@@ -6,6 +6,7 @@
   harness,
   ...
 }: let
+  redact = import ../../../lib/redact {inherit lib;};
   inherit (harness) aiStubs claudeSettings deliveredFiles deliveredTree evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest ownPlan tomlFormat windowNoticeLines;
   # The daemon's settings.json is a read-only copy in the one directory target
   # of Home Manager's daemon-settings writer. `ownPlan` throws on an absent
@@ -651,7 +652,7 @@ in {
           codex.enable = true;
           mcpServers.context7-mcp = {
             package = pkgs.hello;
-            settings.credentials = {_redact.file = "/run/secrets/context7-api-key";};
+            settings.credentials = redact.file {path = "/run/secrets/context7-api-key";};
           };
         };
         hmServer = (hmCodexSettings (evalHm config)).mcp_servers.context7-mcp;
@@ -678,13 +679,13 @@ in {
           mcpServers = {
             context7-mcp = {
               package = pkgs.hello;
-              settings.credentials = {_redact.file = "/run/secrets/context7-api-key";};
+              settings.credentials = redact.file {path = "/run/secrets/context7-api-key";};
             };
             effect-mcp.url = "http://127.0.0.1:19760/mcp";
             git-intel-mcp.package = pkgs.hello;
             github-mcp = {
               package = pkgs.hello;
-              settings.credentials = {_redact.file = "/run/secrets/github-token";};
+              settings.credentials = redact.file {path = "/run/secrets/github-token";};
             };
             nixos-mcp.url = "http://127.0.0.1:19761/mcp";
             openmemory = {

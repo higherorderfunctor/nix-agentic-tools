@@ -1,8 +1,7 @@
 ## Runtime References and MCP Secrets
 
-> **Last verified:** 2026-10-07 — redact unifies file and command references,
-> typed literal policy and strict runtime delivery; HTTP sources retain their
-> existing shape and convert at the proxy reader boundary.
+> **Last verified:** 2026-10-07 — references are read in memory; diagnostics
+> name public options, and MCP settings-derived env retains its option label.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -461,3 +460,17 @@ raw commands and packaged servers when references are present, resolving them
 before exec. Serialized MCP config contains only public values and wrapper
 paths. Managed MCP services use the same reader, and file-backed env references
 participate in their existing restart-on-rotation mechanism.
+
+### Behavior changes
+
+Command references suppress stderr, including interactive prompts and helper
+errors. Referenced glab hosts skip seeding, so `glab auth status` reports
+`gitlab.com` unless a prior login or keyring synchronization created a host
+entry. Environment names must match `[a-zA-Z_][a-zA-Z0-9_]*`, including raw MCP
+command entries. MCP env accepts strings or references; null entries are type
+errors. Managed services resolve env references in the same HTTP mode used for
+literal exports and rotation tracking.
+
+GitLab's `meta.environmentOptions.GITLAB_API_URL = "instanceUrl"` maps a
+settings-derived env reference back to `settings.instanceUrl` in diagnostics. An
+explicit env override keeps its env option label.

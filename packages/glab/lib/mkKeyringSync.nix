@@ -35,7 +35,7 @@
     glab_sync_probe_stored=false
 
     glab_sync_cleanup() {
-      ${pkgs.coreutils}/bin/rm ${lib.escapeShellArg pendingFile}
+      ${pkgs.coreutils}/bin/rm -f ${lib.escapeShellArg pendingFile}
       if [ "$glab_sync_probe_stored" = true ]; then
         ${pkgs.libsecret}/bin/secret-tool clear service glab-keyring-sync-probe \
           >/dev/null 2>&1 || :
@@ -116,9 +116,13 @@
     GITLAB_HOST="$glab_sync_host"
     GIT_DIR=/dev/null
     export GITLAB_HOST GIT_DIR
-    if ! printf '%s' "$glab_sync_token" \
-      | "${lib.getExe cfg.package}" "''${glab_sync_args[@]}" >/dev/null 2>&1; then
-      echo "glab.keyringSync: login failed for glab.host and glab.token" >&2
+    if glab_sync_error="$(printf '%s' "$glab_sync_token" \
+      | "${lib.getExe cfg.package}" "''${glab_sync_args[@]}" 2>&1 >/dev/null)"; then
+      :
+    else
+      glab_sync_error=''${glab_sync_error//"$glab_sync_host"/glab.host}
+      glab_sync_error=''${glab_sync_error//"$glab_sync_token"/glab.token}
+      printf 'glab.keyringSync: login failed: %s\n' "$glab_sync_error" >&2
       exit 1
     fi
     unset glab_sync_token

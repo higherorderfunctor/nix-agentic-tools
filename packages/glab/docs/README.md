@@ -1,7 +1,7 @@
 # glab
 
-> **Last verified:** 2026-10-07 — host literals and redact references share the
-> wrapper; tokens require references and private hosts stay off argv.
+> **Last verified:** 2026-10-07 — command stderr is suppressed; referenced hosts
+> skip seeding, and keyring cleanup tolerates a missing pending marker.
 
 Declarative configuration for the GitLab CLI, with the instance URL and token
 resolved at runtime so neither reaches the Nix store. Home Manager can either
@@ -75,8 +75,8 @@ After that probe, the service resolves `host` and `token` references and passes
 the token to `glab auth login --stdin --use-keyring`. The explicit (now
 deprecated) keyring flag keeps package overrides predating keyring-by-default
 behavior secure. The token is never placed in command arguments, a persistent
-environment variable, or the Nix store. `token.plain` is rejected because it
-would already have exposed the credential through the store.
+environment variable, or the Nix store. A literal token is a type error because
+it would already have exposed the credential through the store.
 
 While synchronization is enabled, the ordinary Home Manager wrapper stops
 exporting `GITLAB_TOKEN`; environment credentials take precedence over stored
@@ -132,6 +132,14 @@ schema. It forms the variable by upper-casing the key, which is what glab does
 for any key without an explicit override — exact for genuinely new keys, wrong
 for one that has aliases. If such a key starts behaving oddly, bump the package:
 the typed option appears on its own.
+
+## Behavior changes
+
+Command references suppress stderr, including interactive prompts and helper
+error messages. With a referenced host, the wrapper skips host seeding;
+`glab auth status` reports `gitlab.com` unless a prior login or keyring
+synchronization has created the host entry. Normal commands receive the resolved
+host through `GITLAB_HOST`.
 
 ## `auth status` and the seeded `hosts:` entry
 

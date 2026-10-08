@@ -5,7 +5,7 @@
 # the Home Manager and devenv modules. One delivery description serves both
 # backends: read-only copies of settings/cli.json and settings/mcp.json,
 # settings/lsp.json, steering, skills, agents and hooks under `<configDir>`,
-# with environment variables baked into the launcher on both backends.
+# with environment variables exported at launch on both backends.
 {
   lib,
   pkgs,
@@ -1234,7 +1234,7 @@ in
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "kiro-cli";
     };
     # The builder declares `agents`, `agentsDir`, `environmentVariables`
-    # (baked into the launcher on both backends), and `lspServers`.
+    # (exported at launch on both backends), and `lspServers`.
     poolOptions = {
       lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
     };

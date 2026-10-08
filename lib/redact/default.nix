@@ -6,7 +6,9 @@
     && builtins.attrNames value == ["_redact"]
     && builtins.isAttrs value._redact
     && (builtins.attrNames value._redact == ["command"] || builtins.attrNames value._redact == ["file"])
-    && lib.all (path: builtins.isString path && lib.hasPrefix "/" path) (builtins.attrValues value._redact);
+    && lib.all (path: builtins.isString path && lib.hasPrefix "/" path) (builtins.attrValues value._redact)
+    # Interpolated Nix paths have already copied the file into the store.
+    && (!(value._redact ? file) || !builtins.hasContext value._redact.file);
   reference = lib.types.mkOptionType {
     name = "redacted reference";
     description = "a redact.file or redact.command reference";
@@ -18,7 +20,7 @@
       else throw "${lib.showOption loc}: expected a redact reference; literal secrets are forbidden";
   };
   maybeRedacted = type:
-    if type != lib.types.str
+    if type.name != "str"
     then throw "redact.types.maybeRedacted supports str only"
     else
       lib.types.mkOptionType {
@@ -28,7 +30,9 @@
         merge = loc: defs:
           if lib.all (def: type.check def.value) defs
           then type.merge loc defs
-          else reference.merge loc defs;
+          else if lib.all (def: validReference def.value) defs
+          then reference.merge loc defs
+          else throw "${lib.showOption loc}: expected a string or redact reference";
       };
   environmentEntry = lib.types.mkOptionType {
     name = "environment value";
@@ -84,7 +88,7 @@ in {
   environment = {
     pkgs,
     values,
-    option ? "environmentVariables",
+    option,
   }: let
     checked = environmentType.merge [option] [
       {
@@ -101,9 +105,13 @@ in {
       })
     checked);
   file = {path}: {_redact.file = path;};
+  filePath = value:
+    if isReference value && value._redact ? file
+    then value._redact.file
+    else null;
   types = {
     environment = environmentType;
-    inherit maybeRedacted;
+    inherit environmentEntry maybeRedacted;
     redacted = reference;
   };
 }

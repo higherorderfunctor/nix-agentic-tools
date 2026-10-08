@@ -1,5 +1,5 @@
 # A runtime's launcher: the package wrapped with `wrapProgram`, or the bare
-# package when there is nothing to bake in. Decided by ONE condition here, so
+# package when there are no flags or environment exports. Decided by ONE condition here, so
 # no backend re-derives its own `needsWrapper` and drifts from the other — the
 # failure the copilot wrapper's header records having shipped twice.
 #
@@ -10,6 +10,7 @@ pkgs: {
   exe,
   flags ? [],
   name,
+  option,
   package,
 }: let
   inherit (pkgs) lib;
@@ -17,7 +18,7 @@ pkgs: {
   args =
     flags
     ++ lib.optional (environmentVariables != {}) "--run ${lib.escapeShellArg (redact.environment {
-      inherit pkgs;
+      inherit option pkgs;
       values = environmentVariables;
     })}";
 in

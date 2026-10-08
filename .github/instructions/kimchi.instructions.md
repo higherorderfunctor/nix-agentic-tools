@@ -323,13 +323,13 @@ text. Locked by `module-kimchi-devenv-env-shadowed-resources` and
 omitted. Kimchi reads git tokens only from the user `config.json` and has no
 environment input for them
 (`src/extensions/teleport/provisioning/git-token.ts`), so this branch cannot use
-shared delivery: its `content.run` renderer exports each token from its file and
-merges it into the declaration with `jq` when the writer runs. It remains a 0400
-`copy-ro` file; shared delivery accepts only `content.value`. The store holds
-the credential path. The writer is ordered after the `secrets` token.
-`native.settings` has no `gitTokens` option, which would write the secret into
-the store. Devenv rejects the option by name. The API key needs no leaf: Kimchi
-prefers `KIMCHI_API_KEY` over the file everywhere it reads the key
+shared delivery: its `content.run` renderer exports each token from its file or
+command and merges it into the declaration with `jq` when the writer runs. It
+remains a 0400 `copy-ro` file; shared delivery accepts only `content.value`. The
+store holds the credential path. The writer is ordered after the `secrets`
+token. `native.settings` has no `gitTokens` option, which would write the secret
+into the store. Devenv rejects the option by name. The API key needs no leaf:
+Kimchi prefers `KIMCHI_API_KEY` over the file everywhere it reads the key
 (`loadConfig`, the telemetry and mismatch paths in `src/config.ts`), and the
 launcher exports it from `ai.kimchi.apiKey`. With it set, an in-app login or
 logout changes nothing the next launch reads. Locked by
@@ -556,10 +556,10 @@ Neither pool writes the developer's session environment.
 
 Join `wrapProgram` flags with a single space — `lib.concatStringsSep " "`,
 matching `mkKiro` / `mkCopilot`. A `" \<newline>  "` separator inside a regular
-Nix string collapses the backslash, so with two or more env vars the second
-`--set` runs as its own command → `exit 127`. The package is wrapped in **both**
-backends (the wrapper owns the env vars and the credential export), so HM and
-devenv stay at parity by construction. Locked by `module-kimchi-wrapper-builds`.
+Nix string collapses the backslash, so a later flag runs as its own command and
+exits 127. Environment values are exported at launch through a runtime block.
+The package is wrapped in both backends, preserving the same credential and env
+delivery. Locked by `module-kimchi-wrapper-builds`.
 
 ## Orientation-only steering
 

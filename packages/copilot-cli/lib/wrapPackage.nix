@@ -74,4 +74,5 @@ in
     exe = "copilot";
     flags = lib.optional mcp ''--add-flags "--additional-mcp-config @${mcpConfigPath}"'';
     name = "copilot-cli-wrapped";
+    option = "ai.copilot.environmentVariables";
   }

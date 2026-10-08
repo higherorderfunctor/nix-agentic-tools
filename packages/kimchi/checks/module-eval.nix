@@ -7,6 +7,7 @@
   pkgs,
   ...
 }: let
+  redact = import ../../../lib/redact {inherit lib;};
   inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
@@ -1207,14 +1208,14 @@ in {
         hm = evalHm {
           ai.kimchi = {
             enable = true;
-            gitTokens."github.com" = {_redact.file = "/run/secrets/kimchi-github";};
+            gitTokens."github.com" = redact.file {path = "/run/secrets/kimchi-github";};
           };
         };
         target = dirTarget "kimchiFiles" hm.config.ai.kimchi.configDir hm;
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
-            gitTokens."github.com" = {_redact.file = "/run/secrets/kimchi-github";};
+            gitTokens."github.com" = redact.file {path = "/run/secrets/kimchi-github";};
           };
         };
       in
@@ -1644,7 +1645,7 @@ in {
         result = evalDevenv {
           ai.kimchi = {
             enable = true;
-            apiKey = {_redact.file = "/run/secrets/kimchi-key";};
+            apiKey = redact.file {path = "/run/secrets/kimchi-key";};
           };
         };
       in
@@ -1671,7 +1672,7 @@ in {
       result = evalHm {
         ai.kimchi = {
           enable = true;
-          apiKey = {_redact.file = "/run/secrets/kimchi-test";};
+          apiKey = redact.file {path = "/run/secrets/kimchi-test";};
           environmentVariables.KIMCHI_EXTRA = "yes";
           native.harnessSettings.resources."extensions.todos" = true;
         };

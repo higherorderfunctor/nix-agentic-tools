@@ -46,7 +46,7 @@ in
         };
 
         env = mkOption {
-          type = redact.types.environment;
+          type = types.attrsOf redact.types.environmentEntry;
           default = {};
           description = "Extra environment variables (escape hatch for options not yet in settings). Secret names require runtime references.";
         };

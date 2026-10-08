@@ -5,6 +5,7 @@
   harness,
   ...
 }: let
+  redact = import ../../../lib/redact {lib = harness.hmLib;};
   inherit (harness) hmLib mkTest;
 in {
   checks = {
@@ -20,13 +21,13 @@ in {
             lib = hmLib;
             pkgs = pkgs // {ai = pkgs.ai or {};};
           } {
-            env.AIHUBMIX_API_KEY = "sentinel";
+            env.AIHUBMIX_API_KEY = redact.file {path = "/run/secrets/aihubmix";};
           };
       in
         result.type
         == "stdio"
         && result.command == "aihubmix-mcp"
-        && result.env.AIHUBMIX_API_KEY == "sentinel"
+        && result.env.AIHUBMIX_API_KEY == redact.file {path = "/run/secrets/aihubmix";}
     );
   };
 }

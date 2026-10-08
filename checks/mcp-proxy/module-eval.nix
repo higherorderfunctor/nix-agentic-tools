@@ -11,6 +11,20 @@
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
 in {
   checks = {
+    module-mcp-proxy-start-script-reads-secrets-at-runtime = mkTest "mcp-proxy-start-script-reads-secrets-at-runtime" (
+      let
+        spec = mcpProxyLib.specFor "example" proxySampleServer;
+        script = (mcpProxyLib.startScriptFor spec).text;
+      in
+        lib.hasInfix "redact-read" script
+        && lib.hasInfix "set -euETo pipefail" script
+        && lib.hasInfix "shopt -s inherit_errexit" script
+        && !(lib.hasInfix "--header" script)
+        && lib.all (var: lib.hasInfix "export ${var}" script) (builtins.attrNames spec.headerSecrets ++ [spec.urlVar])
+        && lib.hasInfix "ai.mcpServers.example.proxy.headers.X-Api-Key" script
+        && lib.hasInfix "ai.mcpServers.example.url" script
+    );
+
     # Kiro content pipeline: a credential http HEADER renders to a
     # `${env:VAR}` placeholder (Kiro expands it at launch) and a credential
     # URL to a bare `${VAR}` envsubst sentinel (WE expand it at activation)

@@ -547,12 +547,12 @@
     | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
     | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
     | Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |
-    | MCP credentials | Manual env vars | `plain`, `file`, or `helper` | `plain`, `file`, or `helper` |
+    | MCP credentials | Manual env vars | `redact.file` or `redact.command` references | Same |
     | Semble search integrations | Manual install | `ai.programs.semble` (Claude + Codex + Kiro) | Same; project-native paths |
     | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
     | Git configuration | `git config` | `git.settings` + typed `git.{branchless,absorb,revise}.settings` → `programs.git.settings` | Same options; a repository-local include that wins key by key |
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
-    | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
+    | GitLab CLI credentials | Manual env vars | host: literal or redact reference; token and keyring keys: `redact.file`/`redact.command` | Same |
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
     | Generated files | N/A | `ai.formatter`, `ai.guards.<name>`, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
     | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
@@ -560,7 +560,7 @@
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi + Kiro) | Same; project-native paths |
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
     | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Copilot + Kiro; Claude has no project LSP route (warns); Codex has no native LSP registry |
-    | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
+    | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; exported at launch by each wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 

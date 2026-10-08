@@ -285,7 +285,7 @@
         else {inherit (value) helper;};
     in {
       rendered = prefix + envRef var + suffix;
-      secrets = {${var} = cred;};
+      secrets = {${var} = cred // {option = "ai.mcpServers.${serverName}.proxy.headers.${field}";};};
     };
 
   # ── Per-server proxy spec ───────────────────────────────────────────
@@ -330,6 +330,7 @@
           then {inherit (url) file;}
           else {inherit (url) helper;}
         )
+        // {option = "ai.mcpServers.${serverName}.url";}
       else null;
     urlLiteral =
       if urlCred
@@ -448,7 +449,7 @@
               if (cred.file or null) != null
               then redact.file {path = cred.file;}
               else redact.command {path = cred.helper;};
-            option = "mcpServers.${spec.name}.${var}";
+            inherit (cred) option;
             target = var;
             export = true;
           })

@@ -206,6 +206,7 @@
   ];
 in {
   meta = {
+    environmentOptions.GITLAB_API_URL = "instanceUrl";
     modes = {
       stdio = "gitlab-mcp";
       http = "bridge";

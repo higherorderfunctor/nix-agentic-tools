@@ -4,30 +4,24 @@ import ../strict-shell-application.nix pkgs {
   text = ''
     label=$1 source_kind=$2 source_path=$3
     fail() { printf '%s: %s\n' "$label" "$1" >&2; exit 1; }
-    umask 077
-    temp=$(${pkgs.coreutils}/bin/mktemp)
-    trap '${pkgs.coreutils}/bin/rm -- "$temp"' EXIT
+    value=
     case "$source_kind" in
       file)
         [[ ! -d "$source_path" ]] || fail 'reference is a directory'
         [[ -e "$source_path" ]] || fail 'reference file is missing'
         [[ -r "$source_path" ]] || fail 'reference file is unreadable'
-        # Snapshot catches read errors (including a file removed after the test).
-        if ! ${pkgs.coreutils}/bin/cat -- "$source_path" >"$temp" 2>/dev/null; then
-          fail 'reference file could not be read'
+        if IFS= read -r -d "" value <"$source_path"; then
+          fail 'reference contains a NUL byte'
         fi
         ;;
       command)
-        if ! "$source_path" >"$temp" 2>/dev/null; then
-          fail 'reference command failed'
-        fi
+        nul=0
+        if IFS= read -r -d "" value < <("$source_path" 2>/dev/null); then nul=1; fi
+        wait $! || fail 'reference command failed'
+        [[ $nul == 0 ]] || fail 'reference contains a NUL byte'
         ;;
       *) fail 'invalid reference source' ;;
     esac
-    value=
-    if IFS= read -r -d "" value <"$temp"; then
-      fail 'reference contains a NUL byte'
-    fi
     while [[ $value == *$'\n' ]]; do value=''${value%$'\n'}; done
     [[ -n "$value" ]] || fail 'reference resolved empty'
     printf '%s' "$value"

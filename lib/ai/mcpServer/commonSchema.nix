@@ -168,7 +168,7 @@ in {
       description = "Arguments passed to the server binary.";
     };
     env = lib.mkOption {
-      type = redact.types.environment;
+      type = lib.types.attrsOf redact.types.environmentEntry;
       default = {};
       description = "Environment variables for the server process. Secret names require runtime references.";
     };

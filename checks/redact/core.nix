@@ -31,7 +31,8 @@ in {
     assert accepts redact.types.redacted file;
     assert accepts redact.types.redacted command;
     assert !(accepts redact.types.redacted "literal-secret");
-    assert !(accepts redact.types.redacted {_redact.file = ./core.nix;});
+    assert !(accepts redact.types.redacted (redact.file {path = ./core.nix;}));
+    assert !(accepts redact.types.redacted (redact.file {path = "${./core.nix}";}));
     assert !(accepts redact.types.redacted {
       _redact = {
         file = "/a";
@@ -40,6 +41,7 @@ in {
     });
     assert accepts (redact.types.maybeRedacted lib.types.str) "public-host";
     assert accepts (redact.types.maybeRedacted lib.types.str) file;
+    assert accepts (redact.types.maybeRedacted (lib.extend (_: _: {})).types.str) "public-host";
     assert !(accepts (redact.types.maybeRedacted lib.types.str) false);
     assert accepts redact.types.environment {
       TOKEN = file;
@@ -54,7 +56,7 @@ in {
     shopt -s inherit_errexit 2>/dev/null || :
     export LC_ALL=C
     # Build-only fixture: its bytes are absent from the reader and consumer plans.
-    sentinel="redact-$(printf '%s' 'sentinel')"
+    sentinel="redact-$(cat /proc/sys/kernel/random/uuid)"
     printf '%s\n\n' "$sentinel" > value
     test "$(${reader} test.token file "$PWD/value")" = "$sentinel"
     printf 'quote" slash\\ internal\nnewline\n' > value
@@ -62,7 +64,7 @@ in {
     printf 'quote" slash\\ internal\nnewline' > expected
     cmp actual expected
     : > empty
-    printf 'bad\0value' > nul
+    printf '%s\0value' "$sentinel" > nul
     mkdir directory
     for input in empty nul directory absent; do
       if ${reader} test.token file "$PWD/$input" >captured.out 2>captured.err; then
@@ -70,7 +72,7 @@ in {
       fi
       test ! -s captured.out
       grep -q '^test.token:' captured.err
-      ! grep -Fq "$sentinel" captured.err
+      if grep -Fq "$sentinel" captured.err; then echo "leak: reader diagnostics" >&2; exit 1; fi
     done
     cat > noisy <<'SCRIPT'
     #!${pkgs.runtimeShell}
@@ -87,7 +89,7 @@ in {
     fi
     test ! -s captured.out
     grep -q '^test.token: reference command failed$' captured.err
-    ! grep -Fq "$sentinel" captured.err
+    if grep -Fq "$sentinel" captured.err; then echo "leak: reader diagnostics" >&2; exit 1; fi
     if ${consumer} >captured.out 2>captured.err; then
       exit 1
     fi

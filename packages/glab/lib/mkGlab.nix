@@ -56,6 +56,7 @@
       export = true;
       option = "glab.${name}";
       target = envVarOf name;
+      # Direct lib.glab.mkGlab callers bypass the option type; reject literal tokens.
       value =
         if name == "host"
         then cfg.${name}
@@ -285,7 +286,7 @@ in
     postBuild = ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      rm "$out/bin/glab"
+      rm -f "$out/bin/glab"
       ln -s "${wrapper}" "$out/bin/glab"
     '';
 

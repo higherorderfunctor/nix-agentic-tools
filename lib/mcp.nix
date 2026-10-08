@@ -16,8 +16,7 @@
   # Resolve the per-package typed MCP server module. Each MCP package
   # under packages/<name>/ owns its typed settings schema at
   # packages/<name>/modules/mcp-server.nix.
-  # settingsOptions declares the public options; optional settingsModule is an
-  # ordinary Nix module for config defaults and config.assertions over settings.
+  # settingsOptions declares the public options.
   # Assertion values merge with caller values; the internal option is reserved.
   loadServer = name: import ../packages/${name}/modules/mcp-server.nix {inherit lib mcpLib;};
   mcpLib = {inherit redact;};
@@ -47,7 +46,6 @@
               };
             };
         }
-        (serverDef.settingsModule or {})
         {config = settings;}
       ];
     };
@@ -81,11 +79,35 @@
     (serverDef.settingsToArgs cfgShim mode) ++ extraArgs;
 
   redact = import ./redact {inherit lib;};
-  credentialsEnvironment = pkgs: credentialVars: settings:
-    redact.environment {
-      inherit pkgs;
-      values = lib.mapAttrs' (name: spec: lib.nameValuePair spec.envVar settings.${name}) credentialVars;
-    };
+  credentialsEnvironment = pkgs: option: credentialVars: settings:
+    lib.concatStringsSep "\n" (mapAttrsToList (name: spec:
+      redact.read {
+        inherit pkgs;
+        export = true;
+        option = "${option}.settings.${name}";
+        target = spec.envVar;
+        value = settings.${name};
+      })
+    credentialVars);
+
+  # Settings-derived references name their public option, unless env overrides it.
+  serverEnvironment = {
+    option,
+    pkgs,
+    values,
+    environmentOptions ? {},
+    extraEnv ? {},
+  }:
+    lib.concatStringsSep "\n" (mapAttrsToList (target: value:
+      redact.read {
+        inherit pkgs target value;
+        export = true;
+        option =
+          if environmentOptions ? ${target} && !(extraEnv ? ${target})
+          then "${option}.settings.${environmentOptions.${target}}"
+          else "${option}.env.${target}";
+      })
+    values);
 
   # ── Credentials helpers ──────────────────────────────────────────
   # credentialVars: { settingsOptionName = { envVar = "ENV_VAR"; required = bool; }; }
@@ -104,12 +126,10 @@
   # changes), so callers hash these files to decide whether a dependent
   # long-lived service must restart. Agnostic to the secret manager
   # (sops-nix, agenix, ln, ...): it only needs the decrypted file path.
+  # A credential and an env entry can refer to the same file; hash it once.
   credentialFilePaths = credentialVars: settings: env:
     lib.unique (builtins.filter (p: p != null) (
-      map (value:
-        if redact.isReference value && value._redact ? file
-        then value._redact.file
-        else null)
+      map redact.filePath
       ((mapAttrsToList (optName: _spec: settings.${optName} or null) credentialVars)
         ++ builtins.attrValues env)
     ));
@@ -122,17 +142,19 @@
     pkgs,
     name,
     credentialVars ? {},
+    environmentOptions ? {},
+    extraEnv ? {},
     settings ? {},
   }: let
     drv = pkgs.writeShellScript (name + "-env") ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      ${redact.environment {
-        inherit pkgs;
+      ${serverEnvironment {
+        inherit environmentOptions extraEnv pkgs;
         values = env;
-        option = "mcpServers.${name}.env";
+        option = "mcpServers.${name}";
       }}
-      ${credentialsEnvironment pkgs credentialVars settings}
+      ${credentialsEnvironment pkgs "mcpServers.${name}" credentialVars settings}
       exec ${lib.escapeShellArg command} "$@"
     '';
   in "${drv}";
@@ -147,15 +169,17 @@
     command ? null,
     credentialVars ? {},
     env,
+    environmentOptions ? {},
+    extraEnv ? {},
     package ? null,
     settings ? {},
   }: let
-    checkedEnv = lib.filterAttrs (_: value: value != null) (redact.types.environment.merge ["mcpServers" name "env"] [
+    checkedEnv = (lib.types.attrsOf redact.types.environmentEntry).merge ["mcpServers" name "env"] [
       {
         file = "renderServer";
         value = env;
       }
-    ]);
+    ];
     executable =
       if command != null
       then command
@@ -167,7 +191,7 @@
       if wrapped
       then
         mkSecretsWrapper {
-          inherit name pkgs settings credentialVars;
+          inherit name pkgs settings credentialVars environmentOptions extraEnv;
           command = executable;
           env = builtins.removeAttrs checkedEnv (builtins.attrNames (
             if guarded
@@ -291,6 +315,8 @@
         args = stdioArgs ++ srvArgs;
         inherit credentialVars package;
         env = srvEnv;
+        environmentOptions = serverDef.meta.environmentOptions or {};
+        extraEnv = env;
         settings = evaluatedSettings;
       };
     in {
@@ -373,5 +399,6 @@ in {
     mkStdioEntry
     redact
     renderServer
+    serverEnvironment
     ;
 }

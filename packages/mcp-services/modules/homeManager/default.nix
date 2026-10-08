@@ -122,7 +122,7 @@
 
     credSnippet =
       if hasCreds
-      then mcpLib.credentialsEnvironment pkgs credVars evaluatedSettings
+      then mcpLib.credentialsEnvironment pkgs "services.mcp-servers.servers.${name}" credVars evaluatedSettings
       else "";
 
     # `--host` is passed explicitly rather than left to mcp-proxy's own
@@ -151,10 +151,12 @@
         ++ optionals (httpCmd == "bridge") [config.ai.internal.packages.mcpServers.mcp-proxy];
       text = ''
         ${shellStrict.shoptHeader}
-        ${mcpLib.redact.environment {
+        ${mcpLib.serverEnvironment {
           inherit pkgs;
-          values = filterAttrs (_: mcpLib.redact.isReference) (effectiveEnvFor name srv effectiveMode);
-          option = "services.mcp-servers.servers.${name}.env";
+          environmentOptions = (mcpLib.loadServer name).meta.environmentOptions or {};
+          extraEnv = srv.env;
+          values = filterAttrs (_: mcpLib.redact.isReference) (effectiveEnvFor name srv "http");
+          option = "services.mcp-servers.servers.${name}";
         }}
         ${credSnippet}
         exec ${rawCmd}${optionalString (argsStr != "") " ${argsStr}"}
@@ -319,7 +321,7 @@ in {
 
     systemd.user.services = mkIf pkgs.stdenv.hostPlatform.isLinux (mapAttrs' (name: srv: let
       serverDef = serverFiles.${name};
-      srvEnv = lib.filterAttrs (_: value: value != null && !mcpLib.redact.isReference value) (effectiveEnvFor name srv "http");
+      srvEnv = lib.filterAttrs (_: value: !mcpLib.redact.isReference value) (effectiveEnvFor name srv "http");
       # Optional per-server ExecStartPre, contributed by a server module's
       # `settingsToPreStart`, for setup that must happen before the daemon
       # inits. NO SERVER DECLARES ONE TODAY: openmemory-mcp was the only

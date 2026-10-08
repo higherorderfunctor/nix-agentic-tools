@@ -1,4 +1,6 @@
-# Factory for a typed GitHub MCP entry. Credentials use redact references.
+# Factory for a typed GitHub MCP entry.
+# The default command branch ignores settings: supply credentials through env
+# references, or use mkStdioEntry with a package for typed settings.credentials.
 {
   lib,
   pkgs,

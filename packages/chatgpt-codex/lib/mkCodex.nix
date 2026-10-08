@@ -56,6 +56,7 @@
         )
       );
       name = "chatgpt-codex-wrapped";
+      option = "ai.codex.environmentVariables";
       inherit (cfg) package;
     };
   daemonSelect = import ./daemonSelect.nix pkgs;
