@@ -397,18 +397,19 @@ launch, so Home Manager-only users get it in any repository. It checks the
 launch directory, because Kimchi reads trust-gated project files from its exact
 working directory, and it warns when a readable file sits under `.kimchi/` or
 `.config/kimchi/harness/` there. From `$HOME` that harness path is user scope
-and is skipped: the user harness itself, or, when `configDir` moves the harness,
-the fixed directory of Kimchi's user `permissions.json`. It reads the user
-harness under `$HOME`: Home Manager passes its `configDir` harness, devenv the
-runtime default `.config/kimchi/harness`. It checks the nearest boolean trust
-entry at or above the real launch directory, and uses user `settings.json`'s
-`defaultProjectTrust` only without a persisted decision. `always` allows;
-`ask`/`never` deny unattended sessions. Explicit denial wins over `always`, null
-entries inherit, and project settings cannot grant trust. Missing/unreadable
-trust files stay silent; without a decision, missing/unreadable settings also
-stay silent. Empty or unreadable namespaces and root AGENTS.md alone do not
-warn. The shared `lib/ai/launcher-preflight.nix` isolates it as it does Codex's
-preflight: bounded to one second, no stdin, stdout discarded, failure ignored.
+and is skipped when it is the user harness itself. When `configDir` moves the
+harness, it is the fixed directory of Kimchi's user `permissions.json`: still
+scanned, but that one file is ignored. It reads the user harness under `$HOME`:
+Home Manager passes its `configDir` harness, devenv the runtime default
+`.config/kimchi/harness`. It checks the nearest boolean trust entry at or above
+the real launch directory, and uses user `settings.json`'s `defaultProjectTrust`
+only without a persisted decision. `always` allows; `ask`/`never` deny
+unattended sessions. Explicit denial wins over `always`, null entries inherit,
+and project settings cannot grant trust. Missing/unreadable trust files stay
+silent; without a decision, missing/unreadable settings also stay silent. Empty
+or unreadable namespaces and root AGENTS.md alone do not warn. The shared
+`lib/ai/launcher-preflight.nix` isolates it as it does Codex's preflight:
+bounded to one second, no stdin, stdout discarded, failure ignored.
 `module-kimchi-project-trust-notice` runs its fixtures through each backend's
 launcher, covering both project namespaces with positive controls.
 

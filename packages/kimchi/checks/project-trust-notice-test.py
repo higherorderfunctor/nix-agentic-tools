@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory() as temporary:
             assert result.stdout == "", result
             if warning:
                 assert "warning: Kimchi project files" in result.stderr
-                assert str(root) in result.stderr and str(trust) in result.stderr
+                assert str(directory) in result.stderr and str(trust) in result.stderr
             else:
                 assert result.stderr == "", result.stderr
 
@@ -89,5 +89,20 @@ with tempfile.TemporaryDirectory() as temporary:
         permissions.write_text("{}")
         write_trust([])
         probe(True)
+        if relative != ".config/kimchi/harness":
+            # Other launchers' runs leave their user harness files in the fixed
+            # directory; only permissions.json belongs to this configuration.
+            for leftover in permissions.parent.iterdir():
+                if leftover != permissions:
+                    leftover.unlink()
         probe(False, user_home)
+        # A moved configDir leaves the fixed directory holding only the user
+        # permissions.json: it alone stays silent, but any other readable file
+        # there is a project file and warns.
+        if relative != ".config/kimchi/harness":
+            fixed_settings = permissions.with_name("settings.json")
+            fixed_settings.write_text("{}")
+            probe(True, user_home)
+            fixed_settings.unlink()
+            probe(False, user_home)
         project_file.unlink()

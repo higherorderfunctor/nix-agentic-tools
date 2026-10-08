@@ -133,8 +133,7 @@ users never reach. A resolver failure skips them with the rest of the preflight.
 The document warnings print first, so per-config notice processes cannot push
 them past the launcher's one-second bound, and each trust notice takes its
 directory's trust from the preflight's one `--json` resolution
-(`directory_trust`) instead of running the resolver again. Those notices run
-nearest layer first, so the bound cuts the farthest layers.
+(`directory_trust`) instead of running the resolver again.
 
 `lib/ai/launcher-preflight.nix` isolates the whole preflight, for this launcher
 and Kimchi's: a one-second timeout over its process group, no stdin, stdout
