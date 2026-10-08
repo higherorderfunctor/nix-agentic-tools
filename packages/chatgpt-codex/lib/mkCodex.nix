@@ -62,6 +62,7 @@
     };
   daemonSelect = import ./daemonSelect.nix pkgs;
   permissionLayersNotice = import ./permissionLayersNotice.nix pkgs;
+  projectTrustNotice = import ./projectTrustNotice.nix pkgs;
   runtimeFiles = import ../../../lib/ai/runtime-files.nix {inherit lib;};
   packageLayout = import ./packageLayout.nix;
   jsonFormat = pkgs.formats.json {};
@@ -491,7 +492,7 @@
             };
           });
           default = {};
-          description = "User-level project trust, keyed by absolute path; Codex matches the working directory or its repository root exactly, and a linked worktree resolves to its main checkout, so one entry covers a clone and its worktrees. With Home Manager this is the only trust Codex keeps, because its trust prompt cannot write the Nix-owned user config.toml. Devenv rejects this bootstrap-global setting in project config.toml.";
+          description = "User-level project trust, keyed by absolute path. A main-checkout entry covers linked worktrees; an empty worktree entry does not revoke it. An explicit worktree trust_level takes precedence. With Home Manager this is the only trust Codex keeps, because its trust prompt cannot write the Nix-owned user config.toml. Devenv rejects this bootstrap-global setting in project config.toml.";
         };
         sandbox_mode = lib.mkOption {
           type = lib.types.nullOr (lib.types.enum sandboxModeNames);
@@ -1542,6 +1543,7 @@ in
 
         (lib.optionalAttrs (!isHm && options ? enterShell) {
           enterShell = lib.mkIf (cfg.files ? ${configFile} && runtimeFiles.isLive cfg.files.${configFile}) ''
+            ${lib.getExe projectTrustNotice} "$DEVENV_ROOT"
             ${lib.getExe permissionLayersNotice} "$DEVENV_ROOT"/${lib.escapeShellArg configFile}
           '';
         })

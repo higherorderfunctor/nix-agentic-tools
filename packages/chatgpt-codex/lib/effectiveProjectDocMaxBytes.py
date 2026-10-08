@@ -109,6 +109,7 @@ def resolve(git, directory, default, overrides=(), profile=None):
         "directories": [str(folder) for folder in chain],
         "filenames": names,
         "limit": effective,
+        "project_trust": trust(directory),
         "untrusted": doc_trust == "untrusted",
         "untrusted_config": next((str(path) for path, limit in reversed(skipped) if limit > effective), None),
         "user_config": str(user_config),
@@ -117,8 +118,8 @@ def resolve(git, directory, default, overrides=(), profile=None):
 
 if __name__ == "__main__":
     git, directory, default, *arguments = sys.argv[1:]
-    as_json = arguments[:1] == ["--json"]
-    arguments = arguments[1:] if as_json else arguments
+    mode = arguments[0] if arguments[:1] in (["--json"], ["--trust"]) else None
+    arguments = arguments[1:] if mode else arguments
     overrides = []
     profile = None
     for index in range(0, len(arguments), 2):
@@ -127,4 +128,7 @@ if __name__ == "__main__":
         elif arguments[index] in {"-p", "--profile"}:
             profile = arguments[index + 1]
     resolution = resolve(git, directory, int(default), overrides, profile)
-    print(json.dumps(resolution) if as_json else resolution["limit"])
+    if mode == "--trust":
+        print(resolution["project_trust"] or "untrusted")
+    else:
+        print(json.dumps(resolution) if mode == "--json" else resolution["limit"])
