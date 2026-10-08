@@ -1037,13 +1037,13 @@ entries live in the skill. Ordering uses named `before` and `after` edges.
 Missing or disabled anchors are ignored, cycles fail, and ties have no promised
 order.
 
-Runtime `settings.<runtime>.routing` and `workflows` compose with portable maps
-by key. A present runtime entry replaces the portable entry atomically; an
-absent key inherits. Workflow headers and their step maps compose separately: a
-runtime record without text keeps the portable header, and runtime steps replace
-portable steps by name while retaining siblings. Within one scope, fields merge
-and different same-priority text definitions conflict. Disable an inherited
-entry with `enable = false`.
+Runtime `ai.programs.delegate-routing.runtimes.<runtime>.routing` and
+`workflows` compose with portable maps by key. A present runtime entry replaces
+the portable entry atomically; an absent key inherits. Workflow headers and
+their step maps compose separately: a runtime record without text keeps the
+portable header, and runtime steps replace portable steps by name while
+retaining siblings. Within one scope, fields merge and different same-priority
+text definitions conflict. Disable an inherited entry with `enable = false`.
 
 Runtime `techniques` describe workflows, subagents, external launches, model
 introspection and usage. Override a node's fields or disable it with

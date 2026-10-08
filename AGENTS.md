@@ -906,7 +906,7 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-06 — the worker and three review roles run inside a
+> **Last verified:** 2026-10-08 — the worker and three review roles run inside a
 > loop of at most 3 rounds; unsettled findings go back to the orchestrator to
 > validate.
 >
@@ -1084,7 +1084,8 @@ validate.
   cannot be given a model or an effort level, and the cost belongs where those
   controls exist.
 - Size the roles separately, and never let a delegate inherit an interactive
-  session's model and effort by default — see the delegate-routing orientation.
+  session's model and effort by default — see the delegate-routing skill's "Size
+  the work" section.
 
 The recipe is in the `pr-review-loop` skill. It lives there rather than here
 because a skill is the only manual-load carrier that works across runtimes —

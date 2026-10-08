@@ -318,7 +318,7 @@ in {
       default = null;
       description = ''
         Directory of `.md` rule files fanned out to Claude, Codex, Copilot,
-        and Kiro. Each file becomes one entry in `ai.rules` keyed by the
+        Kimchi, and Kiro. Each file becomes one entry in `ai.rules` keyed by the
         basename minus `.md`. Explicit `ai.rules.<name>` values arbitrate with
         these generated defaults; per-runtime entries then replace or suppress
         the resulting root entry. Accepts either a Nix path literal or `{ path,

@@ -1231,7 +1231,8 @@
     Ordering uses named `before` and `after` edges. Missing or disabled anchors are
     ignored, cycles fail, and ties have no promised order.
 
-    Runtime `settings.<runtime>.routing` and `workflows` compose with portable maps
+    Runtime `ai.programs.delegate-routing.runtimes.<runtime>.routing` and
+    `workflows` compose with portable maps
     by key. A present runtime entry replaces the portable entry atomically; an
     absent key inherits. Workflow headers and their step maps compose separately:
     a runtime record without text keeps the portable header, and runtime steps
