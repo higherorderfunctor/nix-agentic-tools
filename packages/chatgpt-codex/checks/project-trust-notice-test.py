@@ -61,11 +61,13 @@ trust([(root, "trusted")])
 with user.open("a") as stream:
     stream.write(f"\n[projects.{json.dumps(str(worktree))}]\n")
 probe(worktree, True)
-# Each missing/unreadable input follows an otherwise identical bad case.
+# Missing user config is untrusted; missing project config stays silent.
+# Each unreadable input follows an otherwise identical bad case.
 trust([])
 probe(root, True)
 user.unlink()
-probe(root, False)
+for directory in (root, worktree, plain):
+    probe(directory, True)
 trust([])
 probe(root, True)
 project = root / ".codex/config.toml"

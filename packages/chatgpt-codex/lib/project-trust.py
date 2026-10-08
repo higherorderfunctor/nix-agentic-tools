@@ -29,6 +29,8 @@ def resolve(directory, user_path, git):
                         return "unknown"
                     return "trusted" if entry.get("trust_level") == "trusted" else "untrusted"
         return "untrusted"
+    except FileNotFoundError:
+        return "untrusted"
     except (OSError, ValueError):
         return "unknown"
 
