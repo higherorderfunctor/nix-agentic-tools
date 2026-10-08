@@ -27,8 +27,14 @@ if project is not None and user is not None:
     project_model, user_model = model(project), model(user)
     if project_model and user_model and project_model != user_model:
         # Codex resolves selectors low-to-high; a table alone is not a selector.
-        winner = project_path if project_model == "named permissions" else user_path
-        winning_model = "named permissions"
+        # Without a selector Codex rejects the named catalog, rather than
+        # silently overriding a lower layer's model.
+        if not any(
+            "sandbox_mode" in config or "default_permissions" in config
+            for config in (user, project)
+        ):
+            sys.exit(0)
+        winner, winning_model = user_path, user_model
         for path, config, layer_model in (
             (user_path, user, user_model),
             (project_path, project, project_model),

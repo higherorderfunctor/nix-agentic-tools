@@ -29,6 +29,7 @@ def probe(project_text, user_text, winner=None):
 
 probe(named, legacy, project)
 probe(legacy, named, project)
+probe('[permissions.work]\n', '[sandbox_workspace_write]\nwritable_roots = []\n')
 probe('[sandbox_workspace_write]\nwritable_roots = []\n', named, user)
 probe('[permissions.work]\n', legacy, user)
 for same in (legacy, named, ""):
