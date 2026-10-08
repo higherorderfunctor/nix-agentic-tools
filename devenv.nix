@@ -165,9 +165,6 @@ in {
   enterTest = ''
     echo "Validating devenv configuration..."
     nat_codex_bin="$(command -v codex)"
-    nat_codex_config=.codex/config.toml
-    test -f "$nat_codex_config" || { echo "FAIL: Codex project config was not written"; exit 1; }
-    ${pkgs.gnugrep}/bin/grep -Fq 'sandbox_mode = "danger-full-access"' "$nat_codex_config" || { echo "FAIL: Codex project config does not disable the sandbox"; exit 1; }
     ${lib.optionalString (!isCI) ''
       nat_hooks_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-path hooks)"
       for nat_hook in pre-commit commit-msg; do

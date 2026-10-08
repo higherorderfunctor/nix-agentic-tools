@@ -12,7 +12,8 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 > measurements; old binary-release figures are not current estimates. The
 > instruction copier check is gone with the generator's materializer. The Codex
 > permission-mix assertions and runtime PATH provenance are consumer-wide
-> shell-entry warnings, not repository enterTest loops.
+> shell-entry warnings, not repository enterTest loops. The repository shell
+> sets no harness permissions; contributors choose them in their user config.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 
@@ -111,25 +112,21 @@ the decision rule above forbids using that branch for anything a guard depends
 on, and the shared installation block warns at shell entry when PATH resolves a
 runtime outside the devenv profile.
 
-### Codex uses an unrestricted project override
+### Harness permissions belong to each contributor
 
-This repository used to supply a `codexForRepository` wrapper through
-`ai.codex.package`, injecting `--cd` and `--profile nix-agentic-tools` for
-runtime command families only. That argument-injecting wrapper remains gone.
-Codex may still have an environment-only wrapper for `SHELL` and the
-sandbox-safe Git SSH command, but the selected permission policy lives in the
-normal user/project config stack rather than a separate `--profile` config
-layer.
+This repository's dev shell sets no harness permissions. Contributors set them
+in their own user config. The repository declares only `project_doc_max_bytes`
+for Codex project settings; the generated config also carries the module's model
+and reasoning defaults. It does not override the user's approval policy or
+permission profile. A Codex delegate that must run Nix needs a user config
+without the workspace sandbox, because that sandbox blocks the Nix daemon
+socket.
 
-Named permission tables are now supported by the module and same-named tables
-merge across user and project layers. They do not compose with legacy
-`sandbox_mode` settings anywhere in the loaded stack, however. The Home Manager
-user layer has migrated to `default_permissions = "user-default"`; this project
-nevertheless selects `sandbox_mode = "danger-full-access"` as a temporary,
-explicit override while unrestricted execution is needed here. With
-`approval_policy = "never"`, Codex 0.151.0's doctor reports an unrestricted
-filesystem sandbox and no approval prompts. Two earlier measurements still
-constrain any future return to a project permission profile:
+The `codexForRepository` wrapper that injected `--cd` and `--profile` remains
+gone. Codex may still have an environment-only wrapper for `SHELL` and the
+sandbox-safe Git SSH command.
+
+Two earlier measurements still constrain any future project permission profile:
 
 - **The old mixed model denied `~/.cache/nix`.** Automatic integration roots now
   lower into a selected custom permission profile as direct filesystem writes,
@@ -140,10 +137,9 @@ constrain any future return to a project permission profile:
   `:workspace_roots."." = "write"` made that false from the start. The stated
   security property never existed.
 
-The unrestricted override needs no writable-root declarations. The repository
-enables Semble only outside diagnostic mode, pins it to this flake, adds AWK and
-jq Tree-sitter grammars, and maps its non-standard Bash, Gitignore, JSON, and
-Markdown paths. Its devenv facet still owns and invalidates
+The repository enables Semble only outside diagnostic mode, pins it to this
+flake, adds AWK and jq Tree-sitter grammars, and maps its non-standard Bash,
+Gitignore, JSON, and Markdown paths. Its devenv facet still owns and invalidates
 `${config.devenv.state}/semble-cache`. It is the root `ai.programs.semble` in
 `dev/ai.nix`, so every runtime it supports gets its CLI rule (Claude as a rule
 file, Codex and Kiro inline in AGENTS.md) and none gets its MCP server. The
@@ -153,12 +149,12 @@ realize its model, MCP, or grammar closure. The diagnostic therefore rewrites
 its throwaway AGENTS.md without the Semble rule; the drift check pins
 `isCI = false`, so the committed bytes never depend on it.
 
-Integration roots remain available to normal workspace-write and named-profile
-consumers, but this project override intentionally does not use them. enterTest
-asserts that the project config selects `danger-full-access`. A permission model
-mixed across the user and project layers is the ai module's shell-entry warning,
-not a repo assertion. The old `--profile` wrapper and stale whole-file profile
-assertions are gone: `ai.codex.profiles` was removed, and
+Integration roots remain available to workspace-write and named-profile
+consumers. The repository no longer asserts a Codex sandbox policy or repeats
+the generic project-config delivery check in `enterTest`. A permission model
+mixed across the user and project layers remains the ai module's shell-entry
+warning. The old `--profile` wrapper and stale whole-file profile assertions are
+gone: `ai.codex.profiles` was removed, and
 `packages/chatgpt-codex/lib/launcher-flags.nix` owns the launcher flags.
 
 Two proofs to preserve when touching the diagnostic: with `CI` unset the shell
