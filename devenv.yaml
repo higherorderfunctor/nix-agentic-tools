@@ -49,7 +49,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   treefmt-nix:
-    url: github:numtide/treefmt-nix/7ba5d7180939b022772e9dbaa1cd82435962073c
+    url: github:numtide/treefmt-nix/2108ed809134967affc3f6ef203967c13af05a5f
     inputs:
       nixpkgs:
         follows: nixpkgs
