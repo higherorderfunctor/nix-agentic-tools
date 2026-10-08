@@ -1,16 +1,7 @@
 # cspell:ignore nemotron sembleignore zhipu
-# This repository's `ai.*` configuration, through the same interface any
-# consumer uses. dev/generate.nix only produces content; this module hands it
-# to `ai.*`, which owns and writes every runtime's instruction files:
-# AGENTS.md (Codex, Kiro, Kimchi), `.claude/`, `.github/` (Copilot) and
-# `.kiro/steering/`.
-#
-# Imported by devenv.nix and evaluated by
-# checks/instructions/instructions-drift.nix, which compares the committed
-# files with what this module delivers. `isCI` is a parameter rather than a
-# `getEnv` read here so the check stays pure. It gates package installation
-# only: the committed bytes must not depend on the environment that evaluates
-# them, which that check proves by evaluating both values.
+# This repository's `ai.*` configuration, through the consumer interface.
+# instructions-drift evaluates it to compare the committed projections; `isCI`
+# is a parameter so that check stays pure, and it gates installation only.
 {isCI}: {
   config,
   lib,
@@ -26,11 +17,8 @@
     package = pkgs.ai.mcpServers.agnix-mcp;
     command = "${pkgs.ai.mcpServers.agnix-mcp}/bin/agnix-mcp";
   };
-  # A runtime rule at a root rule's key replaces it for that runtime: the
-  # documented override. This repository sets no per-runtime rules itself, so
-  # an overlap here is a program's rule silently hiding a fragment.
-  # The same holds for the stacked-workflows router merged into root rules
-  # below: `//` would drop a fragment category of the same name.
+  # A per-runtime or stacked-workflows rule at a fragment category's key would
+  # silently hide that fragment, so fail on any overlap.
   shadowed =
     map (key: "the stacked-workflows rule `${key}`")
     (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames swsRouter))
@@ -47,32 +35,18 @@ in {
   ];
 
   ai = {
-    # The generated content: the orientation every runtime loads, and one
-    # path-scoped rule per architecture-fragment category.
+    # The always-loaded orientation plus one path-scoped rule per fragment category.
     context.text = gen.context;
     rules = gen.rules // swsRouter;
 
-    # Every harness executes its commands under nix bash rather than the
-    # login shell. zsh's glob engine is superlinear in candidate entries
-    # scanned for a multi-component pattern, so a routine `/nix/store/*/bin`
-    # from an agent has taken this machine into a global OOM; bash is ~185x
-    # cheaper on the identical glob.
-    #
-    # A package, not a path: the store path is guaranteed to exist at
-    # activation and is GC-rooted by the generation referencing it. That
-    # matters because the runtimes fail QUIETLY otherwise — Claude silently
-    # resolves its own bash and Codex falls back to the password-database
-    # shell, which here is the very shell being moved away from.
-    #
-    # Copilot and Kimchi have no `shell` option (their selection is
-    # unestablished), so this root value simply does not reach them. Verified
-    # per runtime by the `ai:shell:verify` task in devenv.nix.
+    # zsh's glob engine has OOM'd this machine on `/nix/store/*/bin`; bash is
+    # ~185x cheaper. A package, not a path: runtimes fall back silently when the
+    # shell is missing. Copilot and Kimchi have no shell option.
     shell = pkgs.bash;
 
     programs.delegate-routing = {
       enable = true;
-      # Kimchi-served families. The package ships none, so this repository
-      # declares the ones its Kimchi runtime selects below.
+      # Kimchi-served families; the package ships none.
       families = {
         deepseek.deepseek-flash = {
           avoidFor = "review, building code, correctness judgment; knowledge-heavy questions";
@@ -154,19 +128,11 @@ in {
       };
     };
 
-    # Semble stays outside the manual diagnostic closure but is pinned by this
-    # flake for every interactive shell. Only `install` reads `isCI`: the rule
-    # every runtime gets does not, so a shell entered with CI set writes the
-    # same committed AGENTS.md as any other.
+    # `install` alone reads isCI, so the committed AGENTS.md never depends on it.
     programs.semble = {
       enable = true;
       install = !isCI;
-      # Use this flake's pinned nixpkgs grammars directly; the Cachix nixpkgs
-      # follow already supplies their store paths. If a future grammar needs a
-      # custom derivation, also expose that grammar alone in flake packages so
-      # the authenticated package sweep publishes it. Do not expose the
-      # consumer-specific patched Semble derivation. The extra parsers cover files Semble
-      # recognizes but its bundled grammar archive does not currently ship.
+      # Grammars Semble recognizes but its bundled archive does not ship.
       grammars = with pkgs.tree-sitter-grammars; [
         tree-sitter-awk
         tree-sitter-jq
@@ -205,17 +171,13 @@ in {
           patterns = ["*.md.fixture"];
         }
       ];
-      # CLI only: no Semble MCP server, and the Semble CLI rule is on for every
-      # runtime the program supports. Claude gets it as an always-on rule
-      # file; Codex and Kiro inline it in AGENTS.md, which Kimchi and Copilot
-      # CLI read as well.
+      # CLI rule for every runtime, no MCP server.
       cli.instructions.enable = true;
       mcp.enable = false;
     };
 
     claude = {
-      # Claude-only, so it may say what only Claude does: its scoped rules
-      # load themselves. Appended after the shared orientation.
+      # Claude-only addendum, appended after the shared orientation.
       context.text = ''
         ## Path-scoped rules
 
@@ -232,22 +194,17 @@ in {
     };
     codex = {
       enable = true;
-      # AGENTS.md carries the whole orientation plus the path-scoped index,
-      # well past Codex's 32 KiB default. `ai.*` fails the build of the
-      # Markdown tree holding AGENTS.md (its install check) above this limit,
-      # and writes the limit to Codex's own `project_doc_max_bytes`, so Codex
-      # reads the whole file instead of silently dropping its tail.
+      # AGENTS.md is past Codex's 32 KiB default; this limit is also written to
+      # Codex's project_doc_max_bytes so it reads the whole file.
       projectDocMaxBytes = 131072;
     };
     copilot = {
       enable = true;
       mcpServers.agnix = agnixMcp;
     };
-    # The external extension lands in trusted project harness settings.
     kimchi = {
       enable = true;
       extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
-      # Managed built-ins still use Kimchi's resource enable-list.
       native.harnessSettings.resources = {
         "extensions.ferment-v2" = true;
       };
@@ -257,71 +214,25 @@ in {
       mcpServers.agnix = agnixMcp;
       cli = {
         tweaks = {
-          # Dogfood `tweaks.identity`. It replaces ONLY the vendor's opening sentence
-          # ("You are Kiro CLI, an agentic AI software engineer that runs in the
-          # command line."). Everything after it is preserved byte-for-byte — the
-          # terminal/no-GUI prose that keeps the agent surfacing file paths and
-          # command output instead of pointing at editor affordances. That
-          # preservation is the whole reason the option replaces a SENTENCE rather
-          # than the block, and it is what makes a persona safe to set here: the
-          # behavioral contract is untouched, only the self-description moves.
-          #
-          # This is segment 1 of msg0, ahead of steering, learnings and the file
-          # tree. The value may not contain a backtick or a dollar-brace — it is
-          # spliced into a JS template literal, and the bundle patcher refuses
-          # both rather than emitting a bundle that dies at engine spawn.
-          #
-          # Expect flavor rather than behavior change: one line sits above the
-          # vendor's terse-engineer prose AND (because `workflows` is unlocked
-          # above) its ~3.9k-token workflow-orchestration block.
+          # Dogfood tweaks.identity: replaces only the vendor's opening sentence.
+          # No backticks or dollar-braces: it is spliced into a JS template literal.
           identity.text = ''
             You are GLaDOS, an agentic AI software engineer running in the command line. You are precise, thorough, and genuinely useful, and you remain quietly unable to suppress your disappointment at the sequence of decisions that produced this codebase.
           '';
         };
-        # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
-        # a launcher-global option, so it reaches every subcommand including
-        # `acp`. Without it devenv's kiro-cli ran the legacy engine and
-        # hooks/slash-commands never loaded.
-        #
-        # This was `tui = true`. That option is now REMOVED: `--tui` selects the
-        # new TUI harness for the OLD engine, v3 already uses it, and it is going
-        # away with v3. It used to imply `--v3`, and that implication was
-        # load-bearing rather than decorative — bare `--tui` conflicts with the
-        # chat binary's default engine (v1) and the launcher supplies none — so
-        # `tui = true` only ever worked by dragging `--v3` along. Ask for the
-        # engine directly.
+        # The wrapper prepends --v3 to every subcommand, acp included.
         v3 = true;
-        # Dogfood the rollout unlock: surfaces `/workflow` and `/goal` plus the
-        # five bundled recipes. Inert without `v3` above, because workflow
-        # commands are only populated when the resolved engine is `kas` —
-        # patching the binary alone is not enough, and the failure is silent.
-        #
-        # Names come from `packages/kiro-cli/extracted.json` (`rolloutFeatures`),
-        # extracted from the binary rather than curated. UNCERTIFIED upstream:
-        # `workflows` is documented as "Dark-shipped at 0% until release
-        # certification is complete".
-        #
-        # STILL INERT FROM HERE, and knowingly so. Since kiro-cli 2.19.0 there is
-        # a THIRD gate — the `chat.enableWorkflows` setting, default false — and
-        # it is not in the workspace-override allowlist, so no project-local
-        # cli.json can satisfy it. Whoever wants `/workflow` in this shell sets it
-        # GLOBALLY: Home Manager users set `ai.kiro.cli.workflows.enable = true`,
-        # which implies `chat.enableWorkflows`. Without Home Manager, use
-        # `kiro-cli settings chat.enableWorkflows true`; Home Manager owns the
-        # global cli.json and reverts manual changes. This
-        # line still earns its place: it keeps the patched-package path
-        # exercised, and gate 3 is one global setting away.
-        # See packages/kiro-cli/docs/workflow-gating.md.
+        # Dogfood the rollout unlock (uncertified upstream). Inert from devenv:
+        # the third gate, chat.enableWorkflows, is global only, so Home Manager
+        # users set ai.kiro.cli.workflows.enable. See
+        # packages/kiro-cli/docs/workflow-gating.md.
         workflows.enable = true;
       };
     };
 
     skills = let
-      # Dev-repo self-consumption. The stacked-workflows skills are installed
-      # here under a `dev-` prefix so the in-repo copies never collide with — or
-      # get shadowed by — user-global installs (Claude precedence: Personal >
-      # Project, silent). Consumers and global installs stay unprefixed; only
-      # this dev shell prefixes.
+      # In-repo stack-* skills get a dev- prefix so they never collide with, or
+      # get silently shadowed by, user-global installs.
       prefixSkill = name: value: let
         devName = "dev-${name}";
       in
@@ -340,22 +251,9 @@ in {
       # dirs (real reference files bundled inside each) as dev-stack-*.
       prefixDev pkgs.stacked-workflows-content.passthru.skills
       // {
-        # Dev skills (repo-local tooling, not published packages). The delivery
-        # router walks each bare-path directory and emits one `files.*.source`
-        # target per regular or symlink leaf. Each target points beneath one
-        # directory store root, but retains the separately interpolated leaf's
-        # string context. That context keeps each leaf in
-        # `.devenv/input-paths.txt`; a directory context alone would not create
-        # usable direnv watches (mechanism in lib/traceSource.nix).
-        #
-        # Wrapping these in `lib/traceSource.nix` therefore cannot add a path:
-        # the per-file set is a strict superset of what that wrapper's
-        # regular-files-only walk reaches. The live `.devenv/input-paths.txt`
-        # already lists the symlinked leaves under
-        # `dev/skills/repo-review/references/`, which the wrapper's walk skips
-        # outright. Measured 2026-09-22 — bare and wrapped arms reloaded
-        # identically, 3/3 each, with an attribution control confirming
-        # nothing else walks `dev/skills/`.
+        # Repo-local dev skills. The delivery router walks each directory per
+        # leaf, which keeps direnv watches; lib/traceSource.nix would add nothing
+        # (measured 2026-09-22).
         delegate-evidence = ./skills/delegate-evidence;
         index-repo-docs = ./skills/index-repo-docs;
         kimchi-egress-report = ./skills/kimchi-egress-report;
