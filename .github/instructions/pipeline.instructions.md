@@ -486,7 +486,7 @@ them.
 
 ## Generation Architecture
 
-> **Last verified:** 2026-10-03 — repo documents and agent files are built by
+> **Last verified:** 2026-10-08 — repo documents and agent files are built by
 > `mkTree` with the evaluated `ai.formatter` treefmt config and the named
 > guards; scoped rules rely on the normalized matcher-derived `fileMatch`
 > trigger default. `generate:all` writes instruction and repo-document
@@ -525,6 +525,11 @@ Two kinds of generated content, two owners:
 
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.
+
+The primary checkout has no instruction files left by the old generator. Its
+one-time cleanup is retired; the operator will prune old worktrees that still
+hold those files (decision, 2026-10-08). The ownership writer only prunes files
+in its own ledger, so it does not replace that historical cleanup.
 
 ### Source Layout
 
