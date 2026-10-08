@@ -61,6 +61,8 @@
   daemonSelect = import ./daemonSelect.nix pkgs;
   effectiveProjectDocMaxBytes = import ./effectiveProjectDocMaxBytes.nix pkgs;
   packageLayout = import ./packageLayout.nix;
+  projectTrustNotice = import ./projectTrustNotice.nix pkgs;
+  runtimeFiles = import ../../../lib/ai/runtime-files.nix {inherit lib;};
   jsonFormat = pkgs.formats.json {};
   tomlFormat = pkgs.formats.toml {};
 
@@ -1539,6 +1541,12 @@ in
             format = "toml";
           };
         }
+
+        (lib.optionalAttrs (!isHm && options ? enterShell) {
+          enterShell = lib.mkIf (cfg.files ? ${configFile} && runtimeFiles.isLive cfg.files.${configFile}) ''
+            ${lib.getExe projectTrustNotice} "$DEVENV_ROOT"
+          '';
+        })
 
         (lib.optionalAttrs isHm (lib.mkMerge [
           {

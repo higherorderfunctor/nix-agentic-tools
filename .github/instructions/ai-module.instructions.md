@@ -7,10 +7,9 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-07 — the runtime record's `launcherOptionsPath`
-> moves Kiro launcher options to `ai.kiro.cli`; Codex guards launcher flags as
-> real uses without per-name annotation rows; per-runtime program overrides
-> accept portable `settings`.
+> **Last verified:** 2026-10-07 — devenv warns when delivered Codex project
+> config is untrusted, sharing the trust resolver with the AGENTS.md
+> effective-limit notice.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -264,18 +263,24 @@ The ai module fans out TWO kinds of configuration:
   `codex --profile <name>`) was removed 2026-09-19 as unreachable dead code; see
   the Settled bullet above. `projects.<path>.trust_level` is accepted only by
   Home Manager's user-global file, where it is the only project trust Codex
-  keeps: one entry per clone, since Codex resolves a linked worktree to its main
-  checkout. Devenv rejects it because a project cannot bootstrap the trust
-  required to load its own `.codex/config.toml`; without Home Manager,
-  `~/.codex` is Codex's own and its trust prompt saves there.
-  `ai.codex.execpolicyRules.<name>` writes native Starlark to
-  `<config-layer>/rules/<name>.rules` in both backends. It is intentionally
-  separate from Markdown `ai.rules`, which remains durable AGENTS.md guidance.
-  Home Manager reserves `execpolicyRules.default` because Codex appends accepted
-  user allow-list decisions to `$CODEX_HOME/rules/default.rules`; other
-  per-entry files remain declarative while that native mutation can coexist.
-  Trusted project rules are declarative and may use `default` because Codex's
-  native writer targets only the user layer.
+  keeps. The shell-entry project-trust notice and AGENTS.md effective-limit
+  resolver share `projectTrust.nix`: canonical/original cwd entries precede the
+  main checkout entry for linked worktrees, and an explicit cwd entry (even
+  without a trust level) prevents falling through. A non-Git project uses its
+  cwd entry. The notice warns only when a readable delivered
+  `.codex/config.toml` will be ignored; missing/unreadable user or project files
+  and malformed user TOML stay silent. Disabled delivery emits no notice. Devenv
+  rejects it because a project cannot bootstrap the trust required to load its
+  own `.codex/config.toml`; without Home Manager, `~/.codex` is Codex's own and
+  its trust prompt saves there. `ai.codex.execpolicyRules.<name>` writes native
+  Starlark to `<config-layer>/rules/<name>.rules` in both backends. It is
+  intentionally separate from Markdown `ai.rules`, which remains durable
+  AGENTS.md guidance. Home Manager reserves `execpolicyRules.default` because
+  Codex appends accepted user allow-list decisions to
+  `$CODEX_HOME/rules/default.rules`; other per-entry files remain declarative
+  while that native mutation can coexist. Trusted project rules are declarative
+  and may use `default` because Codex's native writer targets only the user
+  layer.
 - `ai.codex.agents.<name>` — a normalized agent record or a raw standalone TOML
   role file, delivered verbatim (not scanned for OAuth secrets);
   `ai.codex.agentsDir` expands `.toml` files into raw entries. A normalized
