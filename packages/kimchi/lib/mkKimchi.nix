@@ -16,6 +16,8 @@
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
+  projectTrustNotice = import ./projectTrustNotice.nix pkgs;
+  runtimeFiles = import ../../../lib/ai/runtime-files.nix {inherit lib;};
   sharedHooks = lib.ai.hooks;
   # Native option types, project-tier keys and environment names, all read
   # from the committed sidecar (never passthru.extracted: that is IFD).
@@ -393,6 +395,7 @@
     mergedRules,
     mergedServers,
     mergedSkills,
+    options,
     resolvedSettings,
     topHooks,
     ...
@@ -479,6 +482,10 @@
         runtime = "kimchi";
         writer = "kimchiFiles";
       };
+    projectFilesRequiringTrust = builtins.attrNames (lib.filterAttrs (path: entry:
+      (lib.hasPrefix "${projectDir}/" path || lib.hasPrefix "${projectHarnessDir}/" path)
+      && runtimeFiles.isLive entry)
+    cfg.files);
     relativeTrustKeys = builtins.filter (key: !(lib.hasPrefix "/" key)) (builtins.attrNames cfg.projectTrust);
     # Git tokens are secrets with no environment input: Kimchi reads them only
     # from the user config.json (src/extensions/teleport/provisioning/
@@ -499,6 +506,11 @@
       };
   in
     lib.mkMerge [
+      (lib.optionalAttrs (isDevenv && options ? enterShell) {
+        enterShell = lib.mkIf (projectFilesRequiringTrust != []) ''
+          ${lib.getExe projectTrustNotice} "$DEVENV_ROOT" ${lib.escapeShellArgs projectFilesRequiringTrust}
+        '';
+      })
       {
         assertions =
           [

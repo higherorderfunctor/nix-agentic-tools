@@ -1,7 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-07 — extractor floors guard config, environment and
-> harness surfaces; secret environment rows must state what they control.
+> **Last verified:** 2026-10-07 — devenv warns at shell entry when delivered
+> project files will be ignored by user-scope project trust.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -383,6 +383,19 @@ and TUI only: ACP resolves trust again for each session without it
 persisted decision or `defaultProjectTrust`. Root `AGENTS.md` is the upstream
 exception: Kimchi's context loader walks ancestors directly without consulting
 the project-scope gate.
+
+Devenv emits one `kimchi-project-trust-notice` at shell entry when live final
+files land under `.kimchi/` or `.config/kimchi/harness/`. It reads the pinned
+runtime's fixed user harness at `$HOME/.config/kimchi/harness`, checks the
+nearest boolean trust entry at or above the real project root, and uses user
+`settings.json`'s `defaultProjectTrust` only without a persisted decision.
+`always` allows; `ask`/`never` deny unattended sessions. Explicit denial wins
+over `always`, null entries inherit, and project settings cannot grant trust.
+The notice warns without failing shell entry. Missing/unreadable trust files
+stay silent; without a decision, missing/unreadable settings also stay silent.
+Absent/unreadable delivered files, disabled delivery, and root AGENTS.md alone
+do not warn. Rendered-command module fixtures exercise both project namespaces
+with positive controls.
 
 `ai.kimchi.projectTrust` (absolute path → bool) is the persisted decision,
 declared. pi 0.85.1 keeps it in `<agentDir>/trust.json`, which Kimchi pins to
