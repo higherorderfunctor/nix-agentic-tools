@@ -737,17 +737,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1791440858,
-        "narHash": "sha256-7OXThmOkHUYdFfotgtT9wK/Vh0LSpGTiVYVy1bzvPVU=",
+        "lastModified": 1791457538,
+        "narHash": "sha256-0hiDHC/3SQLf3pOrn9kJf52KekanXRdw2Xyk56G5uI4=",
         "owner": "numtide",
         "repo": "treefmt-nix",
-        "rev": "0585216029b53d58eb9e0b52df274034c6ce26e8",
+        "rev": "7ba5d7180939b022772e9dbaa1cd82435962073c",
         "type": "github"
       },
       "original": {
         "owner": "numtide",
         "repo": "treefmt-nix",
-        "rev": "0585216029b53d58eb9e0b52df274034c6ce26e8",
+        "rev": "7ba5d7180939b022772e9dbaa1cd82435962073c",
         "type": "github"
       }
     }
