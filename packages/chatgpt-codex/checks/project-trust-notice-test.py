@@ -38,6 +38,7 @@ def probe(directory, warning, expected_limit=32768):
     assert result.stdout == "", result
     if warning:
         assert "warning: Codex ignores" in result.stderr
+        assert "an explicit cwd entry overrides main-checkout trust" in result.stderr
         assert str(directory / ".codex/config.toml") in result.stderr
         assert str(user) in result.stderr
     else:
