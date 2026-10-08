@@ -1,7 +1,7 @@
 # Wrap kiro-cli so it launches the way the config asks — shared by BOTH backends
 # (DRY). Returns the raw package when nothing needs wrapping.
 #
-# `environmentVariables` are baked as `export`s on BOTH backends. devenv used
+# `environmentVariables` are exported at launch on BOTH backends. devenv used
 # to pass `{}` here and export through its native `env` attrset instead; that
 # wrote the PROJECT SHELL, handing every variable to the developer's own
 # session, so it was retired on 2026-08-10. devenv also still needs the flag
@@ -59,6 +59,7 @@
   lib,
   pkgs,
 }: let
+  redact = import ../../../lib/redact {inherit lib;};
   inherit
     (import ../../../lib/idempotentFlags.nix {inherit lib;})
     gateOnSubcommand
@@ -132,15 +133,11 @@
     hasV3 = reasons.v3.active;
     needsWrapper = lib.any (reason: reason.active) (lib.attrValues reasons);
     trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
-    # env baked as `export`s (was makeWrapper `--set`), so the hand-written
-    # wrapper can ALSO position the flags. makeWrapper only appends
-    # (`--append-flags`) or prepends blindly (`--add-flags`), with no way to
-    # skip a flag the caller already passed or to gate one on the subcommand.
-    envExports =
-      lib.concatStringsSep "\n"
-      (lib.mapAttrsToList
-        (k: v: "export ${lib.escapeShellArg k}=${lib.escapeShellArg v}")
-        environmentVariables);
+    envExports = redact.environment {
+      inherit pkgs;
+      option = "ai.kiro.environmentVariables";
+      values = environmentVariables;
+    };
 
     # SOPS/agenix secrets read at RUNTIME — the decrypted file is `cat`ed into
     # the env just before `exec`, so the VALUE never enters the world-readable

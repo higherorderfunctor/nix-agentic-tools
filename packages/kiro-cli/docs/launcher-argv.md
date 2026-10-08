@@ -1,9 +1,8 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-06 — opt-in bundle replacements apply independently
-> and cached partial patches replay their skip warnings;
-> `relativeFileCheckPaths` keeps the stop-condition file workspace-relative for
-> writer and check. No successful replacement means stock launch.
+> **Last verified:** 2026-10-07 — environment references resolve through the
+> shared redact reader before launching Kiro; PATH composition and the separate
+> MCP-secret path retain their existing ordering.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -172,11 +171,12 @@ each opt-in tweak selecting the patched path on both backends.
 `ai.kiro.extraPackages` adds one more environment-only injection to both the
 launcher and direct chat wrappers. Their store-backed `bin` directories are
 prepended after ordinary and secret environment exports, so an explicit
-`ai.kiro.environmentVariables.PATH` becomes the base and the requested packages
-are first at that wrapper boundary. With no explicit PATH, the caller's
-inherited value remains after the prefix. Setting the Kiro-specific PATH entry
-to null suppresses a root `ai.environmentVariables.PATH`, restoring the ambient
-base before `extraPackages` is prepended.
+`ai.kiro.environmentVariables.PATH` (literal or redact reference) becomes the
+base and the requested packages are first at that wrapper boundary. With no
+explicit PATH, the caller's inherited value remains after the prefix. Setting
+the Kiro-specific PATH entry to null suppresses a root
+`ai.environmentVariables.PATH`, restoring the ambient base before
+`extraPackages` is prepended.
 
 That is not final override precedence on Linux. The upstream FHS `/init` then
 sources `/etc/profile`, which puts `/run/wrappers/bin:/usr/bin:/usr/sbin` ahead

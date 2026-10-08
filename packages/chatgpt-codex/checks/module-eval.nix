@@ -651,7 +651,7 @@ in {
           codex.enable = true;
           mcpServers.context7-mcp = {
             package = pkgs.hello;
-            settings.credentials.file = "/run/secrets/context7-api-key";
+            settings.credentials = {_redact.file = "/run/secrets/context7-api-key";};
           };
         };
         hmServer = (hmCodexSettings (evalHm config)).mcp_servers.context7-mcp;
@@ -678,13 +678,13 @@ in {
           mcpServers = {
             context7-mcp = {
               package = pkgs.hello;
-              settings.credentials.file = "/run/secrets/context7-api-key";
+              settings.credentials = {_redact.file = "/run/secrets/context7-api-key";};
             };
             effect-mcp.url = "http://127.0.0.1:19760/mcp";
             git-intel-mcp.package = pkgs.hello;
             github-mcp = {
               package = pkgs.hello;
-              settings.credentials.file = "/run/secrets/github-token";
+              settings.credentials = {_redact.file = "/run/secrets/github-token";};
             };
             nixos-mcp.url = "http://127.0.0.1:19761/mcp";
             openmemory = {

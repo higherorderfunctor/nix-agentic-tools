@@ -20,6 +20,7 @@
   deliveryOptions = import ./delivery-options.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
+  redact = import ../redact {inherit lib;};
   formatter =
     (config.ai.internal.treefmtNix.lib.evalModule pkgs {
       imports = [
@@ -469,7 +470,7 @@ in {
     };
 
     environmentVariables = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+      type = redact.types.environment;
       default = {};
       description = ''
         Environment variables fanned out to every enabled AI app with a
@@ -477,8 +478,9 @@ in {
         replace root entries at the same key; null suppresses an inherited
         variable for that runtime.
 
-        Delivered by baking them into each app's wrapper, so they scope to
-        that process and the commands it spawns. They are NOT written into
+        Literals are baked into the wrapper; `redact.file` and
+        `redact.command` references are read at launch. Credential-named keys
+        require references. Values scope to that process and its children. They are NOT written into
         the Home Manager session or the devenv project shell — this module
         does not touch the shell environment, because a variable exported
         there also reaches the developer's own session and every other
@@ -619,6 +621,7 @@ in {
   # Emission logic lives at L4 inside each per-CLI factory. This
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
+    {_module.args.redact = redact;}
     (lib.optionalAttrs hasAssertions {assertions = proxyAssertions;})
     # Drop the systemd path entirely in devenv. `mkIf false` would still define
     # an unknown option there; the option-tree probe is a build-time condition

@@ -33,7 +33,7 @@
   pkgs,
   cfg,
 }: let
-  credentialsLib = import ../../../lib/credentials.nix {inherit lib;};
+  redact = import ../../../lib/redact {inherit lib;};
 
   # Key partitioning + env-var mapping live in ONE place, shared with
   # ../modules/options.nix, which declares the options these exports
@@ -50,10 +50,24 @@
     then builtins.filter (name: name != "token") secretKeys
     else secretKeys;
 
-  secretExports =
-    lib.concatStringsSep "\n"
-    (builtins.filter (s: s != "")
-      (map (n: credentialsLib.mkSecretExport pkgs (envVarOf n) (cfg.${n} or null)) invocationSecretKeys));
+  secretExports = lib.concatMapStringsSep "\n" (name:
+    lib.optionalString ((cfg.${name} or null) != null) (redact.read {
+      inherit pkgs;
+      export = true;
+      option = "glab.${name}";
+      target = envVarOf name;
+      value =
+        if name == "host"
+        then cfg.${name}
+        else
+          redact.types.redacted.merge ["glab" name] [
+            {
+              file = "glab.mkGlab";
+              value = cfg.${name};
+            }
+          ];
+    }))
+  invocationSecretKeys;
 
   # Non-secret settings: plain exports, no store-visibility concern.
   # Booleans become "true"/"false", which is what glab's own bool parser
@@ -184,6 +198,12 @@
         fi
       fi
 
+      ${lib.optionalString (redact.isReference (cfg.host or null)) ''
+      # glab's seeding API takes the hostname on argv. Private hosts stay in
+      # GITLAB_HOST; auth status needs an entry created by auth login instead.
+      return 0
+    ''}
+
       # glab stores BARE hostnames; the configured value may carry a
       # scheme and a path. Both strips are bash builtins, so this costs no
       # process and works with no PATH.
@@ -263,7 +283,9 @@ in
     # Replace only bin/glab. Everything else in the join — man pages,
     # bash/fish/zsh completions — is upstream's, untouched.
     postBuild = ''
-      rm -f "$out/bin/glab"
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      rm "$out/bin/glab"
       ln -s "${wrapper}" "$out/bin/glab"
     '';
 

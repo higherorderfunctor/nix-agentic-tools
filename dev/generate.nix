@@ -299,7 +299,9 @@
 
     services.mcp-servers.servers.github-mcp = {
       enable = true;
-      settings.credentials.file = "/run/secrets/github-token";
+      settings.credentials = inputs.nix-agentic-tools.lib.redact.file {
+        path = "/run/secrets/github-token";
+      };
     };
     ```
 
@@ -1158,11 +1160,15 @@
     <details>
     <summary><strong>MCP Servers (Home-Manager)</strong></summary>
 
+    The module argument `redact` supplies runtime references.
+
     ```nix
     services.mcp-servers.servers = {
       github-mcp = {
         enable = true;
-        settings.credentials.file = config.sops.secrets.github-token.path;
+        settings.credentials = redact.file {
+          path = config.sops.secrets.github-token.path;
+        };
       };
       nixos-mcp.enable = true;
       context7-mcp.enable = true;

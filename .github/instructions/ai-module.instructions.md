@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-07 — Codex reconciles committed command and flag
-> names and checks launcher flags against the root command; per-runtime program
+> **Last verified:** 2026-10-07 — supported launcher environment pools accept
+> redact references and reject literal credentials; per-runtime program
 > overrides accept portable `settings`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
@@ -513,13 +513,13 @@ scope or a non-empty list for `fileMatch` content.
   drop it for that runtime with `ai.<runtime>.lspServers.<name> = null`. Copilot
   also keys `lspServers` by the attribute name and rejects the whole file for a
   name outside `[A-Za-z0-9_-]+`, so such a name throws for Copilot too.
-- `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
-  of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
-  joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
-  is a different thing and still is — that filters what SPAWNED commands
-  inherit, while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.native.settings.env` is its
-  native equivalent.
+- `ai.environmentVariables` — shared environment literals or redact references,
+  resolved by the launcher wrapper of every harness that has one: **Codex,
+  Copilot, Kimchi and Kiro**. Codex joined on 2026-08-10 when it gained a
+  wrapper; its `shell_environment_policy` is a different thing and still is —
+  that filters what SPAWNED commands inherit, while this pool configures the CLI
+  process itself. Claude is the one exclusion: it has no wrapper here, and
+  `ai.claude.native.settings.env` is its native equivalent.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
   runtime variable** — not for Codex, not for anything. An earlier revision of
@@ -1835,8 +1835,9 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-07 — launcher environment literals and redact
+> references use shared runtime exports; configured values retain precedence
+> over the ambient environment.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1913,7 +1914,7 @@ sibling shell-specific capability flag.
 | runtime | knob                       | delivery                                |
 | ------- | -------------------------- | --------------------------------------- |
 | Claude  | `CLAUDE_CODE_SHELL`        | `native.settings.env` → `settings.json` |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                |
+| Codex   | `SHELL` (own process env)  | launcher wrapper runtime export         |
 | Kiro    | `SHELL` (own process env)  | launcher wrapper `export`               |
 | Copilot | **unknown — verified gap** | excluded                                |
 | Kimchi  | unassessed                 | excluded                                |
@@ -2004,10 +2005,11 @@ three runtimes demonstrably do not perform.
   **`pkgs.bashNonInteractive`**. Any test asserting "the override changed the
   value" must use that one, or it passes vacuously against two names for one
   store path.
-- **`--set`, never `--set-default`.** This repo reserves `--set-default` for
-  polite defaults a user may override (`TERM`, `GH_TELEMETRY`). A configured
-  shell must beat the ambient environment. For Codex this matters more than it
-  looks, because "unset" is not neutral — it lands on the passwd shell.
+- **Configured exports override ambient values.** `lib/redact` materializes
+  launcher environment entries: ordinary names accept strings or file/command
+  references; credential-named keys require references. Reads happen at launch
+  and fail before the consumer runs. `--set-default` remains reserved for polite
+  defaults such as `TERM`.
 - **Codex had no wrapper before this option.** It now installs
   `lib.ai.mkLauncher` (`lib/ai/launcher.nix`), which Copilot's wrapper also
   calls. The wrapper is skipped entirely when it has nothing to bake in, so a

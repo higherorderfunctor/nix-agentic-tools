@@ -9,40 +9,39 @@ self-hosted instances are configured per the "Instance URL" section below.
 ## Quick start (HM)
 
 ```nix
-{ config, ... }: {
+{ config, redact, ... }: {
   services.mcp-servers.servers.gitlab-mcp = {
     enable = true;
-    settings.pat.file = config.sops.secrets."gitlab-personal-access-token".path;
+    settings.pat = redact.file {
+      path = config.sops.secrets."gitlab-personal-access-token".path;
+    };
   };
 }
 ```
 
 The PAT (`GITLAB_PERSONAL_ACCESS_TOKEN`) is the only required credential. The
-`settings.pat` option is the standard sops-nix / agenix surface — `.file` reads
-a decrypted file at service start, `.helper` reads from a credential-helper
-script. Exactly one must be set; raw inline tokens are intentionally not
-supported (they would land in the Nix store).
+`settings.pat` option accepts a `redact.file { path = "…"; }` or
+`redact.command { path = "…"; }` reference. Inline tokens are a type error. The
+shared reader refuses unreadable, empty, NUL-containing, or failed command
+output before starting the server; its diagnostics never include the value.
 
 ## Instance URL
 
-Two ways to point at a non-default instance, mutually exclusive:
+`instanceUrl` maps to `GITLAB_API_URL` and accepts a public string or a
+reference:
 
 ```nix
-# Plain URL — lands in the Nix store. Use when the URL is public
-# knowledge (e.g. a self-hosted instance everyone in the org knows).
+# Public URL, stored in Nix.
 services.mcp-servers.servers.gitlab-mcp.settings.instanceUrl =
   "https://gitlab.example.com";
 ```
 
 ```nix
-# Credential form — keeps the URL out of the store. Use when the
-# instance URL itself is sensitive.
-services.mcp-servers.servers.gitlab-mcp.settings.apiUrl.file =
-  config.sops.secrets."gitlab-instance-url".path;
+# Private URL, read only when the server starts.
+services.mcp-servers.servers.gitlab-mcp.settings.instanceUrl = redact.file {
+  path = config.sops.secrets."gitlab-instance-url".path;
+};
 ```
-
-Setting both raises an eval-time error. Both forms end up as `GITLAB_API_URL`
-for the server.
 
 ## Trust posture knobs
 
@@ -80,8 +79,8 @@ environment variable is omitted).
   default to keep the default tool list small.
 - `caCertPath = "/etc/ssl/certs/ca.pem"` — path to a CA bundle for self-signed
   GitLab instances (`GITLAB_CA_CERT_PATH`).
-- `jobToken.file` — set `GITLAB_JOB_TOKEN` for CI-scoped operations that prefer
-  the job token over the PAT.
+- `jobToken = redact.file { path = "…"; }` — set `GITLAB_JOB_TOKEN` for
+  CI-scoped operations that prefer the job token over the PAT.
 
 ## OAuth and other deferred env vars
 
@@ -96,6 +95,3 @@ services.mcp-servers.servers.gitlab-mcp.env = {
   HTTP_PROXY = "http://proxy.example.com:3128";
 };
 ```
-
-See `docs/plans/gitlab-mcp-packaging-slim.md` in the repo for the full
-deferred-vars table with upstream source references.

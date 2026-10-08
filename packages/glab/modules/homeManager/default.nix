@@ -46,10 +46,8 @@ in {
           message = "glab.keyringSync.enable requires glab.host so the token cannot be stored for the wrong instance.";
         }
         {
-          assertion =
-            !cfg.keyringSync.enable
-            || (cfg.token != null && !(cfg.token ? plain));
-          message = "glab.keyringSync.enable requires glab.token.file or glab.token.helper; token.plain would already expose the token through the Nix store.";
+          assertion = !cfg.keyringSync.enable || cfg.token != null;
+          message = "glab.keyringSync.enable requires glab.token.";
         }
       ];
     }

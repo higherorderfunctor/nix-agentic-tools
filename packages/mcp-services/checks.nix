@@ -1,3 +1,3 @@
 {
-  imports = [./checks/module-eval.nix];
+  imports = [./checks/module-eval.nix ./checks/redact.nix];
 }

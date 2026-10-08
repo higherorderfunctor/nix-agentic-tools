@@ -266,6 +266,7 @@ for it. When several entries match, their guidance composes.
     - `lib/ai/mcpServer/**`
     - `lib/ai/sharedOptions.nix`
     - `lib/mcp.nix`
+    - `lib/redact/**`
     - `lib/testing/factory-harness.nix`
     - `lib/testing/module-harness.nix`
     - `packages/*/checks/factory-eval.nix`

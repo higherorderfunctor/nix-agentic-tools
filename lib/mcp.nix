@@ -20,7 +20,7 @@
   # ordinary Nix module for config defaults and config.assertions over settings.
   # Assertion values merge with caller values; the internal option is reserved.
   loadServer = name: import ../packages/${name}/modules/mcp-server.nix {inherit lib mcpLib;};
-  mcpLib = {inherit mkCredentialsOption;};
+  mcpLib = {inherit redact;};
 
   isExternal = serverDef: serverDef.meta ? external && serverDef.meta.external;
 
@@ -80,15 +80,12 @@
   in
     (serverDef.settingsToArgs cfgShim mode) ++ extraArgs;
 
-  # ── Credentials option generator ──────────────────────────────────
-  # MOVED to lib/credentials.nix and re-exported here unchanged, so every
-  # MCP server module keeps the exact option type it had. The move
-  # happened when packages/glab — not an MCP server — needed the same
-  # runtime-secret primitives. Do not fork a second copy back into this
-  # file; add to credentials.nix instead.
-  inherit (credentialsLib) mkCredentialsOption mkCredentialsSnippet;
-
-  credentialsLib = import ./credentials.nix {inherit lib;};
+  redact = import ./redact {inherit lib;};
+  credentialsEnvironment = pkgs: credentialVars: settings:
+    redact.environment {
+      inherit pkgs;
+      values = lib.mapAttrs' (name: spec: lib.nameValuePair spec.envVar settings.${name}) credentialVars;
+    };
 
   # ── Credentials helpers ──────────────────────────────────────────
   # credentialVars: { settingsOptionName = { envVar = "ENV_VAR"; required = bool; }; }
@@ -98,7 +95,7 @@
     any (optName: let
       cred = settings.${optName};
     in
-      (cred.file or null) != null || (cred.helper or null) != null)
+      cred != null)
     (builtins.attrNames credentialVars);
 
   # File paths backing file-based credentials, in declaration order.
@@ -107,38 +104,87 @@
   # changes), so callers hash these files to decide whether a dependent
   # long-lived service must restart. Agnostic to the secret manager
   # (sops-nix, agenix, ln, ...): it only needs the decrypted file path.
-  credentialFilePaths = credentialVars: settings:
-    builtins.filter (p: p != null)
-    (mapAttrsToList (optName: _: let
-      cred = settings.${optName} or null;
-    in
-      if cred != null && cred ? file
-      then cred.file
-      else null)
-    credentialVars);
-
-  # `mkCredentialsSnippet` also lives in lib/credentials.nix now (it is
-  # inherited above). It still uses absolute store paths for every
-  # command — Claude Code's MCP `env` field REPLACES the process
-  # environment, so a bare `cat` there fails with "command not found"
-  # and the server starts silently unauthenticated.
+  credentialFilePaths = credentialVars: settings: env:
+    lib.unique (builtins.filter (p: p != null) (
+      map (value:
+        if redact.isReference value && value._redact ? file
+        then value._redact.file
+        else null)
+      ((mapAttrsToList (optName: _spec: settings.${optName} or null) credentialVars)
+        ++ builtins.attrValues env)
+    ));
 
   # ── Secrets wrapper for stdio servers with credentials ─────────────
   # Returns a string (store path) for use directly as a command.
   mkSecretsWrapper = {
+    command,
+    env,
     pkgs,
     name,
-    package,
-    credentialVars,
-    settings,
+    credentialVars ? {},
+    settings ? {},
   }: let
     drv = pkgs.writeShellScript (name + "-env") ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      ${mkCredentialsSnippet pkgs credentialVars settings}
-      exec "${getExe package}" "$@"
+      ${redact.environment {
+        inherit pkgs;
+        values = env;
+        option = "mcpServers.${name}.env";
+      }}
+      ${credentialsEnvironment pkgs credentialVars settings}
+      exec ${lib.escapeShellArg command} "$@"
     '';
   in "${drv}";
+
+  pythonGuard = {
+    PYTHONNOUSERSITE = "true";
+    PYTHONPATH = "";
+  };
+
+  normalizeStdio = pkgs: name: {
+    args ? [],
+    command ? null,
+    credentialVars ? {},
+    env,
+    package ? null,
+    settings ? {},
+  }: let
+    checkedEnv = lib.filterAttrs (_: value: value != null) (redact.types.environment.merge ["mcpServers" name "env"] [
+      {
+        file = "renderServer";
+        value = env;
+      }
+    ]);
+    executable =
+      if command != null
+      then command
+      else getExe package;
+    guarded = package != null;
+    wrapped = hasCredentials credentialVars settings || any redact.isReference (builtins.attrValues checkedEnv);
+  in {
+    command =
+      if wrapped
+      then
+        mkSecretsWrapper {
+          inherit name pkgs settings credentialVars;
+          command = executable;
+          env = builtins.removeAttrs checkedEnv (builtins.attrNames (
+            if guarded
+            then pythonGuard
+            else {}
+          ));
+        }
+      else executable;
+    inherit args;
+    env =
+      (
+        if wrapped
+        then {}
+        else checkedEnv
+      )
+      // lib.optionalAttrs guarded pythonGuard;
+  };
 
   # ── Typed-shape constructor (ai.mcpServers.<name> values) ────────
   # Returns the typed shape declared in
@@ -163,7 +209,7 @@
   # Discriminates on which fields are set, in order:
   #
   #   url != null        → HTTP pass-through
-  #   command != null    → raw pass-through (no wrapping)
+  #   command != null    → raw command, wrapped when env has references
   #                        Explicit command always wins so users can
   #                        override or skip the server-module pipeline.
   #   package != null    → typed-via-package — runs the
@@ -219,12 +265,14 @@
       }
       // lib.optionalAttrs (timeout != null) {inherit timeout;}
     else if command != null
-    then {
+    then let
+      rendered = normalizeStdio pkgs name {inherit args command env;};
+    in {
       type =
         if type != null
         then type
         else "stdio";
-      inherit command args env;
+      inherit (rendered) args command env;
     }
     else if package != null
     then let
@@ -239,27 +287,15 @@
       srvEnv = effectiveEnv name cfgShim "stdio" env;
       srvArgs = effectiveArgs name cfgShim "stdio" args;
       credentialVars = serverDef.meta.credentialVars or {};
-      needsWrapper = hasCredentials credentialVars evaluatedSettings;
-      wrappedCommand = mkSecretsWrapper {
-        inherit pkgs name credentialVars package;
+      rendered = normalizeStdio pkgs name {
+        args = stdioArgs ++ srvArgs;
+        inherit credentialVars package;
+        env = srvEnv;
         settings = evaluatedSettings;
       };
     in {
       type = "stdio";
-      command =
-        if needsWrapper
-        then wrappedCommand
-        else getExe package;
-      args = stdioArgs ++ srvArgs;
-      # Prevent Python path pollution from parent process (e.g.,
-      # nixos-mcp sets PYTHONPATH for Python 3.13 which breaks
-      # Python 3.14 servers).
-      env =
-        srvEnv
-        // {
-          PYTHONPATH = "";
-          PYTHONNOUSERSITE = "true";
-        };
+      inherit (rendered) args command env;
     }
     else throw "renderServer: server '${name}' must specify one of: package, command, or url";
 
@@ -322,6 +358,7 @@
 in {
   inherit
     credentialFilePaths
+    credentialsEnvironment
     effectiveArgs
     effectiveEnv
     evalSettings
@@ -329,13 +366,12 @@ in {
     isExternal
     loadServer
     mkCfgShim
-    mkCredentialsOption
-    mkCredentialsSnippet
     mkHttpEntry
     mkPackageEntry
     mkSecretsWrapper
     mkStdioConfig
     mkStdioEntry
+    redact
     renderServer
     ;
 }

@@ -1,5 +1,8 @@
 # glab
 
+> **Last verified:** 2026-10-07 — host literals and redact references share the
+> wrapper; tokens require references and private hosts stay off argv.
+
 Declarative configuration for the GitLab CLI, with the instance URL and token
 resolved at runtime so neither reaches the Nix store. Home Manager can either
 supply the token to each invocation or synchronize it into glab's operating
@@ -12,13 +15,13 @@ that happen to agree.
 ## Usage
 
 ```nix
-{
+{config, redact, ...}: {
   glab = {
     enable = true;
 
     # Self-hosted instance whose URL should stay out of the store.
-    host.file = config.sops.secrets.gitlab-url.path;
-    token.file = config.sops.secrets.gitlab-token.path;
+    host = redact.file {path = config.sops.secrets.gitlab-url.path;};
+    token = redact.file {path = config.sops.secrets.gitlab-token.path;};
 
     settings = {
       git_protocol = "ssh";
@@ -29,13 +32,13 @@ that happen to agree.
 }
 ```
 
-For a public instance the URL is ordinary configuration, so use `plain`:
+For a public instance the URL can be a literal string:
 
 ```nix
 glab = {
   enable = true;
-  host.plain = "gitlab.com";
-  token.helper = "/run/wrappers/bin/my-token-helper";
+  host = "gitlab.com";
+  token = redact.command {path = "/run/wrappers/bin/my-token-helper";};
 };
 ```
 
@@ -47,9 +50,9 @@ Secret Service backend:
 ```nix
 glab = {
   enable = true;
-  host.file = config.sops.secrets.gitlab-url.path;
+  host = redact.file {path = config.sops.secrets.gitlab-url.path;};
   keyringSync.enable = true;
-  token.file = config.sops.secrets.gitlab-token.path;
+  token = redact.file {path = config.sops.secrets.gitlab-token.path;};
 
   settings.git_protocol = "ssh";
 };
@@ -68,13 +71,12 @@ cannot take its normal plaintext-config fallback. The service has `Restart=no`
 and removes the marker on every exit, so one activation permits at most one
 prompt. A later activation creates a fresh marker and permits one new attempt.
 
-After that probe, the service reads `host` and `token` from their `file` or
-`helper` branches and passes the token to
-`glab auth login --stdin --use-keyring`. The explicit (now deprecated) keyring
-flag keeps package overrides predating keyring-by-default behavior secure. The
-token is never placed in command arguments, a persistent environment variable,
-or the Nix store. `token.plain` is rejected because it would already have
-exposed the credential through the store.
+After that probe, the service resolves `host` and `token` references and passes
+the token to `glab auth login --stdin --use-keyring`. The explicit (now
+deprecated) keyring flag keeps package overrides predating keyring-by-default
+behavior secure. The token is never placed in command arguments, a persistent
+environment variable, or the Nix store. `token.plain` is rejected because it
+would already have exposed the credential through the store.
 
 While synchronization is enabled, the ordinary Home Manager wrapper stops
 exporting `GITLAB_TOKEN`; environment credentials take precedence over stored
@@ -86,32 +88,22 @@ the devenv facet so the two option trees cannot drift, but enabling it there is
 an evaluation error: a repository shell may consume a user's keyring, but it
 must not own login, Secret Service, or graphical-session units.
 
-## Secret-capable options
+## References and literals
 
-`host`, `token` and `job_token` each take **exactly one** of three branches. The
-option is a discriminated union, so "plain and file both set" is not a state you
-can construct — there is no runtime assertion to forget.
+`host` accepts a literal string or a `redact.file` / `redact.command` reference.
+`token`, `job_token`, and every keyring-eligible key in glab's extracted schema
+accept references only. Their defaults are `null`, which leaves the
+corresponding environment variable unset. Other settings keep their ordinary
+types.
 
-| branch   | behavior                                                       |
-| -------- | -------------------------------------------------------------- |
-| `plain`  | literal value, interpolated into the store, **world-readable** |
-| `file`   | path read at runtime; nothing enters the store                 |
-| `helper` | executable run at runtime; nothing enters the store            |
+A file reference contains an absolute runtime file path; a command reference
+names an executable which prints the value on stdout. The shared reader rejects
+failed, unreadable, empty, or NUL-containing input before glab runs. Diagnostics
+name the option, never the value or command output. Secret contents must not be
+read by Nix or embedded in a command's store-resident source.
 
-`file` and `helper` both **abort** when the value comes back empty, rather than
-exporting nothing and letting glab fall back to its own default. That matters
-most for `host`, whose default is `gitlab.com`: an empty self-managed URI would
-otherwise send your token to the wrong instance, silently. A half-applied sops
-rotation, or a key the reader cannot decrypt, produces exactly that empty file.
-
-With `keyringSync.enable`, `token.file` or `token.helper` becomes the source for
-the one-shot synchronizer instead of an environment export on every glab
-invocation.
-
-`token` and `job_token` are secret-capable because glab's own schema marks them
-keyring-eligible. `host` is included on top of that: a self-hosted instance URL
-is often information an operator would rather not publish in a world-readable
-store path, even though upstream does not class it as a credential.
+With `keyringSync.enable`, the token reference supplies the one-shot
+synchronizer instead of an environment export on each invocation.
 
 ## Settings
 
@@ -149,8 +141,8 @@ configuration. It enumerates `cfg.Hosts()` — the `hosts:` block of `config.yml
 every other command works fine. That is a trap: it is the first thing anyone
 runs when debugging auth.
 
-The wrapper therefore seeds a `hosts:` entry on first run, by invoking glab
-itself (`glab config set --host <host> api_protocol <proto>`) rather than
+For a literal host, the wrapper seeds a `hosts:` entry on first run, by invoking
+glab itself (`glab config set --host <host> api_protocol <proto>`) rather than
 editing YAML. glab owns and reformats that file, so hand-written YAML would
 drift — and this way nothing like `yq` enters the closure.
 
@@ -170,19 +162,18 @@ hostname, and a pattern that matched too much would skip seeding while the entry
 is genuinely absent. It is also pure bash builtins, so it costs no process and
 works with no `PATH`.
 
-The hostname lands in `config.yml` in cleartext at mode 0600 — which is where
-glab would write it anyway on `glab auth login`, but worth knowing if your
-instance URL comes from sops.
+For a referenced host the wrapper skips seeding: glab's seeding command requires
+the hostname on argv. Normal commands still receive `GITLAB_HOST`; `auth status`
+needs a host entry from an earlier login or keyring synchronization. Login
+writes that hostname into mutable `config.yml` at mode 0600.
 
 The wrapper also, before every `exec`:
 
 - creates the config directory at mode `0700` when absent;
 - repairs `config.yml` to `0600` when a stray umask left it looser, since glab
   hard-refuses anything else;
-- fails when a credential file is missing or resolves empty, with a message
-  naming the environment variable and the path it was read from (for example
-  `GITLAB_TOKEN … from /run/secrets/gitlab-token`) — not the Nix option, which
-  the wrapper does not know at runtime.
+- fails when a reference cannot be read, resolves empty, contains NUL, or its
+  command fails, with a message naming the Nix option, such as `glab.token`.
 
 ## `configDir` — project-local state
 

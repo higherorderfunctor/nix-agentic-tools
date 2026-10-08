@@ -1,7 +1,8 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-07 — launcher environment literals and redact
+> references use shared runtime exports; configured values retain precedence
+> over the ambient environment.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -78,7 +79,7 @@ sibling shell-specific capability flag.
 | runtime | knob                       | delivery                                |
 | ------- | -------------------------- | --------------------------------------- |
 | Claude  | `CLAUDE_CODE_SHELL`        | `native.settings.env` → `settings.json` |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                |
+| Codex   | `SHELL` (own process env)  | launcher wrapper runtime export         |
 | Kiro    | `SHELL` (own process env)  | launcher wrapper `export`               |
 | Copilot | **unknown — verified gap** | excluded                                |
 | Kimchi  | unassessed                 | excluded                                |
@@ -169,10 +170,11 @@ three runtimes demonstrably do not perform.
   **`pkgs.bashNonInteractive`**. Any test asserting "the override changed the
   value" must use that one, or it passes vacuously against two names for one
   store path.
-- **`--set`, never `--set-default`.** This repo reserves `--set-default` for
-  polite defaults a user may override (`TERM`, `GH_TELEMETRY`). A configured
-  shell must beat the ambient environment. For Codex this matters more than it
-  looks, because "unset" is not neutral — it lands on the passwd shell.
+- **Configured exports override ambient values.** `lib/redact` materializes
+  launcher environment entries: ordinary names accept strings or file/command
+  references; credential-named keys require references. Reads happen at launch
+  and fail before the consumer runs. `--set-default` remains reserved for polite
+  defaults such as `TERM`.
 - **Codex had no wrapper before this option.** It now installs
   `lib.ai.mkLauncher` (`lib/ai/launcher.nix`), which Copilot's wrapper also
   calls. The wrapper is skipped entirely when it has nothing to bake in, so a

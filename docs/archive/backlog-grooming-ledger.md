@@ -16,8 +16,6 @@ do not authorize another sweep. Paths in the table are relative to `docs/`.
 | `concepts.md`                                                 | grill-me glossary stub (Q-GRILL retire).                                                      |
 | `plans/ci-darwin-nuscht-and-update-timeout.md`                | COMPLETE — 3 CI fixes landed.                                                                 |
 | `plans/claude-effort-pin-and-mutable-state-reconciliation.md` | SUPERSEDED by convergence; forensics safe in memory `project_claude_effort_pin_state`.        |
-| `plans/gitlab-mcp-packaging-slim.md`                          | COMPLETE — executed; pkg live.                                                                |
-| `plans/gitlab-mcp-packaging.md`                               | SUPERSEDED by `-slim` (wrong tool count).                                                     |
 | `plans/kiro-agent-engine-and-mode.md`                         | COMPLETE — `v3` bool shipped (`19a87a9`).                                                     |
 | `plans/per-cli-model-and-thinking-config.md`                  | SUPERSEDED by convergence; shipped.                                                           |
 | `plans/typed-model-and-thinking-config-convergence.md`        | COMPLETE (`94d2262`). ⚠ memory cites it as canonical handoff — update memory if path changes. |

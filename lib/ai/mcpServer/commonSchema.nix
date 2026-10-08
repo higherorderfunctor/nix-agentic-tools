@@ -9,13 +9,12 @@
 #       (provides typed settings schema, mode strings, credentialVars).
 #       Each ecosystem's renderServer translates to its native target,
 #       wrapping the package with a credentials snippet when settings.*
-#       includes file/helper credentials.
+#       includes runtime references.
 #
 #   (B) Raw command — escape hatch for ad-hoc wrappers
 #       { type = "stdio"; command = "<abs-path>"; args = [...]; env = {...}; }
-#       Pass-through. Useful when the user hand-rolls a wrapper script
-#       that doesn't need the server-module machinery (no credential
-#       injection, no settings translation).
+#       References in env are resolved by a wrapper before the command runs.
+#       No server-module settings translation is applied.
 #
 #   (C) External HTTP — for already-running / remote services
 #       { type = "http"; url = "..."; headers = {...}; timeout = <ms>; }
@@ -32,6 +31,7 @@
 #       secretValue.nix.
 #       Used by services.mcp-servers outputs and lib.ai.externalServers.
 {lib, ...}: let
+  redact = import ../../redact {inherit lib;};
   secretValue = import ./secretValue.nix lib;
 in {
   options = {
@@ -168,16 +168,16 @@ in {
       description = "Arguments passed to the server binary.";
     };
     env = lib.mkOption {
-      type = lib.types.attrsOf lib.types.str;
+      type = redact.types.environment;
       default = {};
-      description = "Environment variables for the server process.";
+      description = "Environment variables for the server process. Secret names require runtime references.";
     };
     settings = lib.mkOption {
       type = lib.types.attrsOf lib.types.anything;
       default = {};
       description = ''
         Server-specific settings — typed by the server module's
-        settingsOptions. Credentials (file/helper) flow through here
+        settingsOptions. Credential references flow through here
         and the renderer materializes them into a wrapper script.
       '';
     };

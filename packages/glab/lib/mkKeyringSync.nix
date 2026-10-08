@@ -8,10 +8,15 @@
   pendingFile,
   pkgs,
 }: let
-  credentialsLib = import ../../../lib/credentials.nix {inherit lib;};
+  redact = import ../../../lib/redact {inherit lib;};
 
-  hostAssignment = credentialsLib.mkSecretAssignment pkgs "glab_sync_host" cfg.host;
-  tokenAssignment = credentialsLib.mkSecretAssignment pkgs "glab_sync_token" cfg.token;
+  assignment = name:
+    redact.read {
+      inherit pkgs;
+      option = "glab.${name}";
+      target = "glab_sync_${name}";
+      value = cfg.${name};
+    };
 
   apiHost = cfg.settings.api_host or null;
   apiProtocol = cfg.settings.api_protocol or null;
@@ -30,7 +35,7 @@
     glab_sync_probe_stored=false
 
     glab_sync_cleanup() {
-      ${pkgs.coreutils}/bin/rm -f ${lib.escapeShellArg pendingFile}
+      ${pkgs.coreutils}/bin/rm ${lib.escapeShellArg pendingFile}
       if [ "$glab_sync_probe_stored" = true ]; then
         ${pkgs.libsecret}/bin/secret-tool clear service glab-keyring-sync-probe \
           >/dev/null 2>&1 || :
@@ -52,8 +57,8 @@
       >/dev/null 2>&1 || :
     glab_sync_probe_stored=false
 
-    ${hostAssignment}
-    ${tokenAssignment}
+    ${assignment "host"}
+    ${assignment "token"}
 
     glab_sync_api_protocol=${lib.escapeShellArg (
       if apiProtocol == null
@@ -97,7 +102,6 @@
     glab_sync_args=(
       auth login
       --api-protocol "$glab_sync_api_protocol"
-      --hostname "$glab_sync_host"
       --stdin
       # Deprecated by current glab, but retained so older package overrides
       # cannot silently choose plaintext storage.
@@ -107,8 +111,16 @@
     ${optionalLoginArg "--git-protocol" gitProtocol}
     ${optionalLoginArg "--ssh-hostname" sshHost}
 
-    printf '%s' "$glab_sync_token" \
-      | "${lib.getExe cfg.package}" "''${glab_sync_args[@]}"
+    # auth login prefers a repository remote over GITLAB_HOST. Disable git
+    # discovery so this service always uses the configured instance.
+    GITLAB_HOST="$glab_sync_host"
+    GIT_DIR=/dev/null
+    export GITLAB_HOST GIT_DIR
+    if ! printf '%s' "$glab_sync_token" \
+      | "${lib.getExe cfg.package}" "''${glab_sync_args[@]}" >/dev/null 2>&1; then
+      echo "glab.keyringSync: login failed for glab.host and glab.token" >&2
+      exit 1
+    fi
     unset glab_sync_token
   '';
 

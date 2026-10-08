@@ -3,10 +3,8 @@
 # no backend re-derives its own `needsWrapper` and drifts from the other — the
 # failure the copilot wrapper's header records having shipped twice.
 #
-# `--set`, never `--set-default`: a configured value must beat the ambient
-# session, and `--set-default` is reserved for polite defaults (`TERM`).
-# `flags` (`--add-flags …`) come before the environment, the order the
-# wrappers this replaced used, so their store paths are unchanged.
+# One runtime export block handles literals and references without putting
+# referenced values in the store or argv. Configured values beat ambient ones.
 pkgs: {
   environmentVariables ? {},
   exe,
@@ -15,9 +13,13 @@ pkgs: {
   package,
 }: let
   inherit (pkgs) lib;
+  redact = import ../redact {inherit lib;};
   args =
     flags
-    ++ lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") environmentVariables;
+    ++ lib.optional (environmentVariables != {}) "--run ${lib.escapeShellArg (redact.environment {
+      inherit pkgs;
+      values = environmentVariables;
+    })}";
 in
   if args == []
   then package
@@ -27,6 +29,8 @@ in
       paths = [package];
       nativeBuildInputs = [pkgs.makeWrapper];
       postBuild = ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         wrapProgram $out/bin/${exe} ${lib.concatStringsSep " " args}
       '';
     }
