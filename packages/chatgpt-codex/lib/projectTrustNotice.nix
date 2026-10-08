@@ -8,7 +8,7 @@ in
       if [ -f "$project_config" ] && [ -r "$project_config" ]; then
         trusted="$(${pkgs.lib.getExe trust} "$1")"
         if [ "$trusted" = untrusted ]; then
-          printf 'warning: Codex ignores %s because this project is not trusted in %s. Trust the project (its main checkout for a linked worktree) in Codex to load the delivered config.\n' "$project_config" "''${CODEX_HOME:-''${HOME:-}/.codex}/config.toml" >&2
+          printf 'warning: Codex ignores %s because this project is not trusted in %s. Set the effective project trust entry to trusted in the user config; an explicit cwd entry overrides main-checkout trust.\n' "$project_config" "''${CODEX_HOME:-''${HOME:-}/.codex}/config.toml" >&2
         fi
       fi
       exit 0
