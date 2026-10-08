@@ -99,13 +99,16 @@ The preflight therefore reads local files. The existing
 `effectiveProjectDocMaxBytes` resolver parses TOML, accounts for system, user,
 profile, trusted-project and session limits, handles lowered limits and clone
 trust inherited by linked worktrees, and returns the root-to-cwd directories and
-override/default/fallback filenames. The preflight measures the cumulative
-budget, respecting empty overrides, whitespace-only content and explicitly
-untrusted projects (which Codex does not load). Config, profile and cwd flags
-reach the resolver; extracted CLI value requirements skip unrelated arguments,
-and `--` ends option parsing. Unknown flags skip the advisory rather than
-guessing what value they consume. Remote-session and managed-worktree launch
-paths are not predicted; the check measures the local launch directory.
+override/default/fallback filenames. Unix managed settings come from
+`/etc/codex/managed_config.toml`; a same-named Codex-home file is ignored.
+Custom-root trust gates project config, while only cwd/Git-clone distrust
+suppresses project docs. The preflight measures the cumulative budget,
+respecting empty overrides, whitespace-only content and explicitly untrusted
+projects (which Codex does not load). Config, profile and cwd flags reach the
+resolver; extracted CLI value requirements skip unrelated arguments, and `--`
+ends option parsing. Unknown flags skip the advisory rather than guessing what
+value they consume. Remote-session and managed-worktree launch paths are not
+predicted; the check measures the local launch directory.
 
 Warnings go only to stderr and name `project_doc_max_bytes` and
 `ai.codex.projectDocMaxBytes`. The resolver adds the user-config trust remedy

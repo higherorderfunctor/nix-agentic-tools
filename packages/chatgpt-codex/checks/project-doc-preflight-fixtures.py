@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-binary, preflight, hm_launcher, devenv_launcher, fake_launcher, preflight_source = sys.argv[1:]
+binary, preflight, hm_launcher, devenv_launcher, fake_launcher, preflight_source, bash = sys.argv[1:]
 home = Path(os.environ["CODEX_HOME"])
 root = Path.cwd() / "fixture"
 root.mkdir()
@@ -164,6 +164,20 @@ for arguments in [["--unknown-future-flag"], ["--remote", "ws://example.invalid"
     result = run([preflight, *arguments])
     assert result.returncode == 0 and result.stdout == b"" and result.stderr == b"", result
 
+# Codex ignores managed_config.toml in CODEX_HOME on Unix. A stale home
+# file must not raise the effective budget and suppress a real warning.
+(home / "managed_config.toml").write_text("project_doc_max_bytes = 50000\n")
+notice(True)
+(home / "managed_config.toml").unlink()
+# Custom-root trust gates config, but doc suppression uses cwd/Git clone.
+custom = Path.cwd() / "custom"
+(custom / "child").mkdir(parents=True)
+(custom / ".root-marker").touch()
+sized(custom / "AGENTS.md", 40000)
+user_config(f'project_root_markers = [".root-marker"]\n[projects.{json.dumps(str(custom))}]\ntrust_level = "untrusted"\n')
+notice(True, cwd=custom / "child")
+user_config()
+
 # Linked worktree inherits main-checkout trust and applies its own config.
 subprocess.run(["git", "-C", str(root), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-qm", "fixture"], check=True)
 linked = Path.cwd() / "linked"
@@ -198,10 +212,13 @@ schema = Path.cwd() / "flags.json"
 schema.write_text("{}")
 for script in ["exit 1", "printf '{invalid json'", "exec sleep 3"]:
     resolver = Path.cwd() / "broken-resolver"
-    resolver.write_text("#!/usr/bin/env bash\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + script + "\n")
+    resolver.write_text("#!" + bash + "\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + script + "\n")
     resolver.chmod(0o700)
     started = time.monotonic()
     result = run([sys.executable, preflight_source, str(resolver), str(schema)])
-    assert time.monotonic() - started < 1.5, script
+    elapsed = time.monotonic() - started
+    assert elapsed < 1.5, script
+    if script == "exec sleep 3":
+        assert elapsed >= 0.4, "the hanging resolver was never executed"
     assert result.returncode == 0 and result.stdout == b"" and result.stderr == b"", result
 print("PASS: local discovery matches real offline Codex prompts, both launchers, and failure isolation")
