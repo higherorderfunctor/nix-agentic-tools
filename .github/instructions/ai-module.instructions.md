@@ -2065,6 +2065,12 @@ download.
 
 ### Verifying a change here
 
+`checks/ai-shell/module-eval.nix` covers Claude settings, Codex and Kiro
+launcher contents, and unsupported per-runtime shell writes. The Copilot
+root-shell wrapper exclusion checks complete that coverage. The repository's
+`verify-ai-shell` executable and `ai:shell:verify` task are retired; these
+contracts run in automatic flake CI instead of only in `devenv test`.
+
 ```bash
 # the option surface, both backends
 nix build .#checks.x86_64-linux.options-doc-ai-parity
