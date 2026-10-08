@@ -27,13 +27,13 @@ omits tooling that enterTest never invokes, but it does not alter repository
 validation declarations. A developer exporting `CI=1` gets fewer interactive
 packages, never fewer guards.
 
-The diagnostic's full-corpus manual-stage hook run lives in the `enterTest`
-script, after shell-entry tasks have materialized files and installed hooks. It
-does not live behind `devenv:enterTest` in the task DAG: a shared prerequisite
-with the shell lane allowed devenv's all-task traversal to pull that sibling
-into ordinary `devenv shell`. The named `devenv:git-hooks:run` task remains
-available as a dependency-free manual diagnostic and executes the same packaged
-runner against the immutable generated hook config.
+`enterTest` no longer runs the full-corpus hook runner. The automatic flake
+checks `repo-lints`, `formatting` and `shellcheck-corpus` cover those validators
+from `config/repo-validation.nix`. The named `devenv:git-hooks:run` task remains
+an explicit manual diagnostic using the same packaged runner and immutable
+generated hook config. It is dependency-free: devenv's all-task traversal can
+pull a sibling lane through a shared prerequisite, so adding activation edges
+could make ordinary shell entry scan the full corpus.
 
 ## The five buckets
 
