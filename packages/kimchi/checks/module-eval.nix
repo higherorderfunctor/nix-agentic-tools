@@ -258,46 +258,32 @@ in {
   ];
 
   checks = {
+    # Both backends' launchers warn from the launch directory, so the notice
+    # reaches Home Manager-only users in any repo.
     module-kimchi-project-trust-notice = let
-      linesOf = evaluated: lib.filter (lib.hasInfix "/bin/kimchi-project-trust-notice ") (lib.splitString "\n" evaluated.config.enterShell);
-      configured = settings:
-        evalDevenv {
-          ai.kimchi = {
-            enable = true;
-            native = settings;
-          };
-        };
-      config = configured {settings.redaction.enabled = false;};
-      harnessConfig = configured {harnessSettings.defaultThinkingLevel = "high";};
-      suppressed = evalDevenv {
-        ai.kimchi = {
-          enable = true;
-          native.settings.redaction.enabled = false;
-          files.".kimchi/config.json".content.enable = false;
-        };
-      };
-      rendered = evaluated:
-        pkgs.writeShellScript "rendered-kimchi-project-trust-notice" ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          ${lib.head (linesOf evaluated)}
-        '';
+      launchers = map (launcher: "${launcher}/bin/kimchi") [
+        (lib.head
+          (evalHm {
+            ai.kimchi = {
+              enable = true;
+              package = kimchiStub;
+            };
+          }).config.home.packages)
+        (lib.head
+          (evalDevenv {
+            ai.kimchi = {
+              enable = true;
+              package = kimchiStub;
+            };
+          }).config.packages)
+      ];
     in
-      assert builtins.length (linesOf config) == 1 && builtins.length (linesOf harnessConfig) == 1;
-      assert linesOf (evalDevenv {}) == [] && linesOf (configured {}) == [] && linesOf suppressed == [];
-      assert linesOf (evalDevenv {
-        ai.kimchi = {
-          context.text = "CONTEXT";
-          enable = true;
-        };
-      })
-      == [];
-        pkgs.runCommand "module-test-kimchi-project-trust-notice" {} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          ${pkgs.python3}/bin/python3 ${./project-trust-notice-test.py} ${rendered config} ${rendered harnessConfig}
-          echo PASS > "$out"
-        '';
+      pkgs.runCommand "module-test-kimchi-project-trust-notice" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${pkgs.python3}/bin/python3 ${./project-trust-notice-test.py} ${lib.escapeShellArgs launchers}
+        echo PASS > "$out"
+      '';
 
     # Slash commands dispatch before model/credential validation. Feed the
     # smoke production delivery, including HM's serialized shared-document

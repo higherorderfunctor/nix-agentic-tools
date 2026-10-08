@@ -1,4 +1,5 @@
 """Warn when persisted Kimchi trust will discard delivered project files."""
+# cspell:ignore followlinks
 
 import json
 import os
@@ -30,9 +31,17 @@ def untrusted(directory, harness):
     return settings is not None and settings.get("defaultProjectTrust") != "always"
 
 
+def holds_readable_file(namespace):
+    # An empty or unreadable namespace gives Kimchi nothing to load. Delivered
+    # skills are links into the store, so the walk follows links.
+    return any(os.access(Path(parent) / name, os.R_OK) for parent, _, names in os.walk(namespace, followlinks=True) for name in names)
+
+
 directory = Path(sys.argv[1]).resolve()
 harness = Path(sys.argv[2])
-if any((directory / path).exists() and os.access(directory / path, os.R_OK) for path in sys.argv[3:]) and untrusted(directory, harness):
+# From $HOME the project harness namespace is the user harness itself.
+paths = [directory / path for path in sys.argv[3:] if (directory / path).resolve() != harness.resolve()]
+if any(map(holds_readable_file, paths)) and untrusted(directory, harness):
     print(
         f"warning: Kimchi project files at {directory} are untrusted by "
         f"{harness / 'trust.json'}; unattended sessions ignore them. "

@@ -2187,75 +2187,45 @@ in {
           echo PASS > "$out"
         '';
 
-    module-codex-permission-layers-notice = let
-      evaluated = evalDevenv {ai.codex.enable = true;};
-      linesOf = evaluated: lib.filter (lib.hasInfix "/bin/codex-permission-layers-notice ") (lib.splitString "\n" evaluated.config.enterShell);
-      command = lib.head (linesOf evaluated);
-      suppressed = evalDevenv {
-        ai.codex = {
-          enable = true;
-          files.".codex/config.toml".content.enable = false;
-        };
-      };
+    # Both backends' launchers run the project-config notices against the
+    # launch directory, so they reach Home Manager-only users in any repo.
+    module-codex-launch-config-notices = let
+      stub = pkgs.writeShellScriptBin "codex" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+      '';
+      launchers = map (launcher: "${launcher}/bin/codex") [
+        (lib.head
+          (evalHm {
+            ai.codex = {
+              enable = true;
+              package = stub;
+              pinDaemonToPackage = false;
+            };
+          }).config.home.packages)
+        (lib.head
+          (evalDevenv {
+            ai.codex = {
+              enable = true;
+              package = stub;
+            };
+          }).config.packages)
+      ];
     in
-      assert builtins.length (linesOf evaluated) == 1;
-      assert linesOf (evalDevenv {}) == [] && linesOf suppressed == [];
-      assert linesOf (evalDevenv {
-        ai.codex = {
-          enable = true;
-          native.settings = {
-            model = null;
-            model_reasoning_effort = null;
-          };
-        };
-      })
-      == [];
-        pkgs.runCommand "module-test-codex-permission-layers-notice" {} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          export DEVENV_ROOT="$TMPDIR/project" CODEX_HOME="$TMPDIR/user"
-          mkdir -p "$DEVENV_ROOT/.codex" "$CODEX_HOME"
-          ${pkgs.python3}/bin/python3 ${./permission-layers-notice-test.py} ${pkgs.writeShellScript "rendered-permission-layers-notice" ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            ${command}
-          ''}
-          echo PASS > "$out"
-        '';
-
-    module-codex-project-trust-notice = let
-      linesOf = evaluated: lib.filter (lib.hasInfix "/bin/codex-project-trust-notice ") (lib.splitString "\n" evaluated.config.enterShell);
-      enabled = evalDevenv {ai.codex.enable = true;};
-      suppressed = evalDevenv {
-        ai.codex = {
-          enable = true;
-          files.".codex/config.toml".content.enable = false;
-        };
-      };
-    in
-      assert builtins.length (linesOf enabled) == 1;
-      assert linesOf (evalDevenv {}) == [] && linesOf suppressed == [];
-      assert linesOf (evalDevenv {
-        ai.codex = {
-          enable = true;
-          native.settings = {
-            model = null;
-            model_reasoning_effort = null;
-          };
-        };
-      })
-      == [];
-        pkgs.runCommand "module-test-codex-project-trust-notice" {} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          export CODEX_HOME="$TMPDIR/user"
-          ${pkgs.python3}/bin/python3 ${./project-trust-notice-test.py} ${pkgs.writeShellScript "rendered-codex-project-trust-notice" ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            ${lib.head (linesOf enabled)}
-          ''} ${lib.getExe (import ../lib/effectiveProjectDocMaxBytes.nix pkgs)} ${pkgs.git}/bin/git
-          echo PASS > "$out"
-        '';
+      pkgs.runCommand "module-test-codex-launch-config-notices" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        # Each run gets its own project and Codex home.
+        isolated() {
+          work="$(${pkgs.coreutils}/bin/mktemp -d)"
+          TMPDIR="$work" CODEX_HOME="$work/user" ${pkgs.python3}/bin/python3 "$@"
+        }
+        for launcher in ${lib.escapeShellArgs launchers}; do
+          isolated ${./permission-layers-notice-test.py} "$launcher"
+          isolated ${./project-trust-notice-test.py} "$launcher" ${lib.getExe (import ../lib/effectiveProjectDocMaxBytes.nix pkgs)} ${pkgs.git}/bin/git
+        done
+        echo PASS > "$out"
+      '';
 
     # `format = "raw"` delivers AGENTS.md as written on both backends. It is
     # built into the generated tree, which measures it and neither formats nor

@@ -1,5 +1,6 @@
-"""Exercise rendered Kimchi notices against the native user trust/default files."""
+"""Exercise the Kimchi launchers' trust notice against the native user trust/default files."""
 
+import itertools
 import json
 import os
 import subprocess
@@ -19,14 +20,14 @@ with tempfile.TemporaryDirectory() as temporary:
     def write_trust(entries):
         trust.write_text(json.dumps({str(path): value for path, value in entries}))
 
-    for script, target in zip(sys.argv[1:], (".kimchi/config.json", ".config/kimchi/harness/settings.json"), strict=True):
+    for launcher, target in itertools.product(sys.argv[1:], (".kimchi/config.json", ".config/kimchi/harness/settings.json")):
         project_file = root / target
         project_file.parent.mkdir(parents=True, exist_ok=True)
         project_file.write_text('{"defaultProjectTrust": "always"}')
 
         def probe(warning, directory=root):
-            env = dict(os.environ, DEVENV_ROOT=str(directory), HOME=str(user_home))
-            result = subprocess.run([script], env=env, capture_output=True, text=True, check=True)
+            env = dict(os.environ, HOME=str(user_home))
+            result = subprocess.run([launcher], cwd=directory, env=env, capture_output=True, text=True, check=True)
             assert result.stdout == "", result
             if warning:
                 assert "warning: Kimchi project files" in result.stderr
@@ -78,4 +79,8 @@ with tempfile.TemporaryDirectory() as temporary:
             probe(True)
             trust.write_text(malformed)
             probe(False)
+        # From $HOME the project harness path is the user harness itself.
+        write_trust([])
+        probe(True)
+        probe(False, user_home)
         project_file.unlink()

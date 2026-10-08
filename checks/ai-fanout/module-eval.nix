@@ -83,10 +83,9 @@ in {
         # buildEnv fail activation with a conflicting-subpath error.
         #
         # Every harness wraps on devenv because `gitSshConfigWorkaround` defaults
-        # on and contributes `GIT_SSH_COMMAND`. Codex also always wraps on Home
-        # Manager for its document preflight. Other Home Manager launchers wrap
-        # only when they inject configuration: kimchi's `region` and
-        # `telemetry.enabled` reach its global config.json, not the environment.
+        # on and contributes `GIT_SSH_COMMAND`. Codex and Kimchi also always wrap
+        # on Home Manager for their launch preflight checks. Other Home Manager
+        # launchers wrap only when they inject configuration.
         # `claude` has no wrapper anywhere (its env rides
         # `.claude/settings.json`, never process env), so it installs `cfg.package`
         # on both backends and MUST NOT gain a `-wrapped` suffix.
@@ -102,7 +101,7 @@ in {
             claude = "bare";
             codex = "wrapped";
             copilot = "bare";
-            kimchi = "bare";
+            kimchi = "wrapped";
             kiro = "bare";
           };
         };

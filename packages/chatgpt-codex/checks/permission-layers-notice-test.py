@@ -1,14 +1,26 @@
-"""Exercise the module's rendered shell-entry command, including absence controls."""
+"""Exercise the permission-layers notice through a module launcher, with absence controls."""
 
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-project = Path(os.environ["DEVENV_ROOT"]) / ".codex/config.toml"
+launcher = sys.argv[1]
+project_root = Path(os.environ["TMPDIR"]) / "project"
+project = project_root / ".codex/config.toml"
+project.parent.mkdir(parents=True)
 user = Path(os.environ["CODEX_HOME"]) / "config.toml"
+user.parent.mkdir()
 legacy = 'sandbox_mode = "workspace-write"\n'
 named = 'default_permissions = "work"\n[permissions.work]\n'
+
+
+def launch():
+    result = subprocess.run([launcher], cwd=project_root, capture_output=True, text=True, check=True)
+    assert result.stdout == "", result
+    # The launcher also warns that nothing trusts this project; that notice
+    # has its own test.
+    return "\n".join(line for line in result.stderr.splitlines() if not line.startswith("warning: Codex ignores"))
 
 
 def probe(project_text, user_text, winner=None):
@@ -17,14 +29,13 @@ def probe(project_text, user_text, winner=None):
             path.unlink()
         if text is not None:
             path.write_text(text)
-    result = subprocess.run([sys.argv[1]], capture_output=True, text=True, check=True)
-    assert result.stdout == "", result
+    stderr = launch()
     if winner is None:
-        assert result.stderr == "", result.stderr
+        assert stderr == "", stderr
     else:
-        assert "warning: Codex permission models differ:" in result.stderr
-        assert str(project) in result.stderr and str(user) in result.stderr
-        assert f"{winner}'s" in result.stderr, result.stderr
+        assert "warning: Codex permission models differ:" in stderr
+        assert str(project) in stderr and str(user) in stderr
+        assert f"{winner}'s" in stderr, stderr
 
 
 probe(named, legacy, project)
@@ -44,13 +55,11 @@ for invalid in ('not toml!', '# sandbox_mode = "workspace-write"\n', '[other]\ns
 probe(named, legacy, project)
 user.unlink()
 user.mkdir()
-result = subprocess.run([sys.argv[1]], capture_output=True, text=True, check=True)
-assert result.stdout == result.stderr == "", result
+assert launch() == ""
 user.rmdir()
 probe(named, legacy, project)
 user.chmod(0)
 try:
-    result = subprocess.run([sys.argv[1]], capture_output=True, text=True, check=True)
-    assert result.stdout == result.stderr == "", result
+    assert launch() == ""
 finally:
     user.chmod(0o600)

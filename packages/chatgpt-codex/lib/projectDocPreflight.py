@@ -1,4 +1,4 @@
-"""Warn locally about Codex project-document truncation, without starting Codex."""
+"""Warn locally about Codex project documents and config, without starting Codex."""
 
 import json
 from pathlib import Path
@@ -42,7 +42,7 @@ def discovery_options(arguments, flags):
 
 
 def main():
-    resolver, schema, *arguments = sys.argv[1:]
+    resolver, schema, trust_notice, permission_notice, *arguments = sys.argv[1:]
     with open(schema) as source:
         options = discovery_options(arguments, json.load(source))
     if options is None:
@@ -64,6 +64,15 @@ def main():
         check=True,
     )
     resolution = json.loads(result.stdout)
+    # Every project config layer Codex would load from this launch: the trust
+    # notice warns when Codex will ignore it, the permission notice when its
+    # model opposes the user's. The user config is skipped where the walk
+    # reaches CODEX_HOME's parent, as the resolver skips it.
+    for directory in resolution["directories"]:
+        config = Path(directory) / ".codex/config.toml"
+        if config.is_file() and str(config) != resolution["user_config"]:
+            subprocess.run([trust_notice, directory], check=False)
+            subprocess.run([permission_notice, str(config)], check=False)
     # Explicitly untrusted projects suppress project instructions upstream;
     # an undecided project still reads docs but ignores project config.
     if resolution["untrusted"]:

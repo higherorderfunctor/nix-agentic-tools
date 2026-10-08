@@ -16,8 +16,6 @@
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
-  projectTrustNotice = import ./projectTrustNotice.nix pkgs;
-  runtimeFiles = import ../../../lib/ai/runtime-files.nix {inherit lib;};
   sharedHooks = lib.ai.hooks;
   # Native option types, project-tier keys and environment names, all read
   # from the committed sidecar (never passthru.extracted: that is IFD).
@@ -30,6 +28,12 @@
   # That fixed project namespace is independent of ai.kimchi.configDir, which
   # selects the Home Manager output root.
   projectHarnessDir = ".config/kimchi/harness";
+  # The project directory for Kimchi's own files.
+  projectDir = ".kimchi";
+  # Every trust-gated project file lives under these two namespaces; the
+  # launcher's notice warns when user trust will discard the ones at the launch
+  # directory.
+  projectTrustNotice = import ./projectTrustNotice.nix pkgs [projectDir projectHarnessDir];
   projectContextFilename = "AGENTS.md";
   # The user harness directory, and the context file in it Home Manager
   # writes; shared by the emitter and `contentTargets`.
@@ -273,8 +277,9 @@
     (sharedHooks.merge topHooks cfg.hooks);
   hasHookHandlers = hooks: lib.any (lib.any (block: block.hooks != [])) (builtins.attrValues hooks);
 
-  # The launcher both install hooks share: the merged environment, the runtime
-  # secret export and, on devenv, global-only settings plus the exact-cwd guard.
+  # The launcher both install hooks share: the merged environment, the project
+  # trust notice, the runtime secret export and, on devenv, global-only
+  # settings plus the exact-cwd guard.
   mkPrep = {
     backend,
     cfg,
@@ -331,24 +336,22 @@
       # set value is extended, not overwritten.
       ++ lib.optional (backend == "devenv" && shadowed.enabledResources != []) "--suffix ${lib.escapeShellArg (sidecar.environmentName "KIMCHI_ENABLE_RESOURCES")} , ${lib.escapeShellArg (lib.concatStringsSep "," shadowed.enabledResources)}"
       ++ lib.optional (exactCwdGuard != "") "--run ${lib.escapeShellArg exactCwdGuard}"
+      # Kimchi resolves trust-gated project files from the launch directory, on
+      # both backends; warn before the secret export is in its environment.
+      ++ [(import ../../../lib/ai/launcher-preflight.nix pkgs projectTrustNotice)]
       ++ lib.optional (credSnippet != "") "--run ${lib.escapeShellArg credSnippet}";
-
-    # Not `lib.ai.mkLauncher`: that one writes `wrapProgram` on one line, and
-    # moving this continued form onto it would change the wrapper's store path.
-    wrappedPackage = pkgs.symlinkJoin {
+    # Not `lib.ai.mkLauncher`: it places raw flags before `--set`, and the
+    # `--suffix` above must follow it. The preflight argument is shared.
+  in {
+    package = pkgs.symlinkJoin {
       name = "kimchi-wrapped";
       paths = [cfg.package];
       nativeBuildInputs = [pkgs.makeWrapper];
-      postBuild = lib.optionalString (wrapArgs != []) ''
+      postBuild = ''
         wrapProgram $out/bin/kimchi \
           ${lib.concatStringsSep " " wrapArgs}
       '';
     };
-  in {
-    package =
-      if wrapArgs != []
-      then wrappedPackage
-      else cfg.package;
   };
   # Both backends install the same prepared wrapper (env + the runtime secret,
   # which is cat'd at launch so it never enters the store). Handed to the
@@ -395,7 +398,6 @@
     mergedRules,
     mergedServers,
     mergedSkills,
-    options,
     resolvedSettings,
     topHooks,
     ...
@@ -414,8 +416,6 @@
       if isDevenv
       then projectHarnessDir
       else userHarnessDir cfg;
-    # The project directory for Kimchi's own files.
-    projectDir = ".kimchi";
     # Where Kimchi reads MCP servers and skills: a trusted project's own
     # directory, or the user harness.
     mcpAndSkillsDir =
@@ -482,10 +482,6 @@
         runtime = "kimchi";
         writer = "kimchiFiles";
       };
-    projectFilesRequiringTrust = builtins.attrNames (lib.filterAttrs (path: entry:
-      (lib.hasPrefix "${projectDir}/" path || lib.hasPrefix "${projectHarnessDir}/" path)
-      && runtimeFiles.isLive entry)
-    cfg.files);
     relativeTrustKeys = builtins.filter (key: !(lib.hasPrefix "/" key)) (builtins.attrNames cfg.projectTrust);
     # Git tokens are secrets with no environment input: Kimchi reads them only
     # from the user config.json (src/extensions/teleport/provisioning/
@@ -506,11 +502,6 @@
       };
   in
     lib.mkMerge [
-      (lib.optionalAttrs (isDevenv && options ? enterShell) {
-        enterShell = lib.mkIf (projectFilesRequiringTrust != []) ''
-          ${lib.getExe projectTrustNotice} "$DEVENV_ROOT" ${lib.escapeShellArgs projectFilesRequiringTrust}
-        '';
-      })
       {
         assertions =
           [

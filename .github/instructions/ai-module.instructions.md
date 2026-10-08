@@ -7,11 +7,11 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-08 — devenv warns at shell entry when delivered
-> Codex project config and user config use opposite permission models, naming
-> both files and the winning selector, and when an installed runtime's PATH
-> binary resolves outside the devenv profile; Codex's launcher owns the document
-> preflight. The delivered-project-config trust warning shares its resolver.
+> **Last verified:** 2026-10-08 — Codex's launcher, on both backends, warns at
+> every launch when a project config Codex would load is untrusted or uses the
+> opposite permission model to the user config, alongside its document
+> preflight; devenv warns at shell entry when an installed runtime's PATH binary
+> resolves outside the devenv profile.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -224,9 +224,10 @@ The ai module fans out TWO kinds of configuration:
   installed by the shared backend transform unless set to `null`. Four supply an
   `installPackage` callback that wraps the selected package when the runtime
   needs env or flag injection and installs it bare otherwise — wrapping is
-  conditional for Copilot, Kiro and Kimchi. Codex always wraps for its offline
-  project-document preflight, on both backends. `lib.ai.mkLauncher` execs the
-  original package directly and flattens an earlier launcher through its
+  conditional for Copilot and Kiro. Codex and Kimchi always wrap for their
+  launch preflight checks, on both backends, isolated by the shared
+  `lib/ai/launcher-preflight.nix`. `lib.ai.mkLauncher` execs the original
+  package directly and flattens an earlier launcher through its
   `launcherPackage` passthru. The process environment each one bakes in is the
   builder's `launcherEnvironment`.
 - `ai.kiro.cli.extraPackages` — store-backed tools added to Kiro's runtime PATH
@@ -269,13 +270,14 @@ The ai module fans out TWO kinds of configuration:
   config layers; both backends may therefore contribute to one policy without
   restating lower-layer roots. The older sandbox model and permission profiles
   remain mutually exclusive, so the module fails when both appear in one
-  settings tree. At devenv shell entry, `codex-permission-layers-notice` parses
-  the delivered project file and `${CODEX_HOME:-$HOME/.codex}/config.toml`,
-  warns when their models differ, and names the winning selector when the
-  project is trusted and loaded. Selectors resolve low-to-high; tables alone do
-  not select a model. Disabled delivery, missing/unreadable files and malformed
-  TOML stay silent. Profile names and inheritance graphs remain
-  runtime-validated by Codex because config layers may contribute parents
+  settings tree. At every launch, on both backends, the launcher's preflight
+  runs `codex-permission-layers-notice` on each `.codex/config.toml` Codex would
+  load from the launch directory and on
+  `${CODEX_HOME:-$HOME/.codex}/config.toml`, warns when their models differ, and
+  names the winning selector when the project is trusted and loaded. Selectors
+  resolve low-to-high; tables alone do not select a model. Missing/unreadable
+  files and malformed TOML stay silent. Profile names and inheritance graphs
+  remain runtime-validated by Codex because config layers may contribute parents
   dynamically. The distinct whole-file `ai.codex.profiles.<name>` surface (a
   separate static `${configDir}/<name>.config.toml` user layer selected with
   `codex --profile <name>`) was removed 2026-09-19 as unreachable dead code; see
@@ -286,12 +288,12 @@ The ai module fans out TWO kinds of configuration:
   explicit worktree `trust_level` takes precedence. Devenv rejects it because a
   project cannot bootstrap the trust required to load its own
   `.codex/config.toml`; without Home Manager, `~/.codex` is Codex's own and its
-  trust prompt saves there. At shell entry, `codex-project-trust-notice` warns
-  when a readable delivered project config will be ignored because nothing
-  trusts the project, including when the user config is missing. It reuses the
-  launch preflight's `effectiveProjectDocMaxBytes` resolver. Disabled delivery
-  and unreadable or malformed inputs stay silent, and the warning never fails
-  shell entry. `ai.codex.execpolicyRules.<name>` writes native Starlark to
+  trust prompt saves there. The same launch preflight runs
+  `codex-project-trust-notice`, which warns when a readable project config will
+  be ignored because nothing trusts the project, including when the user config
+  is missing. It reuses the preflight's `effectiveProjectDocMaxBytes` resolver.
+  Unreadable or malformed inputs stay silent, and the warning never changes the
+  launch. `ai.codex.execpolicyRules.<name>` writes native Starlark to
   `<config-layer>/rules/<name>.rules` in both backends. It is intentionally
   separate from Markdown `ai.rules`, which remains durable AGENTS.md guidance.
   Home Manager reserves `execpolicyRules.default` because Codex appends accepted

@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-08 — launcher flags are checked as root-command
 > `uses`; Home Manager owns daemon selection and settings; both backends run the
-> offline project-document preflight before it execs the original binary.
+> offline project-document and project-config preflight before it execs the
+> original binary, isolated by the shared `lib/ai/launcher-preflight.nix`.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -79,7 +80,7 @@ refuse to run; `codex remote-control` and `codex app-server daemon …` ignore i
 and still reach the user daemon. A VM or sandbox home is out of scope: the
 sandbox will own that home.
 
-## Every module launcher checks project documentation
+## Every module launcher checks project documentation and config
 
 Home Manager and devenv always install a launcher. It sets the configured
 process environment, runs `lib/projectDocPreflight.nix`, then execs the original
@@ -113,14 +114,27 @@ predicted; the check measures the local launch directory.
 Warnings go only to stderr and name `project_doc_max_bytes` and
 `ai.codex.projectDocMaxBytes`. The resolver adds the user-config trust remedy
 when a skipped project config raises the limit. Missing/unreadable files,
-invalid config and resolver failures are silent. The preflight has a one-second
-outer timeout, reads no stdin, and cannot change Codex's stdout or exit status.
-It runs in repositories without devenv too. The devenv shell-entry notice and
+invalid config and resolver failures are silent.
+
+The same preflight runs the two project-config notices for every
+`.codex/config.toml` in the resolver's root-to-cwd directories, skipping the
+user config where the walk reaches it: `codex-project-trust-notice` warns when
+Codex will ignore the file because nothing trusts the project, and
+`codex-permission-layers-notice` warns when its permission model opposes the
+user config's. They used to run at devenv shell entry, which Home Manager-only
+users never reach. A resolver failure skips them with the rest of the preflight.
+
+`lib/ai/launcher-preflight.nix` isolates the whole preflight, for this launcher
+and Kimchi's: a one-second timeout over its process group, no stdin, stdout
+discarded, failure ignored. So it cannot change Codex's stdout or exit status.
+It runs in repositories without devenv too. The devenv shell-entry notices and
 manual `enterTest` prompt probe are deleted; `instructions-drift` still checks
 the generated index and rule marker offsets. The
 `chatgpt-codex-project-doc-preflight` check calibrates every discovery fixture
 against the real binary's prompt builder in the offline Nix build sandbox, and
-tests both backend launchers and failure isolation.
+tests both backend launchers and failure isolation, including preflight checks
+that fail, read stdin or hang with a child. `module-codex-launch-config-notices`
+runs both notices' fixtures through each backend's launcher.
 
 ## Gates
 

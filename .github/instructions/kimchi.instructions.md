@@ -7,8 +7,9 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-07 — devenv warns at shell entry when delivered
-> project files will be ignored by user-scope project trust.
+> **Last verified:** 2026-10-08 — the launcher, on both backends, warns at every
+> launch when project files in the launch directory will be ignored by
+> user-scope project trust.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -391,18 +392,23 @@ persisted decision or `defaultProjectTrust`. Root `AGENTS.md` is the upstream
 exception: Kimchi's context loader walks ancestors directly without consulting
 the project-scope gate.
 
-Devenv emits one `kimchi-project-trust-notice` at shell entry when live final
-files land under `.kimchi/` or `.config/kimchi/harness/`. It reads the pinned
-runtime's fixed user harness at `$HOME/.config/kimchi/harness`, checks the
-nearest boolean trust entry at or above the real project root, and uses user
-`settings.json`'s `defaultProjectTrust` only without a persisted decision.
-`always` allows; `ask`/`never` deny unattended sessions. Explicit denial wins
-over `always`, null entries inherit, and project settings cannot grant trust.
-The notice warns without failing shell entry. Missing/unreadable trust files
-stay silent; without a decision, missing/unreadable settings also stay silent.
-Absent/unreadable delivered files, disabled delivery, and root AGENTS.md alone
-do not warn. Rendered-command module fixtures exercise both project namespaces
-with positive controls.
+The launcher, on both backends, runs `kimchi-project-trust-notice` at every
+launch, so Home Manager-only users get it in any repository. It checks the
+launch directory, because Kimchi reads trust-gated project files from its exact
+working directory, and it warns when a readable file sits under `.kimchi/` or
+`.config/kimchi/harness/` there. From `$HOME` that harness path is the user
+harness itself and is skipped. It reads the pinned runtime's fixed user harness
+at `$HOME/.config/kimchi/harness`, checks the nearest boolean trust entry at or
+above the real launch directory, and uses user `settings.json`'s
+`defaultProjectTrust` only without a persisted decision. `always` allows;
+`ask`/`never` deny unattended sessions. Explicit denial wins over `always`, null
+entries inherit, and project settings cannot grant trust. Missing/unreadable
+trust files stay silent; without a decision, missing/unreadable settings also
+stay silent. Empty or unreadable namespaces and root AGENTS.md alone do not
+warn. The shared `lib/ai/launcher-preflight.nix` isolates it as it does Codex's
+preflight: bounded to one second, no stdin, stdout discarded, failure ignored.
+`module-kimchi-project-trust-notice` runs its fixtures through each backend's
+launcher, covering both project namespaces with positive controls.
 
 `ai.kimchi.projectTrust` (absolute path → bool) is the persisted decision,
 declared. pi 0.85.1 keeps it in `<agentDir>/trust.json`, which Kimchi pins to
@@ -576,12 +582,14 @@ also use reference-backed index entries.
 ## Shared prep
 
 `mkPrep` (top-level `let`) builds the wrapped launcher from the builder's
-`launcherEnvironment`, the credential export and, on devenv, Kimchi's typed
-global-only variables plus the exact-cwd guard. The one `installPackage`
+`launcherEnvironment`, the project trust notice, the credential export and, on
+devenv, Kimchi's typed global-only variables plus the exact-cwd guard. It always
+wraps, because the notice runs on both backends. The one `installPackage`
 callback calls it; the delivery function computes its own filtered settings and
 context entry, because it never installs the package. The wrapper stays a local
-`symlinkJoin` rather than `lib.ai.mkLauncher`: its `postBuild` uses a continued
-line, and moving it would change the wrapper's store path.
+`symlinkJoin` rather than `lib.ai.mkLauncher`, because its `--suffix` must
+follow `--set` and mkLauncher places raw flags first. It shares mkLauncher's
+preflight argument, `lib/ai/launcher-preflight.nix`.
 
 ## Source packaging
 

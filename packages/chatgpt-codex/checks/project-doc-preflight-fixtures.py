@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-binary, preflight, hm_launcher, devenv_launcher, fake_launcher, preflight_source, bash = sys.argv[1:]
+binary, preflight, hm_launcher, devenv_launcher, fake_launcher, preflight_source, bash, trust_notice, permission_notice, *broken_launchers = sys.argv[1:]
 home = Path(os.environ["CODEX_HOME"])
 root = Path.cwd() / "fixture"
 root.mkdir()
@@ -219,10 +219,23 @@ for script in ["exit 1", "printf '{invalid json'", "exec sleep 3"]:
     resolver.write_text("#!" + bash + "\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + script + "\n")
     resolver.chmod(0o700)
     started = time.monotonic()
-    result = run([sys.executable, preflight_source, str(resolver), str(schema)])
+    result = run([sys.executable, preflight_source, str(resolver), str(schema), trust_notice, permission_notice])
     elapsed = time.monotonic() - started
     assert elapsed < 1.5, script
     if script == "exec sleep 3":
         assert elapsed >= 0.4, "the hanging resolver was never executed"
     assert result.returncode == 0 and result.stdout == b"" and result.stderr == b"", result
+# The launcher's shared isolation bounds any preflight: one that fails and
+# writes stdout, reads stdin, or hangs with a child leaves the launch's stdin,
+# stdout and exit status intact and costs at most the one-second bound. A
+# surviving child would hold the captured stderr open past it.
+for index, launcher in enumerate(broken_launchers):
+    started = time.monotonic()
+    result = run([launcher, "exec", "--json"], data=b"stdin preserved\n")
+    elapsed = time.monotonic() - started
+    assert elapsed < 1.5, (launcher, elapsed)
+    if index == len(broken_launchers) - 1:
+        assert elapsed >= 0.9, "the hanging preflight was never executed"
+    assert result.returncode == 23, result
+    assert result.stdout == b'{"output":"unchanged"}\nstdin preserved\n', result.stdout
 print("PASS: local discovery matches real offline Codex prompts, both launchers, and failure isolation")
