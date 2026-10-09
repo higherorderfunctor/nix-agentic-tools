@@ -479,14 +479,11 @@ in {
       let
         hm = evalHm {ai.codex.enable = true;};
         devenv = evalDevenv {ai.codex.enable = true;};
-        expected = {
-          model = "gpt-6-astra";
-          model_reasoning_effort = "xhigh";
-        };
       in
         hmCodexSettings hm
-        == withHmDaemonDefault expected
-        && devenv.config.ai.codex.files.".codex/config.toml".content.value == expected
+        == withHmDaemonDefault {}
+        && !(devenv.config.ai.codex.files ? ".codex/config.toml")
+        && !(devenv.config.files ? ".codex/config.toml")
     );
 
     # config.toml is a plain store symlink on both backends: no writer owns
@@ -525,8 +522,6 @@ in {
           native.settings = {
             # Null beats Home Manager's mkDefault, as it does every default.
             features.daemon_auto_start = null;
-            model = null;
-            model_reasoning_effort = null;
           };
         };
         hm = evalHm config;
@@ -1959,7 +1954,7 @@ in {
         };
       };
       assert lib.all (assertion: assertion.assertion) hm.config.assertions;
-      assert !(devenv.config.ai.codex.files.".codex/config.toml".content.value ? hooks);
+      assert !(devenv.config.ai.codex.files ? ".codex/config.toml");
       assert builtins.length devenvStateFailures == 1;
       assert hasLiteral "hooks.state has no effect in project" (lib.head devenvStateFailures).message;
         mkWrapperGrepTest {
