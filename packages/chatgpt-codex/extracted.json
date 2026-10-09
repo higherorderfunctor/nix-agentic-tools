@@ -4713,6 +4713,14 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
+            "help": "Run an embedded app-server in the foreground until Ctrl-C",
+            "names": ["--no-daemon"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
             "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
             "names": ["--disable"],
             "valueName": "FEATURE"
@@ -5271,6 +5279,45 @@
         "help": "Run commands within a Codex-provided sandbox",
         "path": ["codex", "sandbox"]
       },
+      "codex sandbox uninstall": {
+        "aliases": [],
+        "flags": [
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Enable a feature (repeatable). Equivalent to `-c features.<name>=true`",
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Print help (see a summary with '-h') Run as administrator after stopping apps using the legacy sandbox and its provisioning service, if installed. Preserves Codex home, including sandbox directories and filesystem permissions.",
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ],
+        "help": "Remove the legacy Windows sandbox's machine-wide accounts and network rules",
+        "path": ["codex", "sandbox", "uninstall"]
+      },
       "codex unarchive": {
         "aliases": [],
         "flags": [
@@ -5701,7 +5748,7 @@
     },
     {
       "default": false,
-      "maturity": "under development",
+      "maturity": "removed",
       "name": "apply_patch_preserve_line_endings"
     },
     {
@@ -5797,7 +5844,17 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "code_mode_only_strict_3p_tools"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "code_mode_prewarm"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "code_mode_tool_search"
     },
     {
       "default": false,
@@ -5980,6 +6037,11 @@
       "name": "guardianv2.thread_context"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "guardianv2_decisions_comparison"
+    },
+    {
       "default": true,
       "maturity": "stable",
       "name": "hooks"
@@ -6031,6 +6093,11 @@
     },
     {
       "default": false,
+      "maturity": "under development",
+      "name": "incremental_tools"
+    },
+    {
+      "default": true,
       "maturity": "under development",
       "name": "instant_interrupt"
     },
@@ -6103,6 +6170,11 @@
       "default": false,
       "maturity": "stable",
       "name": "multi_agent_v2"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "multi_agent_v2_dynamic_tools"
     },
     {
       "default": false,
@@ -6317,6 +6389,11 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "stable_environment_tools"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "standalone_web_search"
     },
     {
@@ -6378,6 +6455,11 @@
       "default": true,
       "maturity": "removed",
       "name": "tui_app_server"
+    },
+    {
+      "default": true,
+      "maturity": "stable",
+      "name": "ultrafast_mode"
     },
     {
       "default": false,
@@ -6544,7 +6626,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.161.0",
+    "codexVersion": "0.162.0",
     "extractorSchema": 1
   }
 }
