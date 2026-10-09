@@ -7,9 +7,9 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-07 — managed Kiro uses `ai.kiro.cli`;
-> workflow-enabled reach defaults both workflow tweaks, and skill rendering and
-> acceptance inventory share effective technique selection.
+> **Last verified:** 2026-10-08 — the delegate map distinguishes upstream Kimchi
+> workflows from the always-patched package and indexes its offline thinking
+> dispatch/preflight contract.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,

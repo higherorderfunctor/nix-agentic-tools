@@ -143,3 +143,16 @@ inspect the wire, tool results and session files. The inventory resolves its
 stdin fixture before entering the scratch project. Native AST extraction
 requires every selected declaration, and its VM replay reads the exclusion
 constants from the pinned source.
+
+### Packaged workflow thinking
+
+| Case id                       | Command                        | Expected excerpt                                                       |
+| ----------------------------- | ------------------------------ | ---------------------------------------------------------------------- |
+| codex:workflow-thinking-patch | `python3 packaged_thinking.py` | `PASS packaged workflow thinking dispatch and same-output preparation` |
+
+This case builds the normal patched extension with `--offline`, or inspects
+`KIMCHI_WORKFLOWS_PKG` when supplied. Its Nix build gates scripted engine/host
+thinking regressions and an install check of native preparation followed by
+preflight against the final installed output. It never launches Kimchi or an
+inference request. Installed-source assertions are A; the scripted tests are V
+offline. The older workflow cases describe upstream 0.0.9 without this patch.

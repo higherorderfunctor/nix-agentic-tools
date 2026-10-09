@@ -34,6 +34,13 @@ in
       inherit (sources) rev;
       hash = sources.srcHash;
     };
+    patches = [./native-preflight.patch ./step-thinking.patch];
+    postPatch = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      substituteInPlace src/host/workflow-package.ts test/nix-preflight.test.ts \
+        --replace-fail '@workflowPackage@' "$out"
+    '';
     pnpmDeps = pkgs.fetchPnpmDeps {
       pname = versionedName;
       inherit (finalAttrs) src version;
@@ -64,6 +71,20 @@ in
       pnpm run dist:metadata
       pnpm run build
       runHook postBuild
+    '';
+    doCheck = true;
+    checkPhase = ''
+      runHook preCheck
+      pnpm run docs:check
+      pnpm run typecheck
+      pnpm exec vitest run test/thinking.test.ts
+      runHook postCheck
+    '';
+    doInstallCheck = true;
+    installCheckPhase = ''
+      runHook preInstallCheck
+      pnpm exec vitest run test/nix-preflight.test.ts
+      runHook postInstallCheck
     '';
     installPhase = ''
       runHook preInstall
