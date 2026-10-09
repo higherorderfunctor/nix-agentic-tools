@@ -1,7 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-07 — devenv warns at shell entry when delivered
-> project files will be ignored by user-scope project trust.
+> **Last verified:** 2026-10-08 — the docs skill reads the same patched
+> installed workflows package as the native runtime.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -607,10 +607,10 @@ requirement; keeping it would advertise a toggle without a factory. See
 [external workflows](kimchi-workflows.md) for the pinned source evidence,
 runtime payload and CI contracts.
 
-The opt-in `kimchi-docs` skill links the pinned source as `workflows`, with
-directions to README, docs, examples and src. Both module backends use the
-repository package roots, so a host without an overlay and the module harness's
-stub executable receive the same pin.
+The opt-in `kimchi-docs` skill links the patched installed package as
+`workflows`, with directions to README, docs, examples and src. Both module
+backends use the repository package roots, so a host without an overlay and the
+module harness's stub executable receive the same pin.
 
 The package builds upstream's Bun executable and its Go proxy helper from the
 same pinned release. That source is pinned once, as `extraction.kimchiSource` in

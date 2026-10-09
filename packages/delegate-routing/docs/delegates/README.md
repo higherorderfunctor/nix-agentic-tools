@@ -18,3 +18,8 @@ Every fact cell carries an evidence mark. Probe scripts for replay live in
 
 Use [evidence.md](evidence.md) for pins, marks and replay methods. The topic
 files own the facts; their exceptions and evidence marks apply to each decision.
+
+The packaged Kimchi workflows extension includes per-step `thinking` and a
+same-output preflight binding; unpatched upstream 0.0.9 lacks that field. See
+the [control surface](control-surfaces.md#kimchi) and
+[offline evidence](evidence.md#pinned-versions).

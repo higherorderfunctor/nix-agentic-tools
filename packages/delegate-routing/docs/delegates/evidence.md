@@ -82,6 +82,19 @@ in `live/sc/`, each answered 200 by the model sent) showed no detectable effect
 of effort on `reasoning_tokens` at n=5 on a one-turn prompt (V LIVE): minimax-m3
 means 253 vs 231, glm-5.3 71 vs 92, arms overlapping on both models.
 
+The normal packaged workflows output additionally always applies
+`step-thinking.patch` and the Nix-specific `native-preflight.patch`.
+`codex:workflow-thinking-patch` covers optional per-step native thinking through
+scripted engine/host tests (V offline) and installed-source inspection (A). The
+install check exercises native preparation and preflight against that same
+output after runtime dependency pruning. Background/isolated calls carry
+`--thinking`; foreground calls restore the selected model baseline after
+success, error, or active cancellation. The supported host baseline is
+PI >=0.85.1; tests compile against upstream's 0.84.1 declarations and use
+scripted hosts. This does not establish gateway reasoning behavior. Earlier wire
+cases and the unchanged upstream 0.0.9 source census remain historical evidence
+of no step field.
+
 ## Methods per harness
 
 Codex evidence uses the pinned x86_64-linux source build (0.160.1). All indexed

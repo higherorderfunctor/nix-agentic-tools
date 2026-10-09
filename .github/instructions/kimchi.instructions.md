@@ -7,8 +7,8 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-07 — devenv warns at shell entry when delivered
-> project files will be ignored by user-scope project trust.
+> **Last verified:** 2026-10-08 — the docs skill reads the same patched
+> installed workflows package as the native runtime.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -614,10 +614,10 @@ requirement; keeping it would advertise a toggle without a factory. See
 [external workflows](kimchi-workflows.md) for the pinned source evidence,
 runtime payload and CI contracts.
 
-The opt-in `kimchi-docs` skill links the pinned source as `workflows`, with
-directions to README, docs, examples and src. Both module backends use the
-repository package roots, so a host without an overlay and the module harness's
-stub executable receive the same pin.
+The opt-in `kimchi-docs` skill links the patched installed package as
+`workflows`, with directions to README, docs, examples and src. Both module
+backends use the repository package roots, so a host without an overlay and the
+module harness's stub executable receive the same pin.
 
 The package builds upstream's Bun executable and its Go proxy helper from the
 same pinned release. That source is pinned once, as `extraction.kimchiSource` in
@@ -674,9 +674,9 @@ the link targets.
 
 # External workflows
 
-> **Last verified:** 2026-10-04 — independent source package, virtual peers,
-> shared top-level package links, native dependency fixups, and credential-free
-> CI smoke of evaluated backend delivery.
+> **Last verified:** 2026-10-08 — per-step native thinking is always patched
+> into the installed extension and covered by offline build checks; the docs
+> skill reads that same output.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's lock. Its owner-local
@@ -703,6 +703,37 @@ exists inside the output and every `node_modules` symlink resolves inside it.
 The extension's root manifest retains its peer declarations and source entry.
 See the
 [pinned workflows manifest](https://github.com/getkimchi/kimchi-workflows/blob/7a6765ccc4aa417f38cecce1216dd8dcd3b9fab7/package.json).
+
+The package always applies `step-thinking.patch`; there is one installed
+variant. `createAgentStep({ thinking: "high", ... })` accepts PI's native
+thinking levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`).
+Each background or statically isolated worker gets an explicit `--thinking`
+argument, including repair and resume calls. Foreground steps set thinking after
+model selection and restore that model's initial thinking level on disposal.
+Omission leaves native session/default behavior unchanged. PI still clamps
+levels to model capabilities; this controls the client's requested reasoning
+level, not gateway enforcement.
+
+The supported host baseline is PI >=0.85.1, whose public setter does not persist
+defaults. Earlier setters write global preferences and are unsupported. The
+packaged host uses PI 0.85.1. The build runs generated API document checks,
+TypeScript checks, and the focused offline thinking regressions. These use
+scripted hosts and the upstream 0.84.1 development type declarations; they make
+no inference calls. The unchanged wildcard peer range does not enforce the host
+baseline: native virtual module aliases select the running harness's SDK. The
+opt-in docs skill links this installed package, including its patched source and
+generated authoring reference.
+
+`native-preflight.patch` binds the central project workflow package's managed
+framework dependency to `file:<this installed output>`. Native run/resume
+preparation and local preflight therefore use the same patched API as the
+injected extension, instead of replacing it with upstream npm 0.0.9. The package
+substitutes its final output path during `postPatch`; no extra package variant,
+environment selector, or user configuration is required. Ordinary project
+preparation may still fetch its existing toolchain dependencies through pnpm.
+The offline install check uses a scripted installer and the actual installed
+framework after runtime dependency pruning, then typechecks and evaluates a
+workflow declaring `thinking` without executing its agents.
 
 Declare the package with:
 
