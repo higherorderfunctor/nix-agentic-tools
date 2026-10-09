@@ -427,6 +427,7 @@ in {
         programParity "delegate-routing" {
           enable = "boolean";
           families = "attribute set of attribute set of (submodule)";
+          reminder = "submodule";
           routing = "attribute set of (submodule)";
           workflows = "attribute set of (submodule)";
         } ["claude" "codex" "kimchi" "kiro"]

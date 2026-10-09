@@ -1,5 +1,8 @@
 # Acceptance suite
 
+> **Last verified:** 2026-10-09 — reminder pairs join the existing clamp and
+> Pool drain pairs; clamp pairs keep the reminder off.
+
 One manual suite of real sessions on Claude, Codex, Kiro and Kimchi. Each case
 checks what the delivered delegate-routing configuration makes an agent do with
 a real task. A human starts it; it spends real model turns on the operator's
@@ -48,8 +51,14 @@ expected behavior never enters it.
 | `codex-single`, `kimchi-single`, `kiro-single`          | one task                                               | `one-delegate` |
 | `codex-dependent`, `kimchi-dependent`, `kiro-dependent` | dependent chain                                        | `workflow`     |
 
-The two Claude pairs are on/off pairs: the switch is the only difference. The
-drain cases supply more Codex headroom than Claude headroom.
+Claude and Kiro each have `*-reminder-on` and `*-reminder-off` cases, with the
+same task and the `delegate` assertion. Only
+`ai.programs.delegate-routing.reminder.enable` changes. Routing rules and skills
+remain enabled; a FAIL measures behavior rather than a fixture error. The clamp
+pair forces the reminder off to measure the clamp independently.
+
+The existing Claude pairs are on/off pairs: the switch is the only difference.
+The drain cases supply more Codex headroom than Claude headroom.
 
 Assertions read the session's own event log. A delegate call is a tool call
 named after a `subagent` or `workflow` technique of the case's runtime, or a
