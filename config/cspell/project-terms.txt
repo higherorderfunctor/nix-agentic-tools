@@ -10,6 +10,7 @@ agentsmd
 agnix
 aihubmix
 aioptimizer
+anonymization
 anthropics
 applyto
 argjson
@@ -48,6 +49,7 @@ cachix
 caddyfile
 calen
 cancelchild
+cand
 cands
 caoff
 capserver
@@ -73,6 +75,7 @@ configdir
 Consolas
 convco
 coreutils
+counterevidence
 creds
 customisation
 datamodels
@@ -97,6 +100,7 @@ docbook
 docsite
 dogfood
 dotglob
+dountil
 drvs
 dsolve
 dunder
@@ -182,6 +186,7 @@ isaacphi
 iterm
 jandedobbeleer
 journalctl
+journaled
 kagi
 kagimcp
 kagisearch
@@ -265,6 +270,8 @@ nodev
 noexplore
 nohup
 nomodel
+nonterminal
+nontext
 nosub
 nosuid
 NOSYSTEM
@@ -406,6 +413,7 @@ taplo
 tengu
 TERMUX
 testapp
+textconv
 timespec
 tmpfs
 toctou
@@ -438,12 +446,14 @@ unparseable
 unredacted
 unrepresentable
 unresumable
+unrun
 unscanned
 unsets
 unstages
 unstarted
 unstash
 untarring
+unvalidated
 unwire
 uppercased
 usebruno

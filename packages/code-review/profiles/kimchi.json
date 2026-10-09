@@ -1,0 +1,41 @@
+{
+  "defense_policy": "when-requested",
+  "limits": {
+    "concurrency": 6,
+    "max_waves": 3
+  },
+  "roles": {
+    "dedupe": {
+      "effort": "high",
+      "model_id": "kimchi-dev/kimi-k3"
+    },
+    "defense": {
+      "effort": "high",
+      "model_id": "kimchi-dev/glm-5.3"
+    },
+    "evidence": {
+      "effort": "high",
+      "model_id": "kimchi-dev/kimi-k3"
+    },
+    "finalize": {
+      "effort": "high",
+      "model_id": "kimchi-dev/kimi-k3"
+    },
+    "judge": {
+      "effort": "max",
+      "model_id": "kimchi-dev/glm-5.3"
+    },
+    "lens": {
+      "effort": "high",
+      "model_id": "kimchi-dev/kimi-k3"
+    },
+    "refine": {
+      "effort": "high",
+      "model_id": "kimchi-dev/kimi-k3"
+    },
+    "surface": {
+      "effort": "high",
+      "model_id": "kimchi-dev/kimi-k3"
+    }
+  }
+}
