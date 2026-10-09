@@ -32,6 +32,10 @@ in {
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       export HOME="$TMPDIR/home"
+      # Full parallel CI can exceed the verifier's one-minute child-process budget.
+      # Extend only this offline check copy; installed workflow budgets stay intact.
+      substituteInPlace src/verification/verify.ts \
+        --replace-fail 'const VERIFICATION_TIMEOUT_MS = 60_000' 'const VERIFICATION_TIMEOUT_MS = 180_000'
       mkdir -p node_modules/@kimchi-dev suite
       ln -s ${framework} node_modules/@kimchi-dev/kimchi-workflows
       cp -r ${framework}/dist .
@@ -40,8 +44,8 @@ in {
       chmod -R u+w suite
       cp ${../src/kimchi}/offline-entry.workflow.ts ${../src/kimchi}/workflow.test.ts suite/kimchi/
       cp ${../src/transport}/offline-entry.workflow.ts ${../src/transport}/workflow.test.ts suite/transport/
-      node ${framework}/bin/kimchi-workflows.mjs verify --entry ${storeEntry} --test ./suite/kimchi/workflow.test.ts --package-root .
-      node ${framework}/bin/kimchi-workflows.mjs verify --entry ./suite/transport/offline-entry.workflow.ts --test ./suite/transport/workflow.test.ts --package-root .
+      node ./bin/kimchi-workflows.mjs verify --entry ${storeEntry} --test ./suite/kimchi/workflow.test.ts --package-root .
+      node ./bin/kimchi-workflows.mjs verify --entry ./suite/transport/offline-entry.workflow.ts --test ./suite/transport/workflow.test.ts --package-root .
       cp ${./saved-entries.test.ts} suite/saved-entries.test.ts
       CODE_REVIEW_SAVED_ENTRIES="$(${pkgs.python3}/bin/python3 - ${skill}/SKILL.md <<'PY'
       import json, pathlib, re, sys
@@ -53,7 +57,7 @@ in {
       ${pkgs.python3}/bin/python3 - <<'PY'
       import json, os, subprocess
       for entry in json.loads(os.environ['CODE_REVIEW_SAVED_ENTRIES']):
-          subprocess.run(['node', '${framework}/bin/kimchi-workflows.mjs', 'verify', '--entry', entry, '--test', './suite/saved-entries.test.ts', '--package-root', '.'], check=True)
+          subprocess.run(['node', './bin/kimchi-workflows.mjs', 'verify', '--entry', entry, '--test', './suite/saved-entries.test.ts', '--package-root', '.'], check=True)
       PY
     '';
     installPhase = ''
