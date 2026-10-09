@@ -1423,7 +1423,8 @@ in
             default = false;
             description = ''
               Remove the vendor workflow worktree paragraph (worktrees under
-              `.worktrees/`, rebased onto `mainline`) at launch, for repositories
+              `.worktrees/`, rebased onto and fast-forwarding the checked-out base
+              branch) at launch, for repositories
               whose own instructions supply the git workflow. Uses the same
               exact-match bundle materializer as `tweaks.identity`, on Home
               Manager and devenv. A source-text drift prints a warning and

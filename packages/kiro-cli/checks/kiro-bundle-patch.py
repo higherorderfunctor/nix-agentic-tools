@@ -19,8 +19,8 @@ LAUNCHERS = json.loads(Path(sys.argv.pop(1)).read_text())
 IDENTITY = b"Custom identity. Another sentence!"
 BUNDLE = (b"function identity(){return `" + patcher.IDENTITY_SENTENCE
           + b" Terminal guidance.`}\nvar steering='Before\\n\\n"
-          + patcher.WORKTREE_PARAGRAPH + b"After';\nvar workflow=`"
-          + patcher.FILE_CHECK_PARAGRAPH + b"`;\n")
+          + patcher.WORKTREE_PARAGRAPH + b"After';\nvar workflow='"
+          + patcher.FILE_CHECK_PARAGRAPH + b"';\n")
 
 
 def prepare_bundle(root, data):

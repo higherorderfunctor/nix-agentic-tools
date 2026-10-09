@@ -256,9 +256,9 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-07 — launcher controls use `ai.kiro.cli`;
-> delegate-routing defaults the two workflow tweaks on for managed Kiro with
-> workflows enabled.
+> **Last verified:** 2026-10-09 — kiro-cli 2.29.0 rewrote the vendor worktree
+> paragraph and moved the workflow steering into a single-quoted string; the
+> tweak sources and replacement are escaped for that context.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -377,14 +377,14 @@ Four properties worth knowing before touching it:
   `tweaks.identity.source` reads a packaged file;
   `tweaks.identity.enable = false` disables either form explicitly. The boolean
   `tweaks.stripVendorWorktreeSteering` (default false) removes the vendor
-  paragraph assigning worktree setup and a `mainline` fast-forward to workflows,
-  for repositories whose own instructions supply the git workflow.
-  `tweaks.relativeFileCheckPaths` (default false) replaces the vendor workflow
-  paragraph that requires absolute stop-condition paths. The step writes the
-  stop-condition file, and `fileCheck.path` checks it, at the same plain path
-  relative to the workflow workspace root, without templates or an absolute
-  worktree prefix. Every other file in a step prompt keeps the absolute-path
-  guidance.
+  paragraph assigning worktree setup and a fast-forward of the checked-out base
+  branch to workflows, for repositories whose own instructions supply the git
+  workflow. `tweaks.relativeFileCheckPaths` (default false) replaces the vendor
+  workflow paragraph that requires absolute stop-condition paths. The step
+  writes the stop-condition file, and `fileCheck.path` checks it, at the same
+  plain path relative to the workflow workspace root, without templates or an
+  absolute worktree prefix. Every other file in a step prompt keeps the
+  absolute-path guidance.
 - **It is computed at LAUNCH, not at eval.** The value is the stdout of a
   materializer that resolves the installed engine bundle, applies selected
   exact-byte replacements to a mirrored copy, and caches the result. The engine

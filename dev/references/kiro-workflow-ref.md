@@ -1546,10 +1546,10 @@ the condition can never match and the loop silently runs to `maxIterations`
 The repository no longer injects per-turn workflow reminders or decodes the
 vendor steering. The separate opt-in
 `ai.kiro.cli.tweaks.stripVendorWorktreeSteering` removes the vendor paragraph
-assigning worktree setup and a `mainline` fast-forward to workflows, leaving git
-workflow to repository instructions. Each selected replacement applies
-independently: exact source drift warns and skips only that replacement at
-launch, and fails CI. The launcher uses stock when none apply.
+assigning worktree setup and a fast-forward of the checked-out base branch to
+workflows, leaving git workflow to repository instructions. Each selected
+replacement applies independently: exact source drift warns and skips only that
+replacement at launch, and fails CI. The launcher uses stock when none apply.
 
 ### Small things that save a run
 
