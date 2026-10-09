@@ -19,6 +19,27 @@
     "DIFF_THEME": {
       "controls": "syntax-highlighting theme for rendered diffs (default github-dark)"
     },
+    "GH_ENTERPRISE_TOKEN": {
+      "controls": "GitHub Enterprise token for pull-request status lookups on the GH_HOST host; preferred over GITHUB_ENTERPRISE_TOKEN, and over config.json gitTokens and gh auth"
+    },
+    "GH_TOKEN": {
+      "controls": "github.com token for pull-request status lookups; preferred over GITHUB_TOKEN, and over config.json gitTokens and gh auth"
+    },
+    "GITHUB_ENTERPRISE_TOKEN": {
+      "controls": "GitHub Enterprise token for pull-request status lookups on the GH_HOST host when GH_ENTERPRISE_TOKEN is unset; preferred over config.json gitTokens and gh auth"
+    },
+    "GITHUB_TOKEN": {
+      "controls": "github.com token for pull-request status lookups when GH_TOKEN is unset; preferred over config.json gitTokens and gh auth"
+    },
+    "GITLAB_ACCESS_TOKEN": {
+      "controls": "GitLab token for pull-request status lookups on the GITLAB_HOST/GL_HOST/GITLAB_URI host (default gitlab.com) when GITLAB_TOKEN and GLAB_TOKEN are unset; preferred over config.json gitTokens and glab credentials"
+    },
+    "GITLAB_TOKEN": {
+      "controls": "GitLab token for pull-request status lookups on the GITLAB_HOST/GL_HOST/GITLAB_URI host (default gitlab.com); preferred over GLAB_TOKEN, GITLAB_ACCESS_TOKEN, config.json gitTokens and glab credentials"
+    },
+    "GLAB_TOKEN": {
+      "controls": "GitLab token for pull-request status lookups on the GITLAB_HOST/GL_HOST/GITLAB_URI host (default gitlab.com) when GITLAB_TOKEN is unset; preferred over GITLAB_ACCESS_TOKEN, config.json gitTokens and glab credentials"
+    },
     "JS_DEBUG_PATH": {
       "controls": "js-debug DAP server script used by the debugger extension"
     },
