@@ -20,12 +20,12 @@
   # agnix requires Rust edition 2024 (>= 1.91)
   rustPlatform = vu.mkRustPlatform {inherit pkgs;};
 
-  rev = "37d9d2630b69bc4ff0565cdec9d541956d80e27d";
+  rev = "004b7ea143de549c13e89614fd73be0497abbdd0";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";
     inherit rev;
-    hash = "sha256-xm5zaRr9esZbISkNRbmm24MYxlkCgCrUwhMndMzrrCU=";
+    hash = "sha256-jE/YqSG3LmFRl565rGRT/pq8JoXJzm1kiarhmv/HYaE=";
   };
 in
   rustPlatform.buildRustPackage {
