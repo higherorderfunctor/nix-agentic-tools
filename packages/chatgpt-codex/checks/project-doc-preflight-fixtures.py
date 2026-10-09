@@ -26,8 +26,10 @@ def trust(path=root):
     user_config(f"[projects.{json.dumps(str(path))}]\ntrust_level = 'trusted'\n")
 
 
+# Fails a hung command by name instead of at the CI job's 60-minute limit. A
+# cold Codex start on a loaded runner has taken over 5 s, so leave headroom.
 def run(arguments, cwd=root, data=None, env=None):
-    return subprocess.run(arguments, cwd=cwd, input=data, capture_output=True, env=env, timeout=5)
+    return subprocess.run(arguments, cwd=cwd, input=data, capture_output=True, env=env, timeout=60)
 
 
 def documents(prompt):
