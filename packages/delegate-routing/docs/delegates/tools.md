@@ -266,7 +266,9 @@ claude:h2-hookblock, claude:h3-hookblock, pr-hl-wf · MCP-server codex:R1.
 6. `thinking`, `tools`, `disallowed_tools`, `extensions`, `skills`,
    `prompt_mode`, budgets. `model` and `isolation` are ignored.
 7. prompt, `model`, `retry`, `asks`, output schema, `maxDurationMs`,
-   `maxTokens`. No effort.
+   `maxTokens`. Packaged step `thinking` is covered by
+   `codex:workflow-thinking-patch` (V offline; A); unpatched upstream 0.0.9 has
+   no effort field.
 8. `--model`, `--thinking`, `--append-system-prompt`, perm/session flags, `-e`.
 9. `session/new|load|list|close`, `prompt`, `cancel`, `set_config_option`.
 
