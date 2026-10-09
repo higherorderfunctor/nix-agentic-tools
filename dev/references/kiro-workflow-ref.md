@@ -1528,20 +1528,19 @@ workflow-creator prompt prescribes absolute `{{worktree_path}}/…` paths. These
 fail for sibling worktrees outside the workspace. Require workspace-relative
 fileCheck paths in the `workflowPrompt` brief, or opt into
 `ai.kiro.cli.tweaks.relativeFileCheckPaths = true` on Home Manager or devenv
-(default false). In the pinned 2.27.1 bundle the conflicting paragraph begins
-"Every path in a prompt or stop condition is absolute" and explicitly extends
-that rule to `fileCheck.path`. This exact-match tweak keeps absolute
-interpolation for every other file a step prompt names. It tells the workflow
-creator that the step writes the stop-condition file, and `fileCheck.path`
-checks it, at the same plain workspace-relative path, without templates or an
-absolute worktree prefix. It keeps the vendor's warning that a path that never
-resolves spins the loop to `maxIterations`. It corrects prompt guidance; it does
-not change the engine's path validation or template resolution. Creator behavior
-with the tweak enabled is unmeasured until an opted-in sibling-worktree run. And
-`stopWhen`'s `"{{id.output}} contains <text>"` form matches against _captured
-output_, so it inherits the empty-capture hazard wholesale — under a cheap model
-the condition can never match and the loop silently runs to `maxIterations`
-(ledger §7.6).
+(default false). In the pinned bundle the conflicting paragraph begins "Every
+path in a prompt or stop condition is absolute" and explicitly extends that rule
+to `fileCheck.path`. This exact-match tweak keeps absolute interpolation for
+every other file a step prompt names. It tells the workflow creator that the
+step writes the stop-condition file, and `fileCheck.path` checks it, at the same
+plain workspace-relative path, without templates or an absolute worktree prefix.
+It keeps the vendor's warning that a path that never resolves spins the loop to
+`maxIterations`. It corrects prompt guidance; it does not change the engine's
+path validation or template resolution. Creator behavior with the tweak enabled
+is unmeasured until an opted-in sibling-worktree run. And `stopWhen`'s
+`"{{id.output}} contains <text>"` form matches against _captured output_, so it
+inherits the empty-capture hazard wholesale — under a cheap model the condition
+can never match and the loop silently runs to `maxIterations` (ledger §7.6).
 
 The repository no longer injects per-turn workflow reminders or decodes the
 vendor steering. The separate opt-in

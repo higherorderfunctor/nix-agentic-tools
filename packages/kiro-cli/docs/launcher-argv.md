@@ -1,8 +1,9 @@
 # kiro-cli wrapper: the argv contract
 
 > **Last verified:** 2026-10-09 — kiro-cli 2.29.0 rewrote the vendor worktree
-> paragraph and moved the workflow steering into a single-quoted string; the
-> tweak sources and replacement are escaped for that context.
+> paragraph and moved the wf-workflow-creator prompt, which holds the rule-13
+> file-check paragraph, from a template literal into a single-quoted string; the
+> file-check source and replacement are escaped for that context.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
