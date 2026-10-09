@@ -1795,6 +1795,10 @@
       "hooks.*[].hooks[]|0.if": {
         "type": "string"
       },
+      "hooks.*[].hooks[]|0.onFailure": {
+        "enum": ["block", "continue"],
+        "type": "string"
+      },
       "hooks.*[].hooks[]|0.once": {
         "type": "boolean"
       },
@@ -1888,6 +1892,10 @@
         "type": "string"
       },
       "hooks.*[].hooks[]|3.if": {
+        "type": "string"
+      },
+      "hooks.*[].hooks[]|3.onFailure": {
+        "enum": ["block", "continue"],
         "type": "string"
       },
       "hooks.*[].hooks[]|3.once": {
