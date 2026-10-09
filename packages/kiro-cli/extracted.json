@@ -53,6 +53,7 @@
     "remote_changelog",
     "remote_sandbox",
     "session_dashboard",
+    "standalone_toolbox",
     "tangent",
     "test",
     "test_internal_only",
