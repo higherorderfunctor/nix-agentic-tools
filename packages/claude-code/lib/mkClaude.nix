@@ -348,7 +348,7 @@ in
 
           The freeform catch-all still accepts a key newer than this
           package's schema — see `allowUnrecognizedSettings`, which is what
-          stops it accepting typos too. The undocumented `ultracode` session
+          stops it accepting typos too. The `ultracode`
           key is intentionally NOT a hand-authored option (see
           ultracodeOnLaunch) but is declared by the binary and so is typed
           like any other.
@@ -408,27 +408,16 @@ in
         '';
       };
       ultracodeOnLaunch = lib.mkEnableOption ''
-          starting every Claude session in ultracode (xhigh effort plus
-          standing dynamic-workflow orchestration).
+        starting every Claude session in ultracode (standing dynamic-workflow
+        orchestration at the session's effort level).
 
-          Session-setup convenience, NOT the per-turn "ultracode" keyword
-          (that is `settings.workflowKeywordTriggerEnabled`, orthogonal).
-          When true, writes `settings.ultracode = true` (⚠ see caveat) and
-          `settings.enableWorkflows = true` via mkDefault, so an explicit
-          `ai.claude.native.settings.*` still wins. Does NOT set effortLevel —
-          ultracode implies xhigh unconditionally.
-
-          ⚠ CAVEAT: the `ultracode` settings key is UNDOCUMENTED and
-          officially session-only. Anthropic's docs describe ultracode as
-          lasting only for the current session; only `disableWorkflows`
-          appears in the official settings reference. Persisting
-          `ultracode = true` relies on internal behavior (the binary reads it
-          from any settings.json source) that works today (verified on
-          claude-code 2.1.202) but carries no compatibility promise — a future
-          release could stop honoring it without it counting as a breaking
-          change. The claude-code overlay's extraExtract guard asserts the key
-          still parses on each bump so a silent drop fails the update pipeline
-        loudly'';
+        Session-setup convenience, NOT the per-turn "ultracode" keyword
+        (that is `settings.workflowKeywordTriggerEnabled`, orthogonal).
+        When true, writes `settings.ultracode = true` and
+        `settings.enableWorkflows = true` via mkDefault, so an explicit
+        `ai.claude.native.settings.*` still wins. Does NOT set effortLevel —
+        ultracode runs at the session's effort level. The
+        `--effort ultracode` CLI flag also sets xhigh.'';
       marketplaces = lib.mkOption {
         type = with lib.types; attrsOf (either package path);
         default = {};
@@ -782,12 +771,11 @@ in
           ai.claude.hooks = memoryCollisionGuardHooks cfg.memoryCollisionGuard;
         })
         # Meta option: ultracode on at every launch. Writes the
-        # (undocumented, officially session-only) `ultracode` key plus the
+        # `ultracode` key plus the
         # `enableWorkflows` master toggle via mkDefault so an explicit
         # `ai.claude.native.settings.*` still wins. This is the single place the
-        # off-label `ultracode` key is written (its risk is disclosed in the
-        # ultracodeOnLaunch description). No effortLevel — ultracode implies
-        # xhigh. No workflowKeywordTriggerEnabled — orthogonal per-turn key.
+        # `ultracode` key is written. No effortLevel — ultracode runs at the
+        # session's effort level. No workflowKeywordTriggerEnabled — orthogonal per-turn key.
         (lib.mkIf cfg.ultracodeOnLaunch {
           ai.claude.native.settings = {
             ultracode = lib.mkDefault true;

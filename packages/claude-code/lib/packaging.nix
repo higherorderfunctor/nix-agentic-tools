@@ -30,15 +30,15 @@ rec {
   # supposed to describe. That is also why the emitted sidecar is committed and
   # drift-checked.
   #
-  # The `settingsBooleanKeys` guard covers `ultracode` (UNDOCUMENTED, officially
-  # session-only — persisted via ai.claude.ultracodeOnLaunch), `enableWorkflows`
-  # and `workflowKeywordTriggerEnabled`. These are off-label / /config-only keys
-  # with no compatibility promise; asserting that the binary's own schema still
-  # types all three as booleans on each bump converts a future silent drop into
-  # a loud update-pipeline (and `nix flake check` drift-check) failure. Unlike
-  # the grep it replaces, the array is now a DISCOVERY rather than the input
-  # list echoed back: census.mjs filters those three names by the type the
-  # schema actually gives them, so a retype shortens the array.
+  # The `settingsBooleanKeys` guard covers `ultracode` (persisted via
+  # ai.claude.ultracodeOnLaunch), `enableWorkflows` and
+  # `workflowKeywordTriggerEnabled`, which the module writes by name. Asserting
+  # that the binary's own schema still types all three as booleans on each bump
+  # converts a future silent drop into a loud update-pipeline (and
+  # `nix flake check` drift-check) failure. Unlike the grep it replaces, the
+  # array is now a DISCOVERY rather than the input list echoed back: census.mjs
+  # filters those three names by the type the schema actually gives them, so a
+  # retype shortens the array.
   #
   #   assets: the packages/claude-code/extract/ directory — bununpack.py, census.mjs
   #           and locate.mjs. Passed as a path so the scripts ride the
@@ -123,7 +123,7 @@ rec {
       exit 1
     fi
 
-    # A SHORT array means one of the three off-label boolean keys was renamed,
+    # A SHORT array means one of the three guarded boolean keys was renamed,
     # dropped, or retyped — census.mjs filters its three names by the type the
     # emitted schema gives them. The names live there, once, and are
     # deliberately not restated here.
