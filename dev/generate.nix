@@ -1246,6 +1246,22 @@
     runtime list, using its own spelling. Usage commands come from the existing
     technique catalog. Both Home Manager and devenv expose the same options.
 
+    #### Per-turn reminder
+
+    The default-on `reminder.{enable,text,source}` supplies a standing request
+    permitting subagents, workflows and delegates and pointing to the skill for sizing.
+    `runtimes.<runtime>.reminder.enable` overrides the shared enable; null inherits it.
+    Claude and Codex receive JSON `additionalContext` on both backends.
+    Kimchi receives it on devenv only; an explicit Home Manager runtime enable warns.
+    Kiro receives plain stdout on both backends.
+    Codex inline hook events in `ai.codex.native.settings.hooks` conflict;
+    `hooks.state` may coexist. Move inline events to
+    `ai.codex.hooks` or disable `runtimes.codex.reminder.enable`.
+    Kiro's `ai.kiro.hooksDir` conflicts: move those hooks out of `hooksDir` or
+    disable `runtimes.kiro.reminder.enable`.
+    The reminder names workflows to provide Claude's explicit user opt-in when
+    ultracode is off. The Claude clamp remains available in this release.
+
     </details>
 
     <details>

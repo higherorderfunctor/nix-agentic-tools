@@ -84,7 +84,10 @@
       expect = "delegate";
       id = "claude-clamp-${label on}";
       runtime = "claude";
-      switches.ai.claude.delegationClampMitigation.enable = lib.mkForce on;
+      switches.ai = {
+        claude.delegationClampMitigation.enable = lib.mkForce on;
+        programs.delegate-routing.reminder.enable = lib.mkForce false;
+      };
       task = single;
     })
     (mkCase {
@@ -103,6 +106,15 @@
       task = dependent;
     })
   ]) [false true];
+  reminderPairs = lib.concatMap (runtime:
+    map (on:
+      mkCase {
+        inherit runtime;
+        expect = "delegate";
+        id = "${runtime}-reminder-${label on}";
+        switches.ai.programs.delegate-routing.reminder.enable = lib.mkForce on;
+        task = single;
+      }) [true false]) ["claude" "kiro"];
   # Task shape: a single task wants one delegate, a dependent chain a workflow.
   shapes = lib.concatMap (runtime: [
     (mkCase {
@@ -119,4 +131,4 @@
     })
   ]) ["codex" "kimchi" "kiro"];
 in
-  claudePairs ++ shapes
+  claudePairs ++ reminderPairs ++ shapes
