@@ -1,7 +1,7 @@
 # cspell:ignore lndir
 # Builds the opt-in `kimchi-docs` skill directory.
 #
-# Shape: `{ SKILL.md, snapshot -> <kimchi-docs>, workflows -> <workflowsSource> }`.
+# Shape: `{ SKILL.md, snapshot -> <kimchi-docs>, workflows -> <workflowsPackage> }`.
 #
 # ── Symlink, not copy ──
 #
@@ -31,7 +31,7 @@
   pkgs,
   search,
   treefmt-nix,
-  workflowsSource,
+  workflowsPackage,
 }: let
   frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
   generated = import ../../../lib/generated.nix {inherit lib;} pkgs;
@@ -103,9 +103,10 @@
 
     ## Workflows source, documentation and examples
 
-    The `workflows` directory beside this file is the pinned source for
+    The `workflows` directory beside this file is the installed package for
     `@kimchi-dev/kimchi-workflows`, pinned independently of Kimchi and loaded
-    externally via `ai.kimchi.extensions.workflows`. It is offline; no clone is needed.
+    externally via `ai.kimchi.extensions.workflows`, including its downstream API patches.
+    It is offline; no clone is needed.
     Read `workflows/README.md` first, then search `workflows/docs` for workflow
     authoring and execution guidance, `workflows/examples` for working examples,
     and `workflows/src` for implementation details. These paths are relative to
@@ -153,5 +154,5 @@ in
     ${pkgs.coreutils}/bin/mkdir -p "$out"
     ${pkgs.coreutils}/bin/install -m 644 ${skill}/SKILL.md "$out/SKILL.md"
     ${pkgs.coreutils}/bin/ln -s ${docs} "$out/snapshot"
-    ${pkgs.coreutils}/bin/ln -s ${workflowsSource} "$out/workflows"
+    ${pkgs.coreutils}/bin/ln -s ${workflowsPackage} "$out/workflows"
   ''

@@ -1,0 +1,59 @@
+diff --git a/src/host/workflow-package.ts b/src/host/workflow-package.ts
+--- a/src/host/workflow-package.ts
++++ b/src/host/workflow-package.ts
+@@ -121,7 +121,7 @@
+ function workflowManifest(current: PackageManifest): PackageManifest {
+ 	const managedDependencies: Record<string, string> = {
+ 		[distribution.name]:
+-			distribution.version === "0.0.0" ? localPackageSpecifier(developmentPackageRoot()) : distribution.version,
++			distribution.version === "0.0.0" ? localPackageSpecifier(developmentPackageRoot()) : "file:@workflowPackage@",
+ 		"@earendil-works/pi-coding-agent": distribution.toolchain.piCodingAgent,
+ 		"@earendil-works/pi-tui": distribution.toolchain.piTui,
+ 		"@types/node": distribution.toolchain.typesNode,
+diff --git a/test/nix-preflight.test.ts b/test/nix-preflight.test.ts
+new file mode 100644
+--- /dev/null
++++ b/test/nix-preflight.test.ts
+@@ -0,0 +1,42 @@
++import { mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises"
++import { tmpdir } from "node:os"
++import path from "node:path"
++import { expect, it } from "vitest"
++import { prepareProjectWorkflowPackage } from "../src/host/project-workflow-package.ts"
++import { loadValidatedWorkflow } from "../src/host/workflow-preflight.ts"
++import { prepareWorkflowPackageFixture } from "./workflow-package-fixture.ts"
++
++// Downstream install check: use the actual installed output, never an npm copy,
++// a model endpoint, or an executing workflow agent.
++it("native preparation and preflight use the same installed thinking API", async () => {
++	const root = await mkdtemp(path.join(tmpdir(), "nix-workflow-thinking-"))
++	try {
++		const prepared = await prepareProjectWorkflowPackage({
++			projectRoot: root,
++			install: async (directory) => {
++				const manifest = await readFile(path.join(directory, "package.json"), "utf8")
++				expect(JSON.parse(manifest).devDependencies["@kimchi-dev/kimchi-workflows"]).toBe("file:@workflowPackage@")
++				await prepareWorkflowPackageFixture({ directory })
++				const framework = path.join(directory, "node_modules/@kimchi-dev/kimchi-workflows")
++				await unlink(framework)
++				await symlink("@workflowPackage@", framework)
++				await writeFile(path.join(directory, "package.json"), manifest)
++				return { code: 0, stdout: "", stderr: "" }
++			},
++		})
++		expect(prepared.installed).toBe(true)
++		const entry = path.join(root, "automation/review.workflow.ts")
++		await mkdir(path.dirname(entry), { recursive: true })
++		await writeFile(
++			entry,
++			`import { createAgentStep, createWorkflow } from "@kimchi-dev/kimchi-workflows"
++export default createWorkflow({ name: "native-thinking" })
++ .then(createAgentStep({ name: "review", background: true, thinking: "high", prompt: () => "go" })).commit()
++`,
++		)
++		const preflight = await loadValidatedWorkflow({ filePath: entry, projectRoot: root })
++		expect(preflight.ok, JSON.stringify(preflight)).toBe(true)
++	} finally {
++		await rm(root, { recursive: true, force: true })
++	}
++})

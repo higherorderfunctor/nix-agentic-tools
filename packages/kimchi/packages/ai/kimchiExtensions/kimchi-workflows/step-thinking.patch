@@ -1,0 +1,375 @@
+diff --git a/docs/api-reference.md b/docs/api-reference.md
+--- a/docs/api-reference.md
++++ b/docs/api-reference.md
+@@ -9,7 +9,7 @@
+ ### `CreateAgentStepOptions`
+ 
+ ```ts
+-interface CreateAgentStepOptions<TInputSchema extends TSchema | undefined, TOutputSchema extends TSchema> { name: string description?: string input?: TInputSchema output?: TOutputSchema model?: string prompt: (args: AgentPromptArgs<InferInput<TInputSchema>>) => string asks?: boolean retry?: RetryPolicy maxOutputRepairs?: number maxDurationMs?: number | ((args: { ctx: RunContext }) => number) optional?: boolean maxTokens?: number background?: boolean resumable?: boolean | string | ((args: { ctx: RunContext }) => string) }
++interface CreateAgentStepOptions<TInputSchema extends TSchema | undefined, TOutputSchema extends TSchema> { name: string description?: string input?: TInputSchema output?: TOutputSchema model?: string thinking?: ThinkingLevel prompt: (args: AgentPromptArgs<InferInput<TInputSchema>>) => string asks?: boolean retry?: RetryPolicy maxOutputRepairs?: number maxDurationMs?: number | ((args: { ctx: RunContext }) => number) optional?: boolean maxTokens?: number background?: boolean resumable?: boolean | string | ((args: { ctx: RunContext }) => string) }
+ ```
+ 
+ Agent-step configuration, including model selection, output repair, budgets, isolation, and resumability.
+@@ -405,7 +405,7 @@
+ ### `CreateAgentStepOptions`
+ 
+ ```ts
+-interface CreateAgentStepOptions<TInputSchema extends TSchema | undefined, TOutputSchema extends TSchema> { name: string description?: string input?: TInputSchema output?: TOutputSchema model?: string prompt: (args: AgentPromptArgs<InferInput<TInputSchema>>) => string asks?: boolean retry?: RetryPolicy maxOutputRepairs?: number maxDurationMs?: number | ((args: { ctx: RunContext }) => number) optional?: boolean maxTokens?: number background?: boolean resumable?: boolean | string | ((args: { ctx: RunContext }) => string) }
++interface CreateAgentStepOptions<TInputSchema extends TSchema | undefined, TOutputSchema extends TSchema> { name: string description?: string input?: TInputSchema output?: TOutputSchema model?: string thinking?: ThinkingLevel prompt: (args: AgentPromptArgs<InferInput<TInputSchema>>) => string asks?: boolean retry?: RetryPolicy maxOutputRepairs?: number maxDurationMs?: number | ((args: { ctx: RunContext }) => number) optional?: boolean maxTokens?: number background?: boolean resumable?: boolean | string | ((args: { ctx: RunContext }) => string) }
+ ```
+ 
+ Agent-step configuration, including model selection, output repair, budgets, isolation, and resumability.
+diff --git a/src/engine/step-runner.ts b/src/engine/step-runner.ts
+--- a/src/engine/step-runner.ts
++++ b/src/engine/step-runner.ts
+@@ -410,6 +410,7 @@
+ 	try {
+ 		session = host.startAgent({
+ 			model,
++			thinking: step.thinking,
+ 			history,
+ 			stepName: step.name,
+ 			// Run/execution identity (spec §8.5): everything a host needs to give this session a durable name
+diff --git a/src/engine/types.ts b/src/engine/types.ts
+--- a/src/engine/types.ts
++++ b/src/engine/types.ts
+@@ -6,6 +6,7 @@
+  */
+ import type { TSchema } from "typebox"
+ import type { Questionnaire } from "../flow/questionnaire.ts"
++import type { ThinkingLevel } from "../flow/types.ts"
+ 
+ /** Host-owned provenance used to recover a workflow definition for status, resume, and attended input. */
+ export type WorkflowSource =
+@@ -237,6 +238,8 @@
+  */
+ export interface AgentRequest {
+ 	readonly model?: string
++	/** Explicit per-step native thinking override; omitted preserves host defaults. */
++	readonly thinking?: ThinkingLevel
+ 	readonly history?: readonly ConversationMessage[]
+ 	/** The step this session belongs to. Lets a host attribute cost/telemetry — and lets a test double script replies per step. */
+ 	readonly stepName: string
+diff --git a/src/flow/create-agent-step.ts b/src/flow/create-agent-step.ts
+--- a/src/flow/create-agent-step.ts
++++ b/src/flow/create-agent-step.ts
+@@ -1,5 +1,5 @@
+ import type { Static, TSchema } from "typebox"
+-import type { AgentPromptArgs, AgentStep, RetryPolicy, RunContext } from "./types.ts"
++import type { AgentPromptArgs, AgentStep, RetryPolicy, RunContext, ThinkingLevel } from "./types.ts"
+ 
+ /** Static type the `prompt` builder receives as `input`: the input schema's Static type, or `undefined` when none. */
+ type InferInput<TInputSchema extends TSchema | undefined> = TInputSchema extends TSchema
+@@ -36,6 +36,10 @@
+ 	output?: TOutputSchema
+ 	/** Model override in `provider/modelId` form. Falls back to the workflow default, then the session (spec §9.5). */
+ 	model?: string
++	/** Native thinking override for this step. Omit for the host/session default.
++	 * PI clamps to model capabilities. An in-session override requires PI >=0.85.1 and is restored
++	 * when the step ends. The package requires PI >=0.85.1 for its non-persisting setter. */
++	thinking?: ThinkingLevel
+ 	/** Build the user message from the validated input and run context. Task-only when `asks` is set —
+ 	 * the framework auto-injects the asking protocol. */
+ 	prompt: (args: AgentPromptArgs<InferInput<TInputSchema>>) => string
+@@ -102,6 +106,7 @@
+ 		inputSchema: options.input,
+ 		outputSchema: options.output,
+ 		model: options.model,
++		thinking: options.thinking,
+ 		asks: options.asks,
+ 		retry: options.retry,
+ 		maxOutputRepairs: options.maxOutputRepairs,
+diff --git a/src/flow/index.ts b/src/flow/index.ts
+--- a/src/flow/index.ts
++++ b/src/flow/index.ts
+@@ -62,6 +62,7 @@
+ 	StepNode,
+ 	StepRunArgs,
+ 	StepRunFn,
++	ThinkingLevel,
+ 	WorkflowDefinition,
+ 	WorkflowNode,
+ } from "./types.ts"
+diff --git a/src/flow/types.ts b/src/flow/types.ts
+--- a/src/flow/types.ts
++++ b/src/flow/types.ts
+@@ -4,9 +4,12 @@
+  * PI appears only as a type for interactive render callbacks. The deterministic engine neither imports
+  * PI at runtime nor invokes those callbacks; an attended host does so after execution returns blocked.
+  */
+-import type { ExtensionContext, ExtensionUIContext } from "@earendil-works/pi-coding-agent"
++import type { ExtensionAPI, ExtensionContext, ExtensionUIContext } from "@earendil-works/pi-coding-agent"
+ import type { TSchema } from "typebox"
+ import type { Questionnaire } from "./questionnaire.ts"
++
++/** Native PI reasoning levels accepted by the public extension API. */
++export type ThinkingLevel = Parameters<ExtensionAPI["setThinkingLevel"]>[0]
+ 
+ /**
+  * One enclosing construct's position and input, exposed through {@link RunContext.scope}
+@@ -217,6 +220,8 @@
+ 	readonly kind: "agent"
+ 	readonly outputSchema?: TSchema
+ 	readonly model?: string
++	/** Per-step native thinking override. Omit to preserve the host/session default. */
++	readonly thinking?: ThinkingLevel
+ 	readonly buildPrompt: (args: AgentPromptArgs<unknown>) => string
+ 	/**
+ 	 * In-session output-steering budget (spec §9.2): how many corrections to send after the first
+diff --git a/src/host/builtin/generated/authoring-reference.ts b/src/host/builtin/generated/authoring-reference.ts
+--- a/src/host/builtin/generated/authoring-reference.ts
++++ b/src/host/builtin/generated/authoring-reference.ts
+@@ -26,7 +26,7 @@
+ 			{
+ 				symbol: "CreateAgentStepOptions",
+ 				signature:
+-					"interface CreateAgentStepOptions<TInputSchema extends TSchema | undefined, TOutputSchema extends TSchema> { name: string description?: string input?: TInputSchema output?: TOutputSchema model?: string prompt: (args: AgentPromptArgs<InferInput<TInputSchema>>) => string asks?: boolean retry?: RetryPolicy maxOutputRepairs?: number maxDurationMs?: number | ((args: { ctx: RunContext }) => number) optional?: boolean maxTokens?: number background?: boolean resumable?: boolean | string | ((args: { ctx: RunContext }) => string) }",
++					"interface CreateAgentStepOptions<TInputSchema extends TSchema | undefined, TOutputSchema extends TSchema> { name: string description?: string input?: TInputSchema output?: TOutputSchema model?: string thinking?: ThinkingLevel prompt: (args: AgentPromptArgs<InferInput<TInputSchema>>) => string asks?: boolean retry?: RetryPolicy maxOutputRepairs?: number maxDurationMs?: number | ((args: { ctx: RunContext }) => number) optional?: boolean maxTokens?: number background?: boolean resumable?: boolean | string | ((args: { ctx: RunContext }) => string) }",
+ 				documentation:
+ 					"Agent-step configuration, including model selection, output repair, budgets, isolation, and resumability.\n\nRemarks: An acting agent omits `output`. A reporting agent declares `output`; an asking agent additionally sets\n`asks: true`. Asking cannot be combined with `background`. Static resumable keys cannot be shared by\nexecutions that may overlap.",
+ 			},
+@@ -245,7 +245,7 @@
+ 			{
+ 				symbol: "CreateAgentStepOptions",
+ 				signature:
+-					"interface CreateAgentStepOptions<TInputSchema extends TSchema | undefined, TOutputSchema extends TSchema> { name: string description?: string input?: TInputSchema output?: TOutputSchema model?: string prompt: (args: AgentPromptArgs<InferInput<TInputSchema>>) => string asks?: boolean retry?: RetryPolicy maxOutputRepairs?: number maxDurationMs?: number | ((args: { ctx: RunContext }) => number) optional?: boolean maxTokens?: number background?: boolean resumable?: boolean | string | ((args: { ctx: RunContext }) => string) }",
++					"interface CreateAgentStepOptions<TInputSchema extends TSchema | undefined, TOutputSchema extends TSchema> { name: string description?: string input?: TInputSchema output?: TOutputSchema model?: string thinking?: ThinkingLevel prompt: (args: AgentPromptArgs<InferInput<TInputSchema>>) => string asks?: boolean retry?: RetryPolicy maxOutputRepairs?: number maxDurationMs?: number | ((args: { ctx: RunContext }) => number) optional?: boolean maxTokens?: number background?: boolean resumable?: boolean | string | ((args: { ctx: RunContext }) => string) }",
+ 				documentation:
+ 					"Agent-step configuration, including model selection, output repair, budgets, isolation, and resumability.\n\nRemarks: An acting agent omits `output`. A reporting agent declares `output`; an asking agent additionally sets\n`asks: true`. Asking cannot be combined with `background`. Static resumable keys cannot be shared by\nexecutions that may overlap.",
+ 			},
+diff --git a/src/host/pi-agent.ts b/src/host/pi-agent.ts
+--- a/src/host/pi-agent.ts
++++ b/src/host/pi-agent.ts
+@@ -377,6 +377,7 @@
+ 		// reverts anything they enable afterwards. Set only once this session actually narrows the set,
+ 		// so a session rejected by the cross-talk guard cannot restore over a sibling's live turn.
+ 		let toolBaseline: readonly string[] | undefined
++		let thinkingBaseline: AgentRequest["thinking"]
+ 		// An answer-resume (spec §8.4) arrives with its blocked step's stored conversation — seed it into
+ 		// this session's outgoing LLM calls via the shared `context` handler above, for the session's whole
+ 		// lifetime (cleared in `dispose()`). A fresh run's `request.history` is always undefined, so the
+@@ -412,6 +413,13 @@
+ 					}
+ 				}
+ 
++				if (request.thinking !== undefined) {
++					// Model selection establishes its native default first. Capture once: output
++					// repairs must not mistake this step's override for the user's baseline.
++					thinkingBaseline ??= pi.getThinkingLevel()
++					pi.setThinkingLevel(request.thinking)
++				}
++
+ 				// The output tools, scoped to THIS step (step-output-tools.ts). A spawned step gets them at
+ 				// load from the env handoff and its process ends with the step; an in-session one shares a
+ 				// process with every other step, so the schema is re-registered per turn AND the ACTIVE set
+@@ -561,6 +569,7 @@
+ 				// rejected by the cross-talk guard never registered anything, and restoring from it would
+ 				// strip the tools out from under the turn that is genuinely in flight.
+ 				if (toolBaseline !== undefined) pi.setActiveTools(activeToolsForStep(toolBaseline))
++				if (thinkingBaseline !== undefined) pi.setThinkingLevel(thinkingBaseline)
+ 			},
+ 		}
+ 	}
+@@ -620,6 +629,7 @@
+ 				}
+ 				args.push("--model", request.model)
+ 			}
++			if (request.thinking !== undefined) args.push("--thinking", request.thinking)
+ 			// The prompt goes over stdin (`runSubagent`/`writePrompt`), never in `args`: the respawned
+ 			// harness reads its prompt from stdin and, with a piped (non-TTY) stdin, silently ignores a
+ 			// positional argument — verified against a real `pi` binary (stdin: full reply, positional arg: nothing).
+diff --git a/test/thinking.test.ts b/test/thinking.test.ts
+new file mode 100644
+--- /dev/null
++++ b/test/thinking.test.ts
+@@ -0,0 +1,190 @@
++import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
++import { describe, expect, it, vi } from "vitest"
++import { runWorkflow } from "../src/engine/run-workflow.ts"
++import type { AgentRequest } from "../src/engine/types.ts"
++import { createAgentStep, createWorkflow, type ThinkingLevel } from "../src/flow/index.ts"
++import { createPiAgentBridge } from "../src/host/pi-agent.ts"
++import type { ModelRegistry } from "../src/host/pi-agent-messages.ts"
++import { assistantLine, scriptedSubagent } from "./fake-subagent.ts"
++import { agentRequest, createTestHost, tempSessionsDir } from "./helpers.ts"
++
++const registry = { find: () => ({ provider: "test", id: "model" }) } as unknown as ModelRegistry
++const resolver = (args: readonly string[]) => ({ command: "pi", args })
++
++// All workers are scripted; these tests never invoke a harness or an inference endpoint.
++describe("per-step thinking", () => {
++	it("forwards distinct levels for the same model and leaves omission undefined", async () => {
++		const requests: AgentRequest[] = []
++		const { host } = createTestHost({
++			startAgent: (request) => {
++				requests.push(request)
++				return { sendAndAwaitEnd: async () => ({ text: "done" }), getConversation: () => [], dispose: () => {} }
++			},
++		})
++		const workflow = createWorkflow({ name: "thinking" })
++			.then(createAgentStep({ name: "low", model: "test/model", thinking: "low", prompt: () => "go" }))
++			.then(createAgentStep({ name: "high", model: "test/model", thinking: "high", prompt: () => "go" }))
++			.then(createAgentStep({ name: "off", thinking: "off", prompt: () => "go" }))
++			.then(createAgentStep({ name: "default", prompt: () => "go" }))
++			.commit()
++		expect((await runWorkflow(workflow, undefined, host)).status).toBe("completed")
++		expect(requests.map(({ thinking }) => thinking)).toEqual(["low", "high", "off", undefined])
++		expect(requests.slice(0, 2).map(({ model }) => model)).toEqual(["test/model", "test/model"])
++	})
++
++	it.each(["background", "isolated"] as const)(
++		"passes explicit thinking on every %s spawn, including repairs",
++		async (mode) => {
++			const { spawn, calls } = scriptedSubagent(`${assistantLine("done", 1)}\n`)
++			const start = createPiAgentBridge(
++				{ on: () => {} } as unknown as ExtensionAPI,
++				resolver,
++				spawn,
++			)(registry, tempSessionsDir())
++			for (const thinking of ["low", "high", "max", "off", undefined] as const) {
++				const session = start(
++					agentRequest({ [mode]: true, thinking, model: "test/model", stepName: `worker-${thinking}` }),
++				)
++				await session.sendAndAwaitEnd("go")
++				await session.sendAndAwaitEnd("repair")
++				session.dispose()
++			}
++			expect(calls).toHaveLength(10)
++			for (let index = 0; index < calls.length; index++) {
++				const args = calls[index]!.args
++				const level = ["low", "high", "max", "off", undefined][Math.floor(index / 2)]
++				expect(args.includes("--thinking")).toBe(level !== undefined)
++				if (level !== undefined) expect(args[args.indexOf("--thinking") + 1]).toBe(level)
++				if (index % 2 === 1) expect(args[4]).toBe(calls[index - 1]!.args[4])
++			}
++		},
++	)
++
++	it("restores foreground overrides after successful completion before an omitted step", async () => {
++		let level: ThinkingLevel = "medium"
++		const observed: ThinkingLevel[] = []
++		const handlers = new Map<string, (event: unknown, ctx: unknown) => void>()
++		const pi = {
++			on: (event: string, handler: (event: unknown, ctx: unknown) => void) => {
++				handlers.set(event, handler)
++			},
++			getThinkingLevel: () => level,
++			setThinkingLevel: (value: ThinkingLevel) => {
++				level = value
++			},
++			sendMessage: () => {
++				observed.push(level)
++				queueMicrotask(() => {
++					handlers.get("agent_end")!({ messages: [] }, {})
++					handlers.get("agent_settled")!({}, {})
++				})
++			},
++		} as unknown as ExtensionAPI
++		const start = createPiAgentBridge(pi)(registry, tempSessionsDir())
++		for (const thinking of ["low", "high", undefined] as const) {
++			const session = start(agentRequest({ stepName: `worker-${thinking}`, thinking }))
++			await session.sendAndAwaitEnd("go")
++			session.dispose()
++			expect(level).toBe("medium")
++		}
++		expect(observed).toEqual(["low", "high", "medium"])
++	})
++
++	it("restores the selected model baseline after repairs, failure, and cancellation", async () => {
++		let level: ThinkingLevel = "low"
++		const order: string[] = []
++		const pi = {
++			on: () => {},
++			setModel: async () => {
++				level = "medium"
++				order.push("model")
++				return true
++			},
++			getThinkingLevel: () => level,
++			setThinkingLevel: (value: ThinkingLevel) => {
++				level = value
++				order.push(value)
++			},
++			sendMessage: vi.fn(() => {
++				order.push(`send:${level}`)
++				throw new Error("scripted failure")
++			}),
++		} as unknown as ExtensionAPI
++		const start = createPiAgentBridge(pi)(registry, tempSessionsDir())
++		const session = start(agentRequest({ stepName: "foreground", model: "test/model", thinking: "high" }))
++		await expect(session.sendAndAwaitEnd("go")).rejects.toThrow("scripted failure")
++		await expect(session.sendAndAwaitEnd("repair")).rejects.toThrow("scripted failure")
++		session.dispose()
++		expect(order).toEqual(["model", "high", "send:high", "model", "high", "send:high", "medium"])
++		expect(level).toBe("medium")
++		const cancelled = start(agentRequest({ stepName: "cancelled", thinking: "off", signal: AbortSignal.abort() }))
++		await expect(cancelled.sendAndAwaitEnd("go")).rejects.toThrow("aborted")
++		cancelled.dispose()
++		expect(level).toBe("medium")
++		const omitted = start(agentRequest({ stepName: "omitted" }))
++		await expect(omitted.sendAndAwaitEnd("go")).rejects.toThrow("scripted failure")
++		omitted.dispose()
++		expect(level).toBe("medium")
++	})
++	it("restores the actual baseline of each distinct selected model", async () => {
++		let level: ThinkingLevel = "medium"
++		const baselines: Record<string, ThinkingLevel> = { first: "low", second: "max" }
++		const pi = {
++			on: () => {},
++			setModel: async (model: { id: string }) => {
++				level = baselines[model.id]!
++				return true
++			},
++			getThinkingLevel: () => level,
++			setThinkingLevel: (value: ThinkingLevel) => {
++				level = value
++			},
++			sendMessage: () => {
++				throw new Error("scripted failure")
++			},
++		} as unknown as ExtensionAPI
++		const models = { find: (_provider: string, id: string) => ({ id }) } as unknown as ModelRegistry
++		const start = createPiAgentBridge(pi)(models, tempSessionsDir())
++		for (const model of ["first", "second"]) {
++			const session = start(agentRequest({ stepName: model, model: `test/${model}`, thinking: "high" }))
++			await expect(session.sendAndAwaitEnd("go")).rejects.toThrow("scripted failure")
++			expect(level).toBe("high")
++			session.dispose()
++			expect(level).toBe(baselines[model])
++		}
++	})
++
++	it("restores thinking when an active foreground turn is cancelled", async () => {
++		let level: ThinkingLevel = "medium"
++		const handlers = new Map<string, (event: unknown, ctx: unknown) => void>()
++		const pi = {
++			on: (event: string, handler: (event: unknown, ctx: unknown) => void) => {
++				handlers.set(event, handler)
++			},
++			getThinkingLevel: () => level,
++			setThinkingLevel: (value: ThinkingLevel) => {
++				level = value
++			},
++			sendMessage: () => {},
++		} as unknown as ExtensionAPI
++		const controller = new AbortController()
++		const control = {
++			abort: vi.fn(() => {
++				handlers.get("agent_end")!({ messages: [] }, {})
++				handlers.get("agent_settled")!({}, {})
++			}),
++			waitForIdle: () => new Promise<void>(() => {}),
++			isIdle: () => false,
++			hasPendingMessages: () => false,
++		}
++		const start = createPiAgentBridge(pi)(registry, tempSessionsDir(), control as never)
++		const session = start(agentRequest({ stepName: "active", thinking: "high", signal: controller.signal }))
++		const turn = session.sendAndAwaitEnd("go")
++		expect(level).toBe("high")
++		controller.abort()
++		expect((await turn).cancelled).toBe(true)
++		expect(control.abort).toHaveBeenCalledOnce()
++		session.dispose()
++		expect(level).toBe("medium")
++	})
++})
