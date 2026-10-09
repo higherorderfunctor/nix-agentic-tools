@@ -1,4 +1,4 @@
-"""The rendered notice and document limit must agree on project trust."""
+"""The launcher's trust notice and the document limit must agree on project trust."""
 
 import json
 import os
@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-notice, limit, git = sys.argv[1:]
+launcher, limit, git = sys.argv[1:]
 root = Path(os.environ["TMPDIR"]) / "project"
 root.mkdir()
 user = Path(os.environ["CODEX_HOME"]) / "config.toml"
@@ -33,8 +33,7 @@ def trust(entries):
 
 
 def probe(directory, warning, expected_limit=32768):
-    env = dict(os.environ, DEVENV_ROOT=str(directory))
-    result = subprocess.run([notice], env=env, capture_output=True, text=True, check=True)
+    result = subprocess.run([launcher], cwd=directory, capture_output=True, text=True, check=True)
     assert result.stdout == "", result
     if warning:
         assert "warning: Codex ignores" in result.stderr
@@ -43,7 +42,7 @@ def probe(directory, warning, expected_limit=32768):
         assert str(user) in result.stderr
     else:
         assert result.stderr == "", result.stderr
-    result = subprocess.run([limit, str(directory), "32768"], env=env, capture_output=True, text=True, check=False)
+    result = subprocess.run([limit, str(directory), "32768"], capture_output=True, text=True, check=False)
     if expected_limit is None:
         # The shared resolver rejects malformed TOML; advisory callers stay silent.
         assert result.returncode != 0, result

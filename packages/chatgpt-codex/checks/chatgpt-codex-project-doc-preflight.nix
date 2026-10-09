@@ -37,6 +37,19 @@
         pinDaemonToPackage = false;
       };
     }).config.home.packages;
+  # The shared launcher isolation around preflight checks that fail and write
+  # stdout, read stdin, or hang with a child of their own.
+  brokenLaunchers = lib.imap0 (index: script:
+    import ../../../lib/ai/launcher.nix pkgs {
+      exe = "codex";
+      name = "codex-broken-preflight-${toString index}";
+      package = fake;
+      preflight = pkgs.writeShellScriptBin "broken-preflight" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${script}
+      '';
+    }) ["printf 'stdout noise\\n'; exit 1" "${pkgs.coreutils}/bin/cat" "${pkgs.coreutils}/bin/sleep 3 & wait"];
 in {
   checks.chatgpt-codex-project-doc-preflight = assert devenvLauncher.launcherPackage == codex;
     pkgs.runCommand "chatgpt-codex-project-doc-preflight" {
@@ -52,7 +65,10 @@ in {
       python3 ${./project-doc-preflight-fixtures.py} \
         ${codex}/bin/codex ${lib.getExe preflight} \
         ${hmLauncher}/bin/codex ${devenvLauncher}/bin/codex \
-        ${fakeLauncher}/bin/codex ${../lib/projectDocPreflight.py} ${pkgs.bash}/bin/bash
+        ${fakeLauncher}/bin/codex ${../lib/projectDocPreflight.py} ${pkgs.bash}/bin/bash \
+        ${lib.getExe (import ../lib/projectTrustNotice.nix pkgs)} \
+        ${lib.getExe (import ../lib/permissionLayersNotice.nix pkgs)} \
+        ${lib.concatMapStringsSep " " (launcher: "${launcher}/bin/codex") brokenLaunchers}
       echo PASS > "$out"
     '';
 }

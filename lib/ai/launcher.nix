@@ -6,7 +6,8 @@
 # `--set`, never `--set-default`: a configured value must beat the ambient
 # session, and `--set-default` is reserved for polite defaults (`TERM`).
 # `flags` (`--add-flags …`) come before the environment, the order the
-# wrappers this replaced used. The preflight follows environment injection.
+# wrappers this replaced used. The preflight follows environment injection,
+# isolated by ./launcher-preflight.nix.
 # `launcherPackage` flattens a previously generated launcher: one preflight
 # and one exec of the package binary, even when a module selects a launcher.
 pkgs: {
@@ -22,7 +23,7 @@ pkgs: {
   args =
     flags
     ++ lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") environmentVariables
-    ++ lib.optional (preflight != null) "--run ${lib.escapeShellArg "${lib.getExe preflight} \"$@\" >/dev/null || :"}";
+    ++ lib.optional (preflight != null) (import ./launcher-preflight.nix pkgs preflight);
 in
   if args == []
   then package
