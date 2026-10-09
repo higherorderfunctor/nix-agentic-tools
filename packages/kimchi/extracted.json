@@ -2148,7 +2148,7 @@
   },
   "provenance": {
     "extractorSchema": 4,
-    "kimchiVersion": "1.7.2",
+    "kimchiVersion": "1.8.0",
     "piVersion": "0.85.1"
   },
   "virtualPackages": [
