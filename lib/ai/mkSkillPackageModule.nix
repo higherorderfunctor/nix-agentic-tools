@@ -68,7 +68,8 @@
 # `ai.<runtime>.rules.<name>`. A same-key root consumer entry is a portable
 # default: this module's per-runtime value replaces it after ordinary module
 # priority has selected the value at each level. Consumers can also set the
-# per-runtime key to null to suppress the root value.
+# per-runtime skill key to null, or a rule's `enable = false`, to suppress
+# the root value.
 #
 # Writing the ROOT pool is what this module used to do, and it is banned by
 # the provenance guard in `checks/module-provenance/helpers.nix`. Root pools belong to
@@ -80,10 +81,9 @@
 # 1. THE WRITE IS GATED ON OPTION PRESENCE. A per-runtime write requires that
 #    runtime's module to be in the SAME evaluation, and nothing guarantees it:
 #    `flake.nix` collects every facet so the published module set has all five,
-#    but a consumer importing modules individually may have fewer, and the
-#    repo's own `devenv.nix` imports four of the five runtime modules (kimchi
-#    is absent). Writing an undeclared option is an eval error, so the fanout
-#    is filtered by what is actually declared.
+#    but a consumer importing modules individually may have fewer. Writing
+#    an undeclared option is an eval error, so the fanout is filtered by what
+#    is actually declared.
 spec: {
   config,
   lib,
