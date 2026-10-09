@@ -8,13 +8,11 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-09 — Codex sets neither model nor reasoning effort
-> unless the consumer declares one. delegate-routing contributes per-turn
-> reminders through native hook pools; explicit Kimchi Home Manager reminder
-> requests warn. Codex's launcher, on both backends, warns at every launch when
-> a project config Codex would load is untrusted or uses the opposite permission
-> model to the user config, alongside its document preflight; devenv warns at
-> shell entry when an installed runtime's PATH binary resolves outside the
-> devenv profile.
+> unless the consumer declares one. Codex's launcher, on both backends, warns at
+> every launch when a project config Codex would load is untrusted or uses the
+> opposite permission model to the user config, alongside its document
+> preflight; devenv warns at shell entry when an installed runtime's PATH binary
+> resolves outside the devenv profile.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -440,13 +438,9 @@ enabled ecosystem whose native model preserves the option's semantics):
   Home Manager can own, so its Home Manager row is an explicit exclusion: silent
   for the shared pool, warned for `ai.kimchi.hooks`. Kiro's v3 trigger records
   remain native-only, but their `action.command` resolves a package through the
-  same shared `commandType`. Delegate-routing's default-on reminder contributes
-  to these per-runtime hook pools, while Kiro uses its native hook record.
-  Claude and Codex receive JSON additionalContext on both backends, Kimchi only
-  on devenv, and Kiro plain stdout on both. Explicit Kimchi Home Manager
-  reminder enable warns; the portable default follows the shared-pool exclusion
-  pattern. Runtime enable overrides use the program factory's null-as-inherit
-  rule.
+  same shared `commandType`. Delegate-routing contributes its reminder to native
+  per-runtime hooks, preserving these backend exclusions; package details live
+  in `packages/delegate-routing/docs/development.md`.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
   when both are present. The strictly higher-priority definition supplies the

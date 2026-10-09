@@ -7,8 +7,8 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-09 — per-turn reminders use native hook pools on
-> both backends; Kimchi Home Manager explicitly warns when requested.
+> **Last verified:** 2026-10-09 — reminder documentation owns the workflow
+> opt-in rationale and per-turn tradeoff.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -201,34 +201,11 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 
 ## Per-turn reminder
 
-`reminder.{enable,text,source}` supplies one standing request in the user's
-voice. It defaults on when the program and runtime are enabled. The default
-grants permission to use subagents, workflows and delegates whenever they fit,
-and points to the delegate-routing skill for model and effort sizing. Naming
-workflows explicitly provides Claude's user opt-in when ultracode is off. The
-Claude clamp remains available; its removal is a separate change.
-
-`runtimes.<runtime>.reminder.enable` follows the program factory's B4 rule: null
-inherits the shared enable, false withholds it, and true enables it even when
-the shared reminder is off. `text` or `source` uses the shared text-source
-record. An enabled hook needs content. Before changing the default wording, read
-the properties in `packages/claude-code/docs/heron-brook-clamp.md`.
-
-Claude and Codex on both backends, and Kimchi on devenv only, receive a
-`UserPromptSubmit` hook whose JSON stdout carries
-`hookSpecificOutput.additionalContext`. Kiro receives plain stdout through
-`ai.kiro.hooks.delegate-routing-reminder` on both backends. The printer reads
-only a store payload, ignores stdin, and exits zero even if the read fails. Home
-Manager has no Kimchi hook file. Explicit
-`runtimes.kimchi.reminder.enable = true` warns when Kimchi and its program are
-enabled; the shared default stays silent, as for other portable exclusions.
-
-Codex's reminder cannot coexist with inline hook events in
-`ai.codex.native.settings.hooks`; `hooks.state` may coexist. Move those events
-to `ai.codex.hooks` or disable `runtimes.codex.reminder.enable`. Kiro's inline
-reminder cannot coexist with `ai.kiro.hooksDir`. Move those hooks out of
-`hooksDir` or disable `runtimes.kiro.reminder.enable`. Always-on router rules
-stay on rules delivery for all four runtimes.
+The default wording names workflows to provide Claude's explicit user opt-in
+when ultracode is off. Before changing it, read
+`packages/claude-code/docs/heron-brook-clamp.md`; removing that clamp is
+separate work. Consumer delivery and enable controls are documented in the
+`reminder` option; the hook pools own conflict diagnostics.
 
 ## Acceptance suite
 
@@ -263,10 +240,8 @@ The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
 in the sandbox: it validates every case and renders every fixture and launch
 plan with no harness and no login. Its `cases` passthru is the runner's fixture
 export. It also runs the offline source-attribution and event-schema regressions
-in `eval/test_suite.py`. Claude and Kiro also have reminder on/off pairs; only
-the reminder enable changes. Clamp pairs force the reminder off so the new
-default does not mask their switch. No check starts a session. See
-`eval/README.md` for the isolation recipe, the caps and the operator steps.
+in `eval/test_suite.py`. No check starts a session. See `eval/README.md` for
+reminder comparisons, the isolation recipe, the caps and the operator steps.
 
 ## Delegate map
 

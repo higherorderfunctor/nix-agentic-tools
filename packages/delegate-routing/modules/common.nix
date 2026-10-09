@@ -149,21 +149,10 @@ in {
         };
         default = {};
         description = ''
-          A standing request in the user's voice, delivered on every turn by a
-          UserPromptSubmit hook. Claude and Codex receive JSON additionalContext
-          on both backends; Kimchi receives it on devenv only (Home Manager has
-          no Kimchi hook file). Kiro receives plain text on both backends.
-          The default grants delegation to subagents, workflows and delegates and points
-          to the delegate-routing skill. Enable follows the program by default;
-          runtimes.<runtime>.reminder.enable overrides the shared reminder enable.
-
-          On Codex this defines ai.codex.hooks and cannot coexist with inline
-          hook events in ai.codex.native.settings.hooks; hooks.state may coexist.
-          Move inline hook events to ai.codex.hooks
-          or disable runtimes.codex.reminder.enable.
-
-          On Kiro this cannot coexist with ai.kiro.hooksDir. Set
-          runtimes.kiro.reminder.enable = false or move those hooks out of hooksDir.
+          Per-turn UserPromptSubmit reminder in the user's voice. Claude and Codex
+          receive JSON additionalContext on both backends; Kimchi on devenv only.
+          Kiro receives plain text on both. Set runtimes.<runtime>.reminder.enable
+          to false to withhold it from that runtime.
         '';
       };
 

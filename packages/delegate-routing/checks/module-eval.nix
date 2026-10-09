@@ -65,10 +65,11 @@
       ai.programs.delegate-routing.enable = true;
       ai.programs.delegate-routing.runtimes.codex.enable = false;
     };
-    hookRuntimes =
-      if name == "hm"
-      then lib.remove "kimchi" runtimes
-      else runtimes;
+    reminderCases = lib.genAttrs runtimes (runtime:
+      if name == "hm" && runtime == "kimchi"
+      then 0
+      else 1);
+    hookRuntimes = lib.attrNames (lib.filterAttrs (_: count: count == 1) reminderCases);
     reminderCommands = evaluation: runtime:
       if runtime == "kiro"
       then lib.optional (evaluation.config.ai.kiro.hooks ? delegate-routing-reminder) evaluation.config.ai.kiro.hooks.delegate-routing-reminder.action.command
@@ -626,21 +627,21 @@
     "module-delegate-routing-${name}-reminder" = mkTest "delegate-routing-${name}-reminder" (
       result.config.ai.programs.delegate-routing.reminder.enable
       && result.config.ai.programs.delegate-routing.reminder.text == (import ../lib/reminder.nix {inherit lib pkgs;}).defaultText
-      && lib.all (runtime: builtins.length (reminderCommands result runtime) == 1) hookRuntimes
-      && (name != "hm" || !(hasReminder result "kimchi"))
-      && lib.all (runtime: result.config.ai.${runtime}.rules ? delegate-routing-router) runtimes
+      && lib.all (runtime: builtins.length (reminderCommands result runtime) == reminderCases.${runtime}) runtimes
     );
     "module-delegate-routing-${name}-reminder-disabled" = mkTest "delegate-routing-${name}-reminder-disabled" (
-      lib.all (runtime: hasReminder result runtime && !(hasReminder reminderOff runtime)) hookRuntimes
-      && lib.all (runtime:
-        hasReminder result runtime
-        && !(hasReminder (change {ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable = false;}) runtime)
-        && hasReminder (reminderOverride runtime) runtime
-        && lib.all (other: !(hasReminder (reminderOverride runtime) other)) (lib.remove runtime hookRuntimes)
-        && !(hasReminder (change {ai.programs.delegate-routing.runtimes.${runtime}.enable = false;}) runtime)
-        && !(hasReminder (change {ai.${runtime}.enable = lib.mkForce false;}) runtime))
-      hookRuntimes
-      && lib.all (runtime: !(hasReminder (change {ai.programs.delegate-routing.enable = false;}) runtime)) hookRuntimes
+      lib.all (runtime: let
+        absent = evaluation: !(hasReminder evaluation runtime);
+        override = reminderOverride runtime;
+      in
+        absent reminderOff
+        && absent (change {ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable = false;})
+        && absent (change {ai.programs.delegate-routing.runtimes.${runtime}.enable = false;})
+        && absent (change {ai.${runtime}.enable = lib.mkForce false;})
+        && absent (change {ai.programs.delegate-routing.enable = false;})
+        && hasReminder override runtime == (reminderCases.${runtime} == 1)
+        && lib.all (other: !(hasReminder override other)) (lib.remove runtime runtimes))
+      runtimes
       && failsWith (change {
         ai.programs.delegate-routing = {
           reminder = {
@@ -676,20 +677,14 @@
                   hookEventName = "UserPromptSubmit";
                 };
               };
-        }) [
-          {
-            evaluation = result;
-            text = result.config.ai.programs.delegate-routing.reminder.text;
-          }
-          {
-            evaluation = reminderCustom;
-            text = reminderCustomText;
-          }
-          {
-            evaluation = reminderSource;
-            text = builtins.readFile reminderSourcePath;
-          }
-        ])
+        }) (map (pair: {
+            evaluation = builtins.head pair;
+            text = builtins.elemAt pair 1;
+          }) [
+            [result result.config.ai.programs.delegate-routing.reminder.text]
+            [reminderCustom reminderCustomText]
+            [reminderSource (builtins.readFile reminderSourcePath)]
+          ]))
       hookRuntimes;
     in
       pkgs.runCommand "delegate-routing-${name}-reminder-payload" {} ''

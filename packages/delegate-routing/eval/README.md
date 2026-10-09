@@ -53,9 +53,8 @@ expected behavior never enters it.
 
 Claude and Kiro each have `*-reminder-on` and `*-reminder-off` cases, with the
 same task and the `delegate` assertion. Only
-`ai.programs.delegate-routing.reminder.enable` changes. Routing rules and skills
-remain enabled; a FAIL measures behavior rather than a fixture error. The clamp
-pair forces the reminder off to measure the clamp independently.
+`ai.programs.delegate-routing.reminder.enable` changes. The clamp pair forces
+the reminder off to measure the clamp independently.
 
 The existing Claude pairs are on/off pairs: the switch is the only difference.
 The drain cases supply more Codex headroom than Claude headroom.
