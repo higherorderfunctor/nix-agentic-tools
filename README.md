@@ -190,6 +190,7 @@ git-branchless, git-absorb, and git-revise.
 <!-- prettier-ignore -->
 | Skill | Description |
 |-------|-------------|
+| `/code-review` | Native Kimchi and Kiro code review with shared local evidence and durable role receipts; enable via ai.programs.code-review.enable |
 | `/delegate-routing` | Size model and effort before calling subagents or building workflows |
 | `/kimchi-docs` | Search the pinned Kimchi docs snapshot and independently pinned workflows source, docs and examples; enable via ai.programs.kimchi-docs.enable |
 | `/peer-communication` | Write replies a person reads: answer first, plain words, easy to scan |
