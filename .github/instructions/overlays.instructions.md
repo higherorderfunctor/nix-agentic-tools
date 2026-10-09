@@ -7,9 +7,9 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,lib/toolchains.nix,pack
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-07 — Semble uses the source-build pattern; overlay
-> parity uses devenv’s foreign nixpkgs and the two Semble roles share one
-> derivation; pnpm 12 generates its embedded loader before Cargo compilation.
+> **Last verified:** 2026-10-09 — versioned packages declare updater coverage;
+> repository-maintained implementations without upstream releases carry an
+> explicit package exemption reason.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -288,9 +288,8 @@ These are package properties, not a second name registry:
 `passthru.updateFlakeInput = "<input>"` is accepted only when the named root
 flake input exists, while `passthru.updateTargetExempt = "<reason>"` must carry
 a non-empty explanation. The latter is for a derivation whose version labels an
-in-tree implementation with no upstream release to sweep. Its only instance, the
-repository-local `kiro-memory-distiller`, was removed on 2026-09-01, so
-`updateTargetExempt` currently has no consumer.
+in-tree implementation with no upstream release to sweep. The
+repository-maintained `code-review` package uses this property.
 
 ### Thin overrides of a nixpkgs package
 

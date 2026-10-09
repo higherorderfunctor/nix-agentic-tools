@@ -1,0 +1,46 @@
+{
+  "defense_policy": "when-requested",
+  "limits": {
+    "concurrency": 1,
+    "max_waves": 2
+  },
+  "note": "café",
+  "roles": {
+    "coordinator": {
+      "effort": "default",
+      "model_id": "claude-haiku-4.5"
+    },
+    "dedupe": {
+      "effort": "medium",
+      "model_id": "claude-sonnet-5.5"
+    },
+    "defense": {
+      "effort": "medium",
+      "model_id": "claude-opus-5.5"
+    },
+    "evidence": {
+      "effort": "high",
+      "model_id": "claude-sonnet-5.5"
+    },
+    "finalize": {
+      "effort": "medium",
+      "model_id": "claude-opus-5.5"
+    },
+    "judge": {
+      "effort": "low",
+      "model_id": "fixture-judge"
+    },
+    "lens": {
+      "effort": "medium",
+      "model_id": "claude-sonnet-5.5"
+    },
+    "refine": {
+      "effort": "medium",
+      "model_id": "claude-sonnet-5.5"
+    },
+    "surface": {
+      "effort": "medium",
+      "model_id": "claude-sonnet-5.5"
+    }
+  }
+}
