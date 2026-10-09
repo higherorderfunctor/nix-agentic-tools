@@ -1,7 +1,8 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-07 — Kiro CLI controls live under `ai.kiro.cli`;
-> shared `.kiro` file declarations remain under `ai.kiro`.
+> **Last verified:** 2026-10-09 — Kiro CLI controls live under `ai.kiro.cli`;
+> shared `.kiro` file declarations remain under `ai.kiro`; no job pushes any
+> kiro path to the public cache.
 
 ### Overview
 
@@ -114,12 +115,14 @@ reads the `releases/latest` redirect rather than the GitHub API, so it needs no
 token and cannot be rate-limited; prefer it over a hand-rolled
 `curl … api.github.com | jq -r .tag_name` version check.
 
-### Patched Kiro variants stay local — TWO credentialed paths, not one
+### Kiro never reaches the public cache — TWO credentialed paths, not one
 
+No Kiro binary is ever pushed to the public cache: `kiro-cli` is always a local
+vendor download, and a patch is always a local patch of it.
 `pkgs.ai.kiro-cli-workflows` exposes the same derivation selected by
-`ai.kiro.cli.unlockedRolloutFeatures = ["workflows"]`. It must never reach the
-public cache: it is a MODIFIED proprietary binary, and republishing one is a
-different act from mirroring the vendor's own build.
+`ai.kiro.cli.unlockedRolloutFeatures = ["workflows"]`; it is additionally a
+MODIFIED proprietary binary, and republishing one is a different act from
+mirroring the vendor's own build.
 
 **Excluding it from `ci.yml`'s native package shards is necessary and NOT
 sufficient.** That was the whole mitigation from #665 (2026-08-01), and the
@@ -127,24 +130,28 @@ patched 2.17.0 binary was live in the public cache on 2026-08-12 anyway — elev
 days later, so `ci.yml` provably was not the source. Two workflow paths hold
 `CACHIX_AUTH_TOKEN`, and only one of them was covered:
 
-| job                     | builds patched?                  | pushes?                        |
-| ----------------------- | -------------------------------- | ------------------------------ |
-| `ci.yml` build-packages | no — `ci-packages.py` exclusions | yes (token)                    |
-| `ci.yml` test           | no                               | no token                       |
-| `kiro-patched`          | yes                              | no token                       |
-| `update.yml` inputs     | **yes — `verify_all_packages`**  | yes (token) → **`pushFilter`** |
+| job                     | builds patched?                  | pushes?                  |
+| ----------------------- | -------------------------------- | ------------------------ |
+| `ci.yml` build-packages | no — `ci-packages.py` exclusions | token → **`pushFilter`** |
+| `ci.yml` test           | no                               | no token                 |
+| `kiro-patched`          | yes                              | no token                 |
+| `update.yml` inputs     | **yes — `verify_all_packages`**  | token → **`pushFilter`** |
 
 `ci-packages.py` removes its `EXCLUDED` names before partitioning the native
 package set and emits a positive `--select` expression for each shard. Keep the
 patched variant in that exclusion set; the dedicated native jobs validate it
-without cache credentials.
+without cache credentials. The unpatched `kiro-cli` stays in the shards: they
+build it as a check, and the `pushFilter` is what keeps it out of the cache.
 
 `verify_all_packages` (`dev/scripts/update-common.sh`) builds
 `.#ciPackages.<sys>` with **no `--select`**, on every input bump. That is
 deliberate and stays: `postInstallCheck` runs `kiro-cli-chat --version`, so the
 build is a genuine runtime smoke test of the patch, and `doInstallCheck` is
 already true upstream so the phase really executes. The fix is therefore at the
-PUSH, not the build — `pushFilter: "kiro-cli"` on that job's `cachix-action`.
+PUSH, not the build — `pushFilter: kiro-cli` on every `cachix-action` step that
+holds the token (`ci.yml` build-packages and `update.yml` inputs). One spelling,
+copied identically: Actions cannot share an action input across workflows, and
+`test-ci-packages.py` fails if any credentialed step lacks it.
 
 **The generalizable lesson: `cachix-action` with a token runs a watch-store
 daemon that pushes every path realized in the job.** Reasoning about which
@@ -158,8 +165,9 @@ Supporting properties:
   an allow-list and has already been misread as one in review; inverting it
   would publish ONLY kiro. It is also ignored outright if `pathsToPush` is set.
 - **`pushFilter` drops ALL kiro, not just the patched variant.** Nothing is lost
-  — `ci.yml` publishes the unpatched package on merge — and it covers the layers
-  naming cannot reach (below).
+  — the unpatched package is a vendor download anyone can fetch — and it covers
+  the layers naming cannot reach (below). `ci.yml` used to publish the unpatched
+  package on purpose; it no longer does.
 - **It is not a guarantee on its own**: "paths may still be pushed if they are
   part of another path's closure". Nothing outside the kiro closure depends on
   the patched output today and every layer inside it matches the regex, so it
@@ -194,9 +202,12 @@ worth keeping because none is specific to Kiro:
   now reports three false leaks (six before the FHS consolidation). The shared
   dispatcher, `-init` script, and `-fhsenv-profile` tree do not depend on the
   binary's CONTENT, so they are byte-identical across both variants, share a
-  store path, and are published legitimately with the unpatched package.
-  Subtract the unpatched closure first. A patched-specific path cannot appear in
-  the base derivation tree, so the subtraction cannot over-exclude.
+  store path, and the unpatched closure is no longer published either. The
+  subtraction stays only because a cache purge of the paths published before the
+  filter reached `ci.yml` is operator-side; once it is done the whole closure
+  can be asserted. Subtract the unpatched closure first. A patched-specific path
+  cannot appear in the base derivation tree, so the subtraction cannot
+  over-exclude.
 - **`nix derivation show`'s `.outputs[].path` changes shape by nix version** —
   `/nix/store/xxx-name` on 2.34.4, bare `xxx-name` on 2.35.1. A full-path
   comparison matched NOTHING on the runner while passing locally. Compare

@@ -16,6 +16,20 @@ ci = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ci)
 
 
+class CachixPushFilterTest(unittest.TestCase):
+    def test_every_credentialed_cachix_step_filters_kiro(self):
+        # cachix-action with a token pushes every path the job realizes, so the
+        # audit is by credential: any step holding the token must exclude kiro.
+        steps = 0
+        for workflow in sorted((Path(__file__).parents[2] / ".github/workflows").glob("*.yml")):
+            for chunk in workflow.read_text().split("uses: cachix/cachix-action@")[1:]:
+                step = chunk.split("\n      - ", 1)[0]
+                if "CACHIX_AUTH_TOKEN" in step:
+                    steps += 1
+                    self.assertIn("pushFilter: kiro-cli\n", step + "\n", workflow.name)
+        self.assertGreater(steps, 0)
+
+
 class CacheAssertionTest(unittest.TestCase):
     def test_patched_cache_assertion_requires_complete_enumeration(self):
         workflow = Path(__file__).parents[2] / ".github/workflows/ci.yml"

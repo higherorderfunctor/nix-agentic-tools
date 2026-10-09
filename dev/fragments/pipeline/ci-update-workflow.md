@@ -1,7 +1,8 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-07 — package build runners use no CI-only
-> substituter and no shard mirrors a runtime closure into the project cache.
+> **Last verified:** 2026-10-09 — package build runners use no CI-only
+> substituter, no shard mirrors a runtime closure into the project cache, and
+> every Cachix step holding the token filters kiro out of the push.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -228,8 +229,8 @@ the extracted-metadata drift check on both Linux and Darwin, covering TUI
 materialization on macOS where the Linux-only flake check cannot. These jobs
 explicitly enable and assert the Nix sandbox before the materializer executes;
 Darwin's Nix default does not provide that guarantee. Patched proprietary Kiro
-stays in those jobs without cache publication; the update workers retain
-Cachix's `pushFilter: kiro-cli`.
+stays in those jobs without cache publication; every Cachix step holding the
+token, package matrix and update workers alike, carries `pushFilter: kiro-cli`.
 
 The Cachix action owns shard uploads and its finalization remains part of the
 worker outcome. Do not also start nix-fast-build's optional uploader: its
