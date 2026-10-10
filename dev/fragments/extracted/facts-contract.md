@@ -196,10 +196,15 @@ files; Nix consumers read the aggregate directly.
 ## Drift
 
 `mkDriftCheck` accepts, in addition to today's single `committed` and
-`extracted`, per-system inputs: `committed = { "<system>" = path; }` and
-`extracted = { "<system>" = derivation; }`. On host `S` it diffs every system
-whose extraction derivation can build on `S`; a static extractor may supply
-both. The message names the committed path for the system that drifted.
+`extracted`, per-system inputs. Owners never name a per-system raw file:
+`committed` is the owner's `extracted/` directory as a path, `sidecar` is that
+directory's repository path as a string, and the lib derives `<system>.json`
+under each for every system in `config/systems.nix` that has an extraction.
+`extracted` is `{ "<system>" = derivation; }`. On host `S` the check diffs every
+system whose extraction derivation can build on `S`; a static extractor supplies
+several, a host-run one supplies only `S`. Every drifted system is reported,
+each by its committed file path, and the check fails once at the end. Today's
+single-value callers are unchanged.
 
 ## The guard
 
