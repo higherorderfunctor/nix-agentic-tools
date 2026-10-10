@@ -443,7 +443,9 @@ enabled ecosystem whose native model preserves the option's semantics):
   Home Manager can own, so its Home Manager row is an explicit exclusion: silent
   for the shared pool, warned for `ai.kimchi.hooks`. Kiro's v3 trigger records
   remain native-only, but their `action.command` resolves a package through the
-  same shared `commandType`.
+  same shared `commandType`. Delegate-routing contributes its reminder to native
+  per-runtime hooks, preserving these backend exclusions; package details live
+  in `packages/delegate-routing/docs/development.md`.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
   when both are present. The strictly higher-priority definition supplies the

@@ -55,10 +55,8 @@
   # derivation name rather than on an exact string.
   handlerCommands = blocks:
     lib.concatMap (b: map (h: h.command) b.hooks) blocks;
-  hasClampHook = blocks:
-    builtins.any (lib.hasInfix "claude-delegation-clamp") (handlerCommands blocks);
   hasGuardHook = blocks:
     builtins.any (lib.hasInfix "claude-memory-collision-guard") (handlerCommands blocks);
 in {
-  inherit claudeAssertionFails claudeAssertions claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasClampHook hasGuardHook;
+  inherit claudeAssertionFails claudeAssertions claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasGuardHook;
 }

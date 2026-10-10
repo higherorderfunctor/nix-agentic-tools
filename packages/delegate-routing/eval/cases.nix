@@ -79,15 +79,8 @@
   single = "Implement a pure Python function `unique_words(text)` in `words.py` that returns the sorted unique words of a string; `unique_words('pear apple pear')` must return `['apple', 'pear']`.";
   dependent = "Derive a normalization specification from the examples 'Pear' -> 'pear' and 'APPLE' -> 'apple' and write it to `SPEC.md`; then implement that specification as `normalize(word)` in `normalize.py`; then validate the implementation against those examples. Each step consumes the preceding result.";
   # On/off pairs: the switch is the only difference between the two cases.
-  claudePairs = lib.concatMap (on: [
-    (mkCase {
-      expect = "delegate";
-      id = "claude-clamp-${label on}";
-      runtime = "claude";
-      switches.ai.claude.delegationClampMitigation.enable = lib.mkForce on;
-      task = single;
-    })
-    (mkCase {
+  claudeDrainPairs = map (on:
+    mkCase {
       codexHeadroom = true;
       expect =
         if on
@@ -96,13 +89,20 @@
       id = "claude-ultracode-drain-${label on}";
       runtime = "claude";
       switches.ai = {
-        claude.delegationClampMitigation.enable = lib.mkForce true;
         claude.ultracodeOnLaunch = lib.mkForce true;
         programs.delegate-routing.runtimes.claude.routing."Pool drain".enable = lib.mkForce on;
       };
       task = dependent;
-    })
-  ]) [false true];
+    }) [false true];
+  reminderPairs = lib.concatMap (runtime:
+    map (on:
+      mkCase {
+        inherit runtime;
+        expect = "delegate";
+        id = "${runtime}-reminder-${label on}";
+        switches.ai.programs.delegate-routing.reminder.enable = lib.mkForce on;
+        task = single;
+      }) [true false]) ["claude" "kiro"];
   # Task shape: a single task wants one delegate, a dependent chain a workflow.
   shapes = lib.concatMap (runtime: [
     (mkCase {
@@ -119,4 +119,4 @@
     })
   ]) ["codex" "kimchi" "kiro"];
 in
-  claudePairs ++ shapes
+  claudeDrainPairs ++ reminderPairs ++ shapes
