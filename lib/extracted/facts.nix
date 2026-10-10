@@ -4,36 +4,11 @@
 {lib}: let
   inherit (import ../runtime-values {inherit lib;}) classify;
   nonBlank = value: builtins.isString value && builtins.match "[[:space:]]*" value == null;
-  # A real proleptic Gregorian date, not only a well-formed one.
-  calendarDate = value: let
-    parts =
-      if builtins.isString value
-      then builtins.match "([0-9]{4})-([0-9]{2})-([0-9]{2})" value
-      else null;
-    year = lib.toIntBase10 (builtins.elemAt parts 0);
-    month = lib.toIntBase10 (builtins.elemAt parts 1);
-    day = lib.toIntBase10 (builtins.elemAt parts 2);
-    leap = lib.mod year 4 == 0 && (lib.mod year 100 != 0 || lib.mod year 400 == 0);
-    days = builtins.elemAt [
-      31
-      (
-        if leap
-        then 29
-        else 28
-      )
-      31
-      30
-      31
-      30
-      31
-      31
-      30
-      31
-      30
-      31
-    ] (month - 1);
-  in
-    parts != null && month >= 1 && month <= 12 && day >= 1 && day <= days;
+  # Well-formed only: `decided` is provenance, nothing reads it as a date.
+  # The pasted placeholder `YYYY-MM-DD` has no digits, so it is refused too.
+  isoDate = value:
+    builtins.isString value
+    && builtins.match "[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])" value != null;
   wildcard = "<name>";
   keyOf = lib.concatStringsSep ".";
   segmentsMatch = pattern: path: lib.all lib.id (lib.zipListsWith (p: s: p == wildcard || p == s) pattern path);
@@ -153,7 +128,7 @@ in {
       ++ lib.optional (!known) "unknown combine ${builtins.toJSON combine}"
       ++ lib.optional (known && declared && combineTypes ? ${combine} && !builtins.elem type combineTypes.${combine}) "combine ${combine} does not apply to type ${builtins.toJSON type}"
       ++ lib.optional (!nonBlank (row.reason or null) || builtins.match "[[:space:]]*TODO(:.*|[[:space:]]*)" row.reason != null) "reason must be non-blank and not a TODO placeholder"
-      ++ lib.optional (!calendarDate (row.decided or null)) "decided must be a real calendar date (YYYY-MM-DD)"
+      ++ lib.optional (!isoDate (row.decided or null)) "decided must be an ISO date (YYYY-MM-DD)"
       ++ lib.optional (row ? ignore && !(builtins.elem type collections && builtins.isList row.ignore)) "ignore needs a list on a set or list key";
     decisionReasons = lib.mapAttrs checkDecision decisions;
 

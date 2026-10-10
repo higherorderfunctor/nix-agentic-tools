@@ -83,10 +83,10 @@
       kinds = ["bad-decision"];
     };
     # Fixture 11; spec:81, spec:138-139, spec:149.
-    bad-decision-impossible-date = {
+    bad-decision-malformed-date = {
       input = {
         declarations.mode = static "string";
-        decisions.mode = decision "equal" // {decided = "2026-02-31";};
+        decisions.mode = decision "equal" // {decided = "2026-1-01";};
         raws = both {mode = "same";};
       };
       kinds = ["bad-decision"];

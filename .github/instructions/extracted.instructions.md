@@ -144,7 +144,8 @@ shown in `details`; for `declared-gone` it is "delete the declaration for
 `TODO: <what to explain>`; `bad-decision` rejects both literals (a `reason` is a
 placeholder only when, trimmed, it is exactly `TODO` or begins with `TODO:`), so
 a row pasted unedited fails naming exactly the fields the human must fill.
-`decided` must be a real calendar date, not only a well-formed one.
+`decided` must be an ISO `YYYY-MM-DD` date; its shape is checked, calendar
+validity is not: the field is provenance, nothing reads it.
 
 Failure kinds and when they fire:
 
