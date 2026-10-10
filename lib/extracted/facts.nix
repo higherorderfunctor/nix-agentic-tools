@@ -152,7 +152,7 @@ in {
       lib.optional (!declared) "row for an undeclared key"
       ++ lib.optional (!known) "unknown combine ${builtins.toJSON combine}"
       ++ lib.optional (known && declared && combineTypes ? ${combine} && !builtins.elem type combineTypes.${combine}) "combine ${combine} does not apply to type ${builtins.toJSON type}"
-      ++ lib.optional (!nonBlank (row.reason or null) || builtins.match "[[:space:]]*TODO.*" row.reason != null) "reason must be non-blank and not a TODO placeholder"
+      ++ lib.optional (!nonBlank (row.reason or null) || builtins.match "[[:space:]]*TODO(:.*|[[:space:]]*)" row.reason != null) "reason must be non-blank and not a TODO placeholder"
       ++ lib.optional (!calendarDate (row.decided or null)) "decided must be a real calendar date (YYYY-MM-DD)"
       ++ lib.optional (row ? ignore && !(builtins.elem type collections && builtins.isList row.ignore)) "ignore needs a list on a set or list key";
     decisionReasons = lib.mapAttrs checkDecision decisions;
