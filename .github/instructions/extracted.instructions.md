@@ -90,9 +90,10 @@ a non-negative integer. `object` is opaque and only compared whole.
 
 Combine vocabulary, closed: `equal`, `and`, `or`, `max`, `min`, `intersection`,
 `union`, `prefer:<system>`, `per-platform`, `ignore`. Anything else is a
-`bad-decision` failure. `ignore` as a combine drops the key from the aggregate
-entirely (it stays in the raws). `per-platform` produces no combined value;
-consumers read per system.
+`bad-decision` failure. `and` and `or` apply to `bool`, `max` and `min` to
+`count`, `intersection` and `union` to `set` and `list`, the rest to every type.
+`ignore` as a combine drops the key from the aggregate entirely (it stays in the
+raws). `per-platform` produces no combined value; consumers read per system.
 
 Defaults when no decision row exists, by declared type:
 
@@ -149,14 +150,14 @@ validity is not: the field is provenance, nothing reads it.
 
 Failure kinds and when they fire:
 
-| Kind                | Fires when                                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `divergent`         | systems disagree and the effective combine is `equal`                                                               |
-| `missing-system`    | a declared key is present in at least one system but absent from another its declaration requires                   |
-| `declared-gone`     | a declared key is absent from every raw; `missing-system` does not also fire. Not for `systems = []`                |
-| `type-mismatch`     | a raw value does not fit the declared type                                                                          |
-| `bad-decision`      | unknown combine, blank reason, missing or malformed date, `ignore` on a non-collection, a row for an undeclared key |
-| `undeclared-secret` | an undeclared key that `classify` flags as credential-shaped                                                        |
+| Kind                | Fires when                                                                                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `divergent`         | systems disagree and the effective combine is `equal`                                                                                                       |
+| `missing-system`    | a declared key is present in at least one system but absent from another its declaration requires                                                           |
+| `declared-gone`     | a declared key is absent from every raw; `missing-system` does not also fire. Not for `systems = []`                                                        |
+| `type-mismatch`     | a raw value does not fit the declared type                                                                                                                  |
+| `bad-decision`      | unknown combine, a combine its key's type does not take, blank reason, missing or malformed date, `ignore` on a non-collection, a row for an undeclared key |
+| `undeclared-secret` | an undeclared key that `classify` flags as credential-shaped                                                                                                |
 
 Not failures: an undeclared key (listed in `undeclared`); a key that only `live`
 systems would carry; wildcard children appearing or disappearing. A wildcard

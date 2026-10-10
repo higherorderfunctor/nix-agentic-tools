@@ -115,6 +115,15 @@
       };
       kinds = ["bad-decision"];
     };
+    # spec:84-87: `max` applies to `count` only.
+    bad-decision-type-combine = {
+      input = {
+        declarations.mode = static "string";
+        decisions.mode = decision "max";
+        raws = both {mode = "same";};
+      };
+      kinds = ["bad-decision"];
+    };
     # Fixture 11; spec:84-85, spec:149.
     bad-decision-unknown-combine = {
       input = {

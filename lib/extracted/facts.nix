@@ -32,22 +32,21 @@
     set = "intersection";
     string = "equal";
   };
-  # Combines limited to some types; every other combine applies to all types.
-  combineTypes = {
-    and = ["bool"];
-    intersection = ["list" "set"];
-    max = ["count"];
-    min = ["count"];
-    or = ["bool"];
-    union = ["list" "set"];
-  };
-  combiners = {
-    and = lib.all lib.id;
-    intersection = values: lib.foldl' (acc: value: lib.filter (element: builtins.elem element value) acc) (builtins.head values) (builtins.tail values);
-    max = values: lib.foldl' lib.max (builtins.head values) values;
-    min = values: lib.foldl' lib.min (builtins.head values) values;
-    or = lib.any lib.id;
-    union = values: lib.unique (builtins.concatLists values);
+  everyType = builtins.attrNames fits;
+  # The closed combine vocabulary, less `prefer:<system>`: the types each
+  # combine applies to and, for a reducer, how it reduces every system's value.
+  combiners = let
+    reducer = types: apply: {inherit apply types;};
+  in {
+    and = reducer ["bool"] (lib.all lib.id);
+    equal.types = everyType;
+    ignore.types = everyType;
+    intersection = reducer collections (values: lib.foldl' (acc: value: lib.filter (element: builtins.elem element value) acc) (builtins.head values) (builtins.tail values));
+    max = reducer ["count"] (values: lib.foldl' lib.max (builtins.head values) values);
+    min = reducer ["count"] (values: lib.foldl' lib.min (builtins.head values) values);
+    or = reducer ["bool"] (lib.any lib.id);
+    per-platform.types = everyType;
+    union = reducer collections (values: lib.unique (builtins.concatLists values));
   };
   collections = ["list" "set"];
 
@@ -114,19 +113,16 @@ in {
       })
     loose);
 
+    vocabulary = combiners // lib.genAttrs (map (system: "prefer:${system}") systems) (_: {types = everyType;});
     checkDecision = key: row: let
       declared = declarations ? ${key};
       type = declarations.${key}.type or null;
       combine = row.combine or null;
-      known =
-        builtins.isString combine
-        && (builtins.elem combine ["equal" "ignore" "per-platform"]
-          || combineTypes ? ${combine}
-          || lib.any (system: combine == "prefer:${system}") systems);
+      known = builtins.isString combine && vocabulary ? ${combine};
     in
       lib.optional (!declared) "row for an undeclared key"
       ++ lib.optional (!known) "unknown combine ${builtins.toJSON combine}"
-      ++ lib.optional (known && declared && combineTypes ? ${combine} && !builtins.elem type combineTypes.${combine}) "combine ${combine} does not apply to type ${builtins.toJSON type}"
+      ++ lib.optional (known && declared && !builtins.elem type vocabulary.${combine}.types) "combine ${combine} does not apply to type ${builtins.toJSON type}"
       ++ lib.optional (!nonBlank (row.reason or null) || builtins.match "[[:space:]]*TODO(:.*|[[:space:]]*)" row.reason != null) "reason must be non-blank and not a TODO placeholder"
       ++ lib.optional (!isoDate (row.decided or null)) "decided must be an ISO date (YYYY-MM-DD)"
       ++ lib.optional (row ? ignore && !(builtins.elem type collections && builtins.isList row.ignore)) "ignore needs a list on a set or list key";
@@ -185,7 +181,7 @@ in {
             if prepared ? ${preferred}
             then {value = prepared.${preferred};}
             else lib.optionalAttrs (builtins.length values == 1) {value = builtins.head values;}
-          else lib.optionalAttrs (combiners ? ${combine}) {value = finish (combiners.${combine} values);};
+          else lib.optionalAttrs (combiners.${combine} ? apply) {value = finish (combiners.${combine}.apply values);};
         failure = kind: details: fix: {
           inherit details fix kind;
           key = instanceKey;
