@@ -188,6 +188,15 @@ _: {
       ];
       sources = ["ci-lean-closure" "files-internals"];
     };
+    extracted = {
+      scopes = [
+        "checks/extracted/**"
+        "lib/extracted/**"
+        "packages/*/extracted/**"
+        "packages/*/extracted.json"
+      ];
+      sources = ["facts-contract"];
+    };
     facets = {
       scopes = [
         "checks/*/default.nix"

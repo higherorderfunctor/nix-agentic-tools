@@ -1,8 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-07 — regeneration writes extracted facts only; hand
-> annotations and real uses retain removal checks; extractor floors guard
-> collapsed surfaces, and secret environment rows require controls prose.
+> **Last verified:** 2026-10-10 — the one-sidecar-for-both-platforms shape is
+> pre-contract; per-system facts follow the extracted contract.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -254,6 +253,11 @@ typed addition is emitted with `type = null`, and reconcile fails it as
 `needs-human` until a row supplies the type or an ignore reason. pi's own
 variable names come from Kimchi's `piConfig.name` the way pi derives them, not
 from pi's `PI_` default.
+
+That one shared sidecar is the pre-contract shape. The extracted facts contract
+(`dev/fragments/extracted/facts-contract.md`) replaces it with one raw file per
+system, combined by declared rules; an owner keeps the single `extracted.json`
+through `mkDriftCheck` until it migrates.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin
