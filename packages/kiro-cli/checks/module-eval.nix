@@ -139,18 +139,23 @@ in {
 
     module-kiro-cli-namespace = mkTest "kiro-cli-namespace" (let
       moved = [
+        ["backgroundExecution"]
+        ["codeToSpec"]
         ["environmentVariables"]
         ["extraPackages"]
+        ["features"]
+        ["kvim"]
         ["native" "settings"]
         ["normalized" "environmentVariables"]
         ["normalized" "shell"]
         ["package"]
+        ["sandbox"]
         ["shell"]
         ["trustedMcpTools"]
         ["tweaks"]
-        ["unlockedRolloutFeatures"]
         ["useFhsSandbox"]
         ["v3"]
+        ["workflows"]
       ];
       check = evaluate: let
         result = evaluate {};
@@ -207,39 +212,120 @@ in {
     in
       lib.all check [evalHm evalDevenv]);
 
-    module-kiro-cli-workflows = mkTest "kiro-cli-workflows" (let
-      base.ai.kiro = {
-        enable = true;
-        cli = {
-          unlockedRolloutFeatures = ["tangent"];
-          v3 = true;
-          workflows.enable = true;
+    # Friendly switches resolve the same patch on both backends, while global
+    # settings are implied only where Kiro honors them.
+    module-kiro-cli-friendly-features = mkTest "kiro-cli-friendly-features" (let
+      cases = {
+        backgroundExecution = {
+          feature = "background_execution";
+          setting = null;
+        };
+        codeToSpec = {
+          feature = "c2s";
+          setting = "enableC2s";
+        };
+        kvim = {
+          feature = "kvim";
+          setting = null;
+        };
+        sandbox = {
+          feature = "local_sandbox";
+          setting = null;
+        };
+        workflows = {
+          feature = null;
+          setting = "enableWorkflows";
         };
       };
-      hm = evalHm base;
-      devenv = evalDevenv base;
-      explicitFalse = evalHm (lib.recursiveUpdate base {ai.kiro.cli.native.settings.chat.enableWorkflows = false;});
-      equivalent = evaluate:
-        evaluate (lib.recursiveUpdate base {
+      backends = {
+        devenv = {
+          evaluate = evalDevenv;
+          packages = ev: ev.config.packages;
+        };
+        hm = {
+          evaluate = evalHm;
+          packages = ev: ev.config.home.packages;
+        };
+      };
+      check = backend: runner: name: case: let
+        base.ai.kiro = {
+          enable = true;
+          cli.v3 = true;
+        };
+        selected = runner.evaluate (lib.recursiveUpdate base {ai.kiro.cli.${name}.enable = true;});
+        raw = runner.evaluate (lib.recursiveUpdate base {
+          ai.kiro.cli.features = lib.optionalAttrs (case.feature != null) {${case.feature}.enable = true;};
+        });
+        plain = runner.evaluate base;
+        setting =
+          if case.setting == null
+          then null
+          else selected.config.ai.kiro.cli.native.settings.chat.${case.setting};
+        explicitFalse = runner.evaluate (lib.recursiveUpdate base {
           ai.kiro.cli = {
-            unlockedRolloutFeatures = ["tangent" "workflows"];
-            workflows.enable = false;
+            ${name}.enable = true;
+            native.settings.chat = lib.optionalAttrs (case.setting != null) {${case.setting} = false;};
           };
         });
-      fails = evaluate: change: needle:
-        lib.any (item: !item.assertion && lib.hasInfix needle item.message)
-        (evaluate (lib.recursiveUpdate base change)).config.assertions;
+        requiresV3 = runner.evaluate (lib.recursiveUpdate base {
+          ai.kiro.cli = {
+            ${name}.enable = true;
+            v3 = false;
+          };
+        });
+        rawDisabled = runner.evaluate (lib.recursiveUpdate base {
+          ai.kiro.cli = {
+            ${name}.enable = true;
+            features = lib.optionalAttrs (case.feature != null) {${case.feature}.enable = false;};
+          };
+        });
+      in
+        soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages raw))
+        && (
+          if case.feature == null
+          then soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
+          else selected.config.ai.kiro.cli.features.${case.feature}.enable && soleFork (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
+        )
+        && (
+          if case.setting == null
+          then selected.config.ai.kiro.cli.native.settings.chat.enableC2s == null && selected.config.ai.kiro.cli.native.settings.chat.enableWorkflows == null
+          else if backend == "hm"
+          then setting == true && explicitFalse.config.ai.kiro.cli.native.settings.chat.${case.setting} == false
+          else setting == null && !(selected.config.ai.kiro.files ? ".kiro/settings/cli.json")
+        )
+        && lib.any (item: !item.assertion && lib.hasInfix "ai.kiro.cli.${name}.enable requires" item.message) requiresV3.config.assertions
+        && (
+          if case.feature == null
+          then builtins.all (item: item.assertion) rawDisabled.config.assertions
+          else
+            lib.any (item:
+              !item.assertion
+              && item.message == "ai.kiro.cli.${name}.enable is on but ai.kiro.cli.features.${case.feature}.enable is explicitly false")
+            rawDisabled.config.assertions
+        );
     in
-      (hmCliSettings hm)."chat.enableWorkflows"
-      && !(hmCliSettings explicitFalse)."chat.enableWorkflows"
-      && !(devenv.config.ai.kiro.files ? ".kiro/settings/cli.json")
-      && soleSame (kiroWrappedDrvs hm.config.home.packages) (kiroWrappedDrvs (equivalent evalHm).config.home.packages)
-      && soleSame (kiroWrappedDrvs devenv.config.packages) (kiroWrappedDrvs (equivalent evalDevenv).config.packages)
-      && lib.all (evaluate:
-        fails evaluate {ai.kiro.cli.v3 = false;} "v3 = true"
-        && fails evaluate {ai.kiro.cli.package = pkgs.hello;} "withRolloutFeatures") [evalHm evalDevenv]
-      && fails evalDevenv {ai.kiro.cli.native.settings.chat.enableWorkflows = true;} "PROJECT-LOCAL"
-      && lib.any (lib.hasInfix "ai.kiro.cli.workflows.enable") (evalHm (lib.recursiveUpdate base {ai.kiro.cli.package = null;})).config.warnings);
+      lib.all (backend: lib.all (name: check backend backends.${backend} name cases.${name}) (builtins.attrNames cases)) (builtins.attrNames backends));
+
+    module-kiro-cli-keybindings-typed = mkTest "kiro-cli-keybindings-typed" (let
+      extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+      expected = map (lib.removePrefix "chat.keybindings.") (lib.filter (lib.hasPrefix "chat.keybindings.") extracted.settingKeys);
+      check = evaluate: let
+        plain = evaluate {};
+        good = evaluate {
+          ai.kiro.cli.native.settings.chat.keybindings = {
+            moveToBackground = "ctrl+x";
+            futureAction = 42;
+          };
+        };
+        bad = builtins.tryEval (evaluate {ai.kiro.cli.native.settings.chat.keybindings.moveToBackground = 42;}).config.ai.kiro.cli.native.settings.chat.keybindings.moveToBackground;
+      in
+        builtins.attrNames plain.config.ai.kiro.cli.native.settings.chat.keybindings
+        == expected
+        && good.config.ai.kiro.cli.native.settings.chat.keybindings.moveToBackground == "ctrl+x"
+        && good.config.ai.kiro.cli.native.settings.chat.keybindings.futureAction == 42
+        && !bad.success;
+    in
+      lib.all check [evalHm evalDevenv]);
 
     module-kiro-package-null-skips-install-keeps-files = mkTest "kiro-package-null-skips-install-keeps-files" (
       let
@@ -1038,7 +1124,7 @@ in {
 
     # The unlock must FORK the derivation — if the drvPath were unchanged, the
     # patch step silently did nothing and the consumer would get stock kiro while
-    # believing workflows were on. Comparing drvPaths is the only assertion that
+    # believing background execution was on. Comparing drvPaths is the only assertion that
     # actually distinguishes those two worlds; a name check cannot, because both
     # sides are named `kiro-cli-wrapped`.
     module-kiro-hm-rollout-unlock-forks-package = mkTest "kiro-hm-rollout-unlock-forks-package" (
@@ -1061,7 +1147,7 @@ in {
             ai.kiro = {
               enable = true;
               cli.v3 = true;
-              cli.unlockedRolloutFeatures = ["workflows"];
+              cli.features.background_execution.enable = true;
             };
           })
       .config
@@ -1092,7 +1178,7 @@ in {
             ai.kiro = {
               enable = true;
               cli.v3 = true;
-              cli.unlockedRolloutFeatures = ["workflows"];
+              cli.features.background_execution.enable = true;
             };
           })
       .config
@@ -1112,34 +1198,33 @@ in {
         lib.any (p: (p.drvPath or null) == pkgs.ai.kiro-cli.drvPath) packages
     );
 
-    # A duplicated entry must NOT fork the derivation — otherwise two configs
-    # that mean the same thing produce two store paths and two 556 MB builds.
-    module-kiro-rollout-dedupes-features = mkTest "kiro-rollout-dedupes-features" (
-      let
-        drvOf = features:
-          kiroWrappedDrvs
-          (evalHm {
-            ai.kiro = {
-              enable = true;
-              cli.v3 = true;
-              cli.unlockedRolloutFeatures = features;
-            };
-          })
-        .config
-        .home
-        .packages or [
-          ];
+    # Raw and friendly declarations coalesce into one feature, and GA raw
+    # availability does not introduce a pointless binary rebuild.
+    module-kiro-rollout-coalesces-features = mkTest "kiro-rollout-coalesces-features" (let
+      check = evaluate: packages: let
+        base.ai.kiro = {
+          enable = true;
+          cli.v3 = true;
+        };
+        drvOf = cli: kiroWrappedDrvs (packages (evaluate (lib.recursiveUpdate base {ai.kiro.cli = cli;})));
       in
-        soleSame (drvOf ["workflows"]) (drvOf ["workflows" "workflows"])
-        # Order must not fork it either. The list is comma-joined into
-        # `postFixup`, so without a sort these two semantically identical sets
-        # would produce different drvPaths and two redundant ~556 MB builds.
-        && soleSame (drvOf ["tangent" "workflows"]) (drvOf ["workflows" "tangent"])
-        # Control: a genuinely DIFFERENT set must still fork. Without this, the
-        # two assertions above would also pass if canonicalization had collapsed
-        # every input to a single derivation.
-        && soleFork (drvOf ["workflows"]) (drvOf ["tangent" "workflows"])
-    );
+        soleSame (drvOf {features.background_execution.enable = true;}) (drvOf {
+          backgroundExecution.enable = true;
+          features.background_execution.enable = true;
+        })
+        && soleSame (drvOf {features.background_execution.enable = true;})
+        (drvOf {package = pkgs.ai.kiro-cli.withRolloutFeatures ["background_execution"];})
+        && lib.all (name: soleSame (drvOf {}) (drvOf {features.${name}.enable = true;}))
+        ["remote_changelog" "test" "workflows"]
+        && soleFork (drvOf {features.background_execution.enable = true;}) (drvOf {
+          features = {
+            background_execution.enable = true;
+            kvim.enable = true;
+          };
+        });
+    in
+      check evalHm (ev: ev.config.home.packages)
+      && check evalDevenv (ev: ev.config.packages));
 
     # A `package` without the overlay's passthru cannot be patched. Assert the
     # failure is the NAMED one rather than a bare "attribute missing" pointing
@@ -1150,7 +1235,7 @@ in {
           ai.kiro = {
             enable = true;
             cli.package = pkgs.hello;
-            cli.unlockedRolloutFeatures = ["workflows"];
+            cli.features.background_execution.enable = true;
           };
         };
         asserts =
@@ -1167,7 +1252,7 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            cli.unlockedRolloutFeatures = ["workflows"];
+            cli.features.background_execution.enable = true;
           };
         };
         asserts =
@@ -1362,7 +1447,7 @@ in {
             cli = {
               package = customFhsPackage;
               trustedMcpTools = ["fs_read"];
-              unlockedRolloutFeatures = ["workflows"];
+              features.background_execution.enable = true;
               v3 = true;
             };
           };
@@ -1374,7 +1459,7 @@ in {
         asserts != [] && (builtins.head asserts).assertion == false
     );
 
-    # `unlockedRolloutFeatures` without `v3` is INERT, and silently so — the
+    # A raw rollout patch without `v3` is INERT, and silently so — the
     # binary really is patched, the option really is set, and the feature never
     # appears. The assertion is all that stands between a consumer and a
     # debugging session, so pin that it actually fires.
@@ -1383,7 +1468,7 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            cli.unlockedRolloutFeatures = ["workflows"];
+            cli.features.background_execution.enable = true;
           };
         };
         asserts =
@@ -1401,7 +1486,7 @@ in {
           ai.kiro = {
             enable = true;
             cli.v3 = true;
-            cli.unlockedRolloutFeatures = ["workflows"];
+            cli.features.background_execution.enable = true;
           };
         };
         asserts =
@@ -1411,77 +1496,100 @@ in {
         asserts != [] && (builtins.head asserts).assertion == true
     );
 
-    # ── workflows: the SECOND gate ─────────────────────────────────────────────
-    # `unlockedRolloutFeatures = ["workflows"]` patches the binary, which since
-    # kiro-cli 2.19.0 only makes the feature AVAILABLE. The client also reads
-    # `chat.enableWorkflows`, default false, so the unlock alone is silently
-    # inert. HM implies the setting with the unlock; these pin that it happens,
-    # that an explicit value still beats it, and that it does NOT happen where the
-    # setting cannot work.
-    module-kiro-workflows-unlock-implies-setting = mkTest "kiro-workflows-unlock-implies-setting" (
-      let
-        ev = evalHm {
-          ai.kiro = {
-            enable = true;
-            cli.v3 = true;
-            cli.unlockedRolloutFeatures = ["workflows"];
-          };
-        };
-      in
-        ev.config.ai.kiro.cli.native.settings.chat.enableWorkflows == true
-    );
-
-    # The implication is a DEFAULT, not a mandate. Without `mkDefault` this would
-    # be a definition conflict rather than a losing contribution, so the explicit
-    # `false` is the only thing that distinguishes the two.
-    module-kiro-workflows-explicit-setting-beats-unlock = mkTest "kiro-workflows-explicit-setting-beats-unlock" (
-      let
-        ev = evalHm {
+    module-kiro-raw-features-imply-no-settings = mkTest "kiro-raw-features-imply-no-settings" (let
+      check = evaluate: let
+        ev = evaluate {
           ai.kiro = {
             enable = true;
             cli = {
-              native.settings.chat.enableWorkflows = false;
-              unlockedRolloutFeatures = ["workflows"];
+              features = {
+                c2s.enable = true;
+                workflows.enable = true;
+              };
               v3 = true;
             };
           };
         };
       in
-        ev.config.ai.kiro.cli.native.settings.chat.enableWorkflows == false
-    );
-
-    # Positive control for the two above: without the unlock nothing writes the
-    # key, so a test that merely found `true` everywhere would be vacuous.
-    module-kiro-workflows-no-unlock-leaves-setting-unset = mkTest "kiro-workflows-no-unlock-leaves-setting-unset" (
-      let
-        ev = evalHm {
-          ai.kiro = {
-            enable = true;
-            cli.v3 = true;
-          };
-        };
-      in
-        ev.config.ai.kiro.cli.native.settings.chat.enableWorkflows == null
-    );
-
-    # devenv must NOT inherit the implication: it writes the project-local
-    # cli.json, where kiro discards this key, so implying it there would both
-    # mislead the consumer and trip the workspace-allowlist assertion below on a
-    # config nobody wrote.
-    module-kiro-devenv-workflows-unlock-implies-nothing = mkTest "kiro-devenv-workflows-unlock-implies-nothing" (
-      let
-        ev = evalDevenv {
-          ai.kiro = {
-            enable = true;
-            cli.v3 = true;
-            cli.unlockedRolloutFeatures = ["workflows"];
-          };
-        };
-      in
-        ev.config.ai.kiro.cli.native.settings.chat.enableWorkflows
+        ev.config.ai.kiro.cli.native.settings.chat.enableC2s
         == null
-        && builtins.all (a: a.assertion) ev.config.assertions
-    );
+        && ev.config.ai.kiro.cli.native.settings.chat.enableWorkflows == null;
+    in
+      lib.all check [evalHm evalDevenv]);
+
+    # Inject the measured patchability record through the factory's internal
+    # option, keeping both real discovered backend modules in place.
+    module-kiro-rollout-rejects-unpatchable = mkTest "kiro-rollout-rejects-unpatchable" (let
+      extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+      check = evaluate: enable: patchable: let
+        ev = evaluate {
+          ai.kiro = {
+            enable = true;
+            _rolloutPatchability =
+              extracted.rolloutPatchability
+              // {
+                background_execution = {
+                  inherit patchable;
+                  unmatchedSites =
+                    if patchable
+                    then 0
+                    else 1;
+                };
+              };
+            cli.features.background_execution.enable = enable;
+            cli.v3 = true;
+          };
+        };
+        assertions = builtins.filter (item:
+          lib.hasInfix "ai.kiro.cli.features.background_execution.enable: the pinned rollout entry is not patchable" item.message)
+        ev.config.assertions;
+      in
+        builtins.length assertions
+        == 1
+        && (builtins.head assertions).assertion == (!enable || patchable)
+        && (patchable || lib.hasInfix "1 site(s) did not match the patcher's entry shape" (builtins.head assertions).message);
+    in
+      lib.all (evaluate:
+        check evaluate true false
+        && check evaluate true true
+        && check evaluate false false)
+      [evalHm evalDevenv]);
+
+    module-kiro-rollout-rejects-unreviewed = mkTest "kiro-rollout-rejects-unreviewed" (let
+      reviewed = builtins.fromJSON (builtins.readFile ../extract/rollout-features.json);
+      check = evaluate: let
+        ev = evaluate {
+          ai.kiro = {
+            enable = true;
+            _reviewedRolloutFeatures = builtins.removeAttrs reviewed ["background_execution"];
+            cli.features.background_execution.enable = true;
+            cli.v3 = true;
+          };
+        };
+      in
+        lib.any (item: !item.assertion && lib.hasInfix "ai.kiro.cli.features.background_execution.enable: the pinned rollout feature has no review row" item.message) ev.config.assertions;
+    in
+      lib.all check [evalHm evalDevenv]);
+
+    module-kiro-package-null-names-friendly-feature = mkTest "kiro-package-null-names-friendly-feature" (let
+      check = evaluate: let
+        ev = evaluate {
+          ai.kiro = {
+            enable = true;
+            cli = {
+              backgroundExecution.enable = true;
+              package = null;
+              v3 = true;
+            };
+          };
+        };
+      in
+        lib.any (message:
+          lib.hasInfix "ai.kiro.cli.backgroundExecution.enable" message
+          && !(lib.hasInfix "ai.kiro.cli.features.background_execution.enable" message))
+        ev.config.warnings;
+    in
+      lib.all check [evalHm evalDevenv]);
 
     # ── flatten boundary: object-valued settings ───────────────────────────────
     # cli.json is flat dotted keys whose VALUES may be objects, and attrset shape

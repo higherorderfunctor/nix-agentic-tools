@@ -1,0 +1,138 @@
+{
+  "background_execution": {
+    "state": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 0
+    }
+  },
+  "c2s": {
+    "state": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 100
+    }
+  },
+  "cloud_config": {
+    "state": {
+      "segment": "all",
+      "treatment_percent": 100
+    }
+  },
+  "infra_safety": {
+    "state": {
+      "segment": "internal",
+      "treatment_percent": 100
+    }
+  },
+  "kvim": {
+    "state": {
+      "segment": "internal",
+      "treatment_percent": 100
+    }
+  },
+  "lite": {
+    "state": {
+      "segment": "internal",
+      "treatment_percent": 100
+    }
+  },
+  "local_sandbox": {
+    "state": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 100
+    }
+  },
+  "memory": {
+    "state": {
+      "segment": "all",
+      "treatment_percent": 100
+    }
+  },
+  "memory_controls": {
+    "state": {
+      "segment": "all",
+      "treatment_percent": 100
+    }
+  },
+  "remote_changelog": {
+    "state": {
+      "channel": "stable",
+      "treatment_percent": 100
+    }
+  },
+  "remote_sandbox": {
+    "state": {
+      "segment": "all",
+      "treatment_percent": 100
+    }
+  },
+  "session_dashboard": {
+    "state": {
+      "segment": "all",
+      "treatment_percent": 100
+    }
+  },
+  "standalone_toolbox": {
+    "state": {
+      "segment": "all",
+      "treatment_percent": 0
+    }
+  },
+  "tangent": {
+    "state": {
+      "segment": "all",
+      "treatment_percent": 100
+    }
+  },
+  "test": {
+    "state": {
+      "treatment_percent": 100
+    }
+  },
+  "test_internal_only": {
+    "state": {
+      "segment": "internal",
+      "treatment_percent": 100
+    }
+  },
+  "test_nightly_only": {
+    "state": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 100
+    }
+  },
+  "trust_classifier_shadow": {
+    "state": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 100
+    }
+  },
+  "tui": {
+    "state": {
+      "segment": "internal",
+      "treatment_percent": 50
+    }
+  },
+  "v3_prompt": {
+    "state": {
+      "segment": "internal",
+      "treatment_percent": 35
+    }
+  },
+  "voice": {
+    "state": {
+      "segment": "all",
+      "treatment_percent": 100
+    }
+  },
+  "workflows": {
+    "state": {
+      "segment": "all",
+      "treatment_percent": 100
+    }
+  }
+}

@@ -370,9 +370,9 @@ Each names a fixable entry (set `extensions` or rename the server, or
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-09 — Kiro CLI controls live under `ai.kiro.cli`;
-> shared `.kiro` file declarations remain under `ai.kiro`; no job pushes any
-> kiro path to the public cache.
+> **Last verified:** 2026-10-09 — the internal Kiro canary selects features from
+> extracted vendor state and measured patchability, without public exposure or
+> cache publication.
 
 ### Overview
 
@@ -394,11 +394,11 @@ Packages live under `pkgs.ai.*` and are flattened to top-level flake outputs
 (`chatgpt-codex`, `claude-code`, `copilot-cli`, `kimchi`, `kiro-cli`,
 `kiro-gateway`).
 
-claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-cli-workflows are
-unfree, so they are not in `packages.<system>`: `nix flake check` forces every
-drvPath there, and this flake never enables unfree for a consumer. Consumers get
-them from `legacyPackages.<system>` (or the overlay, or the modules) with their
-own unfree opt-in. Repository code reads them from `ciPackages.<system>`.
+claude-code, copilot-cli, kimchi-docs and kiro-cli are unfree, so they are not
+in `packages.<system>`: `nix flake check` forces every drvPath there, and this
+flake never enables unfree for a consumer. Consumers get them from
+`legacyPackages.<system>` (or the overlay, or the modules) with their own unfree
+opt-in. Repository code reads them from `ciPackages.<system>`.
 
 ### Build Patterns
 
@@ -489,10 +489,23 @@ token and cannot be rate-limited; prefer it over a hand-rolled
 
 No Kiro binary is ever pushed to the public cache: `kiro-cli` is always a local
 vendor download, and a patch is always a local patch of it.
-`pkgs.ai.kiro-cli-workflows` exposes the same derivation selected by
-`ai.kiro.cli.unlockedRolloutFeatures = ["workflows"]`; it is additionally a
-MODIFIED proprietary binary, and republishing one is a different act from
-mirroring the vendor's own build.
+`ciPackages.<system>.kiro-cli-rollout-canary` is an internal validation target,
+built with `kiro-cli.withRolloutFeatures` for every feature whose extracted
+vendor state needs a patch and whose measured patchability is true, matching
+consumer package selection. `extract/rollout-features.json` contains only
+reviewed vendor state; `extract/rollout-coverage.nix` owns the shared
+restriction predicate. Its recipe lives outside the discovered public package
+tree and is exposed only in `ciPackages`. The parity check verifies it stays
+absent from the overlay and public outputs. Consumer
+`cli.features.<name>.enable` patches only features whose extracted vendor state
+needs it; workflows are GA since 2.26.0 and select the stock package. Long
+feature sets use a bounded derivation suffix with a feature count and digest;
+short sets retain readable names. The extractor counts treatment sites in each
+manifest and names unmatched entries if new fields escape its state regex.
+Separately, `rolloutPatchability` records whether every feature site matches the
+shared patcher entry regex and counts unmatched sites. An unpatchable feature is
+rejected at module evaluation with its name and that count. A patched canary
+contains modified proprietary bytes, so it must never be republished.
 
 **Excluding it from `ci.yml`'s native package shards is necessary and NOT
 sufficient.** That was the whole mitigation from #665 (2026-08-01), and the

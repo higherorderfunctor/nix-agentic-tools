@@ -1,9 +1,10 @@
 ## Overlay Grouping under `pkgs.ai`
 
 > **Last verified:** 2026-10-09 — CI pushes `ciPackages` to cachix minus every
-> Kiro path; Semble uses the source-build pattern; overlay parity uses devenv’s
-> foreign nixpkgs and the two Semble roles share one derivation; pnpm 12
-> generates its embedded loader before Cargo compilation.
+> Kiro path; its rollout canary is CI-only; Semble uses the source-build
+> pattern; overlay parity uses devenv’s foreign nixpkgs and the two Semble roles
+> share one derivation; pnpm 12 generates its embedded loader before Cargo
+> compilation.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -127,7 +128,8 @@ unchecked derivations.
   (`ai`, `docs`, …) nested. `nix run <flake>#claude-code` resolves there and
   needs the caller's opt-in (`NIXPKGS_ALLOW_UNFREE=1 --impure`), as in nixpkgs.
 - `ciPackages` is the full flat set CI builds and pushes to cachix (Kiro paths
-  are filtered out of the push). Everything that reads a package by name (CI,
+  are filtered out of the push), plus the CI-only Kiro rollout canary outside
+  public package discovery. Everything that reads a package by name (CI,
   warm-ifd, update scripts, checks) uses it. Naming `ciPackages` is an explicit
   opt-in, like `checks`.
 
@@ -162,12 +164,14 @@ evaluates. The foreign nixpkgs is devenv's rolling input, asserted to differ
 from this flake's revision, so no new input is fetched.
 
 - **A** the overlay over the foreign nixpkgs gives `ciPackages`' drv for every
-  claimed leaf, and the claim list equals the `ciPackages` leaves.
-- **B** `packages` and `legacyPackages` give `ciPackages`' drvs; only unfree
-  leaves are missing from `packages`, and they refuse in `legacyPackages`; every
-  free claimed leaf evaluates on this flake's nixpkgs with no config. The
-  refusal rows assume pure evaluation: `--impure` with `NIXPKGS_ALLOW_UNFREE=1`
-  or a user `config.nix` allowing unfree fails them.
+  claimed leaf, and the claim list equals the `ciPackages` leaves except the
+  named CI-only rollout canary, whose absence from public surfaces is asserted.
+- **B** `packages` and `legacyPackages` give `ciPackages`' drvs for public
+  leaves; CI-only leaves remain absent, and only unfree leaves are missing from
+  `packages`, and they refuse in `legacyPackages`; every free claimed leaf
+  evaluates on this flake's nixpkgs with no config. The refusal rows assume pure
+  evaluation: `--impure` with `NIXPKGS_ALLOW_UNFREE=1` or a user `config.nix`
+  allowing unfree fails them.
 - **C** over the foreign nixpkgs with no opt-in, every unfree claimed leaf
   refuses and every free one gives `ciPackages`' drv; with `allowUnfree`, and
   separately `allowUnfreePredicate = _: true`, `ai.claude-code` gives

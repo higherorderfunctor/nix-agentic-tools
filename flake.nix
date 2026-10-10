@@ -199,7 +199,13 @@
     # The internal flat package set, unchecked: what CI builds and pushes to
     # cachix (minus Kiro), and what checks and the update pipeline read. A consumer who
     # names it opts in to unfree, the same as building `checks`.
-    ciPackages = forAllSystems flatPackagesFor;
+    ciPackages = forAllSystems (system:
+      flatPackagesFor system
+      // {
+        kiro-cli-rollout-canary = import ./packages/kiro-cli/rollout-canary.nix {
+          kiro-cli = (pkgsFor system).ai.kiro-cli;
+        };
+      });
 
     # Every package under its flat name plus the nested roots (`ai`, `docs`,
     # ...), checked by plain nixpkgs: `nix run <this flake>#claude-code`
@@ -212,7 +218,7 @@
     # `nix flake check` forces every drvPath here and an unfree one throws.
     packages = forAllSystems (system:
       lib.filterAttrs (_: package: !(package.meta.unfree or false))
-      (publicCheck.${system} self.ciPackages.${system}));
+      (publicCheck.${system} (flatPackagesFor system)));
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # See devenv.nix for shell configuration.

@@ -194,6 +194,7 @@ kiro
 kirocli
 kirocrew
 kirodotdev
+kvim
 ldflags
 libc
 libdl
@@ -297,6 +298,7 @@ passteque
 passthru
 passwordless
 pasteable
+patchability
 Patchelf
 PATHEXT
 pdsolve
@@ -435,9 +437,11 @@ unhide
 unmappable
 unparameterized
 unparseable
+unpatchable
 unredacted
 unrepresentable
 unresumable
+unreviewed
 unscanned
 unsets
 unstages

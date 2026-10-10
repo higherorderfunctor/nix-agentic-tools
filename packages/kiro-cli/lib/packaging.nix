@@ -76,6 +76,34 @@ rec {
         return found
   '';
 
+  # The extractor measures exactly the entry shape and all-site count that the
+  # patcher uses. A vendor state can be extracted without being patchable.
+  kiroRolloutEntryPy = ''
+    import re
+
+    def entry_re(name):
+        n = re.escape(name.encode())
+        return re.compile(
+            rb'"' + n + rb'": \{\n'
+            rb'    "description": "[^"]*",\n'
+            rb'    "treatment_percent": \d+'
+            rb'(?:,\n    "(?:segment|channel)": "[^"]*")*\n'
+            rb'  \}'
+        )
+
+    # The ONE patchability rule: every `"<name>": {` site must match
+    # entry_re. Returns the matches and the count of sites that did not match;
+    # the extractor and the patcher both decide from these, never from raw counts.
+    def rollout_sites(mapped, name):
+        key = rb'"' + re.escape(name.encode()) + rb'": \{'
+        sites = len(re.findall(key, mapped))
+        hits = list(entry_re(name).finditer(mapped))
+        return hits, sites - len(hits)
+
+    def is_patchable(hits, unmatched):
+        return unmatched == 0 and len(hits) > 0
+  '';
+
   # Resolve the ONE kiro chat binary under a package root, printing its path.
   #
   # Every failure here is phrased as a LOCATION failure and says so explicitly,
@@ -154,7 +182,7 @@ rec {
   #         entries span newlines).
   #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
   # Reads the rollout manifest the kiro chat binary carries in rodata and emits
-  # its feature NAMES as a JSON array. Genuinely extracted, never curated: the
+  # its feature names and vendor states as JSON. Genuinely extracted, never curated: the
   # names ARE the enum a consumer may unlock, so a hand-copied list would drift
   # silently the first time upstream adds a flag.
   #
@@ -165,19 +193,47 @@ rec {
   # that the result is non-empty.
   kiroRolloutExtractScript = pkgs:
     pkgs.writeText "kiro-rollout-extract.py" ''
-      import json, mmap, re, sys
+      ${kiroRolloutEntryPy}
+      import json, mmap, sys
 
       # mmap for the same reason the patcher uses it: the input is a ~556 MB
       # ELF and read() would peak that much RSS on a builder to scan for a few
       # hundred bytes of manifest. `re` scans the mapping through the buffer
       # protocol, so nothing is materialized.
       ent = re.compile(
-          rb'\n  "([a-z0-9_]+)": \{\n    "description": "[^"]*",\n'
+          rb'\n  "([a-z0-9_]+)": (\{\n    "description": "(?:[^"\\]|\\.)*",\n'
           rb'    "treatment_percent": \d+'
+          rb'(?:,\n    "(?:segment|channel)": (?:null|"[^"\\]*"))*\n  \})'
       )
+      manifest = re.compile(rb'\{\n  "[a-z0-9_]+": \{\n    "description": .*?\n\}', re.DOTALL)
+      entries = re.compile(rb'\n  "([a-z0-9_]+)": \{\n.*?\n  \}', re.DOTALL)
+      states = {}
       with open(sys.argv[1], "rb") as fh:
           with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-              names = sorted({m.decode() for m in ent.findall(mm)})
+              for region in manifest.finditer(mm):
+                  data = region[0]
+                  matches = list(ent.finditer(data))
+                  sites = len(re.findall(rb'"treatment_percent":', data))
+                  if sites != len(matches):
+                      matched = {match[1] for match in matches}
+                      unmatched = sorted(match[1].decode() for match in entries.finditer(data) if match[1] not in matched)
+                      sys.exit("kiro-extract: rollout manifest has %d treatment sites but %d extracted entries; unmatched entries: %s" % (sites, len(matches), ", ".join(unmatched)))
+                  for match in matches:
+                      name = match[1].decode()
+                      entry = json.loads(match[2])
+                      # Absent fields stay absent; null is a different vendor state.
+                      state = {key: entry[key] for key in ("channel", "segment", "treatment_percent") if key in entry}
+                      if name in states and states[name] != state:
+                          sys.exit("kiro-extract: conflicting rollout copies for " + name)
+                      states[name] = state
+              patchability = {}
+              for name in sorted(states):
+                  hits, unmatched = rollout_sites(mm, name)
+                  patchability[name] = {
+                      "patchable": is_patchable(hits, unmatched),
+                      "unmatchedSites": unmatched,
+                  }
+      names = sorted(states)
 
       required = {"tangent", "workflows"}
       missing = sorted(required - set(names))
@@ -189,7 +245,7 @@ rec {
           )
           sys.exit(1)
 
-      json.dump(names, sys.stdout)
+      json.dump({"rolloutFeatures": names, "rolloutPatchability": patchability, "rolloutStates": states}, sys.stdout, sort_keys=True)
     '';
 
   # TypeScript locates the TUI's registry, allowlist, and workspace merge.
@@ -270,7 +326,7 @@ rec {
     else
       documentedAbsentJson='[]'
     fi
-    rolloutFeaturesJson=$("$python3" ${kiroRolloutExtractScript pkgs} "$kiroChatBin")
+    rolloutJson=$("$python3" ${kiroRolloutExtractScript pkgs} "$kiroChatBin")
     # Appended rather than slotted in alphabetically: the field order here is
     # the sidecar's on-disk order, and reordering it would churn the committed
     # JSON for every reader without telling anyone anything.
@@ -287,9 +343,9 @@ rec {
 
     "$jq" -n --argjson hookTriggers "$hookTriggersJson" --argjson documentedAbsent "$documentedAbsentJson" \
       --argjson models "$modelsJson" \
-      --argjson rolloutFeatures "$rolloutFeaturesJson" \
+      --argjson rollout "$rolloutJson" \
       --argjson settings "$settingsJson" \
-      '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent, models: $models, rolloutFeatures: $rolloutFeatures, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
+      '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent, models: $models, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, keybindingDefaults: $settings.keybindingDefaults, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
   '';
 
   # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to
@@ -318,7 +374,7 @@ rec {
   }: let
     script = pkgs.writeText "kiro-rollout-patch.py" ''
       ${kiroChatLocatorPy}
-      import re
+      ${kiroRolloutEntryPy}
       import sys
 
       # De-duplicated, order preserved. The module already calls lib.unique,
@@ -328,16 +384,6 @@ rec {
       # harmless — that count is the drift signal).
       features = list(dict.fromkeys(f for f in sys.argv[1].split(",") if f))
       root = sys.argv[2]
-
-      def entry_re(name):
-          n = re.escape(name.encode())
-          return re.compile(
-              rb'"' + n + rb'": \{\n'
-              rb'    "description": "[^"]*",\n'
-              rb'    "treatment_percent": \d+'
-              rb'(?:,\n    "(?:segment|channel)": "[^"]*")*\n'
-              rb'  \}'
-          )
 
       def replacement(name, width):
           core = (
@@ -389,15 +435,13 @@ rec {
               with open(path, "r+b") as fh:
                   with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_WRITE) as mm:
                       for name in features:
-                          key = rb'"' + re.escape(name.encode()) + rb'": \{'
-                          sites = len(re.findall(key, mm))
-                          hits = list(entry_re(name).finditer(mm))
-                          if len(hits) != sites:
+                          hits, unmatched = rollout_sites(mm, name)
+                          if unmatched:
                               sys.stderr.write(
-                                  "kiro-rollout: %r appears %d time(s) in %s but "
-                                  "only %d matched the expected entry shape. "
+                                  "kiro-rollout: %r has %d site(s) in %s that did "
+                                  "not match the expected entry shape. "
                                   "Refusing to half-patch.\n"
-                                  % (name, sites, path, len(hits))
+                                  % (name, unmatched, path)
                               )
                               sys.exit(1)
                           for m in hits:

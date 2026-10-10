@@ -64,6 +64,198 @@
     "voice",
     "workflows"
   ],
+  "rolloutPatchability": {
+    "background_execution": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "c2s": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "cloud_config": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "infra_safety": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "kvim": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "lite": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "local_sandbox": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "memory": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "memory_controls": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "remote_changelog": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "remote_sandbox": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "session_dashboard": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "standalone_toolbox": {
+      "patchable": false,
+      "unmatchedSites": 1
+    },
+    "tangent": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "test": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "test_internal_only": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "test_nightly_only": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "trust_classifier_shadow": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "tui": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "v3_prompt": {
+      "patchable": false,
+      "unmatchedSites": 1
+    },
+    "voice": {
+      "patchable": true,
+      "unmatchedSites": 0
+    },
+    "workflows": {
+      "patchable": true,
+      "unmatchedSites": 0
+    }
+  },
+  "rolloutStates": {
+    "background_execution": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 0
+    },
+    "c2s": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 100
+    },
+    "cloud_config": {
+      "segment": "all",
+      "treatment_percent": 100
+    },
+    "infra_safety": {
+      "segment": "internal",
+      "treatment_percent": 100
+    },
+    "kvim": {
+      "segment": "internal",
+      "treatment_percent": 100
+    },
+    "lite": {
+      "segment": "internal",
+      "treatment_percent": 100
+    },
+    "local_sandbox": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 100
+    },
+    "memory": {
+      "segment": "all",
+      "treatment_percent": 100
+    },
+    "memory_controls": {
+      "segment": "all",
+      "treatment_percent": 100
+    },
+    "remote_changelog": {
+      "channel": "stable",
+      "treatment_percent": 100
+    },
+    "remote_sandbox": {
+      "segment": "all",
+      "treatment_percent": 100
+    },
+    "session_dashboard": {
+      "segment": "all",
+      "treatment_percent": 100
+    },
+    "standalone_toolbox": {
+      "segment": "all",
+      "treatment_percent": 0
+    },
+    "tangent": {
+      "segment": "all",
+      "treatment_percent": 100
+    },
+    "test": {
+      "treatment_percent": 100
+    },
+    "test_internal_only": {
+      "segment": "internal",
+      "treatment_percent": 100
+    },
+    "test_nightly_only": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 100
+    },
+    "trust_classifier_shadow": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 100
+    },
+    "tui": {
+      "segment": "internal",
+      "treatment_percent": 50
+    },
+    "v3_prompt": {
+      "segment": "internal",
+      "treatment_percent": 35
+    },
+    "voice": {
+      "segment": "all",
+      "treatment_percent": 100
+    },
+    "workflows": {
+      "segment": "all",
+      "treatment_percent": 100
+    }
+  },
+  "keybindingDefaults": {
+    "cancelStream": "esc",
+    "closeMenu": "esc",
+    "moveToBackground": "ctrl+b",
+    "quit": "ctrl+c",
+    "toggleInterruptBehavior": "ctrl+s",
+    "toggleSessionDashboard": "ctrl+e"
+  },
   "settingKeys": [
     "chat.allowAnimations",
     "chat.allowAsciiArt",
