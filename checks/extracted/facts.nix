@@ -1,7 +1,7 @@
-# Fixtures for lib/extracted/facts.nix. Every case cites the clause of
-# dev/fragments/extracted/facts-contract.md (as of 754dd6bb) it tests as
-# `spec:<line>`; where
-# this suite and the implementation disagree, the contract decides.
+# Fixtures for lib/extracted/facts.nix. Each group is a table of inputs and
+# the result the contract (dev/fragments/extracted/facts-contract.md) says
+# they give; each group's comment names its section. Where this suite and
+# the implementation disagree, the contract decides.
 {
   harness,
   lib,
@@ -11,6 +11,8 @@
   inherit (import ../../lib/extracted/facts.nix {inherit lib;}) expect get getFor merge;
   inherit (import ../../lib/extracted {inherit pkgs;}) index;
   systems = import ../../config/systems.nix;
+  run = input: merge (input // {inherit systems;});
+  kinds = result: map (failure: failure.kind) result.failures;
   both = tree: lib.genAttrs systems (_: tree);
   split = darwin: linux: {
     aarch64-darwin = darwin;
@@ -29,523 +31,308 @@
     declarations.mode = static "string";
     raws = split {mode = "darwin-value";} {mode = "linux-value";};
   };
-  # A decisions row for `mode` that differs from a valid one in its reason only.
-  reasoned = reason: {
-    declarations.mode = static "string";
-    decisions.mode = decision "equal" // {inherit reason;};
-    raws = both {mode = "same";};
-  };
-  # A count required on both systems, combined by `ignore`.
-  ignoredLimit = raws: {
-    inherit raws;
-    declarations.limit = static "count";
-    decisions.limit = decision "ignore";
-  };
-  # spec:30-33, spec:153-157: one wildcard child on Darwin only.
-  disappearing = {
-    declarations."features.<name>.state" = static "string";
-    raws = split {
-      features = {
-        new.state = "on";
-        old.state = "off";
-      };
-    } {features.old.state = "off";};
-  };
-  # Every case names its refused input or the consumer-visible result.
-  # `kinds` is merge's failure kinds, compared exactly; `shows` is the visible
-  # result.
-  cases = {
-    # Fixture 1; spec:216, spec:122.
-    agree = {
-      input = {
-        declarations.mode = static "string";
-        raws = both {mode = "same";};
-      };
-      kinds = [];
-      shows = result: get result.aggregate "mode" == "same";
+  # The divergent fix, parsed as the wrapped decisions.json object it is.
+  fixText = (lib.head (run divergent).failures).fix;
+  fixRows = builtins.fromJSON fixText;
+
+  groups = {
+    # Decisions: the combine vocabulary and the defaults table. A key `k`
+    # differs (or not) across systems; columns: combine, type, Darwin raw,
+    # Linux raw, combined value. `set` is compared without order.
+    combines = let
+      combined = written: combine: type: darwin: linux: value: let
+        result = run ({
+            declarations.k = static type;
+            raws = split {k = darwin;} {k = linux;};
+          }
+          // lib.optionalAttrs written {decisions.k = decision combine;});
+        normal =
+          if type == "set"
+          then lib.sort builtins.lessThan
+          else lib.id;
+      in
+        kinds result == [] && result.aggregate.k.combine == combine && normal (get result.aggregate "k") == normal value;
+      byDefault = combined false;
+      decided = combined true;
+    in {
+      bool-and = byDefault "and" "bool" true false false;
+      bool-or = decided "or" "bool" true false true;
+      count-max = decided "max" "count" 3 5 5;
+      count-min = decided "min" "count" 3 5 3;
+      list-agree = byDefault "equal" "list" ["b" "a"] ["b" "a"] ["b" "a"];
+      object-agree = byDefault "equal" "object" {a.b = 1;} {a.b = 1;} {a.b = 1;};
+      set-intersection = byDefault "intersection" "set" ["a" "b"] ["c" "b"] ["b"];
+      set-union = decided "union" "set" ["a" "b"] ["c" "b"] ["c" "b" "a"];
+      string-agree = byDefault "equal" "string" "same" "same" "same";
+      string-prefer = decided "prefer:x86_64-linux" "string" "darwin-value" "linux-value" "linux-value";
     };
-    # Fixture 11; spec:81, spec:149.
-    bad-decision-blank-reason = {
-      input = {
-        declarations.mode = static "string";
-        decisions.mode = decision "equal" // {reason = " ";};
-        raws = both {mode = "same";};
-      };
-      kinds = ["bad-decision"];
-    };
-    # spec:82, spec:150.
-    bad-decision-ignore-non-collection = {
-      input = {
-        declarations.mode = static "string";
-        decisions.mode = decision "equal" // {ignore = ["x"];};
-        raws = both {mode = "same";};
-      };
-      kinds = ["bad-decision"];
-    };
-    # Fixture 11; spec:81, spec:138-139, spec:149.
-    bad-decision-malformed-date = {
-      input = {
-        declarations.mode = static "string";
-        decisions.mode = decision "equal" // {decided = "2026-1-01";};
-        raws = both {mode = "same";};
-      };
-      kinds = ["bad-decision"];
-    };
-    # spec:137-138: trimmed, exactly `TODO`.
-    bad-decision-reason-todo = {
-      input = reasoned "TODO";
-      kinds = ["bad-decision"];
-    };
-    # spec:137-138: begins with `TODO:`, nothing after it.
-    bad-decision-reason-todo-colon = {
-      input = reasoned "TODO:";
-      kinds = ["bad-decision"];
-    };
-    # spec:137-138: begins with `TODO:` once trimmed.
-    bad-decision-reason-todo-indented = {
-      input = reasoned "  TODO: why";
-      kinds = ["bad-decision"];
-    };
-    # Fixture 11; spec:149.
-    bad-decision-undeclared-key = {
-      input = {
-        declarations.mode = static "string";
-        decisions.ghost = decision "equal";
-        raws = both {mode = "same";};
-      };
-      kinds = ["bad-decision"];
-    };
-    # spec:84-87: `max` applies to `count` only.
-    bad-decision-type-combine = {
-      input = {
-        declarations.mode = static "string";
-        decisions.mode = decision "max";
-        raws = both {mode = "same";};
-      };
-      kinds = ["bad-decision"];
-    };
-    # Fixture 11; spec:84-85, spec:149.
-    bad-decision-unknown-combine = {
-      input = {
-        declarations.mode = static "string";
-        decisions.mode = decision "average";
-        raws = both {mode = "same";};
-      };
-      kinds = ["bad-decision"];
-    };
-    # spec:86, spec:160-161: still validated, so an absent key is gone.
-    combine-ignore-declared-gone = {
-      input = ignoredLimit (both {});
-      kinds = ["declared-gone"];
-    };
-    # spec:86-87, spec:160: the key leaves the aggregate, and differing raws
-    # are not divergent.
-    combine-ignore-drops = {
-      input = {
-        declarations.models = static "set";
-        decisions.models = decision "ignore";
-        raws = split {models = ["a"];} {models = ["b"];};
-      };
-      kinds = [];
-      shows = result: !(result.aggregate ? models);
-    };
-    # spec:160-161.
-    combine-ignore-missing-system = {
-      input = ignoredLimit (split {} {limit = 5;});
-      kinds = ["missing-system"];
-    };
-    # spec:160-161.
-    combine-ignore-type-mismatch = {
-      input = ignoredLimit (both {limit = "five";});
-      kinds = ["type-mismatch"];
-    };
-    # Fixture 6; spec:147. Same shape as live-no-systems minus the live
-    # declaration, so that case cannot pass by reporting nothing.
-    declared-gone = {
-      input = {
-        declarations.lastRun = static "string";
-        raws = both {};
-      };
-      kinds = ["declared-gone"];
-    };
-    # spec:132-135: the fix names the key it would delete.
-    declared-gone-fix = {
-      input = {
-        declarations.lastRun = static "string";
-        raws = both {};
-      };
-      kinds = ["declared-gone"];
-      shows = result: (lib.head result.failures).fix == "delete the declaration for `lastRun`";
-    };
-    # Fixture 2; spec:93.
-    differ-bool-and = {
-      input = {
-        declarations.enabled = static "bool";
-        raws = split {enabled = true;} {enabled = false;};
-      };
-      kinds = [];
-      shows = result:
-        get result.aggregate "enabled"
-        == false
-        && result.aggregate.enabled.combine == "and";
-    };
-    # spec:84.
-    differ-bool-or = {
-      input = {
-        declarations.enabled = static "bool";
-        decisions.enabled = decision "or";
-        raws = split {enabled = true;} {enabled = false;};
-      };
-      kinds = [];
-      shows = result:
-        get result.aggregate "enabled"
-        == true
-        && result.aggregate.enabled.combine == "or";
-    };
-    # Fixture 2; spec:84, spec:96 (overridden by a decision).
-    differ-count-max = {
-      input = {
-        declarations.limit = static "count";
-        decisions.limit = decision "max";
-        raws = split {limit = 3;} {limit = 5;};
-      };
-      kinds = [];
-      shows = result:
-        get result.aggregate "limit"
-        == 5
-        && result.aggregate.limit.combine == "max";
-    };
-    # spec:84.
-    differ-count-min = {
-      input = {
-        declarations.limit = static "count";
-        decisions.limit = decision "min";
-        raws = split {limit = 3;} {limit = 5;};
-      };
-      kinds = [];
-      shows = result:
-        get result.aggregate "limit"
-        == 3
-        && result.aggregate.limit.combine == "min";
-    };
-    # Fixture 2; spec:56, spec:95.
-    differ-set-intersection = {
-      input = {
-        declarations.models = static "set";
-        raws = split {models = ["a" "b"];} {models = ["c" "b"];};
-      };
-      kinds = [];
-      shows = result:
-        get result.aggregate "models"
-        == ["b"]
-        && result.aggregate.models.combine == "intersection";
-    };
-    # spec:56, spec:84.
-    differ-set-union = {
-      input = {
-        declarations.models = static "set";
-        decisions.models = decision "union";
-        raws = split {models = ["a" "b"];} {models = ["c" "b"];};
-      };
-      kinds = [];
-      shows = result:
-        get result.aggregate "models"
-        == ["a" "b" "c"]
-        && result.aggregate.models.combine == "union";
-    };
-    # Fixture 2; spec:85.
-    differ-string-prefer = {
-      input = {
-        declarations.mode = static "string";
-        decisions.mode = decision "prefer:x86_64-linux";
-        raws = split {mode = "darwin-value";} {mode = "linux-value";};
-      };
-      kinds = [];
-      shows = result:
-        get result.aggregate "mode"
-        == "linux-value"
-        && result.aggregate.mode.combine == "prefer:x86_64-linux";
-    };
-    # Fixture 3; spec:101-102, spec:132-135, spec:145. The fix row itself is
-    # checked by checks.extracted-facts-divergent-fix.
-    divergent = {
-      input = divergent;
-      kinds = ["divergent"];
-      shows = result: let
+
+    # `merge`, failure kinds: `divergent` under an effective `equal`, with
+    # every system's value in `details`. Columns: type, Darwin raw, Linux raw.
+    divergence = let
+      diverges = type: darwin: linux: let
+        result = run {
+          declarations.k = static type;
+          raws = split {k = darwin;} {k = linux;};
+        };
         details = builtins.toJSON (lib.head result.failures).details;
       in
-        lib.all (value: lib.hasInfix value details) ["darwin-value" "linux-value"];
+        kinds result == ["divergent"] && lib.all (value: lib.hasInfix (builtins.toJSON value) details) [darwin linux];
+    in {
+      list-order = diverges "list" ["a" "b"] ["b" "a"];
+      object-whole = diverges "object" {a.b = 1;} {a.b = 2;};
+      string = diverges "string" "darwin-value" "linux-value";
     };
-    # Fixture 3; spec:135-139. Pasted unedited, the row is refused naming both
-    # placeholders; with both filled in, merge is clean.
-    divergent-fix-pasted = {
-      input = divergent;
-      kinds = ["divergent"];
-      shows = _: let
-        pasted = merge (divergent
-          // {
-            inherit systems;
-            decisions = fixRows;
-          });
-        # One message per bad field, in `details` only.
-        refused = map (failure: failure.details) (lib.filter (failure: failure.kind == "bad-decision") pasted.failures);
-        # The fields each message names, one message per field.
-        named = map (message: lib.filter (field: lib.hasInfix field message) ["decided" "reason"]);
-        edited = merge (divergent
-          // {
-            inherit systems;
-            decisions = lib.mapAttrs (_: row:
-              row
-              // {
-                decided = "2026-10-10";
-                reason = "fixture";
-              })
-            fixRows;
-          });
-      in
-        builtins.length refused
-        == 1
-        && lib.sort (a: b: toString a < toString b) (named (lib.head refused)) == [["decided"] ["reason"]]
-        && edited.failures == [];
+
+    # `merge`, the `fix` paragraph: the divergent row pasted unedited is
+    # refused naming both placeholder fields; filled in, merge is clean.
+    repair = let
+      pasted = run (divergent // {decisions = fixRows;});
+      refused = builtins.toJSON (lib.findFirst (failure: failure.kind == "bad-decision") {} pasted.failures).details;
+      edited = run (divergent // {decisions = lib.mapAttrs (_: row: row // decision row.combine) fixRows;});
+    in {
+      edited-clean = edited.failures == [];
+      pasted-names-both = lib.all (field: lib.hasInfix field refused) ["decided" "reason"];
     };
-    # Fixture 9; spec:171-187.
-    expect = {
-      input = {
-        declarations = {
-          hookTriggers = static "set";
-          "steering.maxChars" = static "count";
-          tools = static "set";
-        };
-        raws = both {
-          hookTriggers = ["stop"];
-          steering.maxChars = 50000;
-          tools = ["invoke_sub_agent" "read"];
-        };
-      };
-      kinds = [];
-      shows = result: let
-        consumer = "delegate-routing";
-        satisfied = expect {
-          inherit (result) aggregate;
-          inherit consumer;
-          needs = [
-            {
-              contains = "invoke_sub_agent";
-              key = "tools";
-            }
-            {
-              key = "steering.maxChars";
-              value = 50000;
-            }
-            {key = "hookTriggers";}
-          ];
-        };
-        failed = expect {
-          inherit (result) aggregate;
-          inherit consumer;
-          needs = [
-            {
-              contains = "write";
-              key = "tools";
-            }
-            {
-              key = "steering.maxChars";
-              value = 1;
-            }
-          ];
-        };
-        # `expected` is the need's payload, bare or with its own field name.
-        shown = key: expected: actual: let
-          failure = lib.findFirst (failure: failure.key == key) {} failed.failures;
-        in
-          failure.kind or null
-          == "expectation"
-          && failure.consumer or null == consumer
-          && builtins.elem (failure.expected or null) [expected.${lib.head (builtins.attrNames expected)} expected]
-          && failure.actual or null == actual;
-      in
-        satisfied.failures
-        == []
-        && builtins.length failed.failures == 2
-        && shown "tools" {contains = "write";} (get result.aggregate "tools")
-        && shown "steering.maxChars" {value = 1;} 50000;
+
+    # Decisions table and `bad-decision`: one row for the string key `mode`,
+    # differing from a valid row in the fields shown, accepted or refused.
+    decisions = let
+      verdict = accepted: key: fields:
+        kinds (run {
+          declarations.mode = static "string";
+          decisions.${key} = decision "equal" // fields;
+          raws = both {mode = "same";};
+        })
+        == lib.optional (!accepted) "bad-decision";
+      accept = verdict true "mode";
+      refuse = verdict false "mode";
+    in {
+      # `and` on a string would otherwise throw inside the reducer.
+      combine-and-on-string = refuse {combine = "and";};
+      combine-max-on-string = refuse {combine = "max";};
+      combine-unknown = refuse {combine = "average";};
+      date-leap = accept {decided = "2024-02-29";};
+      date-malformed = refuse {decided = "2026-1-01";};
+      date-month-13 = refuse {decided = "2026-13-01";};
+      date-placeholder = refuse {decided = "YYYY-MM-DD";};
+      # Calendar validity is not checked: the field is provenance.
+      date-well-formed = accept {decided = "2026-02-31";};
+      ignore-non-collection = refuse {ignore = ["x"];};
+      reason-blank = refuse {reason = " ";};
+      reason-todo = refuse {reason = "TODO";};
+      reason-todo-colon = refuse {reason = "TODO:";};
+      reason-todo-indented = refuse {reason = "  TODO: why";};
+      reason-todo-prefixed-word = accept {reason = "TODO entries are excluded because they are not implemented commands";};
+      undeclared-key = verdict false "ghost" {};
     };
-    # spec:179, spec:185-187: a presence-only need on an absent key.
-    expect-presence-missing = {
-      input = {
-        declarations.mode = static "string";
-        raws = both {mode = "same";};
-      };
-      kinds = [];
-      shows = result: let
-        failed = expect {
-          inherit (result) aggregate;
-          consumer = "delegate-routing";
-          needs = [{key = "hookTriggers";}];
+
+    # Decisions: `ignore` as a combine drops the key from the aggregate, so
+    # differing raws are not divergent, yet its raws are still validated.
+    # Columns: Darwin raw, Linux raw, failure kinds.
+    ignoreCombine = let
+      ignored = darwin: linux: expected: let
+        result = run {
+          declarations.limit = static "count";
+          decisions.limit = decision "ignore";
+          raws = split darwin linux;
         };
       in
-        map (failure: {inherit (failure) consumer key kind;}) failed.failures
-        == [
-          {
-            consumer = "delegate-routing";
-            key = "hookTriggers";
-            kind = "expectation";
-          }
-        ];
+        kinds result == expected && !(result.aggregate ? limit);
+    in {
+      declared-gone = ignored {} {} ["declared-gone"];
+      drops = ignored {limit = 3;} {limit = 5;} [];
+      missing-system = ignored {} {limit = 5;} ["missing-system"];
+      type-mismatch = ignored {limit = "five";} {limit = "five";} ["type-mismatch"];
     };
-    # Fixture 12; spec:82.
-    ignore-before-intersection = {
-      input = {
+
+    # Decisions: `ignore` removes elements before combining.
+    ignoreElements.before-intersection =
+      get
+      (run {
         declarations.models = static "set";
         decisions.models = decision "intersection" // {ignore = ["preview"];};
         raws = both {models = ["a" "preview"];};
-      };
-      kinds = [];
-      shows = result: get result.aggregate "models" == ["a"];
-    };
-    # Fixture 14; spec:53-54, spec:147, spec:152-153.
-    live-no-systems = {
-      input = {
-        declarations.lastRun = {
-          source = "live";
-          systems = [];
-          type = "string";
-        };
+      }).aggregate "models"
+      == ["a"];
+
+    # `merge`, failure kinds: `declared-gone` (with its fix) and
+    # `missing-system`; a `live` key with `systems = []` requires nothing.
+    presence = let
+      gone = run {
+        declarations.lastRun = static "string";
         raws = both {};
       };
-      kinds = [];
+    in {
+      declared-gone = kinds gone == ["declared-gone"] && (lib.head gone.failures).fix == "delete the declaration for `lastRun`";
+      live-no-systems =
+        (run {
+          declarations.lastRun = {
+            source = "live";
+            systems = [];
+            type = "string";
+          };
+          raws = both {};
+        }).failures
+        == [];
+      missing-system =
+        kinds (run {
+          declarations.limit = static "count";
+          raws = split {} {limit = 5;};
+        })
+        == ["missing-system"];
     };
-    # Fixture 13; spec:54, spec:146.
-    missing-system = {
-      input = {
-        declarations.limit = static "count";
-        raws = split {} {limit = 5;};
-      };
-      kinds = ["missing-system"];
+
+    # Declarations: `count` is a non-negative integer, `set` a list of
+    # strings. The key is required on Linux only, so one raw is checked.
+    # Columns: type, Linux raw, whether it fits.
+    types = let
+      fits = type: value: accepted:
+        kinds (run {
+          declarations.k = static type // {systems = ["x86_64-linux"];};
+          raws = split {} {k = value;};
+        })
+        == lib.optional (!accepted) "type-mismatch";
+    in {
+      count-negative = fits "count" (-1) false;
+      count-string = fits "count" "five" false;
+      count-zero = fits "count" 0 true;
+      set-non-string = fits "set" ["a" 1] false;
     };
-    # Fixture 8; spec:87-88, spec:122, spec:164-166.
-    per-platform = {
-      input = {
+
+    # Undeclared keys, and a raw leaf at a strict prefix of a declared path:
+    # listed in `undeclared`, a failure only when credential-shaped.
+    # Columns: declared key, raw tree, undeclared, failure kinds.
+    undeclared = let
+      loose = key: tree: listed: expected: let
+        result = run {
+          declarations.${key} = static "string";
+          raws = both tree;
+        };
+      in
+        result.undeclared == listed && kinds result == expected;
+    in {
+      plain = loose "mode" {
+        mode = "same";
+        newThing = "value";
+      } ["newThing"] [];
+      prefix-leaf = loose "apiToken.child" {apiToken = "credential";} ["apiToken"] ["declared-gone" "undeclared-secret"];
+      secret = loose "mode" {
+        apiToken = "value";
+        mode = "same";
+      } ["apiToken"] ["undeclared-secret"];
+    };
+
+    # `get` and `getFor` on a `per-platform` key, which has no value.
+    platform = let
+      result = run {
         declarations.limit = static "count";
         decisions.limit = decision "per-platform";
         raws = split {limit = 3;} {limit = 5;};
       };
-      kinds = [];
-      shows = result:
-        !(result.aggregate.limit ? value)
-        && !(builtins.tryEval (get result.aggregate "limit")).success
-        && getFor "aarch64-darwin" result.aggregate "limit" == 3
-        && getFor "x86_64-linux" result.aggregate "limit" == 5;
+    in {
+      get-for = getFor "aarch64-darwin" result.aggregate "limit" == 3 && getFor "x86_64-linux" result.aggregate "limit" == 5;
+      get-throws = !(builtins.tryEval (get result.aggregate "limit")).success;
+      no-value = kinds result == [] && !(result.aggregate.limit ? value);
     };
-    # spec:137-138: a reason that merely starts with the word TODO is real.
-    reason-todo-prefixed-word = {
-      input = reasoned "TODO entries are excluded because they are not implemented commands";
-      kinds = [];
-    };
-    # spec:150-151, spec:158-159: a raw leaf at a strict prefix of a declared
-    # path stays undeclared and is classified; the declared child is gone.
-    secret-prefix-leaf = {
-      input = {
-        declarations."apiToken.child" = static "string";
-        raws = both {apiToken = "credential";};
-      };
-      kinds = ["declared-gone" "undeclared-secret"];
-      shows = result: result.undeclared == ["apiToken"];
-    };
-    # Fixture 7; spec:56, spec:148. Required on one system only, so exactly one
-    # raw value is checked.
-    type-mismatch = {
-      input = {
-        declarations.limit = static "count" // {systems = ["x86_64-linux"];};
-        raws = split {} {limit = "five";};
-      };
-      kinds = ["type-mismatch"];
-    };
-    # Fixture 4; spec:127, spec:152.
-    undeclared = {
-      input = {
-        declarations.mode = static "string";
-        raws = both {
-          mode = "same";
-          newThing = "value";
-        };
-      };
-      kinds = [];
-      shows = result: result.undeclared == ["newThing"];
-    };
-    # Fixture 5; spec:117, spec:150.
-    undeclared-secret = {
-      input = {
-        declarations.mode = static "string";
-        raws = both {
-          apiToken = "value";
-          mode = "same";
-        };
-      };
-      kinds = ["undeclared-secret"];
-    };
-    # Fixture 10; spec:30-33, spec:155-156. `new` has no row of its own and is still
-    # declared and combined.
-    wildcard = {
-      input = {
-        declarations."features.<name>.state" = static "string";
-        raws = both {
-          features = {
-            new.state = "off";
-            old.state = "on";
+
+    # `expect`: a need is met, or fails naming consumer, key, expected and
+    # actual value.
+    expectations = let
+      consumer = "delegate-routing";
+      inherit
+        (run {
+          declarations = {
+            hookTriggers = static "set";
+            "steering.maxChars" = static "count";
+            tools = static "set";
           };
-        };
+          raws = both {
+            hookTriggers = ["stop"];
+            steering.maxChars = 50000;
+            tools = ["invoke_sub_agent" "read"];
+          };
+        })
+        aggregate
+        ;
+      failures = need:
+        (expect {
+          inherit aggregate consumer;
+          needs = [need];
+        }).failures;
+      meets = need: failures need == [];
+      misses = need: actual:
+        failures need
+        == [
+          {
+            inherit actual consumer;
+            inherit (need) key;
+            expected = builtins.removeAttrs need ["key"];
+            kind = "expectation";
+          }
+        ];
+    in {
+      contains-met = meets {
+        contains = "invoke_sub_agent";
+        key = "tools";
       };
-      kinds = [];
-      shows = result:
-        result.undeclared
-        == []
-        && get result.aggregate "features.new.state" == "off"
-        && get result.aggregate "features.old.state" == "on";
+      contains-unmet = misses {
+        contains = "write";
+        key = "tools";
+      } ["invoke_sub_agent" "read"];
+      presence-met = meets {key = "hookTriggers";};
+      presence-unmet = misses {key = "absent";} null;
+      value-met = meets {
+        key = "steering.maxChars";
+        value = 50000;
+      };
+      value-unmet =
+        misses {
+          key = "steering.maxChars";
+          value = 1;
+        }
+        50000;
     };
-    # spec:153-157: a child on one system only is no failure, and its entry
-    # is keyed by the concrete path with one system's raw.
-    wildcard-disappearing-child = {
-      input = disappearing;
-      kinds = [];
-      shows = result:
-        builtins.attrNames result.aggregate."features.new.state".bySystem
-        == ["aarch64-darwin"]
-        && get result.aggregate "features.new.state" == "on";
-    };
-    # spec:157-158: prefer takes the only value when the preferred system
-    # lacks the child.
-    wildcard-prefer-sole-value = {
-      input =
-        disappearing
-        // {
-          decisions."features.<name>.state" = decision "prefer:x86_64-linux";
+
+    # Keys and the not-failures paragraph: a wildcard covers every child,
+    # new or disappearing; the aggregate is keyed by concrete path.
+    wildcards = let
+      state = raws: decisions:
+        run {
+          declarations."features.<name>.state" = static "string";
+          inherit decisions raws;
         };
-      kinds = [];
-      shows = result:
-        result.aggregate."features.new.state".value
-        == "on"
-        && get result.aggregate "features.new.state" == "on";
+      disappearing = split {
+        features = {
+          new.state = "on";
+          old.state = "off";
+        };
+      } {features.old.state = "off";};
+      covered = state (both {
+        features = {
+          new.state = "off";
+          old.state = "on";
+        };
+      }) {};
+      gone = state disappearing {};
+      emptied = state (both {features = {};}) {};
+      preferred = state disappearing {"features.<name>.state" = decision "prefer:x86_64-linux";};
+    in {
+      covers-every-child = covered.failures == [] && covered.undeclared == [] && get covered.aggregate "features.new.state" == "off" && get covered.aggregate "features.old.state" == "on";
+      disappearing-child = gone.failures == [] && builtins.attrNames gone.aggregate."features.new.state".bySystem == ["aarch64-darwin"] && get gone.aggregate "features.new.state" == "on";
+      emptied-parent = emptied.failures == [] && emptied.aggregate == {};
+      prefer-sole-value = preferred.failures == [] && get preferred.aggregate "features.new.state" == "on";
     };
   };
-  run = case: let
-    result = merge (case.input // {inherit systems;});
-  in
-    map (failure: failure.kind) result.failures
-    == case.kinds
-    && (case.shows or (_: true)) result;
-  failures = builtins.attrNames (lib.filterAttrs (_: case: !(run case)) cases);
-  # spec:132-139: the divergent fix is a complete decisions.json row, pasted
-  # into the decisions object bare or wrapped.
-  fixText = (lib.head (merge (divergent // {inherit systems;})).failures).fix;
-  fixRows = builtins.fromJSON (
-    if lib.hasPrefix "{" (lib.trim fixText)
-    then fixText
-    else "{${fixText}}"
-  );
-  # spec:190-195: one owner's merged aggregate, written per owner and indexed.
+  failures = lib.concatLists (lib.mapAttrsToList (group: rows: map (row: "${group}.${row}") (builtins.attrNames (lib.filterAttrs (_: passed: !passed) rows))) groups);
+
+  # `index`: one owner's merged aggregate, written per owner and indexed.
   indexed = index {
-    demo = merge (cases.differ-count-max.input // {inherit systems;});
+    demo = run {
+      declarations.limit = static "count";
+      decisions.limit = decision "max";
+      raws = split {limit = 3;} {limit = 5;};
+    };
   };
   vocabulary = ["and" "equal" "ignore" "intersection" "max" "min" "or" "per-platform" "union"] ++ map (system: "prefer:${system}") systems;
 in {
@@ -564,18 +351,20 @@ in {
       }
       echo "PASS: extracted-facts-index" > "$out"
     '';
+    # `merge`, the `fix` paragraph: the divergent fix is a complete
+    # decisions.json object, wrapped by the declared pattern.
     extracted-facts-divergent-fix = pkgs.runCommand "extracted-facts-divergent-fix" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      jq="${pkgs.jq}/bin/jq"
-      "$jq" -e --argjson vocabulary '${builtins.toJSON vocabulary}' '
+      fix=${pkgs.writeText "divergent-fix.json" fixText}
+      ${pkgs.jq}/bin/jq -e --argjson vocabulary '${builtins.toJSON vocabulary}' '
         keys == ["mode"]
         and (.mode.combine | IN($vocabulary[]))
         and (.mode.reason | type == "string" and (trim | . == "TODO" or startswith("TODO:")))
         and .mode.decided == "YYYY-MM-DD"
-      ' ${pkgs.writeText "divergent-fix.json" (builtins.toJSON fixRows)} > /dev/null || {
+      ' "$fix" > /dev/null || {
         echo "FAIL: divergent fix is not a complete decisions.json row:" >&2
-        cat ${pkgs.writeText "divergent-fix" fixText} >&2
+        cat "$fix" >&2
         exit 1
       }
       echo "PASS: extracted-facts-divergent-fix" > "$out"
