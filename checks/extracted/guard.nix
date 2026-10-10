@@ -27,6 +27,7 @@
   pkgs,
   ...
 }: let
+  runner = import ./runner.nix {inherit lib;};
   systems = lib.concatMapStringsSep "|" lib.escapeRegex (import ../../config/systems.nix);
   # gawk regexes; `\y` is a word boundary. `combine` as an attribute name
   # (`=`, not `==`) or an object key (`:`).
@@ -130,21 +131,12 @@
       fails = "packages/fake/url.nix";
     };
   };
-  control = label: case: ''
-    if bash ${scan} ${tree case.files} 2> "$TMPDIR/${label}"; then
-      ${
-      if case ? fails
-      then ''echo "FAIL: control ${label} passed; it must fail naming ${case.fails}" >&2; exit 1''
-      else ":"
-    }
-    else
-      ${
-      if case ? fails
-      then ''grep -qF ${lib.escapeShellArg case.fails} "$TMPDIR/${label}" || { echo "FAIL: control ${label} does not name ${case.fails}:" >&2; cat "$TMPDIR/${label}" >&2; exit 1; }''
-      else ''echo "FAIL: control ${label} failed; it must pass:" >&2; cat "$TMPDIR/${label}" >&2; exit 1''
-    }
-    fi
-  '';
+  control = label: case:
+    runner {
+      inherit label;
+      command = "bash ${scan} ${tree case.files}";
+      names = lib.optional (case ? fails) case.fails;
+    };
 in {
   checks.extracted-contract-guard = pkgs.runCommand "extracted-contract-guard" {} ''
     set -euETo pipefail

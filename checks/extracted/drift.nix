@@ -7,6 +7,7 @@
   ...
 }: let
   inherit (import ../../lib/extracted {inherit pkgs;}) mkDriftCheck;
+  runner = import ./runner.nix {inherit lib;};
   host = pkgs.stdenv.hostPlatform.system;
   # A system this host cannot build for: a host-run extractor's derivation.
   other = lib.findFirst (system: system != host) null (import ../../config/systems.nix);
@@ -78,7 +79,7 @@
       fails = ["${sidecar}/${host}.json" "${sidecar}/${other}.json"];
     };
     # A static extractor supplies every system from this host; only the
-    # drifted one is named.
+    # drifted one is named, the matching one is not.
     static-names-drifted = {
       args = {
         committed = directory {
@@ -92,29 +93,18 @@
         inherit sidecar;
       };
       fails = ["${sidecar}/${other}.json"];
+      omits = ["${sidecar}/${host}.json"];
     };
   };
   script = case: (mkDriftCheck (case.args // {name = "fake";})).fake-extracted.buildCommand;
-  run = label: case: ''
-    mkdir "$TMPDIR/${label}"
-    if (cd "$TMPDIR/${label}" && out="$TMPDIR/${label}/out" bash ${pkgs.writeText "${label}.sh" (script case)}) 2> "$TMPDIR/${label}/err"; then
-      ${
-      if case ? fails
-      then ''echo "FAIL: ${label} passed; it must fail naming ${toString case.fails}" >&2; exit 1''
-      else ":"
-    }
-    else
-      ${
-      if case ? fails
-      then
-        lib.concatMapStrings (path: ''
-          grep -qF 'sidecar (${path})' "$TMPDIR/${label}/err" || { echo "FAIL: ${label} message does not name ${path}:" >&2; cat "$TMPDIR/${label}/err" >&2; exit 1; }
-        '')
-        case.fails
-      else ''echo "FAIL: ${label} failed; it must pass:" >&2; cat "$TMPDIR/${label}/err" >&2; exit 1''
-    }
-    fi
-  '';
+  named = path: "sidecar (${path})";
+  run = label: case:
+    runner {
+      inherit label;
+      command = ''(mkdir "$TMPDIR/${label}" && cd "$TMPDIR/${label}" && out="$TMPDIR/${label}/out" bash ${pkgs.writeText "${label}.sh" (script case)})'';
+      names = map named case.fails or [];
+      omits = map named case.omits or [];
+    };
 in {
   checks.extracted-drift = pkgs.runCommand "extracted-drift" {} ''
     set -euETo pipefail
