@@ -1,9 +1,10 @@
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-08 — launcher flags are checked as root-command
-> `uses`; Home Manager owns daemon selection and settings; both backends run the
-> offline project-document and project-config preflight before it execs the
-> original binary, isolated by the shared `lib/ai/launcher-preflight.nix`.
+> **Last verified:** 2026-10-09 — devenv can opt into runtime project trust;
+> launcher flags are checked as root-command `uses`; Home Manager owns daemon
+> selection and settings; both backends run the offline project-document and
+> project-config preflight before it execs the original binary, isolated by the
+> shared `lib/ai/launcher-preflight.nix`.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -177,3 +178,33 @@ runs both notices' fixtures through each backend's launcher.
   the whole store path of a running process's executable, so the old package,
   bundled bwrap included, lives until the daemon exits (measured 2026-09-26, Nix
   2.34.4, PR #1989 review).
+
+## Opt into project trust for a devenv session
+
+Put this in your uncommitted `devenv.local.nix`:
+
+```nix
+{
+  ai.codex.trustProjectForSession = true;
+}
+```
+
+Devenv automatically imports that file beside `devenv.nix`, and this repository
+already ignores it. The option defaults to false and exists only on devenv. Home
+Manager instead declares persistent trust through
+`ai.codex.native.settings.projects` in its user config.
+
+The existing Codex launcher reads `$DEVENV_ROOT` at launch and passes a
+session-only table-form `-c projects={"<root>"={trust_level="trusted"}}`
+override. The table form preserves dots, spaces and quotes in paths; dotted
+override keys split at every dot. Codex merges that override before discovering
+project trust, so it loads `.codex/config.toml`, including
+`project_doc_max_bytes`, without a user-config entry. The preflight receives the
+same override and its project-trust notice stays quiet. Trust of a main checkout
+covers linked worktrees; trust of a parent folder does not cover child
+repositories. Measured offline with Codex 0.162.0 using `debug prompt-input` and
+an isolated `CODEX_HOME`.
+
+A committed `devenv.nix` enabling this trusts its own project. Entering that
+shell already executes the project's Nix code, so the option adds no new trust
+boundary. It does not persist trust or change the user config.

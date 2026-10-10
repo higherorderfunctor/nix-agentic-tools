@@ -7,12 +7,12 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-09 — Codex sets neither model nor reasoning effort
-> unless the consumer declares one. Codex's launcher, on both backends, warns at
-> every launch when a project config Codex would load is untrusted or uses the
-> opposite permission model to the user config, alongside its document
-> preflight; devenv warns at shell entry when an installed runtime's PATH binary
-> resolves outside the devenv profile.
+> **Last verified:** 2026-10-09 — devenv can opt into runtime project trust;
+> Codex sets neither model nor reasoning effort unless the consumer declares
+> one. Codex's launcher, on both backends, warns at every launch when a project
+> config Codex would load is untrusted or uses the opposite permission model to
+> the user config, alongside its document preflight; devenv warns at shell entry
+> when an installed runtime's PATH binary resolves outside the devenv profile.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -283,13 +283,18 @@ The ai module fans out TWO kinds of configuration:
   separate static `${configDir}/<name>.config.toml` user layer selected with
   `codex --profile <name>`) was removed 2026-09-19 as unreachable dead code; see
   the Settled bullet above. `projects.<path>.trust_level` is accepted only by
-  Home Manager's user-global file, where it is the only project trust Codex
-  keeps: one entry per clone, since Codex resolves a linked worktree to its main
-  checkout; an empty worktree entry does not revoke that trust, while an
-  explicit worktree `trust_level` takes precedence. Devenv rejects it because a
-  project cannot bootstrap the trust required to load its own
-  `.codex/config.toml`; without Home Manager, `~/.codex` is Codex's own and its
-  trust prompt saves there. The same launch preflight runs
+  Home Manager's user-global file for persistent trust: one entry per clone,
+  since Codex resolves a linked worktree to its main checkout; an empty worktree
+  entry does not revoke that trust, while an explicit worktree `trust_level`
+  takes precedence. Devenv rejects it because a project cannot bootstrap the
+  trust required to load its own `.codex/config.toml`. Devenv's opt-in
+  `ai.codex.trustProjectForSession` instead adds a table-form
+  `-c projects={...}` session override for the runtime `$DEVENV_ROOT` before the
+  preflight. It leaves user config untouched and quiets the trust notice when
+  that root is trusted. Set it in uncommitted `devenv.local.nix` for a local
+  choice. Parent-folder trust does not cover child repositories; clone trust
+  does cover linked worktrees. Without Home Manager, `~/.codex` is Codex's own
+  and its trust prompt saves there. The same launch preflight runs
   `codex-project-trust-notice`, which warns when a readable project config will
   be ignored because nothing trusts the project, including when the user config
   is missing. It takes each directory's trust from the preflight's one
@@ -650,10 +655,14 @@ Every option on the HM ai module must have a matching option on the devenv ai
 module with the same semantics. If you add an option to one, add it to the other
 in the same commit. Codex's exact generated option-name set is compared across
 both backends by `checks/modules/options-doc.nix`. Runtime scope differences
-belong in backend lowering, not divergent declarations:
-`ai.codex.execpolicyRules` is one typed surface, with HM writing each `.rules`
-file into the user-global `${configDir}` and devenv writing the project-local
-`.codex/rules/<name>.rules` instead — Codex reads both layers natively.
+belong in backend lowering, not divergent declarations. Two Codex options are
+intentional exceptions: Home Manager's `pinDaemonToPackage` selects the shared
+user daemon, which devenv bypasses; devenv's `trustProjectForSession` trusts its
+runtime project root, while Home Manager declares persistent user-global
+`native.settings.projects` trust instead. `ai.codex.execpolicyRules` is one
+typed surface, with HM writing each `.rules` file into the user-global
+`${configDir}` and devenv writing the project-local `.codex/rules/<name>.rules`
+instead — Codex reads both layers natively.
 
 ### Final delivery seam
 
