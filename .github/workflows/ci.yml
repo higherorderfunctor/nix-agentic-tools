@@ -335,11 +335,11 @@ jobs:
           # scaffolding — the shared command dispatcher, `-init` script and
           # `-fhsenv-profile` tree — does not depend on the binary's CONTENT, so
           # it is byte-identical for both variants and shares one store path,
-          # which the build job publishes legitimately as part of the unpatched
-          # package. Walking the whole closure therefore reports three such
-          # paths as leaks on linux (six before nixpkgs consolidated the three
-          # FHS environments; darwin has no FHS layer, so it passed and hid the
-          # bug). Those carry no patched bytes; flagging them would train the
+          # which the build job's pushFilter keeps out of the cache along with
+          # the rest of the unpatched package. Walking the whole closure
+          # therefore reports three such paths as leaks on linux (six before
+          # nixpkgs consolidated the three FHS environments; darwin has no FHS
+          # layer, so it passed and hid the bug). Those carry no patched bytes; flagging them would train the
           # reader to ignore this step, which is worse than not having it.
           #
           # `nix derivation show -r` is eval-only — it reads each derivation's

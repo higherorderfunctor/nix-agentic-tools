@@ -1,8 +1,9 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-07 — Semble uses the source-build pattern; overlay
-> parity uses devenv’s foreign nixpkgs and the two Semble roles share one
-> derivation; pnpm 12 generates its embedded loader before Cargo compilation.
+> **Last verified:** 2026-10-09 — CI pushes `ciPackages` to cachix minus every
+> Kiro path; Semble uses the source-build pattern; overlay parity uses devenv’s
+> foreign nixpkgs and the two Semble roles share one derivation; pnpm 12
+> generates its embedded loader before Cargo compilation.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -125,9 +126,10 @@ unchecked derivations.
 - `legacyPackages` is one rule: every leaf under its flat name and every root
   (`ai`, `docs`, …) nested. `nix run <flake>#claude-code` resolves there and
   needs the caller's opt-in (`NIXPKGS_ALLOW_UNFREE=1 --impure`), as in nixpkgs.
-- `ciPackages` is the full flat set CI builds and pushes to cachix. Everything
-  that reads a package by name (CI, warm-ifd, update scripts, checks) uses it.
-  Naming `ciPackages` is an explicit opt-in, like `checks`.
+- `ciPackages` is the full flat set CI builds and pushes to cachix (Kiro paths
+  are filtered out of the push). Everything that reads a package by name (CI,
+  warm-ifd, update scripts, checks) uses it. Naming `ciPackages` is an explicit
+  opt-in, like `checks`.
 
 **Fallback.** `natSystemOf pkgs` returns the system only when it is in
 `config/systems.nix` and both build and host platform triples equal the system's
