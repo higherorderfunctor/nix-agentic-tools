@@ -127,6 +127,14 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`dev/fragments/devenv/ci-lean-closure.md`](dev/fragments/devenv/ci-lean-closure.md)
     - [`dev/fragments/devenv/files-internals.md`](dev/fragments/devenv/files-internals.md)
+- **`extracted`**
+  - Match:
+    - `checks/extracted/**`
+    - `lib/extracted/**`
+    - `packages/*/extracted/**`
+    - `packages/*/extracted.json`
+  - Read:
+    - [`dev/fragments/extracted/facts-contract.md`](dev/fragments/extracted/facts-contract.md)
 - **`facets`**
   - Match:
     - `checks/*/default.nix`
