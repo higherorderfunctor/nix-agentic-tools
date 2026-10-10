@@ -197,7 +197,7 @@
     # devShells.ci is a lightweight shell for the CI update pipeline.
 
     # The internal flat package set, unchecked: what CI builds and pushes to
-    # cachix, and what checks and the update pipeline read. A consumer who
+    # cachix (minus Kiro), and what checks and the update pipeline read. A consumer who
     # names it opts in to unfree, the same as building `checks`.
     ciPackages = forAllSystems flatPackagesFor;
 

@@ -58,6 +58,7 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          pushFilter: kiro-cli
       - name: Warm IFD sources (retry, best-effort)
         uses: ./.github/actions/warm-ifd
         with:
@@ -297,13 +298,14 @@ jobs:
             --option substituters "https://cache.nixos.org https://devenv.cachix.org")"
           printf 'out=%s\n' "$out" >> "$GITHUB_OUTPUT"
 
-      # TRIPWIRE. The exclusion above and update.yml's pushFilter are both
-      # configuration, and this repo already learned that a mitigation with an
-      # unwatched hole reads exactly like a working one: #665 excluded this
-      # attribute from the cache-writing build and the patched binary was
-      # published anyway for eleven days, through update.yml's whole-package-set
-      # verification build. So assert the OUTCOME rather than trusting either
-      # knob — ask the cache directly whether the patched closure is fetchable.
+      # TRIPWIRE. The exclusion above and the `pushFilter: kiro-cli` on every
+      # credentialed cachix-action step are both configuration, and this repo
+      # already learned that a mitigation with an unwatched hole reads exactly
+      # like a working one: #665 excluded this attribute from the
+      # cache-writing build and the patched binary was published anyway for
+      # eleven days, through update.yml's whole-package-set verification build.
+      # So assert the OUTCOME rather than trusting either knob — ask the cache
+      # directly whether the patched closure is fetchable.
       #
       # This runs here because the job already has the paths and needs no
       # credentials (a narinfo GET is public), and because a `nix flake check`
@@ -332,13 +334,15 @@ jobs:
           # Assert only on paths UNIQUE to the patched closure. Some FHS
           # scaffolding — the shared command dispatcher, `-init` script and
           # `-fhsenv-profile` tree — does not depend on the binary's CONTENT, so
-          # it is byte-identical for both variants and shares one store path,
-          # which the build job publishes legitimately as part of the unpatched
-          # package. Walking the whole closure therefore reports three such
-          # paths as leaks on linux (six before nixpkgs consolidated the three
-          # FHS environments; darwin has no FHS layer, so it passed and hid the
-          # bug). Those carry no patched bytes; flagging them would train the
-          # reader to ignore this step, which is worse than not having it.
+          # it is byte-identical for both variants and shares one store path.
+          # The build job's pushFilter now keeps those paths out of the cache,
+          # but they were published before the filter existed and stay
+          # fetchable until the operator purges them. Walking the whole closure
+          # would report three of them as leaks on linux (six before nixpkgs
+          # consolidated the three FHS environments; darwin has no FHS layer,
+          # so it passed and hid the bug) and turn CI red over paths that carry
+          # no patched bytes. Once the purge has run, drop the subtraction and
+          # assert on the whole closure.
           #
           # `nix derivation show -r` is eval-only — it reads each derivation's
           # DECLARED output paths without building or substituting the 621 MiB
@@ -449,7 +453,8 @@ jobs:
           if [ "$published" -ne 0 ]; then
             echo "::error::${published} patched path(s) failed the not-published" \
                  "assertion against $CACHE (published, or inconclusive — see above)." \
-                 "Check update.yml's pushFilter and ci-packages.py's EXCLUDED set."
+                 "Check the cachix-action pushFilter in ci.yml and update.yml" \
+                 "and ci-packages.py's EXCLUDED set."
             exit 1
           fi
           echo "No patched Kiro path is fetchable from $CACHE."

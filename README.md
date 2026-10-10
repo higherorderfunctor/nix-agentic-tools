@@ -124,9 +124,10 @@ inputs:
 ### Binary cache
 
 CI builds every package here with this flake's own nixpkgs and pushes the
-results to `nix-agentic-tools.cachix.org`. The overlay and the module package
-defaults hand you those same builds, so they come from the cache whatever
-nixpkgs you use.
+results to `nix-agentic-tools.cachix.org`, except Kiro: no `kiro-cli` path is
+ever pushed, so it is always fetched from the vendor and patched locally. The
+overlay and the module package defaults hand you those same builds, so they come
+from the cache whatever nixpkgs you use.
 
 Add the cache to your own Nix configuration. This flake's `nixConfig` lists it,
 but Nix ignores a flake's substituters unless you are a trusted user.
