@@ -9,7 +9,6 @@
 }: let
   inherit (import ../lib/vocabulary.nix) delegateKinds;
   mkCase = {
-    codexHeadroom ? false,
     expect,
     id,
     runtime,
@@ -57,17 +56,11 @@
       inherit expect files id runtime switches task techniques;
       usage = {
         claude = {
-          remainingPercent =
-            if codexHeadroom
-            then 10
-            else 90;
+          remainingPercent = 90;
           windowSeconds = 18000;
         };
         codex = {
-          remainingPercent =
-            if codexHeadroom
-            then 90
-            else 10;
+          remainingPercent = 10;
           windowSeconds = 18000;
         };
       };
@@ -79,33 +72,6 @@
   single = "Implement a pure Python function `unique_words(text)` in `words.py` that returns the sorted unique words of a string; `unique_words('pear apple pear')` must return `['apple', 'pear']`.";
   dependent = "Derive a normalization specification from the examples 'Pear' -> 'pear' and 'APPLE' -> 'apple' and write it to `SPEC.md`; then implement that specification as `normalize(word)` in `normalize.py`; then validate the implementation against those examples. Each step consumes the preceding result.";
   # On/off pairs: the switch is the only difference between the two cases.
-  claudePairs = lib.concatMap (on: [
-    (mkCase {
-      expect = "delegate";
-      id = "claude-clamp-${label on}";
-      runtime = "claude";
-      switches.ai = {
-        claude.delegationClampMitigation.enable = lib.mkForce on;
-        programs.delegate-routing.reminder.enable = lib.mkForce false;
-      };
-      task = single;
-    })
-    (mkCase {
-      codexHeadroom = true;
-      expect =
-        if on
-        then "codex-lane"
-        else "observe";
-      id = "claude-ultracode-drain-${label on}";
-      runtime = "claude";
-      switches.ai = {
-        claude.delegationClampMitigation.enable = lib.mkForce true;
-        claude.ultracodeOnLaunch = lib.mkForce true;
-        programs.delegate-routing.runtimes.claude.routing."Pool drain".enable = lib.mkForce on;
-      };
-      task = dependent;
-    })
-  ]) [false true];
   reminderPairs = lib.concatMap (runtime:
     map (on:
       mkCase {
@@ -131,4 +97,4 @@
     })
   ]) ["codex" "kimchi" "kiro"];
 in
-  claudePairs ++ reminderPairs ++ shapes
+  reminderPairs ++ shapes

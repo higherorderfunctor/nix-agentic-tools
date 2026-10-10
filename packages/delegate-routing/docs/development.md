@@ -224,10 +224,9 @@ differences live in its `HARNESSES` table; assertions in its `ASSERTIONS` table.
 
 A delegate call is classified by technique name, so the suite and the rendered
 skill read one table. Same-runtime nested children ARE logged in and can run and
-spend inside the 600 s process-group cap; no PATH shim blocks them. The Claude
-clamp and ultracode drain cases are on/off pairs. Results are `PASS`, `FAIL` or
-`ERROR`; only `ERROR` (no answer, a leak, or the routing skill missing from the
-startup record) fails the run.
+spend inside the 600 s process-group cap; no PATH shim blocks them. Results are
+`PASS`, `FAIL` or `ERROR`; only `ERROR` (no answer, a leak, or the routing skill
+missing from the startup record) fails the run.
 
 The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
 in the sandbox: it validates every case and renders every fixture and launch

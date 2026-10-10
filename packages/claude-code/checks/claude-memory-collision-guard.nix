@@ -2,16 +2,12 @@
 # agent-memory collision guard. Exercises the scope test, the deny-once cadence, the
 # per-file keying, and every fail-open path.
 #
-# The cadence is what this pins hardest, and for a sharper reason than the clamp's:
-# this hook DENIES a tool call, so a deny that repeats is not a cost regression, it is
+# The cadence is what this pins hardest: this hook DENIES a tool call, so a deny that repeats is not a cost regression, it is
 # a livelock. The model retries the same write, gets the same denial, and has no way
 # through. Test 3 is therefore the load-bearing one — and test 8 covers the case where
 # the marker cannot be written at all, where the script must stand down completely
 # rather than deny without a memo.
 #
-# Note this INVERTS the clamp's degradation bias, which is why both directions are
-# asserted explicitly: the clamp degrades toward injecting, this degrades toward
-# allowing the write.
 {pkgs, ...}: {
   checks.claude-memory-collision-guard =
     pkgs.runCommandLocal "claude-memory-collision-guard-check" {
@@ -143,9 +139,8 @@
       else bad "extraDirectories did not widen scope (rc=$rc)"
       fi
 
-      # 8. A marker directory that cannot be created must stand the guard down — the
-      #    inverse of the clamp's bias, and the difference matters: a deny it cannot record
-      #    repeats forever, so allowing is the only safe degradation.
+      # 8. A marker directory that cannot be created must stand the guard down: a deny
+      #    it cannot record repeats forever, so allowing is the only safe degradation.
       #
       #    The thing that must not be writable is the PARENT, and that is not a technicality.
       #    Making the marker directory itself mode 500 does not test this: the script
