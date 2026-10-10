@@ -256,10 +256,9 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-09 — kiro-cli 2.29.0 rewrote the vendor worktree
-> paragraph and moved the wf-workflow-creator prompt, which holds the rule-13
-> file-check paragraph, from a template literal into a single-quoted string; the
-> file-check source and replacement are escaped for that context.
+> **Last verified:** 2026-10-09 — rollout switches derive restrictions from
+> extracted state and reject entries whose measured sites do not all match the
+> patcher; GA workflows need v3 and their global client setting.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -637,30 +636,28 @@ declaratively — the grant is simply absent for that session.
 > `KIRO_INTERNAL=1` do not move it either — `segment: "internal"` resolves off
 > the authenticated identity (`lite` is documented as restricted to
 > vendor-internal users), not off the environment.
->
-> The real gate is a **JSON rollout manifest carried in the ELF's rodata**, in
-> TWO identical copies, parsed at runtime — see `vu.mkKiroRolloutPatch` and
-> `ai.kiro.cli.unlockedRolloutFeatures`. Its feature names are extracted into
-> `packages/kiro-cli/extracted.json` under `rolloutFeatures`, so read that file
-> rather than re-deriving the list by hand (the extractor found two entries a
-> careful manual read had missed). Note the manifest's own `workflows`
-> description says "enable locally through KIRO_ENABLED_FEATURES" — that line is
-> STALE and does not describe shipped behavior. Believing it costs a measurement
-> session.
->
-> **Patching the binary is necessary but NOT sufficient: the resolved engine
-> must be `kas` (v3).** In `tui.js` the feature-gated slash-commands reach the
-> palette only via `kasCommands`, populated as `n === "kas" ? [...TQ()] : []`
-> where `n` is the resolved agent engine. `TQ()` is itself the manifest-filtered
-> list (`ltn(e) = e.filter(n => !n.feature || Lr.isEnabled(n.feature))`), so
-> BOTH conditions gate it — the flag must be unlocked AND the engine must be v3.
-> On the legacy engine the commands are filtered out wholesale.
->
-> That is why `ai.kiro.cli.unlockedRolloutFeatures` asserts `v3 = true`. Without
-> the assertion the misconfiguration is silent in the worst way: the binary is
-> genuinely patched, the option is genuinely set, and `/workflow` is simply
-> never there. It cost a consumer repo a debugging session before the assertion
-> existed.
+
+The rollout manifest is embedded in the chat binary and its names and vendor
+state are extracted into `packages/kiro-cli/extracted.json`.
+`ai.kiro.cli.features.<name>.enable` exposes those names; restricted entries are
+enabled by a length-preserving patch through `passthru.withRolloutFeatures`, and
+entries already available to every user preserve the stock package. Patch
+feasibility comes from `extracted.json.rolloutPatchability`, measured with the
+patcher’s shared entry matcher. Enabling an unpatchable feature fails at
+evaluation and names the unmatched-site count. The reviewed
+`extract/rollout-features.json` table contains only vendor state. These patches
+require `cli.v3 = true` because the feature surfaces use the `kas` engine.
+
+Workflows are GA since 2.26.0 and need no binary patch. `cli.workflows.enable`
+still requires v3 and the global `chat.enableWorkflows` setting; Home Manager
+implies it and devenv warns when it is absent. `codeToSpec`,
+`backgroundExecution`, `kvim` and `sandbox` are friendly switches over
+restricted rollout names, with client-setting and launch prerequisites described
+in [`workflow-gating.md`](workflow-gating.md). Raw feature switches change
+availability only. Typed `cli.native.settings.chat.keybindings` declarations
+follow the extracted registry; background execution's extracted default (see its
+option description) can be rebound with `moveToBackground` in the global
+settings.
 
 **"Is the engine v3" is a RUNTIME question.** A caller's `--agent-engine`
 overrides the injected `--v3`, so an eval-time `hasV3` gets it wrong in both

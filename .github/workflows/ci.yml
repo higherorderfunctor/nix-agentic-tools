@@ -186,7 +186,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # Only inputs that can move `kiro-cli-workflows`'s store path. A
+      # Only inputs that can move `kiro-cli-rollout-canary`'s store path. A
       # context7-mcp bump touches another owner's recipe tree and cannot, so it
       # should not pay for a 621 MiB build on two runners.
       #
@@ -227,6 +227,7 @@ jobs:
                   packages/kiro-cli/lib/packaging.nix | \
                   packages/kiro-cli/model-catalog.json | \
                   packages/kiro-cli/packages/* | \
+                  packages/kiro-cli/rollout-canary.nix | \
                   packages/kiro-cli/sources.json | \
                   lib/packaging.nix)
                   needed=true
@@ -252,7 +253,7 @@ jobs:
       # change, moving from `runner` to `_nixbld*`, which put the ad-hoc
       # codesign-then-exec assertion in lib/packaging.nix at risk on a required
       # check. That is now measured, not inferred: run 31837837510 built
-      # kiro-cli-rollout-workflows locally under `_nixbld*` and passed.
+      # the earlier workflows-patched Kiro locally under `_nixbld*` and passed.
       - if: steps.scope.outputs.needed == 'true'
         uses: cachix/install-nix-action@v31
         with:
@@ -292,7 +293,7 @@ jobs:
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          out="$(nix build ".#ciPackages.${{ matrix.system }}.kiro-cli-workflows" \
+          out="$(nix build ".#ciPackages.${{ matrix.system }}.kiro-cli-rollout-canary" \
             --no-link --print-out-paths \
             --option extra-substituters "" \
             --option substituters "https://cache.nixos.org https://devenv.cachix.org")"

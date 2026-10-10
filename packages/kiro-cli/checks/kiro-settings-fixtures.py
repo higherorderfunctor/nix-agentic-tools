@@ -10,6 +10,8 @@ warning = '[cli-settings] failed to read workspace cli.json:'
 properties = [
     'CHAT_DEFAULT_MODEL:"chat.defaultModel"',
     'CHAT_MODEL_DEFAULTS:"chat.modelDefaults"',
+    'KEY_CANCEL:"chat.keybindings.cancelStream"',
+    'KEY_INTERRUPT:"chat.keybindings.toggleInterruptBehavior"',
 ] + [f'CHAT_TEST_{index:02d}:"chat.fixture{index}"' for index in range(43)]
 members = ["pn.CHAT_DEFAULT_MODEL", "pn.CHAT_MODEL_DEFAULTS"] + [
     f'"chat.allowed{index}"' for index in range(8)
@@ -25,11 +27,14 @@ def merge_with_guard(guard):
     )
 
 
-def bundle(*, registry=None, allowlist=None, merge=None):
+def bundle(*, registry=None, allowlist=None, merge=None, defaults=None, binding_settings=None):
     registry = registry or registry_assignment
     allowlist = allowlist or f'Cq=new Set([{",".join(members)}]);'
     merge = merge or merge_with_guard("Cq.has(k)")
-    return 'var pn,Cq;' + registry + allowlist + merge
+    defaults = 'defaults={cancelStream:"esc",toggleInterruptMode:"ctrl+x"};' if defaults is None else defaults
+    binding_settings = ('bindings={cancelStream:pn.KEY_CANCEL,toggleInterruptMode:pn.KEY_INTERRUPT};'
+                        if binding_settings is None else binding_settings)
+    return 'var pn,Cq;' + registry + allowlist + merge + defaults + binding_settings
 
 
 with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
@@ -42,11 +47,18 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     happy = run(bundle())
     assert happy.returncode == 0, happy.stderr
     result = json.loads(happy.stdout)
-    assert len(result["settingKeys"]) == 45, result
+    assert len(result["settingKeys"]) == 47, result
     assert len(result["workspaceOverridableSettings"]) == 11, result
     assert "chat.defaultModel" in result["workspaceOverridableSettings"]
 
+    assert result["keybindingDefaults"] == {"cancelStream": "esc", "toggleInterruptBehavior": "ctrl+x"}
+
     cases = {
+        "ambiguous keybindings": (bundle(defaults='first={cancelStream:"esc"};second={cancelStream:"x"};'), "ambiguous or absent"),
+        "missing keybindings": (bundle(defaults=""), "ambiguous or absent"),
+        "unresolved keybindings": (bundle(binding_settings='bindings={cancelStream:pn.KEY_CANCEL,toggleInterruptMode:pn.UNKNOWN};'), "unresolved property"),
+        "non-string keybinding": (bundle(defaults='defaults={cancelStream:"esc",toggleInterruptMode:42};'), "non-literal"),
+        "missing action default": (bundle(defaults='defaults={cancelStream:"esc"};'), "different actions"),
         "accept all": (
             bundle(merge=merge_with_guard("Cq.has(k)||true")),
             "does not apply exactly",

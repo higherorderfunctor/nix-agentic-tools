@@ -7,9 +7,9 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-09 — package build runners use no CI-only
-> substituter, no shard mirrors a runtime closure into the project cache, and
-> every Cachix step holding the token filters kiro out of the push.
+> **Last verified:** 2026-10-09 — native Kiro jobs scope the canary recipe and
+> validate every measured patchable rollout feature whose vendor state needs a
+> patch, without cache publication.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -235,9 +235,16 @@ Generated documents stay in the flake checks. Kiro's scoped native jobs build
 the extracted-metadata drift check on both Linux and Darwin, covering TUI
 materialization on macOS where the Linux-only flake check cannot. These jobs
 explicitly enable and assert the Nix sandbox before the materializer executes;
-Darwin's Nix default does not provide that guarantee. Patched proprietary Kiro
-stays in those jobs without cache publication; every Cachix step holding the
-token, package matrix and update workers alike, carries `pushFilter: kiro-cli`.
+Darwin's Nix default does not provide that guarantee. The internal
+`kiro-cli-rollout-canary` patches every feature whose extracted vendor state
+needs a patch and whose measured patchability is true through
+`kiro-cli.withRolloutFeatures`. Its scope includes `rollout-canary.nix`, the
+extracted sidecar, and `extract/*`, which carries the shared restriction
+predicate. It is exposed only in `ciPackages`, outside public package discovery.
+It replaces the workflow-only package and stays outside the cache-writing
+shards. Patched proprietary Kiro stays in those jobs without cache publication;
+every Cachix step holding the token, package matrix and update workers alike,
+carries `pushFilter: kiro-cli`.
 
 The Cachix action owns shard uploads and its finalization remains part of the
 worker outcome. Do not also start nix-fast-build's optional uploader: its

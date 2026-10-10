@@ -115,7 +115,13 @@ folds every inert setting into one warning naming each option; Codex's
 
 Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
 `shell`, `extraPackages`, `native.settings`, `trustedMcpTools`, `tweaks`,
-`unlockedRolloutFeatures`, `useFhsSandbox`, `v3` and `workflows.enable`. The
+`features.<name>.enable`, `useFhsSandbox` and `v3`, plus the friendly
+`backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and `workflows` switches.
+Rollout names and typed `native.settings.chat.keybindings` keys come from the
+extracted registry. Friendly workflows select the GA stock package and imply
+their global client setting on Home Manager; Code-to-Spec also implies its
+global setting there. Devenv warns when either requested global setting is
+missing, and refuses explicit project-only writes of global keys. The
 environment and shell folds live at `cli.normalized.environmentVariables` and
 `cli.normalized.shell`. All other normalized pools, native agents, permissions,
 hooks, MCP/LSP, files and activation remain shared under `ai.kiro`. There are no

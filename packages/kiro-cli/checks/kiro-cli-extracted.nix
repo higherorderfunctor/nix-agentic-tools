@@ -25,6 +25,11 @@
     }
     // mkDriftCheck {
       inherit committed extracted;
+      results.rollout = (import ../extract/rollout-coverage.nix).check {
+        inherit (pkgs) lib;
+        extracted = builtins.fromJSON (builtins.readFile committed);
+        rows = builtins.fromJSON (builtins.readFile ../extract/rollout-features.json);
+      };
       name = "kiro-cli";
       sidecar = "packages/kiro-cli/extracted.json";
     };

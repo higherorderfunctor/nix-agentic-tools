@@ -20,6 +20,8 @@ function fail(message) {
 if (file.parseDiagnostics.length)
   fail("the TUI bundle is not valid JavaScript");
 
+const bindingDefaultsCandidates = [];
+const bindingSettingsCandidates = [];
 const registryCandidates = [];
 const setCandidates = [];
 const warningFunctions = [];
@@ -41,6 +43,17 @@ function walk(node) {
       )
     ) {
       registryCandidates.push(node);
+    }
+    if (ts.isObjectLiteralExpression(node.right)) {
+      const cancel = node.right.properties.find(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          property.name.text === "cancelStream",
+      );
+      if (cancel && ts.isStringLiteral(cancel.initializer))
+        bindingDefaultsCandidates.push(node.right);
+      if (cancel && ts.isPropertyAccessExpression(cancel.initializer))
+        bindingSettingsCandidates.push(node.right);
     }
     if (
       ts.isNewExpression(node.right) &&
@@ -93,6 +106,39 @@ for (const property of registry.right.properties) {
   if (propertyNames.has(name)) fail(`settings registry repeats ${name}`);
   propertyNames.add(name);
 }
+if (
+  bindingDefaultsCandidates.length !== 1 ||
+  bindingSettingsCandidates.length !== 1
+)
+  fail("keybinding defaults or settings map are ambiguous or absent");
+const bindingDefaults = bindingDefaultsCandidates[0];
+const bindingSettings = bindingSettingsCandidates[0];
+function bindingNames(object, validValue) {
+  const names = [];
+  for (const property of object.properties) {
+    if (
+      !ts.isPropertyAssignment(property) ||
+      !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) ||
+      !validValue(property.initializer)
+    )
+      fail("keybinding table contains a non-literal or unresolved property");
+    if (names.includes(property.name.text))
+      fail(`keybinding table repeats ${property.name.text}`);
+    names.push(property.name.text);
+  }
+  return names.sort();
+}
+const defaultNames = bindingNames(bindingDefaults, ts.isStringLiteral);
+const settingNames = bindingNames(
+  bindingSettings,
+  (value) =>
+    ts.isPropertyAccessExpression(value) &&
+    ts.isIdentifier(value.expression) &&
+    value.expression.text === registryName &&
+    propertyNames.has(value.name.text),
+);
+if (JSON.stringify(defaultNames) !== JSON.stringify(settingNames))
+  fail("keybinding defaults and settings map name different actions");
 const allowlist = setCandidates[0];
 const allowlistName = allowlist.left.text;
 
@@ -206,7 +252,8 @@ if (hasCalls.length !== 1)
 const expression =
   `(()=>{const ${registryName}=${registry.right.getText(file)};` +
   `return {registry:Object.values(${registryName}),` +
-  `allowlist:Array.from(${allowlist.right.getText(file)})}})()`;
+  `allowlist:Array.from(${allowlist.right.getText(file)}),` +
+  `bindingDefaults:${bindingDefaults.getText(file)},bindingSettings:${bindingSettings.getText(file)}}})()`;
 const values = vm.runInNewContext(expression, Object.create(null), {
   timeout: 1000,
   contextCodeGeneration: { strings: false, wasm: false },
@@ -220,6 +267,27 @@ if (
     "evaluated settings registry or workspace allowlist has an unrecognizable shape",
   );
 }
+
+const keybindingDefaults = {};
+for (const action of defaultNames) {
+  const setting = values.bindingSettings[action];
+  if (!setting.startsWith("chat.keybindings."))
+    fail(`keybinding ${action} maps outside chat.keybindings`);
+  const name = setting.slice("chat.keybindings.".length);
+  if (Object.hasOwn(keybindingDefaults, name))
+    fail(`keybinding setting repeats ${setting}`);
+  keybindingDefaults[name] = values.bindingDefaults[action];
+}
+if (
+  JSON.stringify(Object.keys(keybindingDefaults).sort()) !==
+  JSON.stringify(
+    values.registry
+      .filter((key) => key.startsWith("chat.keybindings."))
+      .map((key) => key.slice("chat.keybindings.".length))
+      .sort(),
+  )
+)
+  fail("keybinding defaults do not cover exactly the settings registry");
 
 // Execute only this small original merge helper, with inert load/read/logger
 // dependencies. Opposing global/workspace sentinels prove every extracted key
@@ -263,6 +331,9 @@ for (const [key, expected] of Object.entries(expectedMerged)) {
 
 process.stdout.write(
   JSON.stringify({
+    keybindingDefaults: Object.fromEntries(
+      Object.entries(keybindingDefaults).sort(([a], [b]) => a.localeCompare(b)),
+    ),
     settingKeys: [...new Set(values.registry)].sort(),
     workspaceOverridableSettings: [...new Set(values.allowlist)].sort(),
   }),

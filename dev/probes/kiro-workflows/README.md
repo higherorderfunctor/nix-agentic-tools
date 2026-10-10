@@ -1,5 +1,8 @@
 # Kiro workflow-engine probe fixtures
 
+> **Last verified:** 2026-10-09 — probes require v3 and global workflow
+> enablement; no rollout patch is needed.
+
 The instruments behind `dev/references/kiro-workflows.md`. Dev-only: nothing
 here is exported from the flake or referenced by a build.
 
@@ -9,9 +12,14 @@ so a future session can extend rather than rebuild.
 
 ## Prerequisite
 
-The engine is dark-shipped and off by default — see §1.1. Without
-`ai.kiro.cli.unlockedRolloutFeatures = ["workflows"]` the workflow tools do not
-exist and nothing here is runnable.
+Workflows are GA since Kiro CLI 2.26.0. Set `ai.kiro.cli.v3 = true` and
+`ai.kiro.cli.workflows.enable = true`. Home Manager implies the global
+`chat.enableWorkflows` setting; devenv requires it in the user's global Kiro
+settings and warns when it is missing. Start a fresh session and confirm
+`validate_workflow` is available before launching probes. Raw
+`features.workflows.enable` changes availability only and does not imply the
+setting. See the
+[feature-gating reference](../../../packages/kiro-cli/docs/workflow-gating.md).
 
 **The probe root must be inside the workspace root** (§7.1). A `fileCheck` path
 outside it evaluates false forever, silently, and a git worktree is a _sibling_

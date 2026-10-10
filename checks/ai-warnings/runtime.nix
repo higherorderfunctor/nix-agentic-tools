@@ -35,7 +35,7 @@
     # manifest must not claim it.
     files.".custom-kiro/consumer-owned.md".text = "consumer";
   };
-  workflowWarning = declaration:
+  featureWarning = declaration:
     (harness.evalDevenv {
       ai.kiro = {
         enable = true;
@@ -74,6 +74,8 @@
     printf 'launched\n'
   '';
   stub = pkgs.runCommand "kiro-warning-stub-package" {} ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
     mkdir -p "$out/bin"
     ln -s ${stubBin} "$out/bin/kiro-cli"
     ln -s ${stubBin} "$out/bin/kiro-cli-chat"
@@ -98,6 +100,8 @@ in {
     pkgs.runCommand "ai-warnings-runtime" {
       nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.findutils pkgs.gnused pkgs.jq pkgs.python3];
     } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       ${pkgs.python3}/bin/python ${./runtime.py} \
         ${../../lib/ai/file-warnings.py} \
         ${../../packages/claude-code/lib/memory-collision-guard.sh} \
@@ -110,14 +114,22 @@ in {
   checks.ai-warnings-files-wired = harness.mkTest "ai-warnings-files-wired" (
     lib.hasInfix "file-warnings.py" enabled.config.enterShell
     && enabled.config.tasks."ai:delivery:observe-retired".before == ["devenv:files:cleanup"]
-    && lib.hasInfix "workflows" (workflowWarning {
+    && lib.hasInfix "workflows" (featureWarning {
       workflows.enable = true;
       v3 = true;
     })
-    && lib.hasInfix "workflows" (workflowWarning {
-      unlockedRolloutFeatures = ["workflows"];
+    && !(lib.hasInfix "global-feature" (featureWarning {
+      features.workflows.enable = true;
+      v3 = true;
+    }))
+    && lib.hasInfix "codeToSpec" (featureWarning {
+      codeToSpec.enable = true;
       v3 = true;
     })
-    && !(lib.hasInfix "workflows" (workflowWarning {}))
+    && !(lib.hasInfix "global-feature" (featureWarning {
+      features.c2s.enable = true;
+      v3 = true;
+    }))
+    && !(lib.hasInfix "workflows" (featureWarning {}))
   );
 }

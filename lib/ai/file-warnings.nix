@@ -122,6 +122,7 @@
       source = file.file or file.source or null;
     })
     (lib.filterAttrs (name: _: builtins.hasAttr name owned) config.files);
+  globalFeatureNotices = lib.concatMapStrings (runtime: ai.${runtime}._globalFeatureNotices or "") runtimes;
 in {
   config = lib.optionalAttrs isDevenv {
     tasks."ai:delivery:observe-retired" = {
@@ -151,9 +152,7 @@ in {
         ${lib.escapeShellArg config.devenv.state} \
         ${pkgs.writeText "ai-delivery-files.json" (builtins.toJSON desired)} \
         ${pkgs.writeText "ai-delivery-current-files.json" (builtins.toJSON (builtins.attrNames config.files ++ ownedPaths))}
-      ${lib.optionalString ((ai.kiro.enable or false) && ((ai.kiro.cli.workflows.enable or false) || builtins.elem "workflows" (ai.kiro.cli.unlockedRolloutFeatures or []))) ''
-        ${pkgs.python3}/bin/python ${./file-warnings.py} workflows "''${KIRO_HOME:-$HOME/.kiro}"
-      ''}
+      ${globalFeatureNotices}
     '';
   };
 }

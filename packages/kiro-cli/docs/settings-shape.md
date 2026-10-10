@@ -1,9 +1,7 @@
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-07 — Kiro CLI settings use
-> `ai.kiro.cli.native.settings`; settings extraction requires the shipped TUI
-> registry, workspace allowlist and merge, and historical no-workspace-merge
-> support is removed. Kiro excludes normalized settings.
+> **Last verified:** 2026-10-09 — the shipped TUI supplies setting keys,
+> workspace scope and mapped keybinding defaults on every update.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -52,6 +50,16 @@ embedded archives did not contain Opus 5 or Sonnet 5 IDs. Kiro Crew's static
 registry also omitted them; newer IDs appeared in UI fixtures, not a maintained
 complete catalog. A free CI account, a binary string scan, or Crew's fallback
 registry cannot establish a complete suggestion list.
+
+### Keybinding defaults track the bundle
+
+`keybindingDefaults` comes from the TUI's default action bindings and its
+action-to-setting map, both selected through AST anchors. The map matters: an
+action name can differ from the setting name. Nullable string options under
+`cli.native.settings.chat.keybindings` use these extracted defaults for
+descriptions and default text; null leaves the vendor binding intact. Missing,
+ambiguous, non-literal or mismatched tables fail extraction. The update pipeline
+regenerates this data with the rest of the sidecar on every bump.
 
 ### Flat settings and object values
 

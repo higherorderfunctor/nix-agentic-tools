@@ -1,134 +1,101 @@
-## Kiro workflows: three gates, all of them silent
+## Kiro feature availability and client settings
 
-> **Last verified:** 2026-10-07 — `ai.kiro.cli.workflows.enable` unlocks the
-> rollout and implies the global chat setting on Home Manager; devenv retains
-> its global-setting warning; the pinned TUI still excludes
-> `chat.enableWorkflows` from the workspace allowlist.
+> **Last verified:** 2026-10-09 — rollout patchability is measured with the
+> patcher’s shared matcher; reviewed rows contain only vendor state, and package
+> selection derives restrictions from that state on both backends.
 
-Enable workflows with `ai.kiro.cli.workflows.enable = true` and
-`ai.kiro.cli.v3 = true`. The switch adds `"workflows"` to the effective rollout
-list alongside any `cli.unlockedRolloutFeatures`, and Home Manager implies
-`cli.native.settings.chat.enableWorkflows = lib.mkDefault true`. An explicit
-false still wins. Devenv cannot write that global-only key: set it in the global
-config, and shell entry warns when it is absent or false. Low-level
-`cli.unlockedRolloutFeatures = ["workflows"]` retains the same Home Manager
-setting implication.
+Workflows have been generally available since **Kiro CLI 2.26.0**. Their pinned
+rollout state is 100% for all users with no channel restriction, so enabling
+workflows does not patch the binary. Two gates remain: the v3 (`kas`) engine and
+the global `chat.enableWorkflows` client setting.
 
-Three independent gates remain:
-
-| #   | Gate                                    | Set by                                 | Failure look                   |
-| --- | --------------------------------------- | -------------------------------------- | ------------------------------ |
-| 1   | rollout manifest says the feature is on | the byte patch (`mkKiroRolloutPatch`)  | `/workflow` absent             |
-| 2   | engine is `kas`                         | `ai.kiro.cli.v3 = true`                | `/workflow` absent             |
-| 3   | `chat.enableWorkflows` is true          | the GLOBAL `~/.kiro/settings/cli.json` | commands present, TOOLS absent |
-
-Gates 1 and 2 already have assertions in `mkKiro.nix`. Gate 3 is implied with
-gate 1 on the Home Manager backend and cannot be satisfied from devenv at all —
-see below.
-
-### Gate 3 is the one that looks like an upstream removal
-
-Numbering note, because the two counts in play are easy to conflate: there are
-THREE gates in the table, and gate 3 is the setting. Separately, the CLIENT's
-own check went from one condition to two in 2.19.0 — that second condition is
-what gate 3 reads. "Second condition" and "third gate" are the same fact counted
-in different frames.
-
-Up to 2.18.1 the client's check was one condition:
-
-```js
-workflowsEnabled = Lr.isEnabled("workflows");
+```nix
+ai.kiro = {
+  enable = true;
+  cli = {
+    v3 = true;
+    workflows.enable = true;
+  };
+};
 ```
 
-From **2.19.0** it is two, and the second defaults to false:
+Home Manager implies
+`cli.native.settings.chat.enableWorkflows = lib.mkDefault true`; an explicit
+false wins. Devenv cannot deliver this global-only setting: configure it in the
+user's `~/.kiro/settings/cli.json` (or `$KIRO_HOME/settings/cli.json`). Shell
+entry warns when the friendly switch requests workflows but the global setting
+is absent or false. Start a fresh session after changing it; Kiro stores the
+workflow choice per session.
 
-```js
-function Ah() {
-  let e = Ht("workflows");
-  return { available: e, enabled: e && wi(pn.CHAT_ENABLE_WORKFLOWS, !1) };
-}
-// pn.CHAT_ENABLE_WORKFLOWS === "chat.enableWorkflows"
-```
+### Friendly switches
 
-Measured by counting the gate expression `CHAT_ENABLE_WORKFLOWS,!1)` in each
-store binary's embedded JS: **0 in 2.18.0 and 2.18.1, 2 in every measured
-release from 2.19.0 on** (2.19.0, 2.19.1, 2.19.2, 2.20.1, 2.20.2, 2.21.0,
-2.21.1).
+Every friendly switch requires `cli.v3 = true`. The switches share declarations
+and package selection across Home Manager and devenv; client settings are
+implied only where the pinned client honors them. A friendly switch implies its
+raw feature at default priority. Explicitly disabling that raw feature while
+leaving the friendly switch enabled fails an assertion on both backends.
 
-The failure presents as the feature having been withdrawn. `Ah().enabled` false
-means `get workflowExtension(){ if(!this.workflowsEnabled) return }` never
-constructs the extension, so the client sends
-`settings.workflows = {enabled:false}` (and `goal` with it), and in the KAS
-engine `createWorkflowCommandSource` registers no workflow tools. The agent then
-reports that `run_workflow` is not in its toolset — which reads exactly like
-upstream deleting the tool. **Check the setting before re-deriving anything
-about the patch.**
+| `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                                                                                              |
+| ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backgroundExecution.enable` | `background_execution` | No client setting. The extracted default key may conflict with a terminal multiplexer prefix; rebind `native.settings.chat.keybindings.moveToBackground` globally.  |
+| `codeToSpec.enable`          | `c2s`                  | Global `chat.enableC2s`; Home Manager implies it, while devenv warns if it is missing.                                                                              |
+| `kvim.enable`                | `kvim`                 | `nvim` on PATH; no editor package is installed automatically.                                                                                                       |
+| `sandbox.enable`             | `local_sandbox`        | Availability only. Each invocation still needs `--sandbox` with `--no-interactive` or `--output-format stream-json`; Linux requires bubblewrap and user namespaces. |
+| `workflows.enable`           | Already GA             | Global `chat.enableWorkflows`.                                                                                                                                      |
 
-Two consequences worth knowing when verifying a fix:
+Kiro's local sandbox feature is separate from nixpkgs' Linux FHS compatibility
+wrapper, controlled by `cli.useFhsSandbox`.
 
-- The setting is read at START. Restart kiro; do not expect a running session to
-  pick it up.
-- KAS persists `workflowsEnabled` per session, explicitly "so a reloaded session
-  keeps its choice". Prefer a fresh session over resuming one created while the
-  setting was off, or the fix will look like it did not take.
+### Generated rollout options and key bindings
 
-### Gate 3 is GLOBAL-only, which is why devenv refuses it
+`cli.features.<name>.enable` is generated for every name in `extracted.json`'s
+`rolloutFeatures`. Raw switches enable availability only; they do not imply
+client settings. For example, `features.c2s.enable` applies the rollout patch
+but leaves `chat.enableC2s` to the caller, while `features.workflows.enable`
+preserves the stock package and leaves `chat.enableWorkflows` to the caller.
 
-Since **2.21.1** — and not before; every earlier release measured (2.18.1,
-2.19.0, 2.19.2, 2.20.2, 2.21.0) has no such code and no `[cli-settings]`
-workspace warning at all — the TUI merges a project-local
-`.kiro/settings/cli.json` over the global one through an allowlist:
+`extracted.json.rolloutStates` records the manifest's treatment percentage,
+segment and channel, preserving missing fields separately from null. The
+reviewed `extract/rollout-features.json` table contains only that vendor
+`state`. The coverage gate reports each unreviewed feature, stale row or changed
+state with its name and old/new state; state changes require a fresh review.
+`extracted.json.rolloutPatchability` records each feature’s `patchable` flag and
+`unmatchedSites` count using the patcher’s shared entry matcher over every
+feature site in the chat binary. Enabling an unpatchable feature fails at
+evaluation with its name and unmatched-site count. A single predicate in
+`extract/rollout-coverage.nix` derives whether a patch is needed: 100% treatment
+for all users on the stable channel preserves the stock derivation; absent or
+null segment and channel fields mean all and stable. Restricted features require
+v3 and a package exposing `passthru.withRolloutFeatures`. The CI rollout canary
+patches every measured patchable feature that still needs a patch to prove byte
+feasibility, matching consumer package selection. The package constructor sorts
+and deduplicates direct callers' feature lists.
 
-```js
-function vr() {
-  let e = dA(); // global ~/.kiro/settings/cli.json
-  try {
-    let n = Qq(Eq()); // workspace .kiro/settings/cli.json
-    for (let [t, a] of Object.entries(n)) if (Cq.has(t)) e[t] = a; // <- allowlist
-  } catch (n) {
-    ee.warn("[cli-settings] failed to read workspace cli.json:", n);
-  }
-  return e;
-}
-```
+`cli.native.settings.chat.keybindings` generates nullable string options from
+every extracted `chat.keybindings.*` setting key. Known keys reject non-string
+values; unknown keys remain available through the native JSON freeform tail. Key
+bindings use Kiro's own syntax, such as `"ctrl+x"`. Descriptions and default
+text use `extracted.json.keybindingDefaults`, measured from the bundle's
+action-to-setting map on every scheduled update. The workspace allowlist decides
+which settings devenv can deliver, including key bindings: a global-only key is
+refused at evaluation instead of written into a file Kiro ignores.
 
-`chat.enableWorkflows` is **not** in that allowlist, so a project-local write of
-it is read, filtered out, and dropped without a warning. The two backends
-therefore honor different key sets, because they write different files:
+### The scope boundary comes from the pinned client
 
-- **Home Manager** writes the GLOBAL file. Every key works. Unlocking
-  `workflows` implies
-  `cli.native.settings.chat.enableWorkflows = mkDefault true`
-  (`workflowsSettingImplication`), so gates 1 and 3 cannot drift apart, and an
-  explicit value still wins.
-- **devenv** writes the PROJECT-LOCAL file. Only allowlisted keys work, so
-  `mkDevenvWorkspaceSettingsAssertions` REFUSES anything else at eval rather
-  than emitting a file that looks applied. The implication is deliberately not
-  contributed there — it would write a discarded key and trip that very
-  assertion on a config nobody wrote.
-
-Do not "restore parity" by adding the implication to devenv. The asymmetry is
-the correct lowering of one option onto two different native scopes; the option
-DECLARATION is shared, which is where parity actually lives.
-
-### The allowlist is extracted from the workspace merge
+The TUI merges project-local `.kiro/settings/cli.json` over the global file
+through an allowlist. `chat.enableC2s`, `chat.enableWorkflows` and the
+background key binding are absent from the pinned allowlist. Home Manager writes
+the global file; devenv writes the project file, so devenv cannot satisfy those
+gates itself.
 
 `packages/kiro-cli/extracted.json` carries `workspaceOverridableSettings`,
-produced by `kiroSettingsExtractScript` in
-`packages/kiro-cli/lib/packaging.nix`. It is extracted rather than curated for
-the same reason `rolloutFeatures` is: the set IS the contract.
+extracted by `kiroSettingsExtractScript` in
+`packages/kiro-cli/lib/packaging.nix`. The extractor materializes the shipped
+TUI in the Nix build sandbox and finds the registry, allowlist and merge by
+their contents rather than minified names. Missing or ambiguous anchors fail
+extraction. Module checks compare declarations, rollout state and key-binding
+names with that sidecar and verify the scope difference on both backends.
 
-The extractor materializes the shipped TUI source in a Nix build sandbox and
-uses its JavaScript AST to find the registry and candidate allowlist by their
-contents, not by minified variable names. It also requires the workspace merge
-function to consult that same set. A missing or ambiguous registry, set, or
-merge is fatal. The extractor no longer supports the pre-2.21.1 shape without
-workspace merging. The validated registry and set expressions and the selected
-merge helper are evaluated in an isolated VM with inert loaders. This resolves
-symbolic members through the bundle's own registry and verifies which keys the
-merge actually copies. `module-kiro-workspace-allowlist-from-sidecar` checks for
-`chat.defaultModel` specifically because it appears symbolically in the set.
-
-That test also asserts `chat.enableWorkflows` is ABSENT from the allowlist. If
-upstream adds it, the test failing is the signal to relax the devenv guidance
-above — not a defect to route around.
+`KIRO_ENABLED_FEATURES` remains an unreliable override: the Rust chat binary
+recomputes it before spawning the TUI. Restricted features use the embedded
+rollout manifest patch; GA workflows need no such override.

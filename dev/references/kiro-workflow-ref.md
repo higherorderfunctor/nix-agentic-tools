@@ -1,8 +1,7 @@
 # Kiro Workflow Engine — Working Notes
 
-> **Last verified:** 2026-10-06 — independent launch-time tweaks include the
-> opt-in `relativeFileCheckPaths` correction (writer and check share one
-> workspace-relative path); per-turn reminders remain removed.
+> **Last verified:** 2026-10-09 — GA workflows require v3 and their global
+> client setting; older engine measurements retain their provenance.
 
 ## What this is, and how much to trust it
 
@@ -12,9 +11,10 @@ with light operator review on the seven questions that drove it. It measured
 nothing itself.
 
 **Treat it as a launch point, not a settled reference.** It is a snapshot of the
-best current understanding of a feature that is dark-shipped, undocumented
-upstream, and pre-release. It exists to save the next person the discovery cost,
-not to be right about everything.
+understanding of the older workflow engine; workflows are now generally
+available, while the engine measurements below retain their original release
+provenance. It exists to save the next person the discovery cost, not to be
+right about everything.
 
 **Calibration, stated plainly because it is the most useful thing on this page:
 a single operator review pass corrected three of its claims** — §2 (asserted no
@@ -69,45 +69,35 @@ If you are reading this outside `nix-agentic-tools`, those citations are dead
 pointers — the evidence lives in that repository, and a claim you cannot trace
 back to it should carry less weight, not the same weight.
 
-**The feature is dark-shipped and off by default.** Upstream describes
-`workflows` as "Dark-shipped at 0% until release certification is complete", and
-it appears in no official Kiro documentation — the vendor's own public v3 docs
-snapshot mentions workflows, recipes and `/goal` exactly zero times. Everything
-below can move without notice.
+Workflows are generally available since Kiro CLI 2.26.0. The older measurements
+below describe their recorded releases; current enablement follows
+[`workflow-gating.md`](../../packages/kiro-cli/docs/workflow-gating.md).
 
 ## 1. Execution model
 
-### Unlocking it
+### Enabling it
 
-Nothing here runs until the `workflows` rollout feature is force-unlocked. In
-this repository that is two options, declared in
-`packages/kiro-cli/lib/mkKiro.nix`:
+Current workflows need the v3 (`kas`) engine and the global
+`chat.enableWorkflows` client setting, with no rollout patch:
 
 ```nix
-ai.kiro.cli.unlockedRolloutFeatures = ["workflows"];
-ai.kiro.cli.v3 = true;                  # required — the commands need the kas engine
+ai.kiro.cli.v3 = true;
+ai.kiro.cli.workflows.enable = true;
 ```
 
-**`KIRO_ENABLED_FEATURES` does not work, and the reason is worth knowing because
-the evidence looks like it should.** Two sources point opposite ways and the
-resolution is the useful part:
+Home Manager implies the setting at default priority; devenv cannot write this
+global-only key and warns when it is missing. Set it in
+`~/.kiro/settings/cli.json` (or `$KIRO_HOME/settings/cli.json`) and start a
+fresh session. The friendly `codeToSpec`, `backgroundExecution`, `kvim` and
+`sandbox` switches cover other feature surfaces; `features.<name>.enable`
+exposes every extracted rollout name, and `native.settings.chat.keybindings`
+types the extracted binding keys. Their scope and launch requirements are
+documented in the feature-gating reference above.
 
-- At **2.15.2** the flag gained real client-side consumers —
-  `isEnabled("workflows")` went from 0 to 2 call sites, and the client's
-  feature-to-setting table gained `["workflows","workflows"]` and
-  `["workflows","goal"]`. From a static read alone you would conclude the env
-  var now works.
-- At **2.16.0** it was measured directly and does not: the Rust chat binary
-  **recomputes and overwrites the variable before spawning bun** — the parent
-  process held `["workflows"]` and the child received `["tangent"]` (ledger
-  §1.1).
-
-Both are true. The consumer exists; it is simply fed a recomputed value, so
-setting the variable never reaches it. Neither `KIRO_ROLLOUT_FORCE_INTERNAL` nor
-`KIRO_ROLLOUT_FORCE_NIGHTLY` helps either, since `segment: "internal"` resolves
-off the authenticated identity rather than the environment. **Patching the
-rollout manifest is the only client-side seam.** Unlocking `workflows` also
-enables `/goal` — one flag, two commands.
+The historical `KIRO_ENABLED_FEATURES` probe on 2.16.0 showed the Rust client
+overwriting the parent variable before spawning the TUI. That explains why the
+older restricted rollout needed a manifest patch; it is not a current workflow
+prerequisite. `/goal` shares the workflow gate.
 
 There is a second route that does not touch the binary: the engine's gate is a
 two-line pure function, `resolveWorkflows(parsed, persistedDefault)`, with no
@@ -969,13 +959,10 @@ and it does not check tool-group names (ledger §3.8).
 
 ### Validating without a session
 
-There is a bootstrapping problem worth knowing about: `validate_workflow` only
-exists in a session where `workflowsEnabled` is true, and enabling that requires
-either a patched binary or a pre-seeded session — so the tool that would vet
-your definition only exists in a session you can only create by already having a
-definition worth seeding.
+`validate_workflow` exists in any v3 session with `chat.enableWorkflows = true`.
+Workflows are generally available since 2.26.0 and require no binary patch.
 
-`fixtures/kiro-primitives/workflows/contract.jq` breaks that circle. It
+`fixtures/kiro-primitives/workflows/contract.jq` validates without a session. It
 re-implements the definition contract from the bundle read, runs on nothing but
 `jq`, and each diagnostic carries a `basis` saying whose rule it is: `engine`
 (the engine performs an equivalent check), `policy` (the engine **accepts**
@@ -1639,6 +1626,6 @@ figure above:
   in §1 is the cautionary case: a 2.15.2 static read showed the consumer had
   appeared and concluded the variable should now work, and a 2.16.0 live probe
   showed it still does not. Prefer the measurement where they conflict.
-- **Pre-release.** `workflows` is dark-shipped at 0% pending certification,
-  absent from all upstream documentation. Every behavior here can change without
-  notice.
+- **Release provenance.** Workflow availability is GA since 2.26.0; older engine
+  behavior recorded here has not been re-measured merely because its
+  availability changed.

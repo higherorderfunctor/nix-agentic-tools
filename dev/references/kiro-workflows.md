@@ -1,5 +1,8 @@
 # Kiro Workflow Engine — Mechanics and Measured Behavior
 
+> **Last verified:** 2026-10-09 — GA workflow prerequisites replace the
+> historical rollout unlock.
+
 Reference for adopting the workflow engine in another repository. Written for a
 reader who was not present for the experiments.
 
@@ -41,11 +44,10 @@ methodology (§13) make no behavioral claims and so carry none.
 
 ## 1. What this is, and what it is not (Measured)
 
-The workflow system is **dark-shipped, pre-release upstream code**. It is absent
-from the official Kiro CLI documentation — not in the slash-command reference,
-the CLI command reference, or the built-in tools reference — and it is **off by
-default**. §1.1 covers unlocking it; nothing else in this document is runnable
-until you have.
+Workflows are generally available since Kiro CLI 2.26.0. Current sessions still
+need the v3 (`kas`) engine and the global `chat.enableWorkflows` client setting.
+§1.1 describes current setup; engine measurements elsewhere retain their
+original versions and dates.
 
 It is reachable two ways, and an earlier version of this section wrongly claimed
 only the second existed:
@@ -94,47 +96,37 @@ Consequences for adoption:
 - Document it to **agents** via steering as well (§11); under ACP that is the
   only path.
 
-### 1.1 Prerequisite: the feature must be force-unlocked (Measured)
+### 1.1 Prerequisite: v3 and the global client setting (Extracted, module contract)
 
-`workflows` is one of **14 rollout features** listed in
-`packages/kiro-cli/extracted.json` under `rolloutFeatures`, gated by a JSON
-rollout manifest carried in the chat binary's **ELF rodata** in two identical
-copies. See `packages/kiro-cli/docs/launcher-argv.md` for the full anatomy.
-
-In this repository it is unlocked by patching that manifest:
+The pinned `workflows` rollout state is 100% for all users without a channel
+restriction. No binary patch is needed. Configure:
 
 ```nix
-ai.kiro.cli.unlockedRolloutFeatures = ["workflows"];
+ai.kiro.cli.v3 = true;
+ai.kiro.cli.workflows.enable = true;
 ```
 
-declared in `packages/kiro-cli/lib/mkKiro.nix`. Two assertions guard it: the
-option requires a `package` exposing `passthru.withRolloutFeatures`, and it
-requires `ai.kiro.cli.v3 = true` — the feature-gated commands reach the palette
-only on the v3 (`kas`) engine, so patching the binary is necessary but not
-sufficient.
+Home Manager implies
+`cli.native.settings.chat.enableWorkflows = lib.mkDefault true`; an explicit
+false wins. Devenv cannot deliver this global-only key and warns when it is
+missing or false. Configure it in `~/.kiro/settings/cli.json` (or
+`$KIRO_HOME/settings/cli.json`), then create a fresh session: the engine stores
+its workflow choice per session.
 
-**`KIRO_ENABLED_FEATURES` does not work.** `tui.js` reads it, which makes it
-look like an env var you can simply set, but the rust chat binary **recomputes
-and overwrites it** before spawning bun: measured, the parent process held
-`["workflows"]` and the child received `["tangent"]`. The manifest's own
-`workflows` description says "enable locally through `KIRO_ENABLED_FEATURES`" —
-that line is **stale** and does not describe shipped behavior. Neither
-`KIRO_ROLLOUT_FORCE_INTERNAL` nor `KIRO_ROLLOUT_FORCE_NIGHTLY` helps either,
-since `segment: "internal"` resolves off the authenticated identity rather than
-the environment. Patching the manifest is the only client-side seam.
+`/goal` shares the workflow gate. Confirm availability by calling
+`validate_workflow` on a trivial definition before running a probe. Absent tools
+require checking the engine, global setting and persisted session choice.
 
-**Unlocking `workflows` also enables `/goal`**, because the one flag gates both
-commands — both registry entries carry `feature:"workflows"` (see the grep
-above). `/goal` is the closest user-facing analogue to a workflow, so expect to
-be asked about it.
+Other friendly switches are `codeToSpec`, `backgroundExecution`, `kvim` and
+`sandbox`. `cli.features.<name>.enable` exposes every extracted rollout name and
+changes availability only, with no implied client setting. Typed
+`cli.native.settings.chat.keybindings` keys also come from the pinned registry.
+Scope exclusions and feature prerequisites are in
+[`workflow-gating.md`](../../packages/kiro-cli/docs/workflow-gating.md).
 
-**This documents pre-release, uncertified behavior.** Upstream describes
-`workflows` as "Dark-shipped at 0% until release certification is complete".
-Everything measured here could move without notice.
-
-Confirm the unlock is live in your own session before trusting any probe in this
-document: call `validate_workflow` on a trivial definition. If the workflow
-tools are absent, the feature is not unlocked and nothing here is reproducible.
+The earlier 2.16.0 `KIRO_ENABLED_FEATURES` probe remains historical evidence
+that the Rust client overwrote a parent override. It does not make a rollout
+patch necessary for current GA workflows.
 
 ## 2. Vocabulary
 
@@ -142,7 +134,7 @@ Terms used throughout, several of which are specific to this document:
 
 | term                 | meaning                                                                         |
 | -------------------- | ------------------------------------------------------------------------------- |
-| **engine**           | the dark-shipped workflow feature itself — node types, scheduler, tool surface  |
+| **engine**           | the workflow feature itself — node types, scheduler, tool surface               |
 | **orchestrator**     | the chat session that calls `run_workflow`. Also "root session", "parent".      |
 | **step agent**       | the agent running one `step` node, in its own isolated session                  |
 | **recipe**           | a stored workflow definition: `bundled://`, `generated://`, or a file path      |
@@ -159,7 +151,7 @@ Terms used throughout, several of which are specific to this document:
 
 The bare word "workflow" is ambiguous across four senses, and three of the rows
 above exist to keep them apart. The **engine** is the feature: it is what §1.1
-unlocks and what every measurement here is about. A **recipe** is one saved
+enables and what every measurement here is about. A **recipe** is one saved
 definition, whether bundled, generated, or a `.workflow.json` file on disk
 (§4.1). A **run** is one execution of a recipe, the thing `inspect_workflow`
 reports a status and a node tree for; two runs of one recipe are two runs.

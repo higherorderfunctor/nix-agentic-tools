@@ -1,7 +1,7 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-07 — owners receive the shared extraction library
-> as an argument rather than importing it by a relative path.
+> **Last verified:** 2026-10-09 — CI-only validation recipes stay outside native
+> public package discovery; owners receive the shared extraction library.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -107,5 +107,9 @@ The flat flake package projections (`packages`, `ciPackages`, and the flat part
 of `legacyPackages`) come from indexed leaf basenames. It rejects collisions,
 including workspace outputs, before constructing the final attrset. A nested
 namespace is available through the overlay while every leaf remains a derivation
-at the flat flake boundary. Both flake and devenv use the same repository
-composer; document generation uses its package-independent registry.
+at the flat flake boundary. CI-only validation recipes, such as the Kiro rollout
+canary, live outside the discovered package tree and are added only to
+`ciPackages` by the flake. Overlay parity explicitly checks their absence from
+public outputs while preserving completeness for every discovered leaf. Both
+flake and devenv use the same repository composer; document generation uses its
+package-independent registry.

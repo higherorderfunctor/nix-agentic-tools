@@ -105,12 +105,17 @@
     # hash, so a leaked patched binary was indistinguishable from the stock
     # one in a cache listing — which is exactly how one sat unnoticed in the
     # public cache. Derived from the canonicalized feature list, so it names
-    # WHICH features were unlocked rather than merely asserting "patched".
+    # WHICH features were unlocked, with a count and digest when the full
+    # names would exceed Nix's derivation-name limit.
     #
     # Consumed only inside `optionalAttrs (rolloutFeatures != [])` blocks:
     # renaming the DEFAULT derivation would fork its drvPath for every
     # consumer and cost the cache hit the `[]` path exists to preserve.
-    rolloutSuffix = "rollout-" + pkgs.lib.concatStringsSep "-" rolloutFeatures;
+    readableRolloutSuffix = "rollout-" + pkgs.lib.concatStringsSep "-" rolloutFeatures;
+    rolloutSuffix =
+      if builtins.stringLength "${basePackage.pname or "kiro-cli-unwrapped"}-${readableRolloutSuffix}-${sources.version}" < 200
+      then readableRolloutSuffix
+      else "rollout-${toString (builtins.length rolloutFeatures)}-${builtins.substring 0 12 (builtins.hashString "sha256" (pkgs.lib.concatStringsSep "," rolloutFeatures))}";
 
     pinned = basePackage.overrideAttrs (finalAttrs: attrs:
       {
