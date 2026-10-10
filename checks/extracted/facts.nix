@@ -157,8 +157,10 @@
             inherit systems;
             decisions = fixRows;
           });
-        refused = lib.filter (failure: failure.kind == "bad-decision") pasted.failures;
-        named = builtins.toJSON (map (failure: {inherit (failure) details fix;}) refused);
+        # One message per bad field, in `details` only.
+        refused = map (failure: failure.details) (lib.filter (failure: failure.kind == "bad-decision") pasted.failures);
+        # The fields each message names, one message per field.
+        named = map (message: lib.filter (field: lib.hasInfix field message) ["decided" "reason"]);
         edited = merge (divergent
           // {
             inherit systems;
@@ -171,9 +173,9 @@
             fixRows;
           });
       in
-        refused
-        != []
-        && lib.all (field: lib.hasInfix field named) ["decided" "reason"]
+        builtins.length refused
+        == 1
+        && lib.sort (a: b: toString a < toString b) (named (lib.head refused)) == [["decided"] ["reason"]]
         && edited.failures == [];
     };
     # Fixture 9; spec:171-187.
@@ -362,7 +364,7 @@ in {
       "$jq" -e --argjson vocabulary '${builtins.toJSON vocabulary}' '
         keys == ["mode"]
         and (.mode.combine | IN($vocabulary[]))
-        and (.mode.reason | type == "string" and startswith("TODO"))
+        and (.mode.reason | type == "string" and (trim | . == "TODO" or startswith("TODO:")))
         and .mode.decided == "YYYY-MM-DD"
       ' ${pkgs.writeText "divergent-fix.json" (builtins.toJSON fixRows)} > /dev/null || {
         echo "FAIL: divergent fix is not a complete decisions.json row:" >&2
