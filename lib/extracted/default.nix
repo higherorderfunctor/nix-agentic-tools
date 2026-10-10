@@ -4,29 +4,32 @@ in {
   inherit (import ./reconcile.nix {inherit lib;}) reconcile;
 
   mkDriftCheck = {
-    # A path or derivation each, or per system (the facts contract's
-    # "Drift"): `{ "<system>" = path; }` and `{ "<system>" = derivation; }`.
+    # A path, or per system (the facts contract's "Drift") the owner's
+    # `extracted/` directory; `<system>.json` is derived under it.
     committed,
+    # A path or derivation, or `{ "<system>" = derivation; }`.
     extracted,
     name,
     results ? {},
     # The sidecar's repository path, as a string, for messages only. A path
     # derived from `committed` would move with its owner, and
-    # checks.facet-owner-relocation requires the check not to. Per system
-    # when `committed` is.
+    # checks.facet-owner-relocation requires the check not to. Per system it
+    # names the directory, like `committed`.
     sidecar,
   }: let
     failures = lib.concatMap (surface: surface.failures) (builtins.attrValues results);
     host = pkgs.stdenv.hostPlatform.system;
-    perSystem = builtins.isAttrs committed && !lib.isDerivation committed;
+    perSystem = builtins.isAttrs extracted && !lib.isDerivation extracted;
     # A host-run extractor builds only on its own system; a static one may
     # supply every system's raw from this host.
-    buildable = lib.filterAttrs (_: drv: !lib.isDerivation drv || drv.system == host) extracted;
+    buildable = builtins.filter (system: extracted ? ${system} && extracted.${system}.system == host) (import ../../config/systems.nix);
     compare = {
       committed,
       extracted,
       sidecar,
       attr,
+      # Single mode stops here; per-system records it and fails at the end.
+      onDrift,
     }: ''
       if ! "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} '$a == $b' > /dev/null; then
         echo "FAIL: ${name} sidecar (${sidecar}) is out of sync with its extraction sources." >&2
@@ -37,24 +40,28 @@ in {
         echo '  extracted="$(nix build --no-link --print-out-paths .#checks.${host}.${name}-extracted.passthru.${attr})"' >&2
         echo '  cp "$extracted" ${sidecar}' >&2
         echo '  nix fmt -- ${sidecar}' >&2
-        exit 1
+        ${onDrift}
       fi
     '';
     comparisons =
       if perSystem
-      then
-        lib.concatStrings (lib.mapAttrsToList (system: drv:
+      then ''
+        drifted=0
+        ${lib.concatMapStrings (system:
           compare {
-            committed = committed.${system};
-            extracted = drv;
-            sidecar = sidecar.${system};
+            committed = committed + "/${system}.json";
+            extracted = extracted.${system};
+            sidecar = "${sidecar}/${system}.json";
             attr = "extracted.${system}";
+            onDrift = "drifted=1";
           })
-        buildable)
+        buildable}if [ "$drifted" -eq 1 ]; then exit 1; fi
+      ''
       else
         compare {
           inherit committed extracted sidecar;
           attr = "extracted";
+          onDrift = "exit 1";
         };
   in {
     "${name}-extracted" =
