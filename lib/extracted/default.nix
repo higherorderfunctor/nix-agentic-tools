@@ -1,7 +1,10 @@
 {pkgs}: let
   inherit (pkgs) lib;
+  facts = import ./facts.nix {inherit lib;};
 in {
+  inherit (facts) expect get getFor merge;
   inherit (import ./reconcile.nix {inherit lib;}) reconcile;
+  index = facts.index pkgs;
 
   mkDriftCheck = {
     committed,
