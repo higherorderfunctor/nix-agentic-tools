@@ -370,9 +370,8 @@ Each names a fixable entry (set `extensions` or rename the server, or
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-09 — Kiro CLI controls live under `ai.kiro.cli`;
-> shared `.kiro` file declarations remain under `ai.kiro`; no job pushes any
-> kiro path to the public cache.
+> **Last verified:** 2026-10-10 — the `kiro-patched` tripwire asserts the whole
+> patched closure is absent from the public cache; no job pushes any kiro path.
 
 ### Overview
 
@@ -565,34 +564,22 @@ answers 200 from the cache. It opens with a positive control against
 `nix-cache-info`, because every assertion in it is "not 200" and a typo'd host
 would satisfy all of them — a tripwire that can only pass is worse than none.
 
-Getting that step right took three wrong versions, and each failure mode is
-worth keeping because none is specific to Kiro:
+Getting that step right took wrong versions, and each failure mode is worth
+keeping because none is specific to Kiro:
 
-- **Assert only on the patched-UNIQUE paths.** Walking the whole patched closure
-  now reports three false leaks (six before the FHS consolidation). The shared
-  dispatcher, `-init` script, and `-fhsenv-profile` tree do not depend on the
-  binary's CONTENT, so they are byte-identical across both variants, share a
-  store path, and the unpatched closure is no longer published either. The
-  subtraction stays only because a cache purge of the paths published before the
-  filter reached `ci.yml` is operator-side; once it is done the whole closure
-  can be asserted. Subtract the unpatched closure first. A patched-specific path
-  cannot appear in the base derivation tree, so the subtraction cannot
-  over-exclude.
-- **`nix derivation show`'s `.outputs[].path` changes shape by nix version** —
-  `/nix/store/xxx-name` on 2.34.4, bare `xxx-name` on 2.35.1. A full-path
-  comparison matched NOTHING on the runner while passing locally. Compare
-  BASENAMES (`s|.*/||`) so both shapes normalize. This is the general trap:
-  local nix and runner nix are different versions, so any jq over nix JSON needs
-  verifying under both.
-- **An emptiness guard is not enough.** That schema change produced a large,
-  well-formed, entirely useless list which `[ -z ]` accepted. The guard also
-  requires the enumeration to contain a kiro path, so the next shape change is
-  one loud line instead of six false leak reports.
-- **`printf … | grep -q` under `pipefail` inverts a successful match.**
-  `grep -q` exits on the first hit, `printf` takes SIGPIPE (141), and pipefail
-  reports 141 for the pipeline. It is SIZE-dependent — invisible below the ~64
-  KiB pipe buffer, reproducible at the real ~95 KB — so a small fixture
-  "verifies" it wrongly. The test is pure-bash for that reason.
+- **Assert on the WHOLE patched closure, shared FHS pieces included.** The
+  dispatcher, `-init` script, and `-fhsenv-profile` tree are byte-identical
+  across both variants and share a store path. The step used to subtract the
+  unpatched closure so those paths, published before the filter reached
+  `ci.yml`, did not read as leaks. The operator purged them (2026-10-10, every
+  kiro path in the pinned closure answers 404), so the subtraction is gone and
+  any kiro path that answers 200 fails the step.
+- **An emptiness guard is not enough.** A large, well-formed, entirely useless
+  list passes `[ -z ]` and makes the loop ask nothing. The step requires the
+  patched closure listing to contain a kiro path, so a shape change is one loud
+  line instead of a silent pass. Entries are compared by BASENAME
+  (`${path##*/}`), since nix versions differ on whether a store path prints with
+  its `/nix/store/` prefix.
 
 Sources are filtered too, and gain explicit versioned names
 (`kiro-cli-source-<version>-<system>.<ext>`). They were unversioned
