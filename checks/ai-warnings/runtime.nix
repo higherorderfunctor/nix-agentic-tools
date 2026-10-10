@@ -25,7 +25,7 @@
         filename = "KIRO.md";
         text = "kiro probe";
       };
-      enable = true;
+      cli.enable = true;
       lspServers.probe = {
         command = "probe";
         extensions = ["nix"];
@@ -37,10 +37,7 @@
   };
   workflowWarning = declaration:
     (harness.evalDevenv {
-      ai.kiro = {
-        enable = true;
-        cli = declaration;
-      };
+      ai.kiro.cli = {enable = true;} // declaration;
     }).config.enterShell;
   # Kimchi's context.filename names the Home Manager harness file only; devenv
   # always writes the project-root AGENTS.md. Evaluated alone so no other

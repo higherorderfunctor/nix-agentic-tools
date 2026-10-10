@@ -90,7 +90,7 @@ in {
     module-ai-shell-kiro-hm-wrapper-carries-shell = let
       result = evalHm {
         ai.shell = pkgs.bash;
-        ai.kiro.enable = true;
+        ai.kiro.cli.enable = true;
       };
     in
       mkWrapperGrepTest {
@@ -176,8 +176,10 @@ in {
       result = evalHm {
         ai.shell = pkgs.bash;
         ai.kiro = {
-          enable = true;
-          cli.environmentVariables.SHELL = "/explicit/zsh";
+          cli = {
+            enable = true;
+            environmentVariables.SHELL = "/explicit/zsh";
+          };
         };
       };
     in

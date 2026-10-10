@@ -204,9 +204,9 @@ in {
       };
     };
     kiro = {
-      enable = true;
       mcpServers.agnix = agnixMcp;
       cli = {
+        enable = true;
         tweaks = {
           # Replacing only the opening sentence preserves the vendor's behavioral prose.
           # No backticks or dollar-braces: the value goes into a JS template literal.

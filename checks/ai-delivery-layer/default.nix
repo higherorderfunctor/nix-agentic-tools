@@ -13,7 +13,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles deliveredMarkdown deliveredTree evalDevenv fromGeneratedTree harnessNames hasLiteral markdownInput mkTest ownPlan;
+  inherit (harness) deliveredFiles deliveredMarkdown deliveredTree evalDevenv fromGeneratedTree harnessNames hasLiteral markdownInput mkTest ownPlan setEnable;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
   formats = import ../../lib/ai/formats.nix {inherit lib pkgs;};
@@ -43,7 +43,7 @@
         skills.probe = ./fixtures/probe-skill;
       }
       // lib.genAttrs harnessNames (runtime:
-        {enable = true;}
+        lib.getAttrFromPath ["ai" runtime] (setEnable runtime true)
         // lib.optionalAttrs (runtime == "claude") {
           files.".claude/hooks/raw-probe" = {
             content.source = rawSource;
@@ -52,7 +52,7 @@
         })
       // {
         kiro = {
-          enable = true;
+          cli.enable = true;
           hooks.typed = {
             action.command = "true";
             trigger = "PostToolUse";
@@ -228,7 +228,7 @@
     kiro.cli.native.settings.chat.defaultModel = "SNAPSHOT-NATIVE";
   };
   snapshotConfig = runtimes: {
-    ai = pools // lib.genAttrs runtimes (runtime: {enable = true;} // native.${runtime});
+    inherit (lib.foldl' lib.recursiveUpdate {ai = pools;} (map (runtime: setEnable runtime true) runtimes ++ [{ai = lib.genAttrs runtimes (runtime: native.${runtime});}])) ai;
   };
   renderEntry = label: value: "${label} ${builtins.toJSON value}\n";
   renderSink = backend: evaluated: let
@@ -265,20 +265,20 @@
   # One writer, both backends, every ordering feature: a backend-keyed entry
   # name, a token with no devenv node (`secrets`), and both ends of the
   # position.
-  migrator = runtime: {
-    ai.${runtime} = {
-      enable = true;
-      activation.probeMigrate = {
-        after = ["secrets"];
-        before = ["linkCheck" "shell"];
-        command = "printf 'probe'";
-        entry = {
-          devenv = "ai:probe:migrate";
-          hm = "probeMigrate";
+  migrator = runtime:
+    lib.recursiveUpdate (setEnable runtime true) {
+      ai.${runtime} = {
+        activation.probeMigrate = {
+          after = ["secrets"];
+          before = ["linkCheck" "shell"];
+          command = "printf 'probe'";
+          entry = {
+            devenv = "ai:probe:migrate";
+            hm = "probeMigrate";
+          };
         };
       };
     };
-  };
   # `exit` would truncate the whole concatenated activation script, so match
   # the WORD: `inherit_errexit` carries the substring and must not trip this.
   usesExit = line: builtins.match "(.*[^_[:alnum:]])?exit([^_[:alnum:]].*)?" line != null;
@@ -351,7 +351,7 @@ in {
       leafSource = pkgs.writeText "delivery-recursive-neighbor.md" "extra\n";
       config = {
         ai.kiro = {
-          enable = true;
+          cli.enable = true;
           files = {
             ".kiro/tree" = {
               content.source = ./fixtures/probe-skill;
@@ -524,7 +524,7 @@ in {
             (evaluate {
               ai.rules.inherited.text = "INHERITED-RULE";
               ai.kiro = {
-                enable = true;
+                cli.enable = true;
                 normalized.rules.extra = {
                   matcher = ["src/**"];
                   text = "EXTRA-RULE";
@@ -555,7 +555,7 @@ in {
               path = ".kiro/probe.${codec}";
               ledger = "documents/probe.json";
               base.ai.kiro = {
-                enable = true;
+                cli.enable = true;
                 activation.probeDocument.ledgers.${ledger} = {inherit codec path;};
                 files.${path} = {
                   content.value.generated = true;
@@ -697,7 +697,7 @@ in {
           codex.enable = true;
           context.text = "GENERATED-CONTEXT";
           kimchi.enable = true;
-          kiro.enable = true;
+          kiro.cli.enable = true;
         };
         evaluate = entry:
           evalDevenv (lib.recursiveUpdate base {
@@ -725,7 +725,7 @@ in {
             };
             kimchi.enable = true;
             kiro = {
-              enable = true;
+              cli.enable = true;
               files."separate.md".content.text = "SEPARATE";
             };
           };
@@ -772,7 +772,7 @@ in {
                 methodFor = lib.mkForce (_: "shared");
               };
               kiro = {
-                enable = true;
+                cli.enable = true;
                 files."AGENTS.md" = {
                   content.text = "SAME";
                   method = "symlink";
@@ -813,7 +813,7 @@ in {
           evaluated = evaluate {
             ai.rules.inherited.text = "INHERITED-RULE";
             ai.kiro = {
-              enable = true;
+              cli.enable = true;
               rules.local.text = "LOCAL-RULE";
               normalized.rules = lib.mkForce {
                 forced = {
@@ -908,7 +908,7 @@ in {
         # bare-enabled, so it is the only one that can show the edge ABSENT.
         base = {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             activation.probeDefaults.command = "printf 'probe'";
           };
         };
@@ -927,7 +927,7 @@ in {
     module-delivery-devenv-guards-symlink-updates = let
       config = {
         ai.kiro = {
-          enable = true;
+          cli.enable = true;
           activation = {
             probeLate = {
               before = [];
@@ -966,7 +966,7 @@ in {
       devenv = (evalDevenv (config // {files."probe-copy".copyMode = "copy";})).config;
       hm = (evalHm config).config;
       task = devenv.tasks."ai:kiro:guard-symlink-updates";
-      bare = (evalDevenv {ai.kiro.enable = true;}).config;
+      bare = (evalDevenv {ai.kiro.cli.enable = true;}).config;
       guardLines =
         lib.filter (line: lib.hasPrefix "guard_link " line)
         (map lib.strings.trim (lib.splitString "\n" task.exec));
@@ -1170,6 +1170,7 @@ in {
 
     module-delivery-method-for-delegates-to-the-rule = mkTest "delivery-method-for-delegates-to-the-rule" (
       let
+        evaluate = config: evalHm (lib.mkMerge [{ai.rules.probe.text = "probe";} config]);
         ask = evaluated: path:
           evaluated.config.ai.kiro.methodFor {
             backend = "hm";
@@ -1177,30 +1178,30 @@ in {
             facts = plainFacts;
             inherit path;
           };
-        standard = evalHm {ai.kiro.enable = true;};
+        standard = evaluate {ai.kiro.cli.enable = true;};
         # Two definitions at ORDINARY priority are not a merge error:
         # `functionTo` merges the RESULTS, per call, through the enum. Two
         # that agree answer; two that disagree fail where the router calls
         # the function rather than where they were written.
-        agreeing = evalHm {
+        agreeing = evaluate {
           ai.kiro = lib.mkMerge [
-            {enable = true;}
+            {cli.enable = true;}
             {methodFor = _: "copy-ro";}
             {methodFor = _: "copy-ro";}
           ];
         };
-        disagreeing = evalHm {
+        disagreeing = evaluate {
           ai.kiro = lib.mkMerge [
-            {enable = true;}
+            {cli.enable = true;}
             {methodFor = _: "copy-ro";}
             {methodFor = _: "shared";}
           ];
         };
         # The exotic case: replace the lambda, override ONE path, and hand
         # every other case back to the rule that was passed in.
-        replaced = evalHm {
+        replaced = evaluate {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             methodFor = lib.mkForce ({
               backend,
               default,
@@ -1213,7 +1214,8 @@ in {
           };
         };
       in
-        ask standard ".kiro/steering/orientation.md"
+        (deliveredFiles standard.config) ? ".kiro/steering/probe.md"
+        && ask standard ".kiro/steering/orientation.md"
         == "symlink"
         && ask replaced ".kiro/steering/orientation.md" == "copy-ro"
         && ask replaced ".kiro/settings/lsp.json" == "symlink"
@@ -1228,14 +1230,13 @@ in {
     # generator family, because each one contributes its entry differently.
     module-delivery-sibling-definition-keeps-generated-content = mkTest "delivery-sibling-definition-keeps-generated-content" (
       let
-        base = runtime: {
-          ai =
-            {
+        base = runtime:
+          lib.recursiveUpdate (setEnable runtime true) {
+            ai = {
               context.text = "GENERATED-CONTEXT";
               rules.probe.text = "GENERATED-RULE";
-            }
-            // {${runtime}.enable = true;};
-        };
+            };
+          };
         withSibling = {
           evaluate,
           path,
@@ -1313,7 +1314,7 @@ in {
         merged = generated:
           (evalHm {
             ai.kiro = lib.mkMerge [
-              {enable = true;}
+              {cli.enable = true;}
               {files.".kiro/probe.json" = {format = "json";} // generated;}
               {files.".kiro/probe.json".content.value.consumer = true;}
             ];
@@ -1352,7 +1353,7 @@ in {
         entryFor = format:
           (evalHm {
             ai.kiro = {
-              enable = true;
+              cli.enable = true;
               files.".kiro/rendered" = {
                 inherit format;
                 content = {inherit value;};
@@ -1381,7 +1382,7 @@ in {
       let
         evaluated = evalHm {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             files.".kiro/settings/probe.json" = {
               # The harness rewrites it, so the rule answers `shared`.
               content.text = "{}";
@@ -1411,7 +1412,7 @@ in {
         };
         config = {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             files.".kiro/tree" = tree;
           };
         };
@@ -1420,7 +1421,7 @@ in {
         notADirectory = builtins.tryEval (builtins.deepSeq
           (evalDevenv {
             ai.kiro = {
-              enable = true;
+              cli.enable = true;
               files.".kiro/leaf" =
                 tree
                 // {content.source = ./fixtures/probe-skill/SKILL.md;};
@@ -1524,7 +1525,7 @@ in {
       source = pkgs.writeText "raw-rewrite-probe.md" "#   Heading\n";
       config = {
         ai.kiro = {
-          enable = true;
+          cli.enable = true;
           skills.probe-file = source;
         };
       };
@@ -1548,7 +1549,7 @@ in {
       let
         config = {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             activation.probeMaterialize = {
               entry = {
                 devenv = "ai:probe:materialize";
@@ -1652,7 +1653,7 @@ in {
       let
         base = {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             activation.probeMaterialize.ledgers."materialize/probe.manifest" = {
               codec = "dir";
               path = ".kiro/probe";
@@ -1668,7 +1669,7 @@ in {
         };
         document = {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             activation.probeDocument.ledgers."json-settings/probe-doc.json" = {
               codec = "json";
               path = ".kiro/probe-doc.json";
@@ -1779,7 +1780,7 @@ in {
           builtins.tryEval (builtins.deepSeq
             (evalDevenv {
               ai.kiro = {
-                enable = true;
+                cli.enable = true;
                 files.".kiro/probe.json" = {
                   content.text = "{}";
                   facts.symlinkReadable = value;
@@ -1791,7 +1792,7 @@ in {
             true);
         writer = {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             activation.probeMigrate = {
               command = "printf 'probe'";
               entry.hm = "probeMigrate";
@@ -1900,9 +1901,7 @@ in {
       lib.all (runtime: let
         hm = (evalHm (migrator runtime)).config;
         devenv = (evalDevenv (migrator runtime)).config;
-        disabled = evalHm (lib.recursiveUpdate (migrator runtime) {
-          ai.${runtime}.enable = false;
-        });
+        disabled = evalHm (lib.recursiveUpdate (migrator runtime) (setEnable runtime false));
       in
         hm.home.activation
         ? probeMigrate

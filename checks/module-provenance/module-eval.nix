@@ -7,6 +7,7 @@
   ...
 }: let
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) normalizedPoolNames packagePoolCollisions packagePoolProbeConfigs packagePoolsClean rootPoolClean rootPoolProbeConfig rootPoolSrcRoot rootPoolViolations;
+  optionPaths = import ../../lib/ai/option-paths.nix {inherit lib pkgs;};
   inherit (harness) aiStubs evalDevenv evalHm harnessNames hmLib mkTest;
 in {
   checks = {
@@ -27,7 +28,7 @@ in {
     # enables. A shallow merge here silently makes runtime-gated callbacks
     # unreachable and turns the guard into a false negative.
     module-ai-root-pool-probe-retains-runtime-enables = mkTest "ai-root-pool-probe-retains-runtime-enables" (
-      lib.all (runtime: rootPoolProbeConfig.ai.${runtime}.enable) harnessNames
+      lib.all (runtime: lib.getAttrFromPath (optionPaths.launcher runtime "enable") rootPoolProbeConfig) harnessNames
       && lib.all
       (program: rootPoolProbeConfig.ai.programs.${program}.enable)
       ["delegate-routing" "peer-communication" "semble" "stacked-workflows"]

@@ -3,7 +3,7 @@
   harness,
   ...
 }: let
-  inherit (harness) harnessNames;
+  inherit (harness) harnessNames setEnable;
   optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
 
   # ── The A1 backstop: no module in THIS repo may define a ROOT ai.* option ──
@@ -89,7 +89,7 @@
   rootPoolSrcRoot = toString ../..;
 
   runtimePoolProbeConfig = {
-    ai = lib.genAttrs harnessNames (_: {enable = true;});
+    inherit (lib.foldl' lib.recursiveUpdate {} (map (runtime: setEnable runtime true) harnessNames)) ai;
   };
   withEnabledProgramProbes = probe: lib.recursiveUpdate runtimePoolProbeConfig probe;
 

@@ -1,8 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-08 — Kiro launcher controls and normalized launcher
-> pools use `ai.kiro.cli`; shared pools and delivery stay at `ai.kiro`; Codex
-> checks document truncation at launch rather than through shared shell entry.
+> **Last verified:** 2026-10-09 — Kiro launcher controls, including enable, use
+> `ai.kiro.cli`; root enable is read-only and derived from that switch.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -78,12 +77,13 @@ not move them back.
 ```
 
 The runtime record has one data-only placement field, `launcherOptionsPath`,
-default `[]`. Kiro sets `["cli"]`: only package, environment, shell and the
-corresponding normalized inputs move there. Declarations, per-key fold defaults
-and callback reads share that path. Callbacks still receive the shared `cfg` and
-one complete `normalized` view. Native agents and every file/ledger remain at
-the runtime root. The field must be a list of nonempty strings; constructor and
-transform both validate it.
+default `[]`. Kiro sets `["cli"]`: enable, package, environment, shell and the
+corresponding normalized inputs move there. The root `ai.kiro.enable` is
+read-only and derived from `ai.kiro.cli.enable`. Declarations, per-key fold
+defaults and callback reads share that path. Callbacks still receive the shared
+`cfg` and one complete `normalized` view. Native agents and every file/ledger
+remain at the runtime root. The field must be a list of nonempty strings;
+constructor and transform both validate it.
 
 ### Rules
 

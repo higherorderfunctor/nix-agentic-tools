@@ -2301,7 +2301,7 @@ in {
             projectDocMaxBytes = 16;
           };
           kiro = {
-            enable = true;
+            cli.enable = true;
             rules.kiro-only.text = lib.concatStrings (lib.replicate 32 "x");
           };
         };

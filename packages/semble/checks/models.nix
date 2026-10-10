@@ -478,7 +478,7 @@ in {
                 cli.instructions.enable = true;
                 subagent.enable = true;
               };
-            kiro.enable = true;
+            kiro.cli.enable = true;
           };
         };
         rule = evaluated.config.ai.claude.rules.semble.text;

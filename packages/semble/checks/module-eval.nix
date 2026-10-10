@@ -213,7 +213,7 @@ in {
         cfg =
           (evalHm {
             ai.programs.semble.subagent.enable = true;
-            ai.kiro.enable = true;
+            ai.kiro.cli.enable = true;
           }).config;
         emitted = builtins.fromJSON (builtins.unsafeDiscardStringContext (markdownInput {config = cfg;} ".kiro/agents/semble-search.json").text);
       in
@@ -241,7 +241,7 @@ in {
                 instructions.text = "Root instructions.";
               };
               claude.enable = true;
-              kiro.enable = true;
+              kiro.cli.enable = true;
               programs.semble = {
                 enable = true;
                 subagent = {
@@ -948,7 +948,7 @@ in {
               subagent = mcpSubagent;
             };
             ai.kiro = {
-              enable = true;
+              cli.enable = true;
             };
           }).config;
         # The same with nothing enabled but the subagent.
@@ -956,7 +956,7 @@ in {
           (evalHm {
             ai.programs.semble.runtimes.kiro.subagent = mcpSubagent;
             ai.kiro = {
-              enable = true;
+              cli.enable = true;
             };
           }).config;
         claude =
@@ -1020,7 +1020,7 @@ in {
           };
         };
         ai.kiro = {
-          enable = true;
+          cli.enable = true;
         };
       };
       agentFile = (deliveredFiles evaluated.config).".kiro/agents/semble-search.json".source;
@@ -1198,7 +1198,7 @@ in {
           ai = {
             claude.enable = true;
             codex.enable = true;
-            kiro.enable = true;
+            kiro.cli.enable = true;
           };
           ai.programs.semble.cli.instructions.enable = true;
         };
@@ -1348,7 +1348,7 @@ in {
               mcpServers.semble = null;
             };
             kiro = {
-              enable = true;
+              cli.enable = true;
               mcpServers.semble = null;
             };
           };
@@ -1376,13 +1376,21 @@ in {
               subagent.enable = true;
             };
             kiro =
-              {enable = true;}
+              {cli.enable = true;}
               // lib.optionalAttrs withdrawn {agents.semble-search = null;};
           };
         };
         hasNative = evaluated: evaluated.config.ai.kiro.native.agents ? semble-search;
       in
-        lib.all (evaluate: !(hasNative (evaluate (config true))) && hasNative (evaluate (config false))) [evalHm evalDevenv]
+        lib.all (evaluate: let
+          disabled = evaluate (config true);
+          enabled = evaluate (config false);
+          path = ".kiro/agents/semble-search.json";
+        in
+          !(hasNative disabled)
+          && hasNative enabled
+          && !((deliveredFiles disabled.config) ? ${path})
+          && (deliveredFiles enabled.config) ? ${path}) [evalHm evalDevenv]
     );
   };
 }

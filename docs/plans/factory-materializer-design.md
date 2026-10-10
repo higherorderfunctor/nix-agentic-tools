@@ -145,8 +145,8 @@ path and the prune path; "ours" = disk hash equals manifest hash):
 | stale `.nat-tmp.` temp (ours by infix) | swept at start — the ONE declared non-manifest deletion (never user content; infix reserved)                                                                            | same sweep                                |
 | foreign (no manifest entry, real file) | **backup + WARN + write** — adoption-with-preservation; today's HM errors on this collision, an activation script must not abort, so preservation+warning is the analog | never touched (not in manifest)           |
 
-**[B6] Disable/removal is a declared limitation**: `ai.kiro.enable = false` (or
-removing the module) removes the runner itself — nothing can prune the
+**[B6] Disable/removal is a declared limitation**: `ai.kiro.cli.enable = false`
+(or removing the module) removes the runner itself — nothing can prune the
 materialized files, and Kiro keeps loading them. Documented uninstall path: set
 the surface empty (or `steeringStrategy = "symlink"`) for one activation, THEN
 disable. Called out in module docs + README. (Symlink mode never had this hole;

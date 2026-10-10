@@ -58,7 +58,7 @@ ai = {
     settings.model = "gpt-5.6-sol";
   };
   copilot.enable = true;
-  kiro.enable = true;
+  kiro.cli.enable = true;
   programs.delegate-routing.enable = true;
   programs.stacked-workflows.enable = true;
   settings.reasoningEffort = "high";
@@ -465,7 +465,7 @@ ai = {
   codex.enable = true;
   copilot.enable = true;
   kimchi.enable = true;
-  kiro.enable = true;
+  kiro.cli.enable = true;
 
   skills.my-skill = ./skills/my-skill;
 
@@ -520,8 +520,8 @@ Kiro keeps shared files under `ai.kiro` and CLI controls under `ai.kiro.cli`:
 
 ```nix
 ai.kiro = {
-  enable = true;
   cli = {
+    enable = true;
     v3 = true;
     workflows.enable = true;
   };
@@ -540,11 +540,11 @@ only when workflows are enabled.
 > **Kiro steering-copy upgrade:** when upgrading from a release that
 > materialized steering as real copies, keep the previous `ai.kiro.configDir`
 > for one Home Manager activation or devenv shell entry. The manifest-guarded
-> retirement runs even when `ai.kiro.enable = false`. If a custom `configDir`
-> must change or be removed, perform that retirement generation first, then
-> change the directory; the legacy manifest records owned filenames and hashes,
-> but not an invertible target path, so a later generation cannot safely infer
-> the old custom directory.
+> retirement runs even when `ai.kiro.cli.enable = false`. If a custom
+> `configDir` must change or be removed, perform that retirement generation
+> first, then change the directory; the legacy manifest records owned filenames
+> and hashes, but not an invertible target path, so a later generation cannot
+> safely infer the old custom directory.
 
 </details>
 
@@ -732,7 +732,7 @@ ai.programs.semble.enable = true;
 
 ai.claude.enable = true;
 ai.codex.enable = true;
-ai.kiro.enable = true;
+ai.kiro.cli.enable = true;
 ```
 
 Portable defaults live at `ai.programs.semble`. Each supported runtime has the

@@ -19,6 +19,8 @@
   # is what makes the tests below GROW when a sixth runtime lands: a hardcoded
   # list would keep passing while silently not covering the newcomer.
   harnessNames = import ../ai/runtimes.nix;
+  optionPaths = import ../ai/option-paths.nix {inherit lib pkgs;};
+  setEnable = runtime: lib.setAttrByPath (optionPaths.launcher runtime "enable");
   tomlFormat = pkgs.formats.toml {};
   hmLib =
     lib
@@ -521,6 +523,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
   inherit testing;
 }

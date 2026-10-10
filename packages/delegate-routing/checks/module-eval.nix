@@ -6,7 +6,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) evalDevenv evalHm mkTest setEnable;
   runtimes = ["claude" "codex" "kimchi" "kiro"];
   scenario.ai = {
     claude.enable = true;
@@ -16,7 +16,7 @@
       # Home Manager requires an account region.
       native.settings.region = "us";
     };
-    kiro.enable = true;
+    kiro.cli.enable = true;
     programs.delegate-routing = {
       enable = true;
       # The package ships no Kimchi families, so the scenario declares one.
@@ -93,7 +93,7 @@
     reminderWithIgnoredPrompt = change {ai.kiro.hooks.delegate-routing-reminder.action.prompt.text = "IGNORED PROMPT";};
     manualScenario.ai = {
       claude.enable = true;
-      kiro.enable = true;
+      kiro.cli.enable = true;
       programs.delegate-routing.runtimes.claude = {
         enable = true;
         manualExternalDelegates = ["kiro"];
@@ -108,12 +108,12 @@
       ai.programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
     });
     manualRuntimeDisabled = evaluate (lib.recursiveUpdate manualScenario {
-      ai.kiro.enable = lib.mkForce false;
+      ai.kiro.cli.enable = lib.mkForce false;
       ai.programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
     });
     invalid = evaluate (lib.recursiveUpdate manualScenario {
       ai = {
-        kiro.enable = lib.mkForce false;
+        kiro.cli.enable = lib.mkForce false;
         programs.delegate-routing.runtimes.claude = {
           extraRuntimes = ["kiro"];
           manualExternalDelegates = [];
@@ -129,8 +129,7 @@
         lib.remove target scenario.ai.programs.delegate-routing.runtimes.claude.manualExternalDelegates;
     in
       failsWith (change {ai.programs.delegate-routing.runtimes.${target}.models = [];}) "ai.programs.delegate-routing.runtimes.${target}.models must select at least one"
-      && passes (change (lib.recursiveUpdate unnamed {
-        ai.${target}.enable = lib.mkForce false;
+      && passes (change (lib.recursiveUpdate (lib.recursiveUpdate unnamed (setEnable target (lib.mkForce false))) {
         ai.programs.delegate-routing.runtimes.${target}.models = [];
       }))
       && passes (change (lib.recursiveUpdate unnamed {
@@ -406,7 +405,7 @@
       && tweaksOff (workflowChange {ai.programs.delegate-routing.enable = false;})
       && tweaksOff (workflowChange {ai.kiro.cli.package = null;})
       && tweaksOff (workflowChange {
-        ai.kiro.enable = lib.mkForce false;
+        ai.kiro.cli.enable = lib.mkForce false;
         ai.claude.enable = lib.mkForce false;
       })
       && tweaksOff (workflowChange {
@@ -579,7 +578,7 @@
       && ownSubagents ownSubagentsOverride "codex exec" == "CUSTOM OWN SUBAGENTS"
     );
     "module-delegate-routing-${name}-external-enable" = mkTest "delegate-routing-${name}-external-enable" (
-      failsWith invalid "ai.programs.delegate-routing.runtimes.claude.extraRuntimes includes `kiro`, but ai.kiro.enable is false. Enable it with ai.kiro.enable = true."
+      failsWith invalid "ai.programs.delegate-routing.runtimes.claude.extraRuntimes includes `kiro`, but ai.kiro.enable is false. Enable it with ai.kiro.cli.enable = true."
       && failsWith manualMissingModels "ai.programs.delegate-routing.runtimes.kiro.models must select at least one"
       && passes manualManaged
       && lib.hasInfix "## manual-only external delegates\n\n### kiro\n\n-" (readSkill manualManaged "claude")
@@ -590,7 +589,7 @@
       && passes extraProgramDisabledKiro
     );
     "module-delegate-routing-${name}-manual-external-enable" = mkTest "delegate-routing-${name}-manual-external-enable" (
-      failsWith manualRuntimeDisabled "ai.programs.delegate-routing.runtimes.claude.manualExternalDelegates includes `kiro`, but ai.kiro.enable is false. Enable it with ai.kiro.enable = true."
+      failsWith manualRuntimeDisabled "ai.programs.delegate-routing.runtimes.claude.manualExternalDelegates includes `kiro`, but ai.kiro.enable is false. Enable it with ai.kiro.cli.enable = true."
       && passes manualManaged
     );
     "module-delegate-routing-${name}-options" = mkTest "delegate-routing-${name}-options" (
@@ -637,7 +636,7 @@
         absent reminderOff
         && absent (change {ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable = false;})
         && absent (change {ai.programs.delegate-routing.runtimes.${runtime}.enable = false;})
-        && absent (change {ai.${runtime}.enable = lib.mkForce false;})
+        && absent (change (setEnable runtime (lib.mkForce false)))
         && absent (change {ai.programs.delegate-routing.enable = false;})
         && hasReminder override runtime == (reminderCases.${runtime} == 1)
         && lib.all (other: !(hasReminder override other)) (lib.remove runtime runtimes))
