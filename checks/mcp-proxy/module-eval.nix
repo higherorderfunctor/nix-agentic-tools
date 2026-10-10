@@ -417,7 +417,7 @@ in {
           builtins.tryEval
           (evalHm {
             ai.kiro = {
-              enable = true;
+              cli.enable = true;
               mcpServers.jira = {
                 type = "http";
                 url.file = "/run/secrets/jira-url";
@@ -456,7 +456,7 @@ in {
       let
         result = evalHm {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             mcpServers.jira = {
               type = "http";
               url.file = "/run/secrets/jira-url";
@@ -482,7 +482,7 @@ in {
       let
         result = evalHm {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             mcpServers.jira = {
               type = "http";
               url.file = "/run/secrets/jira-url";
@@ -503,7 +503,7 @@ in {
       let
         result = evalHm {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             mcpServers.jira = proxySampleServer;
           };
         };

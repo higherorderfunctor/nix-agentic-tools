@@ -5,10 +5,11 @@
   evaluators,
   policy,
 }: let
+  optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
   inspect = writer: let
     evaluate = declaration:
       evaluators.${writer.mode} (lib.mkMerge [
-        {ai.${writer.ecosystem}.enable = true;}
+        (lib.setAttrByPath (optionPaths.launcher writer.ecosystem "enable") true)
         writer.probe.base
         declaration
       ]);

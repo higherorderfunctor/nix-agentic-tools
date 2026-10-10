@@ -111,7 +111,7 @@ in {
             codex.enable = true;
             copilot.enable = true;
             kimchi.enable = true;
-            kiro.enable = true;
+            kiro.cli.enable = true;
             rules.active = {
               matcher = ["**/*.nix"];
               text = activeMarker;
@@ -295,7 +295,7 @@ in {
           ai = {
             codex.enable = true;
             context.text = "Shared context.";
-            kiro.enable = true;
+            kiro.cli.enable = true;
             rules.shared.text = "Shared rule.";
           };
         };
@@ -317,7 +317,7 @@ in {
                 rules.shared.text = "Codex view.";
               };
               kiro = {
-                enable = true;
+                cli.enable = true;
                 rules.shared.text = "Kiro view.";
               };
             };
@@ -337,7 +337,7 @@ in {
               enable = true;
             };
             kiro = {
-              enable = true;
+              cli.enable = true;
               rules.kiro-only.text = "Kiro rule.";
             };
           };
@@ -355,7 +355,7 @@ in {
       let
         result = evalHm {
           ai = {
-            kiro.enable = true;
+            kiro.cli.enable = true;
             rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
           };
         };

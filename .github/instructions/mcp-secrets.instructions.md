@@ -7,12 +7,8 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-09-29 — Caddy config persistence is disabled, and
-> every managed proxy uses private runtime XDG directories. Claude's settings
-> and MCP files are Nix-owned read-only links. Proxy ownership is explicit and
-> keyed by server name, so each owner gets its own daemon; every ecosystem
-> renders servers via `renderServer`; Kiro's mcp.json is always a read-only
-> copy.
+> **Last verified:** 2026-10-09 — Kiro CLI configuration lives under
+> `ai.kiro.cli`; MCP delivery remains runtime-owned.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -346,15 +342,15 @@ Nothing ties them together. Any kiro binary that is not the wrapper holding the
 secrets reads the same global mcp.json, sees the same servers, and sends the
 same headers — with the variables unset.
 
-**A devenv project is where this bites.** `ai.kiro.enable` in a devenv project
-puts a SECOND wrapped kiro on `packages`, which SHADOWS the Home Manager one on
-`PATH` inside that shell. That wrapper carries `secretEnv` only for servers
-declared in THAT project, so a project that enables kiro without re-declaring
-the gateway servers gets a kiro that reads the user-global mcp.json and
-authenticates with nothing.
+**A devenv project is where this bites.** `ai.kiro.cli.enable` in a devenv
+project puts a SECOND wrapped kiro on `packages`, which SHADOWS the Home Manager
+one on `PATH` inside that shell. That wrapper carries `secretEnv` only for
+servers declared in THAT project, so a project that enables kiro without
+re-declaring the gateway servers gets a kiro that reads the user-global mcp.json
+and authenticates with nothing.
 
-**So: any devenv project setting `ai.kiro.enable = true` must declare, in that
-project, every MCP server it expects kiro to reach, with its credentials.**
+**So: any devenv project setting `ai.kiro.cli.enable = true` must declare, in
+that project, every MCP server it expects kiro to reach, with its credentials.**
 Treat `~/.kiro/settings/mcp.json` as unreachable from a devenv project.
 Checkable: every server name in the project's `ai.mcpServers` /
 `ai.kiro.mcpServers` has a credential source declared in the same project.

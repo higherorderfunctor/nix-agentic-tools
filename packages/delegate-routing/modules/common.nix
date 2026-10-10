@@ -21,6 +21,7 @@
   entries = import ../lib/resolve-entries.nix {inherit lib;};
   entryOptions = entryTypes.options;
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
+  optionPaths = import ../../../lib/ai/option-paths.nix {inherit lib pkgs;};
   reminder = import ../lib/reminder.nix {inherit lib pkgs;};
   # Home Manager has no Kimchi hook file.
   hookRuntimes = ["claude" "codex" "kiro"] ++ lib.optional (backend == "devenv") "kimchi";
@@ -247,7 +248,7 @@ in {
         lib.concatMap (list:
           map (target: {
             assertion = !(sourceEnabled runtime) || runtimeEnabled target;
-            message = "${path}.${list} includes `${target}`, but ai.${target}.enable is false. Enable it with ai.${target}.enable = true.";
+            message = "${path}.${list} includes `${target}`, but ai.${target}.enable is false. Enable it with ${lib.concatStringsSep "." (optionPaths.launcher target "enable")} = true.";
           })
           portable.runtimes.${runtime}.${list}) ["extraRuntimes" "manualExternalDelegates"]
         ++ map (target: {

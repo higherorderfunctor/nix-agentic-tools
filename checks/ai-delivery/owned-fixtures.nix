@@ -11,7 +11,7 @@
       codec = "json";
       inherit path;
     };
-    enable = true;
+    cli.enable = true;
     files.${path} = {
       content.value.probe = true;
       entry = "probeDocument";

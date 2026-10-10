@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs claudeSettings evalDevenv evalHm harnessNames hmLib markdownInput mkTest;
+  inherit (harness) aiStubs claudeSettings evalDevenv evalHm harnessNames hmLib markdownInput mkTest setEnable;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDaemonDefault;
   # Runtimes whose app record supports the normalized settings pool. Kiro is
   # excluded: it persists effort only per model, so it declares no
@@ -60,9 +60,9 @@ in {
           });
         launcherPath = lib.optional (runtime == "kiro") "cli";
         configFor = package: {
-          ai.${runtime} = {enable = true;} // lib.setAttrByPath launcherPath ({inherit package;} // lib.optionalAttrs (runtime == "kiro") {useFhsSandbox = false;});
+          ai.${runtime} = lib.setAttrByPath launcherPath ({inherit package;} // lib.optionalAttrs (runtime == "kiro") {useFhsSandbox = false;});
         };
-        evaluated = evalDevenv (configFor package);
+        evaluated = evalDevenv (lib.recursiveUpdate (setEnable runtime true) (configFor package));
         noticeLines = config: lib.filter (lib.hasInfix "/bin/ai-runtime-path-provenance-notice ") (lib.splitString "\n" config.enterShell);
         lines = noticeLines evaluated.config;
       in
@@ -133,8 +133,8 @@ in {
           };
         };
         installedBy = {
-          devenv = name: (evalDevenv {ai.${name}.enable = true;}).config.packages;
-          hm = name: (evalHm {ai.${name}.enable = true;}).config.home.packages;
+          devenv = name: (evalDevenv (setEnable name true)).config.packages;
+          hm = name: (evalHm (setEnable name true)).config.home.packages;
         };
         # `.name`, NOT `baseNameOf (toString drv)`: coercing a derivation to a string
         # forces its `drvPath` and instantiates every runtime's package, which
@@ -224,14 +224,14 @@ in {
         # the consumer-facing `ai.<cli>.environmentVariables` pool. Claude has no
         # wrapper and uses settings.env.
         devenvChannel = name: let
-          cfg = (evalDevenv (lib.setAttrByPath ["ai" name "enable"] true)).config;
+          cfg = (evalDevenv (setEnable name true)).config;
         in
           if name == "claude"
           then cfg.ai.claude.native.settings.env.GIT_SSH_COMMAND
           else cfg.ai._sandboxSafeSshCommand;
         commands =
           lib.concatMap (name: [
-              (evalHm (lib.setAttrByPath ["ai" name "enable"] true))
+              (evalHm (setEnable name true))
           .config
           .programs
           .git
@@ -401,7 +401,7 @@ in {
             claude.enable = true;
             codex.enable = true;
             copilot.enable = true;
-            kiro.enable = true;
+            kiro.cli.enable = true;
           };
         };
         hm = evalHm config;
@@ -507,7 +507,7 @@ in {
           ai = {
             claude.enable = true;
             copilot.enable = true;
-            kiro.enable = true;
+            kiro.cli.enable = true;
             rules.priority = {
               description = "Load when the task concerns source code";
               inclusion = ["auto" "fileMatch"];
@@ -550,7 +550,7 @@ in {
         attempt = builtins.tryEval (let
           evaluated = evalDevenv {
             ai = {
-              kiro.enable = true;
+              kiro.cli.enable = true;
               rules.semantic = {
                 inclusion = ["auto"];
                 text = "SEMANTIC-RULE.";
@@ -607,7 +607,7 @@ in {
             claude.enable = true;
             codex.enable = true;
             copilot.enable = true;
-            kiro.enable = true;
+            kiro.cli.enable = true;
             rules = {
               always.text = "DEFAULT-ALWAYS.";
               scoped = {

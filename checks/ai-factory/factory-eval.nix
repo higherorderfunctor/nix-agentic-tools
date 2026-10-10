@@ -88,11 +88,11 @@ in {
           if backend == "hm"
           then evaluated.config.home.packages
           else evaluated.config.packages;
-        normal = eval {ai.testapp.enable = true;};
+        normal = eval {ai.testapp.cli.enable = true;};
         custom = transformed backend (record // {installPackage = _: throw "null package called installPackage";}) {
-          ai.testapp = {
+          ai.testapp.cli = {
             enable = true;
-            cli.package = null;
+            package = null;
           };
         };
       in

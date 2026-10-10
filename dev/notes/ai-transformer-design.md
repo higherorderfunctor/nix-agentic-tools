@@ -746,7 +746,7 @@ ai = {
   claude.enable = true;  # gets git-mcp + github-mcp
 
   kiro = {
-    enable = true;
+    cli.enable = true;
     mcpServers = {
       # kiro-specific addition — not loaded in claude
       aws-mcp = { command = "aws-mcp-server"; };
@@ -914,7 +914,7 @@ Useful for personal/quick ecosystems where building a full record is overkill.
         {
           ai = {
             claude.enable = true;
-            kiro.enable = true;
+            kiro.cli.enable = true;
             openclaw.enable = true;
 
             # Shared across all enabled ecosystems

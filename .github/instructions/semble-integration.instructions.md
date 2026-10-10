@@ -7,9 +7,8 @@ applyTo: "packages/semble/**"
 
 # Semble integrations
 
-> **Last verified:** 2026-10-07 — Semble is built from source on this flake’s
-> nixpkgs; shared runtime config validation preserves cache identity and
-> first-party PYTHONPATH isolation.
+> **Last verified:** 2026-10-09 — Semble Kiro fixtures use `ai.kiro.cli.enable`
+> and observe generated agent files on both backends.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -39,7 +38,7 @@ same cache is rebuilt once.
   # Runtime selection configures integrations but does not enable a CLI.
   ai.claude.enable = true;
   ai.codex.enable = true;
-  ai.kiro.enable = true;
+  ai.kiro.cli.enable = true;
 }
 ```
 

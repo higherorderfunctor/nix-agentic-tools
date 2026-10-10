@@ -87,7 +87,7 @@
                   type = schema.writerMapType;
                   default = {};
                 };
-                enable = lib.mkEnableOption "fixture";
+                cli.enable = lib.mkEnableOption "fixture";
                 files = lib.mkOption {
                   type = schema.fileMapType;
                   default = {};

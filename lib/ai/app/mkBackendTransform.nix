@@ -49,7 +49,9 @@
     inherit (appRecord) pkgs;
   };
   cfg = config.ai.${appRecord.name};
-  launcherOptionsPath = appRecord.launcherOptionsPath or [];
+  # Path operations read launcher metadata before backendSpec is forced.
+  launcherOptionsPath = assert checkRecord.record appRecord;
+    appRecord.launcherOptionsPath or [];
   launcherCfg = lib.attrByPath launcherOptionsPath {} cfg;
   poolOptionsPath = pool: lib.optionals (builtins.elem pool ["environmentVariables" "shell"]) launcherOptionsPath;
   normalizedPath = pool: poolOptionsPath pool ++ ["normalized" pool];
@@ -280,9 +282,12 @@
     };
   };
   checkRecord = import ./checkRecord.nix {inherit lib;};
+  # A nested launcher declares its harness switch beside its own options;
+  # `ai.<name>.enable` is derived from that switch.
+  harnessSwitched = launcherOptionsPath != [];
+  runtimeOptions = (appRecord.options or {}) // backendOptions;
   # A runtime's own options may already declare `native.*` (settings), so the
   # native agent option joins that attrset rather than replacing it.
-  runtimeOptions = (appRecord.options or {}) // backendOptions;
   nativeOptions =
     runtimeOptions
     // lib.optionalAttrs hasNativeAgents {
@@ -345,6 +350,7 @@
       })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools));
   launcherOptions = lib.setAttrByPath launcherOptionsPath (
     {
+      enable = lib.mkEnableOption appRecord.name;
       package = lib.mkOption ({
           type = lib.types.nullOr lib.types.package;
           default = package;
@@ -546,7 +552,6 @@ in {
           enabled, unless declared outside that gate with `runWhenDisabled`.
         '';
       };
-      enable = lib.mkEnableOption appRecord.name;
       checks = lib.genAttrs deliveryOptions.surfaces (surface:
         lib.mkOption {
           type = lib.types.lines;
@@ -618,6 +623,16 @@ in {
         internal = true;
         visible = false;
         description = "Internal module-to-runtime integration channel.";
+      };
+    }
+    // lib.optionalAttrs harnessSwitched {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        readOnly = true;
+        description = ''
+          Whether ${appRecord.name} is managed. Read-only: true when
+          `ai.${appRecord.name}.${lib.concatStringsSep "." launcherOptionsPath}.enable` is set.
+        '';
       };
     }
     // lib.optionalAttrs (supportsPool "mcpServers") {
@@ -737,6 +752,9 @@ in {
     # Both real backends expose warnings. Minimal evalModules callers without
     # that option still see diagnostics when they force the installed packages.
     (lib.optionalAttrs (options ? warnings) {warnings = deliveryWarnings;})
+    (lib.optionalAttrs harnessSwitched {
+      ai.${appRecord.name}.enable = launcherCfg.enable;
+    })
     {
       ai.${appRecord.name} = placeNormalized (
         lib.mapAttrs (_: pool: lib.mapAttrs (_: lib.mkDefault) pool)

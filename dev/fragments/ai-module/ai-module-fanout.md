@@ -1,11 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-09 — devenv can opt into runtime project trust;
-> Codex sets neither model nor reasoning effort unless the consumer declares
-> one. Codex's launcher, on both backends, warns at every launch when a project
-> config Codex would load is untrusted or uses the opposite permission model to
-> the user config, alongside its document preflight; devenv warns at shell entry
-> when an installed runtime's PATH binary resolves outside the devenv profile.
+> **Last verified:** 2026-10-09 — Kiro uses `ai.kiro.cli.enable`; its read-only
+> runtime enable is derived from the launcher switch.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -80,13 +76,19 @@ restore parallel handwritten lists.
 The `ai` module has **no master enable option**. Each per-CLI sub-enable is the
 sole gate for that ecosystem's product output:
 
-| Consumer sets              | What fires                                                          |
-| -------------------------- | ------------------------------------------------------------------- |
-| `ai.claude.enable = true`  | Claude package + claude fanout block                                |
-| `ai.codex.enable = true`   | Codex package + guidance, skills, settings, agents, hooks fanout    |
-| `ai.copilot.enable = true` | Copilot package + copilot fanout block                              |
-| `ai.kimchi.enable = true`  | Kimchi package + context, MCP, settings, skills, environment fanout |
-| `ai.kiro.enable = true`    | Kiro package + kiro fanout block                                    |
+| Consumer sets               | What fires                                                          |
+| --------------------------- | ------------------------------------------------------------------- |
+| `ai.claude.enable = true`   | Claude package + claude fanout block                                |
+| `ai.codex.enable = true`    | Codex package + guidance, skills, settings, agents, hooks fanout    |
+| `ai.copilot.enable = true`  | Copilot package + copilot fanout block                              |
+| `ai.kimchi.enable = true`   | Kimchi package + context, MCP, settings, skills, environment fanout |
+| `ai.kiro.cli.enable = true` | Kiro package + kiro fanout block                                    |
+
+`ai.kiro.enable` exists but is read-only: the factory derives it from the
+launcher switch at `ai.kiro.cli.enable`. Generic code reads
+`ai.<runtime>.enable` and sets a switch through `lib/ai/option-paths.nix`'s
+`launcher runtime "enable"` helper, which derives the path from the runtime
+record's `launcherOptionsPath`.
 
 No runtime hands its files to an upstream `programs.<cli>` or devenv
 integration: every one delivers through `ai.<runtime>.files`, so there is no
@@ -119,9 +121,8 @@ Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
 environment and shell folds live at `cli.normalized.environmentVariables` and
 `cli.normalized.shell`. All other normalized pools, native agents, permissions,
 hooks, MCP/LSP, files and activation remain shared under `ai.kiro`. There are no
-old-path aliases or separate CLI enable.
-`ai.kiro.enable = true; ai.kiro.cli.package = null;` keeps shared files without
-installing a CLI.
+old-path aliases. `ai.kiro.cli.enable = true; ai.kiro.cli.package = null;` keeps
+shared files without installing a CLI.
 
 The direction of that default is load-bearing. Installation used to be a
 per-factory `home.packages` / `packages` write with no shared requirement, and

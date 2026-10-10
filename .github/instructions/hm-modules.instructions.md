@@ -7,38 +7,8 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-07 — module sites read this flake's roots from
-> `ai.internal.roots` (`ai.internal.packages` is its `ai`), this flake's build
-> checked by the module's own nixpkgs unless the overlay is applied. Kimchi's
-> user config.json and harness settings.json are shared documents;
-> stacked-workflows' Git preset is `mkDefault` sugar over the shared `git.*`
-> options. JSON document targets retire independently; no runtime flips an
-> upstream `programs.<cli>.enable`; skills reach Claude through `mkSkillFiles`,
-> and Claude has no wrapper. Claude's devenv `.claude/settings.json` and
-> `.mcp.json`, Copilot's settings files, and Kiro's and Kimchi's settings copies
-> are written only when something is declared; other devenv writes are
-> unconditional. Settings are read-only copies or symlinks where the CLI's write
-> primitive permits; only Claude and Copilot retain writable state documents
-> with Nix-owned leaves. The JSON document reconciler has no TOML codec,
-> document mode or native-writer lock. Semble's `pathMappings` and model routing
-> live at the program root. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`); Kiro CLI settings live at
-> `ai.kiro.cli.native.settings`. Shared documents, each declared by
-> `facts.harnessWrites` (the router, never a factory, calls
-> `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
-> on HM activation (Claude's `.claude.json` and Copilot's `config.json`
-> `trustedFolders` leaf, whose `//` header own.py keeps). Kiro's, Kimchi's and
-> Copilot's settings files are read-only copies. A fully retracted empty
-> document is deleted, a document is published by compare-and-swap against
-> unlocked runtime writers, credential documents get an ungated mode-narrowing
-> command writer, and the delivery-path parity example uses
-> `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile` /
-> `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
-> (one entry). Every whole file the router writes is delivered from each
-> runtime's store tree: typed Markdown, JSON, TOML and YAML are formatted, while
-> raw files and recursive sources are copied byte-for-byte with their modes.
-> This includes Home Manager Claude agents, commands and output styles.
+> **Last verified:** 2026-10-09 — Kiro is gated by `ai.kiro.cli.enable`;
+> factories read the derived, read-only `ai.kiro.enable`.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -56,11 +26,12 @@ declare the real type: `types.submodule`, `types.nullOr`, `types.attrsOf`,
 
 **Submodules as containers.** Per-ecosystem config lives in a submodule:
 `ai.claude`, `ai.codex`, `ai.copilot`, `ai.kimchi`, and `ai.kiro` are
-`types.submodule` containers. Kiro keeps shared file options and `enable` at
-`ai.kiro`; its launcher options (`package`, `environmentVariables`, `shell`,
-`native.settings`, and other CLI controls) live under `ai.kiro.cli`. Other
-runtimes keep launcher options at their runtime root. The submodule is the
-logical grouping — do not flatten per-ecosystem options into the top level.
+`types.submodule` containers. Kiro keeps shared file options and the derived,
+read-only `enable` at `ai.kiro`; its launcher options (`enable`, `package`,
+`environmentVariables`, `shell`, `native.settings`, and other CLI controls) live
+under `ai.kiro.cli`. Other runtimes keep launcher options at their runtime root.
+The submodule is the logical grouping — do not flatten per-ecosystem options
+into the top level.
 
 **Flat at top level for cross-ecosystem.** `ai.context`, `ai.rules`,
 `ai.skills`, `ai.lspServers`, and `ai.environmentVariables` are NOT nested
@@ -84,10 +55,12 @@ consumers can override).
 
 ### Gating and mkIf patterns
 
-**Per-CLI enable is the SOLE gate.** Each
-`ai.{claude,codex,copilot,kimchi,kiro}.enable` is its own mkIf block. There is
-**no master `ai.enable`** — it was dropped in commit f2e911c after causing a
-silent no-op bug (see `ai-module-fanout` fragment for the full story).
+**Per-CLI enable is the SOLE gate.** Consumers set
+`ai.{claude,codex,copilot,kimchi}.enable` or `ai.kiro.cli.enable`. Factories
+read `ai.<runtime>.enable` in their mkIf blocks; Kiro derives that read-only
+value from its CLI switch. There is **no master `ai.enable`** — it was dropped
+in commit f2e911c after causing a silent no-op bug (see `ai-module-fanout`
+fragment for the full story).
 
 The `config` block shape:
 
@@ -104,7 +77,7 @@ config = mkMerge [
 
 **No per-CLI block flips an upstream `programs.<cli>.enable`.** Every runtime
 installs its package through the shared backend transform and delivers its files
-through `ai.<runtime>.files`, so a consumer sets `ai.<cli>.enable` once and
+through `ai.<runtime>.files`, so a consumer sets the launcher switch once and
 there is no second module to import, enable or keep in step.
 
 ### Assertion conventions

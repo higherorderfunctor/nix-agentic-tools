@@ -66,7 +66,7 @@
   gaps = lib.filter (row: row.primitive == "notApplicable" || row ? deliveryGap) policy.rows;
   rowCase = row: let
     supported = builtins.elem row.surface records.${row.ecosystem}.supportedPools;
-    enabled = {ai.${row.ecosystem}.enable = true;};
+    enabled = harness.setEnable row.ecosystem true;
     empty = evaluate row.mode enabled;
     messagesFor = path: evaluate row.mode (lib.recursiveUpdate enabled (lib.setAttrByPath path sample.${row.surface}));
     warns = path: let
@@ -291,7 +291,7 @@
   }:
     lib.all (mode:
       lib.all (path: let
-        enabled = lib.recursiveUpdate {ai.${runtime}.enable = true;} extra;
+        enabled = lib.recursiveUpdate (harness.setEnable runtime true) extra;
       in
         evaluate mode (lib.recursiveUpdate enabled (lib.setAttrByPath path "high"))
         == evaluate mode enabled)
@@ -345,7 +345,7 @@
       recordedGap = lib.any (row: row.surface == "lspServers" && row.ecosystem == runtime && row.mode == mode) gaps;
     in
       lib.all (path: let
-        messages = evaluate mode (lib.recursiveUpdate {ai.${runtime}.enable = true;} (lib.setAttrByPath path {
+        messages = evaluate mode (lib.recursiveUpdate (harness.setEnable runtime true) (lib.setAttrByPath path {
           command = "probe";
           extensions = ["nix"];
         }));
@@ -361,7 +361,7 @@
     mode = case.mode or "devenv";
     input = lib.setAttrByPath case.path case.value;
     needle = lib.showOption case.path + (case.suffix or "");
-    enabled = {ai.${case.runtime}.enable = true;};
+    enabled = harness.setEnable case.runtime true;
   in
     contains needle (evaluate mode (lib.recursiveUpdate enabled input))
     && !contains needle (evaluate mode enabled)
@@ -369,7 +369,7 @@
   kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [
     {
       ai = {
-        kiro.enable = true;
+        kiro.cli.enable = true;
         rules.probe = {
           inclusion = ["always" "manual"];
           text = "root";
@@ -379,7 +379,7 @@
     {
       ai = {
         kiro = {
-          enable = true;
+          cli.enable = true;
           rules.probe = {
             inclusion = "always";
             text = "native";
@@ -412,7 +412,7 @@
   }: let
     declaration = {
       ai.kiro = {
-        enable = true;
+        cli.enable = true;
         cli = {inherit trustedMcpTools v3;};
       };
     };
@@ -488,7 +488,7 @@ in {
         warningsFor = extra:
           evaluate mode {
             ai.kiro = {
-              enable = true;
+              cli.enable = true;
               hooks.probe =
                 lib.recursiveUpdate {
                   trigger = "UserPromptSubmit";
@@ -549,7 +549,7 @@ in {
             codex.enable = true;
             context.text = "CTX";
             kiro = {
-              enable = true;
+              cli.enable = true;
               files."AGENTS.md".content.enable = false;
             };
             rules.probe.text = "RULE";
@@ -569,7 +569,7 @@ in {
         # One scoped Kiro steering file on devenv; Claude rule file on HM.
         steeringOff = evaluate "devenv" {
           ai.kiro = {
-            enable = true;
+            cli.enable = true;
             files.".kiro/steering/scoped.md".content.enable = false;
             rules.scoped = {
               matcher = ["src/**"];
@@ -655,7 +655,7 @@ in {
               context.text = "CTX";
               copilot.enable = true;
               kimchi.enable = true;
-              kiro.enable = true;
+              kiro.cli.enable = true;
               rules = {
                 probe.text = "RULE";
                 scoped = {

@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv evalHm fromGeneratedTree harnessNames markdownInput mkTest;
+  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv evalHm fromGeneratedTree harnessNames markdownInput mkTest setEnable;
   # A delivered Markdown file's text, from the evaluated `config`.
   markdownOf = config: deliveredMarkdown {inherit config;};
 in {
@@ -27,9 +27,8 @@ in {
         checkRuntime = runtime: let
           textTarget = "literal/${runtime}.txt";
           sourceTarget = "literal/${runtime}.source";
-          config = {
+          config = lib.recursiveUpdate (setEnable runtime true) {
             ai.${runtime} = {
-              enable = true;
               files = {
                 ${textTarget} = {
                   content.text = "${runtime}-TEXT";
@@ -164,7 +163,7 @@ in {
             codex.enable = true;
             copilot.enable = true;
             kimchi.enable = true;
-            kiro.enable = true;
+            kiro.cli.enable = true;
           };
         };
         hm = evalHm config;
@@ -195,7 +194,7 @@ in {
             codex.enable = true;
             context.text = "GENERATED-SHARED-CONTEXT";
             kimchi.enable = true;
-            kiro.enable = true;
+            kiro.cli.enable = true;
           };
         };
         replaced = evalDevenv (lib.recursiveUpdate base {
@@ -335,13 +334,12 @@ in {
           dormantRuntime,
           entry,
         }:
-          evalDevenv {
+          evalDevenv (lib.recursiveUpdate (setEnable activeRuntime true) {
             ai = {
               context.text = "ACTIVE-SHARED-CONTEXT";
-              ${activeRuntime}.enable = true;
               ${dormantRuntime}.files."AGENTS.md" = entry;
             };
-          };
+          });
         evaluations = [
           (withDormantEntry {
             activeRuntime = "codex";
@@ -494,7 +492,7 @@ in {
             context = {inherit source;};
             kiro = {
               context.text = "RUNTIME-CONTEXT";
-              enable = true;
+              cli.enable = true;
               files.".kiro/steering/AGENTS.md".content.enable = false;
             };
           };
@@ -504,7 +502,7 @@ in {
             context = {inherit source;};
             kiro = {
               context.text = "RUNTIME-CONTEXT";
-              enable = true;
+              cli.enable = true;
               files."AGENTS.md".content.enable = false;
             };
           };
@@ -537,7 +535,7 @@ in {
         devenvKiro = evalDevenv {
           ai = {
             context = {inherit source;};
-            kiro.enable = true;
+            kiro.cli.enable = true;
           };
         };
       in
@@ -616,7 +614,7 @@ in {
           lib.mkMerge ([
               {
                 ai.kiro = {
-                  enable = true;
+                  cli.enable = true;
                   files.${target}.format = "json";
                 };
               }
@@ -632,7 +630,7 @@ in {
         runEntry = extra:
           (evalHm {
             ai.kiro = {
-              enable = true;
+              cli.enable = true;
               files.".kiro/probe.run".content = {run = "printf probe";} // extra;
             };
           }).config.ai.kiro.files.".kiro/probe.run";
