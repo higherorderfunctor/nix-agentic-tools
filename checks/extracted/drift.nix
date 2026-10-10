@@ -17,29 +17,34 @@
     name = "foreign-extracted";
     system = other;
   };
+  # An owner's `extracted/` directory, as the string of a store path so
+  # mkDriftCheck can append `/<system>.json` as it does to `./extracted`.
+  directory = raws: "${pkgs.linkFarm "committed" (lib.mapAttrsToList (system: value: {
+      name = "${system}.json";
+      path = raw system value;
+    })
+    raws)}";
+  sidecar = "packages/fake/extracted";
   cases = {
     per-system-drift = {
       args = {
-        committed.${host} = raw "committed" {a = 1;};
+        committed = directory {${host} = {a = 1;};};
         extracted.${host} = raw "extracted" {a = 2;};
-        sidecar.${host} = "packages/fake/extracted/${host}.json";
+        inherit sidecar;
       };
-      fails = "packages/fake/extracted/${host}.json";
+      fails = ["${sidecar}/${host}.json"];
     };
     per-system-skips-foreign = {
       args = {
-        committed = {
-          ${host} = raw "committed" {a = 1;};
-          ${other} = raw "stale" {a = 0;};
+        committed = directory {
+          ${host} = {a = 1;};
+          ${other} = {a = 0;};
         };
         extracted = {
           ${host} = raw "extracted" {a = 1;};
           ${other} = foreign;
         };
-        sidecar = {
-          ${host} = "packages/fake/extracted/${host}.json";
-          ${other} = "packages/fake/extracted/${other}.json";
-        };
+        inherit sidecar;
       };
     };
     single-drift = {
@@ -48,7 +53,7 @@
         extracted = raw "extracted" {a = 2;};
         sidecar = "packages/fake/extracted.json";
       };
-      fails = "packages/fake/extracted.json";
+      fails = ["packages/fake/extracted.json"];
     };
     single-match = {
       args = {
@@ -57,24 +62,36 @@
         sidecar = "packages/fake/extracted.json";
       };
     };
+    # Every drifted system is named before the check fails.
+    static-names-both = {
+      args = {
+        committed = directory {
+          ${host} = {a = 0;};
+          ${other} = {a = 0;};
+        };
+        extracted = {
+          ${host} = raw "fresh-host" {a = 1;};
+          ${other} = raw "fresh-other" {a = 2;};
+        };
+        inherit sidecar;
+      };
+      fails = ["${sidecar}/${host}.json" "${sidecar}/${other}.json"];
+    };
     # A static extractor supplies every system from this host; only the
     # drifted one is named.
     static-names-drifted = {
       args = {
-        committed = {
-          ${host} = raw "committed" {a = 1;};
-          ${other} = raw "stale" {a = 0;};
+        committed = directory {
+          ${host} = {a = 1;};
+          ${other} = {a = 0;};
         };
         extracted = {
           ${host} = raw "extracted" {a = 1;};
           ${other} = raw "fresh" {a = 2;};
         };
-        sidecar = {
-          ${host} = "packages/fake/extracted/${host}.json";
-          ${other} = "packages/fake/extracted/${other}.json";
-        };
+        inherit sidecar;
       };
-      fails = "packages/fake/extracted/${other}.json";
+      fails = ["${sidecar}/${other}.json"];
     };
   };
   script = case: (mkDriftCheck (case.args // {name = "fake";})).fake-extracted.buildCommand;
@@ -83,13 +100,17 @@
     if (cd "$TMPDIR/${label}" && out="$TMPDIR/${label}/out" bash ${pkgs.writeText "${label}.sh" (script case)}) 2> "$TMPDIR/${label}/err"; then
       ${
       if case ? fails
-      then ''echo "FAIL: ${label} passed; it must fail naming ${case.fails}" >&2; exit 1''
+      then ''echo "FAIL: ${label} passed; it must fail naming ${toString case.fails}" >&2; exit 1''
       else ":"
     }
     else
       ${
       if case ? fails
-      then ''grep -qF 'sidecar (${case.fails})' "$TMPDIR/${label}/err" || { echo "FAIL: ${label} message does not name ${case.fails}:" >&2; cat "$TMPDIR/${label}/err" >&2; exit 1; }''
+      then
+        lib.concatMapStrings (path: ''
+          grep -qF 'sidecar (${path})' "$TMPDIR/${label}/err" || { echo "FAIL: ${label} message does not name ${path}:" >&2; cat "$TMPDIR/${label}/err" >&2; exit 1; }
+        '')
+        case.fails
       else ''echo "FAIL: ${label} failed; it must pass:" >&2; cat "$TMPDIR/${label}/err" >&2; exit 1''
     }
     fi
