@@ -130,22 +130,34 @@ merge {
 ```
 
 `fix` is a ready-to-paste snippet: for `divergent` it is the complete
-`decisions.json` row with every system's value shown in `details`; for
-`declared-gone` it is "delete the declaration for `<key>`".
+`decisions.json` row, keyed by the declared pattern, with every system's value
+shown in `details`; for `declared-gone` it is "delete the declaration for
+`<key>`". Pure evaluation cannot know today's date, so the generated row's
+`decided` carries the literal placeholder `YYYY-MM-DD` and its `reason` is a
+`TODO`; `bad-decision` rejects both literals, so a row pasted unedited fails
+naming exactly the fields the human must fill. `decided` must be a real calendar
+date, not only a well-formed one.
 
 Failure kinds and when they fire:
 
 | Kind                | Fires when                                                                                                          |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `divergent`         | systems disagree and the effective combine is `equal`                                                               |
-| `missing-system`    | a declared key has no value in a system its declaration requires                                                    |
-| `declared-gone`     | a declared key is absent from every raw                                                                             |
+| `missing-system`    | a declared key is present in at least one system but absent from another its declaration requires                   |
+| `declared-gone`     | a declared key is absent from every raw; `missing-system` does not also fire. Not for `systems = []`                |
 | `type-mismatch`     | a raw value does not fit the declared type                                                                          |
 | `bad-decision`      | unknown combine, blank reason, missing or malformed date, `ignore` on a non-collection, a row for an undeclared key |
 | `undeclared-secret` | an undeclared key that `classify` flags as credential-shaped                                                        |
 
 Not failures: an undeclared key (listed in `undeclared`); a key that only `live`
-systems would carry; wildcard children appearing or disappearing.
+systems would carry; wildcard children appearing or disappearing. A wildcard
+child present on one system and absent on another is a disappearing child, not
+`missing-system`; the aggregate is keyed by concrete paths, one entry per
+matched child, and `prefer:<system>` takes the only value when the preferred
+system lacks that child. A declaration pattern never hides a raw leaf: a leaf at
+a prefix of a declared path is undeclared and is classified like any other.
+`ignore` as a combine drops the key from the aggregate only; its raws are still
+validated and `type-mismatch`, `missing-system` and `declared-gone` still fire.
 
 ### `get` and `getFor`
 
