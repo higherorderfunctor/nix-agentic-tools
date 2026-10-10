@@ -102,7 +102,6 @@ in {
         ${../../lib/ai/file-warnings.py} \
         ${../../packages/claude-code/lib/memory-collision-guard.sh} \
         ${wrappers} \
-        ${../../packages/claude-code/lib/delegation-clamp.sh} \
         ${observer "warning-observer-shell" enabled} \
         ${observer "kimchi-warning-observer-shell" kimchi} \
         ${observer "shared-agents-md-observer-shell" sharedAgentsMd}

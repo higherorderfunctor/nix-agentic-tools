@@ -2,6 +2,7 @@
   config,
   lib,
   options,
+  pkgs,
   ...
 }: let
   # Copilot's sizing controls are not established.
@@ -19,6 +20,22 @@
   entryTypes = import ../lib/entry-type.nix {inherit lib;};
   entries = import ../lib/resolve-entries.nix {inherit lib;};
   entryOptions = entryTypes.options;
+  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
+  reminder = import ../lib/reminder.nix {inherit lib pkgs;};
+  # Home Manager has no Kimchi hook file.
+  hookRuntimes = ["claude" "codex" "kiro"] ++ lib.optional (backend == "devenv") "kimchi";
+  reminderProgram = (import ../../../lib/ai/program.nix {inherit lib;}).mkProgram {
+    name = "delegate-routing";
+    inherit supportedRuntimes;
+    options.reminder.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to deliver the per-turn delegation reminder.";
+    };
+  };
+  reminderEnabled = runtime: (reminderProgram.resolve config runtime).reminder.enable;
+  reminderRuntimes = lib.filter (runtime: lib.hasAttrByPath ["ai" runtime "hooks"] options) hookRuntimes;
+  reminderHookEnabled = runtime: sourceEnabled runtime && reminderEnabled runtime;
   resolved = runtime: let
     local = portable.runtimes.${runtime};
   in {
@@ -126,7 +143,24 @@ in {
         default = {};
         description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
       };
-      runtimes = lib.genAttrs supportedRuntimes runtimeOptions;
+      reminder = lib.mkOption {
+        type = aiTypes.optionalTextSource {
+          defaultContent.text = reminder.defaultText;
+          description = "the per-turn delegate-routing reminder";
+          enableDefault = true;
+        };
+        default = {};
+        description = ''
+          Per-turn UserPromptSubmit reminder in the user's voice. Claude and Codex
+          receive JSON additionalContext on both backends; Kimchi on devenv only.
+          Kiro receives plain text on both. Set runtimes.<runtime>.reminder.enable
+          to false to withhold it from that runtime.
+        '';
+      };
+
+      runtimes =
+        lib.genAttrs supportedRuntimes (runtime:
+          runtimeOptions runtime // reminderProgram.module.options.ai.programs.delegate-routing.runtimes.${runtime});
     };
 
   # Emit one portable enable option and skills/rules for each supported runtime.
@@ -177,14 +211,28 @@ in {
           v3 = lib.mkDefault true;
         };
       })
+      (lib.genAttrs reminderRuntimes (runtime:
+        lib.mkIf (reminderHookEnabled runtime)
+        (reminder.hooks.${runtime} portable.reminder.text)))
     ];
-    warnings = lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
-      ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
-      skill's Kiro behavior is verified on the v3 engine only; sessions on
-      another engine may not delegate as the skill describes.
-    '';
+    warnings =
+      map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}. Disable that runtime reminder or use devenv.")
+      (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes)
+      ++ lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
+        ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
+        skill's Kiro behavior is verified on the v3 engine only; sessions on
+        another engine may not delegate as the skill describes.
+      '';
     assertions =
       [
+        {
+          assertion = !(builtins.elem "kiro" reminderRuntimes && reminderHookEnabled "kiro") || config.ai.kiro.hooksDir == null;
+          message = "ai.programs.delegate-routing: the Kiro reminder cannot coexist with ai.kiro.hooksDir. Set runtimes.kiro.reminder.enable = false or move those hooks out of hooksDir.";
+        }
+        {
+          assertion = !lib.any reminderHookEnabled reminderRuntimes || portable.reminder._sourceWins || portable.reminder.text != "";
+          message = "ai.programs.delegate-routing.reminder.text must be non-empty when a runtime reminder hook is enabled, unless a source supplies the content.";
+        }
         {
           assertion = lib.allUnique (map (family: family.name) flattenedFamilies);
           message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";

@@ -1,7 +1,14 @@
 # Delegate routing package
 
 > **Last verified:** 2026-10-09 — backend modules pass their scope to the shared
-> skill-package factory, which gates package rules by delivery capability.
+> skill-package factory, which gates package rules by delivery capability; the
+> per-turn reminder derives its hook runtimes from that scope.
+>
+> **Settled — do not relitigate.** Per-turn chosen over once-per-session
+> (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
+> for one stateless hook on every harness, with no marker or PreCompact re-arm.
+> Earlier design:
+> `git show be765e0e:packages/claude-code/docs/heron-brook-clamp.md`.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -188,6 +195,13 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```
 
+## Per-turn reminder
+
+The default wording is Claude's user-voiced grant against the heron_brook clamp.
+Before changing it, read `packages/claude-code/docs/heron-brook-clamp.md`.
+Consumer delivery and enable controls are documented in the `reminder` option;
+the hook pools own conflict diagnostics.
+
 ## Acceptance suite
 
 `eval/` is the acceptance suite: one manual suite of real sessions on Claude,
@@ -212,17 +226,16 @@ differences live in its `HARNESSES` table; assertions in its `ASSERTIONS` table.
 
 A delegate call is classified by technique name, so the suite and the rendered
 skill read one table. Same-runtime nested children ARE logged in and can run and
-spend inside the 600 s process-group cap; no PATH shim blocks them. The Claude
-clamp and ultracode drain cases are on/off pairs. Results are `PASS`, `FAIL` or
-`ERROR`; only `ERROR` (no answer, a leak, or the routing skill missing from the
-startup record) fails the run.
+spend inside the 600 s process-group cap; no PATH shim blocks them. Results are
+`PASS`, `FAIL` or `ERROR`; only `ERROR` (no answer, a leak, or the routing skill
+missing from the startup record) fails the run.
 
 The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
 in the sandbox: it validates every case and renders every fixture and launch
 plan with no harness and no login. Its `cases` passthru is the runner's fixture
 export. It also runs the offline source-attribution and event-schema regressions
-in `eval/test_suite.py`. No check starts a session. See `eval/README.md` for the
-isolation recipe, the caps and the operator steps.
+in `eval/test_suite.py`. No check starts a session. See `eval/README.md` for
+reminder comparisons, the isolation recipe, the caps and the operator steps.
 
 ## Delegate map
 

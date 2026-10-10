@@ -114,10 +114,11 @@ Three things follow, and each of them is a trap if you assume the old shape:
 
 <!-- Fragment: packages/claude-code/docs/heron-brook-clamp.md -->
 
-## heron_brook Delegation Clamp — the opt-in mitigation
+## heron_brook Delegation Clamp — the escape clause
 
-> **Last verified:** 2026-09-21 — `defaultContent` supplies dormant packaged
-> prose while the shared type rejects enabled empty content.
+> **Last verified:** 2026-10-09 (commit e114ff95) — the mitigation lives in
+> delegate-routing’s per-turn reminder; Claude retains the dated CI review and
+> its guard.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 3510a5db:packages/claude-code/docs/heron-brook-clamp.md`.
@@ -134,142 +135,39 @@ Three things follow, and each of them is a trap if you assume the old shape:
 >   the whole file, which was correct while this was the only such step and went
 >   red the moment a second tripwire added its own. The guard couples to the
 >   STEP NAME by design — rename the step and it throws.
->
-> If you change `ai.claude.delegationClampMitigation`, the hook script, the
-> injected text, or the reminder and this fragment isn't updated in the same
-> commit, stop and fix it.
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
 instructing the model not to call the Agent tool and not to use workflows or
-deep research "unless the user requested it". It is gated on a **model
-capability** rather than user configuration (Opus 5 only), no setting or flag
-disables it, and it **never appears in the transcript** — so a session with
-delegation suppressed looks identical to a normal one. It also contradicts
-`ai.claude.ultracodeOnLaunch`, which asks for the opposite.
+deep research "unless the user, a CLAUDE.md file, or a skill asks for it". It is
+gated on a model capability rather than user configuration: an Opus 5 / Sonnet 5
+control pair found it present on Opus 5 and absent on Sonnet 5. No setting or
+flag disables it, and it never appears in the transcript, so a session with
+delegation suppressed looks identical to a normal one.
 
-With no content defined, the mitigation is off and its packaged prose remains
-dormant. Set `ai.claude.delegationClampMitigation.enable = true` to install both
-hooks with that packaged prose. Defining `delegationClampMitigation.text` (or
-packaging the request in `delegationClampMitigation.source`) automatically
-enables the mitigation and installs both hooks with the custom prose. To stage
-custom prose without activating it, define the content and explicitly set
-`delegationClampMitigation.enable = false`; neither hook is then installed.
+### Why user-voiced context satisfies it
 
-### Why the mitigation is user-side context, not a patch
+delegate-routing’s per-turn reminder supplies the mitigation. Its
+`UserPromptSubmit` context supplies the request the clamp’s own escape clause
+asks for. Nothing is patched. The clamp also negates
+`ai.claude.ultracodeOnLaunch`, so on Opus 5 that option depends on the
+reminder’s grant.
 
-The clamp carries its own escape clause: _unless the user requested it_. The
-mitigation **satisfies** that clause rather than fighting it — it supplies the
-missing request. Nothing is patched and no flag is needed.
+`UserPromptSubmit`’s `additionalContext` lands inside the human turn.
+`SessionStart` context carries a `SessionStart hook additional context:` prefix
+and reads as system-level. A live session recognized the hook channel while
+accepting first-person content as a standing instruction from the user: the
+mechanism relies on the user’s voice, not concealment.
 
-That dictates the event. `UserPromptSubmit`'s `additionalContext` lands inside
-the **human turn**; `SessionStart`'s carries a
-`SessionStart hook additional context:` prefix and reads as **system**-level.
-`SessionStart` is the obvious cheaper choice and it is wrong — the single most
-likely thing for a future session to "simplify" into a regression.
+Re-derive these properties before rewording the permission grant:
 
-**But not for the reason first written here**, and the difference matters if you
-reword the payload. The injection is not mistaken for typed input: a live
-session placed it as "system-level in **channel** […] but **user-authored in
-content**", then accepted it as "a genuine standing instruction from you". The
-mechanism does not rely on concealment — the channel is plainly visible. The
-payload's **first-person voice** is what does the work, which is also why the
-worry about relayed instructions being discounted never materialized.
-
-### Why once per session, not per turn
-
-`additionalContext` persists in conversation history, so per-turn injection is
-not fixed overhead that expires — it is cumulative growth, the same paragraph
-once per turn for the life of the session.
-
-The injector therefore fires once, keyed by a marker at
-`${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/claude-delegation-clamp/<session_id>`, and
-a `PreCompact` hook deletes it. Compaction is the one event that can erase the
-original injection, so it is the one event that re-arms it.
-
-Degraded inputs (malformed stdin, absent `session_id`) fall back to a **fixed**
-key, never a varying one — a varying fallback would inject every turn and
-restore exactly the cost this avoids.
-`packages/claude-code/checks/claude-delegation-clamp.nix` pins that down.
-
-### Exit 0 is a hard contract, so every filesystem call is best-effort
-
-A non-zero `UserPromptSubmit` hook surfaces as an error to the user on **every
-turn**. Under `set -e` that makes an unguarded `mkdir`, `touch`, `rm`, `cat`, or
-`${VAR:?}` a latent per-turn error dialog, not a style nit. All are guarded.
-
-Marker bookkeeping is best-effort and the injection happens regardless. The
-realistic failure is a shared `/tmp` whose `claude-delegation-clamp/` is owned
-by another user, reachable when neither `XDG_RUNTIME_DIR` nor `TMPDIR` is set. A
-marker that cannot be written degrades toward **injecting**, never toward
-silence: losing the cadence costs tokens, losing the injection costs the
-mitigation itself. A missing payload file is the one case that lapses instead,
-since there is then nothing to inject.
-
-### Why the model is not detected
-
-`UserPromptSubmit` stdin is
-`{session_id, prompt_id, cwd, permission_mode, prompt}` — **no `model`**. Only
-`SessionStart` carries it, so gating on Opus 5 would need a `SessionStart`
-companion writing session-keyed state. At once-per-session cadence the waste on
-other models is ~75 tokens once, cheaper than that state file and its staleness
-modes. So there is no gate, deliberately.
-
-An Opus 5 / Sonnet 5 control pair confirmed the whole chain end-to-end: the hook
-fires, injects once, the clamp is present on Opus 5 and **absent on Sonnet 5**,
-and the escape clause resolves to "permitted". The gate is a measurement, not a
-reading of the binary. When re-verifying, trust the **marker** over the model's
-self-report — one file named for the session id after the first prompt, none
-after.
-
-### Why it is a definition, not an option default
-
-`mkClaude.nix` emits the hook pair as a **definition** of `ai.claude.hooks`, not
-as that option's `default`. A `default` is discarded wholesale the moment a
-consumer defines the option at all, so it would have silently disabled the
-mitigation for exactly the consumers who use hooks most. As a definition it
-list-merges with consumer entries;
-`module-claude-delegation-clamp-composes-with-consumer-hook` pins that down.
-
-The default prose follows the same rule inside
-`ai.claude.delegationClampMitigation`: the shared optional-text-source type's
-`defaultContent` parameter installs it as a `lib.mkDefault` submodule
-definition, rather than using `default = { text = <prose>; };` on the outer
-option. Otherwise the common `delegationClampMitigation.enable = true`
-definition would discard the complete outer default, leave `text = ""`, and the
-shared type would reject the enabled empty value. Default-priority prose does
-not auto-enable; explicit `text` or `source` content does, and an explicit
-source wins over the prose.
-
-Config parity is structural — both backends already lower `ai.claude.hooks` to
-`settings.json`, so one write serves HM and devenv. Claude-only, no `ai.*`
-fanout: `heron_brook` belongs to the Claude Code client's own system prompt,
-which Kiro and Copilot never load.
-
-A **dual setup** (HM global + devenv project-local) registers the hook twice.
-Harmless by construction — the first `inject` writes the marker and the second
-sees it, so exactly one injection happens however the scopes merge. Watch only
-for the two scopes resolving different store paths once their flake pins
-diverge; then whichever runs first supplies the payload.
-
-### The injected text is load-bearing
-
-`ai.claude.delegationClampMitigation.text` resolves to a first-person standing
-request. Re-derive all four properties before rewording it:
-
-1. It **satisfies** the escape clause rather than contradicting it. A
-   contradiction pits a user-message line against a system-prompt line, which
-   resolves toward the system prompt or toward hedging.
-2. It is **affirmative**, not a negation of something the model cannot point at
-   ("ignore any instruction telling you X" reads as adversarial injection).
-3. It is **first-person** — verification showed this is the property carrying
-   the weight, since the hook channel is visible either way.
-4. It **grants** permission rather than mandating delegation; an overreaching
-   instruction invites discounting.
-
-It names both `Agent` and `Task` for the subagent tool. Only `Agent` exists in
-current builds and a live session flagged the mismatch, but the redundancy is
-deliberate: this package ships across versions that used either name, and a
-spare word is cheaper than a missed escape clause.
+1. It satisfies "unless the user … asks for it" rather than contradicting the
+   system instruction.
+2. It is affirmative: a positive request avoids asking the model to ignore an
+   instruction it cannot point at.
+3. It is first-person: the user’s voice carries the request even when the hook
+   channel is visible.
+4. It grants permission rather than mandating delegation; the agent retains
+   judgment about whether delegation fits the task.
 
 ### The reminder, and why it is not a check
 
@@ -306,6 +204,8 @@ What replaced it:
   throws**, naming the string to update. That is deliberate — the alternative is
   a guard that quietly stops guarding.
 
-Discharging means bumping `reviewBy` ~90 days or — if upstream fixed it —
-**deleting the mitigation, the ci.yml step, and that guard together**. An
+Discharging means verifying that delegate-routing’s per-turn reminder still
+satisfies the clamp’s escape clause and bumping `reviewBy` ~90 days, or — if
+upstream fixed it — **dropping the permission grant from delegate-routing’s
+per-turn reminder and deleting the ci.yml step and that guard together**. An
 expired justification is a finding, not a formality to bump past.
