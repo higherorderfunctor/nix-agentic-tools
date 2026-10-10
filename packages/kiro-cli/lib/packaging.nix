@@ -91,11 +91,17 @@ rec {
             rb'  \}'
         )
 
+    # The ONE patchability rule: every `"<name>": {` site must match
+    # entry_re. Returns the matches and the count of sites that did not match;
+    # the extractor and the patcher both decide from these, never from raw counts.
     def rollout_sites(mapped, name):
         key = rb'"' + re.escape(name.encode()) + rb'": \{'
         sites = len(re.findall(key, mapped))
         hits = list(entry_re(name).finditer(mapped))
-        return sites, hits
+        return hits, sites - len(hits)
+
+    def is_patchable(hits, unmatched):
+        return unmatched == 0 and len(hits) > 0
   '';
 
   # Resolve the ONE kiro chat binary under a package root, printing its path.
@@ -222,10 +228,10 @@ rec {
                       states[name] = state
               patchability = {}
               for name in sorted(states):
-                  sites, hits = rollout_sites(mm, name)
+                  hits, unmatched = rollout_sites(mm, name)
                   patchability[name] = {
-                      "patchable": sites > 0 and sites == len(hits),
-                      "unmatchedSites": sites - len(hits),
+                      "patchable": is_patchable(hits, unmatched),
+                      "unmatchedSites": unmatched,
                   }
       names = sorted(states)
 
@@ -429,13 +435,13 @@ rec {
               with open(path, "r+b") as fh:
                   with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_WRITE) as mm:
                       for name in features:
-                          sites, hits = rollout_sites(mm, name)
-                          if len(hits) != sites:
+                          hits, unmatched = rollout_sites(mm, name)
+                          if unmatched:
                               sys.stderr.write(
-                                  "kiro-rollout: %r appears %d time(s) in %s but "
-                                  "only %d matched the expected entry shape. "
+                                  "kiro-rollout: %r has %d site(s) in %s that did "
+                                  "not match the expected entry shape. "
                                   "Refusing to half-patch.\n"
-                                  % (name, sites, path, len(hits))
+                                  % (name, unmatched, path)
                               )
                               sys.exit(1)
                           for m in hits:
