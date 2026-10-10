@@ -129,21 +129,22 @@
 
     # Decisions: `ignore` as a combine drops the key from the aggregate, so
     # differing raws are not divergent, yet its raws are still validated.
-    # Columns: Darwin raw, Linux raw, failure kinds.
+    # Columns: type, Darwin raw, Linux raw, failure kinds.
     ignoreCombine = let
-      ignored = darwin: linux: expected: let
+      ignored = type: darwin: linux: expected: let
         result = run {
-          declarations.limit = static "count";
-          decisions.limit = decision "ignore";
+          declarations.k = static type;
+          decisions.k = decision "ignore";
           raws = split darwin linux;
         };
       in
-        kinds result == expected && !(result.aggregate ? limit);
+        kinds result == expected && !(result.aggregate ? k);
     in {
-      declared-gone = ignored {} {} ["declared-gone"];
-      drops = ignored {limit = 3;} {limit = 5;} [];
-      missing-system = ignored {} {limit = 5;} ["missing-system"];
-      type-mismatch = ignored {limit = "five";} {limit = "five";} ["type-mismatch"];
+      declared-gone = ignored "count" {} {} ["declared-gone"];
+      drops-count = ignored "count" {k = 3;} {k = 5;} [];
+      drops-set = ignored "set" {k = ["a"];} {k = ["b"];} [];
+      missing-system = ignored "count" {} {k = 5;} ["missing-system"];
+      type-mismatch = ignored "count" {k = "five";} {k = "five";} ["type-mismatch"];
     };
 
     # Decisions: `ignore` removes elements before combining.
@@ -255,43 +256,43 @@
         })
         aggregate
         ;
-      failures = need:
-        (expect {
-          inherit aggregate consumer;
-          needs = [need];
-        }).failures;
-      meets = need: failures need == [];
-      misses = need: actual:
-        failures need
-        == [
-          {
-            inherit actual consumer;
-            inherit (need) key;
-            expected = builtins.removeAttrs need ["key"];
-            kind = "expectation";
-          }
-        ];
+      failures = needs: (expect {inherit aggregate consumer needs;}).failures;
+      # Every need is checked: one failure per unmet need, with its actual.
+      misses = needs: seen:
+        failures needs
+        == lib.zipListsWith (need: actual: {
+          inherit actual consumer;
+          inherit (need) key;
+          expected = builtins.removeAttrs need ["key"];
+          kind = "expectation";
+        })
+        needs
+        seen;
     in {
-      contains-met = meets {
-        contains = "invoke_sub_agent";
-        key = "tools";
-      };
-      contains-unmet = misses {
-        contains = "write";
-        key = "tools";
-      } ["invoke_sub_agent" "read"];
-      presence-met = meets {key = "hookTriggers";};
-      presence-unmet = misses {key = "absent";} null;
-      value-met = meets {
-        key = "steering.maxChars";
-        value = 50000;
-      };
-      value-unmet =
-        misses {
+      all-met =
+        failures [
+          {
+            contains = "invoke_sub_agent";
+            key = "tools";
+          }
+          {
+            key = "steering.maxChars";
+            value = 50000;
+          }
+          {key = "hookTriggers";}
+        ]
+        == [];
+      contains-and-value-unmet = misses [
+        {
+          contains = "write";
+          key = "tools";
+        }
+        {
           key = "steering.maxChars";
           value = 1;
         }
-        50000;
+      ] [["invoke_sub_agent" "read"] 50000];
+      presence-unmet = misses [{key = "absent";}] [null];
     };
 
     # Keys and the not-failures paragraph: a wildcard covers every child,
