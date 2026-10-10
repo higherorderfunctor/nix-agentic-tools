@@ -9,6 +9,7 @@
   ...
 }: let
   inherit (import ../../lib/extracted/facts.nix {inherit lib;}) expect get getFor merge;
+  inherit (import ../../lib/extracted {inherit pkgs;}) index;
   systems = import ../../config/systems.nix;
   both = tree: lib.genAttrs systems (_: tree);
   split = darwin: linux: {
@@ -27,6 +28,28 @@
   divergent = {
     declarations.mode = static "string";
     raws = split {mode = "darwin-value";} {mode = "linux-value";};
+  };
+  # A decisions row for `mode` that differs from a valid one in its reason only.
+  reasoned = reason: {
+    declarations.mode = static "string";
+    decisions.mode = decision "equal" // {inherit reason;};
+    raws = both {mode = "same";};
+  };
+  # A count required on both systems, combined by `ignore`.
+  ignoredLimit = raws: {
+    inherit raws;
+    declarations.limit = static "count";
+    decisions.limit = decision "ignore";
+  };
+  # spec:30-33, spec:153-157: one wildcard child on Darwin only.
+  disappearing = {
+    declarations."features.<name>.state" = static "string";
+    raws = split {
+      features = {
+        new.state = "on";
+        old.state = "off";
+      };
+    } {features.old.state = "off";};
   };
   # Every case names its refused input or the consumer-visible result.
   # `kinds` is merge's failure kinds, compared exactly; `shows` is the visible
@@ -50,6 +73,15 @@
       };
       kinds = ["bad-decision"];
     };
+    # spec:82, spec:150.
+    bad-decision-ignore-non-collection = {
+      input = {
+        declarations.mode = static "string";
+        decisions.mode = decision "equal" // {ignore = ["x"];};
+        raws = both {mode = "same";};
+      };
+      kinds = ["bad-decision"];
+    };
     # Fixture 11; spec:81, spec:138-139, spec:149.
     bad-decision-impossible-date = {
       input = {
@@ -57,6 +89,21 @@
         decisions.mode = decision "equal" // {decided = "2026-02-31";};
         raws = both {mode = "same";};
       };
+      kinds = ["bad-decision"];
+    };
+    # spec:137-138: trimmed, exactly `TODO`.
+    bad-decision-reason-todo = {
+      input = reasoned "TODO";
+      kinds = ["bad-decision"];
+    };
+    # spec:137-138: begins with `TODO:`, nothing after it.
+    bad-decision-reason-todo-colon = {
+      input = reasoned "TODO:";
+      kinds = ["bad-decision"];
+    };
+    # spec:137-138: begins with `TODO:` once trimmed.
+    bad-decision-reason-todo-indented = {
+      input = reasoned "  TODO: why";
       kinds = ["bad-decision"];
     };
     # Fixture 11; spec:149.
@@ -77,6 +124,32 @@
       };
       kinds = ["bad-decision"];
     };
+    # spec:86, spec:160-161: still validated, so an absent key is gone.
+    combine-ignore-declared-gone = {
+      input = ignoredLimit (both {});
+      kinds = ["declared-gone"];
+    };
+    # spec:86-87, spec:160: the key leaves the aggregate, and differing raws
+    # are not divergent.
+    combine-ignore-drops = {
+      input = {
+        declarations.models = static "set";
+        decisions.models = decision "ignore";
+        raws = split {models = ["a"];} {models = ["b"];};
+      };
+      kinds = [];
+      shows = result: !(result.aggregate ? models);
+    };
+    # spec:160-161.
+    combine-ignore-missing-system = {
+      input = ignoredLimit (split {} {limit = 5;});
+      kinds = ["missing-system"];
+    };
+    # spec:160-161.
+    combine-ignore-type-mismatch = {
+      input = ignoredLimit (both {limit = "five";});
+      kinds = ["type-mismatch"];
+    };
     # Fixture 6; spec:147. Same shape as live-no-systems minus the live
     # declaration, so that case cannot pass by reporting nothing.
     declared-gone = {
@@ -85,6 +158,15 @@
         raws = both {};
       };
       kinds = ["declared-gone"];
+    };
+    # spec:132-135: the fix names the key it would delete.
+    declared-gone-fix = {
+      input = {
+        declarations.lastRun = static "string";
+        raws = both {};
+      };
+      kinds = ["declared-gone"];
+      shows = result: (lib.head result.failures).fix == "delete the declaration for `lastRun`";
     };
     # Fixture 2; spec:93.
     differ-bool-and = {
@@ -97,6 +179,19 @@
         get result.aggregate "enabled"
         == false
         && result.aggregate.enabled.combine == "and";
+    };
+    # spec:84.
+    differ-bool-or = {
+      input = {
+        declarations.enabled = static "bool";
+        decisions.enabled = decision "or";
+        raws = split {enabled = true;} {enabled = false;};
+      };
+      kinds = [];
+      shows = result:
+        get result.aggregate "enabled"
+        == true
+        && result.aggregate.enabled.combine == "or";
     };
     # Fixture 2; spec:84, spec:96 (overridden by a decision).
     differ-count-max = {
@@ -111,6 +206,19 @@
         == 5
         && result.aggregate.limit.combine == "max";
     };
+    # spec:84.
+    differ-count-min = {
+      input = {
+        declarations.limit = static "count";
+        decisions.limit = decision "min";
+        raws = split {limit = 3;} {limit = 5;};
+      };
+      kinds = [];
+      shows = result:
+        get result.aggregate "limit"
+        == 3
+        && result.aggregate.limit.combine == "min";
+    };
     # Fixture 2; spec:56, spec:95.
     differ-set-intersection = {
       input = {
@@ -122,6 +230,19 @@
         get result.aggregate "models"
         == ["b"]
         && result.aggregate.models.combine == "intersection";
+    };
+    # spec:56, spec:84.
+    differ-set-union = {
+      input = {
+        declarations.models = static "set";
+        decisions.models = decision "union";
+        raws = split {models = ["a" "b"];} {models = ["c" "b"];};
+      };
+      kinds = [];
+      shows = result:
+        get result.aggregate "models"
+        == ["a" "b" "c"]
+        && result.aggregate.models.combine == "union";
     };
     # Fixture 2; spec:85.
     differ-string-prefer = {
@@ -240,6 +361,29 @@
         && shown "tools" {contains = "write";} (get result.aggregate "tools")
         && shown "steering.maxChars" {value = 1;} 50000;
     };
+    # spec:179, spec:185-187: a presence-only need on an absent key.
+    expect-presence-missing = {
+      input = {
+        declarations.mode = static "string";
+        raws = both {mode = "same";};
+      };
+      kinds = [];
+      shows = result: let
+        failed = expect {
+          inherit (result) aggregate;
+          consumer = "delegate-routing";
+          needs = [{key = "hookTriggers";}];
+        };
+      in
+        map (failure: {inherit (failure) consumer key kind;}) failed.failures
+        == [
+          {
+            consumer = "delegate-routing";
+            key = "hookTriggers";
+            kind = "expectation";
+          }
+        ];
+    };
     # Fixture 12; spec:82.
     ignore-before-intersection = {
       input = {
@@ -283,6 +427,21 @@
         && !(builtins.tryEval (get result.aggregate "limit")).success
         && getFor "aarch64-darwin" result.aggregate "limit" == 3
         && getFor "x86_64-linux" result.aggregate "limit" == 5;
+    };
+    # spec:137-138: a reason that merely starts with the word TODO is real.
+    reason-todo-prefixed-word = {
+      input = reasoned "TODO entries are excluded because they are not implemented commands";
+      kinds = [];
+    };
+    # spec:150-151, spec:158-159: a raw leaf at a strict prefix of a declared
+    # path stays undeclared and is classified; the declared child is gone.
+    secret-prefix-leaf = {
+      input = {
+        declarations."apiToken.child" = static "string";
+        raws = both {apiToken = "credential";};
+      };
+      kinds = ["declared-gone" "undeclared-secret"];
+      shows = result: result.undeclared == ["apiToken"];
     };
     # Fixture 7; spec:56, spec:148. Required on one system only, so exactly one
     # raw value is checked.
@@ -335,6 +494,30 @@
         && get result.aggregate "features.new.state" == "off"
         && get result.aggregate "features.old.state" == "on";
     };
+    # spec:153-157: a child on one system only is no failure, and its entry
+    # is keyed by the concrete path with one system's raw.
+    wildcard-disappearing-child = {
+      input = disappearing;
+      kinds = [];
+      shows = result:
+        builtins.attrNames result.aggregate."features.new.state".bySystem
+        == ["aarch64-darwin"]
+        && get result.aggregate "features.new.state" == "on";
+    };
+    # spec:157-158: prefer takes the only value when the preferred system
+    # lacks the child.
+    wildcard-prefer-sole-value = {
+      input =
+        disappearing
+        // {
+          decisions."features.<name>.state" = decision "prefer:x86_64-linux";
+        };
+      kinds = [];
+      shows = result:
+        result.aggregate."features.new.state".value
+        == "on"
+        && get result.aggregate "features.new.state" == "on";
+    };
   };
   run = case: let
     result = merge (case.input // {inherit systems;});
@@ -351,12 +534,27 @@
     then fixText
     else "{${fixText}}"
   );
+  # spec:190-195: one owner's merged aggregate, written per owner and indexed.
+  indexed = index {
+    demo = merge (cases.differ-count-max.input // {inherit systems;});
+  };
   vocabulary = ["and" "equal" "ignore" "intersection" "max" "min" "or" "per-platform" "union"] ++ map (system: "prefer:${system}") systems;
 in {
   checks = {
     extracted-facts = harness.mkTest "extracted-facts" (
       assert lib.assertMsg (failures == []) (builtins.toJSON failures); true
     );
+    extracted-facts-index = pkgs.runCommand "extracted-facts-index" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      test -f ${indexed}/demo.json
+      test -f ${indexed}/index.json
+      ${pkgs.jq}/bin/jq -e '.demo.limit.value == 5' ${indexed}/index.json > /dev/null || {
+        echo "FAIL: index.json does not carry the merged value of demo's limit" >&2
+        exit 1
+      }
+      echo "PASS: extracted-facts-index" > "$out"
+    '';
     extracted-facts-divergent-fix = pkgs.runCommand "extracted-facts-divergent-fix" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
