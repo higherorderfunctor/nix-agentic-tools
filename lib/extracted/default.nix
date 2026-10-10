@@ -27,12 +27,12 @@ in {
     # supply every system's raw from this host.
     buildable = builtins.filter (system: extracted ? ${system} && extracted.${system}.system == host) (import ../../config/systems.nix);
     compare = {
+      attr,
       committed,
       extracted,
-      sidecar,
-      attr,
       # Single mode stops here; per-system records it and fails at the end.
       onDrift,
+      sidecar,
     }: ''
       if ! "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} '$a == $b' > /dev/null; then
         echo "FAIL: ${name} sidecar (${sidecar}) is out of sync with its extraction sources." >&2
@@ -52,11 +52,11 @@ in {
         drifted=0
         ${lib.concatMapStrings (system:
           compare {
+            attr = "extracted.${system}";
             committed = committed + "/${system}.json";
             extracted = extracted.${system};
-            sidecar = "${sidecar}/${system}.json";
-            attr = "extracted.${system}";
             onDrift = "drifted=1";
+            sidecar = "${sidecar}/${system}.json";
           })
         buildable}if [ "$drifted" -eq 1 ]; then exit 1; fi
       ''
