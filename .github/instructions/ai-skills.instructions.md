@@ -7,7 +7,8 @@ applyTo: "lib/ai/hm-helpers.nix,lib/ai/mkSkillPackageModule.nix,packages/chatgpt
 
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-10-06 — `enableDefault` makes a skill package
+> **Last verified:** 2026-10-08 — Codex skill discovery was re-probed on 0.161.0
+> with the same directory-link result; `enableDefault` makes a skill package
 > default-on; the config-form test evaluators turn every default-on program off.
 >
 > Full lineage:
@@ -29,9 +30,9 @@ discovers Layout A, where the skill directory itself is a symlink.
 | Kimchi  | `mkSkillFiles`                       | HM `harness/skills`; devenv `.kimchi/skills` | B      |
 | Kiro    | `mkSkillFiles`                       | `.kiro/skills`                               | B      |
 
-Codex 0.147.0 was probed with both shapes: a whole-directory symlink appeared in
-`skills/list`, while a real directory whose `SKILL.md` was a symlink did not.
-The official
+Codex 0.161.0 was re-probed on 2026-10-08 with both shapes: a whole-directory
+symlink appeared in `skills/list`, while a real directory whose `SKILL.md` was a
+symlink did not. The official
 [Codex skill documentation](https://developers.openai.com/codex/skills/)
 explicitly supports symlinked skill folders, so both Home Manager and devenv
 emit one `.agents/skills/<name>` link.
