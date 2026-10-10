@@ -77,10 +77,11 @@ in {
     module-sws-hm-enable-sets-ai-rules = mkTest "sws-hm-enable-sets-ai-rules" (
       let
         result = evalHm {ai.programs.stacked-workflows.enable = true;};
-        ruleRuntimes = builtins.filter (runtime: result.options.ai.${runtime} ? rules) harnessNames;
+        ruleRuntimes = builtins.filter (runtime: runtime != "copilot" && result.options.ai.${runtime} ? rules) harnessNames;
         runtimeHasOne = runtime: result.config.ai.${runtime}.rules ? stacked-workflows-router;
       in
         lib.all runtimeHasOne ruleRuntimes
+        && result.config.ai.copilot.rules == {}
         && !(result.config.ai.rules ? stacked-workflows-router)
     );
 

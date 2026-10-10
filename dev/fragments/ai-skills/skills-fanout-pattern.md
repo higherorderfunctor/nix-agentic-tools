@@ -1,8 +1,8 @@
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-10-08 — Codex skill discovery was re-probed on 0.161.0
-> with the same directory-link result; `enableDefault` makes a skill package
-> default-on; the config-form test evaluators turn every default-on program off.
+> **Last verified:** 2026-10-09 — package rules are gated by backend delivery
+> capability; Codex skill discovery was re-probed on 0.161.0 on 2026-10-08 with
+> the same directory-link result.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -128,8 +128,12 @@ first one was added). A check of the real default uses `evalHmModules` /
 
 The factory passes `config`, `lib`, `pkgs` and `runtime` to both `skills` and
 `rules` callbacks. Import it once with the full supported runtime set; render
-per-runtime content inside the callbacks. Existing callbacks that ignore
-`runtime`, such as stacked-workflows, keep the same behavior.
+per-runtime content inside the callbacks. A spec with `rules` must also name its
+`backend` (`"hm"` or `"devenv"`); the shared factory contributes rules only
+where that backend delivers them, using the delivery policy. Copilot on Home
+Manager therefore receives package skills without an undeliverable router rule
+or a warning about a pool the consumer never set. Explicit consumer rules still
+warn.
 
 This controls whether the package writes its existing
 `ai.<runtime>.{skills,rules}` entries; it does not move those entries to the

@@ -1,8 +1,7 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-08 — the delegate map distinguishes upstream Kimchi
-> workflows from the always-patched package and indexes its offline thinking
-> dispatch/preflight contract.
+> **Last verified:** 2026-10-09 — backend modules pass their scope to the shared
+> skill-package factory, which gates package rules by delivery capability.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -154,11 +153,13 @@ Reaching Kiro on devenv withholds `trustedMcpTools` from `kiro acp` (warned),
 while Home Manager drops bare tokens such as `use_aws` from the
 `permissions.yaml` translation.
 
-The common module imports `mkSkillPackageModule` once for the supported
-runtimes. Per-runtime program enable inherits portable enable through the
-factory's null-as-inherit rule. Skills and router rules contribute to
-per-runtime pools, never the portable pools. Runtime-only controls are not
-declared at portable scope. Copilot is excluded from this program.
+The backend modules pass `"hm"` or `"devenv"` to the common module, which
+imports `mkSkillPackageModule` once for the supported runtimes. The factory
+checks rule delivery capability on that backend before contributing package
+rules. Per-runtime program enable inherits portable enable through the factory's
+null-as-inherit rule. Skills and router rules contribute to per-runtime pools,
+never the portable pools. Runtime-only controls are not declared at portable
+scope. Copilot is excluded from this program.
 
 The Kimchi skill lands in devenv `.kimchi/skills` or Home Manager
 `harness/skills`. Project skills take precedence over config paths and harness

@@ -22,6 +22,7 @@
 {lib, ...}: {
   imports = [
     (import ../../../../lib/ai/mkSkillPackageModule.nix {
+      backend = "devenv";
       name = "stacked-workflows";
       enableDescription = "stacked workflow skills + skill-routing rule (project-local devenv scope)";
       skills = {config, ...}: config.ai.internal.roots.stacked-workflows-content.passthru.skills;

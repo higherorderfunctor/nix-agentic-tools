@@ -600,7 +600,9 @@ description and in the delivery matrix instead. A root KEYED pool warns only for
 names the runtime has not withdrawn with `ai.<runtime>.<pool>.<name> = null`
 (`config/ai-delivery.nix` `keyedSurfaces`). A PER-RUNTIME request a backend
 cannot deliver does warn (`lib/ai/delivery-warnings.nix`), because that one the
-consumer wrote directly and can delete.
+consumer wrote directly and can delete. Package rule contributors must instead
+gate their writes by backend delivery capability; `mkSkillPackageModule` applies
+that gate from the delivery policy before writing a per-runtime rules pool.
 
 A context or rule unit that resolves for a runtime but lands in a file whose
 final entry has `content.enable = false` warns too, root or per-runtime: the
@@ -931,14 +933,15 @@ same top-level companion instead of creating misleading runtime overrides.
 
 **The contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
 the factory writes `ai.<runtime>.skills` and `ai.<runtime>.rules` for every
-runtime whose module is present in the evaluation, filtered by
-`lib.hasAttrByPath ["ai" name "skills"] options`. Root `ai.skills` belongs to
-the consumer as a portable default surface. Per-runtime null can now retract an
-inherited key, but packages still do not write root values that fan out beyond
-their runtime ownership. The `rootPoolViolations` provenance guard in
-`checks/module-provenance/helpers.nix` enforces this by reading each root
-option's `definitionsWithLocations`. The declaring module is exempt, which lets
-`sharedOptions.nix` perform its root L1→L2 Dir reshape.
+runtime whose module is present in the evaluation, filtered by option presence.
+Rules additionally require delivery support on the caller's explicit backend;
+Copilot on Home Manager receives skills but no package-generated rules. Root
+`ai.skills` belongs to the consumer as a portable default surface. Per-runtime
+null can now retract an inherited key, but packages still do not write root
+values that fan out beyond their runtime ownership. The `rootPoolViolations`
+provenance guard in `checks/module-provenance/helpers.nix` enforces this by
+reading each root option's `definitionsWithLocations`. The declaring module is
+exempt, which lets `sharedOptions.nix` perform its root L1→L2 Dir reshape.
 
 Two consequences to know before changing it. Consumer override keys are
 `ai.<runtime>.skills.<name>` and `ai.<runtime>.rules.<name>`; package entries

@@ -1,4 +1,4 @@
-{
+{backend}: {
   config,
   lib,
   options,
@@ -134,7 +134,7 @@ in {
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "delegate-routing";
       enableDescription = "delegate model and effort sizing skills and rule";
-      inherit supportedRuntimes;
+      inherit backend supportedRuntimes;
       skills = {runtime, ...}: {
         delegate-routing = "${defaults.passthru.mkSkill {
           inherit runtime models techniques;

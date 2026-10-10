@@ -15,18 +15,12 @@
 # `ai.<runtime>.skills.peer-communication` and
 # `ai.<runtime>.rules.peer-communication-router`.
 #
-# `backend` ("hm" or "devenv") selects which runtimes get the router: a
-# runtime whose rules this backend does not deliver by policy
-# (config/ai-delivery.nix, primitive "notApplicable" — today Copilot under
-# Home Manager) gets none, so a default evaluation does not warn that a rule
-# is set but not delivered. Such a runtime still gets the skill, whose
-# description asks for it to be loaded in an interactive session.
-{backend}: {lib, ...}: let
-  policy = import ../../../config/ai-delivery.nix {inherit lib;};
-  inert = runtime: (policy.definitions.rules.${runtime}.${backend}.primitive or null) == "notApplicable";
-in {
+# The shared skill-package factory gates router rules by backend delivery
+# capability. A runtime without a rule writer still receives the skill.
+{backend}: {
   imports = [
     (import ../../../lib/ai/mkSkillPackageModule.nix {
+      inherit backend;
       name = "peer-communication";
       enableDefault = true;
       enableDescription = "the peer-communication skill and its router rule in each enabled runtime";
@@ -34,14 +28,11 @@ in {
         # A store-path string, the form the other skill packages hand over.
         peer-communication = "${../skills/peer-communication}";
       };
-      rules = {runtime, ...}:
-        if inert runtime
-        then {}
-        else {
-          peer-communication-router = {
-            text = "# Peer communication\n\nWhen you are talking with a person, load the peer-communication skill before your first reply and follow it for every reply after. Skip it when your brief says you run non-interactively and report to an orchestrator.";
-          };
+      rules = _: {
+        peer-communication-router = {
+          text = "# Peer communication\n\nWhen you are talking with a person, load the peer-communication skill before your first reply and follow it for every reply after. Skip it when your brief says you run non-interactively and report to an orchestrator.";
         };
+      };
     })
   ];
 }
