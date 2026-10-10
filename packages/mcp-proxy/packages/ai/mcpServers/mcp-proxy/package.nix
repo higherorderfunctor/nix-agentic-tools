@@ -10,12 +10,12 @@
   inherit (pkgs) fetchFromGitHub;
   vu = packageLib;
 
-  rev = "153a96a61fde2bf5a23961c64a3dd96b5e385108";
+  rev = "ae38d0b3c7978e991819ac6cd9742abf2165be1c";
   src = fetchFromGitHub {
     owner = "sparfenyuk";
     repo = "mcp-proxy";
     inherit rev;
-    hash = "sha256-LeQc1AWq+/iGEePN8ouYjowEt63K23AoKiKktX2EziQ=";
+    hash = "sha256-rworzDa9MJK/f+E8bzNLFr+nSxgJoPY6ehlElv32khs=";
   };
 in
   pkgs.mcp-proxy.overridePythonAttrs (old: let
