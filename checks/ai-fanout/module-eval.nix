@@ -14,6 +14,33 @@
   settingsHarnessNames = lib.remove "kiro" harnessNames;
 in {
   checks = {
+    module-package-copilot-rules-backend-gate = let
+      declaration = {
+        ai.copilot.enable = true;
+        ai.programs.stacked-workflows.enable = true;
+      };
+      hm = evalHm declaration;
+      devenv = evalDevenv declaration;
+      ruleWarnings = evaluated: builtins.filter (lib.hasInfix "ai.copilot.rules is set") evaluated.config.warnings;
+      observation = {
+        rules = builtins.attrNames hm.config.ai.copilot.rules;
+        warnings = ruleWarnings hm;
+        definitions = map (definition: definition.file) hm.options.ai.copilot.rules.definitionsWithLocations;
+      };
+      consumer = evalHm (lib.recursiveUpdate declaration {ai.copilot.rules.consumer.text = "Consumer guidance.";});
+    in
+      (mkTest "package-copilot-rules-backend-gate" (
+        observation.rules
+        == []
+        && observation.warnings == []
+        && hm.config.ai.copilot.skills ? stack-plan
+        && devenv.config.ai.copilot.rules ? stacked-workflows-router
+        && ruleWarnings devenv == []
+        && consumer.config.ai.copilot.rules ? consumer
+        && ruleWarnings consumer != []
+      ))
+      // {passthru = {inherit observation;};};
+
     module-runtime-path-provenance-notice = let
       binaries = {
         claude = "claude";
@@ -174,6 +201,7 @@ in {
               };
             }
             (import ../../lib/ai/mkSkillPackageModule.nix {
+              backend = "hm";
               name = "probe-package";
               enableDescription = "presence-gate probe";
               rules = _: {probe-rule.text = "Probe guidance.";};

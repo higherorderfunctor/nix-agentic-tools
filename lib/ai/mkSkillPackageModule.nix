@@ -22,6 +22,8 @@
 #     module on top.
 #
 # spec:
+#   backend           : "hm" or "devenv", supplied by the backend module
+#                       when it provides rules. Skill-only packages need none.
 #   name              : program key; declares `ai.programs.<name>.enable`
 #                       plus per-runtime overrides (string).
 #   enableDescription : mkEnableOption description (string).
@@ -91,6 +93,7 @@ spec: {
   pkgs,
   ...
 }: let
+  delivery = import ../../config/ai-delivery.nix {inherit lib;};
   moduleArgs = {inherit config lib pkgs;};
   programFactory = import ./program.nix {inherit lib;};
   program = programFactory.mkProgram {
@@ -117,10 +120,13 @@ spec: {
     lib.filter
     (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options)
     program.supportedRuntimes;
-  presentRuleRuntimes =
+  presentRuleRuntimes = lib.optionals (spec ? rules) (
     lib.filter
-    (runtime: lib.hasAttrByPath ["ai" runtime "rules"] options)
-    program.supportedRuntimes;
+    (runtime:
+      lib.hasAttrByPath ["ai" runtime "rules"] options
+      && delivery.definitions.rules.${runtime}.${spec.backend}.primitive != "notApplicable")
+    program.supportedRuntimes
+  );
 in {
   imports = [program.module];
 

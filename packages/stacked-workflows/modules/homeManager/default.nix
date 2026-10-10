@@ -23,6 +23,7 @@
 {lib, ...}: {
   imports = [
     (import ../../../../lib/ai/mkSkillPackageModule.nix {
+      backend = "hm";
       name = "stacked-workflows";
       enableDescription = "stacked workflow skills and skill-routing rule in each enabled runtime";
       skills = {config, ...}: config.ai.internal.roots.stacked-workflows-content.passthru.skills;
