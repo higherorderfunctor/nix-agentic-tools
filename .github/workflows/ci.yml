@@ -334,13 +334,15 @@ jobs:
           # Assert only on paths UNIQUE to the patched closure. Some FHS
           # scaffolding — the shared command dispatcher, `-init` script and
           # `-fhsenv-profile` tree — does not depend on the binary's CONTENT, so
-          # it is byte-identical for both variants and shares one store path,
-          # which the build job's pushFilter keeps out of the cache along with
-          # the rest of the unpatched package. Walking the whole closure
-          # therefore reports three such paths as leaks on linux (six before
-          # nixpkgs consolidated the three FHS environments; darwin has no FHS
-          # layer, so it passed and hid the bug). Those carry no patched bytes; flagging them would train the
-          # reader to ignore this step, which is worse than not having it.
+          # it is byte-identical for both variants and shares one store path.
+          # The build job's pushFilter now keeps those paths out of the cache,
+          # but they were published before the filter existed and stay
+          # fetchable until the operator purges them. Walking the whole closure
+          # would report three of them as leaks on linux (six before nixpkgs
+          # consolidated the three FHS environments; darwin has no FHS layer,
+          # so it passed and hid the bug) and turn CI red over paths that carry
+          # no patched bytes. Once the purge has run, drop the subtraction and
+          # assert on the whole closure.
           #
           # `nix derivation show -r` is eval-only — it reads each derivation's
           # DECLARED output paths without building or substituting the 621 MiB
