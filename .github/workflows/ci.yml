@@ -552,14 +552,14 @@ jobs:
       # proves nothing:
       #   B=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.claude-code)/bin/claude
       #   grep -ac 'NotebookEdit' "$B"                            # control, must be >0
-      #   grep -ac 'Do not call the AgentTool unless the user requested it' "$B"
-      #                                                           # 0 => upstream fixed it
+      #   grep -ac 'or a skill asks for it' "$B"
+      #                                                           # 0 => clause changed or fixed
       #   grep -ac 'tengu_heron_brook' "$B"                       # the gate
       # Presence is the signal, never the count: grep counts LINES and the
       # bundle is minified, so counts drift with no behavior change.
       #
       # If the clamp remains, verify that the delegate-routing per-turn reminder
-      # still satisfies its "unless the user requested it" escape clause.
+      # still satisfies its "unless the user, a CLAUDE.md file, or a skill asks for it" escape clause.
       # Then EITHER bump `reviewBy` ~90 days, OR — if upstream fixed it — drop the
       # permission grant from the delegate-routing reminder's default text, and
       # delete this step and packages/claude-code/checks/claude-heron-brook.nix.

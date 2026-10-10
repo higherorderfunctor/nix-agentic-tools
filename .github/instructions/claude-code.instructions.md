@@ -116,8 +116,9 @@ Three things follow, and each of them is a trap if you assume the old shape:
 
 ## heron_brook Delegation Clamp — the escape clause
 
-> **Last verified:** 2026-10-08 — the mitigation lives in delegate-routing’s
-> per-turn reminder; Claude retains the dated CI review and its guard.
+> **Last verified:** 2026-10-09 (commit e114ff95) — the mitigation lives in
+> delegate-routing’s per-turn reminder; Claude retains the dated CI review and
+> its guard.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 3510a5db:packages/claude-code/docs/heron-brook-clamp.md`.
@@ -137,17 +138,19 @@ Three things follow, and each of them is a trap if you assume the old shape:
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
 instructing the model not to call the Agent tool and not to use workflows or
-deep research "unless the user requested it". It is gated on a model capability
-rather than user configuration: an Opus 5 / Sonnet 5 control pair found it
-present on Opus 5 and absent on Sonnet 5. No setting or flag disables it, and it
-never appears in the transcript, so a session with delegation suppressed looks
-identical to a normal one.
+deep research "unless the user, a CLAUDE.md file, or a skill asks for it". It is
+gated on a model capability rather than user configuration: an Opus 5 / Sonnet 5
+control pair found it present on Opus 5 and absent on Sonnet 5. No setting or
+flag disables it, and it never appears in the transcript, so a session with
+delegation suppressed looks identical to a normal one.
 
 ### Why user-voiced context satisfies it
 
-The mitigation now lives in delegate-routing’s per-turn reminder. Its
+delegate-routing’s per-turn reminder supplies the mitigation. Its
 `UserPromptSubmit` context supplies the request the clamp’s own escape clause
-asks for. Nothing is patched.
+asks for. Nothing is patched. The clamp also negates
+`ai.claude.ultracodeOnLaunch`, so on Opus 5 that option depends on the
+reminder’s grant.
 
 `UserPromptSubmit`’s `additionalContext` lands inside the human turn.
 `SessionStart` context carries a `SessionStart hook additional context:` prefix
@@ -157,7 +160,7 @@ mechanism relies on the user’s voice, not concealment.
 
 Re-derive these properties before rewording the permission grant:
 
-1. It satisfies "unless the user requested it" rather than contradicting the
+1. It satisfies "unless the user … asks for it" rather than contradicting the
    system instruction.
 2. It is affirmative: a positive request avoids asking the model to ignore an
    instruction it cannot point at.

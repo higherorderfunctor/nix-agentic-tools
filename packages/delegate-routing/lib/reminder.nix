@@ -19,8 +19,8 @@
       };
     });
 in {
-  # Wording grants explicit workflow opt-in; see heron-brook-clamp.md.
-  defaultText = "Standing request from me, the user: you may use subagents, workflows and delegates whenever they fit; use the delegate-routing skill to size their model and effort.";
+  # Wording grants the standing opt-in for delegation surfaces; see heron-brook-clamp.md.
+  defaultText = "Standing request from me, the user: you may use subagents, workflows, deep research and delegates whenever they fit; use the delegate-routing skill to size their model and effort.";
 
   # Definitions under ai.<runtime>; Kiro consumes plain stdout.
   hooks =

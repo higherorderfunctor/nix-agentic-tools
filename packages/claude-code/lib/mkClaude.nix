@@ -384,7 +384,10 @@ in
         `settings.enableWorkflows = true` via mkDefault, so an explicit
         `ai.claude.native.settings.*` still wins. Does NOT set effortLevel —
         ultracode runs at the session's effort level. The
-        `--effort ultracode` CLI flag also sets xhigh.'';
+        `--effort ultracode` CLI flag also sets xhigh.
+
+        On Opus 5 the heron_brook clamp negates ultracode unless a user-voiced
+        grant is present; the delegate-routing per-turn reminder supplies it.'';
       marketplaces = lib.mkOption {
         type = with lib.types; attrsOf (either package path);
         default = {};

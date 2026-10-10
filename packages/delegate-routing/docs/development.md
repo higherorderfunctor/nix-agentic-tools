@@ -194,11 +194,10 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 
 ## Per-turn reminder
 
-The default wording names workflows to provide Claude's explicit user opt-in
-when ultracode is off. Before changing it, read
-`packages/claude-code/docs/heron-brook-clamp.md`; removing that clamp is
-separate work. Consumer delivery and enable controls are documented in the
-`reminder` option; the hook pools own conflict diagnostics.
+The default wording is Claude's user-voiced grant against the heron_brook clamp.
+Before changing it, read `packages/claude-code/docs/heron-brook-clamp.md`.
+Consumer delivery and enable controls are documented in the `reminder` option;
+the hook pools own conflict diagnostics.
 
 ## Acceptance suite
 
