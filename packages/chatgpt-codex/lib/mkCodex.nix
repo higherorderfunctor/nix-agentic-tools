@@ -51,6 +51,9 @@
       exe = "codex";
       flags = lib.optionals (backend == "devenv") (
         lib.concatMap (flag: ["--add-flags" flag]) launcherFlags.devenv
+        ++ lib.optional cfg.trustProjectForSession (
+          "--run " + lib.escapeShellArg ''set -- -c "$(${pkgs.python3}/bin/python3 -c ${lib.escapeShellArg ''import json, os; print("projects={" + json.dumps(os.environ["DEVENV_ROOT"], ensure_ascii=False) + '={trust_level="trusted"}}')''})" "$@"''
+        )
         ++ lib.optionals (hookTrust != {}) (
           lib.concatMap (flag: ["--add-flag" flag]) launcherFlags.hookTrust
           ++ ["--add-flag" (lib.escapeShellArg (hookTrustOverride hookTrust))]
@@ -488,7 +491,7 @@
           };
         });
         default = {};
-        description = "User-level project trust, keyed by absolute path. A main-checkout entry covers linked worktrees; an empty worktree entry does not revoke it. An explicit worktree trust_level takes precedence. With Home Manager this is the only trust Codex keeps, because its trust prompt cannot write the Nix-owned user config.toml. Devenv rejects this bootstrap-global setting in project config.toml.";
+        description = "User-level project trust, keyed by absolute path. A main-checkout entry covers linked worktrees; an empty worktree entry does not revoke it. An explicit worktree trust_level takes precedence. With Home Manager this is the persistent trust Codex keeps, because its trust prompt cannot write the Nix-owned user config.toml. Devenv rejects this bootstrap-global setting in project config.toml; its trustProjectForSession launcher option can supply session trust instead.";
       };
       sandbox_mode = lib.mkOption {
         type = lib.types.nullOr (lib.types.enum sandboxModeNames);
@@ -1236,6 +1239,30 @@ in
         linked against store paths nothing roots from the copy: it breaks
         after garbage collection until upstream's updater replaces it. Home
         Manager only.
+      '';
+    };
+
+    devenv.options.trustProjectForSession = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Trust the project at `$DEVENV_ROOT` for this Codex launch. When that
+        root is a main checkout, its trust also covers linked worktrees of
+        the clone. A linked-worktree root trusts only that worktree.
+        The launcher adds a table-form `-c`
+        override before its project-document preflight. It reads the root at
+        launch and leaves the user config untouched.
+
+        Set `ai.codex.trustProjectForSession = true;` in an uncommitted
+        `devenv.local.nix` to opt in for your checkout. Devenv automatically
+        loads that file; this repository already ignores it. A committed
+        `devenv.nix` that enables this trusts its own project, but entering
+        that shell already executes the project's Nix code, so it adds no
+        new trust boundary. The default stays off.
+
+        Devenv only: Home Manager already declares persistent user-global
+        trust with `ai.codex.native.settings.projects`. This session-local
+        launcher behavior is an intentional configuration-parity exception.
       '';
     };
 

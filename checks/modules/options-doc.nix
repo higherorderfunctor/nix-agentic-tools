@@ -24,11 +24,11 @@
 # Exact option-tree parity is appropriate here even where runtime behavior
 # differs. Backend-specific boundaries are represented by assertions/defaults,
 # not by deleting the option from either backend; that keeps discovery and
-# diagnostics consistent. `ai.codex.pinDaemonToPackage` is the one deliberate
-# exception: devenv's Codex launcher always passes `--no-daemon`, so there is
-# no daemon at all to pin, which is a stronger statement than a value an
-# assertion rejects — the option is genuinely Home Manager-only and the parity
-# diff below excludes that one leaf rather than asserting it does not matter.
+# diagnostics consistent. Two Codex options have genuinely different scopes:
+# Home Manager's `pinDaemonToPackage` selects a user daemon that devenv bypasses
+# with `--no-daemon`; devenv's `trustProjectForSession` trusts its runtime project
+# root, while Home Manager declares persistent trust in user config instead.
+# The parity diff excludes these two leaves on their respective backends.
 {
   lib,
   pkgs,
@@ -195,11 +195,10 @@
         keys[]
         | select(startswith("ai."))
       ' "${devenvJson}" | "$sort" -u > devenv-ai-options
-      # ai.codex.pinDaemonToPackage is Home Manager-only by design — see the
-      # header comment — so it is excluded from the HM side of this
-      # comparison rather than expected on devenv's.
+      # Exclude only the two intentional backend-specific leaves above.
       "$grep" -v '^ai\.codex\.pinDaemonToPackage$' hm-ai-options > hm-ai-options-comparable
-      "$diff" -u hm-ai-options-comparable devenv-ai-options
+      "$grep" -v '^ai\.codex\.trustProjectForSession$' devenv-ai-options > devenv-ai-options-comparable
+      "$diff" -u hm-ai-options-comparable devenv-ai-options-comparable
 
       "$jq" -S '
         with_entries(select(.key | startswith("ai.")))
@@ -209,6 +208,7 @@
       "$jq" -S '
         with_entries(select(.key | startswith("ai.")))
         | map_values({ type: .type })
+        | del(."ai.codex.trustProjectForSession")
       ' "${devenvJson}" > devenv-ai-types.json
       "$diff" -u hm-ai-types.json devenv-ai-types.json
 
