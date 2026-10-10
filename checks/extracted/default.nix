@@ -1,1 +1,7 @@
-{imports = [./facts.nix ./reconcile.nix];}
+{
+  imports = [
+    ./drift.nix
+    ./facts.nix
+    ./reconcile.nix
+  ];
+}
