@@ -1,0 +1,3636 @@
+{
+  "cli": {
+    "commands": {
+      "codex": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--oss"],
+            "valueName": null
+          },
+          {
+            "names": ["--local-provider"],
+            "valueName": "OSS_PROVIDER"
+          },
+          {
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE_V2"
+          },
+          {
+            "names": ["--sandbox", "-s"],
+            "valueName": "SANDBOX_MODE"
+          },
+          {
+            "names": ["--approve-for-me"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--add-dir"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--ask-for-approval", "-a"],
+            "valueName": "APPROVAL_POLICY"
+          },
+          {
+            "names": ["--search"],
+            "valueName": null
+          },
+          {
+            "names": ["--no-alt-screen"],
+            "valueName": null
+          },
+          {
+            "names": ["--no-daemon"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          },
+          {
+            "names": ["--version", "-V"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex agents": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--no-alt-screen"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--download-url"],
+            "valueName": "DOWNLOAD_URL_OVERRIDE"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--code-mode-host"],
+            "valueName": "URL"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--listen"],
+            "valueName": "URL"
+          },
+          {
+            "names": ["--stdio"],
+            "valueName": null
+          },
+          {
+            "names": ["--analytics-default-enabled"],
+            "valueName": null
+          },
+          {
+            "names": ["--ws-auth"],
+            "valueName": "MODE"
+          },
+          {
+            "names": ["--ws-token-file"],
+            "valueName": "PATH"
+          },
+          {
+            "names": ["--ws-token-sha256"],
+            "valueName": "HEX"
+          },
+          {
+            "names": ["--ws-shared-secret-file"],
+            "valueName": "PATH"
+          },
+          {
+            "names": ["--ws-issuer"],
+            "valueName": "ISSUER"
+          },
+          {
+            "names": ["--ws-audience"],
+            "valueName": "AUDIENCE"
+          },
+          {
+            "names": ["--ws-max-clock-skew-seconds"],
+            "valueName": "SECONDS"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server daemon": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server daemon bootstrap": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--remote-control"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server daemon disable-remote-control": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server daemon enable-remote-control": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server daemon restart": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server daemon start": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server daemon stop": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server daemon update": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--from-cli"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--yes", "-y"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server daemon version": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server generate-json-schema": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--out", "-o"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--experimental"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server generate-ts": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--out", "-o"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--prettier", "-p"],
+            "valueName": "PRETTIER_BIN"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--experimental"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex app-server proxy": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--sock"],
+            "valueName": "SOCKET_PATH"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex apply": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex archive": {
+        "flags": [
+          {
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--oss"],
+            "valueName": null
+          },
+          {
+            "names": ["--local-provider"],
+            "valueName": "OSS_PROVIDER"
+          },
+          {
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE_V2"
+          },
+          {
+            "names": ["--sandbox", "-s"],
+            "valueName": "SANDBOX_MODE"
+          },
+          {
+            "names": ["--approve-for-me"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--add-dir"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex cloud": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          },
+          {
+            "names": ["--version", "-V"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex cloud apply": {
+        "flags": [
+          {
+            "names": ["--attempt"],
+            "valueName": "N"
+          },
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex cloud diff": {
+        "flags": [
+          {
+            "names": ["--attempt"],
+            "valueName": "N"
+          },
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex cloud exec": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--env"],
+            "valueName": "ENV_ID"
+          },
+          {
+            "names": ["--attempts"],
+            "valueName": "ATTEMPTS"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--branch"],
+            "valueName": "BRANCH"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex cloud list": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--env"],
+            "valueName": "ENV_ID"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--limit"],
+            "valueName": "N"
+          },
+          {
+            "names": ["--cursor"],
+            "valueName": "CURSOR"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex cloud status": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex completion": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex debug": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex debug app-server": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex debug app-server send-message-v2": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex debug models": {
+        "flags": [
+          {
+            "names": ["--bundled"],
+            "valueName": null
+          },
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex debug prompt-input": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex delete": {
+        "flags": [
+          {
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--oss"],
+            "valueName": null
+          },
+          {
+            "names": ["--local-provider"],
+            "valueName": "OSS_PROVIDER"
+          },
+          {
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE_V2"
+          },
+          {
+            "names": ["--sandbox", "-s"],
+            "valueName": "SANDBOX_MODE"
+          },
+          {
+            "names": ["--approve-for-me"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--add-dir"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--force"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex doctor": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--summary"],
+            "valueName": null
+          },
+          {
+            "names": ["--all"],
+            "valueName": null
+          },
+          {
+            "names": ["--no-color"],
+            "valueName": null
+          },
+          {
+            "names": ["--ascii"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex exec": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--oss"],
+            "valueName": null
+          },
+          {
+            "names": ["--local-provider"],
+            "valueName": "OSS_PROVIDER"
+          },
+          {
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE_V2"
+          },
+          {
+            "names": ["--sandbox", "-s"],
+            "valueName": "SANDBOX_MODE"
+          },
+          {
+            "names": ["--approve-for-me"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--add-dir"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--thread-source"],
+            "valueName": "SOURCE"
+          },
+          {
+            "names": ["--cyber-access-program"],
+            "valueName": "PROGRAM"
+          },
+          {
+            "names": ["--skip-git-repo-check"],
+            "valueName": null
+          },
+          {
+            "names": ["--ephemeral"],
+            "valueName": null
+          },
+          {
+            "names": ["--ignore-user-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--ignore-rules"],
+            "valueName": null
+          },
+          {
+            "names": ["--output-schema"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--color"],
+            "valueName": "COLOR"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--output-last-message", "-o"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          },
+          {
+            "names": ["--version", "-V"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex exec fork": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--thread-source"],
+            "valueName": "SOURCE"
+          },
+          {
+            "names": ["--cyber-access-program"],
+            "valueName": "PROGRAM"
+          },
+          {
+            "names": ["--skip-git-repo-check"],
+            "valueName": null
+          },
+          {
+            "names": ["--ephemeral"],
+            "valueName": null
+          },
+          {
+            "names": ["--ignore-user-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--ignore-rules"],
+            "valueName": null
+          },
+          {
+            "names": ["--output-schema"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--output-last-message", "-o"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex exec resume": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--last"],
+            "valueName": null
+          },
+          {
+            "names": ["--all"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--thread-source"],
+            "valueName": "SOURCE"
+          },
+          {
+            "names": ["--cyber-access-program"],
+            "valueName": "PROGRAM"
+          },
+          {
+            "names": ["--skip-git-repo-check"],
+            "valueName": null
+          },
+          {
+            "names": ["--ephemeral"],
+            "valueName": null
+          },
+          {
+            "names": ["--ignore-user-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--ignore-rules"],
+            "valueName": null
+          },
+          {
+            "names": ["--output-schema"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--output-last-message", "-o"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex exec review": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--uncommitted"],
+            "valueName": null
+          },
+          {
+            "names": ["--base"],
+            "valueName": "BRANCH"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--commit"],
+            "valueName": "SHA"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--title"],
+            "valueName": "TITLE"
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--thread-source"],
+            "valueName": "SOURCE"
+          },
+          {
+            "names": ["--cyber-access-program"],
+            "valueName": "PROGRAM"
+          },
+          {
+            "names": ["--skip-git-repo-check"],
+            "valueName": null
+          },
+          {
+            "names": ["--ephemeral"],
+            "valueName": null
+          },
+          {
+            "names": ["--ignore-user-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--ignore-rules"],
+            "valueName": null
+          },
+          {
+            "names": ["--output-schema"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--output-last-message", "-o"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex exec-server": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--linux-sandbox-pid-namespace"],
+            "valueName": "MODE"
+          },
+          {
+            "names": ["--proxy-private-ips-via-upstream"],
+            "valueName": null
+          },
+          {
+            "names": ["--concurrent-requests"],
+            "valueName": "COUNT"
+          },
+          {
+            "names": ["--listen"],
+            "valueName": "URL"
+          },
+          {
+            "names": ["--ws-auth"],
+            "valueName": "MODE"
+          },
+          {
+            "names": ["--ws-token-file"],
+            "valueName": "PATH"
+          },
+          {
+            "names": ["--ws-token-sha256"],
+            "valueName": "HEX"
+          },
+          {
+            "names": ["--ws-shared-secret-file"],
+            "valueName": "PATH"
+          },
+          {
+            "names": ["--ws-issuer"],
+            "valueName": "ISSUER"
+          },
+          {
+            "names": ["--ws-audience"],
+            "valueName": "AUDIENCE"
+          },
+          {
+            "names": ["--ws-max-clock-skew-seconds"],
+            "valueName": "SECONDS"
+          },
+          {
+            "names": ["--remote"],
+            "valueName": "URL"
+          },
+          {
+            "names": ["--remote-transport"],
+            "valueName": "REMOTE_TRANSPORT"
+          },
+          {
+            "names": ["--environment-id"],
+            "valueName": "ID"
+          },
+          {
+            "names": ["--name"],
+            "valueName": "NAME"
+          },
+          {
+            "names": ["--use-agent-identity-auth"],
+            "valueName": null
+          },
+          {
+            "names": ["--aws-sigv4"],
+            "valueName": null
+          },
+          {
+            "names": ["--aws-profile"],
+            "valueName": "PROFILE"
+          },
+          {
+            "names": ["--aws-region"],
+            "valueName": "REGION"
+          },
+          {
+            "names": ["--aws-service"],
+            "valueName": "SERVICE"
+          },
+          {
+            "names": ["--exit-on-stdin-close"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex exec-server forward": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--connect"],
+            "valueName": "URL"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--linux-sandbox-pid-namespace"],
+            "valueName": "MODE"
+          },
+          {
+            "names": ["--proxy-private-ips-via-upstream"],
+            "valueName": null
+          },
+          {
+            "names": ["--remote"],
+            "valueName": "URL"
+          },
+          {
+            "names": ["--remote-transport"],
+            "valueName": "REMOTE_TRANSPORT"
+          },
+          {
+            "names": ["--environment-id"],
+            "valueName": "ID"
+          },
+          {
+            "names": ["--name"],
+            "valueName": "NAME"
+          },
+          {
+            "names": ["--use-agent-identity-auth"],
+            "valueName": null
+          },
+          {
+            "names": ["--aws-sigv4"],
+            "valueName": null
+          },
+          {
+            "names": ["--aws-profile"],
+            "valueName": "PROFILE"
+          },
+          {
+            "names": ["--aws-region"],
+            "valueName": "REGION"
+          },
+          {
+            "names": ["--aws-service"],
+            "valueName": "SERVICE"
+          },
+          {
+            "names": ["--exit-on-stdin-close"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex features": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex features disable": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex features enable": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex features list": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex fork": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--last"],
+            "valueName": null
+          },
+          {
+            "names": ["--all"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--oss"],
+            "valueName": null
+          },
+          {
+            "names": ["--local-provider"],
+            "valueName": "OSS_PROVIDER"
+          },
+          {
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE_V2"
+          },
+          {
+            "names": ["--sandbox", "-s"],
+            "valueName": "SANDBOX_MODE"
+          },
+          {
+            "names": ["--approve-for-me"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--add-dir"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--ask-for-approval", "-a"],
+            "valueName": "APPROVAL_POLICY"
+          },
+          {
+            "names": ["--search"],
+            "valueName": null
+          },
+          {
+            "names": ["--no-alt-screen"],
+            "valueName": null
+          },
+          {
+            "names": ["--no-daemon"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          },
+          {
+            "names": ["--version", "-V"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex login": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--with-api-key"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--with-access-token"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--device-auth"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex login status": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex logout": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex mcp": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex mcp add": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--env"],
+            "valueName": "KEY=VALUE"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--url"],
+            "valueName": "URL"
+          },
+          {
+            "names": ["--bearer-token-env-var"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--oauth-client-id"],
+            "valueName": "CLIENT_ID"
+          },
+          {
+            "names": ["--oauth-client-secret"],
+            "valueName": "CLIENT_SECRET"
+          },
+          {
+            "names": ["--oauth-client-registration"],
+            "valueName": "AUTO|CIMD|DCR"
+          },
+          {
+            "names": ["--oauth-resource"],
+            "valueName": "RESOURCE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex mcp get": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex mcp list": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex mcp login": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--no-browser"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--scopes"],
+            "valueName": "SCOPE,SCOPE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--oauth-client-registration"],
+            "valueName": "AUTO|CIMD|DCR"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex mcp logout": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex mcp remove": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex migrate-rollouts": {
+        "flags": [
+          {
+            "names": ["--apply"],
+            "valueName": null
+          },
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--thread"],
+            "valueName": "THREAD_ID"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--max-mib-per-second"],
+            "valueName": "MIB"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--verbose"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex plugin": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex plugin add": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--marketplace", "-m"],
+            "valueName": "MARKETPLACE"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex plugin list": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--marketplace", "-m"],
+            "valueName": "MARKETPLACE"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--available"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex plugin marketplace": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex plugin marketplace add": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--ref"],
+            "valueName": "REF"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--sparse"],
+            "valueName": "PATH"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex plugin marketplace list": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex plugin marketplace remove": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex plugin marketplace upgrade": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex plugin remove": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--marketplace", "-m"],
+            "valueName": "MARKETPLACE"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex queue": {
+        "flags": [
+          {
+            "names": ["--thread"],
+            "valueName": "THREAD"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--message"],
+            "valueName": "TEXT"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--oss"],
+            "valueName": null
+          },
+          {
+            "names": ["--local-provider"],
+            "valueName": "OSS_PROVIDER"
+          },
+          {
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE_V2"
+          },
+          {
+            "names": ["--sandbox", "-s"],
+            "valueName": "SANDBOX_MODE"
+          },
+          {
+            "names": ["--approve-for-me"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--add-dir"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex remote-control": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--no-daemon"],
+            "valueName": null
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex remote-control pair": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex remote-control start": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex remote-control stop": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--json"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex resume": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--last"],
+            "valueName": null
+          },
+          {
+            "names": ["--all"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--include-non-interactive"],
+            "valueName": null
+          },
+          {
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--oss"],
+            "valueName": null
+          },
+          {
+            "names": ["--local-provider"],
+            "valueName": "OSS_PROVIDER"
+          },
+          {
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE_V2"
+          },
+          {
+            "names": ["--sandbox", "-s"],
+            "valueName": "SANDBOX_MODE"
+          },
+          {
+            "names": ["--approve-for-me"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--add-dir"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--ask-for-approval", "-a"],
+            "valueName": "APPROVAL_POLICY"
+          },
+          {
+            "names": ["--search"],
+            "valueName": null
+          },
+          {
+            "names": ["--no-alt-screen"],
+            "valueName": null
+          },
+          {
+            "names": ["--no-daemon"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          },
+          {
+            "names": ["--version", "-V"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex review": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--uncommitted"],
+            "valueName": null
+          },
+          {
+            "names": ["--base"],
+            "valueName": "BRANCH"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--commit"],
+            "valueName": "SHA"
+          },
+          {
+            "names": ["--title"],
+            "valueName": "TITLE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex sandbox": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--sandbox-state-json"],
+            "valueName": "JSON"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--sandbox-state-readable-root"],
+            "valueName": "SANDBOX_STATE_READABLE_ROOT"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--sandbox-state-disable-network"],
+            "valueName": null
+          },
+          {
+            "names": ["--permission-profile", "-P"],
+            "valueName": "NAME"
+          },
+          {
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE"
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--include-managed-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--allow-unix-socket"],
+            "valueName": "ALLOW_UNIX_SOCKETS"
+          },
+          {
+            "names": ["--log-denials"],
+            "valueName": null
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex sandbox uninstall": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex unarchive": {
+        "flags": [
+          {
+            "names": ["--remote"],
+            "valueName": "ADDR"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--remote-auth-token-env"],
+            "valueName": "ENV_VAR"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--image", "-i"],
+            "valueName": "FILE"
+          },
+          {
+            "names": ["--model", "-m"],
+            "valueName": "MODEL"
+          },
+          {
+            "names": ["--oss"],
+            "valueName": null
+          },
+          {
+            "names": ["--local-provider"],
+            "valueName": "OSS_PROVIDER"
+          },
+          {
+            "names": ["--profile", "-p"],
+            "valueName": "CONFIG_PROFILE_V2"
+          },
+          {
+            "names": ["--sandbox", "-s"],
+            "valueName": "SANDBOX_MODE"
+          },
+          {
+            "names": ["--approve-for-me"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-approvals-and-sandbox"],
+            "valueName": null
+          },
+          {
+            "names": ["--dangerously-bypass-hook-trust"],
+            "valueName": null
+          },
+          {
+            "names": ["--cd", "-C"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--worktree"],
+            "valueName": null
+          },
+          {
+            "names": ["--add-dir"],
+            "valueName": "DIR"
+          },
+          {
+            "names": ["--strict-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
+      "codex update": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      }
+    },
+    "globalFlags": [
+      {
+        "acceptedValues": [],
+        "names": ["--config", "-c"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--enable"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--disable"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--remote"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--remote-auth-token-env"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--strict-config"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--image", "-i"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--model", "-m"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--oss"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--local-provider"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--profile", "-p"]
+      },
+      {
+        "acceptedValues": [
+          "danger-full-access",
+          "read-only",
+          "workspace-write"
+        ],
+        "names": ["--sandbox", "-s"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--approve-for-me"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--dangerously-bypass-approvals-and-sandbox"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--dangerously-bypass-hook-trust"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--cd", "-C"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--worktree"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--add-dir"]
+      },
+      {
+        "acceptedValues": ["never", "on-request"],
+        "names": ["--ask-for-approval", "-a"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--search"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--no-alt-screen"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--no-daemon"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--help", "-h"]
+      },
+      {
+        "acceptedValues": [],
+        "names": ["--version", "-V"]
+      }
+    ]
+  },
+  "features": [
+    {
+      "maturity": "under development",
+      "name": "agent_message_board"
+    },
+    {
+      "maturity": "experimental",
+      "name": "analytics_plan_history"
+    },
+    {
+      "maturity": "stable",
+      "name": "api_key_cyber_access_programs"
+    },
+    {
+      "maturity": "stable",
+      "name": "api_key_model_discovery"
+    },
+    {
+      "maturity": "removed",
+      "name": "apply_patch_freeform"
+    },
+    {
+      "maturity": "removed",
+      "name": "apply_patch_preserve_line_endings"
+    },
+    {
+      "maturity": "under development",
+      "name": "apply_patch_streaming_events"
+    },
+    {
+      "maturity": "stable",
+      "name": "apps"
+    },
+    {
+      "maturity": "removed",
+      "name": "apps_mcp_path_override"
+    },
+    {
+      "maturity": "under development",
+      "name": "artifact"
+    },
+    {
+      "maturity": "stable",
+      "name": "auth_elicitation"
+    },
+    {
+      "maturity": "under development",
+      "name": "background_paginated_rollout_migration"
+    },
+    {
+      "maturity": "under development",
+      "name": "bedrock_setup_wizard"
+    },
+    {
+      "maturity": "stable",
+      "name": "browser_annotation_api"
+    },
+    {
+      "maturity": "stable",
+      "name": "browser_use"
+    },
+    {
+      "maturity": "stable",
+      "name": "browser_use_external"
+    },
+    {
+      "maturity": "stable",
+      "name": "browser_use_full_cdp_access"
+    },
+    {
+      "maturity": "under development",
+      "name": "chronicle"
+    },
+    {
+      "maturity": "under development",
+      "name": "cli_daybreak"
+    },
+    {
+      "maturity": "under development",
+      "name": "code_mode"
+    },
+    {
+      "maturity": "removed",
+      "name": "code_mode_buffered_exec"
+    },
+    {
+      "maturity": "stable",
+      "name": "code_mode_host"
+    },
+    {
+      "maturity": "under development",
+      "name": "code_mode_interrupt"
+    },
+    {
+      "maturity": "under development",
+      "name": "code_mode_only"
+    },
+    {
+      "maturity": "under development",
+      "name": "code_mode_only_strict_3p_tools"
+    },
+    {
+      "maturity": "under development",
+      "name": "code_mode_prewarm"
+    },
+    {
+      "maturity": "under development",
+      "name": "code_mode_tool_search"
+    },
+    {
+      "maturity": "under development",
+      "name": "codex_apps_mcp_2026_07_28"
+    },
+    {
+      "maturity": "removed",
+      "name": "codex_git_commit"
+    },
+    {
+      "maturity": "removed",
+      "name": "collaboration_modes"
+    },
+    {
+      "maturity": "stable",
+      "name": "compaction_image_budget"
+    },
+    {
+      "maturity": "stable",
+      "name": "computer_use"
+    },
+    {
+      "maturity": "under development",
+      "name": "concurrent_reasoning_summaries"
+    },
+    {
+      "maturity": "stable",
+      "name": "content_item_kinds"
+    },
+    {
+      "maturity": "under development",
+      "name": "context_management"
+    },
+    {
+      "maturity": "under development",
+      "name": "current_time_reminder"
+    },
+    {
+      "maturity": "under development",
+      "name": "cwd_relative_turn_diffs"
+    },
+    {
+      "maturity": "stable",
+      "name": "daemon_auto_start"
+    },
+    {
+      "maturity": "under development",
+      "name": "default_mode_request_user_input"
+    },
+    {
+      "maturity": "under development",
+      "name": "defer_mailbox_preemption"
+    },
+    {
+      "maturity": "under development",
+      "name": "deferred_executor"
+    },
+    {
+      "maturity": "under development",
+      "name": "deferred_tool_world_state"
+    },
+    {
+      "maturity": "removed",
+      "name": "elevated_windows_sandbox"
+    },
+    {
+      "maturity": "removed",
+      "name": "enable_fanout"
+    },
+    {
+      "maturity": "under development",
+      "name": "enable_mcp_apps"
+    },
+    {
+      "maturity": "stable",
+      "name": "enable_request_compression"
+    },
+    {
+      "maturity": "under development",
+      "name": "exec_permission_approvals"
+    },
+    {
+      "maturity": "under development",
+      "name": "executed_tool_call_metadata"
+    },
+    {
+      "maturity": "under development",
+      "name": "executor_capability_discovery"
+    },
+    {
+      "maturity": "removed",
+      "name": "experimental_windows_sandbox"
+    },
+    {
+      "maturity": "under development",
+      "name": "external_agent_memory_import"
+    },
+    {
+      "maturity": "removed",
+      "name": "external_migration"
+    },
+    {
+      "maturity": "stable",
+      "name": "fast_mode"
+    },
+    {
+      "maturity": "stable",
+      "name": "goals"
+    },
+    {
+      "maturity": "stable",
+      "name": "guardian_approval"
+    },
+    {
+      "maturity": "under development",
+      "name": "guardian_conversation_history_tools"
+    },
+    {
+      "maturity": "under development",
+      "name": "guardian_enhanced_node_repl_transcripts"
+    },
+    {
+      "maturity": "removed",
+      "name": "guardian_ext"
+    },
+    {
+      "maturity": "under development",
+      "name": "guardian_node_repl_transcript_images"
+    },
+    {
+      "maturity": "stable",
+      "name": "guardian_reuse_parent_compaction"
+    },
+    {
+      "maturity": "under development",
+      "name": "guardian_root_handoff_context"
+    },
+    {
+      "maturity": "under development",
+      "name": "guardianv2"
+    },
+    {
+      "maturity": "removed",
+      "name": "guardianv2.thread_context"
+    },
+    {
+      "maturity": "under development",
+      "name": "guardianv2_decisions_comparison"
+    },
+    {
+      "maturity": "stable",
+      "name": "hooks"
+    },
+    {
+      "maturity": "removed",
+      "name": "image_detail_original"
+    },
+    {
+      "maturity": "stable",
+      "name": "image_generation"
+    },
+    {
+      "maturity": "under development",
+      "name": "image_resize_notice"
+    },
+    {
+      "maturity": "stable",
+      "name": "in_app_browser"
+    },
+    {
+      "maturity": "stable",
+      "name": "in_app_chat"
+    },
+    {
+      "maturity": "stable",
+      "name": "in_app_dictation"
+    },
+    {
+      "maturity": "stable",
+      "name": "in_app_local_automation"
+    },
+    {
+      "maturity": "stable",
+      "name": "in_app_updates"
+    },
+    {
+      "maturity": "stable",
+      "name": "in_app_voice"
+    },
+    {
+      "maturity": "under development",
+      "name": "incremental_tools"
+    },
+    {
+      "maturity": "under development",
+      "name": "instant_interrupt"
+    },
+    {
+      "maturity": "removed",
+      "name": "item_ids"
+    },
+    {
+      "maturity": "removed",
+      "name": "js_repl"
+    },
+    {
+      "maturity": "removed",
+      "name": "js_repl_tools_only"
+    },
+    {
+      "maturity": "under development",
+      "name": "local_thread_store_compression"
+    },
+    {
+      "maturity": "removed",
+      "name": "local_thread_store_shared_compression"
+    },
+    {
+      "maturity": "experimental",
+      "name": "login_shell_package_path"
+    },
+    {
+      "maturity": "under development",
+      "name": "mcp_2026_07_28"
+    },
+    {
+      "maturity": "under development",
+      "name": "mcp_oauth_refresh_coordination"
+    },
+    {
+      "maturity": "stable",
+      "name": "memories"
+    },
+    {
+      "maturity": "stable",
+      "name": "mentions_v2"
+    },
+    {
+      "maturity": "under development",
+      "name": "model_catalog_in_context"
+    },
+    {
+      "maturity": "stable",
+      "name": "multi_agent"
+    },
+    {
+      "maturity": "removed",
+      "name": "multi_agent_mode"
+    },
+    {
+      "maturity": "stable",
+      "name": "multi_agent_v2"
+    },
+    {
+      "maturity": "under development",
+      "name": "multi_agent_v2_dynamic_tools"
+    },
+    {
+      "maturity": "experimental",
+      "name": "network_proxy"
+    },
+    {
+      "maturity": "under development",
+      "name": "non_prefixed_mcp_tool_names"
+    },
+    {
+      "maturity": "under development",
+      "name": "nonfatal_clock_read_errors"
+    },
+    {
+      "maturity": "under development",
+      "name": "omit_app_server_notification_media"
+    },
+    {
+      "maturity": "removed",
+      "name": "personality"
+    },
+    {
+      "maturity": "removed",
+      "name": "plugin_hooks"
+    },
+    {
+      "maturity": "stable",
+      "name": "plugin_sharing"
+    },
+    {
+      "maturity": "stable",
+      "name": "plugins"
+    },
+    {
+      "maturity": "under development",
+      "name": "powershell_shell_version"
+    },
+    {
+      "maturity": "under development",
+      "name": "prefer_mxc"
+    },
+    {
+      "maturity": "experimental",
+      "name": "prevent_idle_sleep"
+    },
+    {
+      "maturity": "under development",
+      "name": "psp"
+    },
+    {
+      "maturity": "stable",
+      "name": "realtime_conversation"
+    },
+    {
+      "maturity": "under development",
+      "name": "reasoning_effort_override"
+    },
+    {
+      "maturity": "stable",
+      "name": "recommended_plugins"
+    },
+    {
+      "maturity": "removed",
+      "name": "remote_compaction_v2"
+    },
+    {
+      "maturity": "removed",
+      "name": "remote_control"
+    },
+    {
+      "maturity": "removed",
+      "name": "remote_models"
+    },
+    {
+      "maturity": "stable",
+      "name": "remote_plugin"
+    },
+    {
+      "maturity": "under development",
+      "name": "request_permissions_tool"
+    },
+    {
+      "maturity": "removed",
+      "name": "request_rule"
+    },
+    {
+      "maturity": "removed",
+      "name": "resize_all_images"
+    },
+    {
+      "maturity": "under development",
+      "name": "respect_system_proxy"
+    },
+    {
+      "maturity": "removed",
+      "name": "responses_websockets"
+    },
+    {
+      "maturity": "removed",
+      "name": "responses_websockets_v2"
+    },
+    {
+      "maturity": "under development",
+      "name": "retain_client_developer_messages"
+    },
+    {
+      "maturity": "under development",
+      "name": "rollout_budget"
+    },
+    {
+      "maturity": "under development",
+      "name": "runtime_metrics"
+    },
+    {
+      "maturity": "removed",
+      "name": "search_tool"
+    },
+    {
+      "maturity": "stable",
+      "name": "secret_auth_storage"
+    },
+    {
+      "maturity": "removed",
+      "name": "send_async_message"
+    },
+    {
+      "maturity": "under development",
+      "name": "send_message_to_user_async"
+    },
+    {
+      "maturity": "stable",
+      "name": "shell_snapshot"
+    },
+    {
+      "maturity": "under development",
+      "name": "shell_snapshot_v2"
+    },
+    {
+      "maturity": "stable",
+      "name": "shell_tool"
+    },
+    {
+      "maturity": "under development",
+      "name": "shell_zsh_fork"
+    },
+    {
+      "maturity": "removed",
+      "name": "skill_env_var_dependency_prompt"
+    },
+    {
+      "maturity": "stable",
+      "name": "skill_mcp_dependency_install"
+    },
+    {
+      "maturity": "stable",
+      "name": "skill_search"
+    },
+    {
+      "maturity": "under development",
+      "name": "skip_host_skill_discovery"
+    },
+    {
+      "maturity": "stable",
+      "name": "sleep_tool"
+    },
+    {
+      "maturity": "removed",
+      "name": "sqlite"
+    },
+    {
+      "maturity": "under development",
+      "name": "stable_environment_tools"
+    },
+    {
+      "maturity": "under development",
+      "name": "standalone_web_search"
+    },
+    {
+      "maturity": "removed",
+      "name": "steer"
+    },
+    {
+      "maturity": "under development",
+      "name": "step_model_switching"
+    },
+    {
+      "maturity": "stable",
+      "name": "system_proxy_fallback"
+    },
+    {
+      "maturity": "removed",
+      "name": "terminal_resize_reflow"
+    },
+    {
+      "maturity": "under development",
+      "name": "terminal_visualization_instructions"
+    },
+    {
+      "maturity": "under development",
+      "name": "token_budget"
+    },
+    {
+      "maturity": "stable",
+      "name": "tool_call_mcp_elicitation"
+    },
+    {
+      "maturity": "removed",
+      "name": "tool_search"
+    },
+    {
+      "maturity": "removed",
+      "name": "tool_search_always_defer_mcp_tools"
+    },
+    {
+      "maturity": "stable",
+      "name": "tool_suggest"
+    },
+    {
+      "maturity": "deprecated",
+      "name": "transcript_v2"
+    },
+    {
+      "maturity": "removed",
+      "name": "tui_app_server"
+    },
+    {
+      "maturity": "stable",
+      "name": "ultrafast_mode"
+    },
+    {
+      "maturity": "removed",
+      "name": "unavailable_dummy_tools"
+    },
+    {
+      "maturity": "stable",
+      "name": "unbounded_connection_retries"
+    },
+    {
+      "maturity": "removed",
+      "name": "undo"
+    },
+    {
+      "maturity": "stable",
+      "name": "unified_exec"
+    },
+    {
+      "maturity": "stable",
+      "name": "unified_exec_tty"
+    },
+    {
+      "maturity": "removed",
+      "name": "unified_exec_zsh_fork"
+    },
+    {
+      "maturity": "under development",
+      "name": "unified_image_budget"
+    },
+    {
+      "maturity": "under development",
+      "name": "use_agent_identity"
+    },
+    {
+      "maturity": "deprecated",
+      "name": "use_legacy_landlock"
+    },
+    {
+      "maturity": "removed",
+      "name": "use_linux_sandbox_bwrap"
+    },
+    {
+      "maturity": "under development",
+      "name": "use_xaa"
+    },
+    {
+      "maturity": "stable",
+      "name": "view_image"
+    },
+    {
+      "maturity": "deprecated",
+      "name": "web_search_cached"
+    },
+    {
+      "maturity": "deprecated",
+      "name": "web_search_request"
+    },
+    {
+      "maturity": "under development",
+      "name": "windows_sandbox_service"
+    },
+    {
+      "maturity": "stable",
+      "name": "workspace_dependencies"
+    },
+    {
+      "maturity": "removed",
+      "name": "workspace_owner_usage_nudge"
+    },
+    {
+      "maturity": "stable",
+      "name": "worktrees"
+    },
+    {
+      "maturity": "stable",
+      "name": "write_stdin_approval"
+    }
+  ],
+  "models": [
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "xhigh"],
+      "slug": "codex-auto-review"
+    },
+    {
+      "reasoningLevels": ["high", "low", "medium", "xhigh"],
+      "slug": "gpt-5.5"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "xhigh"],
+      "slug": "gpt-5.6-luna"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-5.6-sol"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-5.6-terra"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-6-astra"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "xhigh"],
+      "slug": "gpt-6-luna"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-6-sol"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-6.1-sol"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-daybreak-blue-latest"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-daybreak-red-latest"
+    }
+  ]
+}

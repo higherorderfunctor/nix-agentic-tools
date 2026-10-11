@@ -1,5 +1,5 @@
 # The extracted facts contract (dev/fragments/extracted/facts-contract.md).
-# load, merge, get, getFor and expect need only nixpkgs lib, like reconcile, so an
+# load, merge, children, get, getFor and expect need only lib, like reconcile; an
 # option module can call them before `pkgs` exists; index takes `pkgs` itself.
 {lib}: let
   inherit (import ../runtime-values {inherit lib;}) classify;
@@ -243,8 +243,38 @@
       })
       secrets;
   };
+  # A key without a combined value throws its failure and fix; a
+  # per-platform key has none, and is told to read per system instead.
+  get = aggregate: key: let
+    entry = aggregate.${key} or (throw "extracted fact `${key}` is not in the aggregate: it is undeclared, or declared and absent from every raw (declared-gone). Declare it in facts.json and extract it, or delete the declaration");
+    problem =
+      entry.failure or {
+        details = entry.bySystem;
+        fix = "read it with getFor <system>, or add a decisions.json row that combines it";
+        kind = entry.combine;
+      };
+  in
+    entry.value or (throw "extracted fact `${key}` has no combined value (${problem.kind}): ${builtins.toJSON problem.details}. Fix: ${problem.fix}");
 in {
-  inherit merge;
+  inherit get merge;
+
+  children = aggregate: pattern: let
+    segments = lib.splitString "." pattern;
+    positions = lib.concatLists (lib.imap0 (index: segment: lib.optional (segment == wildcard) index) segments);
+    matches = lib.filter (key: let
+      path = lib.splitString "." key;
+    in
+      builtins.length path == builtins.length segments && segmentsMatch segments path)
+    (builtins.attrNames aggregate);
+  in
+    if builtins.length positions != 1
+    then throw "lib.extracted.children: `${pattern}` must contain exactly one <name> segment"
+    else
+      lib.listToAttrs (map (key: {
+          name = builtins.elemAt (lib.splitString "." key) (builtins.head positions);
+          value = get aggregate key;
+        })
+        matches);
 
   # The only reader of an owner's `extracted/` directory: its declarations,
   # its decisions, and the raw of every configured system it holds. Merged
@@ -269,19 +299,6 @@ in {
         systems = configured;
       }
       // {inherit systems;};
-
-  # A key without a combined value throws its failure and fix; a
-  # per-platform key has none, and is told to read per system instead.
-  get = aggregate: key: let
-    entry = aggregate.${key} or (throw "extracted fact `${key}` is not in the aggregate: it is undeclared, or declared and absent from every raw (declared-gone). Declare it in facts.json and extract it, or delete the declaration");
-    problem =
-      entry.failure or {
-        details = entry.bySystem;
-        fix = "read it with getFor <system>, or add a decisions.json row that combines it";
-        kind = entry.combine;
-      };
-  in
-    entry.value or (throw "extracted fact `${key}` has no combined value (${problem.kind}): ${builtins.toJSON problem.details}. Fix: ${problem.fix}");
 
   getFor = system: aggregate: key: aggregate.${key}.bySystem.${system};
 

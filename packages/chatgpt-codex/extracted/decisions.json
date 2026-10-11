@@ -1,0 +1,7 @@
+{
+  "cli.commands.<name>.flags": {
+    "combine": "union",
+    "decided": "2026-10-11",
+    "reason": "clap help is compiled per platform: `codex sandbox` carries seatbelt-only flags on darwin (--allow-unix-socket, --log-denials) and the Linux sandbox has none; the project-doc preflight needs every flag a host might pass, so the union is the consumer's view"
+  }
+}

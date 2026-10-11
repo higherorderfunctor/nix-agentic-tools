@@ -144,8 +144,7 @@ in
     );
 
     # nixpkgs patches daemon_auto_start's built-in default to false. Our
-    # modules write that setting explicitly, and extracted.json records the
-    # binary's own feature defaults, so the binary keeps upstream's.
+    # modules write that setting explicitly, so the binary keeps upstream's.
     patches = [];
 
     # The voice handshake's commit, read from the archive the voice host
@@ -256,18 +255,13 @@ in
           # update/chatgpt-codex PR (no intra-PR drift).
           extraExtract = ''
             ${fixVendorHash}
-            ${vu.mkExtractRegen {
-              attr = "chatgpt-codex";
-              dest = repoPath ../../../extracted.json;
-              inherit pkgs;
-            }}
+            ${(extractedLib {inherit pkgs;}).regenCommand {name = "chatgpt-codex";}}
           '';
         };
-        extracted = pkgs.runCommandLocal "chatgpt-codex-extracted.json" {} (
+        extracted = pkgs.runCommandLocal "chatgpt-codex-facts-raw" {} (
           vu.mkCodexExtract {
             bin = "${finalAttrs.finalPackage}/bin/codex";
             inherit pkgs;
-            inherit (sources) version;
             dest = "$out";
           }
         );

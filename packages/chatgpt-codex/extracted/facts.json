@@ -1,0 +1,18 @@
+{
+  "cli.commands.<name>.flags": {
+    "source": "host-run",
+    "type": "list"
+  },
+  "cli.globalFlags": {
+    "source": "host-run",
+    "type": "list"
+  },
+  "features": {
+    "source": "host-run",
+    "type": "list"
+  },
+  "models": {
+    "source": "host-run",
+    "type": "list"
+  }
+}

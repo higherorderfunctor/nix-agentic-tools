@@ -5,7 +5,7 @@
   # The per-system drift check's `passthru.regenerate`; regenCommand runs it.
   regenerateName = name: "${name}-regenerate-extracted";
 in {
-  inherit (facts) expect get getFor load merge;
+  inherit (facts) children expect get getFor load merge;
   inherit (import ./reconcile.nix {inherit lib;}) reconcile;
   index = facts.index pkgs;
 

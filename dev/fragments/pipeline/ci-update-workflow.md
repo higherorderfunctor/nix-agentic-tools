@@ -1,9 +1,10 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-10 — package build runners use no CI-only
+> **Last verified:** 2026-10-11 — package build runners use no CI-only
 > substituter, no shard mirrors a runtime closure into the project cache, every
 > Cachix step holding the token filters kiro out of the push, and the darwin
-> `kiro-patched` leg produces Kiro's host-run darwin raw.
+> `extracted-facts` owner matrix produces Codex and Kiro host-run facts on every
+> PR, with its outcome required by the build contexts.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -233,16 +234,24 @@ Darwin's Nix default does not provide that guarantee. Patched proprietary Kiro
 stays in those jobs without cache publication; every Cachix step holding the
 token, package matrix and update workers alike, carries `pushFilter: kiro-cli`.
 
-Kiro's extracted facts are per system, and the darwin raw is host-run, so the
-Linux update script can regenerate only the Linux raw. The darwin `kiro-patched`
-leg is therefore the darwin producer: it runs the drift check's
-`passthru.regenerate` before checking. On an `update/*` branch from this
-repository, a changed raw is committed back as the bot (bot author and
-committer, pushed with the App token) so `update-publish.sh` still sees a branch
-the bot owns; that push re-runs CI on the new head and the concurrency group
-cancels the old run. Anywhere else the leg uploads the
-`kiro-cli-extracted-aarch64-darwin` artifact, prints the copy commands and
-fails, because only the App may write a branch from CI.
+Codex and Kiro facts are host-run, so Linux updates can regenerate only their
+Linux raws. The darwin `extracted-facts` job runs on every PR with the sorted
+owner matrix `chatgpt-codex`, `kiro-cli`; it runs each owner's drift check's
+`passthru.regenerate`, then checks the facts. Both required build contexts also
+require this job's success. The Kiro patch Scope gate no longer gates the
+producer; extracted-directory changes alone no longer select patched Kiro
+validation.
+
+On a same-repository `update/*` branch, changed raws are committed with bot
+author and committer identities and pushed with the App token, preserving
+`update-publish.sh`'s bot ownership. Each matrix leg restores only its owner's
+directory onto the event's immutable head before a plain push. A moved branch
+rejects that push; an accepted push triggers fresh CI and cancels the old run.
+The owner matrix runs one leg at a time, so when both owners drift, successive
+runs may finish their bot updates. Other branches upload an
+`<owner>-extracted-aarch64-darwin` artifact, print copy commands derived from
+the owner's changed files, and fail until those measurements are committed. CI
+names owner directories only; the drift library chooses the raw paths.
 
 The Cachix action owns shard uploads and its finalization remains part of the
 worker outcome. Do not also start nix-fast-build's optional uploader: its
