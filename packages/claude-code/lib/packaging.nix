@@ -48,7 +48,7 @@ rec {
   #   pkgs: nixpkgs set (gnugrep, gnused, coreutils, jq).
   #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
   #
-  # The BUILD must also supply `python3`, `nodejs_24` and `jq` on PATH — see
+  # The BUILD must also supply `python3` and `nodejs_24` on PATH — see
   # packages/claude-code/packages/ai/claude-code/package.nix's nativeBuildInputs. nodejs_24 specifically:
   # census.mjs drives `node:module`'s `registerHooks`, which needs Node >= 22.15.
   mkClaudeExtract = {
@@ -91,9 +91,9 @@ rec {
     # chunk and run the binary's own schema pipeline over it. Both steps are
     # CONTENT-located: nothing here names a chunk file, a minified identifier or
     # a byte offset, because macOS and Linux builds of one version agree on none
-    # of those. (Measured at 2.1.245: the two platforms' censuses are
-    # byte-identical, which is the only reason ONE sidecar can be committed for
-    # both.)
+    # of those. (Measured at 2.1.245 and again at 2.1.296: the two platforms'
+    # censuses are byte-identical, so the per-system raws agree and the facts
+    # merge without a decision row.)
     #
     # bununpack.py prints its graph summary on stdout; send it to stderr so it
     # cannot contaminate a `dest` of /dev/stdout.

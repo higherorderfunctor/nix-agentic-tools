@@ -83,7 +83,7 @@ in
       # default bump cannot regress it.
       extractedFor = lib.genAttrs (builtins.attrNames (builtins.removeAttrs sources ["version"])) (system:
         pkgs.runCommand "claude-code-${system}-extracted.json" {
-          nativeBuildInputs = [pkgs.jq pkgs.nodejs_24 pkgs.python3];
+          nativeBuildInputs = [pkgs.nodejs_24 pkgs.python3];
         } (vu.mkClaudeExtract {
           assets = ../../../extract;
           bin = fetchurl {inherit (sources.${system}) url hash;};
