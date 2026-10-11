@@ -137,6 +137,30 @@
           }
         ]
       },
+      "codex app": {
+        "flags": [
+          {
+            "names": ["--config", "-c"],
+            "valueName": "key=value"
+          },
+          {
+            "names": ["--download-url"],
+            "valueName": "DOWNLOAD_URL_OVERRIDE"
+          },
+          {
+            "names": ["--enable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "names": ["--help", "-h"],
+            "valueName": null
+          }
+        ]
+      },
       "codex app-server": {
         "flags": [
           {
@@ -2653,6 +2677,14 @@
           },
           {
             "names": ["--include-managed-config"],
+            "valueName": null
+          },
+          {
+            "names": ["--allow-unix-socket"],
+            "valueName": "ALLOW_UNIX_SOCKETS"
+          },
+          {
+            "names": ["--log-denials"],
             "valueName": null
           },
           {
