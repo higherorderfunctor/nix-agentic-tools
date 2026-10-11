@@ -1,10 +1,10 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-10 — `get` on a valueless key throws its failure
-> and fix; `load` reads an owner's directory (an absent configured raw is
-> `missing-system`), per-system drift carries `passthru.regenerate` and
-> `regenCommand` runs it, and `checks.extracted-index` lists its first owner,
-> kiro-cli, migrated end to end in this change.
+> **Last verified:** 2026-10-10 — two owners are migrated end to end: kiro-cli
+> (host-run settings facts, darwin raw produced by the darwin CI leg) and
+> claude-code (every fact static, both raws produced on any host from the two
+> release tarballs). `settings.paths` shows the limit of the `<name>` wildcard:
+> a raw whose attribute names contain dots is declared as one opaque `object`.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are

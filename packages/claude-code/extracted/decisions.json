@@ -1,0 +1,22 @@
+{
+  "launchEffortPins": {
+    "combine": "equal",
+    "decided": "2026-10-10",
+    "reason": "the default unpin flags must cover both platforms; intersection would silently keep a launch effort pin on one host"
+  },
+  "models": {
+    "combine": "equal",
+    "decided": "2026-10-10",
+    "reason": "the model suggestions must retain every non-retired catalog id on both platforms; intersection would silently narrow the option enum"
+  },
+  "settings.internalKeys": {
+    "combine": "equal",
+    "decided": "2026-10-10",
+    "reason": "the recognized-key boundary uses internal keys on both platforms; intersection would silently reject a key one host declares"
+  },
+  "settings.publicKeys": {
+    "combine": "equal",
+    "decided": "2026-10-10",
+    "reason": "the generated options and recognized-key boundary need every public key on both platforms; intersection would silently narrow the settings surface"
+  }
+}

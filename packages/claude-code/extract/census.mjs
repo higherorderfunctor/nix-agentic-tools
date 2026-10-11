@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// census.mjs — emit the `settings` block of packages/claude-code/extracted.json
+// census.mjs — emit the `settings.paths`, `settings.publicKeys` and `settings.internalKeys` facts of packages/claude-code/extracted/
 // by driving the claude-code binary's OWN settings-schema builder, its OWN
 // zod -> JSON-Schema converter and its OWN @internal filter.
 //

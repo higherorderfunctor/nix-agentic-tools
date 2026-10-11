@@ -1,16 +1,7 @@
-# Drift check — the committed packages/claude-code/extracted.json must
-# match what the packaged claude binary actually contains. Blocking
-# (pins/levels must be exact for correctness). The build of
-# passthru.extracted also enforces the non-empty / count==1 hardening
-# baked into vu.mkClaudeExtract.
-#
-# This is also the ONLY place a darwin-generated sidecar is ever compared
-# against the committed (linux-generated) one: nothing local can run a macOS
-# build, so `build (aarch64-darwin, macos-latest)` is the first real test that
-# the two platforms' settings censuses agree. A divergence shows up here and
-# nowhere else, which is why the failure branch prints a DIFF rather than
-# dumping both documents — the sidecar carries the binary's whole settings
-# schema now, so a dump is ~86 KB twice and unreadable in a CI log.
+# Drift check — both platform raws in packages/claude-code/extracted/ must
+# match fresh static extraction from their release tarballs on this host.
+# Declared facts must agree across platforms, and the settings, model and
+# hook consumers must retain the values they depend on.
 {
   extractedLib,
   pkgs,
@@ -19,13 +10,41 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
-    extracted = self.ciPackages.${system}.claude-code.passthru.extracted;
-    committed = ../extracted.json;
+    inherit (extractedLib {inherit pkgs;}) expect load mkDriftCheck;
+    claudeFacts = load {dir = ../extracted;};
   in
     mkDriftCheck {
-      inherit committed extracted;
+      committed = ../extracted;
+      extracted = self.ciPackages.${system}.claude-code.passthru.extractedFor;
       name = "claude-code";
-      sidecar = "packages/claude-code/extracted.json";
+      results = {
+        consumers = expect {
+          inherit (claudeFacts) aggregate;
+          consumer = "claude-code";
+          needs = [
+            {
+              contains = "high";
+              key = "effortLevels";
+            }
+            {
+              contains = "PreToolUse";
+              key = "hookEvents";
+            }
+            {key = "launchEffortPins";}
+            {key = "models";}
+            {key = "settings.paths";}
+            {
+              contains = "hooks";
+              key = "settings.publicKeys";
+            }
+            {
+              contains = "model";
+              key = "settings.publicKeys";
+            }
+          ];
+        };
+        facts = claudeFacts;
+      };
+      sidecar = "packages/claude-code/extracted";
     };
 }
