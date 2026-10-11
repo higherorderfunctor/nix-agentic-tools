@@ -7,8 +7,8 @@ applyTo: "packages/semble/**"
 
 # Semble integrations
 
-> **Last verified:** 2026-10-11 — grouped dependency updates respect the pinned
-> Semble release requirements.
+> **Last verified:** 2026-10-11 — Semble uses measured-once extracted facts;
+> grouped dependency updates respect the pinned release requirements.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -145,12 +145,13 @@ language at all, even when their suffix names a parsed language: the patched
 `detect_language` returns the mapping's `None`, and upstream's `chunk_source`
 skips the parser lookup for `None` and goes straight to `chunk_lines` (about 750
 characters per chunk), so nothing is logged. Anything else fails evaluation,
-checked against `extracted.json`, which is what turns a misspelt language name
-into an error instead of a silent line-chunked mapping. That file describes the
-pinned Semble; a consumer who overrides `package` with another version is
-validated against the pinned one. Extra grammars must not reuse a bundled name
-or alias, since Semble would never load them. The same language may appear in
-several entries, so one language can split across content categories by path.
+checked against the declared language facts, which is what turns a misspelt
+language name into an error instead of a silent line-chunked mapping. That file
+describes the pinned Semble; a consumer who overrides `package` with another
+version is validated against the pinned one. Extra grammars must not reuse a
+bundled name or alias, since Semble would never load them. The same language may
+appear in several entries, so one language can split across content categories
+by path.
 
 A pattern without `/` matches a basename at any depth; a pattern containing `/`
 matches the path relative to the indexed repository root. Path matching uses
@@ -416,21 +417,25 @@ snapshot remains verbatim for provenance.
 
 ## Upstream template review gate
 
-`packages/semble/upstream-templates.json` snapshots the four pinned agent
-templates, the installer block, and a live JSON-RPC `tools/list` response
-through `passthru.extractedTemplates` on the package. The four agent templates
-retain human-reviewed hash pins. The installer prose is no longer a reviewed
-hash dependency: a mechanical provenance assertion instead requires its embedded
+The `templates`, `instructions` and `mcpTools` facts in
+`packages/semble/extracted/` record the four pinned agent templates, the
+installer block, and a JSON-RPC `tools/list` response through the package's
+single `passthru.extracted` derivation. The four agent templates retain
+human-reviewed hash pins. The installer prose is no longer a reviewed hash
+dependency: a mechanical provenance assertion instead requires its embedded
 `semble[mcp]==<version>` fallback to match the packaged version. The exact MCP
 surface is reviewed separately, and every tool and argument named by the
 committed MCP prompt must remain present. Module evaluation reads only committed
 files and does not introduce IFD.
 
-## Language knowledge snapshot
+## Language knowledge facts
 
-`packages/semble/extracted.json` records what the pinned Semble knows about
-languages, and `lib/extracted.nix` exposes it to evaluation without IFD. Two
-packages decide how a file is treated:
+`packages/semble/extracted/` records what the pinned Semble knows about
+languages. `facts.json` declares every key as static and required on
+x86_64-linux; one raw is committed because both Python extractors return the
+same answer given the artifact. `lib/extracted.nix` reads the aggregate through
+`load`, `get` and `children`, without IFD. Two packages decide how a file is
+treated:
 
 - **semble** maps a file suffix to a language (`extensions`). A suffix outside
   that map is not indexed. `contentTypes` holds the language sets behind
@@ -447,18 +452,20 @@ semble-grammars ships one wheel per platform, each with its own manifest, and
 interpreter and fails unless the platform manifest equals the
 platform-independent manifest semble-grammars bundles as
 `grammars/sources.json`. So the committed file is the same on every system, and
-the drift check (`semble-languages-extracted`) catches a platform that drops a
-grammar. It runs on Linux inside `nix flake check`, which skips Darwin, so CI's
+the drift check (`semble-extracted`) catches a platform that drops a grammar. It
+runs on Linux inside `nix flake check`, which skips Darwin, so CI's
 aarch64-darwin package job builds it separately (shard 0, before the receipt
 upload, so it gates the required `build` context). The update pipeline extracts
 on x86_64-linux only. On 0.1.2 the linux-x86_64 and macos-arm64 manifests both
 list the same 77 grammars as that bundled manifest.
 
-Both snapshot drift checks call the shared `lib/extracted/default.nix` builder.
-A mismatch prints a sorted JSON diff and a recipe to build that check’s
-`passthru.extracted`, copy it over the committed snapshot, and run `nix fmt`.
-The language check validates the committed sidecar reader while leaving
-`passthru.extracted` buildable for regeneration.
+The single `semble-extracted` drift check uses the shared `mkOwnerCheck`
+builder. A mismatch prints a sorted JSON diff naming the committed raw and the
+command `nix run .#checks.<host>.semble-extracted.passthru.regenerate` to
+restore and format it. Darwin compares its fresh extraction against the same
+Linux raw. The check validates the facts reader while leaving
+`passthru.extracted` buildable for regeneration. Template coverage remains a
+separate review gate reading the combined facts.
 
 Semble's grouped `--use-update-script` target tracks the CLI in `sources.json`
 and model2vec, semble-grammars and vicinity in `<dep>-sources.json`. Each
@@ -466,11 +473,9 @@ vendored dependency selects the newest stable PyPI release satisfying its
 non-extra requirement in the pinned Semble release's PyPI `requires_dist`. The
 dependency rows read the Semble version from `sources.json` when they run, so
 the CLI runs first to apply a new release's bounds in the same sweep. The
-grouped script then regenerates both snapshots from the package's
-`passthru.extracted` and `passthru.extractedTemplates`. The drift checks consume
-the same extractors; `mkExtractRegen` names `extract = "extractedTemplates"` for
-the templates file. Human-reviewed template hashes remain a separate approval
-gate.
+grouped script then uses `regenCommand { name = "semble"; }` to regenerate the
+merged raw from the package's single `passthru.extracted` derivation.
+Human-reviewed template hashes remain a separate approval gate.
 
 ## Direct configuration
 

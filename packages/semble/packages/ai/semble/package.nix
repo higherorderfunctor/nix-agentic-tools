@@ -1,5 +1,6 @@
 # cspell:ignore manylinux
 {
+  extractedLib,
   fetchFromGitHub,
   lib,
   makeWrapper,
@@ -62,18 +63,7 @@
         })}")
       # Update the CLI first so dependency rows read the new release's constraints.
       ["semble" "model2vec" "semble-grammars" "vicinity"]}
-    ${lib.concatMapStringsSep "\n" (target:
-      packageLib.mkExtractRegen (target
-        // {
-          attr = "semble";
-          inherit pkgs;
-        })) [
-      {dest = repoPath ../../../extracted.json;}
-      {
-        dest = repoPath ../../../upstream-templates.json;
-        extract = "extractedTemplates";
-      }
-    ]}
+    ${(extractedLib {inherit pkgs;}).regenCommand {name = "semble";}}
   '';
 
   # Some of semble's direct runtime dependencies are not in nixpkgs.
@@ -261,7 +251,7 @@ in
         sembleConfig = defaultConfig;
         sembleConfigSchema = 1;
       }
-      // (import ../../../extract {inherit lib pkgs;}) finalAttrs.finalPackage;
+      // (import ../../../extract {inherit pkgs;}) finalAttrs.finalPackage;
 
     meta = with lib; {
       changelog = "https://github.com/MinishLab/semble/releases/tag/v${finalAttrs.version}";

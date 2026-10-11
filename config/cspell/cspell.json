@@ -33,7 +33,6 @@
     "packages/delegate-routing/docs/delegates/vendor-prompts/**",
     "packages/delegate-routing/probes/delegates/**",
     "packages/kimchi/egress-report.json",
-    "packages/semble/upstream-templates.json",
     "result"
   ],
   "language": "en",

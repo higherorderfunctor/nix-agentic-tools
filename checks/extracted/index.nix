@@ -10,6 +10,7 @@
     claude-code = ../../packages/claude-code/extracted;
     kimchi = ../../packages/kimchi/extracted;
     kiro-cli = ../../packages/kiro-cli/extracted;
+    semble = ../../packages/semble/extracted;
   };
 in {
   checks.extracted-index = index (lib.mapAttrs (_: dir: load {inherit dir;}) owners);

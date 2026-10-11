@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          nix build ".#checks.$SYSTEM.semble-languages-extracted" --no-link
+          nix build ".#checks.$SYSTEM.semble-extracted" --no-link
       - name: Upload successful shard receipt
         uses: actions/upload-artifact@v7
         with:

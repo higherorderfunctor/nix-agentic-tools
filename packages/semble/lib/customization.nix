@@ -8,7 +8,7 @@
 # entries may omit `enable` and `description`, and content may be a scalar.
 {lib}: let
   contentScope = import ./contentScope.nix {inherit lib;};
-  extracted = import ./extracted.nix;
+  extracted = import ./extracted.nix {inherit lib;};
   inherit (import ./contentCategories.nix) categories expand;
 
   # model2vec's accepted folder layouts (persistence/datamodels.py
@@ -77,7 +77,7 @@
     "Semble `grammars` packages must expose a non-empty `language` attribute."
     ++ map (language: "Semble `grammars` language \"${language}\" appears more than once; grammar languages must be unique.")
     (duplicates (builtins.filter (language: language != "") languages))
-    ++ map (language: "Semble `grammars` language \"${language}\" is already bundled with Semble (semble-grammars ${extracted.provenance.sembleGrammarsVersion}); Semble would never load the extra grammar.")
+    ++ map (language: "Semble `grammars` language \"${language}\" is already bundled with Semble (semble-grammars ${extracted.grammarsVersion}); Semble would never load the extra grammar.")
     (builtins.filter (language: lib.elem language bundledLanguages) languages);
 
   # A mapping may name any language Semble knows: a parsed one (bundled, an
@@ -99,7 +99,7 @@
         then ["Semble `${path}.language` must be null or a non-empty string."]
         else
           lib.optional (!(lib.elem language known))
-          "Semble `${path}.language`: \"${language}\" is not a language Semble knows. Use a bundled grammar or alias (semble-grammars ${extracted.provenance.sembleGrammarsVersion}), a language from Semble's extension map, the language of a `grammars` package, or null for line chunking."
+          "Semble `${path}.language`: \"${language}\" is not a language Semble knows. Use a bundled grammar or alias (semble-grammars ${extracted.grammarsVersion}), a language from Semble's extension map, the language of a `grammars` package, or null for line chunking."
       )
       ++ lib.optional (!(lib.elem (mapping.content or null) categories))
       "Semble `${path}.content` must be one of code, config or docs."
