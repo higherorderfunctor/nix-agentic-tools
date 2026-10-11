@@ -13,8 +13,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) expect load mkDriftCheck;
-    kiroFacts = load {dir = ../extracted;};
+    inherit (extractedLib {inherit pkgs;}) mkOwnerCheck;
   in
     {
       # The trigger-map locator on synthetic bundles: a quoted key is the same
@@ -49,48 +48,35 @@
         touch "$out"
       '';
     }
-    // mkDriftCheck {
-      committed = ../extracted;
-      # The host's extraction only: settingKeys and workspaceOverridableSettings
-      # are host-run, and the other system's package set does not evaluate here.
-      extracted.${system} = self.ciPackages.${system}.kiro-cli.passthru.extracted;
+    // mkOwnerCheck {
+      dir = ../extracted;
       name = "kiro-cli";
-      results = {
-        consumers = expect {
-          inherit (kiroFacts) aggregate;
-          consumer = "kiro-cli";
-          # mkKiro.nix's option enums and flatten boundary, and the
-          # module-eval fixtures that rest on them.
-          needs = [
-            {key = "hookTriggerAliases";}
-            {
-              contains = "SessionStart";
-              key = "hookTriggers";
-            }
-            {
-              contains = "workflows";
-              key = "rolloutFeatures";
-            }
-            {
-              contains = "chat.enableWorkflows";
-              key = "settingKeys";
-            }
-            {
-              contains = "chat.modelDefaults";
-              key = "settingKeys";
-            }
-            {
-              contains = "chat.defaultModel";
-              key = "workspaceOverridableSettings";
-            }
-            {
-              contains = "chat.enableTangentMode";
-              key = "workspaceOverridableSettings";
-            }
-          ];
-        };
-        facts = kiroFacts;
-      };
-      sidecar = "packages/kiro-cli/extracted";
+      needs = [
+        {
+          contains = "SessionStart";
+          key = "hookTriggers";
+        }
+        {
+          contains = "workflows";
+          key = "rolloutFeatures";
+        }
+        {
+          contains = "chat.enableWorkflows";
+          key = "settingKeys";
+        }
+        {
+          contains = "chat.modelDefaults";
+          key = "settingKeys";
+        }
+        {
+          contains = "chat.defaultModel";
+          key = "workspaceOverridableSettings";
+        }
+        {
+          contains = "chat.enableTangentMode";
+          key = "workspaceOverridableSettings";
+        }
+      ];
+      package = self.ciPackages.${system}.kiro-cli;
     };
 }

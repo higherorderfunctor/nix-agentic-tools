@@ -4,11 +4,6 @@
   host = pkgs.stdenv.hostPlatform.system;
   # The per-system drift check's `passthru.regenerate`; regenCommand runs it.
   regenerateName = name: "${name}-regenerate-extracted";
-in {
-  inherit (facts) children expect get getFor load merge;
-  inherit (import ./reconcile.nix {inherit lib;}) reconcile;
-  index = facts.index pkgs;
-
   mkDriftCheck = {
     # A path, or per system (the facts contract's "Drift") the owner's
     # `extracted/` directory; `<system>.json` is derived under it.
@@ -114,6 +109,42 @@ in {
         echo "ok — ${name} sidecar matches the fresh extraction" > "$out"
       '';
   };
+in {
+  inherit (facts) children expect get getFor load merge;
+  inherit (import ./reconcile.nix {inherit lib;}) reconcile;
+  inherit mkDriftCheck;
+  index = facts.index pkgs;
+
+  mkOwnerCheck = {
+    dir,
+    name,
+    needs ? [],
+    package,
+    results ? {},
+  }: let
+    ownerFacts = facts.load {inherit dir;};
+  in
+    mkDriftCheck {
+      committed = dir;
+      extracted.${host} = package.passthru.extracted;
+      inherit name;
+      # `facts` and `consumers` are this builder's own surfaces; an owner's
+      # `results` (reconcile output) may not shadow them, or a supplied
+      # `facts.failures = []` would silence every merge failure.
+      results =
+        lib.throwIf (results ? consumers || results ? facts)
+        "mkOwnerCheck ${name}: results.facts and results.consumers are reserved; pass reconcile results under their own surface names"
+        (results
+          // {
+            consumers = facts.expect {
+              inherit (ownerFacts) aggregate;
+              consumer = name;
+              inherit needs;
+            };
+            facts = ownerFacts;
+          });
+      sidecar = "packages/${name}/extracted";
+    };
 
   # An owner's update script regenerates its per-system raws on this host;
   # the script echoes each path as mkExtractRegen does.
