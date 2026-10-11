@@ -202,12 +202,12 @@ for (const [name, key, expected] of [
     "catalog",
     ["claude-opus-4", "claude-haiku-5", "claude-opus-5", "claude-sonnet-5"],
   ],
-  ["model-retired.js.txt", "retired", ["claude-opus-4"]],
   [
     "model-pins.js.txt",
     "pins",
     ["unpinOpus47LaunchEffort", "unpinFable5LaunchEffort"],
   ],
+  ["model-retired.js.txt", "retired", ["claude-opus-4"]],
 ]) {
   const sites = L.locateModelSites(fixture(name), ts);
   check(
@@ -218,14 +218,38 @@ for (const [name, key, expected] of [
 }
 for (const name of [
   "decoy-model-catalog.js.txt",
-  "decoy-model-retired.js.txt",
   "decoy-model-pins.js.txt",
+  "decoy-model-retired.js.txt",
 ]) {
   const sites = L.locateModelSites(fixture(name), ts);
   check(
     `${name}: rejected`,
     Object.values(sites).every((xs) => xs.length === 0),
     sites,
+  );
+}
+
+for (const [name, diagnostic] of [
+  [
+    "model-catalog-computed.js.txt",
+    "model catalog entry: unsupported property form",
+  ],
+  [
+    "model-catalog-spread.js.txt",
+    "model catalog entry: unsupported property form",
+  ],
+  ["model-retired-malformed.js.txt", 'retirement row "claude-opus-5"'],
+]) {
+  let error = "";
+  try {
+    L.locateModelSites(fixture(name), ts);
+  } catch (e) {
+    error = e.message;
+  }
+  check(
+    `${name}: refuses unsupported structure with PROBE`,
+    error.includes("PROBE failure:") && error.includes(diagnostic),
+    error,
   );
 }
 

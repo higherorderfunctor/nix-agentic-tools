@@ -775,13 +775,23 @@ export function locateModelSites(src, ts) {
       "claude-extract: PROBE failure: model facts chunk does not parse",
     );
   const literal = (n) => (n && ts.isStringLiteral(n) ? n.text : null);
-  const properties = (n) =>
-    new Map(
+  const properties = (n, location) => {
+    if (
+      location &&
+      n.properties.some(
+        (p) => !ts.isPropertyAssignment(p) || ts.isComputedPropertyName(p.name),
+      )
+    )
+      throw new Error(
+        `claude-extract: PROBE failure: ${location}: unsupported property form`,
+      );
+    return new Map(
       n.properties
         .filter(ts.isPropertyAssignment)
         .filter((p) => !ts.isComputedPropertyName(p.name))
         .map((p) => [p.name.text, p.initializer]),
     );
+  };
   const alias = (id) =>
     typeof id === "string" && /^claude-[a-z0-9.-]+$/.test(id);
   function walk(n) {
@@ -789,7 +799,7 @@ export function locateModelSites(src, ts) {
       // Require an actual catalog array, not a bare id or provider wire id.
       const entries = n.elements
         .filter(ts.isObjectLiteralExpression)
-        .map(properties);
+        .map((entry) => properties(entry));
       const ids = entries
         .filter((p) => alias(literal(p.get("id"))) && literal(p.get("family")))
         .map((p) => literal(p.get("id")));
@@ -798,6 +808,8 @@ export function locateModelSites(src, ts) {
           throw new Error(
             "claude-extract: PROBE failure: model catalog contains an entry without literal id/family",
           );
+        for (const entry of n.elements)
+          properties(entry, "model catalog entry");
         sites.catalog.push(ids);
       }
     }
@@ -813,7 +825,29 @@ export function locateModelSites(src, ts) {
             properties(p.initializer).has("retirementDates"),
         )
         .map((p) => p.name.text);
-      if (ids.length) sites.retired.push(ids);
+      if (ids.length) {
+        for (const row of n.properties) {
+          const key = row.name?.getText(tree) ?? row.getText(tree);
+          const location = `retirement row ${key}`;
+          const fields =
+            ts.isPropertyAssignment(row) &&
+            ts.isStringLiteral(row.name) &&
+            alias(row.name.text) &&
+            ts.isObjectLiteralExpression(row.initializer)
+              ? properties(row.initializer, location)
+              : null;
+          if (
+            !fields ||
+            literal(fields.get("modelName")) === null ||
+            !fields.get("retirementDates") ||
+            !ts.isObjectLiteralExpression(fields.get("retirementDates"))
+          )
+            throw new Error(
+              `claude-extract: PROBE failure: ${location}: expected literal modelName and object retirementDates`,
+            );
+        }
+        sites.retired.push(ids);
+      }
     }
     if (
       ts.isIfStatement(n) &&
