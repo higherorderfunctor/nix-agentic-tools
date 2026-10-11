@@ -57,8 +57,9 @@ a silent no-op bug. Read this fragment before changing the gating.
 
 ### Codex checks the names its launcher uses
 
-`packages/chatgpt-codex/extracted.json` is generated fact from the pinned
-binary. `packages/chatgpt-codex/extract/rules.nix` checks launcher flags from
+`packages/chatgpt-codex/extracted/` holds facts measured from the pinned binary
+per platform (the `cli.globalFlags` fact here).
+`packages/chatgpt-codex/extract/rules.nix` checks launcher flags from
 `lib/launcher-flags.nix` against the root command's flags as reconciliation's
 `uses`. `chatgpt-codex-extracted` reports a used flag removed from that command.
 Other removed upstream names disappear from the extracted surface without an
