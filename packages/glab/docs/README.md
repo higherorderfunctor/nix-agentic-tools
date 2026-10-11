@@ -115,10 +115,23 @@ store path, even though upstream does not class it as a credential.
 
 ## Settings
 
-`glab.settings.*` is **generated** from `packages/glab/extracted.json`, which is
-extracted from glab's own `internal/config.KeySchema` and drift-checked by
-`checks.glab-extracted`. Option names are upstream's key names, and each
-description is upstream's own.
+> **Last verified:** 2026-10-11 — glab reads measured-once config-key facts
+> through the shared extracted aggregate and owner drift check.
+
+`glab.settings.*` is **generated** from the `packages/glab/extracted/` facts.
+The Go dump reads glab's vendored `internal/config.KeySchema` without running
+the CLI. One static declaration, `keys.<name>`, covers every key record; only
+`x86_64-linux.json` is committed because the artifact gives the same answer on
+every host. `lib/schema.nix` reads the combined records through `load` and
+`children`, without building during module evaluation. Option names and
+descriptions remain upstream's own.
+
+`checks.glab-extracted` compares fresh measurements to the committed raw on each
+host. Its regenerator rewrites that same raw:
+`nix run .#checks.x86_64-linux.glab-extracted.passthru.regenerate`. The update
+script runs the owner regenerator after source, Go-floor and vendor-hash repair.
+The extractor's scope, required-key and environment-variable guards still reject
+wrong measurements before they can become the committed truth.
 
 That means the surface cannot silently disagree with the packaged version, and
 it also means env-var mapping is exact — several keys have non-obvious names
