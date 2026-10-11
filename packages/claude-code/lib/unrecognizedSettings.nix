@@ -14,7 +14,7 @@
 # appears to apply and does nothing.
 #
 # The packaged binary now hands us its own settings schema (extracted into
-# packages/claude-code/extracted.json, `settings.paths`). That turns the
+# packages/claude-code/extracted/, `settings.paths`). That turns the
 # freeform tail from unknowable into merely undeclared: a key is either
 # declared by the binary, or the consumer has said "I know, let it through".
 #
@@ -343,7 +343,8 @@ in rec {
              writes it through untouched. A `*` segment is accepted in place of
              a key you chose yourself, so one entry can cover every instance.
 
-        The declared set comes from packages/claude-code/extracted.json, which is
+        The declared set comes from settings.publicKeys and settings.internalKeys
+        in packages/claude-code/extracted/, which is
         generated from the binary's own settings schema — never hand-curated. If
         the key is real and the sidecar is stale, REGENERATING THE SIDECAR is the
         durable fix; an allowlist entry is a per-key opt-out of this check that

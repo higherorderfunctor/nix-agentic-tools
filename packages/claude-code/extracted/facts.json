@@ -1,0 +1,30 @@
+{
+  "effortLevels": {
+    "source": "static",
+    "type": "list"
+  },
+  "hookEvents": {
+    "source": "static",
+    "type": "list"
+  },
+  "launchEffortPins": {
+    "source": "static",
+    "type": "set"
+  },
+  "models": {
+    "source": "static",
+    "type": "set"
+  },
+  "settings.internalKeys": {
+    "source": "static",
+    "type": "set"
+  },
+  "settings.paths": {
+    "source": "static",
+    "type": "object"
+  },
+  "settings.publicKeys": {
+    "source": "static",
+    "type": "set"
+  }
+}

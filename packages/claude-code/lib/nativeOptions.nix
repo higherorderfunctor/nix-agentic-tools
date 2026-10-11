@@ -4,7 +4,7 @@
 #
 #   1. MACHINE-DERIVED — `generateSettingsOptions.nix` walks the settings
 #      schema the packaged binary emits about ITSELF (the drift-checked
-#      `packages/claude-code/extracted.json`, `.settings`) and declares a typed
+#      `packages/claude-code/extracted/`, `settings.paths`) and declares a typed
 #      `nullOr` option per path. Nothing here is hand-curated, so a key upstream
 #      adds arrives with the next package bump instead of waiting for someone to
 #      notice it.
@@ -23,16 +23,16 @@
 # `report` is exported for `packages/claude-code/checks/claude-settings-schema.nix`, which is what
 # makes the exception tables above self-policing in CI rather than by review.
 {
+  claudeFact,
   lib,
   pkgs,
-  extracted,
 }: let
   gen = import ./generateSettingsOptions.nix {inherit lib;};
 
   freeformType = (pkgs.formats.json {}).type;
 
   # Non-retired model ids from the binary's own catalog.
-  knownClaudeModels = extracted.models;
+  knownClaudeModels = claudeFact "models";
 
   # Each hand-authored declaration supplies behavior or prose absent from the schema.
   handAuthored = {
@@ -94,12 +94,13 @@
       '';
     };
     effortLevel = lib.mkOption {
-      type = lib.types.nullOr (lib.types.enum extracted.effortLevels);
+      type = lib.types.nullOr (lib.types.enum (claudeFact "effortLevels"));
       default = null;
       description = ''
         Persisted Claude effort level. The valid set
         (low/medium/high/xhigh) is extracted from the packaged binary
-        into packages/claude-code/extracted.json. 'max' is session-only
+        into packages/claude-code/extracted/ (effortLevels).
+        'max' is session-only
         via /effort and cannot be persisted.
       '';
     };
@@ -124,7 +125,7 @@
         Claude model id. The ${toString (builtins.length knownClaudeModels)}
         non-retired ids in the packaged binary's model catalog
         (extracted into the drift-checked
-        packages/claude-code/extracted.json — never hand-curated) are
+        packages/claude-code/extracted/ (models) — never hand-curated) are
         ${lib.concatStringsSep ", " knownClaudeModels}. Any string is
         accepted (non-enforcing soft enum) — the binary's runtime model
         set is not a safe closed enum.
@@ -162,8 +163,10 @@
     };
   };
 
+  settings = lib.genAttrs ["internalKeys" "paths" "publicKeys"] (key: claudeFact "settings.${key}");
+
   generated = gen.generate {
-    inherit (extracted) settings;
+    inherit settings;
     inherit freeformType;
     overrides = gen.overrideTable;
     # Derived, never restated: a hand-authored option and its `externalPaths`
@@ -171,6 +174,7 @@
     externalPaths = lib.attrNames handAuthored;
   };
 in {
+  inherit settings;
   inherit (generated) report;
   # `//` is safe precisely because `externalPaths` already made it a disjoint
   # union — see the header.

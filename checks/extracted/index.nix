@@ -10,6 +10,10 @@
   inherit (import ../../lib/extracted {inherit pkgs;}) index load;
   owners = [
     {
+      dir = ../../packages/claude-code/extracted;
+      name = "claude-code";
+    }
+    {
       dir = ../../packages/kiro-cli/extracted;
       name = "kiro-cli";
     }

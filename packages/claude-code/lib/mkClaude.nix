@@ -10,10 +10,12 @@
 }: let
   inherit (lib.ai) agent;
   sharedHooks = lib.ai.hooks;
-  # Eval-pure reads of COMMITTED source JSON (no IFD). See overlays.md
+  # Eval-pure reads of committed facts (no IFD). See overlays.md
   # § IFD Patterns and memory project_claude_effort_pin_state.
-  extracted =
-    builtins.fromJSON (builtins.readFile ../extracted.json);
+  claudeFact = let
+    extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
+  in
+    extracted.get (extracted.load {dir = ../extracted;}).aggregate;
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   unrecognizedSettings = import ./unrecognizedSettings.nix {inherit lib;};
 
@@ -23,7 +25,7 @@
   # exception aimed at a key the binary no longer declares fails CI rather than
   # sitting here unnoticed.
   nativeFileSurface = import ./nativeOptions.nix {
-    inherit extracted lib pkgs;
+    inherit claudeFact lib pkgs;
   };
 
   # Guard for the freeform `native.settings` tail: every key the packaged
@@ -40,7 +42,7 @@
   # assertion never forces the package (and never triggers overlay IFD).
   nativeFileAssertions = cfg:
     unrecognizedSettings.mkAssertions {
-      declared = extracted.settings;
+      declared = nativeFileSurface.settings;
       # The tree actually written — identical to the
       # `aiCommon.filterNulls cfg.native.settings` settings document below.
       # Filtering FIRST is load-bearing: a typed sub-option sitting at its
@@ -305,7 +307,7 @@ in
           Claude's settings.json, as typed options plus a freeform
           passthrough. Every key the packaged binary's own settings schema
           declares (extracted into the drift-checked
-          packages/claude-code/extracted.json) gets a typed option
+          packages/claude-code/extracted/, settings.paths) gets a typed option
           automatically; a short hand-authored list overrides the generated
           type where the schema is not the surface we want (`attribution.*`
           accepts a bool, `model` is a soft enum, `tui` carries a
@@ -334,7 +336,8 @@ in
           like a brand-new key — and Claude ignores an unknown settings key
           silently, so a misspelling looks applied and does nothing. Every key
           the binary's own extracted schema
-          (packages/claude-code/extracted.json) does not declare is therefore a
+          (packages/claude-code/extracted/, settings.paths) does not declare is
+          therefore a
           HARD FAILURE unless it is listed here:
 
           ```nix
@@ -361,16 +364,17 @@ in
       };
       unpinLaunchEffort = lib.mkOption {
         type = lib.types.attrsOf lib.types.bool;
-        default = lib.genAttrs extracted.launchEffortPins (_: true);
+        default = lib.genAttrs (claudeFact "launchEffortPins") (_: true);
         defaultText =
           lib.literalExpression
-          "lib.genAttrs extracted.launchEffortPins (_: true)";
+          ''lib.genAttrs (claudeFact "launchEffortPins") (_: true)'';
         description = ''
           Per-model "acknowledge launch-default effort" flags merged into
           ~/.claude.json (HM only) so settings.effortLevel is honored instead of
           a newly-shipped model's launch-default effort pin. Keys are
           auto-derived from the packaged binary
-          (packages/claude-code/extracted.json). Set a key false to deliberately
+          (packages/claude-code/extracted/, launchEffortPins). Set a key false to
+          deliberately
           leave that model pinned.
         '';
       };
@@ -448,10 +452,10 @@ in
           typed handlers. Lowered into `.claude/settings.json` on both
           backends.
 
-          The event key is a soft enum: the ${toString (builtins.length extracted.hookEvents)}
+          The event key is a soft enum: the ${toString (builtins.length (claudeFact "hookEvents"))}
           recognized events (extracted from the packaged binary into the
-          drift-checked packages/claude-code/extracted.json — never hard-coded)
-          are ${lib.concatStringsSep ", " extracted.hookEvents}. Any string is
+          drift-checked packages/claude-code/extracted/, hookEvents — never hard-coded)
+          are ${lib.concatStringsSep ", " (claudeFact "hookEvents")}. Any string is
           accepted (forward-compatible with newer binaries).
 
           For hooks that need supporting files, set a handler `command` to a

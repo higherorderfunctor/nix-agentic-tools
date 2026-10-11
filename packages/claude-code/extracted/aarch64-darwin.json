@@ -3531,10 +3531,5 @@
       "worktree",
       "wslInheritsWindowsSettings"
     ]
-  },
-  "settingsBooleanKeys": [
-    "enableWorkflows",
-    "ultracode",
-    "workflowKeywordTriggerEnabled"
-  ]
+  }
 }

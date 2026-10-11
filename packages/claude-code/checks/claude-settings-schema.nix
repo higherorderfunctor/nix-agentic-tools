@@ -35,14 +35,16 @@
   ...
 }: {
   checks = let
-    extracted =
-      builtins.fromJSON (builtins.readFile ../extracted.json);
+    claudeFact = let
+      extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
+    in
+      extracted.get (extracted.load {dir = ../extracted;}).aggregate;
     # The sidecar carries no version of its own; the sources file is what the
     # extraction was run against.
     claudeVersion =
       (builtins.fromJSON (builtins.readFile ../sources.json)).version;
     surface = import ../lib/nativeOptions.nix {
-      inherit extracted lib pkgs;
+      inherit claudeFact lib pkgs;
     };
     inherit (surface) report;
 
@@ -247,7 +249,7 @@
       then
         throw ''
           claude settings-schema guard: ${toString (builtins.length failures)} finding(s)
-          against packages/claude-code/extracted.json (claude-code ${claudeVersion}).
+          against packages/claude-code/extracted/ (claude-code ${claudeVersion}).
 
           ${lib.concatStringsSep "\n\n" failures}
         ''

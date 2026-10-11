@@ -1,5 +1,5 @@
 # Generate `lib.mkOption` declarations for Claude's settings.json from the
-# drift-checked sidecar (`packages/claude-code/extracted.json` → `.settings`).
+# drift-checked sidecar (`packages/claude-code/extracted/` → `settings.paths`).
 #
 # The sidecar is produced by driving the packaged binary's OWN JSON-Schema
 # emitter and its OWN `@internal` filter, so this file never hand-curates a key
