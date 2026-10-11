@@ -1,8 +1,6 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-11 — Kiro and Codex commit per-system raws; Claude
-> and Kimchi are measured once on Linux, and Darwin validates its own extraction
-> against that raw. Declarations and decisions are merged by `lib.extracted`.
+> **Last verified:** 2026-10-11 — fact layout follows the extracted contract;
 > Kiro hook triggers come from the KAS engine's trigger map, not ELF greps.
 >
 > **Settled — do not relitigate.** Full lineage:
@@ -259,19 +257,8 @@ typed addition is emitted with `type = null`, and reconcile fails it as
 variable names come from Kimchi's `piConfig.name` the way pi derives them, not
 from pi's `PI_` default.
 
-That one shared sidecar is the pre-contract shape. Under the extracted facts
-contract (`dev/fragments/extracted/facts-contract.md`) a per-system owner
-commits `extracted/<system>.json` raws, a `facts.json` of declarations and a
-`decisions.json` of combine rules; `lib.extracted` merges them and consumers
-read only the merged value. Kiro and Codex regenerate their Linux raws in the
-update script and their Darwin raws in the Darwin CI leg (see the CI update
-workflow fragment). Claude and Kimchi declare Linux as the measurement system
-for every fact and commit one raw; Darwin validates its own extraction against
-it. Owners not yet migrated keep `extracted.json` through `mkDriftCheck`.
-
-Reach for a grep only for facts that are genuinely outside the artifact's own
-schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin
-keys are local-config keys, and the model catalog is a separate module.
+Owner layout, combination and platform rules live in the
+`dev/fragments/extracted/facts-contract.md`.
 
 #### The sidecar SELF-HEAL loop, and how to debug it when it does not fire
 

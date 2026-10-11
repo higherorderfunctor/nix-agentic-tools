@@ -1,9 +1,9 @@
 # `ai.kimchi.native.*` follows packages/kimchi/extracted/ facts.
 #
-# The option types are generated from the committed sidecar by
-# ../lib/extracted.nix. Agreement with the real sidecar alone would also hold
+# The option types are generated from the committed aggregate by
+# ../lib/extracted.nix. Agreement with the real aggregate alone would also hold
 # for a hand-copied option list, so the cases that matter run the same
-# generator over a FIXTURE sidecar — one key added, one removed, one enum
+# generator over FIXTURE values — one key added, one removed, one enum
 # widened — and require the option surface to move with it. Each case is named
 # in the failure message.
 {
@@ -15,94 +15,56 @@
 }: let
   inherit (harness) evalDevenv;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
-  inherit (extractedLib {inherit pkgs;}) children get load merge;
+  inherit (extractedLib {inherit pkgs;}) get load;
   inherit (load {dir = ../extracted;}) aggregate;
-  committed = {
-    config = {
-      keys = children aggregate "config.keys.<name>";
-      projectTier = get aggregate "config.projectTier";
-    };
-    environment.variables = children aggregate "environment.variables.<name>";
-    harness = {
-      definitions = children aggregate "harness.definitions.<name>";
-      keys = children aggregate "harness.keys.<name>";
-    };
-    virtualPackages = get aggregate "virtualPackages";
-  };
   committedRows = builtins.fromJSON (builtins.readFile ../extract/annotations.json);
-  surfaceForRaw = raw: rows: let
-    merged = merge {
-      declarations = builtins.fromJSON (builtins.readFile ../extracted/facts.json);
-      raws = {
-        aarch64-darwin = raw;
-        x86_64-linux = raw;
-      };
-      systems = import ../../../config/systems.nix;
+  surfaceFor = {
+    changes ? {},
+    removed ? [],
+    rows ? null,
+  }:
+    import ../lib/extracted.nix {
+      inherit extractedLib lib pkgs rows;
+      aggregate = builtins.removeAttrs (lib.recursiveUpdate aggregate (lib.mapAttrs (_: value: {inherit value;}) changes)) removed;
     };
-  in
-    assert merged.failures == [];
-      import ../lib/extracted.nix {
-        inherit extractedLib lib pkgs rows;
-        inherit (merged) aggregate;
-      };
-  real = import ../lib/extracted.nix {inherit aggregate extractedLib lib pkgs;};
+  real = surfaceFor {};
   sorted = lib.sort (a: b: a < b);
 
   # One harness key added, one config key removed, one enum value added.
-  fixture =
-    surfaceForRaw (lib.recursiveUpdate (committed
-      // {
-        config = committed.config // {keys = builtins.removeAttrs committed.config.keys ["llmEndpoint"];};
-      }) {
-      harness.keys = {
-        doubleEscapeAction.enum = committed.harness.keys.doubleEscapeAction.enum ++ ["probe"];
-        probeAdded = {
-          optional = true;
-          type = "boolean";
-          typeExpression = "boolean";
-        };
+  fixture = surfaceFor {
+    changes = {
+      "harness.keys.doubleEscapeAction".enum = (get aggregate "harness.keys.doubleEscapeAction").enum ++ ["probe"];
+      "harness.keys.probeAdded" = {
+        optional = true;
+        type = "boolean";
+        typeExpression = "boolean";
       };
-    })
-    null;
+    };
+    removed = ["config.keys.llmEndpoint"];
+  };
   # Guards the fixture itself: recursiveUpdate cannot delete a key.
   fixtureHasNoLlmEndpoint = !(fixture.settingsOptions ? llmEndpoint);
 
   # A hand-table row whose path is gone, and a key whose type nothing maps.
-  withoutModelRoles = surfaceForRaw (committed
-    // {
-      harness = committed.harness // {keys = builtins.removeAttrs committed.harness.keys ["modelRoles"];};
-    })
-  null;
-  withUnion =
-    surfaceForRaw (lib.recursiveUpdate committed {
-      harness.keys.probeUnion = {
-        optional = true;
-        type = "union";
-        typeExpression = "string | number";
-      };
-    })
-    null;
-  withUserScopeTheme =
-    surfaceForRaw (lib.recursiveUpdate committed {
-      harness.keys.theme.project = false;
-    })
-    null;
-  withConsumedInertKey =
-    surfaceForRaw (lib.recursiveUpdate committed {
-      config.keys.mcpSearchLimit.inert = false;
-    })
-    null;
-  withoutOwnVariable =
-    surfaceForRaw (lib.recursiveUpdate committed {
-      environment.variables.KIMCHI_REGION.consumerOverridable = false;
-    })
-    null;
+  withoutModelRoles = surfaceFor {removed = ["harness.keys.modelRoles"];};
+  withUnion = surfaceFor {
+    changes."harness.keys.probeUnion" = {
+      optional = true;
+      type = "union";
+      typeExpression = "string | number";
+    };
+  };
+  withUserScopeTheme = surfaceFor {changes."harness.keys.theme".project = false;};
+  withConsumedInertKey = surfaceFor {changes."config.keys.mcpSearchLimit".inert = false;};
+  withoutOwnVariable = surfaceFor {changes."environment.variables.KIMCHI_REGION".consumerOverridable = false;};
   # Annotation rows with one harness key and one config key ignored. Both keys
   # have an option on the real surface and nothing in the factory reads them.
-  withIgnoredRows = surfaceForRaw committed (lib.recursiveUpdate committedRows {
-    config.llmEndpoint.ignored = "probe";
-    harness.httpProxy.ignored = "probe";
-  });
+  withIgnoredRows = surfaceFor {
+    rows = lib.recursiveUpdate committedRows {
+      config.llmEndpoint.ignored = "probe";
+      harness.httpProxy.ignored = "probe";
+    };
+  };
 
   # Does `value` type-check against a closed submodule of `options`?
   accepts = options: value:
@@ -261,7 +223,7 @@
     # extraction; the devenv rejection uses the first.
     project-tier-rejects-user-scope-config =
       sorted real.userScopeConfigKeys
-      == sorted (lib.subtractLists committed.config.projectTier.honoredKeys (builtins.attrNames real.rules.results.config.entries))
+      == sorted (lib.subtractLists (get aggregate "config.projectTier").honoredKeys (builtins.attrNames real.rules.results.config.entries))
       && lib.any (lib.hasInfix "config.json keys Kimchi reads only from user scope: telemetry") (failedAssertions devenvTelemetry)
       && failedAssertions hmTelemetry == [];
 

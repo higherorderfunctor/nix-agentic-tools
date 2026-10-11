@@ -1,8 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-11 — the factory reads declared aggregate facts
-> from `packages/kimchi/extracted/`; mutation fixtures merge raw inputs through
-> the shared facts contract.
+> **Last verified:** 2026-10-11 — native-option fixtures vary aggregate values
+> directly, preserving the factory's facts interface.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
