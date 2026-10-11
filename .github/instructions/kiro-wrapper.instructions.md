@@ -256,10 +256,12 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-09 — kiro-cli 2.29.0 rewrote the vendor worktree
-> paragraph and moved the wf-workflow-creator prompt, which holds the rule-13
-> file-check paragraph, from a template literal into a single-quoted string; the
-> file-check source and replacement are escaped for that context.
+> **Last verified:** 2026-10-10 — rollout feature names are the
+> `rolloutFeatures` fact under `packages/kiro-cli/extracted/`. kiro-cli 2.29.0
+> rewrote the vendor worktree paragraph and moved the wf-workflow-creator
+> prompt, which holds the rule-13 file-check paragraph, from a template literal
+> into a single-quoted string; the file-check source and replacement are escaped
+> for that context.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -641,12 +643,12 @@ declaratively — the grant is simply absent for that session.
 > The real gate is a **JSON rollout manifest carried in the ELF's rodata**, in
 > TWO identical copies, parsed at runtime — see `vu.mkKiroRolloutPatch` and
 > `ai.kiro.cli.unlockedRolloutFeatures`. Its feature names are extracted into
-> `packages/kiro-cli/extracted.json` under `rolloutFeatures`, so read that file
-> rather than re-deriving the list by hand (the extractor found two entries a
-> careful manual read had missed). Note the manifest's own `workflows`
-> description says "enable locally through KIRO_ENABLED_FEATURES" — that line is
-> STALE and does not describe shipped behavior. Believing it costs a measurement
-> session.
+> the `rolloutFeatures` fact under `packages/kiro-cli/extracted/` (read through
+> `lib.extracted`), so read that fact rather than re-deriving the list by hand
+> (the extractor found two entries a careful manual read had missed). Note the
+> manifest's own `workflows` description says "enable locally through
+> KIRO_ENABLED_FEATURES" — that line is STALE and does not describe shipped
+> behavior. Believing it costs a measurement session.
 >
 > **Patching the binary is necessary but NOT sufficient: the resolved engine
 > must be `kas` (v3).** In `tui.js` the feature-gated slash-commands reach the
