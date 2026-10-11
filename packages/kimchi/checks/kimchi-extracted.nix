@@ -8,7 +8,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) expect load mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) load mkDriftCheck;
     package = self.ciPackages.${system}.kimchi;
     inherit (package.passthru) extractionSources extractionSourceUrls;
     kimchiFacts = load {dir = ../extracted;};
@@ -35,22 +35,6 @@
       name = "kimchi";
       results =
         {
-          consumers = expect {
-            inherit (kimchiFacts) aggregate;
-            consumer = "kimchi";
-            needs = [
-              {key = "config.keys.region";}
-              {key = "config.projectTier";}
-              {key = "environment.variables.KIMCHI_API_KEY";}
-              {key = "environment.variables.KIMCHI_ENABLE_RESOURCES";}
-              {key = "environment.variables.KIMCHI_REGION";}
-              {key = "environment.variables.KIMCHI_TELEMETRY_ENABLED";}
-              {key = "harness.keys.defaultProjectTrust";}
-              {key = "harness.keys.modelRoles";}
-              {key = "harness.keys.resources";}
-              {key = "virtualPackages";}
-            ];
-          };
           facts = kimchiFacts;
         }
         // package.passthru.extractedRules.results;

@@ -7,13 +7,8 @@ applyTo: "checks/extracted/**,lib/extracted/**,packages/*/extracted/**,packages/
 
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-11 — four owners are migrated end to end: kiro-cli
-> and chatgpt-codex (host-run; the darwin raw is produced by the darwin CI leg,
-> one producer job over every host-run owner), claude-code and kimchi (every
-> fact static, measured once on Linux: one committed raw, and Darwin validates
-> its own extraction against it). `children` reads a wildcard declaration's
-> combined children. `settings.paths` shows the limit of the `<name>` wildcard:
-> a raw whose attribute names contain dots is declared as one opaque `object`.
+> **Last verified:** 2026-10-11 — consumer requirements live at their readers;
+> drift checks add only requirements those readers do not enforce.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -31,7 +26,7 @@ contains merge, combine or platform logic. A check enforces that.
 | `packages/<owner>/extracted/decisions.json` | a human, dated                               | exceptions: how a key combines when systems differ              |
 
 The aggregate is never committed per owner. `lib.extracted.index` writes it from
-the three inputs above, and the drift check compares that output.
+the inputs above; absent decisions default to `{}`.
 
 `<system>` is one of `config/systems.nix`. Today's single `extracted.json` is
 the pre-contract shape; it keeps working through `mkDriftCheck` until its owner
@@ -43,7 +38,8 @@ A key is a dotted path into the raw JSON tree: `settingKeys`,
 `rolloutFeatures.<name>.state`, `cli.commands.<name>.flags`. The segment
 `<name>` matches any attribute name at that depth, so one declaration covers
 every child and a new child inherits it. A path that names a list element is not
-a key: a list is a leaf.
+a key: a list is a leaf. Attribute names containing dots, such as those in
+`settings.paths`, require an opaque `object` declaration for their parent.
 
 ## Declarations (`facts.json`)
 
@@ -117,7 +113,7 @@ differing count or string is a decision, and the failure prints the row.
 ## `lib/extracted/facts.nix`
 
 Needs only `lib`, like `reconcile`, so an option module can call it before
-`pkgs` exists. Six functions.
+`pkgs` exists.
 
 ### `load`
 
@@ -267,20 +263,14 @@ several configured raws are present, evaluation throws naming the directory and
 the expected host raw or single configured raw. A directory with the host's own
 raw keeps per-system behavior.
 
-Per system, the drift check's `passthru.regenerate` is a strict shell
-application that, run from the repository root, copies each buildable system's
-already-built raw to the sidecar it compared, makes it 644, runs `nix fmt` on it
-and prints the path written. It derives those paths where the check derives the
-ones it compares, so no caller names a raw path. A drifted system's failure
-prints one regenerate line:
-`nix run .#checks.<host>.<name>-extracted.passthru.regenerate`. Single mode has
-no `regenerate` and keeps its `cp` and `nix fmt` hint.
+Per-system checks expose `passthru.regenerate`: run
+`nix run .#checks.<host>.<name>-extracted.passthru.regenerate` from the
+repository root to rewrite and format exactly the sidecars the check compares,
+set their mode to 0644 and report each written path. Single mode keeps its `cp`
+and `nix fmt` hint.
 
-`regenCommand { name; }` (in `lib/extracted/default.nix`, which has `pkgs`) is
-the shell an owner's update script runs to regenerate its raws on the current
-host: it builds that `passthru.regenerate` with
-`nix build --no-link --print-out-paths` and executes it. The script's
-`regenerating` and `wrote` lines read like `mkExtractRegen`'s.
+Owner update scripts use `regenCommand { name; }` to build and run that
+regenerator on the current host.
 
 ## The guard
 
@@ -288,39 +278,6 @@ host: it builds that `passthru.regenerate` with
 `lib/extracted/` and `checks/extracted/` reads a per-system raw path, reaches
 into `bySystem`, or defines a combine. Owners supply data and extractors only.
 
-## Fixtures (`checks/extracted/facts.nix`)
+## Fixtures
 
-Eval-time cases in the style of `checks/extracted/reconcile.nix`, each naming
-its refused input or its visible result, plus one derivation that asserts the
-`divergent` message contains the paste-ready row.
-
-1. Two systems agree: aggregate carries the value, no failures.
-2. Differ with a rule: `set` intersection by default; `bool` and; `count` with a
-   `max` decision; `string` with `prefer:x86_64-linux`.
-3. Differ without a rule: `divergent`, and `fix` is a complete decisions row.
-4. New key, undeclared, not secret-shaped: no failure, listed in `undeclared`.
-5. New key, undeclared, secret-shaped: `undeclared-secret`.
-6. Declared key absent everywhere: `declared-gone`.
-7. Type mismatch: a string where `count` is declared.
-8. `per-platform`: `get` throws, `getFor` returns each system's value.
-9. `expect`: a satisfied set and a failed set, failure names the consumer.
-10. Wildcard declaration applies to every child, and a new child is covered.
-11. `bad-decision`: unknown combine; blank reason; row for an undeclared key.
-12. `ignore` removes an element before intersection.
-13. `missing-system`: declared for both, present in one.
-14. `live` with `systems = []`: no system required, no failure; `get` on a
-    divergent key throws and the entry carries merge's failure, and
-    `extracted-facts-divergent-fix` evaluates that `get` in a dummy-store
-    `nix-instantiate` to assert its message names the key and the row.
-15. `load` (fixture directories under `checks/extracted/load/`): both configured
-    raws present, plus one for a system outside `config/systems.nix` that is
-    never read, merge clean with their decision applied; with Darwin's raw
-    absent, every declared key fails `missing-system` naming it, and a
-    `prefer:aarch64-darwin` decision is not a `bad-decision`. `load` on a
-    directory without `facts.json` throws. A measured-once directory with one
-    raw and every declaration requiring only that system loads without failures.
-
-`checks/extracted/drift.nix` runs `mkDriftCheck`'s script per case; a case with
-`regenerate` also reads the per-system regenerate script's text, which must name
-the compared sidecar and omit the unused one, including the other system's raw
-when the owner was measured once.
+The contract cases and their concrete inputs live in `checks/extracted/`.

@@ -1,4 +1,4 @@
-# Drift, cross-system facts, consumer needs and launcher flags are one gate.
+# Drift, cross-system facts and launcher flags are one gate.
 {
   extractedLib,
   pkgs,
@@ -7,7 +7,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) expect load mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) load mkDriftCheck;
     codexFacts = load {dir = ../extracted;};
     package = self.ciPackages.${system}.chatgpt-codex;
   in
@@ -17,16 +17,6 @@
       name = "chatgpt-codex";
       results =
         {
-          consumers = expect {
-            inherit (codexFacts) aggregate;
-            consumer = "chatgpt-codex";
-            needs = [
-              {key = "cli.commands.codex.flags";}
-              {key = "cli.globalFlags";}
-              {key = "features";}
-              {key = "models";}
-            ];
-          };
           facts = codexFacts;
         }
         // package.passthru.extractedRules.results;

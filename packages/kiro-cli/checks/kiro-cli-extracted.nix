@@ -62,7 +62,6 @@
           # mkKiro.nix's option enums and flatten boundary, and the
           # module-eval fixtures that rest on them.
           needs = [
-            {key = "hookTriggerAliases";}
             {
               contains = "SessionStart";
               key = "hookTriggers";

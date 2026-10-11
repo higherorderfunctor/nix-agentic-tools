@@ -28,9 +28,6 @@
               contains = "PreToolUse";
               key = "hookEvents";
             }
-            {key = "launchEffortPins";}
-            {key = "models";}
-            {key = "settings.paths";}
             {
               contains = "hooks";
               key = "settings.publicKeys";
