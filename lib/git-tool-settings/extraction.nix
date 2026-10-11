@@ -10,14 +10,14 @@
 #                                   runs `<extractDir>/extract.py` over the
 #                                   source, with `tools` on PATH; any guard
 #                                   fails the build
-#   checks {name; package; sidecar; committed; extractDir; mutants; installed}
+#   checks {name; package; dir; extractDir; mutants; installed}
 #                                   the three checks below, keyed by name
 #
 # The package carries `passthru.{patchedSource,extracted}`. passthru is not a
 # derivation input, so neither moves the package's store path, and the drift
 # check and the update pipeline's regeneration read the same derivation.
 {pkgs}: let
-  inherit (import ../extracted {inherit pkgs;}) mkDriftCheck;
+  inherit (import ../extracted {inherit pkgs;}) mkOwnerCheck regenCommand;
   jq = "${pkgs.jq}/bin/jq";
 
   # One interpreter for every extractor: tree-sitter-rust for the Rust
@@ -32,6 +32,18 @@
   '';
 in {
   inherit python;
+
+  # update-common.sh runs this script; update-targets-parity requires file paths.
+  regenerateExtracted = {
+    dir,
+    name,
+  }:
+    (pkgs.writeShellScript "${name}-regenerate-extracted" ''
+      ${strict}
+      ${regenCommand {inherit name;}}
+    '').overrideAttrs (prev: {
+      passthru = (prev.passthru or {}) // {sidecars = map (file: "packages/${name}/extracted/${file}") (builtins.attrNames (builtins.readDir dir));};
+    });
 
   patchedSource = {
     name,
@@ -51,7 +63,7 @@ in {
     extractDir,
     tools ? [],
   }:
-    pkgs.runCommand "${name}-extracted.json" {
+    pkgs.runCommand "${name}-census.json" {
       nativeBuildInputs = [python] ++ tools;
       PYTHONPATH = shared;
     } ''
@@ -61,22 +73,26 @@ in {
         --src ${source}
     '';
 
-  # `sidecar` is the repository path in messages, `committed` the file.
+  # `dir` holds the committed declarations and measured raw.
   # `installed` is the file or directory in the built package that must hold
   # every extracted key as a string.
   checks = {
     name,
     package,
-    sidecar,
-    committed,
+    dir,
     extractDir,
     mutants,
     installed,
   }: let
     inherit (package.passthru) extracted patchedSource;
+    facts = import ./extracted.nix {
+      inherit dir;
+      inherit (pkgs) lib;
+    };
+    settings = pkgs.writeText "${name}-settings.json" (builtins.toJSON facts.settings);
     rules = import ./rules.nix {
       inherit (pkgs) lib;
-      extracted = builtins.fromJSON (builtins.readFile committed);
+      extracted = facts;
       rows = builtins.fromJSON (builtins.readFile (extractDir + "/annotations.json"));
     };
     # The extraction's own tools (asciidoc for git-absorb's man page) are
@@ -108,17 +124,17 @@ in {
         missing=""
         while IFS= read -r key; do
           grep -raqF -- "$key" "$target" || missing="$missing $key"
-        done < <(${jq} -r '.settings | keys[] | sub("<name>$"; "")' ${committed})
+        done < <(${jq} -r 'keys[] | sub("<name>$"; "")' ${settings})
         if [ -n "$missing" ]; then
-          echo "FAIL: ${sidecar} names keys absent from $target:$missing" >&2
+          echo "FAIL: packages/${name}/extracted names keys absent from $target:$missing" >&2
           exit 1
         fi
-        ${jq} -r '.settings | keys | "ok — all \(length) extracted keys are strings in ${installed}"' ${committed} >"$out"
+        ${jq} -r 'keys | "ok — all \(length) extracted keys are strings in ${installed}"' ${settings} >"$out"
       '';
     }
     # Compare fresh facts and reject stale or invalid hand annotations.
-    // mkDriftCheck {
-      inherit committed extracted name sidecar;
+    // mkOwnerCheck {
+      inherit dir name package;
       inherit (rules) results;
     };
 }

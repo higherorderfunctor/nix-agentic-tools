@@ -1,8 +1,8 @@
 # Git tool settings: census, sidecar, generator
 
-> **Last verified:** 2026-10-07 — hand annotations carry useful data only; types
-> remain required for read settings, while descriptions, default prose and
-> dead-key reasons are optional. Regeneration writes facts only.
+> **Last verified:** 2026-10-11 — git-absorb, git-branchless and git-revise use
+> measured-once extracted facts; shared readers assemble the plain census tree,
+> and update discovery runs the contract regenerator.
 >
 > **Settled — do not relitigate.**
 >
@@ -39,6 +39,16 @@ Owners live under `packages/` and share code only through `lib/`, which is why
 the generator and helpers sit here and not in one owner.
 
 ## Sidecar schema
+
+Each owner commits `extracted/facts.json` and one `extracted/x86_64-linux.json`.
+Every declaration is static and requires only `x86_64-linux`: the census reads
+patched source under `stdenvNoCC`, with no host dependence. `settings`,
+`foreign`, `deadKeys` and `source` are opaque objects; git-branchless also
+declares `revsetFunctions` as a list. Dotted keys and literal `<name>` in
+setting names rule out wildcard declarations. `source.version` remains because
+the generator's `schema.source` validates it.
+`lib/git-tool-settings/extracted.nix` uses `load` and `get` to assemble the
+plain tree the generator and fixture callers consume.
 
 Top level: `settings`, `foreign`, `deadKeys`, `source.version`, and optional
 `revsetFunctions` (git-branchless). A `settings` entry (the tool's own section)
@@ -95,7 +105,7 @@ description field.
 
 - `<tool>-extracted` — drift between the committed sidecar and a fresh
   extraction, plus the rule's failures over the committed sidecar and rows,
-  built by `lib/extracted/default.nix`’s `mkDriftCheck`. It prints a sorted JSON
+  built by `lib/extracted/default.nix`’s `mkOwnerCheck`. It prints a sorted JSON
   diff, the failures, and the recipe to rebuild the sidecar.
 - `<tool>-extractor-guards` — the mutants: each trips the guards it names or
   moves the output exactly as declared.
@@ -126,22 +136,24 @@ description field.
 
 ## Regeneration
 
-Each package's `passthru.regenerateExtracted`
-(`packageLib.mkRegenerateExtracted`) rewrites its sidecar from
-`passthru.extracted` and lists that destination in `sidecars` for update
-staging. Hand annotations are not regenerated. git-branchless runs this on its
-flake-input bump; git-absorb and git-revise run it from `update-pkg.sh` after a
-rev bump. Extractor floors reject collapsed surfaces. Removing an unused name is
-allowed; live module checks and `module-sws-preset-leaves-are-options` reject
-removals still used by the repo's presets. These consumer checks run in
-mandatory CI; the standalone drift check only checks facts and annotations.
+Each package's `passthru.regenerateExtracted` uses the shared extraction helper
+to run `lib.extracted.regenCommand`, which invokes the owner check's
+`passthru.regenerate`. Its `sidecars` lists the committed files under the
+owner's `extracted/` directory for update staging; `update-targets-parity`
+requires regular files. Hand annotations are not regenerated. git-branchless
+runs this on its flake-input bump; git-absorb and git-revise run it from
+`update-pkg.sh` after a rev bump. Extractor floors reject collapsed surfaces.
+Removing an unused name is allowed; live module checks and
+`module-sws-preset-leaves-are-options` reject removals still used by the repo's
+presets. These consumer checks run in mandatory CI; the standalone drift check
+only checks facts and annotations.
 
-Locally:
-`"$(nix build --no-link --print-out-paths .#<tool>.passthru.regenerateExtracted)"`.
+Locally: `nix run .#checks.<host>.<tool>-extracted.passthru.regenerate`.
 
 ## Adding a tool
 
-`extract/extract.py` + a rows file `annotations.json` (`{deadKeys, settings}`),
+`extracted/facts.json` + a measured raw, `extract/extract.py` + a rows file
+`annotations.json` (`{deadKeys, settings}`),
 `passthru.{patchedSource,extracted, regenerateExtracted}` on the package, a
 `checks.nix` calling `extraction.checks`, a mutant list covering every guard,
 and `lib/default.nix` exporting `<owner>.settings`. The generator check then

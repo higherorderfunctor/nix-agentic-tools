@@ -9,7 +9,8 @@ applyTo: "checks/extracted/**,lib/extracted/**,packages/*/extracted/**,packages/
 
 > **Last verified:** 2026-10-11 — owner checks share `mkOwnerCheck`; consumer
 > requirements live at their readers, with additional needs declared by checks;
-> Migrated owners are Claude, Codex, glab, Kimchi, Kiro and Semble.
+> every extractor owner is migrated: Claude, Codex, git-absorb, git-branchless,
+> git-revise, glab, Kimchi, Kiro and Semble.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are

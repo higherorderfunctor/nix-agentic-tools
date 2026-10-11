@@ -7,7 +7,6 @@
   gitToolExtraction,
   pkgs,
   packageLib,
-  repoPath,
   ...
 }: let
   inherit (pkgs) fetchFromGitHub;
@@ -69,15 +68,9 @@ in
         };
         # A rev bump runs this through dev/scripts/update-pkg.sh, so the bump
         # PR carries the refreshed sidecar.
-        regenerateExtracted = packageLib.mkRegenerateExtracted {
+        regenerateExtracted = extraction.regenerateExtracted {
+          dir = ../../../../extracted;
           name = "git-absorb";
-          inherit pkgs;
-          targets = [
-            {
-              attr = "git-absorb";
-              dest = repoPath ../../../../extracted.json;
-            }
-          ];
         };
       };
   })

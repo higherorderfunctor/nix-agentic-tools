@@ -4,7 +4,11 @@
   # sidecar, with the two hand tables only this tool needs.
   git-branchless.settings = {
     lib,
-    extracted ? builtins.fromJSON (builtins.readFile ../extracted.json),
+    extracted ?
+      import ../../../lib/git-tool-settings/extracted.nix {
+        dir = ../extracted;
+        inherit lib;
+      },
   }:
     import ../../../lib/git-tool-settings {
       inherit extracted lib;

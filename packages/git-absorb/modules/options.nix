@@ -1,6 +1,6 @@
 # `git.absorb.{enable,settings}`, declared once for both backends. The typed
 # settings are generated from git-absorb's drift-checked sidecar
-# (packages/git-absorb/extracted.json) by lib/git-tool-settings; the shared factory
+# (packages/git-absorb/extracted/) by lib/git-tool-settings; the shared factory
 # lowers them into `git.settings` (packages/git), which each backend
 # delivers.
 {

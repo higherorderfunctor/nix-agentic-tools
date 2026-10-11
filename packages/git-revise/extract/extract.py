@@ -4,7 +4,7 @@
 
 Input : the source tree the package builds (--src), and docutils on
         PYTHONPATH.
-Output: extracted.json in the shared sidecar schema (lib/git-tool-settings):
+Output: measured raw JSON in the shared sidecar schema (lib/git-tool-settings):
         facts only. An owned key the man page does not describe has no
         `description`, and a key-shaped string no read covers is a dead key
         with no reason. Hand annotations may add prose in Nix

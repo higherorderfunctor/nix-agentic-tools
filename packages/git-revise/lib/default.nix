@@ -5,7 +5,11 @@
   # (rebase.autoSquash, commit.gpgSign, ...) stay raw git configuration.
   git-revise.settings = {
     lib,
-    extracted ? builtins.fromJSON (builtins.readFile ../extracted.json),
+    extracted ?
+      import ../../../lib/git-tool-settings/extracted.nix {
+        dir = ../extracted;
+        inherit lib;
+      },
   }:
     import ../../../lib/git-tool-settings {
       inherit extracted lib;
