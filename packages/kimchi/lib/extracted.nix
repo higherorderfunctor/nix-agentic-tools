@@ -1,7 +1,7 @@
 # Everything the Kimchi factory reads from its drift-checked sidecar,
-# `packages/kimchi/extracted.json`.
+# `packages/kimchi/extracted/` facts.
 #
-# The sidecar is read as an ordinary committed file. Never read the package's
+# The sidecar is read as ordinary committed facts. Never read the package's
 # `passthru.extracted` derivation here: that is import-from-derivation and
 # poisons evaluation for every consumer. Freshness is the update job's and the
 # `kimchi-extracted` drift check's problem, not evaluation's.
@@ -29,7 +29,7 @@
 #   refinements  path → (node → type), runtime validation the type tree lacks
 #   notes        path → prose appended to the generated description
 {
-  extracted,
+  aggregate,
   extractedLib,
   lib,
   pkgs,
@@ -38,6 +38,7 @@
 }: let
   inherit (lib) types;
   json = (pkgs.formats.json {}).type;
+  inherit (extractedLib {inherit pkgs;}) children;
 
   # Kimchi 1.1.37 reads each modelRoles value as a provider/model string, and
   # for delegable roles also a non-empty list of them. Anything else is
@@ -48,16 +49,16 @@
   roleModelType = types.addCheck types.str (value: builtins.match "[[:space:]]*" value == null);
   roleModelsType = types.addCheck (types.listOf roleModelType) (values: values != []);
 
-  rules = import ../extract/rules.nix ({inherit extracted extractedLib pkgs;} // lib.optionalAttrs (rows != null) {inherit rows;});
+  rules = import ../extract/rules.nix ({inherit aggregate extractedLib pkgs;} // lib.optionalAttrs (rows != null) {inherit rows;});
 
   surfaces = {
-    settings = {
-      schema = extracted.config // {keys = rules.results.config.entries;};
-      definitions = {};
-    };
     harnessSettings = {
-      schema = extracted.harness // {keys = rules.results.harness.entries;};
-      definitions = extracted.harness.definitions or {};
+      definitions = children aggregate "harness.definitions.<name>";
+      keys = rules.results.harness.entries;
+    };
+    settings = {
+      definitions = {};
+      keys = rules.results.config.entries;
     };
   };
 
@@ -74,7 +75,7 @@
               then roleModelType
               else if many
               then types.either roleModelType roleModelsType
-              else throw "ai.kimchi.native.harnessSettings.modelRoles.${role}: packages/kimchi/extracted.json types it as `${roleNode.typeExpression}`, which the role refinement in packages/kimchi/lib/extracted.nix does not handle"
+              else throw "ai.kimchi.native.harnessSettings.modelRoles.${role}: packages/kimchi/extracted/ harness.keys.modelRoles types it as `${roleNode.typeExpression}`, which the role refinement in packages/kimchi/lib/extracted.nix does not handle"
             );
             default = null;
             description =
@@ -195,7 +196,7 @@
   };
 
   surfaceOf = name: surface: let
-    keys = surface.schema.keys;
+    inherit (surface) keys;
     excludedReason = key:
       keys.${key}.excluded or (derivedExclusion keys.${key});
     kept = lib.filterAttrs (key: _: excludedReason key == null) keys;
@@ -219,14 +220,13 @@
   in
     surface
     != null
-    && lib.foldl' step {properties = surface.schema.keys;} (builtins.tail segments) != null;
+    && lib.foldl' step {properties = surface.keys;} (builtins.tail segments) != null;
 
   stale = table: lib.sort (a: b: a < b) (lib.filter (path: !(knownPath path)) (builtins.attrNames table));
 
   variables = rules.results.environment.entries;
   userScopeKeys = keys: builtins.attrNames (lib.filterAttrs (_: node: !(node.project or false)) keys);
 in {
-  inherit (extracted) virtualPackages;
   inherit rules;
 
   settingsOptions = generated.settings.options;
@@ -255,7 +255,7 @@ in {
   environmentName = name:
     if (variables.${name}.consumerOverridable or false)
     then name
-    else throw "ai.kimchi sets ${name}, which packages/kimchi/extracted.json does not list as a variable Kimchi reads and lets the caller set. Kimchi ${extracted.provenance.kimchiVersion} stopped reading it or overwrites it; update packages/kimchi/lib/mkKimchi.nix.";
+    else throw "ai.kimchi sets ${name}, which packages/kimchi/extracted/ environment.variables.${name} does not list as a variable Kimchi reads and lets the caller set. Kimchi ${(builtins.fromJSON (builtins.readFile ../sources.json)).version} stopped reading it or overwrites it; update packages/kimchi/lib/mkKimchi.nix.";
 
   # The resource kinds a harness `resources` key may start with, read from the
   # key's template-literal index signatures (src/resources/types.ts
@@ -265,7 +265,7 @@ in {
     kinds = lib.concatLists (builtins.filter builtins.isList (builtins.split "\\[x: `([a-z]+)\\.\\$\\{string}`]" rules.results.harness.entries.resources.typeExpression));
   in
     if kinds == []
-    then throw "packages/kimchi/extracted.json harness.keys.resources.typeExpression lists no `<kind>.\${string}` index signatures; update packages/kimchi/lib/extracted.nix."
+    then throw "packages/kimchi/extracted/ harness.keys.resources.typeExpression lists no `<kind>.\${string}` index signatures; update packages/kimchi/lib/extracted.nix."
     else lib.sort (a: b: a < b) kinds;
 
   report = {
