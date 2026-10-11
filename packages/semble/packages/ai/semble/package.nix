@@ -31,25 +31,37 @@
     x86_64-darwin = "macosx_10_13_x86_64";
     x86_64-linux = "manylinux2014_x86_64";
   };
+  dependencyPython = python3.withPackages (ps: [ps.packaging]);
+  dependencyVersionCmd = pname: "${dependencyPython}/bin/python3 -I ${../../../update/dependency-version.py} ${lib.escapeShellArg (repoPath sourcesFiles.semble)} ${lib.escapeShellArg pname}";
   updateRows = {
-    model2vec.platforms.src = sdistUrl "model2vec";
+    model2vec = {
+      platforms.src = sdistUrl "model2vec";
+      versionCheck.cmd = dependencyVersionCmd "model2vec";
+    };
     semble = {
       platforms.src = version: "https://github.com/MinishLab/semble/archive/v${version}.tar.gz";
       unpack = true;
+      versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://pypi.org/pypi/semble/json | ${pkgs.jq}/bin/jq -r '.info.version'";
     };
-    semble-grammars.platforms = lib.mapAttrs (_: platform: version: "https://files.pythonhosted.org/packages/py3/s/semble_grammars/semble_grammars-${version}-py3-none-${platform}.whl") grammarPlatforms;
-    vicinity.platforms.src = sdistUrl "vicinity";
+    semble-grammars = {
+      platforms = lib.mapAttrs (_: platform: version: "https://files.pythonhosted.org/packages/py3/s/semble_grammars/semble_grammars-${version}-py3-none-${platform}.whl") grammarPlatforms;
+      versionCheck.cmd = dependencyVersionCmd "semble-grammars";
+    };
+    vicinity = {
+      platforms.src = sdistUrl "vicinity";
+      versionCheck.cmd = dependencyVersionCmd "vicinity";
+    };
   };
   updateScript = pkgs.writeShellScript "update-semble-group" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    ${lib.concatStringsSep "\n" (lib.mapAttrsToList (pname: row: "${packageLib.mkUpdateScript (row
-      // {
-        inherit pkgs pname;
-        sourcesFile = repoPath sourcesFiles.${pname};
-        versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://pypi.org/pypi/${pname}/json | ${pkgs.jq}/bin/jq -r '.info.version'";
-      })}")
-    updateRows)}
+    ${lib.concatMapStringsSep "\n" (pname: "${packageLib.mkUpdateScript (updateRows.${pname}
+        // {
+          inherit pkgs pname;
+          sourcesFile = repoPath sourcesFiles.${pname};
+        })}")
+      # Update the CLI first so dependency rows read the new release's constraints.
+      ["semble" "model2vec" "semble-grammars" "vicinity"]}
     ${lib.concatMapStringsSep "\n" (target:
       packageLib.mkExtractRegen (target
         // {
