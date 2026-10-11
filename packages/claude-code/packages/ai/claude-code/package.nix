@@ -65,7 +65,7 @@ in
       };
       # Each pinned platform's binary -> committed-raw shape: the settings
       # schema comes from the binary's own emitter (unpacked module graph +
-      # census), the model catalog and launch pins from anchored greps.
+      # census), the model catalog and launch pins from content-located AST reads.
       # IFD-safe: consumed ONLY by `nix build` (drift check + update
       # script), NEVER readFile'd at eval. See overlays.md § IFD Patterns.
       #

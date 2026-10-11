@@ -1,0 +1,1 @@
+function P(e){let n=[];if(!e.unpinOpus47LaunchEffort)n.push("claude-opus-4-7");if(!e.unpinFable5LaunchEffort){n.push("claude-fable-5");let r=env.MODEL;if(r)n.push(r)}return n}

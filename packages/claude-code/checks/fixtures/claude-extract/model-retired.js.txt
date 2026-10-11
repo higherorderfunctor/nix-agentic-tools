@@ -1,0 +1,1 @@
+var R={"claude-opus-4":{retirementDates:{api:"2026-01-01"},modelName:"Opus 4"}};

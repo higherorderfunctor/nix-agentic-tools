@@ -1,0 +1,1 @@
+var C=[{id:"claude-opus-decoy",provider_ids:{first_party:"claude-opus-wire"}}];var S='{id:"claude-opus-string",family:"opus"}';

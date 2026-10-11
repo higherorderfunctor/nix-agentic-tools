@@ -3,7 +3,7 @@
 // by driving the claude-code binary's OWN settings-schema builder, its OWN
 // zod -> JSON-Schema converter and its OWN @internal filter.
 //
-//   node census.mjs <unpacked-root> [--out FILE] [--legacy] [--diagnostics]
+//   node census.mjs <unpacked-root> [--out FILE] [--legacy --typescript FILE] [--diagnostics]
 //
 // Nothing in the OUTPUT contains a chunk filename, a minified identifier, a
 // byte offset or a module count. macOS and Linux builds of one version do not
@@ -514,7 +514,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
   const root = process.argv[2];
   if (!root) {
     console.error(
-      "usage: census.mjs <unpacked-root> [--out FILE] [--legacy] [--diagnostics]",
+      "usage: census.mjs <unpacked-root> [--out FILE] [--legacy --typescript FILE] [--diagnostics]",
     );
     process.exit(2);
   }
@@ -522,8 +522,16 @@ if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
   const out = outIdx > -1 ? process.argv[outIdx + 1] : null;
   const r = await census(path.resolve(root));
   const doc = { settings: r.settings };
-  if (process.argv.includes("--legacy"))
-    doc.legacy = legacyFromCensus(r.settings, r.rawEnums);
+  if (process.argv.includes("--legacy")) {
+    const tsIdx = process.argv.indexOf("--typescript");
+    if (tsIdx < 0) throw new Error("--legacy requires --typescript FILE");
+    const ts = (await import(pathToFileURL(process.argv[tsIdx + 1]).href))
+      .default;
+    doc.legacy = {
+      ...legacyFromCensus(r.settings, r.rawEnums),
+      ...L.modelFacts(path.resolve(root), ts),
+    };
+  }
   if (process.argv.includes("--diagnostics")) doc.diagnostics = r.diagnostics;
   const text = JSON.stringify(doc, null, 2) + "\n";
   if (out) {

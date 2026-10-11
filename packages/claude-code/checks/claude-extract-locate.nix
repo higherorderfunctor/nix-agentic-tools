@@ -15,7 +15,9 @@
       # nodejs_24 to match the extraction build in package.nix.
       nativeBuildInputs = [pkgs.nodejs_24];
     } ''
-      node ${./claude-extract-locate.mjs} ${../extract} ${./fixtures/claude-extract}
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      node ${./claude-extract-locate.mjs} ${../extract} ${./fixtures/claude-extract} ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
       touch "$out"
     '';
 }
