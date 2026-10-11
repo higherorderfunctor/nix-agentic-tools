@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-10 — settings are generated from the committed
 > facts in packages/claude-code/extracted/; the schema check gates stale and
-> shadowed rows, missing paths and wildcard grammar.
+> shadowed rows, missing paths and wildcard grammar. Catalog, retirement and
+> launch-pin facts are content-located AST reads of the unpacked graph.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -73,6 +74,16 @@ and `$schema`-description anchors. The description may sit in the builder
 itself, or in a descriptor factory called by exactly one wrapper that constructs
 the schema and returns `.whole()`. More than one matching wrapper is ambiguous
 and stops extraction.
+
+Catalog aliases come from one array of literal `id`/`family` objects, never
+`provider_ids.first_party`. Announced retirement-table membership removes an
+alias without consulting a clock. Launch-pin keys come from negated property
+guards whose body pushes a literal Claude model id. Each site must occupy
+exactly one content-located chunk; missing or ambiguous sites fail as LOCATION
+errors. The AST reader refuses malformed catalogs and requires surviving haiku,
+opus and sonnet ids, so a non-empty stray match cannot collapse the option enum
+silently. The locator fixture gate tests structural decoys as well as the
+pinned-binary drift check.
 
 ### The `native.settings` option surface is GENERATED
 

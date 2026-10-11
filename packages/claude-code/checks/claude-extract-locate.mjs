@@ -25,10 +25,11 @@
 // here in the same commit as the locator change.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const [extractDir, fixtureDir] = process.argv.slice(2);
+const [extractDir, fixtureDir, typescriptPath] = process.argv.slice(2);
 if (!extractDir || !fixtureDir) {
   console.error("usage: claude-extract-locate.mjs <extract-dir> <fixture-dir>");
   process.exit(2);
@@ -193,6 +194,119 @@ check(
   "no memoizer anywhere: null, not a guess",
   L.locateMemoizerLocal("var A=1;", readSpec) === null,
 );
+
+const ts = (await import(pathToFileURL(typescriptPath).href)).default;
+for (const [name, key, expected] of [
+  [
+    "model-catalog.js.txt",
+    "catalog",
+    ["claude-opus-4", "claude-haiku-5", "claude-opus-5", "claude-sonnet-5"],
+  ],
+  ["model-retired.js.txt", "retired", ["claude-opus-4"]],
+  [
+    "model-pins.js.txt",
+    "pins",
+    ["unpinOpus47LaunchEffort", "unpinFable5LaunchEffort"],
+  ],
+]) {
+  const sites = L.locateModelSites(fixture(name), ts);
+  check(
+    `${name}: structural site found`,
+    JSON.stringify(sites[key].flat()) === JSON.stringify(expected),
+    sites,
+  );
+}
+for (const name of [
+  "decoy-model-catalog.js.txt",
+  "decoy-model-retired.js.txt",
+  "decoy-model-pins.js.txt",
+]) {
+  const sites = L.locateModelSites(fixture(name), ts);
+  check(
+    `${name}: rejected`,
+    Object.values(sites).every((xs) => xs.length === 0),
+    sites,
+  );
+}
+
+// Drive the graph reader too: these refusals prevent a newly committed raw
+// from blessing missing sites, ambiguity, total retirement or a stray family.
+const graph = fs.mkdtempSync(path.join(os.tmpdir(), "claude-model-facts-"));
+try {
+  for (const name of ["model-catalog", "model-pins", "model-retired"])
+    fs.writeFileSync(path.join(graph, `${name}.js`), fixture(`${name}.js.txt`));
+  check(
+    "graph: subtracts retirement membership and sorts aliases",
+    JSON.stringify(L.modelFacts(graph, ts)) ===
+      JSON.stringify({
+        launchEffortPins: [
+          "unpinFable5LaunchEffort",
+          "unpinOpus47LaunchEffort",
+        ],
+        models: ["claude-haiku-5", "claude-opus-5", "claude-sonnet-5"],
+      }),
+  );
+  for (const [name, source, diagnostic] of [
+    [
+      "model-catalog",
+      fixture("decoy-model-catalog.js.txt"),
+      "LOCATION failure: catalog site",
+    ],
+    [
+      "model-pins",
+      fixture("decoy-model-pins.js.txt"),
+      "LOCATION failure: pins site",
+    ],
+    [
+      "model-retired",
+      fixture("decoy-model-retired.js.txt"),
+      "LOCATION failure: retired site",
+    ],
+    [
+      "model-catalog",
+      'var C=[{id:"claude-opus-4",family:"opus"}];',
+      "every catalog id is marked retired",
+    ],
+    [
+      "model-catalog",
+      'var C=[{id:"claude-opus-5",family:"opus"}];',
+      "no 'haiku' id",
+    ],
+    [
+      "model-catalog",
+      'var C=[{id:"claude-opus-5",family:"opus"},{id:"claude-stray"}];',
+      "entry without literal id/family",
+    ],
+  ]) {
+    const file = path.join(graph, `${name}.js`);
+    fs.writeFileSync(file, source);
+    let error = "";
+    try {
+      L.modelFacts(graph, ts);
+    } catch (e) {
+      error = e.message;
+    }
+    check(`graph: refuses ${diagnostic}`, error.includes(diagnostic), error);
+    fs.writeFileSync(file, fixture(`${name}.js.txt`));
+  }
+  fs.writeFileSync(
+    path.join(graph, "duplicate.js"),
+    fixture("model-catalog.js.txt"),
+  );
+  let error = "";
+  try {
+    L.modelFacts(graph, ts);
+  } catch (e) {
+    error = e.message;
+  }
+  check(
+    "graph: refuses ambiguous catalog location",
+    error.includes("catalog site: expected exactly 1 chunk, found 2"),
+    error,
+  );
+} finally {
+  fs.rmSync(graph, { recursive: true, force: true });
+}
 
 if (failures) {
   console.error(`${failures} locator case(s) failed`);

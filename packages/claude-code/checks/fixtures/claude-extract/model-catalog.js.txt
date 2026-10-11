@@ -1,0 +1,1 @@
+var C=[{id:"claude-opus-4",family:"opus"},{id:"claude-haiku-5",family:"haiku",provider_ids:{first_party:"claude-haiku-5-20261010"}},{family:"opus",id:"claude-opus-5"},{id:"claude-sonnet-5",family:"sonnet"}];

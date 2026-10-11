@@ -752,3 +752,143 @@ export function locate(root) {
     exports: parseExports(src),
   };
 }
+
+// Catalog aliases, retirement membership and launch guards are outside the
+// settings schema. Parse only content candidates, never execute these chunks.
+export function locateModelSites(src, ts) {
+  const sites = { catalog: [], pins: [], retired: [] };
+  if (
+    !src.includes("family") &&
+    !src.includes("retirementDates") &&
+    !src.includes("LaunchEffort")
+  )
+    return sites;
+  const tree = ts.createSourceFile(
+    "chunk.js",
+    src,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+  if (tree.parseDiagnostics.length)
+    throw new Error(
+      "claude-extract: PROBE failure: model facts chunk does not parse",
+    );
+  const literal = (n) => (n && ts.isStringLiteral(n) ? n.text : null);
+  const properties = (n) =>
+    new Map(
+      n.properties
+        .filter(ts.isPropertyAssignment)
+        .filter((p) => !ts.isComputedPropertyName(p.name))
+        .map((p) => [p.name.text, p.initializer]),
+    );
+  const alias = (id) =>
+    typeof id === "string" && /^claude-[a-z0-9.-]+$/.test(id);
+  function walk(n) {
+    if (ts.isArrayLiteralExpression(n)) {
+      // Require an actual catalog array, not a bare id or provider wire id.
+      const entries = n.elements
+        .filter(ts.isObjectLiteralExpression)
+        .map(properties);
+      const ids = entries
+        .filter((p) => alias(literal(p.get("id"))) && literal(p.get("family")))
+        .map((p) => literal(p.get("id")));
+      if (ids.length) {
+        if (ids.length !== n.elements.length)
+          throw new Error(
+            "claude-extract: PROBE failure: model catalog contains an entry without literal id/family",
+          );
+        sites.catalog.push(ids);
+      }
+    }
+    if (ts.isObjectLiteralExpression(n)) {
+      const ids = n.properties
+        .filter(ts.isPropertyAssignment)
+        .filter(
+          (p) =>
+            ts.isStringLiteral(p.name) &&
+            alias(p.name.text) &&
+            ts.isObjectLiteralExpression(p.initializer) &&
+            literal(properties(p.initializer).get("modelName")) !== null &&
+            properties(p.initializer).has("retirementDates"),
+        )
+        .map((p) => p.name.text);
+      if (ids.length) sites.retired.push(ids);
+    }
+    if (
+      ts.isIfStatement(n) &&
+      ts.isPrefixUnaryExpression(n.expression) &&
+      n.expression.operator === ts.SyntaxKind.ExclamationToken &&
+      ts.isPropertyAccessExpression(n.expression.operand)
+    ) {
+      const key = n.expression.operand.name.text;
+      if (/^unpin[A-Za-z0-9]+LaunchEffort$/.test(key)) {
+        // Fable's guard has a block: its first push is literal, followed by
+        // an optional environment-derived model. Only literal pushes count.
+        const body = n.thenStatement;
+        const statements = ts.isBlock(body) ? body.statements : [body];
+        for (const statement of statements) {
+          if (
+            !ts.isExpressionStatement(statement) ||
+            !ts.isCallExpression(statement.expression)
+          )
+            continue;
+          const call = statement.expression;
+          if (
+            ts.isPropertyAccessExpression(call.expression) &&
+            call.expression.name.text === "push" &&
+            call.arguments.length === 1 &&
+            alias(literal(call.arguments[0]))
+          )
+            sites.pins.push(key);
+        }
+      }
+    }
+    ts.forEachChild(n, walk);
+  }
+  walk(tree);
+  return sites;
+}
+
+export function modelFacts(root, ts) {
+  const hits = { catalog: [], pins: [], retired: [] };
+  for (const name of fs.readdirSync(root)) {
+    // The graph also contains HTML, Markdown and native assets, not JS.
+    if (!name.endsWith(".js")) continue;
+    const file = path.join(root, name);
+    if (!fs.statSync(file).isFile()) continue;
+    const sites = locateModelSites(fs.readFileSync(file, "utf8"), ts);
+    for (const key of Object.keys(hits))
+      if (sites[key].length) hits[key].push({ file, sites: sites[key] });
+  }
+  for (const [key, found] of Object.entries(hits))
+    if (found.length !== 1)
+      throw new Error(
+        `claude-extract: LOCATION failure: ${key} site: expected exactly 1 chunk, found ${found.length} (${found.map((h) => h.file).join(", ")}); nothing was probed at a unique location`,
+      );
+  for (const key of ["catalog", "retired"])
+    if (hits[key][0].sites.length !== 1)
+      throw new Error(
+        `claude-extract: PROBE failure: multiple ${key} structures in the located chunk`,
+      );
+  const retired = new Set(hits.retired[0].sites[0]);
+  // Presence, not the build-time clock, removes announced retirements.
+  const models = [...new Set(hits.catalog[0].sites[0])]
+    .filter((id) => !retired.has(id))
+    .sort();
+  if (!models.length)
+    throw new Error(
+      "claude-extract: PROBE failure: every catalog id is marked retired (anchors disagree; refusing to emit an empty model enum)",
+    );
+  // The old firstParty grep collapsed to one stray id for twelve releases;
+  // a non-empty guard alone would bless that as the newly committed truth.
+  // Token membership keeps both claude-sonnet-5 and claude-3-5-sonnet valid.
+  // Use in-process membership: shell grep -q closes its pipe early and races
+  // printf under pipefail, spuriously reporting a present family as missing.
+  for (const family of ["haiku", "opus", "sonnet"])
+    if (!models.some((id) => id.includes(family)))
+      throw new Error(
+        `claude-extract: PROBE failure: no '${family}' id among the extracted models (anchor is matching the wrong structure, or upstream dropped the family); extracted set was: ${models.join(" ")}`,
+      );
+  return { launchEffortPins: [...new Set(hits.pins[0].sites)].sort(), models };
+}
