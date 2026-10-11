@@ -1,26 +1,32 @@
 {
   "config.keys.<name>": {
     "source": "static",
+    "systems": ["x86_64-linux"],
     "type": "object"
   },
   "config.projectTier": {
     "source": "static",
+    "systems": ["x86_64-linux"],
     "type": "object"
   },
   "environment.variables.<name>": {
     "source": "static",
+    "systems": ["x86_64-linux"],
     "type": "object"
   },
   "harness.definitions.<name>": {
     "source": "static",
+    "systems": ["x86_64-linux"],
     "type": "object"
   },
   "harness.keys.<name>": {
     "source": "static",
+    "systems": ["x86_64-linux"],
     "type": "object"
   },
   "virtualPackages": {
     "source": "static",
+    "systems": ["x86_64-linux"],
     "type": "list"
   }
 }

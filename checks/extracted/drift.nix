@@ -29,6 +29,26 @@
     raws)}";
   sidecar = "packages/fake/extracted";
   cases = {
+    measured-once-drift = {
+      args = {
+        committed = directory {${other} = {a = 1;};};
+        extracted.${host} = raw "extracted" {a = 2;};
+        inherit sidecar;
+      };
+      fails = ["${sidecar}/${other}.json"];
+      omits = ["${sidecar}/${host}.json"];
+    };
+    measured-once-match = {
+      args = {
+        committed = directory {${other} = {a = 1;};};
+        extracted.${host} = raw "extracted" {a = 1;};
+        inherit sidecar;
+      };
+      regenerate = {
+        names = ["${sidecar}/${other}.json"];
+        omits = ["${sidecar}/${host}.json"];
+      };
+    };
     per-system-drift = {
       args = {
         committed = directory {${host} = {a = 1;};};

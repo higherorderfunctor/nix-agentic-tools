@@ -57,13 +57,13 @@ in
           "x86_64-linux" = ver: "${manifestBase}/${ver}/linux-x64/claude";
           "aarch64-darwin" = ver: "${manifestBase}/${ver}/darwin-arm64/claude";
         };
-        # Regenerate both committed raws from the freshly-bumped binaries
+        # Regenerate the single committed raw from the freshly-bumped binary
         # in the SAME update/claude-code PR (no intra-PR drift). The drift
         # check's regenerate command includes the load-bearing `nix fmt` pass.
         extraExtract = (import ../../../../../lib/extracted {inherit pkgs;}).regenCommand {name = "claude-code";};
         inherit pkgs;
       };
-      # Each pinned platform's binary -> committed-raw shape: the settings
+      # The host's pinned binary -> committed-raw shape: the settings
       # schema comes from the binary's own emitter (unpacked module graph +
       # census), the model catalog and launch pins from content-located AST reads.
       # IFD-safe: consumed ONLY by `nix build` (drift check + update
@@ -75,21 +75,21 @@ in
       # re-derives it, fetching the ~390 MB claude binary locally to produce
       # a ~90 KB JSON. With `runCommand` the raw substitutes and the binary
       # is only fetched when it actually moved. Extraction reads the fetched
-      # bytes without executing them, so both platforms build on any host and
-      # need no Linux interpreter patch.
+      # bytes without executing them and needs no Linux interpreter patch.
+      # Linux records the raw once; Darwin validates its own extraction against it.
       #
       # `nodejs_24` and not `nodejs`: census.mjs drives `node:module`'s
       # `registerHooks`, which needs Node >= 22.15. Pinned so a nixpkgs
       # default bump cannot regress it.
-      extractedFor = lib.genAttrs (builtins.attrNames (builtins.removeAttrs sources ["version"])) (system:
-        pkgs.runCommand "claude-code-${system}-extracted.json" {
+      extracted =
+        pkgs.runCommand "claude-code-${stdenv.hostPlatform.system}-extracted.json" {
           nativeBuildInputs = [pkgs.nodejs_24 pkgs.python3];
         } (vu.mkClaudeExtract {
           assets = ../../../extract;
-          bin = fetchurl {inherit (sources.${system}) url hash;};
+          bin = fetchurl {inherit (platformSrc) url hash;};
           inherit pkgs;
           dest = "$out";
-        }));
+        });
     };
     meta = {
       mainProgram = "claude";

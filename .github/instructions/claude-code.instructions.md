@@ -7,9 +7,10 @@ applyTo: "packages/claude-code/packages/ai/claude-code/package.nix,packages/clau
 
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-10 — settings are generated from the committed
-> facts in packages/claude-code/extracted/; the schema check gates stale and
-> shadowed rows, missing paths and wildcard grammar. Catalog, retirement and
+> **Last verified:** 2026-10-11 — settings are generated from the committed
+> facts in packages/claude-code/extracted/, measured once on Linux; Darwin
+> validates its own extraction against that raw. The schema check gates stale
+> and shadowed rows, missing paths and wildcard grammar. Catalog, retirement and
 > launch-pin facts are content-located AST reads of the unpacked graph;
 > unsupported catalog properties, retirement rows and launch-pin shapes fail
 > with PROBE.
@@ -74,9 +75,9 @@ are tracked in `packages/claude-code/sources.json`, managed by the package's
 
 `passthru.extracted` is a `runCommand` — deliberately NOT `runCommandLocal`.
 `runCommandLocal` sets `allowSubstitutes = false`, and since this derivation's
-input is `finalAttrs.finalPackage`, that made every PR and every local
-`nix flake check` realize the ~390 MB binary to produce a ~90 KB JSON. Swapping
-it changes the drv hash once; do not swap it back.
+input is the host's pinned release binary, that would make every PR and every
+local `nix flake check` realize the ~390 MB binary to produce a ~90 KB JSON.
+Swapping it changes the drv hash once; do not swap it back.
 
 The extractor confirms the settings builder through independent schema-emitter
 and `$schema`-description anchors. The description may sit in the builder

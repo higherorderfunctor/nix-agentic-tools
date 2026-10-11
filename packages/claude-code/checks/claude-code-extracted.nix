@@ -1,7 +1,5 @@
-# Drift check — both platform raws in packages/claude-code/extracted/ must
-# match fresh static extraction from their release tarballs on this host.
-# Declared facts must agree across platforms, and the settings, model and
-# hook consumers must retain the values they depend on.
+# Drift check — the host's fresh extraction must match the single committed
+# Linux raw. Settings, model and hook consumers must retain their required facts.
 {
   extractedLib,
   pkgs,
@@ -15,7 +13,7 @@
   in
     mkDriftCheck {
       committed = ../extracted;
-      extracted = self.ciPackages.${system}.claude-code.passthru.extractedFor;
+      extracted.${system} = self.ciPackages.${system}.claude-code.passthru.extracted;
       name = "claude-code";
       results = {
         consumers = expect {

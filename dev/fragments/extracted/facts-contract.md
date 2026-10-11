@@ -2,12 +2,11 @@
 
 > **Last verified:** 2026-10-11 — four owners are migrated end to end: kiro-cli
 > and chatgpt-codex (host-run; the darwin raw is produced by the darwin CI leg,
-> one producer job over every host-run owner), claude-code (every fact static,
-> both raws produced on any host) and kimchi (every fact static from one source
-> tree, so both raws are byte-identical). `children` reads a wildcard
-> declaration's combined children. `settings.paths` shows the limit of the
-> `<name>` wildcard: a raw whose attribute names contain dots is declared as one
-> opaque `object`.
+> one producer job over every host-run owner), claude-code and kimchi (every
+> fact static, measured once on Linux: one committed raw, and Darwin validates
+> its own extraction against it). `children` reads a wildcard declaration's
+> combined children. `settings.paths` shows the limit of the `<name>` wildcard:
+> a raw whose attribute names contain dots is declared as one opaque `object`.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -18,11 +17,11 @@ contains merge, combine or platform logic. A check enforces that.
 
 ## Files per owner
 
-| File                                        | Written by                                   | Holds                                              |
-| ------------------------------------------- | -------------------------------------------- | -------------------------------------------------- |
-| `packages/<owner>/extracted/<system>.json`  | CI on that system, or Linux for static facts | the raw measured value tree for one system         |
-| `packages/<owner>/extracted/facts.json`     | the extractor's author                       | declarations: one row per key, type and source     |
-| `packages/<owner>/extracted/decisions.json` | a human, dated                               | exceptions: how a key combines when systems differ |
+| File                                        | Written by                                   | Holds                                                           |
+| ------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------- |
+| `packages/<owner>/extracted/<system>.json`  | CI on that system, or Linux for static facts | the raw measured value tree; an owner measured once commits one |
+| `packages/<owner>/extracted/facts.json`     | the extractor's author                       | declarations: one row per key, type and source                  |
+| `packages/<owner>/extracted/decisions.json` | a human, dated                               | exceptions: how a key combines when systems differ              |
 
 The aggregate is never committed per owner. `lib.extracted.index` writes it from
 the three inputs above, and the drift check compares that output.
@@ -252,11 +251,20 @@ several, a host-run one supplies only `S`. Every drifted system is reported,
 each by its committed file path, and the check fails once at the end. Today's
 single-value callers are unchanged.
 
+An owner measured once declares `systems = ["x86_64-linux"]` on every key and
+commits only that raw. When a host's own raw is absent, the drift check compares
+its fresh extraction against the single committed raw named by
+`config/systems.nix`, and `regenerate` rewrites that same raw. Darwin still
+validates the measured-once answer. If the host's raw is absent and zero or
+several configured raws are present, evaluation throws naming the directory and
+the expected host raw or single configured raw. A directory with the host's own
+raw keeps per-system behavior.
+
 Per system, the drift check's `passthru.regenerate` is a strict shell
 application that, run from the repository root, copies each buildable system's
-already-built raw to `<sidecar>/<system>.json`, makes it 644, runs `nix fmt` on
-it and prints the path written. It derives those paths where the check derives
-the ones it compares, so no caller names a raw path. A drifted system's failure
+already-built raw to the sidecar it compared, makes it 644, runs `nix fmt` on it
+and prints the path written. It derives those paths where the check derives the
+ones it compares, so no caller names a raw path. A drifted system's failure
 prints one regenerate line:
 `nix run .#checks.<host>.<name>-extracted.passthru.regenerate`. Single mode has
 no `regenerate` and keeps its `cp` and `nix fmt` hint.
@@ -302,8 +310,10 @@ its refused input or its visible result, plus one derivation that asserts the
     never read, merge clean with their decision applied; with Darwin's raw
     absent, every declared key fails `missing-system` naming it, and a
     `prefer:aarch64-darwin` decision is not a `bad-decision`. `load` on a
-    directory without `facts.json` throws.
+    directory without `facts.json` throws. A measured-once directory with one
+    raw and every declaration requiring only that system loads without failures.
 
 `checks/extracted/drift.nix` runs `mkDriftCheck`'s script per case; a case with
 `regenerate` also reads the per-system regenerate script's text, which must name
-the buildable system's `<sidecar>/<system>.json` and not the foreign one's.
+the compared sidecar and omit the unused one, including the other system's raw
+when the owner was measured once.

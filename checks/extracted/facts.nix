@@ -268,6 +268,7 @@
     load = let
       all = load {dir = ./load/all-present;};
       absent = load {dir = ./load/absent-system;};
+      once = load {dir = ./load/measured-once;};
     in {
       absent-system-fails =
         absent.systems
@@ -280,6 +281,7 @@
           kind = "missing-system";
         }) ["limit" "mode"];
       all-present = all.systems == systems && all.failures == [] && all.aggregate.limit.combine == "per-platform";
+      measured-once = once.systems == ["x86_64-linux"] && once.failures == [] && get once.aggregate "limit" == 5;
       missing-facts-throws = !(builtins.tryEval (load {dir = ./.;})).success;
     };
 
