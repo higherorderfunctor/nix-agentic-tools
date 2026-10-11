@@ -15,7 +15,7 @@ in {
       !(evalHm {}).config.glab.enable && (evalHm {}).config.home.packages == []
     );
 
-    # The settings surface is GENERATED from packages/glab/extracted.json.
+    # The settings surface is GENERATED from packages/glab/extracted/ facts.
     # Assert the shape of what was generated rather than a count: a key that
     # upstream renames must show up as a failure here, and an option tree that
     # collapsed to nothing must not read as "fine".

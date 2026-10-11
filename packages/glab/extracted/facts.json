@@ -1,0 +1,7 @@
+{
+  "keys.<name>": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  }
+}

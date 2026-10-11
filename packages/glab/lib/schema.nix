@@ -8,20 +8,12 @@
 # grew a bug: the wrapper emitted `GITLAB_HOST` twice, because its
 # secret-key list was built from a different expression than the options'.
 #
-# Reads the COMMITTED sidecar (`packages/glab/extracted.json`),
-# not `passthru.extracted`. Reading the derivation would be
-# import-from-derivation on every module evaluation; the sidecar is kept
-# honest by `checks.glab-extracted` instead.
+# Reads committed facts through the shared aggregate, never the extraction
+# derivation: module evaluation stays IFD-free; glab-extracted checks drift.
 {lib}: let
-  schema =
-    builtins.fromJSON
-    (builtins.readFile ../extracted.json);
-
-  byName = builtins.listToAttrs (map (k: {
-      inherit (k) name;
-      value = k;
-    })
-    schema);
+  inherit (import ../../../lib/extracted/facts.nix {inherit lib;}) children load;
+  inherit (load {dir = ../extracted;}) aggregate;
+  byName = children aggregate "keys.<name>";
 
   # Keys the schema itself marks as credentials (`Keyring: true`), plus
   # `host`. The keyring flag is upstream's own answer to "is this

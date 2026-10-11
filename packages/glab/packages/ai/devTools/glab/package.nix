@@ -54,8 +54,9 @@
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
 {
-  pkgs,
+  extractedLib,
   packageLib,
+  pkgs,
   repoPath,
   ...
 }: let
@@ -96,11 +97,7 @@
   # the floor and the vendor fix (for `.goModules`).
   goUpdate = vu.mkGoUpdateExtract {
     attr = "glab";
-    extraAfter = vu.mkExtractRegen {
-      attr = "glab";
-      dest = repoPath ../../../../extracted.json;
-      inherit pkgs;
-    };
+    extraAfter = (extractedLib {inherit pkgs;}).regenCommand {name = "glab";};
     inherit pkgs;
     pname = "glab";
     srcFromSidecar = true;
@@ -257,10 +254,13 @@
   # stdlib plus an internal package, so the existing vendor tree already
   # satisfies it.
   extracted =
-    runCommand "glab-extracted.json" {
+    runCommand "glab-extracted" {
       # The dump must use the package's locked compiler (`goToolchain.go`).
       nativeBuildInputs = [goToolchain.go pkgs.jq];
     } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
       export HOME="$TMPDIR"
       export GOCACHE="$TMPDIR/go-cache"
       export GOPROXY=off
@@ -279,12 +279,12 @@
       mkdir -p cmd/glab-schema-dump
       cp ${schemaDumpSrc} cmd/glab-schema-dump/main.go
 
-      go run ./cmd/glab-schema-dump > schema.json
+      go run ./cmd/glab-schema-dump | jq -S '{keys: map({key: .name, value: .}) | from_entries}' > schema.json
 
       # ── Shape guards ──────────────────────────────────────────────
       # NOT a non-empty guard. The UPDATE PIPELINE regenerates this
       # sidecar inside the same version-bump PR (`extraExtract` above,
-      # via `vu.mkExtractRegen`), so an extract that has gone wrong is
+      # via the owner check's regenerator), so a wrong extract is
       # simply committed as the new truth and the drift check goes green
       # over it. These assert the SHAPE of what was captured; when a key
       # or a field is added, its assertion is added with it.
@@ -293,16 +293,16 @@
         exit 1
       }
 
-      count=$(jq 'length' schema.json)
+      count=$(jq '.keys | length' schema.json)
       [ "$count" -ge 30 ] || fail "only $count keys captured (expected >= 30; upstream restructured KeySchema)"
 
       for scope in global per-host; do
-        jq -e --arg s "$scope" 'any(.[]; .scope == $s)' schema.json >/dev/null \
+        jq -e --arg s "$scope" 'any(.keys[]; .scope == $s)' schema.json >/dev/null \
           || fail "no keys in scope '$scope' (upstream changed the Scope enum)"
       done
 
       for k in git_protocol host token; do
-        jq -e --arg k "$k" 'any(.[]; .name == $k)' schema.json >/dev/null \
+        jq -e --arg k "$k" 'any(.keys[]; .name == $k)' schema.json >/dev/null \
           || fail "key '$k' missing (upstream renamed or removed it)"
       done
 
@@ -310,15 +310,15 @@
       # the entire delivery mechanism the HM/devenv modules rely on.
       # EnvKeyEquivalence falls back to the uppercased name, so an empty
       # list means the resolver itself changed shape.
-      jq -e 'all(.[]; (.envVars | length) > 0)' schema.json >/dev/null \
+      jq -e 'all(.keys[]; (.envVars | length) > 0)' schema.json >/dev/null \
         || fail "some keys resolved to no env vars (EnvKeyEquivalence changed shape)"
 
       # Spot-check the overrides a curated list would have gotten wrong.
-      jq -e 'any(.[]; .name == "host" and (.envVars | index("GITLAB_HOST")))' schema.json >/dev/null \
+      jq -e 'any(.keys[]; .name == "host" and (.envVars | index("GITLAB_HOST")))' schema.json >/dev/null \
         || fail "host no longer resolves GITLAB_HOST"
-      jq -e 'any(.[]; .name == "token" and (.envVars | index("GITLAB_TOKEN")))' schema.json >/dev/null \
+      jq -e 'any(.keys[]; .name == "token" and (.envVars | index("GITLAB_TOKEN")))' schema.json >/dev/null \
         || fail "token no longer resolves GITLAB_TOKEN"
-      jq -e 'any(.[]; .name == "telemetry" and (.envVars | index("GLAB_SEND_TELEMETRY")))' schema.json >/dev/null \
+      jq -e 'any(.keys[]; .name == "telemetry" and (.envVars | index("GLAB_SEND_TELEMETRY")))' schema.json >/dev/null \
         || fail "telemetry no longer resolves GLAB_SEND_TELEMETRY"
 
       cp schema.json "$out"

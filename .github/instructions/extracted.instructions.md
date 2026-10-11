@@ -9,7 +9,7 @@ applyTo: "checks/extracted/**,lib/extracted/**,packages/*/extracted/**,packages/
 
 > **Last verified:** 2026-10-11 — owner checks share `mkOwnerCheck`; consumer
 > requirements live at their readers, with additional needs declared by checks;
-> Semble joins Codex, Claude, Kimchi and Kiro as a migrated owner.
+> Migrated owners are Claude, Codex, glab, Kimchi, Kiro and Semble.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
