@@ -1,6 +1,8 @@
 # mkDriftCheck in both input shapes. Each case runs the generated drift
 # script outside its derivation, so a case that must fail can, and asserts
-# the exit status and the message the operator reads.
+# the exit status and the message the operator reads. A case with
+# `regenerate` reads the per-system regenerate script's text for the
+# sidecars it must write (`names`) and must not (`omits`).
 {
   lib,
   pkgs,
@@ -46,6 +48,10 @@
           ${other} = foreign;
         };
         inherit sidecar;
+      };
+      regenerate = {
+        names = ["${sidecar}/${host}.json"];
+        omits = ["${sidecar}/${other}.json"];
       };
     };
     single-drift = {
@@ -96,7 +102,15 @@
       omits = ["${sidecar}/${host}.json"];
     };
   };
-  script = case: (mkDriftCheck (case.args // {name = "fake";})).fake-extracted.buildCommand;
+  check = case: (mkDriftCheck (case.args // {name = "fake";})).fake-extracted;
+  script = case: (check case).buildCommand;
+  # Unmet `regenerate` expectations, each naming its case.
+  regenerating = lib.concatLists (lib.mapAttrsToList (label: case: let
+    inherit ((check case).regenerate) text;
+  in
+    map (path: "${label} does not write ${path}") (builtins.filter (path: !lib.hasInfix path text) case.regenerate.names)
+    ++ map (path: "${label} writes ${path}") (builtins.filter (path: lib.hasInfix path text) case.regenerate.omits))
+  (lib.filterAttrs (_: case: case ? regenerate) cases));
   named = path: "sidecar (${path})";
   run = label: case:
     runner {
@@ -106,10 +120,11 @@
       omits = map named case.omits or [];
     };
 in {
-  checks.extracted-drift = pkgs.runCommand "extracted-drift" {} ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    ${lib.concatStrings (lib.mapAttrsToList run cases)}
-    echo "ok — ${toString (builtins.length (builtins.attrNames cases))} drift cases" > "$out"
-  '';
+  checks.extracted-drift = assert lib.assertMsg (regenerating == []) (lib.concatStringsSep "; " regenerating);
+    pkgs.runCommand "extracted-drift" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${lib.concatStrings (lib.mapAttrsToList run cases)}
+      echo "ok — ${toString (builtins.length (builtins.attrNames cases))} drift cases" > "$out"
+    '';
 }

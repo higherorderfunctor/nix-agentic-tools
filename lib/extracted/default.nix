@@ -1,10 +1,21 @@
 {pkgs}: let
   inherit (pkgs) lib;
   facts = import ./facts.nix {inherit lib;};
+  host = pkgs.stdenv.hostPlatform.system;
+  # The per-system drift check's `passthru.regenerate`; regenCommand runs it.
+  regenerateName = name: "${name}-regenerate-extracted";
 in {
-  inherit (facts) expect get getFor merge;
+  inherit (facts) expect get getFor load merge;
   inherit (import ./reconcile.nix {inherit lib;}) reconcile;
   index = facts.index pkgs;
+
+  # An owner's update script regenerates its per-system raws on this host;
+  # the script echoes each path as mkExtractRegen does.
+  regenCommand = {name}: ''
+    regenerate=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
+      ".#checks.${host}.${name}-extracted.passthru.regenerate")
+    "$regenerate/bin/${regenerateName name}"
+  '';
 
   mkDriftCheck = {
     # A path, or per system (the facts contract's "Drift") the owner's
@@ -21,17 +32,24 @@ in {
     sidecar,
   }: let
     failures = lib.concatMap (surface: surface.failures) (builtins.attrValues results);
-    host = pkgs.stdenv.hostPlatform.system;
     perSystem = builtins.isAttrs extracted && !lib.isDerivation extracted;
     # A host-run extractor builds only on its own system; a static one may
-    # supply every system's raw from this host.
-    buildable = builtins.filter (system: extracted ? ${system} && extracted.${system}.system == host) (import ../../config/systems.nix);
+    # supply every system's raw from this host. Each is compared, and
+    # regenerated, at the same derived paths.
+    targets =
+      map (system: {
+        committed = committed + "/${system}.json";
+        extracted = extracted.${system};
+        sidecar = "${sidecar}/${system}.json";
+      })
+      (builtins.filter (system: extracted ? ${system} && extracted.${system}.system == host) (import ../../config/systems.nix));
     compare = {
-      attr,
       committed,
       extracted,
       # Single mode stops here; per-system records it and fails at the end.
       onDrift,
+      # The operator's commands, as `echo` lines to stderr.
+      regenerate,
       sidecar,
     }: ''
       if ! "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} '$a == $b' > /dev/null; then
@@ -40,9 +58,7 @@ in {
         "$jq" -S . ${extracted} > extracted.json
         ${pkgs.diffutils}/bin/diff -u committed.json extracted.json >&2 || :
         echo "Regenerate from the repository root:" >&2
-        echo '  extracted="$(nix build --no-link --print-out-paths .#checks.${host}.${name}-extracted.passthru.${attr})"' >&2
-        echo '  cp "$extracted" ${sidecar}' >&2
-        echo '  nix fmt -- ${sidecar}' >&2
+        ${regenerate}
         ${onDrift}
       fi
     '';
@@ -50,26 +66,42 @@ in {
       if perSystem
       then ''
         drifted=0
-        ${lib.concatMapStrings (system:
-          compare {
-            attr = "extracted.${system}";
-            committed = committed + "/${system}.json";
-            extracted = extracted.${system};
-            onDrift = "drifted=1";
-            sidecar = "${sidecar}/${system}.json";
-          })
-        buildable}if [ "$drifted" -eq 1 ]; then exit 1; fi
+        ${lib.concatMapStrings (target:
+          compare (target
+            // {
+              onDrift = "drifted=1";
+              regenerate = "echo '  nix run .#checks.${host}.${name}-extracted.passthru.regenerate' >&2";
+            }))
+        targets}if [ "$drifted" -eq 1 ]; then exit 1; fi
       ''
       else
         compare {
           inherit committed extracted sidecar;
-          attr = "extracted";
           onDrift = "exit 1";
+          regenerate = ''
+            echo '  extracted="$(nix build --no-link --print-out-paths .#checks.${host}.${name}-extracted.passthru.extracted)"' >&2
+            echo '  cp "$extracted" ${sidecar}' >&2
+            echo '  nix fmt -- ${sidecar}' >&2
+          '';
         };
+    # Copies each buildable system's raw over its sidecar, from the
+    # repository root; never a foreign system's, which this host cannot build.
+    regenerate = import ../strict-shell-application.nix pkgs {
+      name = regenerateName name;
+      text =
+        lib.concatMapStrings (target: ''
+          echo "${name}: regenerating ${target.sidecar}"
+          ${pkgs.coreutils}/bin/cp ${target.extracted} ${target.sidecar}
+          ${pkgs.coreutils}/bin/chmod 644 ${target.sidecar}
+          ${pkgs.nix}/bin/nix fmt -- ${target.sidecar}
+          echo "${name}: wrote ${target.sidecar}"
+        '')
+        targets;
+    };
   in {
     "${name}-extracted" =
       pkgs.runCommand "${name}-extracted-drift" {
-        passthru = {inherit extracted;};
+        passthru = {inherit extracted;} // lib.optionalAttrs perSystem {inherit regenerate;};
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

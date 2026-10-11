@@ -1,5 +1,5 @@
 # The extracted facts contract (dev/fragments/extracted/facts-contract.md).
-# merge, get, getFor and expect need only nixpkgs lib, like reconcile, so an
+# load, merge, get, getFor and expect need only nixpkgs lib, like reconcile, so an
 # option module can call them before `pkgs` exists; index takes `pkgs` itself.
 {lib}: let
   inherit (import ../runtime-values {inherit lib;}) classify;
@@ -80,7 +80,7 @@
       else if node ? ${segment}
       then find (path ++ [segment]) node.${segment} rest
       else [];
-in {
+
   merge = {
     declarations,
     decisions ? {},
@@ -238,6 +238,29 @@ in {
       })
       secrets;
   };
+in {
+  inherit merge;
+
+  # The only reader of an owner's `extracted/` directory: its declarations,
+  # its decisions, and the raw of every configured system it holds.
+  load = {
+    dir,
+    secretHints ? {},
+  }: let
+    read = file: builtins.fromJSON (builtins.readFile (dir + "/${file}"));
+    present = file: builtins.pathExists (dir + "/${file}");
+    systems = builtins.filter (system: present "${system}.json") (import ../../config/systems.nix);
+  in
+    if !present "facts.json"
+    then throw "lib.extracted.load: ${toString dir}/facts.json is missing; an owner's extracted/ directory declares its keys there"
+    else
+      merge {
+        inherit secretHints systems;
+        declarations = read "facts.json";
+        decisions = lib.optionalAttrs (present "decisions.json") (read "decisions.json");
+        raws = lib.genAttrs systems (system: read "${system}.json");
+      }
+      // {inherit systems;};
 
   get = aggregate: key:
     if aggregate.${key}.combine == "per-platform"

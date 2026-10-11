@@ -8,7 +8,7 @@
   pkgs,
   ...
 }: let
-  inherit (import ../../lib/extracted/facts.nix {inherit lib;}) expect get getFor merge;
+  inherit (import ../../lib/extracted/facts.nix {inherit lib;}) expect get getFor load merge;
   inherit (import ../../lib/extracted {inherit pkgs;}) index;
   systems = import ../../config/systems.nix;
   run = input: merge (input // {inherit systems;});
@@ -222,6 +222,16 @@
         apiToken = "value";
         mode = "same";
       } ["apiToken"] ["undeclared-secret"];
+    };
+
+    # `load`: ./load holds facts.json, decisions.json, the Linux raw and a
+    # raw for a system config/systems.nix does not list; the Darwin raw is
+    # absent. Only the configured, present system is merged.
+    load = let
+      loaded = load {dir = ./load;};
+    in {
+      merges-present = loaded.systems == ["x86_64-linux"] && loaded.failures == [] && builtins.attrNames loaded.aggregate.limit.bySystem == ["x86_64-linux"] && loaded.aggregate.limit.combine == "per-platform";
+      missing-facts-throws = !(builtins.tryEval (load {dir = ./.;})).success;
     };
 
     # `get` and `getFor` on a `per-platform` key, which has no value.
