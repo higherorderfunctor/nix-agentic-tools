@@ -1,0 +1,52 @@
+{
+  "contentTypes.<name>": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "set"
+  },
+  "dataLanguages": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "set"
+  },
+  "extensions": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "grammars.aliases": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "grammars.bundled": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "set"
+  },
+  "grammarsVersion": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "instructions": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "mcpTools": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "templates": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "version": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  }
+}

@@ -1,7 +1,8 @@
 # Extracted facts: the contract
 
 > **Last verified:** 2026-10-11 — owner checks share `mkOwnerCheck`; consumer
-> requirements live at their readers, with additional needs declared by checks.
+> requirements live at their readers, with additional needs declared by checks;
+> Semble joins Codex, Claude, Kimchi and Kiro as a migrated owner.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are

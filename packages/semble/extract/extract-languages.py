@@ -1,5 +1,5 @@
 # Extracts Semble's language knowledge from the pinned package into the shape
-# of packages/semble/extracted.json. Run under the pinned package's own
+# of the language facts in packages/semble/extracted/. Run under the pinned package's own
 # interpreter and module path (checks/semble-script.nix prepends the
 # wrapped entry point's site setup), so every value is read by importing the
 # modules Semble itself imports, never by parsing source text.
@@ -26,7 +26,7 @@ if bundled != sources:
     extra = sorted(set(bundled) - set(sources))
     sys.exit(
         f"FAIL: this platform's grammar manifest differs from sources.json (missing {missing}, extra {extra}); "
-        "extracted.json can no longer be platform-independent"
+        "language facts can no longer be platform-independent"
     )
 
 json.dump(
@@ -40,11 +40,7 @@ json.dump(
             "aliases": dict(sorted(loader._ALIASES.items())),
             "bundled": bundled,
         },
-        "provenance": {
-            "extractorSchema": 1,
-            "sembleGrammarsVersion": version("semble-grammars"),
-            "sembleVersion": version("semble"),
-        },
+        "grammarsVersion": version("semble-grammars"),
     },
     sys.stdout,
     indent=2,
