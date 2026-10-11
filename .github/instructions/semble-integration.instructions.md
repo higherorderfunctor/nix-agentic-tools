@@ -7,8 +7,8 @@ applyTo: "packages/semble/**"
 
 # Semble integrations
 
-> **Last verified:** 2026-10-09 — Semble Kiro fixtures use `ai.kiro.cli.enable`
-> and observe generated agent files on both backends.
+> **Last verified:** 2026-10-11 — grouped dependency updates respect the pinned
+> Semble release requirements.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -461,11 +461,16 @@ The language check validates the committed sidecar reader while leaving
 `passthru.extracted` buildable for regeneration.
 
 Semble's grouped `--use-update-script` target tracks the CLI in `sources.json`
-and model2vec, vicinity and semble-grammars in `<dep>-sources.json`. The grouped
-script then regenerates both snapshots from the package's `passthru.extracted`
-and `passthru.extractedTemplates`. The drift checks consume the same extractors;
-`mkExtractRegen` names `extract = "extractedTemplates"` for the templates file.
-Human-reviewed template hashes remain a separate approval gate.
+and model2vec, semble-grammars and vicinity in `<dep>-sources.json`. Each
+vendored dependency selects the newest stable PyPI release satisfying its
+non-extra requirement in the pinned Semble release's PyPI `requires_dist`. The
+dependency rows read the Semble version from `sources.json` when they run, so
+the CLI runs first to apply a new release's bounds in the same sweep. The
+grouped script then regenerates both snapshots from the package's
+`passthru.extracted` and `passthru.extractedTemplates`. The drift checks consume
+the same extractors; `mkExtractRegen` names `extract = "extractedTemplates"` for
+the templates file. Human-reviewed template hashes remain a separate approval
+gate.
 
 ## Direct configuration
 
