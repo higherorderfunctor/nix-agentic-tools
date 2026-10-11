@@ -971,10 +971,8 @@ coding standard for which sites that leaves unchecked.
 
 ## Project Overview
 
-> **Last verified:** 2026-10-03 — this flake's own nixpkgs builds every package
-> it ships, and the overlay and module defaults re-export those builds; owner
-> registries contribute update, documentation, and architecture metadata;
-> project-local configuration uses the devenv modules.
+> **Last verified:** 2026-10-11 — owner-local `extracted/` directories hold
+> declared facts and measured raws; owner checks expose their regeneration.
 
 nix-agentic-tools is a Nix flake monorepo providing:
 
@@ -1006,7 +1004,7 @@ packages/<owner>/
   registry.nix          Update, documentation, and architecture metadata
   checks.nix, checks/   Owner checks and fixtures
   sources.json          Owner-local release pins (when needed)
-  extracted.json        Measured CLI schemas (when needed)
+  extracted/            Declared facts and measured raws (when needed)
   docs/, patches/, src/ Documentation and build support files
   fragments/, skills/  Published content (when applicable)
 lib/                    Shared composition, AI module engines, packaging helpers

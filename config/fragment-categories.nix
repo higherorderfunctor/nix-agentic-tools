@@ -193,7 +193,6 @@ _: {
         "checks/extracted/**"
         "lib/extracted/**"
         "packages/*/extracted/**"
-        "packages/*/extracted.json"
       ];
       sources = ["facts-contract"];
     };

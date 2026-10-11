@@ -200,7 +200,7 @@
 
       if [ -n "${toString staleCensusTargets}" ]; then
         echo "ERROR: update targets with passthru.extracted but no sidecar regeneration: ${toString staleCensusTargets}" >&2
-        echo "Give each passthru.regenerateExtracted (packageLib.mkRegenerateExtracted)." >&2
+        echo "Give each passthru.regenerateExtracted from the shared git-tool extraction." >&2
         exit 1
       fi
 

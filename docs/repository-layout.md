@@ -38,7 +38,7 @@ packages/
       fixtures/                     Owner test data
     registry.nix                    Update, docs, architecture metadata
     sources.json                    Release pins
-    extracted.json                  Measured upstream metadata
+    extracted/                      Declared facts and measured raws
     docs/, patches/, src/           Supporting material when applicable
   agnix/
     packages/ai/

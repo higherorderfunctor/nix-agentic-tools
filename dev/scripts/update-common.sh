@@ -696,7 +696,7 @@ refresh_package_go_floor() {
 # A package whose update never runs mkUpdateScript's `extraExtract` would
 # ship a sidecar describing the OLD source, and its drift check would fail
 # the bump PR. Such a package exposes `passthru.regenerateExtracted`
-# (`mkRegenerateExtracted` in lib/packaging.nix), and both update paths run
+# (the shared git-tool extraction's regenerator), and both update paths run
 # it through this function:
 #
 #   regenerate_sidecars input <name>     every package whose

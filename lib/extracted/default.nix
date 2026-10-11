@@ -2,24 +2,22 @@
   inherit (pkgs) lib;
   facts = import ./facts.nix {inherit lib;};
   host = pkgs.stdenv.hostPlatform.system;
-  # The per-system drift check's `passthru.regenerate`; regenCommand runs it.
+  # The drift check's `passthru.regenerate`; regenCommand runs it.
   regenerateName = name: "${name}-regenerate-extracted";
   mkDriftCheck = {
-    # A path, or per system (the facts contract's "Drift") the owner's
-    # `extracted/` directory; `<system>.json` is derived under it.
+    # The owner's `extracted/` directory; `<system>.json` is derived under it.
     committed,
-    # A path or derivation, or `{ "<system>" = derivation; }`.
+    # `{ "<system>" = derivation; }`.
     extracted,
     name,
     results ? {},
     # The sidecar's repository path, as a string, for messages only. A path
     # derived from `committed` would move with its owner, and
-    # checks.facet-owner-relocation requires the check not to. Per system it
-    # names the directory, like `committed`.
+    # checks.facet-owner-relocation requires the check not to. It names
+    # the directory, like `committed`.
     sidecar,
   }: let
     failures = lib.concatMap (surface: surface.failures) (builtins.attrValues results);
-    perSystem = builtins.isAttrs extracted && !lib.isDerivation extracted;
     # A host-run extractor builds only on its own system; a static one may
     # supply every system's raw from this host. Each is compared, and
     # regenerated, at the same derived paths.
@@ -41,7 +39,7 @@
     compare = {
       committed,
       extracted,
-      # Single mode stops here; per-system records it and fails at the end.
+      # Record drift and fail after comparing every buildable extraction.
       onDrift,
       # The operator's commands, as `echo` lines to stderr.
       regenerate,
@@ -50,35 +48,23 @@
       if ! "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} '$a == $b' > /dev/null; then
         echo "FAIL: ${name} sidecar (${sidecar}) is out of sync with its extraction sources." >&2
         "$jq" -S . ${committed} > committed.json
-        "$jq" -S . ${extracted} > extracted.json
-        ${pkgs.diffutils}/bin/diff -u committed.json extracted.json >&2 || :
+        "$jq" -S . ${extracted} > fresh.json
+        ${pkgs.diffutils}/bin/diff -u committed.json fresh.json >&2 || :
         echo "Regenerate from the repository root:" >&2
         ${regenerate}
         ${onDrift}
       fi
     '';
-    comparisons =
-      if perSystem
-      then ''
-        drifted=0
-        ${lib.concatMapStrings (target:
-          compare (target
-            // {
-              onDrift = "drifted=1";
-              regenerate = "echo '  nix run .#checks.${host}.${name}-extracted.passthru.regenerate' >&2";
-            }))
-        targets}if [ "$drifted" -eq 1 ]; then exit 1; fi
-      ''
-      else
-        compare {
-          inherit committed extracted sidecar;
-          onDrift = "exit 1";
-          regenerate = ''
-            echo '  extracted="$(nix build --no-link --print-out-paths .#checks.${host}.${name}-extracted.passthru.extracted)"' >&2
-            echo '  cp "$extracted" ${sidecar}' >&2
-            echo '  nix fmt -- ${sidecar}' >&2
-          '';
-        };
+    comparisons = ''
+      drifted=0
+      ${lib.concatMapStrings (target:
+        compare (target
+          // {
+            onDrift = "drifted=1";
+            regenerate = "echo '  nix run .#checks.${host}.${name}-extracted.passthru.regenerate' >&2";
+          }))
+      targets}if [ "$drifted" -eq 1 ]; then exit 1; fi
+    '';
     # Copies each buildable extraction over the same sidecar it compared,
     # including the sole committed raw of an owner measured once.
     regenerate = import ../strict-shell-application.nix pkgs {
@@ -96,7 +82,7 @@
   in {
     "${name}-extracted" =
       pkgs.runCommand "${name}-extracted-drift" {
-        passthru = {inherit extracted;} // lib.optionalAttrs perSystem {inherit regenerate;};
+        passthru = {inherit extracted regenerate;};
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -147,7 +133,7 @@ in {
     };
 
   # An owner's update script regenerates its per-system raws on this host;
-  # the script echoes each path as mkExtractRegen does.
+  # the script echoes each written path.
   regenCommand = {name}: ''
     regenerate=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
       ".#checks.${host}.${name}-extracted.passthru.regenerate")

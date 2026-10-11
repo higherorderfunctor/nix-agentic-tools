@@ -1,8 +1,7 @@
 ## Naming Conventions
 
-> **Last verified:** 2026-10-03 — owner registries contribute update and
-> documentation rows; generated npm locks retain nix-update's standard filename
-> beside the recipe.
+> **Last verified:** 2026-10-11 — owner measurements live under `extracted/`;
+> generated npm locks retain nix-update's standard filename beside the recipe.
 
 - Package recipes:
   `packages/<owner>/packages/<namespace...>/<name>/package.nix`. Directory
@@ -14,7 +13,7 @@
 - Owner metadata: `packages/<owner>/registry.nix` contributes
   update/documentation rows; derive mutable recipe paths with
   `repoPath ./relative/package.nix`.
-- Owner source files: `sources.json`, `extracted.json`, `patches/`, and `src/`.
+- Owner source files: `sources.json`, `extracted/`, `patches/`, and `src/`.
   Multiple release lines may use qualified sidecars such as `sources-10.json`.
   Package-specific extraction machinery belongs in the owner's
   `lib/packaging.nix` or `extract/` directory.
