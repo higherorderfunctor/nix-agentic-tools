@@ -1,16 +1,31 @@
 {
-  "documentedAbsent": [
+  "hookTriggerAliases": {
+    "AfterFileEdit": "PostFileSave",
+    "agentSpawn": "SessionStart",
+    "agentStop": "Stop",
+    "fileCreated": "PostFileCreate",
+    "fileDeleted": "PostFileDelete",
+    "fileEdited": "PostFileSave",
+    "postTaskExecution": "PostTaskExec",
+    "postToolUse": "PostToolUse",
+    "preTaskExecution": "PreTaskExec",
+    "preToolUse": "PreToolUse",
+    "promptSubmit": "UserPromptSubmit",
+    "sessionStart": "SessionStart",
+    "stop": "Stop",
+    "userPromptSubmit": "UserPromptSubmit",
+    "userTriggered": "Manual"
+  },
+  "hookTriggers": [
+    "Manual",
     "PostFileCreate",
     "PostFileDelete",
     "PostFileSave",
     "PostTaskExec",
-    "PreTaskExec"
-  ],
-  "hookTriggers": [
-    "AgentSpawn",
-    "Manual",
     "PostToolUse",
+    "PreTaskExec",
     "PreToolUse",
+    "SessionEnd",
     "SessionStart",
     "Stop",
     "UserPromptSubmit"

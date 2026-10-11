@@ -2,9 +2,9 @@
 # match what the packaged kiro binary and the committed public model-table
 # snapshot contain, the facts must merge across systems, and the facts the
 # Kiro modules were written against must still hold. Blocking (a typed trigger
-# vanishing, or a documented-absent one becoming present, is a correctness
-# signal the typed surface must react to). The build of passthru.extracted also
-# enforces the fail-loud (>=1 present) guard baked into vu.mkKiroExtract.
+# vanishing is a correctness signal the typed surface must react to). The build
+# of passthru.extracted also enforces the shape assertions baked into
+# vu.mkKiroExtract's locators.
 {
   extractedLib,
   pkgs,
@@ -36,7 +36,10 @@
           # mkKiro.nix's option enums and flatten boundary, and the
           # module-eval fixtures that rest on them.
           needs = [
-            {key = "hookTriggers";}
+            {
+              contains = "SessionStart";
+              key = "hookTriggers";
+            }
             {
               contains = "workflows";
               key = "rolloutFeatures";

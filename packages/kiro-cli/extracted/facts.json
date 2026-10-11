@@ -1,6 +1,6 @@
 {
-  "documentedAbsent": { "source": "static", "type": "set" },
-  "hookTriggers": { "source": "static", "type": "set" },
+  "hookTriggerAliases": { "source": "host-run", "type": "object" },
+  "hookTriggers": { "source": "host-run", "type": "set" },
   "models": { "source": "static", "type": "set" },
   "rolloutFeatures": { "source": "static", "type": "set" },
   "rolloutPatchability.<name>.patchable": {
