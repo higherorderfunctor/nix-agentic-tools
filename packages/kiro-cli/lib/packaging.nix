@@ -102,8 +102,23 @@ rec {
         hits = list(entry_re(name).finditer(mapped))
         return hits, sites - len(hits)
 
-    def is_patchable(hits, unmatched):
-        return unmatched == 0 and len(hits) > 0
+    # The unlocked form the patcher writes. `description` is the padding
+    # reservoir, so an entry narrower than the empty-description form cannot
+    # hold it.
+    def unlocked(name, description=b""):
+        return (
+            b'"' + name.encode() + b'": {\n'
+            b'    "description": "' + description + b'",\n'
+            b'    "treatment_percent": 100,\n'
+            b'    "segment": "all"\n'
+            b'  }'
+        )
+
+    def wide_enough(name, hit):
+        return hit.end() - hit.start() >= len(unlocked(name))
+
+    def is_patchable(name, hits, unmatched):
+        return unmatched == 0 and len(hits) > 0 and all(wide_enough(name, m) for m in hits)
   '';
 
   # Resolve the ONE kiro chat binary under a package root, printing its path.
@@ -233,7 +248,7 @@ rec {
               for name in sorted(states):
                   hits, unmatched = rollout_sites(mm, name)
                   patchability[name] = {
-                      "patchable": is_patchable(hits, unmatched),
+                      "patchable": is_patchable(name, hits, unmatched),
                       "unmatchedSites": unmatched,
                   }
       names = sorted(states)
@@ -388,24 +403,6 @@ rec {
       features = list(dict.fromkeys(f for f in sys.argv[1].split(",") if f))
       root = sys.argv[2]
 
-      def replacement(name, width):
-          core = (
-              b'"' + name.encode() + b'": {\n'
-              b'    "description": "%s",\n'
-              b'    "treatment_percent": 100,\n'
-              b'    "segment": "all"\n'
-              b'  }'
-          )
-          pad = width - len(core % b"")
-          if pad < 0:
-              sys.stderr.write(
-                  "kiro-rollout: entry for %r is too short (%d bytes) to hold the "
-                  "unlocked form; upstream shortened the description.\n"
-                  % (name, width)
-              )
-              sys.exit(1)
-          return core % (b"P" * pad)
-
       # mmap, not read()+bytearray. The target is a ~556 MB ELF, and the
       # read-then-copy shape peaked over 1 GB per file, which is enough to
       # make a small CI builder fail on a patch that changes ~200 bytes. The
@@ -447,10 +444,19 @@ rec {
                                   % (name, unmatched, path)
                               )
                               sys.exit(1)
+                          # Checked for every hit before any is written, so a
+                          # short copy cannot leave its siblings patched.
                           for m in hits:
-                              mm[m.start():m.end()] = replacement(
-                                  name, m.end() - m.start()
-                              )
+                              if not wide_enough(name, m):
+                                  sys.stderr.write(
+                                      "kiro-rollout: entry for %r is too short (%d bytes) to hold the "
+                                      "unlocked form; upstream shortened the description.\n"
+                                      % (name, m.end() - m.start())
+                                  )
+                                  sys.exit(1)
+                          for m in hits:
+                              pad = m.end() - m.start() - len(unlocked(name))
+                              mm[m.start():m.end()] = unlocked(name, b"P" * pad)
                               totals[name] += 1
                       mm.flush()
           finally:
