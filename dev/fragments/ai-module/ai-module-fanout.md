@@ -1,7 +1,9 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-09 — Kiro uses `ai.kiro.cli.enable`; its read-only
-> runtime enable is derived from the launcher switch.
+> **Last verified:** 2026-10-11 — Codex launcher flags reconcile against the
+> `cli.globalFlags` fact in `packages/chatgpt-codex/extracted/`; Kiro uses
+> `ai.kiro.cli.enable` and its read-only runtime enable is derived from the
+> launcher switch.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
