@@ -1,11 +1,12 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-11 — `children` reads combined wildcard children;
-> two owners are migrated end to end: kiro-cli (host-run settings facts, darwin
-> raw produced by the darwin CI leg) and claude-code (every fact static, both
-> raws produced on any host from the two release tarballs). `settings.paths`
-> shows the limit of the `<name>` wildcard: a raw whose attribute names contain
-> dots is declared as one opaque `object`.
+> **Last verified:** 2026-10-11 — three owners are migrated end to end: kiro-cli
+> and chatgpt-codex (host-run; the darwin raw is produced by the darwin CI leg,
+> one producer job over every host-run owner) and claude-code (every fact
+> static, both raws produced on any host). `children` reads a wildcard
+> declaration's combined children. `settings.paths` shows the limit of the
+> `<name>` wildcard: a raw whose attribute names contain dots is declared as one
+> opaque `object`.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
