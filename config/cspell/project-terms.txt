@@ -297,6 +297,7 @@ passteque
 passthru
 passwordless
 pasteable
+patchability
 Patchelf
 PATHEXT
 pdsolve

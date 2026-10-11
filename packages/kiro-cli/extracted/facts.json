@@ -1,0 +1,17 @@
+{
+  "documentedAbsent": { "source": "static", "type": "set" },
+  "hookTriggers": { "source": "static", "type": "set" },
+  "models": { "source": "static", "type": "set" },
+  "rolloutFeatures": { "source": "static", "type": "set" },
+  "rolloutPatchability.<name>.patchable": {
+    "source": "static",
+    "type": "bool"
+  },
+  "rolloutPatchability.<name>.unmatchedSites": {
+    "source": "static",
+    "type": "count"
+  },
+  "rolloutStates.<name>": { "source": "static", "type": "object" },
+  "settingKeys": { "source": "host-run", "type": "set" },
+  "workspaceOverridableSettings": { "source": "host-run", "type": "set" }
+}

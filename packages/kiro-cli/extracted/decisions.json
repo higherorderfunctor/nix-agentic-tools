@@ -1,0 +1,7 @@
+{
+  "rolloutPatchability.<name>.unmatchedSites": {
+    "combine": "per-platform",
+    "decided": "2026-10-10",
+    "reason": "the patcher refuses to half-patch on its own host; the count is read per host and only the derived `patchable` bool is combined"
+  }
+}
