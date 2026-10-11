@@ -1,7 +1,10 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-10 — initial contract. Nothing is migrated to it
-> yet; `lib/extracted/facts.nix` and its fixtures are the only consumers.
+> **Last verified:** 2026-10-10 — `get` on a valueless key throws its failure
+> and fix; `load` reads an owner's directory (an absent configured raw is
+> `missing-system`), per-system drift carries `passthru.regenerate` and
+> `regenCommand` runs it, and `checks.extracted-index` lists its first owner,
+> kiro-cli, migrated end to end in this change.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -105,7 +108,26 @@ differing count or string is a decision, and the failure prints the row.
 ## `lib/extracted/facts.nix`
 
 Needs only `lib`, like `reconcile`, so an option module can call it before
-`pkgs` exists. Four functions.
+`pkgs` exists. Five functions.
+
+### `load`
+
+```nix
+load {
+  dir;                       # path: the owner's extracted/ directory
+  secretHints ? {};
+}
+→ merge result // { systems = [ "<system>" ]; }
+```
+
+The only way to read raws. Reads `facts.json` (required: its absence throws,
+naming the path), `decisions.json` (optional, `{}` when absent) and
+`<system>.json` for every system in `config/systems.nix` present under `dir`,
+then calls `merge` against every system in `config/systems.nix`. A configured
+system without a raw therefore fails as `missing-system` for every key its
+declaration requires; a declaration's own `systems` still narrows that. A file
+for a system outside `config/systems.nix` is never read. `systems` lists the
+raws found, for information.
 
 ### `merge`
 
@@ -123,6 +145,8 @@ merge {
       value;                 # combined; ABSENT for per-platform keys
       bySystem = { "<system>" = <raw value>; };
       type; source; combine; # as resolved
+      failure;               # { kind; details; fix; } ONLY when value is
+                             # absent because of a failure
     };
   };
   undeclared = [ "<key>" ];  # present in a raw, no declaration; informational
@@ -164,10 +188,13 @@ validated and `type-mismatch`, `missing-system` and `declared-gone` still fire.
 
 ### `get` and `getFor`
 
-`get aggregate "<key>"` returns the combined value and throws, naming the key
-and the fix, when the key is `per-platform`. `getFor system aggregate "<key>"`
-returns that system's raw value for any key. Consumers use nothing else to read
-facts.
+`get aggregate "<key>"` returns the combined value. `get` on a key without a
+combined value throws naming the key, the failure and the fix: the entry's
+`failure` (for `divergent`, the paste-ready `decisions.json` row), or for a
+`per-platform` key the advice to read it with `getFor`. A key absent from the
+aggregate (undeclared, or `declared-gone`) throws naming the key and both
+remedies. There is no fallback value. `getFor system aggregate "<key>"` returns
+that system's raw value for any key. Consumers use nothing else to read facts.
 
 ### `expect`
 
@@ -196,6 +223,10 @@ owner plus `index.json` across owners, each key carrying `value`, `bySystem`,
 `type`, `source`, `combine`. External readers (skills, CI scripts) read these
 files; Nix consumers read the aggregate directly.
 
+`checks.extracted-index` is `index` over every migrated owner, each `load`ed
+from its `extracted/` directory (listed in `checks/extracted/index.nix`).
+External readers build that attribute and read its files.
+
 ## Drift
 
 `mkDriftCheck` accepts, in addition to today's single `committed` and
@@ -208,6 +239,21 @@ system whose extraction derivation can build on `S`; a static extractor supplies
 several, a host-run one supplies only `S`. Every drifted system is reported,
 each by its committed file path, and the check fails once at the end. Today's
 single-value callers are unchanged.
+
+Per system, the drift check's `passthru.regenerate` is a strict shell
+application that, run from the repository root, copies each buildable system's
+already-built raw to `<sidecar>/<system>.json`, makes it 644, runs `nix fmt` on
+it and prints the path written. It derives those paths where the check derives
+the ones it compares, so no caller names a raw path. A drifted system's failure
+prints one regenerate line:
+`nix run .#checks.<host>.<name>-extracted.passthru.regenerate`. Single mode has
+no `regenerate` and keeps its `cp` and `nix fmt` hint.
+
+`regenCommand { name; }` (in `lib/extracted/default.nix`, which has `pkgs`) is
+the shell an owner's update script runs to regenerate its raws on the current
+host: it builds that `passthru.regenerate` with
+`nix build --no-link --print-out-paths` and executes it. The script's
+`regenerating` and `wrote` lines read like `mkExtractRegen`'s.
 
 ## The guard
 
@@ -235,4 +281,17 @@ its refused input or its visible result, plus one derivation that asserts the
 11. `bad-decision`: unknown combine; blank reason; row for an undeclared key.
 12. `ignore` removes an element before intersection.
 13. `missing-system`: declared for both, present in one.
-14. `live` with `systems = []`: no system required, no failure.
+14. `live` with `systems = []`: no system required, no failure; `get` on a
+    divergent key throws and the entry carries merge's failure, and
+    `extracted-facts-divergent-fix` evaluates that `get` in a dummy-store
+    `nix-instantiate` to assert its message names the key and the row.
+15. `load` (fixture directories under `checks/extracted/load/`): both configured
+    raws present, plus one for a system outside `config/systems.nix` that is
+    never read, merge clean with their decision applied; with Darwin's raw
+    absent, every declared key fails `missing-system` naming it, and a
+    `prefer:aarch64-darwin` decision is not a `bad-decision`. `load` on a
+    directory without `facts.json` throws.
+
+`checks/extracted/drift.nix` runs `mkDriftCheck`'s script per case; a case with
+`regenerate` also reads the per-system regenerate script's text, which must name
+the buildable system's `<sidecar>/<system>.json` and not the foreign one's.

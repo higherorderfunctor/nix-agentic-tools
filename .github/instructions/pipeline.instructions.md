@@ -7,9 +7,10 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-09 — package build runners use no CI-only
-> substituter, no shard mirrors a runtime closure into the project cache, and
-> every Cachix step holding the token filters kiro out of the push.
+> **Last verified:** 2026-10-10 — package build runners use no CI-only
+> substituter, no shard mirrors a runtime closure into the project cache, every
+> Cachix step holding the token filters kiro out of the push, and the darwin
+> `kiro-patched` leg produces Kiro's host-run darwin raw.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -238,6 +239,17 @@ explicitly enable and assert the Nix sandbox before the materializer executes;
 Darwin's Nix default does not provide that guarantee. Patched proprietary Kiro
 stays in those jobs without cache publication; every Cachix step holding the
 token, package matrix and update workers alike, carries `pushFilter: kiro-cli`.
+
+Kiro's extracted facts are per system, and the darwin raw is host-run, so the
+Linux update script can regenerate only the Linux raw. The darwin `kiro-patched`
+leg is therefore the darwin producer: it runs the drift check's
+`passthru.regenerate` before checking. On an `update/*` branch from this
+repository, a changed raw is committed back as the bot (bot author and
+committer, pushed with the App token) so `update-publish.sh` still sees a branch
+the bot owns; that push re-runs CI on the new head and the concurrency group
+cancels the old run. Anywhere else the leg uploads the
+`kiro-cli-extracted-aarch64-darwin` artifact, prints the copy commands and
+fails, because only the App may write a branch from CI.
 
 The Cachix action owns shard uploads and its finalization remains part of the
 worker outcome. Do not also start nix-fast-build's optional uploader: its

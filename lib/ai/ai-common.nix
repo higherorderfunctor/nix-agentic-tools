@@ -205,7 +205,7 @@
   # and it always passes a boundary, so an alias would be dead code. The
   # boundary belongs to whichever runtime owns the format and is extracted from
   # its binary rather than curated — see `settingKeys` in
-  # packages/kiro-cli/extracted.json.
+  # packages/kiro-cli/extracted/.
   flattenDotKeysUntil = terminal: let
     go = prefix: attrs:
       lib.foldlAttrs (acc: name: value: let

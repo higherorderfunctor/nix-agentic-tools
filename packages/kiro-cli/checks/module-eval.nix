@@ -7,6 +7,10 @@
   ...
 }: let
   inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree hasLiteral lspEntryOf markdownInput mkTest mkWrapperGrepTest;
+  kiroFact = let
+    extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
+  in
+    extracted.get (extracted.load {dir = ../extracted;}).aggregate;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
   # The settings writer of one backend as a runnable script: Home Manager
   # replays its prune entry and then its write entry (activation text needs
@@ -1708,8 +1712,7 @@ in {
     # registry entries, so upstream naming the parent would trip this.
     module-kiro-flatten-boundary-has-no-prefix-pairs = mkTest "kiro-flatten-boundary-has-no-prefix-pairs" (
       let
-        extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
-        keys = lib.unique (extracted.settingKeys ++ extracted.workspaceOverridableSettings);
+        keys = lib.unique (kiroFact "settingKeys" ++ kiroFact "workspaceOverridableSettings");
         nested =
           builtins.filter (
             a: builtins.any (b: a != b && lib.hasPrefix "${a}." b) keys
@@ -1719,34 +1722,16 @@ in {
         nested == []
     );
 
-    # Sidecar WIRING: that the field exists, parses, and says what the devenv
-    # assertion assumes about the pinned binary. It is NOT a test of the
-    # extractor — it reads a committed list of strings and runs none of that
-    # code, so it cannot tell a key resolved through the symbolic registry from
-    # one that was always a literal. `checks/kiro-workspace-settings-fixtures`
-    # drives the real script and is where the extraction paths are controlled.
+    # The keys the flatten-boundary and allowlist fixtures rest on are the
+    # consumer needs of `checks.kiro-cli-extracted`; what `expect` cannot say is
+    # an absence, so it stays here. This is NOT a test of the extractor:
+    # `checks/kiro-workspace-settings-fixtures` drives the real script.
     #
     # The absence check is deliberate and is the fact the devenv assertion's whole
     # message rests on: if upstream ever adds `chat.enableWorkflows` to the
     # allowlist, this failing is the signal to relax that guidance rather than a
     # defect to route around.
-    module-kiro-workspace-allowlist-from-sidecar = mkTest "kiro-workspace-allowlist-from-sidecar" (
-      let
-        extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
-        allowlist = extracted.workspaceOverridableSettings;
-      in
-        builtins.isList allowlist
-        # The flatten boundary rides the same sidecar. `chat.modelDefaults` is the
-        # object-valued key the boundary exists for, so its presence is what makes
-        # the nesting tests above more than a coincidence of the current data.
-        && lib.elem "chat.modelDefaults" extracted.settingKeys
-        && lib.elem "chat.enableWorkflows" extracted.settingKeys
-        && builtins.length extracted.settingKeys >= 20
-        && !(lib.elem "chat.enableWorkflows" allowlist)
-        && lib.elem "chat.enableTangentMode" allowlist
-        && lib.elem "chat.defaultModel" allowlist
-        && builtins.length allowlist >= 10
-    );
+    module-kiro-workspace-allowlist-from-sidecar = mkTest "kiro-workspace-allowlist-from-sidecar" (!(lib.elem "chat.enableWorkflows" (kiroFact "workspaceOverridableSettings")));
 
     # ── identity ───────────────────────────────────────────────────────────────
     # Same drvPath discipline as the rollout tests above, and for the same reason:

@@ -1,9 +1,10 @@
 ## Kiro workflows: three gates, all of them silent
 
-> **Last verified:** 2026-10-07 — `ai.kiro.cli.workflows.enable` unlocks the
+> **Last verified:** 2026-10-10 — `ai.kiro.cli.workflows.enable` unlocks the
 > rollout and implies the global chat setting on Home Manager; devenv retains
 > its global-setting warning; the pinned TUI still excludes
-> `chat.enableWorkflows` from the workspace allowlist.
+> `chat.enableWorkflows` from the workspace allowlist; the allowlist is the
+> `workspaceOverridableSettings` fact under `packages/kiro-cli/extracted/`.
 
 Enable workflows with `ai.kiro.cli.workflows.enable = true` and
 `ai.kiro.cli.v3 = true`. The switch adds `"workflows"` to the effective rollout
@@ -113,10 +114,11 @@ DECLARATION is shared, which is where parity actually lives.
 
 ### The allowlist is extracted from the workspace merge
 
-`packages/kiro-cli/extracted.json` carries `workspaceOverridableSettings`,
-produced by `kiroSettingsExtractScript` in
-`packages/kiro-cli/lib/packaging.nix`. It is extracted rather than curated for
-the same reason `rolloutFeatures` is: the set IS the contract.
+The `workspaceOverridableSettings` fact in `packages/kiro-cli/extracted/` (one
+raw per host, merged and read through `lib.extracted`) is produced by
+`kiroSettingsExtractScript` in `packages/kiro-cli/lib/packaging.nix`. It is
+extracted rather than curated for the same reason `rolloutFeatures` is: the set
+IS the contract.
 
 The extractor materializes the shipped TUI source in a Nix build sandbox and
 uses its JavaScript AST to find the registry and candidate allowlist by their

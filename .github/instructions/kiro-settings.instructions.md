@@ -7,10 +7,11 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-07 — Kiro CLI settings use
+> **Last verified:** 2026-10-10 — Kiro CLI settings use
 > `ai.kiro.cli.native.settings`; settings extraction requires the shipped TUI
 > registry, workspace allowlist and merge, and historical no-workspace-merge
-> support is removed. Kiro excludes normalized settings.
+> support is removed. Kiro excludes normalized settings. Extracted facts live in
+> `packages/kiro-cli/extracted/` and are read through `lib.extracted`.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -20,8 +21,8 @@ materialized source.
 
 ### Model suggestions are a public catalog, not an account entitlement list
 
-`cli.native.settings.chat.defaultModel` reads `extracted.json.models` as a soft
-enum. Any string remains accepted. The model field is derived from
+`cli.native.settings.chat.defaultModel` reads the extracted `models` fact as a
+soft enum. Any string remains accepted. The model field is derived from
 `model-catalog.json`, a snapshot of the names in
 [Kiro's public comparison table](https://kiro.dev/docs/models.md). The other
 extracted fields still come from the pinned binary.
@@ -88,8 +89,9 @@ not a devenv-scope problem, it was unusable.
 
 `aiCommon.flattenDotKeysUntil` takes a list of dotted paths that are complete
 setting keys and stops recursing the moment the accumulated path is one of them.
-`mkKiro.nix` passes `kiroSettingKeys` — the union of two measured lists from
-`packages/kiro-cli/extracted.json`:
+`mkKiro.nix` passes `kiroSettingKeys` — the union of two measured lists from the
+`packages/kiro-cli/extracted/` facts, read through `lib.extracted` (each host's
+raw measures them; consumers read the merged value):
 
 - `settingKeys`: the bundle's own `SCREAMING -> "dotted.key"` registry, 55 keys
   at 2.23.0, all `chat.*`.
@@ -101,7 +103,7 @@ setting keys and stops recursing the moment the accumulated path is one of them.
   settings universe: the probe the allowlist scan keys off is itself absent from
   the registry scan.
 
-Neither alone covers the format, which is why the sidecar reports them
+Neither alone covers the format, which is why the extractor reports them
 separately and the union is taken at the consumer. Since 2.23.0 the chat binary
 materializes its compressed TUI source on first launch. The extractor's runtime
 build requires a Nix sandbox, a fake KAS, and isolated state; CI explicitly

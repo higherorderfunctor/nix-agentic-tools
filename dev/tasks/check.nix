@@ -29,12 +29,15 @@ in {
           if [ "$only_auto" = "true" ] || [ -z "$model_ids" ]; then
             log "Kiro: offline auto-only stub detected — SKIPPED (not a drift)"
           else
-            committed=$(jq -r '.models[]' packages/kiro-cli/extracted.json | sort -u)
+            # The merged fact, as checks.<host>.extracted-index writes it.
+            host=$(nix eval --raw --impure --expr builtins.currentSystem)
+            facts=$(nix build --no-link --print-out-paths ".#checks.$host.extracted-index")
+            committed=$(jq -r '.models.value[]' "$facts/kiro-cli.json" | sort -u)
             missing=$(comm -23 <(printf '%s\n' "$model_ids") <(printf '%s\n' "$committed") || true)
             if [ -z "$missing" ]; then
               log "Kiro: OK — extracted model suggestions cover this account's catalog"
             else
-              log "Kiro: DRIFT — live ids missing from packages/kiro-cli/extracted.json:"
+              log "Kiro: DRIFT — live ids missing from models in packages/kiro-cli/extracted/:"
               printf '    %s\n' $missing >&2
               exit 1
             fi

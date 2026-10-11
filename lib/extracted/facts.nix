@@ -1,5 +1,5 @@
 # The extracted facts contract (dev/fragments/extracted/facts-contract.md).
-# merge, get, getFor and expect need only nixpkgs lib, like reconcile, so an
+# load, merge, get, getFor and expect need only nixpkgs lib, like reconcile, so an
 # option module can call them before `pkgs` exists; index takes `pkgs` itself.
 {lib}: let
   inherit (import ../runtime-values {inherit lib;}) classify;
@@ -80,7 +80,7 @@
       else if node ? ${segment}
       then find (path ++ [segment]) node.${segment} rest
       else [];
-in {
+
   merge = {
     declarations,
     decisions ? {},
@@ -186,13 +186,9 @@ in {
           inherit details fix kind;
           key = instanceKey;
         };
-      in {
-        entry =
-          {
-            inherit bySystem combine type;
-            inherit (declaration) source;
-          }
-          // lib.optionalAttrs (mistyped == []) value;
+        combined = lib.optionalAttrs (mistyped == []) value;
+        # What left the entry without a value, for `get` to throw.
+        cause = lib.findFirst (failure: failure.kind != "missing-system") null failures;
         failures =
           lib.optional (missing != []) (failure "missing-system" missing "extract `${instanceKey}` on ${lib.concatStringsSep ", " missing}, or narrow its declared `systems`")
           ++ lib.optional (mistyped != []) (failure "type-mismatch" (lib.genAttrs mistyped (system: bySystem.${system})) "correct the declared type of `${key}` (declared ${builtins.toJSON type})")
@@ -203,6 +199,15 @@ in {
               reason = "TODO: why `${instanceKey}` differs across systems";
             };
           }));
+      in {
+        inherit failures;
+        entry =
+          {
+            inherit bySystem combine type;
+            inherit (declaration) source;
+          }
+          // combined
+          // lib.optionalAttrs (!(combined ? value) && cause != null) {failure = builtins.removeAttrs cause ["key"];};
       };
       results = lib.mapAttrs perInstance instances;
     in {
@@ -238,11 +243,45 @@ in {
       })
       secrets;
   };
+in {
+  inherit merge;
 
-  get = aggregate: key:
-    if aggregate.${key}.combine == "per-platform"
-    then throw "extracted fact `${key}` is per-platform: read it with getFor <system>, or add a decisions.json row that combines it"
-    else aggregate.${key}.value;
+  # The only reader of an owner's `extracted/` directory: its declarations,
+  # its decisions, and the raw of every configured system it holds. Merged
+  # against every configured system, so an absent raw is `missing-system`.
+  load = {
+    dir,
+    secretHints ? {},
+  }: let
+    read = file: builtins.fromJSON (builtins.readFile (dir + "/${file}"));
+    present = file: builtins.pathExists (dir + "/${file}");
+    configured = import ../../config/systems.nix;
+    systems = builtins.filter (system: present "${system}.json") configured;
+  in
+    if !present "facts.json"
+    then throw "lib.extracted.load: ${toString dir}/facts.json is missing; an owner's extracted/ directory declares its keys there"
+    else
+      merge {
+        inherit secretHints;
+        declarations = read "facts.json";
+        decisions = lib.optionalAttrs (present "decisions.json") (read "decisions.json");
+        raws = lib.genAttrs systems (system: read "${system}.json");
+        systems = configured;
+      }
+      // {inherit systems;};
+
+  # A key without a combined value throws its failure and fix; a
+  # per-platform key has none, and is told to read per system instead.
+  get = aggregate: key: let
+    entry = aggregate.${key} or (throw "extracted fact `${key}` is not in the aggregate: it is undeclared, or declared and absent from every raw (declared-gone). Declare it in facts.json and extract it, or delete the declaration");
+    problem =
+      entry.failure or {
+        details = entry.bySystem;
+        fix = "read it with getFor <system>, or add a decisions.json row that combines it";
+        kind = entry.combine;
+      };
+  in
+    entry.value or (throw "extracted fact `${key}` has no combined value (${problem.kind}): ${builtins.toJSON problem.details}. Fix: ${problem.fix}");
 
   getFor = system: aggregate: key: aggregate.${key}.bySystem.${system};
 

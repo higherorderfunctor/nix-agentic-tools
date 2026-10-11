@@ -1,0 +1,7 @@
+{
+  "limit": {
+    "combine": "per-platform",
+    "decided": "2026-10-10",
+    "reason": "fixture: the systems differ, so a clean merge proves load read this row"
+  }
+}

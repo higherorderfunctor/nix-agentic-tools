@@ -1,0 +1,22 @@
+{
+  "rolloutFeatures": {
+    "combine": "equal",
+    "decided": "2026-10-10",
+    "reason": "the unlock enum and the patchability keys are per feature; a platform that lacks a feature is a decision, not a quiet narrowing"
+  },
+  "rolloutPatchability.<name>.unmatchedSites": {
+    "combine": "per-platform",
+    "decided": "2026-10-10",
+    "reason": "the patcher refuses to half-patch on its own host; the count is read per host and only the derived `patchable` bool is combined"
+  },
+  "settingKeys": {
+    "combine": "equal",
+    "decided": "2026-10-10",
+    "reason": "the flatten boundary must know every key the binary names; one TUI bundle ships to both hosts, so a delta is a decision"
+  },
+  "workspaceOverridableSettings": {
+    "combine": "equal",
+    "decided": "2026-10-10",
+    "reason": "the devenv guard refuses keys outside this set; a silently narrowed set would reject settings the host honors"
+  }
+}
