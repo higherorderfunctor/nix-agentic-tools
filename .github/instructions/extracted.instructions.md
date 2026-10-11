@@ -10,9 +10,9 @@ applyTo: "checks/extracted/**,lib/extracted/**,packages/*/extracted/**,packages/
 > **Last verified:** 2026-10-10 — `get` on a valueless key throws its failure
 > and fix; `load` reads an owner's directory (an absent configured raw is
 > `missing-system`), per-system drift carries `passthru.regenerate` and
-> `regenCommand` runs it, and `checks.extracted-index` lists no owner yet.
-> Nothing is migrated to the contract yet; `lib/extracted/` and its fixtures are
-> the only consumers.
+> `regenCommand` runs it, and `checks.extracted-index` lists its first owner,
+> kiro-cli, migrated end to end in this change. Nothing is migrated to the
+> contract yet; `lib/extracted/` and its fixtures are the only consumers.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
