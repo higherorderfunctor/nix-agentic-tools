@@ -31,10 +31,7 @@
               key = "hookEvents";
             }
             {key = "launchEffortPins";}
-            {
-              contains = "claude-opus-5";
-              key = "models";
-            }
+            {key = "models";}
             {key = "settings.paths";}
             {
               contains = "hooks";
