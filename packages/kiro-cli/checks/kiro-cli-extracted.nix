@@ -36,7 +36,10 @@
           for case in absent:"hook trigger map is absent" computed:"non-literal entry"; do
             status=0
             ${extract} "''${case%%:*}.js" > /dev/null 2> err.txt || status=$?
-            [ "$status" = 1 ] && ${pkgs.gnugrep}/bin/grep -qF "''${case#*:}" err.txt
+            # Two statements: the left side of `&&` is exempt from errexit, so
+            # an extractor that unexpectedly exits 0 would not fail the fixture.
+            [ "$status" = 1 ]
+            ${pkgs.gnugrep}/bin/grep -qF "''${case#*:}" err.txt
           done
           touch "$out"
         '';
