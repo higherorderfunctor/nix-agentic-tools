@@ -385,11 +385,12 @@ engine's own vocabulary is one `Object.freeze` map in the KAS bundle
 `acp-server.js`, which the extractor unpacks offline through the same launch
 helper as `kiro-bundle-patch-drift` (`vu.kiroMaterializeKas`).
 `extract/hook-triggers.mjs` locates the map by content (the one frozen object
-with a `SessionStart` key), requires literal string entries, at least eight
-canonical triggers including `SessionStart` and `PreToolUse`, and an identity
-entry for each, and emits `hookTriggers` plus the alias map
-`hookTriggerAliases`. Both are `host-run` because the bundle exists only after
-the binary runs.
+with a `SessionStart` key, compared as the decoded property name so a quoted key
+matches too), requires literal string entries, at least eight canonical triggers
+including `SessionStart` and `PreToolUse`, and an identity entry for each, and
+emits `hookTriggers` plus the alias map `hookTriggerAliases`; the hook record's
+trigger soft enum suggests both. Both are `host-run` because the bundle exists
+only after the binary runs.
 
 #### An anchor can lose its TYPE information without losing its match
 

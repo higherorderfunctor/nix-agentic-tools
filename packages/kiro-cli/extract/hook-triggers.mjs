@@ -23,6 +23,13 @@ function fail(message) {
 if (file.parseDiagnostics.length)
   fail("the KAS engine bundle is not valid JavaScript");
 
+// The decoded name, so `SessionStart:` and `"SessionStart":` are one key.
+function keyName(property) {
+  return ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
+    ? property.name.text
+    : undefined;
+}
+
 const candidates = [];
 function walk(node) {
   if (
@@ -33,7 +40,7 @@ function walk(node) {
     node.arguments[0].properties.some(
       (property) =>
         ts.isPropertyAssignment(property) &&
-        property.name.getText(file) === "SessionStart",
+        keyName(property) === "SessionStart",
     )
   ) {
     candidates.push(node.arguments[0]);
@@ -52,11 +59,11 @@ const map = {};
 for (const property of candidates[0].properties) {
   if (
     !ts.isPropertyAssignment(property) ||
-    !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) ||
+    keyName(property) === undefined ||
     !ts.isStringLiteral(property.initializer)
   )
     fail("hook trigger map contains a non-literal entry");
-  map[property.name.text] = property.initializer.text;
+  map[keyName(property)] = property.initializer.text;
 }
 
 const hookTriggers = [...new Set(Object.values(map))].sort();

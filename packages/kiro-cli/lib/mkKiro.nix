@@ -74,14 +74,17 @@
     };
   };
 
+  # The engine accepts a canonical trigger or any alias of one.
+  kiroHookTriggerNames = kiroFact "hookTriggers" ++ builtins.attrNames (kiroFact "hookTriggerAliases");
+
   # A single v3 hook record (keyed by hook name in `ai.kiro.hooks`). Un-modeled
   # fields round-trip via the freeform JSON tail.
   kiroHookRecord = lib.types.submodule {
     freeformType = (pkgs.formats.json {}).type;
     options = {
       trigger = lib.mkOption {
-        type = lib.types.either (lib.types.enum (kiroFact "hookTriggers")) lib.types.str;
-        description = "Lifecycle trigger — soft enum from the drift-checked sidecar (any string accepted for forward-compat).";
+        type = lib.types.either (lib.types.enum kiroHookTriggerNames) lib.types.str;
+        description = "Lifecycle trigger — soft enum of the engine's canonical triggers and their aliases (an alias resolves to its canonical trigger in the engine), from the drift-checked sidecar; any string accepted for forward-compat.";
       };
       matcher = lib.mkOption {
         type = lib.types.nullOr lib.types.str;

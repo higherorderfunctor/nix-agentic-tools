@@ -2888,6 +2888,20 @@ in {
         && !(lib.hasInfix ''"description"'' t)
     );
 
+    # The trigger soft enum suggests the engine's aliases as well as its
+    # canonical triggers. Checked on the enum half alone: the `str` fallback
+    # would accept any spelling and prove nothing.
+    module-kiro-hooks-trigger-enum-accepts-alias = mkTest "kiro-hooks-trigger-enum-accepts-alias" (
+      let
+        hooks = (evalHm {ai.kiro.cli.enable = true;}).options.ai.kiro.hooks;
+        trigger = (hooks.type.nestedTypes.elemType.getSubOptions []).trigger.type;
+        inherit (trigger.nestedTypes) left;
+      in
+        left.check "SessionStart"
+        && left.check "agentSpawn"
+        && !(left.check "notATrigger")
+    );
+
     # HM: S1 — an `action.command` package coerces to its getExe store path so
     # companion files ride the closure at an absolute, cwd-independent path.
     module-kiro-hooks-command-accepts-package = mkTest "kiro-hooks-command-accepts-package" (
