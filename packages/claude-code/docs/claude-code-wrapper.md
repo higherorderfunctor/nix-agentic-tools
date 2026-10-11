@@ -81,11 +81,14 @@ Catalog aliases come from one array of literal `id`/`family` objects, never
 `provider_ids.first_party`. Announced retirement-table membership removes an
 alias without consulting a clock. Launch-pin keys require a negated dot-property
 guard and a single-argument push of a literal Claude model id, either as the
-whole body or first in the shipped three-statement block (literal push, variable
-binding, conditional dynamic push to the same receiver). Any other guard/body
-shape naming an `unpin…LaunchEffort` token is refused with PROBE naming that
-token, even beside a supported pin. Each site must occupy exactly one
-content-located chunk; missing or ambiguous sites fail as LOCATION errors.
+whole body or first in the shipped three-statement block: that literal push, one
+single-declaration variable statement, then an else-less `if` whose body is one
+single-argument push to the same receiver. The reader checks that shape, not the
+tail's values: the binding and the pushed expression are not inspected, so a
+literal in the tail push is accepted and never counted as a pin. Any other
+guard/body shape naming an `unpin…LaunchEffort` token is refused with PROBE
+naming that token, even beside a supported pin. Each site must occupy exactly
+one content-located chunk; missing or ambiguous sites fail as LOCATION errors.
 Computed properties and spreads in located catalog entries fail with PROBE;
 every located retirement row must have a literal `modelName` and object
 `retirementDates`, or PROBE names its row key. The AST reader refuses malformed
