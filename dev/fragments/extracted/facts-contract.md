@@ -1,10 +1,11 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-10 — two owners are migrated end to end: kiro-cli
-> (host-run settings facts, darwin raw produced by the darwin CI leg) and
-> claude-code (every fact static, both raws produced on any host from the two
-> release tarballs). `settings.paths` shows the limit of the `<name>` wildcard:
-> a raw whose attribute names contain dots is declared as one opaque `object`.
+> **Last verified:** 2026-10-11 — `children` reads combined wildcard children;
+> two owners are migrated end to end: kiro-cli (host-run settings facts, darwin
+> raw produced by the darwin CI leg) and claude-code (every fact static, both
+> raws produced on any host from the two release tarballs). `settings.paths`
+> shows the limit of the `<name>` wildcard: a raw whose attribute names contain
+> dots is declared as one opaque `object`.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -108,7 +109,7 @@ differing count or string is a decision, and the failure prints the row.
 ## `lib/extracted/facts.nix`
 
 Needs only `lib`, like `reconcile`, so an option module can call it before
-`pkgs` exists. Five functions.
+`pkgs` exists. Six functions.
 
 ### `load`
 
@@ -186,7 +187,7 @@ a prefix of a declared path is undeclared and is classified like any other.
 `ignore` as a combine drops the key from the aggregate only; its raws are still
 validated and `type-mismatch`, `missing-system` and `declared-gone` still fire.
 
-### `get` and `getFor`
+### `children`, `get` and `getFor`
 
 `get aggregate "<key>"` returns the combined value. `get` on a key without a
 combined value throws naming the key, the failure and the fix: the entry's
@@ -194,7 +195,16 @@ combined value throws naming the key, the failure and the fix: the entry's
 `per-platform` key the advice to read it with `getFor`. A key absent from the
 aggregate (undeclared, or `declared-gone`) throws naming the key and both
 remedies. There is no fallback value. `getFor system aggregate "<key>"` returns
-that system's raw value for any key. Consumers use nothing else to read facts.
+that system's raw value for any key.
+
+`children aggregate "<pattern>"` reads a declared key pattern containing exactly
+one `<name>` segment and returns `{ "<child>" = <combined value>; }` for its
+matching concrete leaves. Matching requires the same number of dotted segments,
+with every fixed segment equal. Each value is read through `get`, so a matched
+per-platform or failed leaf throws with the same key, failure and remedy. No
+matches returns `{}`: disappearing wildcard children are not a failure. A
+pattern without exactly one `<name>` segment throws. Consumers use these readers
+to read facts.
 
 ### `expect`
 

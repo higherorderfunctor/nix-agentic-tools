@@ -8,7 +8,7 @@
   pkgs,
   ...
 }: let
-  inherit (import ../../lib/extracted/facts.nix {inherit lib;}) expect get getFor load merge;
+  inherit (import ../../lib/extracted/facts.nix {inherit lib;}) children expect get getFor load merge;
   inherit (import ../../lib/extracted {inherit pkgs;}) index;
   systems = import ../../config/systems.nix;
   run = input: merge (input // {inherit systems;});
@@ -36,6 +36,43 @@
   fixRows = builtins.fromJSON fixText;
 
   groups = {
+    # `children`: exact wildcard leaves, disappearing children and get's
+    # refusal of a child whose value must be read per system.
+    children = let
+      pattern = "features.<name>.state";
+      input = {
+        declarations = {
+          "features.<name>.state" = static "string";
+          "other.features.old.state" = static "string";
+        };
+        raws = both {
+          features = {
+            new.state = "on";
+            old.state = "off";
+          };
+          other.features.old.state = "unrelated";
+        };
+      };
+      matched = run input;
+      empty = run {
+        declarations.${pattern} = static "string";
+        raws = both {features = {};};
+      };
+      platform = run (input // {decisions.${pattern} = decision "per-platform";});
+      refuses = aggregate: key: !(builtins.tryEval (builtins.deepSeq (children aggregate key) true)).success;
+    in {
+      empty = children empty.aggregate pattern == {};
+      matches-two =
+        children matched.aggregate pattern
+        == {
+          new = "on";
+          old = "off";
+        };
+      multiple-wildcards-throws = refuses matched.aggregate "<name>.<name>.state";
+      no-wildcard-throws = refuses matched.aggregate "features.old.state";
+      per-platform-throws = refuses platform.aggregate pattern;
+    };
+
     # Decisions: the combine vocabulary and the defaults table. A key `k`
     # differs (or not) across systems; columns: combine, type, Darwin raw,
     # Linux raw, combined value. `set` is compared without order.
