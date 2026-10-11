@@ -29,10 +29,18 @@ in {
     # supply every system's raw from this host. Each is compared, and
     # regenerated, at the same derived paths.
     targets =
-      map (system: {
-        committed = committed + "/${system}.json";
+      map (system: let
+        present = builtins.filter (candidate: builtins.hasAttr "${candidate}.json" (builtins.readDir committed)) (import ../../config/systems.nix);
+        measured =
+          if builtins.pathExists (committed + "/${system}.json")
+          then system
+          else if builtins.length present == 1
+          then builtins.head present
+          else throw "mkDriftCheck: ${toString committed} expected ${system}.json or exactly one raw named by config/systems.nix";
+      in {
+        committed = committed + "/${measured}.json";
         extracted = extracted.${system};
-        sidecar = "${sidecar}/${system}.json";
+        sidecar = "${sidecar}/${measured}.json";
       })
       (builtins.filter (system: extracted ? ${system} && extracted.${system}.system == host) (import ../../config/systems.nix));
     compare = {
@@ -76,8 +84,8 @@ in {
             echo '  nix fmt -- ${sidecar}' >&2
           '';
         };
-    # Copies each buildable system's raw over its sidecar, from the
-    # repository root; never a foreign system's, which this host cannot build.
+    # Copies each buildable extraction over the same sidecar it compared,
+    # including the sole committed raw of an owner measured once.
     regenerate = import ../strict-shell-application.nix pkgs {
       name = regenerateName name;
       text =
