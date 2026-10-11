@@ -186,13 +186,9 @@
           inherit details fix kind;
           key = instanceKey;
         };
-      in {
-        entry =
-          {
-            inherit bySystem combine type;
-            inherit (declaration) source;
-          }
-          // lib.optionalAttrs (mistyped == []) value;
+        combined = lib.optionalAttrs (mistyped == []) value;
+        # What left the entry without a value, for `get` to throw.
+        cause = lib.findFirst (failure: failure.kind != "missing-system") null failures;
         failures =
           lib.optional (missing != []) (failure "missing-system" missing "extract `${instanceKey}` on ${lib.concatStringsSep ", " missing}, or narrow its declared `systems`")
           ++ lib.optional (mistyped != []) (failure "type-mismatch" (lib.genAttrs mistyped (system: bySystem.${system})) "correct the declared type of `${key}` (declared ${builtins.toJSON type})")
@@ -203,6 +199,15 @@
               reason = "TODO: why `${instanceKey}` differs across systems";
             };
           }));
+      in {
+        inherit failures;
+        entry =
+          {
+            inherit bySystem combine type;
+            inherit (declaration) source;
+          }
+          // combined
+          // lib.optionalAttrs (!(combined ? value) && cause != null) {failure = builtins.removeAttrs cause ["key"];};
       };
       results = lib.mapAttrs perInstance instances;
     in {
@@ -265,10 +270,18 @@ in {
       }
       // {inherit systems;};
 
-  get = aggregate: key:
-    if aggregate.${key}.combine == "per-platform"
-    then throw "extracted fact `${key}` is per-platform: read it with getFor <system>, or add a decisions.json row that combines it"
-    else aggregate.${key}.value;
+  # A key without a combined value throws its failure and fix; a
+  # per-platform key has none, and is told to read per system instead.
+  get = aggregate: key: let
+    entry = aggregate.${key};
+    problem =
+      entry.failure or {
+        details = entry.bySystem;
+        fix = "read it with getFor <system>, or add a decisions.json row that combines it";
+        kind = entry.combine;
+      };
+  in
+    entry.value or (throw "extracted fact `${key}` has no combined value (${problem.kind}): ${builtins.toJSON problem.details}. Fix: ${problem.fix}");
 
   getFor = system: aggregate: key: aggregate.${key}.bySystem.${system};
 

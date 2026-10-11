@@ -246,14 +246,18 @@
       missing-facts-throws = !(builtins.tryEval (load {dir = ./.;})).success;
     };
 
-    # `get` and `getFor` on a `per-platform` key, which has no value.
+    # `get` and `getFor` on a `per-platform` key, which has no value; `get`
+    # on a divergent key throws, carrying merge's own failure (its message is
+    # asserted in extracted-facts-divergent-fix).
     platform = let
       result = run {
         declarations.limit = static "count";
         decisions.limit = decision "per-platform";
         raws = split {limit = 3;} {limit = 5;};
       };
+      diverged = run divergent;
     in {
+      get-divergent-throws = !(builtins.tryEval (get diverged.aggregate "mode")).success && diverged.aggregate.mode.failure == builtins.removeAttrs (lib.head diverged.failures) ["key"];
       get-for = getFor "aarch64-darwin" result.aggregate "limit" == 3 && getFor "x86_64-linux" result.aggregate "limit" == 5;
       get-throws = !(builtins.tryEval (get result.aggregate "limit")).success;
       no-value = kinds result == [] && !(result.aggregate.limit ? value);
@@ -357,6 +361,11 @@
       raws = split {limit = 3;} {limit = 5;};
     };
   };
+  # facts.nix and what it imports, for the evaluator in divergent-fix.
+  source = lib.fileset.toSource {
+    root = ../..;
+    fileset = lib.fileset.unions [../../lib/extracted/facts.nix ../../lib/runtime-values];
+  };
   vocabulary = ["and" "equal" "ignore" "intersection" "max" "min" "or" "per-platform" "union"] ++ map (system: "prefer:${system}") systems;
 in {
   checks = {
@@ -375,11 +384,30 @@ in {
       echo "PASS: extracted-facts-index" > "$out"
     '';
     # `merge`, the `fix` paragraph: the divergent fix is a complete
-    # decisions.json object, wrapped by the declared pattern.
+    # decisions.json object, wrapped by the declared pattern, and `get` on
+    # the divergent key fails evaluation printing the key and that row.
+    # tryEval cannot see a throw's message, so a dummy-store evaluator reads it.
     extracted-facts-divergent-fix = pkgs.runCommand "extracted-facts-divergent-fix" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       fix=${pkgs.writeText "divergent-fix.json" fixText}
+      export HOME="$TMPDIR"
+      if ${pkgs.nix}/bin/nix-instantiate --eval --strict --store dummy:// --expr ${lib.escapeShellArg ''
+        let
+          facts = import ${source}/lib/extracted/facts.nix {lib = import ${pkgs.path}/lib;};
+        in
+          facts.get (facts.merge (builtins.fromJSON ${builtins.toJSON (builtins.toJSON (divergent // {inherit systems;}))})).aggregate "mode"
+      ''} 2> get.err; then
+        echo "FAIL: get on the divergent key mode did not fail evaluation" >&2
+        exit 1
+      fi
+      for fragment in '`mode`' "$(cat "$fix")"; do
+        grep -qF -- "$fragment" get.err || {
+          echo "FAIL: get's error does not name $fragment:" >&2
+          cat get.err >&2
+          exit 1
+        }
+      done
       ${pkgs.jq}/bin/jq -e --argjson vocabulary '${builtins.toJSON vocabulary}' '
         keys == ["mode"]
         and (.mode.combine | IN($vocabulary[]))

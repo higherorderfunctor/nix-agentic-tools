@@ -1,10 +1,11 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-10 — `load` reads an owner's directory (an absent
-> configured raw is `missing-system`), per-system drift carries
-> `passthru.regenerate` and `regenCommand` runs it, and `checks.extracted-index`
-> lists no owner yet. Nothing is migrated to the contract yet; `lib/extracted/`
-> and its fixtures are the only consumers.
+> **Last verified:** 2026-10-10 — `get` on a valueless key throws its failure
+> and fix; `load` reads an owner's directory (an absent configured raw is
+> `missing-system`), per-system drift carries `passthru.regenerate` and
+> `regenCommand` runs it, and `checks.extracted-index` lists no owner yet.
+> Nothing is migrated to the contract yet; `lib/extracted/` and its fixtures are
+> the only consumers.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -145,6 +146,8 @@ merge {
       value;                 # combined; ABSENT for per-platform keys
       bySystem = { "<system>" = <raw value>; };
       type; source; combine; # as resolved
+      failure;               # { kind; details; fix; } ONLY when value is
+                             # absent because of a failure
     };
   };
   undeclared = [ "<key>" ];  # present in a raw, no declaration; informational
@@ -186,10 +189,12 @@ validated and `type-mismatch`, `missing-system` and `declared-gone` still fire.
 
 ### `get` and `getFor`
 
-`get aggregate "<key>"` returns the combined value and throws, naming the key
-and the fix, when the key is `per-platform`. `getFor system aggregate "<key>"`
-returns that system's raw value for any key. Consumers use nothing else to read
-facts.
+`get aggregate "<key>"` returns the combined value. `get` on a key without a
+combined value throws naming the key, the failure and the fix: the entry's
+`failure` (for `divergent`, the paste-ready `decisions.json` row), or for a
+`per-platform` key the advice to read it with `getFor`. There is no fallback
+value. `getFor system aggregate "<key>"` returns that system's raw value for any
+key. Consumers use nothing else to read facts.
 
 ### `expect`
 
@@ -276,7 +281,10 @@ its refused input or its visible result, plus one derivation that asserts the
 11. `bad-decision`: unknown combine; blank reason; row for an undeclared key.
 12. `ignore` removes an element before intersection.
 13. `missing-system`: declared for both, present in one.
-14. `live` with `systems = []`: no system required, no failure.
+14. `live` with `systems = []`: no system required, no failure; `get` on a
+    divergent key throws and the entry carries merge's failure, and
+    `extracted-facts-divergent-fix` evaluates that `get` in a dummy-store
+    `nix-instantiate` to assert its message names the key and the row.
 15. `load` (fixture directories under `checks/extracted/load/`): both configured
     raws present, plus one for a system outside `config/systems.nix` that is
     never read, merge clean with their decision applied; with Darwin's raw
