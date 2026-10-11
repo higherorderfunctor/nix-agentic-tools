@@ -8,7 +8,12 @@
   ...
 }: let
   inherit (import ../../lib/extracted {inherit pkgs;}) index load;
-  owners = [];
+  owners = [
+    {
+      dir = ../../packages/kiro-cli/extracted;
+      name = "kiro-cli";
+    }
+  ];
 in {
   checks.extracted-index = index (lib.listToAttrs (map (owner: lib.nameValuePair owner.name (load {inherit (owner) dir;})) owners));
 }

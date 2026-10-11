@@ -1,9 +1,10 @@
-# Drift check — the committed packages/kiro-cli/extracted.json must match what
-# the packaged kiro binary and the committed public model-table snapshot contain.
-# Blocking (a typed trigger vanishing, or a documented-absent one becoming
-# present, is a correctness signal the typed surface must react to). Mirrors
-# packages/claude-code/checks/claude-code-extracted.nix; the build of passthru.extracted also enforces
-# the fail-loud (>=1 present) guard baked into vu.mkKiroExtract.
+# Drift check — the committed packages/kiro-cli/extracted/<host>.json must
+# match what the packaged kiro binary and the committed public model-table
+# snapshot contain, the facts must merge across systems, and the facts the
+# Kiro modules were written against must still hold. Blocking (a typed trigger
+# vanishing, or a documented-absent one becoming present, is a correctness
+# signal the typed surface must react to). The build of passthru.extracted also
+# enforces the fail-loud (>=1 present) guard baked into vu.mkKiroExtract.
 {
   extractedLib,
   pkgs,
@@ -12,9 +13,8 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
-    extracted = self.ciPackages.${system}.kiro-cli.passthru.extracted;
-    committed = ../extracted.json;
+    inherit (extractedLib {inherit pkgs;}) expect load mkDriftCheck;
+    kiroFacts = load {dir = ../extracted;};
   in
     {
       kiro-models-fixtures = pkgs.runCommand "kiro-models-fixtures" {} ''
@@ -24,8 +24,43 @@
       '';
     }
     // mkDriftCheck {
-      inherit committed extracted;
+      committed = ../extracted;
+      # The host's extraction only: settingKeys and workspaceOverridableSettings
+      # are host-run, and the other system's package set does not evaluate here.
+      extracted.${system} = self.ciPackages.${system}.kiro-cli.passthru.extracted;
       name = "kiro-cli";
-      sidecar = "packages/kiro-cli/extracted.json";
+      results = {
+        consumers = expect {
+          inherit (kiroFacts) aggregate;
+          consumer = "kiro-cli";
+          # mkKiro.nix's option enums and flatten boundary, and the
+          # module-eval fixtures that rest on them.
+          needs = [
+            {key = "hookTriggers";}
+            {
+              contains = "workflows";
+              key = "rolloutFeatures";
+            }
+            {
+              contains = "chat.enableWorkflows";
+              key = "settingKeys";
+            }
+            {
+              contains = "chat.modelDefaults";
+              key = "settingKeys";
+            }
+            {
+              contains = "chat.defaultModel";
+              key = "workspaceOverridableSettings";
+            }
+            {
+              contains = "chat.enableTangentMode";
+              key = "workspaceOverridableSettings";
+            }
+          ];
+        };
+        facts = kiroFacts;
+      };
+      sidecar = "packages/kiro-cli/extracted";
     };
 }

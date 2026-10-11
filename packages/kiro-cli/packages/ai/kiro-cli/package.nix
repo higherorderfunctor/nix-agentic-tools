@@ -1,6 +1,7 @@
 # Kiro CLI — override nixpkgs with nightly version.
 # Per-platform sources in kiro-cli-sources.json, managed by updateScript.
 {
+  extractedLib,
   pkgs,
   packageLib,
   repoPath,
@@ -28,11 +29,7 @@
       "$modelTmp/models.md" > "$modelTmp/catalog.json"
     ${pkgs.coreutils}/bin/cp "$modelTmp/catalog.json" ${repoPath ../../../model-catalog.json}
     ${pkgs.nix}/bin/nix fmt -- ${repoPath ../../../model-catalog.json}
-    ${vu.mkExtractRegen {
-      attr = "kiro-cli";
-      dest = repoPath ../../../extracted.json;
-      inherit pkgs;
-    }}
+    ${(extractedLib {inherit pkgs;}).regenCommand {name = "kiro-cli";}}
   '';
 
   # Derived from the URL rather than branched on the platform, so a future
