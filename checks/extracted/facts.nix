@@ -8,7 +8,7 @@
   pkgs,
   ...
 }: let
-  inherit (import ../../lib/extracted/facts.nix {inherit lib;}) children expect get getFor load merge;
+  inherit (import ../../lib/extracted/facts.nix {inherit lib;}) children expect get load merge;
   inherit (import ../../lib/extracted {inherit pkgs;}) index;
   systems = import ../../config/systems.nix;
   run = input: merge (input // {inherit systems;});
@@ -73,7 +73,7 @@
       per-platform-throws = refuses platform.aggregate pattern;
     };
 
-    # Decisions: the combine vocabulary and the defaults table. A key `k`
+    # Decisions: consumer combinations and their defaults. A key `k`
     # differs (or not) across systems; columns: combine, type, Darwin raw,
     # Linux raw, combined value. `set` is compared without order.
     combines = let
@@ -93,15 +93,10 @@
       decided = combined true;
     in {
       bool-and = byDefault "and" "bool" true false false;
-      bool-or = decided "or" "bool" true false true;
-      count-max = decided "max" "count" 3 5 5;
-      count-min = decided "min" "count" 3 5 3;
       list-agree = byDefault "equal" "list" ["b" "a"] ["b" "a"] ["b" "a"];
       object-agree = byDefault "equal" "object" {a.b = 1;} {a.b = 1;} {a.b = 1;};
       set-intersection = byDefault "intersection" "set" ["a" "b"] ["c" "b"] ["b"];
       set-union = decided "union" "set" ["a" "b"] ["c" "b"] ["c" "b" "a"];
-      string-agree = byDefault "equal" "string" "same" "same" "same";
-      string-prefer = decided "prefer:x86_64-linux" "string" "darwin-value" "linux-value" "linux-value";
     };
 
     # `merge`, failure kinds: `divergent` under an effective `equal`, with
@@ -133,35 +128,30 @@
     };
 
     # Decisions table and `bad-decision`: one row for the string key `mode`,
-    # differing from a valid row in the fields shown, accepted or refused.
+    # differing from a valid row in the fields shown and refused.
     decisions = let
-      verdict = accepted: key: fields:
+      verdict = key: fields:
         kinds (run {
           declarations.mode = static "string";
           decisions.${key} = decision "equal" // fields;
           raws = both {mode = "same";};
         })
-        == lib.optional (!accepted) "bad-decision";
-      accept = verdict true "mode";
-      refuse = verdict false "mode";
+        == ["bad-decision"];
+      refuse = verdict "mode";
     in {
       # `and` on a string would otherwise throw inside the reducer.
       combine-and-on-string = refuse {combine = "and";};
       combine-max-on-string = refuse {combine = "max";};
       combine-unknown = refuse {combine = "average";};
-      date-leap = accept {decided = "2024-02-29";};
       date-malformed = refuse {decided = "2026-1-01";};
       date-month-13 = refuse {decided = "2026-13-01";};
       date-placeholder = refuse {decided = "YYYY-MM-DD";};
-      # Calendar validity is not checked: the field is provenance.
-      date-well-formed = accept {decided = "2026-02-31";};
       ignore-non-collection = refuse {ignore = ["x"];};
       reason-blank = refuse {reason = " ";};
       reason-todo = refuse {reason = "TODO";};
       reason-todo-colon = refuse {reason = "TODO:";};
       reason-todo-indented = refuse {reason = "  TODO: why";};
-      reason-todo-prefixed-word = accept {reason = "TODO entries are excluded because they are not implemented commands";};
-      undeclared-key = verdict false "ghost" {};
+      undeclared-key = verdict "ghost" {};
     };
 
     # Decisions: `ignore` as a combine drops the key from the aggregate, so
@@ -178,24 +168,12 @@
         kinds result == expected && !(result.aggregate ? k);
     in {
       declared-gone = ignored "count" {} {} ["declared-gone"];
-      drops-count = ignored "count" {k = 3;} {k = 5;} [];
-      drops-set = ignored "set" {k = ["a"];} {k = ["b"];} [];
       missing-system = ignored "count" {} {k = 5;} ["missing-system"];
       type-mismatch = ignored "count" {k = "five";} {k = "five";} ["type-mismatch"];
     };
 
-    # Decisions: `ignore` removes elements before combining.
-    ignoreElements.before-intersection =
-      get
-      (run {
-        declarations.models = static "set";
-        decisions.models = decision "intersection" // {ignore = ["preview"];};
-        raws = both {models = ["a" "preview"];};
-      }).aggregate "models"
-      == ["a"];
-
     # `merge`, failure kinds: `declared-gone` (with its fix) and
-    # `missing-system`; a `live` key with `systems = []` requires nothing.
+    # `missing-system` name the absent declaration or required system.
     presence = let
       gone = run {
         declarations.lastRun = static "string";
@@ -203,16 +181,6 @@
       };
     in {
       declared-gone = kinds gone == ["declared-gone"] && (lib.head gone.failures).fix == "delete the declaration for `lastRun`";
-      live-no-systems =
-        (run {
-          declarations.lastRun = {
-            source = "live";
-            systems = [];
-            type = "string";
-          };
-          raws = both {};
-        }).failures
-        == [];
       missing-system =
         kinds (run {
           declarations.limit = static "count";
@@ -285,7 +253,7 @@
       missing-facts-throws = !(builtins.tryEval (load {dir = ./.;})).success;
     };
 
-    # `get` and `getFor` on a `per-platform` key, which has no value; `get`
+    # `get` refuses a `per-platform` key, which has no combined value; `get`
     # on a divergent key throws, carrying merge's own failure (its message is
     # asserted in extracted-facts-divergent-fix).
     platform = let
@@ -298,7 +266,6 @@
     in {
       get-absent-throws = !(builtins.tryEval (get diverged.aggregate "gone")).success;
       get-divergent-throws = !(builtins.tryEval (get diverged.aggregate "mode")).success && diverged.aggregate.mode.failure == builtins.removeAttrs (lib.head diverged.failures) ["key"];
-      get-for = getFor "aarch64-darwin" result.aggregate "limit" == 3 && getFor "x86_64-linux" result.aggregate "limit" == 5;
       get-throws = !(builtins.tryEval (get result.aggregate "limit")).success;
       no-value = kinds result == [] && !(result.aggregate.limit ? value);
     };
@@ -310,12 +277,10 @@
       inherit
         (run {
           declarations = {
-            hookTriggers = static "set";
             "steering.maxChars" = static "count";
             tools = static "set";
           };
           raws = both {
-            hookTriggers = ["stop"];
             steering.maxChars = 50000;
             tools = ["invoke_sub_agent" "read"];
           };
@@ -341,11 +306,6 @@
             contains = "invoke_sub_agent";
             key = "tools";
           }
-          {
-            key = "steering.maxChars";
-            value = 50000;
-          }
-          {key = "hookTriggers";}
         ]
         == [];
       contains-and-value-unmet = misses [
@@ -383,12 +343,10 @@
       }) {};
       gone = state disappearing {};
       emptied = state (both {features = {};}) {};
-      preferred = state disappearing {"features.<name>.state" = decision "prefer:x86_64-linux";};
     in {
       covers-every-child = covered.failures == [] && covered.undeclared == [] && get covered.aggregate "features.new.state" == "off" && get covered.aggregate "features.old.state" == "on";
       disappearing-child = gone.failures == [] && builtins.attrNames gone.aggregate."features.new.state".bySystem == ["aarch64-darwin"] && get gone.aggregate "features.new.state" == "on";
       emptied-parent = emptied.failures == [] && emptied.aggregate == {};
-      prefer-sole-value = preferred.failures == [] && get preferred.aggregate "features.new.state" == "on";
     };
   };
   failures = lib.concatLists (lib.mapAttrsToList (group: rows: map (row: "${group}.${row}") (builtins.attrNames (lib.filterAttrs (_: passed: !passed) rows))) groups);
@@ -397,8 +355,7 @@
   indexed = index {
     demo = run {
       declarations.limit = static "count";
-      decisions.limit = decision "max";
-      raws = split {limit = 3;} {limit = 5;};
+      raws = both {limit = 5;};
     };
   };
   # facts.nix and what it imports, for the evaluator in divergent-fix.

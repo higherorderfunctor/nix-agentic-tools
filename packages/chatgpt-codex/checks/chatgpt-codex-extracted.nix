@@ -4,22 +4,13 @@
   pkgs,
   self,
   ...
-}: {
-  checks = let
-    inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) load mkDriftCheck;
-    codexFacts = load {dir = ../extracted;};
-    package = self.ciPackages.${system}.chatgpt-codex;
-  in
-    mkDriftCheck {
-      committed = ../extracted;
-      extracted.${system} = package.passthru.extracted;
-      name = "chatgpt-codex";
-      results =
-        {
-          facts = codexFacts;
-        }
-        // package.passthru.extractedRules.results;
-      sidecar = "packages/chatgpt-codex/extracted";
-    };
+}: let
+  package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.chatgpt-codex;
+in {
+  checks = (extractedLib {inherit pkgs;}).mkOwnerCheck {
+    dir = ../extracted;
+    name = "chatgpt-codex";
+    inherit package;
+    results = package.passthru.extractedRules.results;
+  };
 }

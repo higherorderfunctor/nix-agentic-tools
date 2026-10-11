@@ -6,40 +6,27 @@
   self,
   ...
 }: {
-  checks = let
-    inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) expect load mkDriftCheck;
-    claudeFacts = load {dir = ../extracted;};
-  in
-    mkDriftCheck {
-      committed = ../extracted;
-      extracted.${system} = self.ciPackages.${system}.claude-code.passthru.extracted;
-      name = "claude-code";
-      results = {
-        consumers = expect {
-          inherit (claudeFacts) aggregate;
-          consumer = "claude-code";
-          needs = [
-            {
-              contains = "high";
-              key = "effortLevels";
-            }
-            {
-              contains = "PreToolUse";
-              key = "hookEvents";
-            }
-            {
-              contains = "hooks";
-              key = "settings.publicKeys";
-            }
-            {
-              contains = "model";
-              key = "settings.publicKeys";
-            }
-          ];
-        };
-        facts = claudeFacts;
-      };
-      sidecar = "packages/claude-code/extracted";
-    };
+  checks = (extractedLib {inherit pkgs;}).mkOwnerCheck {
+    dir = ../extracted;
+    name = "claude-code";
+    needs = [
+      {
+        contains = "high";
+        key = "effortLevels";
+      }
+      {
+        contains = "PreToolUse";
+        key = "hookEvents";
+      }
+      {
+        contains = "hooks";
+        key = "settings.publicKeys";
+      }
+      {
+        contains = "model";
+        key = "settings.publicKeys";
+      }
+    ];
+    package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.claude-code;
+  };
 }

@@ -8,10 +8,9 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) load mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) mkOwnerCheck;
     package = self.ciPackages.${system}.kimchi;
     inherit (package.passthru) extractionSources extractionSourceUrls;
-    kimchiFacts = load {dir = ../extracted;};
     extractor = ../extract/extract.mjs;
     runExtractor = source: output: pi: ''
       ${pkgs.yq-go}/bin/yq -o=json '.' ${source}/pnpm-lock.yaml > "$TMPDIR/kimchi-lock.json"
@@ -29,16 +28,11 @@
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
     '';
   in
-    mkDriftCheck {
-      committed = ../extracted;
-      extracted.${system} = package.passthru.extracted;
+    mkOwnerCheck {
+      dir = ../extracted;
       name = "kimchi";
-      results =
-        {
-          facts = kimchiFacts;
-        }
-        // package.passthru.extractedRules.results;
-      sidecar = "packages/kimchi/extracted";
+      inherit package;
+      results = package.passthru.extractedRules.results;
     }
     // {
       kimchi-extracted-harness-guard =

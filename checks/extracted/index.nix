@@ -1,31 +1,16 @@
-# The aggregate facts JSON for readers outside Nix (dev tasks, skills):
-# build `checks.<system>.extracted-index` and read `<owner>.json` or
-# `index.json` from it. Every owner that has migrated to the facts contract
-# is listed by its `extracted/` directory.
+# Keep logical export names explicit; owner directories may be relocated.
 {
   lib,
   pkgs,
   ...
 }: let
   inherit (import ../../lib/extracted {inherit pkgs;}) index load;
-  owners = [
-    {
-      dir = ../../packages/chatgpt-codex/extracted;
-      name = "chatgpt-codex";
-    }
-    {
-      dir = ../../packages/claude-code/extracted;
-      name = "claude-code";
-    }
-    {
-      dir = ../../packages/kimchi/extracted;
-      name = "kimchi";
-    }
-    {
-      dir = ../../packages/kiro-cli/extracted;
-      name = "kiro-cli";
-    }
-  ];
+  owners = {
+    chatgpt-codex = ../../packages/chatgpt-codex/extracted;
+    claude-code = ../../packages/claude-code/extracted;
+    kimchi = ../../packages/kimchi/extracted;
+    kiro-cli = ../../packages/kiro-cli/extracted;
+  };
 in {
-  checks.extracted-index = index (lib.listToAttrs (map (owner: lib.nameValuePair owner.name (load {inherit (owner) dir;})) owners));
+  checks.extracted-index = index (lib.mapAttrs (_: dir: load {inherit dir;}) owners);
 }

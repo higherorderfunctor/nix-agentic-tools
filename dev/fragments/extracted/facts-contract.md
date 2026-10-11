@@ -1,7 +1,7 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-11 — consumer requirements live at their readers;
-> drift checks add only requirements those readers do not enforce.
+> **Last verified:** 2026-10-11 — owner checks share `mkOwnerCheck`; consumer
+> requirements live at their readers, with additional needs declared by checks.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -230,11 +230,19 @@ owner plus `index.json` across owners, each key carrying `value`, `bySystem`,
 `type`, `source`, `combine`. External readers (skills, CI scripts) read these
 files; Nix consumers read the aggregate directly.
 
-`checks.extracted-index` is `index` over every migrated owner, each `load`ed
-from its `extracted/` directory (listed in `checks/extracted/index.nix`).
-External readers build that attribute and read its files.
+`checks.extracted-index` loads the explicit logical-name-to-directory map in
+`checks/extracted/index.nix`. These names identify its JSON files and index keys
+independently of owner directory names. External readers build that attribute
+and read its files.
 
 ## Drift
+
+`mkOwnerCheck { dir; name; package; needs ? []; results ? {}; }` in
+`lib/extracted/default.nix` loads an owner's facts, checks its optional consumer
+needs and supplied annotation `results`, and compares the host's
+`package.passthru.extracted`. `dir` names the committed facts directory; `name`
+identifies the check and its `packages/<name>/extracted` regeneration paths,
+independently of that directory's physical location.
 
 `mkDriftCheck` accepts, in addition to today's single `committed` and
 `extracted`, per-system inputs. Owners never name a per-system raw file:
@@ -273,4 +281,5 @@ into `bySystem`, or defines a combine. Owners supply data and extractors only.
 
 ## Fixtures
 
-The contract cases and their concrete inputs live in `checks/extracted/`.
+Contract cases live in `checks/extracted/facts.nix` and
+`checks/extracted/drift.nix`.
