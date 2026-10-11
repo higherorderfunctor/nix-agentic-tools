@@ -10,17 +10,17 @@
   inherit (pkgs) fetchFromGitHub;
   vu = packageLib;
 
-  rev = "ae38d0b3c7978e991819ac6cd9742abf2165be1c";
+  rev = "70dccbd5fc46c3bae3358e4e36fd82e6c8f0e6f4";
   src = fetchFromGitHub {
     owner = "sparfenyuk";
     repo = "mcp-proxy";
     inherit rev;
-    hash = "sha256-rworzDa9MJK/f+E8bzNLFr+nSxgJoPY6ehlElv32khs=";
+    hash = "sha256-o2qQX1GnU6sxYCxhb0absGrgTq4fYRV4rFZExm/BwvU=";
   };
 in
   pkgs.mcp-proxy.overridePythonAttrs (old: let
     # upstream: readPyprojectVersion @ pyproject.toml
-    upstreamVersion = "0.12.0";
+    upstreamVersion = "0.13.0";
   in {
     version = vu.mkVersion {
       upstream = upstreamVersion;
