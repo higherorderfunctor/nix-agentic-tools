@@ -1,5 +1,7 @@
 {lib, ...}: let
-  codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+  inherit (import ../../../lib/extracted/facts.nix {inherit lib;}) get load;
+  codexFacts = load {dir = ../extracted;};
+  codexGlobalFlags = get codexFacts.aggregate "cli.globalFlags";
 
   # The value Home Manager renders into the user config.toml, read from the
   # file entry both backends share rather than from the generated store file,
@@ -12,5 +14,5 @@
   withHmDaemonDefault = settings:
     lib.recursiveUpdate settings {features.daemon_auto_start = false;};
 in {
-  inherit codexExtracted hmCodexSettings withHmDaemonDefault;
+  inherit codexGlobalFlags hmCodexSettings withHmDaemonDefault;
 }

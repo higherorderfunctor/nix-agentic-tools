@@ -31,7 +31,7 @@
     .targets;
   execpolicyUnits = evaluated: (execpolicyTarget evaluated).units;
   execpolicyInput = evaluated: name: markdownInput evaluated ".codex/rules/${name}";
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexExtracted hmCodexSettings withHmDaemonDefault;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexGlobalFlags hmCodexSettings withHmDaemonDefault;
 in {
   checks = {
     # ── Codex package/factory enable vertical ───────────────────────
@@ -1425,7 +1425,7 @@ in {
         # extracted sets rather than one representative, so replacing the
         # factory's sidecar lookup with a stale handwritten subset goes red.
         extractedFlagValues = name: let
-          matches = builtins.filter (flag: builtins.elem name flag.names) codexExtracted.cli.globalFlags;
+          matches = builtins.filter (flag: builtins.elem name flag.names) codexGlobalFlags;
           matchCount = builtins.length matches;
         in
           if matchCount == 1

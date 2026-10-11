@@ -10,7 +10,8 @@
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
-  codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+  inherit (import ../../../lib/extracted/facts.nix {inherit lib;}) get load;
+  codexFacts = load {dir = ../extracted;};
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   # Codex's launcher, installed by both backends. Codex takes its
   # command shell from `SHELL` in its OWN process environment (via
@@ -185,17 +186,17 @@
     skills;
 
   stableFeatureNames = map (feature: feature.name) (
-    builtins.filter (feature: feature.maturity == "stable") codexExtracted.features
+    builtins.filter (feature: feature.maturity == "stable") (get codexFacts.aggregate "features")
   );
   reasoningEffortLevels = lib.unique (
-    lib.concatMap (model: model.reasoningLevels) codexExtracted.models
+    lib.concatMap (model: model.reasoningLevels) (get codexFacts.aggregate "models")
   );
   # These are closed CLI vocabularies, not manual guesses. The extractor
   # already fails if either sentinel disappears or changes shape; consuming the
   # same records here removes a second hard-coded list that could otherwise
   # keep evaluating after a Codex update changed the accepted values.
   rootFlagValues = name: let
-    matches = builtins.filter (flag: builtins.elem name flag.names) codexExtracted.cli.globalFlags;
+    matches = builtins.filter (flag: builtins.elem name flag.names) (get codexFacts.aggregate "cli.globalFlags");
     matchCount = builtins.length matches;
   in
     if matchCount == 1

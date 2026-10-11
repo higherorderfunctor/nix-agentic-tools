@@ -1,5 +1,4 @@
-# Drift check — the committed Codex sidecar must match the deterministic CLI
-# help, feature list, and bundled model catalog exposed by the packaged binary.
+# Drift, cross-system facts, consumer needs and launcher flags are one gate.
 {
   extractedLib,
   pkgs,
@@ -8,15 +7,29 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) expect load mkDriftCheck;
+    codexFacts = load {dir = ../extracted;};
     package = self.ciPackages.${system}.chatgpt-codex;
-    inherit (package.passthru) extracted;
-    committed = ../extracted.json;
   in
     mkDriftCheck {
-      inherit committed extracted;
+      committed = ../extracted;
+      extracted.${system} = package.passthru.extracted;
       name = "chatgpt-codex";
-      results = package.passthru.extractedRules.results;
-      sidecar = "packages/chatgpt-codex/extracted.json";
+      results =
+        {
+          consumers = expect {
+            inherit (codexFacts) aggregate;
+            consumer = "chatgpt-codex";
+            needs = [
+              {key = "cli.commands.codex.flags";}
+              {key = "cli.globalFlags";}
+              {key = "features";}
+              {key = "models";}
+            ];
+          };
+          facts = codexFacts;
+        }
+        // package.passthru.extractedRules.results;
+      sidecar = "packages/chatgpt-codex/extracted";
     };
 }

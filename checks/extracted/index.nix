@@ -10,6 +10,10 @@
   inherit (import ../../lib/extracted {inherit pkgs;}) index load;
   owners = [
     {
+      dir = ../../packages/chatgpt-codex/extracted;
+      name = "chatgpt-codex";
+    }
+    {
       dir = ../../packages/claude-code/extracted;
       name = "claude-code";
     }
