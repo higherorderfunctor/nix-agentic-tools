@@ -257,6 +257,7 @@
       };
       diverged = run divergent;
     in {
+      get-absent-throws = !(builtins.tryEval (get diverged.aggregate "gone")).success;
       get-divergent-throws = !(builtins.tryEval (get diverged.aggregate "mode")).success && diverged.aggregate.mode.failure == builtins.removeAttrs (lib.head diverged.failures) ["key"];
       get-for = getFor "aarch64-darwin" result.aggregate "limit" == 3 && getFor "x86_64-linux" result.aggregate "limit" == 5;
       get-throws = !(builtins.tryEval (get result.aggregate "limit")).success;

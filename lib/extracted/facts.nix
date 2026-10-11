@@ -273,7 +273,7 @@ in {
   # A key without a combined value throws its failure and fix; a
   # per-platform key has none, and is told to read per system instead.
   get = aggregate: key: let
-    entry = aggregate.${key};
+    entry = aggregate.${key} or (throw "extracted fact `${key}` is not in the aggregate: it is undeclared, or declared and absent from every raw (declared-gone). Declare it in facts.json and extract it, or delete the declaration");
     problem =
       entry.failure or {
         details = entry.bySystem;

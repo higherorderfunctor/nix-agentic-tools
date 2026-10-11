@@ -11,8 +11,7 @@ applyTo: "checks/extracted/**,lib/extracted/**,packages/*/extracted/**,packages/
 > and fix; `load` reads an owner's directory (an absent configured raw is
 > `missing-system`), per-system drift carries `passthru.regenerate` and
 > `regenCommand` runs it, and `checks.extracted-index` lists its first owner,
-> kiro-cli, migrated end to end in this change. Nothing is migrated to the
-> contract yet; `lib/extracted/` and its fixtures are the only consumers.
+> kiro-cli, migrated end to end in this change.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -199,9 +198,10 @@ validated and `type-mismatch`, `missing-system` and `declared-gone` still fire.
 `get aggregate "<key>"` returns the combined value. `get` on a key without a
 combined value throws naming the key, the failure and the fix: the entry's
 `failure` (for `divergent`, the paste-ready `decisions.json` row), or for a
-`per-platform` key the advice to read it with `getFor`. There is no fallback
-value. `getFor system aggregate "<key>"` returns that system's raw value for any
-key. Consumers use nothing else to read facts.
+`per-platform` key the advice to read it with `getFor`. A key absent from the
+aggregate (undeclared, or `declared-gone`) throws naming the key and both
+remedies. There is no fallback value. `getFor system aggregate "<key>"` returns
+that system's raw value for any key. Consumers use nothing else to read facts.
 
 ### `expect`
 
