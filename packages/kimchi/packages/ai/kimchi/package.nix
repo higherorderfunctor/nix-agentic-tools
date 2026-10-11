@@ -288,7 +288,10 @@ in
     passthru = {
       inherit externalizedExtensions externalizeExtensions extracted fixPnpmDepsHash goFloor goModPath proxyHelper;
       inherit (goUpdate) fixGoFloor fixVendorHash;
-      extractedRules = import ../../../extract/rules.nix {inherit extractedLib pkgs;};
+      extractedRules = import ../../../extract/rules.nix {
+        inherit extractedLib pkgs;
+        inherit ((extractedLib {inherit pkgs;}).load {dir = ../../../extracted;}) aggregate;
+      };
       extractionSources = {
         kimchi = kimchiSource;
         pi = piPackage;

@@ -156,11 +156,11 @@
 
   mkInlineCodeList = values:
     lib.concatMapStringsSep ", " (value: "`${value}`") values;
-  # Read from Kimchi's extracted sidecar, the same list devenv rejects.
+  # Read from Kimchi's extracted facts, the same list devenv rejects.
   kimchiUserScopeHarnessKeys =
     (import ../packages/kimchi/lib/extracted.nix {
       inherit lib pkgs;
-      extracted = builtins.fromJSON (builtins.readFile ../packages/kimchi/extracted.json);
+      inherit ((import ../lib/extracted {inherit pkgs;}).load {dir = ../packages/kimchi/extracted;}) aggregate;
       extractedLib = import ../lib/extracted;
     }).userScopeHarnessKeys;
 
