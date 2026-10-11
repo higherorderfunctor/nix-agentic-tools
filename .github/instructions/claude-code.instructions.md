@@ -7,9 +7,9 @@ applyTo: "packages/claude-code/packages/ai/claude-code/package.nix,packages/clau
 
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-07 — settings are generated from the committed
-> sidecar; the schema check gates stale and shadowed rows, missing paths and
-> wildcard grammar.
+> **Last verified:** 2026-10-10 — settings are generated from the committed
+> facts in packages/claude-code/extracted/; the schema check gates stale and
+> shadowed rows, missing paths and wildcard grammar.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -86,7 +86,7 @@ and stops extraction.
 `ai.claude.native.settings` used to be a handful of hand-written options plus a
 freeform JSON tail. It is now one typed option per path in the packaged binary's
 OWN settings schema — ~150 top level, extracted into
-`packages/claude-code/extracted.json` by
+`packages/claude-code/extracted/` (the `settings.paths` fact) by
 `packages/claude-code/extract/census.mjs` and turned into `lib.mkOption`
 declarations by `packages/claude-code/lib/generateSettingsOptions.nix`. The
 wiring lives in `packages/claude-code/lib/nativeOptions.nix`, which is the ONLY

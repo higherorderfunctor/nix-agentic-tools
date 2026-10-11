@@ -7,10 +7,10 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-10 — Kiro is the first per-system owner: its
-> `packages/kiro-cli/extracted/` holds one raw per host plus declarations and
-> decisions, merged by `lib.extracted`; other owners keep one shared sidecar.
-> Kiro hook triggers come from the KAS engine's trigger map, not ELF greps.
+> **Last verified:** 2026-10-10 — Kiro and Claude use per-system raws plus
+> declarations and decisions, merged by `lib.extracted`; Claude statically
+> extracts both release tarballs on either host. Kiro hook triggers come from
+> the KAS engine's trigger map, not ELF greps.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -240,16 +240,18 @@ the sidecar's `settings` block is upstream's own description of itself rather
 than anything this repo recognizes by eye. Everything located by that path is
 located by CONTENT — never a chunk filename, a minified identifier or a byte
 offset, none of which the macOS and Linux builds of one version agree on. That
-is what lets ONE sidecar be committed for both platforms; the darwin `build` job
-is the only place that claim is ever tested by a build. Kimchi's JavaScript
-extractor reads the hash-pinned release source, exact pi npm package, and the
-three pi declaration packages imported by its settings type through nixpkgs'
-pinned TypeScript compiler API. The checker supplies declared settings keys and
-types; syntax-tree queries supply validation and environment access sites. It
-measures both native settings files and every environment read it can resolve
-without unpacking the Bun executable or pattern-matching TypeScript text. It
-extracted both CLI layers until 2026-09-23; that surface was dropped because the
-Kimchi wrapper passes no flags, so nothing read it. The code is at
+lets either host extract both release tarballs into
+`packages/claude-code/extracted/`. The `settings.paths` fact compares the whole
+schema across platforms; the drift check compares both fresh raws against their
+committed counterparts on either host. Kimchi's JavaScript extractor reads the
+hash-pinned release source, exact pi npm package, and the three pi declaration
+packages imported by its settings type through nixpkgs' pinned TypeScript
+compiler API. The checker supplies declared settings keys and types; syntax-tree
+queries supply validation and environment access sites. It measures both native
+settings files and every environment read it can resolve without unpacking the
+Bun executable or pattern-matching TypeScript text. It extracted both CLI layers
+until 2026-09-23; that surface was dropped because the Kimchi wrapper passes no
+flags, so nothing read it. The code is at
 `git show b92a18a8:packages/kimchi/extract/extract.mjs` if a consumer appears.
 Two measurements are attribution, not collection. A `JSON.parse` in `config.ts`
 counts toward `config.json` only when its `readFileSync` path resolves there;
