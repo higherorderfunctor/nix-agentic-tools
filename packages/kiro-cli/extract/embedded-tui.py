@@ -15,10 +15,11 @@ from pathlib import Path
 def signal_group(child, sig):
     """Signal the child's process group, treating an exited group as gone.
 
-    Darwin's killpg answers EPERM, not ESRCH, while every member of the group
-    is a zombie -- here, a leader that exited but is not reaped yet. EPERM is
-    accepted only once poll() has reaped that leader and a retry agrees the
-    group is gone; while the leader lives, EPERM is a real failure and raises.
+    On Darwin, killpg can answer EPERM when any group member cannot be signalled,
+    including during teardown while the leader is still exiting. If the leader
+    is alive, signal it directly instead: cleanup closes the pty master and
+    waits for the child, then sends SIGKILL 0.2 seconds later if needed.
+    If the leader has exited, retry killpg to confirm the group is gone.
     """
     try:
         os.killpg(child.pid, sig)
@@ -26,7 +27,11 @@ def signal_group(child, sig):
         pass
     except PermissionError:
         if child.poll() is None:
-            raise
+            try:
+                child.send_signal(sig)
+            except ProcessLookupError:
+                pass
+            return
         try:
             os.killpg(child.pid, sig)
         except ProcessLookupError:
@@ -116,11 +121,11 @@ with tempfile.TemporaryDirectory(prefix=f"kiro-{mode}-") as root:
                 + output.decode(errors="replace")
             )
     finally:
+        os.close(master)
         signal_group(child, signal.SIGTERM)
         time.sleep(0.2)
         signal_group(child, signal.SIGKILL)
         child.wait()
-        os.close(master)
 
 if mode == "tui" and Path(destination).stat().st_size < 100_000:
     raise RuntimeError("embedded TUI is unexpectedly small")
