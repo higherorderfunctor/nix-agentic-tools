@@ -1,7 +1,6 @@
 """Select a dependency release allowed by the currently pinned Semble release."""
 
 import json
-import re
 import sys
 from pathlib import Path
 from urllib.request import urlopen
@@ -28,7 +27,10 @@ def main():
             requirement
             for requirement in requirements
             if canonicalize_name(requirement.name) == canonicalize_name(dependency)
-            and not re.search(r"\bextra\s*==", str(requirement.marker))
+            and (
+                requirement.marker is None
+                or requirement.marker.evaluate({"extra": ""})
+            )
         ),
         None,
     )
