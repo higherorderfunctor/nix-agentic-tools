@@ -2,12 +2,11 @@
 
 > **Last verified:** 2026-10-11 — four owners are migrated end to end: kiro-cli
 > and chatgpt-codex (host-run; the darwin raw is produced by the darwin CI leg,
-> one producer job over every host-run owner), claude-code (every fact static)
-> and kimchi (every fact static from one source tree). Drift supports owners
-> measured once: one committed raw, with Darwin still validating its answer.
-> `children` reads a wildcard declaration's combined children. `settings.paths`
-> shows the limit of the `<name>` wildcard: a raw whose attribute names contain
-> dots is declared as one opaque `object`.
+> one producer job over every host-run owner), claude-code and kimchi (every
+> fact static, measured once on Linux: one committed raw, and Darwin validates
+> its own extraction against it). `children` reads a wildcard declaration's
+> combined children. `settings.paths` shows the limit of the `<name>` wildcard:
+> a raw whose attribute names contain dots is declared as one opaque `object`.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
