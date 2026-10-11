@@ -1,4 +1,4 @@
-# `ai.kimchi.native.*` follows packages/kimchi/extracted.json.
+# `ai.kimchi.native.*` follows packages/kimchi/extracted/ facts.
 #
 # The option types are generated from the committed sidecar by
 # ../lib/extracted.nix. Agreement with the real sidecar alone would also hold
@@ -15,15 +15,42 @@
 }: let
   inherit (harness) evalDevenv;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
-  committed = builtins.fromJSON (builtins.readFile ../extracted.json);
+  inherit (extractedLib {inherit pkgs;}) children get load merge;
+  inherit (load {dir = ../extracted;}) aggregate;
+  committed = {
+    config = {
+      keys = children aggregate "config.keys.<name>";
+      projectTier = get aggregate "config.projectTier";
+    };
+    environment.variables = children aggregate "environment.variables.<name>";
+    harness = {
+      definitions = children aggregate "harness.definitions.<name>";
+      keys = children aggregate "harness.keys.<name>";
+    };
+    virtualPackages = get aggregate "virtualPackages";
+  };
   committedRows = builtins.fromJSON (builtins.readFile ../extract/annotations.json);
-  surfaceFor = extracted: rows: import ../lib/extracted.nix {inherit extracted extractedLib lib pkgs rows;};
-  real = surfaceFor committed null;
+  surfaceForRaw = raw: rows: let
+    merged = merge {
+      declarations = builtins.fromJSON (builtins.readFile ../extracted/facts.json);
+      raws = {
+        aarch64-darwin = raw;
+        x86_64-linux = raw;
+      };
+      systems = import ../../../config/systems.nix;
+    };
+  in
+    assert merged.failures == [];
+      import ../lib/extracted.nix {
+        inherit extractedLib lib pkgs rows;
+        inherit (merged) aggregate;
+      };
+  real = import ../lib/extracted.nix {inherit aggregate extractedLib lib pkgs;};
   sorted = lib.sort (a: b: a < b);
 
   # One harness key added, one config key removed, one enum value added.
   fixture =
-    surfaceFor (lib.recursiveUpdate (committed
+    surfaceForRaw (lib.recursiveUpdate (committed
       // {
         config = committed.config // {keys = builtins.removeAttrs committed.config.keys ["llmEndpoint"];};
       }) {
@@ -41,13 +68,13 @@
   fixtureHasNoLlmEndpoint = !(fixture.settingsOptions ? llmEndpoint);
 
   # A hand-table row whose path is gone, and a key whose type nothing maps.
-  withoutModelRoles = surfaceFor (committed
+  withoutModelRoles = surfaceForRaw (committed
     // {
       harness = committed.harness // {keys = builtins.removeAttrs committed.harness.keys ["modelRoles"];};
     })
   null;
   withUnion =
-    surfaceFor (lib.recursiveUpdate committed {
+    surfaceForRaw (lib.recursiveUpdate committed {
       harness.keys.probeUnion = {
         optional = true;
         type = "union";
@@ -56,23 +83,23 @@
     })
     null;
   withUserScopeTheme =
-    surfaceFor (lib.recursiveUpdate committed {
+    surfaceForRaw (lib.recursiveUpdate committed {
       harness.keys.theme.project = false;
     })
     null;
   withConsumedInertKey =
-    surfaceFor (lib.recursiveUpdate committed {
+    surfaceForRaw (lib.recursiveUpdate committed {
       config.keys.mcpSearchLimit.inert = false;
     })
     null;
   withoutOwnVariable =
-    surfaceFor (lib.recursiveUpdate committed {
+    surfaceForRaw (lib.recursiveUpdate committed {
       environment.variables.KIMCHI_REGION.consumerOverridable = false;
     })
     null;
   # Annotation rows with one harness key and one config key ignored. Both keys
   # have an option on the real surface and nothing in the factory reads them.
-  withIgnoredRows = surfaceFor committed (lib.recursiveUpdate committedRows {
+  withIgnoredRows = surfaceForRaw committed (lib.recursiveUpdate committedRows {
     config.llmEndpoint.ignored = "probe";
     harness.httpProxy.ignored = "probe";
   });

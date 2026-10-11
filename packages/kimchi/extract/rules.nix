@@ -1,23 +1,23 @@
 # One surface table for consumers and the drift check.
 {
-  extracted ? builtins.fromJSON (builtins.readFile ../extracted.json),
+  aggregate,
   extractedLib,
   pkgs,
   # The annotation rows; a check overrides them to prove a row reaches the surface.
   rows ? builtins.fromJSON (builtins.readFile ./annotations.json),
 }: let
   inherit (pkgs) lib;
-  inherit (extractedLib {inherit pkgs;}) reconcile;
+  inherit (extractedLib {inherit pkgs;}) children reconcile;
   results = reconcile {
     config = {
-      facts = extracted.config.keys;
+      facts = children aggregate "config.keys.<name>";
       fields = ["aliasFor" "excluded"];
       needs = ["type"];
       rows = rows.config;
       secretNeeds = ["excluded"];
     };
     environment = {
-      facts = extracted.environment.variables;
+      facts = children aggregate "environment.variables.<name>";
       # Ordinary names may carry prose; secret rows require it below.
       fields = ["controls"];
       needs = [];
@@ -40,7 +40,7 @@
       secretNeeds = ["controls"];
     };
     harness = {
-      facts = extracted.harness.keys;
+      facts = children aggregate "harness.keys.<name>";
       # The extractor emits a key Kimchi reads with no declared type as
       # `type = null`; a row supplies the JSON type its option needs.
       fields = ["excluded"];

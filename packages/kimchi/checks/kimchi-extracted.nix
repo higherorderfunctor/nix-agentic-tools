@@ -8,10 +8,10 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) expect load mkDriftCheck;
     package = self.ciPackages.${system}.kimchi;
-    inherit (package.passthru) extracted extractionSources extractionSourceUrls;
-    committed = ../extracted.json;
+    inherit (package.passthru) extractionSources extractionSourceUrls;
+    kimchiFacts = load {dir = ../extracted;};
     extractor = ../extract/extract.mjs;
     runExtractor = source: output: pi: ''
       ${pkgs.yq-go}/bin/yq -o=json '.' ${source}/pnpm-lock.yaml > "$TMPDIR/kimchi-lock.json"
@@ -30,10 +30,31 @@
     '';
   in
     mkDriftCheck {
-      inherit committed extracted;
+      committed = ../extracted;
+      extracted.${system} = package.passthru.extracted;
       name = "kimchi";
-      results = package.passthru.extractedRules.results;
-      sidecar = "packages/kimchi/extracted.json";
+      results =
+        {
+          consumers = expect {
+            inherit (kimchiFacts) aggregate;
+            consumer = "kimchi";
+            needs = [
+              {key = "config.keys.region";}
+              {key = "config.projectTier";}
+              {key = "environment.variables.KIMCHI_API_KEY";}
+              {key = "environment.variables.KIMCHI_ENABLE_RESOURCES";}
+              {key = "environment.variables.KIMCHI_REGION";}
+              {key = "environment.variables.KIMCHI_TELEMETRY_ENABLED";}
+              {key = "harness.keys.defaultProjectTrust";}
+              {key = "harness.keys.modelRoles";}
+              {key = "harness.keys.resources";}
+              {key = "virtualPackages";}
+            ];
+          };
+          facts = kimchiFacts;
+        }
+        // package.passthru.extractedRules.results;
+      sidecar = "packages/kimchi/extracted";
     }
     // {
       kimchi-extracted-harness-guard =

@@ -1,0 +1,26 @@
+{
+  "config.keys.<name>": {
+    "source": "static",
+    "type": "object"
+  },
+  "config.projectTier": {
+    "source": "static",
+    "type": "object"
+  },
+  "environment.variables.<name>": {
+    "source": "static",
+    "type": "object"
+  },
+  "harness.definitions.<name>": {
+    "source": "static",
+    "type": "object"
+  },
+  "harness.keys.<name>": {
+    "source": "static",
+    "type": "object"
+  },
+  "virtualPackages": {
+    "source": "static",
+    "type": "list"
+  }
+}

@@ -18,6 +18,10 @@
       name = "claude-code";
     }
     {
+      dir = ../../packages/kimchi/extracted;
+      name = "kimchi";
+    }
+    {
       dir = ../../packages/kiro-cli/extracted;
       name = "kiro-cli";
     }

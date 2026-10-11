@@ -7,10 +7,11 @@ applyTo: "checks/extracted/**,lib/extracted/**,packages/*/extracted/**,packages/
 
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-11 — three owners are migrated end to end: kiro-cli
+> **Last verified:** 2026-10-11 — four owners are migrated end to end: kiro-cli
 > and chatgpt-codex (host-run; the darwin raw is produced by the darwin CI leg,
-> one producer job over every host-run owner) and claude-code (every fact
-> static, both raws produced on any host). `children` reads a wildcard
+> one producer job over every host-run owner), claude-code (every fact static,
+> both raws produced on any host) and kimchi (every fact static from one source
+> tree, so both raws are byte-identical). `children` reads a wildcard
 > declaration's combined children. `settings.paths` shows the limit of the
 > `<name>` wildcard: a raw whose attribute names contain dots is declared as one
 > opaque `object`.

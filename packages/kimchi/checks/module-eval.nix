@@ -77,7 +77,7 @@
   userScopeOnlyHarnessSettingKeys =
     (import ../lib/extracted.nix {
       inherit extractedLib lib pkgs;
-      extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+      inherit ((import ../../../lib/extracted/facts.nix {inherit lib;}).load {dir = ../extracted;}) aggregate;
     }).userScopeHarnessKeys;
   userScopeOnlyHarnessSettingValues = {
     defaultProjectTrust = "always";
@@ -852,7 +852,8 @@ in {
     # for delegable roles a non-empty list of them
     # (src/extensions/orchestration/model-roles.ts:117-181). Anything else is
     # discarded with a warning at runtime, so the option type rejects it. The
-    # role names, and which roles take one string, come from extracted.json.
+    # role names, and which roles take one string, come from
+    # packages/kimchi/extracted/ harness.keys.modelRoles.
     module-kimchi-model-roles-shape = mkTest "kimchi-model-roles-shape" (
       let
         withRoles = modelRoles:

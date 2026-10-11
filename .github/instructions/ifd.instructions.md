@@ -7,10 +7,11 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-10 — Kiro and Claude use per-system raws plus
-> declarations and decisions, merged by `lib.extracted`; Claude statically
-> extracts both release tarballs on either host. Kiro hook triggers come from
-> the KAS engine's trigger map, not ELF greps.
+> **Last verified:** 2026-10-11 — Kiro, Claude, Codex and Kimchi use per-system
+> raws plus declarations and decisions, merged by `lib.extracted`; Claude
+> statically extracts both release tarballs on either host, and Kimchi's two
+> raws are identical because its one source tree is the only input. Kiro hook
+> triggers come from the KAS engine's trigger map, not ELF greps.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -217,10 +218,11 @@ git-branchless instead measure pinned source inputs (git-branchless with a
 tree-sitter walk of its patched source, `packages/git-branchless/extract/`).
 Consumers read the committed file, never the derivation, so option surfaces
 derived from it cost no IFD. Kimchi's `ai.kimchi.native.*` types are generated
-from its sidecar (`packages/kimchi/lib/extracted.nix`), and git-branchless's
-typed settings likewise (`lib/git-tool-settings`, called from each owner's
-`lib/default.nix`). `checks/<pkg>-extracted.nix` then compares committed against
-freshly built output to catch a stale sidecar.
+from its declared facts in `packages/kimchi/extracted/`
+(`packages/kimchi/lib/extracted.nix` reads them through `lib.extracted`), and
+git-branchless's typed settings likewise (`lib/git-tool-settings`, called from
+each owner's `lib/default.nix`). `checks/<pkg>-extracted.nix` then compares
+committed against freshly built output to catch a stale sidecar.
 
 Kiro's `models` field is the exception to the binary source: it is derived from
 the committed public documentation snapshot, refreshed by the update job even

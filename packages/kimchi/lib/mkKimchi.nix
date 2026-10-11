@@ -21,7 +21,7 @@
   # from the committed sidecar (never passthru.extracted: that is IFD).
   sidecar = import ./extracted.nix {
     inherit lib pkgs;
-    extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+    inherit ((import ../../../lib/extracted/facts.nix {inherit lib;}).load {dir = ../extracted;}) aggregate;
     extractedLib = lib.ai.extracted;
   };
   # pi 0.85.1 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir.
@@ -130,8 +130,8 @@
     };
   };
 
-  # Both native files are typed from packages/kimchi/extracted.json by
-  # ./extracted.nix. The submodules are closed: a key Kimchi does not read is
+  # ./extracted.nix types both native files from packages/kimchi/extracted/
+  # config.keys and harness.keys. The submodules are closed: a key Kimchi does not read is
   # an unknown-option error, not bytes nothing reads. Declared per backend
   # because only Home Manager's harness type carries `hmHarnessDefaults`.
   nativeOptions = backend: let
@@ -143,7 +143,7 @@
       description =
         ''
           Kimchi `config.json`, typed from the keys the pinned Kimchi reads
-          (packages/kimchi/extracted.json). Home Manager owns declared leaves
+          (packages/kimchi/extracted/ config.keys). Home Manager owns declared leaves
           in <configDir>/config.json. Devenv writes
           .kimchi/config.json as a read-only copy and rejects keys Kimchi reads
           only from the user file. `apiKey` and `gitTokens` have no option here:
@@ -169,7 +169,7 @@
       description =
         ''
           Kimchi and pi harness `settings.json`, typed from the keys the pinned
-          Kimchi and pi read (packages/kimchi/extracted.json). Home Manager
+          Kimchi and pi read (packages/kimchi/extracted/ harness.keys). Home Manager
           owns declared leaves in <configDir>/harness/settings.json; devenv
           writes a read-only .config/kimchi/harness/settings.json when
           something is declared.
@@ -808,7 +808,7 @@ in
       environmentVariables.description = ''
         Environment variables exported when launching kimchi. Null suppresses
         a root entry at the same key. A variable Kimchi overwrites at launch
-        (listed with its reason in packages/kimchi/extracted.json) fails
+        (listed with its reason in packages/kimchi/extracted/ environment.variables) fails
         evaluation, because a value set for it is never read.
       '';
     };

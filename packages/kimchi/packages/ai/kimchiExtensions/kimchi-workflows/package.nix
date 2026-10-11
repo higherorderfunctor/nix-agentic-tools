@@ -8,11 +8,9 @@
 }: let
   inherit (pkgs) lib;
   pnpm = pkgs.ai.generic.pnpm_10;
-  extracted = import ../../../../lib/extracted.nix {
-    inherit extractedLib lib pkgs;
-    extracted = builtins.fromJSON (builtins.readFile ../../../../extracted.json);
-  };
-  virtualPackages = pkgs.writeText "pi-virtual-packages.json" (builtins.toJSON extracted.virtualPackages);
+  inherit (extractedLib {inherit pkgs;}) get load;
+  inherit (load {dir = ../../../../extracted;}) aggregate;
+  virtualPackages = pkgs.writeText "pi-virtual-packages.json" (builtins.toJSON (get aggregate "virtualPackages"));
   sources = builtins.fromJSON (builtins.readFile ../../../../workflows-sources.json);
   sourcesFile = repoPath ../../../../workflows-sources.json;
   versionedName = "kimchi-workflows-${sources.version}-${builtins.substring 0 7 sources.rev}";

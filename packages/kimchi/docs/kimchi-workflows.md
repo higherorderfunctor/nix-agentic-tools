@@ -1,8 +1,7 @@
 # External workflows
 
-> **Last verified:** 2026-10-08 — per-step native thinking is always patched
-> into the installed extension and covered by offline build checks; the docs
-> skill reads that same output.
+> **Last verified:** 2026-10-11 — the installer reads the `virtualPackages`
+> aggregate fact directly from `packages/kimchi/extracted/`.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's lock. Its owner-local
@@ -23,11 +22,11 @@ verification path uses them. The installation helper copies dependencies and
 their dependency/peer links once per physical package, without development
 dependencies or a network install. Packages named by pi’s literal
 `VIRTUAL_MODULES` keys are omitted from that graph: the extractor collapses
-subpaths to npm package names in `extracted.json.virtualPackages`, consumed
-through `lib/extracted.nix`. The installer checks every manifest extension entry
-exists inside the output and every `node_modules` symlink resolves inside it.
-The extension's root manifest retains its peer declarations and source entry.
-See the
+subpaths to npm package names in `packages/kimchi/extracted/` under the
+`virtualPackages` key, read directly through `lib.extracted.get`. The installer
+checks every manifest extension entry exists inside the output and every
+`node_modules` symlink resolves inside it. The extension's root manifest retains
+its peer declarations and source entry. See the
 [pinned workflows manifest](https://github.com/getkimchi/kimchi-workflows/blob/7a6765ccc4aa417f38cecce1216dd8dcd3b9fab7/package.json).
 
 The package always applies `step-thinking.patch`; there is one installed
