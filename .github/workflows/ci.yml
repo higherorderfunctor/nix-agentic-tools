@@ -184,7 +184,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
+      # No persisted GITHUB_TOKEN: the darwin producer below pushes with the
+      # App token, and a persisted credential header would be sent instead.
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       # Only inputs that can move `kiro-cli-workflows`'s store path. A
       # context7-mcp bump touches another owner's recipe tree and cannot, so it
@@ -223,7 +227,7 @@ jobs:
                   packages/kiro-cli/checks.nix | \
                   packages/kiro-cli/checks/* | \
                   packages/kiro-cli/extract/* | \
-                  packages/kiro-cli/extracted.json | \
+                  packages/kiro-cli/extracted/* | \
                   packages/kiro-cli/lib/packaging.nix | \
                   packages/kiro-cli/model-catalog.json | \
                   packages/kiro-cli/packages/* | \
@@ -275,6 +279,105 @@ jobs:
         uses: ./.github/actions/warm-ifd
         with:
           systems: ${{ matrix.system }}
+
+      # Darwin's raw is host-run: only this leg can measure it, so it is the
+      # producer. It writes the per-system raws under packages/kiro-cli/extracted
+      # (the yml names only the directory; checks/extracted/guard.nix forbids a
+      # raw path here). A clean tree means the committed darwin raw is current.
+      - name: Produce aarch64-darwin extracted facts
+        id: produce
+        if:
+          steps.scope.outputs.needed == 'true' && matrix.system ==
+          'aarch64-darwin'
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          nix run ".#checks.aarch64-darwin.kiro-cli-extracted.passthru.regenerate"
+          if [ -n "$(git status --porcelain -- packages/kiro-cli/extracted)" ]; then
+            git status --porcelain -- packages/kiro-cli/extracted
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # On the update bot's own branches the new raw is committed back AS the
+      # bot. update-publish.sh only keeps touching a branch it owns: bot_owns
+      # requires origin's head to be the bot's last push, non_bot_commits
+      # requires every commit to be authored AND committed by the bot email,
+      # and update-github.py `push` requires GitHub to credit the push to the
+      # App. git-bot-identity gives the author/committer; the App token gives
+      # the push credit. Either missing, the next sweep leaves the branch as a
+      # human edit. Fork heads lack the secrets, so they take the artifact path.
+      - name: Generate publishing App token
+        id: app-token
+        if: >-
+          steps.produce.outputs.changed == 'true' && startsWith(github.head_ref,
+          'update/') && github.event.pull_request.head.repo.full_name ==
+          github.repository
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - if: steps.app-token.outcome == 'success'
+        uses: ./.github/actions/git-bot-identity
+        with:
+          account: nix-agentic-tools-bot[bot]
+          token: ${{ github.token }}
+
+      # The checkout is the PR's merge ref; its merge commit is not the bot's,
+      # so the raw is moved onto the branch head before committing. A plain
+      # (non-force) push is rejected if the branch moved meanwhile. A push made
+      # with the App token (unlike GITHUB_TOKEN) triggers CI on the new head,
+      # and this workflow's concurrency group then cancels this run.
+      - name: Commit aarch64-darwin extracted facts as the update bot
+        if: steps.app-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          gh auth setup-git --hostname github.com
+          git stash push --include-untracked -- packages/kiro-cli/extracted
+          git fetch --no-tags origin "$HEAD_SHA"
+          git checkout --detach "$HEAD_SHA"
+          git stash pop
+          git add -- packages/kiro-cli/extracted
+          git commit -m "chore(kiro-cli): record aarch64-darwin extracted facts"
+          git push origin "HEAD:refs/heads/${HEAD_REF}"
+
+      # Anywhere else nothing may write the branch, so the measured raw leaves
+      # as an artifact and the leg fails until someone commits it.
+      - name: Upload aarch64-darwin extracted facts
+        if: >-
+          steps.produce.outputs.changed == 'true' && steps.app-token.outcome ==
+          'skipped'
+        uses: actions/upload-artifact@v7
+        with:
+          name: kiro-cli-extracted-aarch64-darwin
+          path: packages/kiro-cli/extracted
+          if-no-files-found: error
+
+      - name: Fail on stale aarch64-darwin extracted facts
+        if: >-
+          steps.produce.outputs.changed == 'true' && steps.app-token.outcome ==
+          'skipped'
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          echo "::error::The committed aarch64-darwin extracted facts are stale." \
+               "Artifact kiro-cli-extracted-aarch64-darwin holds the measured files." \
+               "From the repository root, run and commit:"
+          echo "  gh run download ${RUN_ID} -n kiro-cli-extracted-aarch64-darwin -D kiro-cli-extracted-aarch64-darwin"
+          git ls-files --modified --others --exclude-standard -- packages/kiro-cli/extracted |
+            while IFS= read -r changed_file; do
+              echo "  cp kiro-cli-extracted-aarch64-darwin/${changed_file##*/} ${changed_file}"
+            done
+          exit 1
 
       # The Linux flake check covers this drift assertion, but flake check on
       # ubuntu omits Darwin. Exercise first-run TUI materialization and the
