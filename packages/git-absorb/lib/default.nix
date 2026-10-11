@@ -4,7 +4,11 @@
   # No hand tables: the measured `minimum` already bounds `absorb.maxStack`.
   git-absorb.settings = {
     lib,
-    extracted ? builtins.fromJSON (builtins.readFile ../extracted.json),
+    extracted ?
+      import ../../../lib/git-tool-settings/extracted.nix {
+        dir = ../extracted;
+        inherit lib;
+      },
   }:
     import ../../../lib/git-tool-settings {
       inherit extracted lib;

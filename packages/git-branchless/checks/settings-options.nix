@@ -1,4 +1,4 @@
-# The typed git-branchless options follow packages/git-branchless/extracted.json.
+# The typed git-branchless options follow packages/git-branchless/extracted/.
 #
 # ../lib/default.nix generates them, through lib/git-tool-settings, from the
 # committed sidecar. Agreement with the real sidecar alone would also hold for a hand-copied option list, so the
@@ -11,7 +11,10 @@
   pkgs,
   ...
 }: let
-  committed = builtins.fromJSON (builtins.readFile ../extracted.json);
+  committed = import ../../../lib/git-tool-settings/extracted.nix {
+    dir = ../extracted;
+    inherit lib;
+  };
   surfaceFor = extracted: (import ../lib/default.nix).git-branchless.settings {inherit extracted lib;};
   real = surfaceFor committed;
   sorted = lib.sort (a: b: a < b);

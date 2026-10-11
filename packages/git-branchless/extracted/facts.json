@@ -1,0 +1,27 @@
+{
+  "deadKeys": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "foreign": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "revsetFunctions": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "list"
+  },
+  "settings": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "source": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  }
+}

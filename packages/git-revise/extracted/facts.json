@@ -1,0 +1,22 @@
+{
+  "deadKeys": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "foreign": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "settings": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "source": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  }
+}

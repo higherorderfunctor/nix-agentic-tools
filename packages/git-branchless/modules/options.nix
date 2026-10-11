@@ -1,6 +1,6 @@
 # `git.branchless.{enable,settings,scopedSync}`, declared once for both
 # backends. The typed settings are generated from git-branchless's
-# drift-checked sidecar (packages/git-branchless/extracted.json) by
+# drift-checked sidecar (packages/git-branchless/extracted/) by
 # lib/git-tool-settings, whose factory lowers them into `git.settings`
 # (packages/git). `scopedSync` is hand-declared: it is git's `alias.sync`,
 # not a `branchless.*` key, so no census can produce it.

@@ -29,7 +29,6 @@
   inputs,
   packageLib,
   pkgs,
-  repoPath,
   ...
 }: let
   rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
@@ -78,15 +77,9 @@
         # Source and Cargo.lock move with the normal flake-input sweep,
         # which also runs `regenerateExtracted` so the bump PR carries the
         # refreshed sidecar.
-        regenerateExtracted = packageLib.mkRegenerateExtracted {
+        regenerateExtracted = extraction.regenerateExtracted {
+          dir = ../../../../extracted;
           name = "git-branchless";
-          inherit pkgs;
-          targets = [
-            {
-              attr = "git-branchless";
-              dest = repoPath ../../../../extracted.json;
-            }
-          ];
         };
         updateFlakeInput = "git-branchless";
       };

@@ -12,7 +12,6 @@
   gitToolExtraction,
   packageLib,
   pkgs,
-  repoPath,
   ...
 }: let
   inherit (pkgs) fetchFromGitHub;
@@ -68,15 +67,9 @@
         };
         # A rev bump runs this through dev/scripts/update-pkg.sh, so the bump
         # PR carries the refreshed sidecar.
-        regenerateExtracted = packageLib.mkRegenerateExtracted {
+        regenerateExtracted = extraction.regenerateExtracted {
+          dir = ../../../../extracted;
           name = "git-revise";
-          inherit pkgs;
-          targets = [
-            {
-              attr = "git-revise";
-              dest = repoPath ../../../../extracted.json;
-            }
-          ];
         };
       };
   });

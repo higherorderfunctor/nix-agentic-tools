@@ -1,5 +1,5 @@
 # Typed options for the git config keys a git tool reads, generated from its
-# drift-checked sidecar (`packages/<owner>/extracted.json`) as its rows file
+# drift-checked sidecar (`packages/<owner>/extracted/`) as its rows file
 # (`packages/<owner>/extract/annotations.json`) fills it, through ./rules.nix.
 # One generator serves git-branchless, git-absorb and git-revise; each
 # owner's lib/default.nix calls it with its sidecar, rows and hand tables.

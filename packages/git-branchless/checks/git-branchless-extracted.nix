@@ -1,4 +1,4 @@
-# The committed packages/git-branchless/extracted.json, and the extractor
+# The committed packages/git-branchless/extracted/, and the extractor
 # that produces it (lib/git-tool-settings/extraction.nix builds all three):
 #
 #   git-branchless-extracted          drift: the committed sidecar equals a
@@ -22,8 +22,7 @@
   checks = (gitToolExtraction {inherit pkgs;}).checks {
     name = "git-branchless";
     package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.git-branchless;
-    sidecar = "packages/git-branchless/extracted.json";
-    committed = ../extracted.json;
+    dir = ../extracted;
     extractDir = ../extract;
     mutants = import ./extractor-mutants.nix;
     installed = "bin/git-branchless";

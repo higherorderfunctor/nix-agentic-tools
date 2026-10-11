@@ -3,7 +3,7 @@
 
 Input : the PATCHED source tree (the package's unpack + patch output), parsed
         with tree-sitter-rust.
-Output: extracted.json, one record per key (see the sidecar at the bottom):
+Output: measured raw JSON, one record per key (see the sidecar at the bottom):
         facts only. A read with no type or doc comment has neither field, and
         a key-shaped const nothing reads is a dead key with no reason; the
         rows in annotations.json may supply them, in Nix

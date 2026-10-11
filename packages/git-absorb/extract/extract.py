@@ -4,7 +4,7 @@
 Input : the source tree the package builds (src + patches), parsed with
         tree-sitter-rust; and its Documentation/git-absorb.adoc, converted to
         DocBook by asciidoc (the format's own reference parser).
-Output: extracted.json in the shared sidecar schema (lib/git-tool-settings):
+Output: measured raw JSON in the shared sidecar schema (lib/git-tool-settings):
         facts only. A key the man page does not describe has no
         `description`, and a const nothing reads is a dead key with no
         reason. Hand rows in annotations.json may supplement these facts

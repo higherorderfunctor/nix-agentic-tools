@@ -1,4 +1,4 @@
-# The committed packages/git-absorb/extracted.json, and the extractor that
+# The committed packages/git-absorb/extracted/, and the extractor that
 # produces it (lib/git-tool-settings/extraction.nix builds all three):
 #
 #   git-absorb-extracted          drift: the committed sidecar equals a fresh
@@ -21,8 +21,7 @@
   checks = (gitToolExtraction {inherit pkgs;}).checks {
     name = "git-absorb";
     package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.git-absorb;
-    sidecar = "packages/git-absorb/extracted.json";
-    committed = ../extracted.json;
+    dir = ../extracted;
     extractDir = ../extract;
     mutants = import ./extractor-mutants.nix;
     installed = "bin/git-absorb";

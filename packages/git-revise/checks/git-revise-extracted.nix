@@ -1,4 +1,4 @@
-# The committed packages/git-revise/extracted.json, and the extractor that
+# The committed packages/git-revise/extracted/, and the extractor that
 # produces it (lib/git-tool-settings/extraction.nix builds all three):
 #
 #   git-revise-extracted          drift: the committed sidecar equals a fresh
@@ -21,8 +21,7 @@
   checks = (gitToolExtraction {inherit pkgs;}).checks {
     name = "git-revise";
     package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.git-revise;
-    sidecar = "packages/git-revise/extracted.json";
-    committed = ../extracted.json;
+    dir = ../extracted;
     extractDir = ../extract;
     mutants = import ./extractor-mutants.nix;
     installed = "lib";

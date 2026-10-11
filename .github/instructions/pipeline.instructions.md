@@ -618,8 +618,9 @@ are ignored.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-07 — Semble’s grouped package updater owns both
-> snapshots; input regeneration still serves git-branchless.
+> **Last verified:** 2026-10-11 — git-tool sidecar discovery runs the extracted
+> facts contract regenerator and stages the files in each owner’s `extracted/`
+> directory; Semble’s grouped package updater owns both snapshots.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -678,10 +679,11 @@ Targets fall into three categories:
 - **Inputs** (`update-input.sh <name>`) — `nix flake update <name>` in a
   worktree, then `devenv update` to sync `devenv.lock`, then
   `regenerate_sidecars input <name>` (`update-common.sh`). It runs the
-  `passthru.regenerateExtracted` script (`packageLib.mkRegenerateExtracted`) of
-  every package whose `passthru.updateFlakeInput` names the input, and stages
-  the `sidecars` each one lists. Git-branchless's config census follows its
-  input through this path. A failed regeneration holds the input back.
+  `passthru.regenerateExtracted` script (the git tools run
+  `lib.extracted.regenCommand`) of every package whose
+  `passthru.updateFlakeInput` names the input, and stages the `sidecars` each
+  one lists. Git-branchless's config census follows its input through this path.
+  A failed regeneration holds the input back.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages.
   Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before

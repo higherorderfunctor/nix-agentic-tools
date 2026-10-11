@@ -7,9 +7,9 @@ applyTo: "packages/git-branchless/**"
 
 # git-branchless config extraction
 
-> **Last verified:** 2026-10-07 — hand annotations retain types and useful prose
-> without empty acceptance rows; missing descriptions and dead-key reasons are
-> optional. Existing settings and revset floors remain.
+> **Last verified:** 2026-10-11 — measured-once facts are declared in
+> `extracted/facts.json`; shared `load`/`get` readers and `mkOwnerCheck` replace
+> the single sidecar, and update discovery runs the contract regenerator.
 >
 > **Settled — do not relitigate.**
 >
@@ -45,7 +45,7 @@ It never builds Rust, and passthru leaves the package's store path alone.
 
 1. `extract/extract.py` — the resolver. It parses every production `.rs` file
    with tree-sitter-rust (`lib/git-tool-settings/rust_tree.py`), reads call
-   shapes, keys, defaults and types from typed nodes, writes `extracted.json`
+   shapes, keys, defaults and types from typed nodes, writes the measured raw
    (facts only) and exits non-zero on any guard.
 2. `extract/annotations.json` — the rows file, the only hand input, applied in
    Nix by `lib/git-tool-settings/rules.nix`: useful prose (computed defaults,
@@ -56,6 +56,14 @@ Every config access goes through `ConfigRead`/`ConfigWrite` in
 `git-branchless-lib/src/git/config.rs`, which is why a structured scan works.
 
 ## Sidecar shape
+
+`extracted/facts.json` declares opaque static objects `deadKeys`, `foreign`,
+`settings` and `source`, plus the `revsetFunctions` list. Every declaration
+requires only `x86_64-linux`, and `extracted/x86_64-linux.json` is the single
+source census. Setting names contain dots and literal `<name>`, so their parent
+object is opaque rather than a wildcard declaration. The shared reader assembles
+the generator's plain tree through `load` and `get`. `source.version` remains
+validated by the generator's `schema.source`.
 
 - `settings.<key>` — every `branchless.*` key: `type` (`bool`, `int`, `string`,
   `path`, `enum` + `values`), `default`, `description`, `status` (`current` /
@@ -133,12 +141,13 @@ names).
 ## Regeneration
 
 git-branchless is owned by its flake input, so `mkUpdateScript` never runs for
-it. `passthru.regenerateExtracted` (`packageLib.mkRegenerateExtracted`) is run
-by `dev/scripts/update-input.sh git-branchless` through discovery; see the
-update pipeline fragment. Locally, from the repository root:
+it. `passthru.regenerateExtracted` (the shared extraction helper running
+`lib.extracted.regenCommand`) is run by
+`dev/scripts/update-input.sh git-branchless` through discovery; see the update
+pipeline fragment. Locally, from the repository root:
 
 ```bash
-"$(nix build --no-link --print-out-paths .#git-branchless.passthru.regenerateExtracted)"
+nix run .#checks.x86_64-linux.git-branchless-extracted.passthru.regenerate
 ```
 
 ## Reading the tool's config at run time
