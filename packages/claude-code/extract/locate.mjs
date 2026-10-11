@@ -849,33 +849,62 @@ export function locateModelSites(src, ts) {
         sites.retired.push(ids);
       }
     }
-    if (
-      ts.isIfStatement(n) &&
-      ts.isPrefixUnaryExpression(n.expression) &&
-      n.expression.operator === ts.SyntaxKind.ExclamationToken &&
-      ts.isPropertyAccessExpression(n.expression.operand)
-    ) {
-      const key = n.expression.operand.name.text;
-      if (/^unpin[A-Za-z0-9]+LaunchEffort$/.test(key)) {
-        // Fable's guard has a block: its first push is literal, followed by
-        // an optional environment-derived model. Only literal pushes count.
+    if (ts.isIfStatement(n)) {
+      const keys = new Set();
+      function guardTokens(node) {
+        if (
+          (ts.isIdentifier(node) || ts.isStringLiteral(node)) &&
+          /^unpin[A-Za-z0-9]+LaunchEffort$/.test(node.text)
+        )
+          keys.add(node.text);
+        ts.forEachChild(node, guardTokens);
+      }
+      guardTokens(n.expression);
+      if (keys.size) {
+        const guard = n.expression;
         const body = n.thenStatement;
         const statements = ts.isBlock(body) ? body.statements : [body];
-        for (const statement of statements) {
-          if (
-            !ts.isExpressionStatement(statement) ||
-            !ts.isCallExpression(statement.expression)
-          )
-            continue;
+        const push = (statement) => {
+          if (!statement || !ts.isExpressionStatement(statement)) return null;
           const call = statement.expression;
-          if (
+          return ts.isCallExpression(call) &&
             ts.isPropertyAccessExpression(call.expression) &&
             call.expression.name.text === "push" &&
-            call.arguments.length === 1 &&
-            alias(literal(call.arguments[0]))
-          )
-            sites.pins.push(key);
-        }
+            call.arguments.length === 1
+            ? call
+            : null;
+        };
+        const first = push(statements[0]);
+        // Fable also binds an environment model and conditionally pushes it.
+        // Its nested dynamic push is not another launch-pin catalog entry.
+        const tail = statements[2];
+        const dynamic =
+          tail && ts.isIfStatement(tail) && push(tail.thenStatement);
+        const supportedBody = ts.isBlock(body)
+          ? statements.length === 3 &&
+            ts.isVariableStatement(statements[1]) &&
+            statements[1].declarationList.declarations.length === 1 &&
+            !tail.elseStatement &&
+            dynamic &&
+            first &&
+            dynamic.expression.expression.getText(tree) ===
+              first.expression.expression.getText(tree)
+          : statements.length === 1;
+        if (
+          keys.size !== 1 ||
+          !ts.isPrefixUnaryExpression(guard) ||
+          guard.operator !== ts.SyntaxKind.ExclamationToken ||
+          !ts.isPropertyAccessExpression(guard.operand) ||
+          !keys.has(guard.operand.name.text) ||
+          n.elseStatement ||
+          !first ||
+          !alias(literal(first.arguments[0])) ||
+          !supportedBody
+        )
+          throw new Error(
+            `claude-extract: PROBE failure: launch pin ${[...keys].join(", ")}: unsupported guard/push shape`,
+          );
+        sites.pins.push(guard.operand.name.text);
       }
     }
     ts.forEachChild(n, walk);

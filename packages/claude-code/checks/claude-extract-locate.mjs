@@ -238,6 +238,10 @@ for (const [name, diagnostic] of [
     "model-catalog-spread.js.txt",
     "model catalog entry: unsupported property form",
   ],
+  ["model-pins-computed.js.txt", "launch pin unpinOpus48LaunchEffort"],
+  ["model-pins-multi-argument.js.txt", "launch pin unpinOpus48LaunchEffort"],
+  ["model-pins-non-literal.js.txt", "launch pin unpinOpus48LaunchEffort"],
+  ["model-pins-positive.js.txt", "launch pin unpinOpus48LaunchEffort"],
   ["model-retired-malformed.js.txt", 'retirement row "claude-opus-5"'],
 ]) {
   let error = "";

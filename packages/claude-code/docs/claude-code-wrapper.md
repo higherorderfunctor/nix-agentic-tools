@@ -4,7 +4,8 @@
 > facts in packages/claude-code/extracted/; the schema check gates stale and
 > shadowed rows, missing paths and wildcard grammar. Catalog, retirement and
 > launch-pin facts are content-located AST reads of the unpacked graph;
-> unsupported catalog properties and malformed retirement rows fail with PROBE.
+> unsupported catalog properties, retirement rows and launch-pin shapes fail
+> with PROBE.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -78,11 +79,15 @@ and stops extraction.
 
 Catalog aliases come from one array of literal `id`/`family` objects, never
 `provider_ids.first_party`. Announced retirement-table membership removes an
-alias without consulting a clock. Launch-pin keys come from negated property
-guards whose body pushes a literal Claude model id. Each site must occupy
-exactly one content-located chunk; missing or ambiguous sites fail as LOCATION
-errors. Computed properties and spreads in located catalog entries fail with
-PROBE; every located retirement row must have a literal `modelName` and object
+alias without consulting a clock. Launch-pin keys require a negated dot-property
+guard and a single-argument push of a literal Claude model id, either as the
+whole body or first in the shipped three-statement block (literal push, variable
+binding, conditional dynamic push to the same receiver). Any other guard/body
+shape naming an `unpin…LaunchEffort` token is refused with PROBE naming that
+token, even beside a supported pin. Each site must occupy exactly one
+content-located chunk; missing or ambiguous sites fail as LOCATION errors.
+Computed properties and spreads in located catalog entries fail with PROBE;
+every located retirement row must have a literal `modelName` and object
 `retirementDates`, or PROBE names its row key. The AST reader refuses malformed
 catalogs and requires surviving haiku, opus and sonnet ids, so a non-empty stray
 match cannot collapse the option enum silently. The locator fixture gate tests

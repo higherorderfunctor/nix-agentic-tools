@@ -1,1 +1,1 @@
-var key="unpinOpus47LaunchEffort";function P(e,n){if(!e.unpinOpus47LaunchEffort)n.add("claude-opus-4-7");if(e.unpinSonnetLaunchEffort)n.push("claude-sonnet-5")}
+var key="unpinOpus47LaunchEffort";var e={unpinSonnetLaunchEffort:true};function P(e,n){n.push("claude-opus-4-7")}
