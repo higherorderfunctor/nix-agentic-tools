@@ -7,10 +7,11 @@ applyTo: "checks/extracted/**,lib/extracted/**,packages/*/extracted/**,packages/
 
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-10 — `load` reads an owner's directory, per-system
-> drift carries `passthru.regenerate` and `regenCommand` runs it, and
-> `checks.extracted-index` lists no owner yet. Nothing is migrated to the
-> contract yet; `lib/extracted/` and its fixtures are the only consumers.
+> **Last verified:** 2026-10-10 — `load` reads an owner's directory (an absent
+> configured raw is `missing-system`), per-system drift carries
+> `passthru.regenerate` and `regenCommand` runs it, and `checks.extracted-index`
+> lists no owner yet. Nothing is migrated to the contract yet; `lib/extracted/`
+> and its fixtures are the only consumers.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -129,9 +130,11 @@ load {
 The only way to read raws. Reads `facts.json` (required: its absence throws,
 naming the path), `decisions.json` (optional, `{}` when absent) and
 `<system>.json` for every system in `config/systems.nix` present under `dir`,
-then calls `merge` with those systems. A file for a system outside
-`config/systems.nix` is never read. `systems` lists the raws found, so a
-declaration without `systems` requires only those.
+then calls `merge` against every system in `config/systems.nix`. A configured
+system without a raw therefore fails as `missing-system` for every key its
+declaration requires; a declaration's own `systems` still narrows that. A file
+for a system outside `config/systems.nix` is never read. `systems` lists the
+raws found, for information.
 
 ### `merge`
 
@@ -281,10 +284,12 @@ its refused input or its visible result, plus one derivation that asserts the
 12. `ignore` removes an element before intersection.
 13. `missing-system`: declared for both, present in one.
 14. `live` with `systems = []`: no system required, no failure.
-15. `load` (fixture directory `checks/extracted/load/`): the Linux raw and a raw
-    for a system outside `config/systems.nix` are present, Darwin's is absent;
-    only Linux is merged, its decision applies, and `systems` reports it. `load`
-    on a directory without `facts.json` throws.
+15. `load` (fixture directories under `checks/extracted/load/`): both configured
+    raws present, plus one for a system outside `config/systems.nix` that is
+    never read, merge clean with their decision applied; with Darwin's raw
+    absent, every declared key fails `missing-system` naming it, and a
+    `prefer:aarch64-darwin` decision is not a `bad-decision`. `load` on a
+    directory without `facts.json` throws.
 
 `checks/extracted/drift.nix` runs `mkDriftCheck`'s script per case; a case with
 `regenerate` also reads the per-system regenerate script's text, which must name

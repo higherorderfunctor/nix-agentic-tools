@@ -224,13 +224,25 @@
       } ["apiToken"] ["undeclared-secret"];
     };
 
-    # `load`: ./load holds facts.json, decisions.json, the Linux raw and a
-    # raw for a system config/systems.nix does not list; the Darwin raw is
-    # absent. Only the configured, present system is merged.
+    # `load`. ./load/all-present holds both configured raws, a raw for a
+    # system config/systems.nix does not list (never read) and a decision
+    # the differing raws need. ./load/absent-system lacks the Darwin raw and
+    # keeps a `prefer:aarch64-darwin` decision.
     load = let
-      loaded = load {dir = ./load;};
+      all = load {dir = ./load/all-present;};
+      absent = load {dir = ./load/absent-system;};
     in {
-      merges-present = loaded.systems == ["x86_64-linux"] && loaded.failures == [] && builtins.attrNames loaded.aggregate.limit.bySystem == ["x86_64-linux"] && loaded.aggregate.limit.combine == "per-platform";
+      absent-system-fails =
+        absent.systems
+        == ["x86_64-linux"]
+        && absent.failures
+        == map (key: {
+          inherit key;
+          details = ["aarch64-darwin"];
+          fix = "extract `${key}` on aarch64-darwin, or narrow its declared `systems`";
+          kind = "missing-system";
+        }) ["limit" "mode"];
+      all-present = all.systems == systems && all.failures == [] && all.aggregate.limit.combine == "per-platform";
       missing-facts-throws = !(builtins.tryEval (load {dir = ./.;})).success;
     };
 

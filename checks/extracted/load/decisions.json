@@ -1,7 +1,0 @@
-{
-  "limit": {
-    "combine": "per-platform",
-    "decided": "2026-10-10",
-    "reason": "fixture: proves load reads decisions.json"
-  }
-}

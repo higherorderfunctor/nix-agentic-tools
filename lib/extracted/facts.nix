@@ -242,23 +242,26 @@ in {
   inherit merge;
 
   # The only reader of an owner's `extracted/` directory: its declarations,
-  # its decisions, and the raw of every configured system it holds.
+  # its decisions, and the raw of every configured system it holds. Merged
+  # against every configured system, so an absent raw is `missing-system`.
   load = {
     dir,
     secretHints ? {},
   }: let
     read = file: builtins.fromJSON (builtins.readFile (dir + "/${file}"));
     present = file: builtins.pathExists (dir + "/${file}");
-    systems = builtins.filter (system: present "${system}.json") (import ../../config/systems.nix);
+    configured = import ../../config/systems.nix;
+    systems = builtins.filter (system: present "${system}.json") configured;
   in
     if !present "facts.json"
     then throw "lib.extracted.load: ${toString dir}/facts.json is missing; an owner's extracted/ directory declares its keys there"
     else
       merge {
-        inherit secretHints systems;
+        inherit secretHints;
         declarations = read "facts.json";
         decisions = lib.optionalAttrs (present "decisions.json") (read "decisions.json");
         raws = lib.genAttrs systems (system: read "${system}.json");
+        systems = configured;
       }
       // {inherit systems;};
 

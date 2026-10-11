@@ -1,0 +1,7 @@
+{
+  "limit": {
+    "combine": "prefer:aarch64-darwin",
+    "decided": "2026-10-10",
+    "reason": "fixture: a decision naming the absent system stays valid"
+  }
+}

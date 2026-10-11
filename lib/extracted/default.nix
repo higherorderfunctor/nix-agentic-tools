@@ -9,14 +9,6 @@ in {
   inherit (import ./reconcile.nix {inherit lib;}) reconcile;
   index = facts.index pkgs;
 
-  # An owner's update script regenerates its per-system raws on this host;
-  # the script echoes each path as mkExtractRegen does.
-  regenCommand = {name}: ''
-    regenerate=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
-      ".#checks.${host}.${name}-extracted.passthru.regenerate")
-    "$regenerate/bin/${regenerateName name}"
-  '';
-
   mkDriftCheck = {
     # A path, or per system (the facts contract's "Drift") the owner's
     # `extracted/` directory; `<system>.json` is derived under it.
@@ -114,4 +106,12 @@ in {
         echo "ok — ${name} sidecar matches the fresh extraction" > "$out"
       '';
   };
+
+  # An owner's update script regenerates its per-system raws on this host;
+  # the script echoes each path as mkExtractRegen does.
+  regenCommand = {name}: ''
+    regenerate=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
+      ".#checks.${host}.${name}-extracted.passthru.regenerate")
+    "$regenerate/bin/${regenerateName name}"
+  '';
 }
