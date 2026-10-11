@@ -6,8 +6,6 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const EXTRACTOR_SCHEMA = 4;
-
 function fail(message) {
   throw new Error(`kimchi-extract: ${message}`);
 }
@@ -2232,11 +2230,6 @@ async function main() {
       checker,
       ts,
     ),
-    provenance: {
-      extractorSchema: EXTRACTOR_SCHEMA,
-      kimchiVersion: args["kimchi-version"],
-      piVersion,
-    },
     virtualPackages: virtualPackages(
       requireSource(join(piRoot, "dist/core/extensions/loader.js")),
       ts,

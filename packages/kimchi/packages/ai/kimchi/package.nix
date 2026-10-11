@@ -58,12 +58,13 @@
         --kimchi-source ${kimchiSource} \
         --kimchi-source-url ${lib.escapeShellArg extraction.kimchiSource.url} \
         --kimchi-version ${sources.version} \
-        --out "$out" \
+        --out - \
         --pi-agent-core-package ${piAgentCorePackage} \
         --pi-ai-package ${piAiPackage} \
         --pi-package ${piPackage} \
         --pi-tui-package ${piTuiPackage} \
-        --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
+        --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js \
+        | ${pkgs.jq}/bin/jq -S . > "$out"
     '';
 
   # `mkUpdateScript` records the version alone (`platforms = {}`), so this
@@ -140,11 +141,7 @@
     ${pkgs.coreutils}/bin/mv "$extraction_tmp" ${sourcesFile}
     ${pkgs.nix}/bin/nix fmt -- ${sourcesFile}
 
-    ${packageLib.mkExtractRegen {
-      attr = "kimchi";
-      dest = repoPath ../../../extracted.json;
-      inherit pkgs;
-    }}
+    ${(extractedLib {inherit pkgs;}).regenCommand {name = "kimchi";}}
   '';
 
   fixPnpmDepsHash = packageLib.mkHashFix {

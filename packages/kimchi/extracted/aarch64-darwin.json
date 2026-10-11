@@ -1,304 +1,304 @@
 {
   "config": {
     "keys": {
-      "api_key": {
-        "typeExpression": "string",
-        "type": "string",
-        "optional": true,
-        "project": true
-      },
       "apiKey": {
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "type": "string",
+        "typeExpression": "string"
       },
-      "device_id": {
-        "typeExpression": "string",
-        "type": "string",
+      "api_key": {
         "optional": true,
-        "project": true
+        "project": true,
+        "type": "string",
+        "typeExpression": "string"
       },
       "deviceId": {
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "type": "string",
+        "typeExpression": "string"
+      },
+      "device_id": {
+        "optional": true,
+        "project": true,
+        "type": "string",
+        "typeExpression": "string"
       },
       "gitTokens": {
-        "optional": true,
-        "type": "object",
-        "typeExpression": "Record<string, string>",
         "additionalProperties": {
-          "typeExpression": "string",
-          "type": "string"
+          "type": "string",
+          "typeExpression": "string"
         },
-        "project": false
+        "optional": true,
+        "project": false,
+        "type": "object",
+        "typeExpression": "Record<string, string>"
       },
       "llmEndpoint": {
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "type": "string",
+        "typeExpression": "string"
       },
       "maxToolResultChars": {
-        "typeExpression": "number",
-        "type": "number",
-        "optional": true,
         "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
         "inert": true,
-        "project": true
+        "optional": true,
+        "project": true,
+        "type": "number",
+        "typeExpression": "number"
       },
       "mcpSearch": {
-        "typeExpression": "{ strategy?: \"bm25\" | \"regex\"; bm25K1?: number; bm25B?: number; fieldWeights?: { name: number; description: number; schemaKey: number; }; }",
-        "type": "object",
+        "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
+        "inert": true,
+        "optional": true,
+        "project": true,
         "properties": {
           "bm25B": {
-            "typeExpression": "number",
+            "optional": true,
             "type": "number",
-            "optional": true
+            "typeExpression": "number"
           },
           "bm25K1": {
-            "typeExpression": "number",
+            "optional": true,
             "type": "number",
-            "optional": true
+            "typeExpression": "number"
           },
           "fieldWeights": {
-            "typeExpression": "{ name: number; description: number; schemaKey: number; }",
-            "type": "object",
+            "optional": true,
             "properties": {
               "description": {
-                "typeExpression": "number",
-                "type": "number"
+                "type": "number",
+                "typeExpression": "number"
               },
               "name": {
-                "typeExpression": "number",
-                "type": "number"
+                "type": "number",
+                "typeExpression": "number"
               },
               "schemaKey": {
-                "typeExpression": "number",
-                "type": "number"
+                "type": "number",
+                "typeExpression": "number"
               }
             },
-            "optional": true
+            "type": "object",
+            "typeExpression": "{ name: number; description: number; schemaKey: number; }"
           },
           "strategy": {
-            "typeExpression": "\"bm25\" | \"regex\"",
-            "type": "enum",
             "enum": ["bm25", "regex"],
-            "optional": true
+            "optional": true,
+            "type": "enum",
+            "typeExpression": "\"bm25\" | \"regex\""
           }
         },
-        "optional": true,
-        "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
-        "inert": true,
-        "project": true
+        "type": "object",
+        "typeExpression": "{ strategy?: \"bm25\" | \"regex\"; bm25K1?: number; bm25B?: number; fieldWeights?: { name: number; description: number; schemaKey: number; }; }"
       },
       "mcpSearchLimit": {
-        "typeExpression": "number",
-        "type": "number",
-        "optional": true,
         "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
         "inert": true,
-        "project": true
+        "optional": true,
+        "project": true,
+        "type": "number",
+        "typeExpression": "number"
       },
       "memoryEmbedding": {
-        "typeExpression": "{ model?: string; dims?: number; }",
-        "type": "object",
+        "optional": true,
+        "project": true,
         "properties": {
           "dims": {
-            "typeExpression": "number",
+            "optional": true,
             "type": "number",
-            "optional": true
+            "typeExpression": "number"
           },
           "model": {
-            "typeExpression": "string",
+            "optional": true,
             "type": "string",
-            "optional": true
+            "typeExpression": "string"
           }
         },
-        "optional": true,
-        "project": true
+        "type": "object",
+        "typeExpression": "{ model?: string; dims?: number; }"
       },
       "memoryExtraction": {
-        "typeExpression": "{ model?: string; }",
-        "type": "object",
+        "optional": true,
+        "project": true,
         "properties": {
           "model": {
-            "typeExpression": "string",
+            "optional": true,
             "type": "string",
-            "optional": true
+            "typeExpression": "string"
           }
         },
-        "optional": true,
-        "project": true
+        "type": "object",
+        "typeExpression": "{ model?: string; }"
       },
       "migrationState": {
-        "typeExpression": "\"done\" | \"skip-forever\"",
-        "type": "enum",
         "enum": ["done", "skip-forever"],
         "optional": true,
-        "project": true
+        "project": true,
+        "type": "enum",
+        "typeExpression": "\"done\" | \"skip-forever\""
       },
       "onboarding": {
-        "typeExpression": "OnboardingConfig",
-        "type": "object",
+        "optional": true,
+        "project": false,
         "properties": {
           "hideSessionModeDialog": {
-            "typeExpression": "boolean",
+            "optional": true,
             "type": "boolean",
-            "optional": true
+            "typeExpression": "boolean"
           },
           "sessionModeWizardSeenAt": {
-            "typeExpression": "string",
+            "optional": true,
             "type": "string",
-            "optional": true
+            "typeExpression": "string"
           },
           "studioOnboardingSeenAt": {
-            "typeExpression": "string",
+            "optional": true,
             "type": "string",
-            "optional": true
+            "typeExpression": "string"
           },
           "teleportHelpSeenAt": {
-            "typeExpression": "string",
+            "optional": true,
             "type": "string",
-            "optional": true
+            "typeExpression": "string"
           }
         },
-        "optional": true,
-        "project": false
+        "type": "object",
+        "typeExpression": "OnboardingConfig"
       },
       "preferences": {
-        "typeExpression": "PreferencesConfig",
-        "type": "object",
+        "optional": true,
+        "project": false,
         "properties": {
           "hideTips": {
-            "typeExpression": "boolean",
+            "optional": true,
             "type": "boolean",
-            "optional": true
+            "typeExpression": "boolean"
           }
         },
-        "optional": true,
-        "project": false
+        "type": "object",
+        "typeExpression": "PreferencesConfig"
       },
       "redaction": {
-        "typeExpression": "{ enabled?: boolean; }",
-        "type": "object",
+        "optional": true,
+        "project": true,
         "properties": {
           "enabled": {
-            "typeExpression": "boolean",
+            "optional": true,
             "type": "boolean",
-            "optional": true
+            "typeExpression": "boolean"
           }
         },
-        "optional": true,
-        "project": true
+        "type": "object",
+        "typeExpression": "{ enabled?: boolean; }"
       },
       "region": {
-        "typeExpression": "\"us\" | \"eu\" | \"self-hosted\"",
-        "type": "enum",
         "enum": ["us", "eu", "self-hosted"],
         "optional": true,
-        "project": false
+        "project": false,
+        "type": "enum",
+        "typeExpression": "\"us\" | \"eu\" | \"self-hosted\""
       },
       "selfHostedUrl": {
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": false
+        "project": false,
+        "type": "string",
+        "typeExpression": "string"
       },
       "skillPaths": {
-        "typeExpression": "string[]",
-        "type": "array",
         "items": {
-          "typeExpression": "string",
-          "type": "string"
+          "type": "string",
+          "typeExpression": "string"
         },
         "optional": true,
-        "project": true
+        "project": true,
+        "type": "array",
+        "typeExpression": "string[]"
       },
       "surveys": {
-        "optional": true,
-        "type": "object",
-        "typeExpression": "Record<string, SurveyConfig>",
         "additionalProperties": {
-          "type": "object",
-          "typeExpression": "SurveyConfig",
           "properties": {
             "seenAt": {
-              "typeExpression": "string",
+              "optional": true,
               "type": "string",
-              "optional": true
+              "typeExpression": "string"
             }
-          }
+          },
+          "type": "object",
+          "typeExpression": "SurveyConfig"
         },
-        "project": false
+        "optional": true,
+        "project": false,
+        "type": "object",
+        "typeExpression": "Record<string, SurveyConfig>"
       },
       "telemetry": {
         "optional": true,
-        "type": "object",
-        "typeExpression": "TelemetryConfig",
+        "project": false,
         "properties": {
           "enabled": {
-            "typeExpression": "boolean",
+            "optional": true,
             "type": "boolean",
-            "optional": true
+            "typeExpression": "boolean"
           },
           "endpoint": {
-            "typeExpression": "string",
+            "optional": true,
             "type": "string",
-            "optional": true
+            "typeExpression": "string"
           },
           "headers": {
-            "typeExpression": "{ [x: string]: string; }",
-            "type": "object",
             "additionalProperties": {
-              "typeExpression": "string",
-              "type": "string"
+              "type": "string",
+              "typeExpression": "string"
             },
-            "optional": true
+            "optional": true,
+            "type": "object",
+            "typeExpression": "{ [x: string]: string; }"
           },
           "metricsEndpoint": {
-            "typeExpression": "string",
+            "optional": true,
             "type": "string",
-            "optional": true
+            "typeExpression": "string"
           }
         },
-        "project": false
+        "type": "object",
+        "typeExpression": "TelemetryConfig"
       },
       "teleport": {
         "optional": true,
-        "type": "object",
-        "typeExpression": "{ compactHint?: { enabled?: boolean } }",
+        "project": false,
         "properties": {
           "compactHint": {
             "optional": true,
-            "type": "object",
-            "typeExpression": "{ enabled?: boolean }",
             "properties": {
               "enabled": {
-                "typeExpression": "boolean",
+                "optional": true,
                 "type": "boolean",
-                "optional": true
+                "typeExpression": "boolean"
               }
-            }
+            },
+            "type": "object",
+            "typeExpression": "{ enabled?: boolean }"
           }
         },
-        "project": false
+        "type": "object",
+        "typeExpression": "{ compactHint?: { enabled?: boolean } }"
       },
       "tui": {
-        "typeExpression": "TuiConfig",
-        "type": "object",
+        "optional": true,
+        "project": true,
         "properties": {
           "wheelScrollLines": {
-            "typeExpression": "number",
-            "type": "number",
+            "description": "Wheel-scroll step (lines) for fullscreen (alt-screen) mode. Min 1; floored by the pi-tui clamp.",
             "optional": true,
-            "description": "Wheel-scroll step (lines) for fullscreen (alt-screen) mode. Min 1; floored by the pi-tui clamp."
+            "type": "number",
+            "typeExpression": "number"
           }
         },
-        "optional": true,
-        "project": true
+        "type": "object",
+        "typeExpression": "TuiConfig"
       }
     },
     "projectTier": {
@@ -323,11 +323,6 @@
   },
   "environment": {
     "variables": {
-      "__MINIMATCH_TESTING_PLATFORM__": {
-        "consumerOverridable": true,
-        "readBy": ["pi"],
-        "type": "string"
-      },
       "APPDATA": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -508,12 +503,12 @@
         "readBy": ["pi"],
         "type": "string"
       },
-      "CLOUD_RUN_JOB": {
+      "CLOUDSDK_CONFIG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
       },
-      "CLOUDSDK_CONFIG": {
+      "CLOUD_RUN_JOB": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -531,11 +526,6 @@
       "COLUMNS": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "type": "string"
-      },
-      "comspec": {
-        "consumerOverridable": true,
-        "readBy": ["pi"],
         "type": "string"
       },
       "ComSpec": {
@@ -603,12 +593,12 @@
         "readBy": ["pi"],
         "type": "string"
       },
-      "gcloud_project": {
+      "GCLOUD_PROJECT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
       },
-      "GCLOUD_PROJECT": {
+      "GHOSTTY_RESOURCES_DIR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -626,11 +616,6 @@
       "GH_TOKEN": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "type": "string"
-      },
-      "GHOSTTY_RESOURCES_DIR": {
-        "consumerOverridable": true,
-        "readBy": ["pi"],
         "type": "string"
       },
       "GITHUB_ENTERPRISE_TOKEN": {
@@ -663,19 +648,14 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
-      "GL_HOST": {
-        "consumerOverridable": true,
-        "readBy": ["kimchi"],
-        "type": "string"
-      },
       "GLAB_TOKEN": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
       },
-      "google_application_credentials": {
+      "GL_HOST": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi"],
         "type": "string"
       },
       "GOOGLE_APPLICATION_CREDENTIALS": {
@@ -684,11 +664,6 @@
         "type": "string"
       },
       "GOOGLE_CLOUD_LOCATION": {
-        "consumerOverridable": true,
-        "readBy": ["pi"],
-        "type": "string"
-      },
-      "google_cloud_project": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -738,22 +713,12 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
-      "http_proxy": {
+      "HTTPS_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "HTTP_PROXY": {
-        "consumerOverridable": true,
-        "readBy": ["kimchi", "pi"],
-        "type": "string"
-      },
-      "https_proxy": {
-        "consumerOverridable": true,
-        "readBy": ["kimchi", "pi"],
-        "type": "string"
-      },
-      "HTTPS_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
         "type": "string"
@@ -771,16 +736,6 @@
       "JS_DEBUG_PATH": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "type": "string"
-      },
-      "K_CONFIGURATION": {
-        "consumerOverridable": true,
-        "readBy": ["pi"],
-        "type": "string"
-      },
-      "K_SERVICE": {
-        "consumerOverridable": true,
-        "readBy": ["pi"],
         "type": "string"
       },
       "KIMCHI_ACTIVE_FERMENT": {
@@ -855,6 +810,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_FERMENTS_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_FERMENT_DISABLE_PARALLEL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -866,11 +826,6 @@
         "type": "string"
       },
       "KIMCHI_FERMENT_LOCK_MAX_AGE_MS": {
-        "consumerOverridable": true,
-        "readBy": ["kimchi"],
-        "type": "string"
-      },
-      "KIMCHI_FERMENTS_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -1056,6 +1011,16 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "K_CONFIGURATION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "K_SERVICE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "LINES": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -1086,16 +1051,6 @@
         "readBy": ["pi"],
         "type": "string"
       },
-      "no_proxy": {
-        "consumerOverridable": true,
-        "readBy": ["kimchi", "pi"],
-        "type": "string"
-      },
-      "NO_PROXY": {
-        "consumerOverridable": true,
-        "readBy": ["kimchi", "pi"],
-        "type": "string"
-      },
       "NODE_DEBUG": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
@@ -1104,6 +1059,11 @@
       "NODE_ENV": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "NO_PROXY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "OLLAMA_HOST": {
@@ -1317,17 +1277,17 @@
         "readBy": ["kimchi", "pi"],
         "type": "string"
       },
-      "TERM_PROGRAM": {
-        "consumerOverridable": true,
-        "readBy": ["kimchi", "pi"],
-        "type": "string"
-      },
       "TERMINAL_EMULATOR": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "TERMUX_VERSION": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "TERM_PROGRAM": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
         "type": "string"
@@ -1397,14 +1357,9 @@
         "readBy": ["pi"],
         "type": "string"
       },
-      "WS_NO_BUFFER_UTIL": {
+      "WSLENV": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
-        "type": "string"
-      },
-      "WS_NO_UTF_8_VALIDATE": {
-        "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "WSL_DISTRO_NAME": {
@@ -1417,9 +1372,14 @@
         "readBy": ["kimchi", "pi"],
         "type": "string"
       },
-      "WSLENV": {
+      "WS_NO_BUFFER_UTIL": {
         "consumerOverridable": true,
-        "readBy": ["kimchi", "pi"],
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "WS_NO_UTF_8_VALIDATE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
         "type": "string"
       },
       "WT_SESSION": {
@@ -1451,6 +1411,46 @@
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
+      },
+      "__MINIMATCH_TESTING_PLATFORM__": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "comspec": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "gcloud_project": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "google_application_credentials": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "google_cloud_project": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "http_proxy": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "https_proxy": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "no_proxy": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
       }
     }
   },
@@ -1458,640 +1458,640 @@
     "definitions": {
       "BranchSummarySettings": {
         "reserveTokens": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         },
         "skipPrompt": {
-          "typeExpression": "boolean",
+          "optional": true,
           "type": "boolean",
-          "optional": true
+          "typeExpression": "boolean"
         }
       },
       "CompactionSettings": {
         "enabled": {
-          "typeExpression": "boolean",
+          "optional": true,
           "type": "boolean",
-          "optional": true
+          "typeExpression": "boolean"
         },
         "keepRecentTokens": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         },
         "reserveTokens": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         }
       },
       "ImageSettings": {
         "autoResize": {
-          "typeExpression": "boolean",
+          "optional": true,
           "type": "boolean",
-          "optional": true
+          "typeExpression": "boolean"
         },
         "blockImages": {
-          "typeExpression": "boolean",
+          "optional": true,
           "type": "boolean",
-          "optional": true
+          "typeExpression": "boolean"
         }
       },
       "MarkdownSettings": {
         "codeBlockIndent": {
-          "typeExpression": "string",
+          "optional": true,
           "type": "string",
-          "optional": true
+          "typeExpression": "string"
         },
         "mermaid": {
-          "typeExpression": "\"off\" | \"final\" | \"streaming\"",
-          "type": "enum",
           "enum": ["off", "final", "streaming"],
-          "optional": true
+          "optional": true,
+          "type": "enum",
+          "typeExpression": "\"off\" | \"final\" | \"streaming\""
         }
       },
       "ProviderRetrySettings": {
         "maxRetries": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         },
         "maxRetryDelayMs": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         },
         "timeoutMs": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         }
       },
       "RetrySettings": {
         "baseDelayMs": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         },
         "enabled": {
-          "typeExpression": "boolean",
+          "optional": true,
           "type": "boolean",
-          "optional": true
+          "typeExpression": "boolean"
         },
         "maxRetries": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         },
         "provider": {
-          "typeExpression": "ProviderRetrySettings",
+          "optional": true,
           "type": "object",
-          "optional": true
+          "typeExpression": "ProviderRetrySettings"
         }
       },
       "TerminalSettings": {
         "clearOnShrink": {
-          "typeExpression": "boolean",
+          "optional": true,
           "type": "boolean",
-          "optional": true
+          "typeExpression": "boolean"
         },
         "hyperlinks": {
-          "typeExpression": "boolean | \"auto\"",
-          "type": "enum",
           "enum": [false, true, "auto"],
-          "optional": true
-        },
-        "images": {
-          "typeExpression": "false | \"auto\" | \"kitty\" | \"iterm2\"",
+          "optional": true,
           "type": "enum",
-          "enum": [false, "auto", "kitty", "iterm2"],
-          "optional": true
+          "typeExpression": "boolean | \"auto\""
         },
         "imageWidthCells": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
+        },
+        "images": {
+          "enum": [false, "auto", "kitty", "iterm2"],
+          "optional": true,
+          "type": "enum",
+          "typeExpression": "false | \"auto\" | \"kitty\" | \"iterm2\""
         },
         "showImages": {
-          "typeExpression": "boolean",
+          "optional": true,
           "type": "boolean",
-          "optional": true
+          "typeExpression": "boolean"
         },
         "showTerminalProgress": {
-          "typeExpression": "boolean",
+          "optional": true,
           "type": "boolean",
-          "optional": true
+          "typeExpression": "boolean"
         },
         "trueColor": {
-          "typeExpression": "boolean | \"auto\"",
-          "type": "enum",
           "enum": [false, true, "auto"],
-          "optional": true
+          "optional": true,
+          "type": "enum",
+          "typeExpression": "boolean | \"auto\""
         }
       },
       "ThinkingBudgetsSettings": {
         "high": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         },
         "low": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         },
         "medium": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         },
         "minimal": {
-          "typeExpression": "number",
+          "optional": true,
           "type": "number",
-          "optional": true
+          "typeExpression": "number"
         }
       },
       "WarningSettings": {
         "anthropicExtraUsage": {
-          "typeExpression": "boolean",
+          "optional": true,
           "type": "boolean",
-          "optional": true
+          "typeExpression": "boolean"
         }
       }
     },
     "keys": {
       "autocompleteMaxVisible": {
-        "source": "pi",
-        "typeExpression": "number",
-        "type": "number",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "number",
+        "typeExpression": "number"
       },
       "branchSummary": {
-        "source": "pi",
-        "typeExpression": "BranchSummarySettings",
-        "type": "object",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "object",
+        "typeExpression": "BranchSummarySettings"
       },
       "collapseChangelog": {
-        "source": "pi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "compaction": {
-        "source": "pi",
-        "typeExpression": "CompactionSettings",
-        "type": "object",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "object",
+        "typeExpression": "CompactionSettings"
       },
       "defaultModel": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "defaultProjectTrust": {
-        "source": "pi",
-        "typeExpression": "\"ask\" | \"always\" | \"never\"",
-        "type": "enum",
+        "default": "ask",
         "enum": ["ask", "always", "never"],
         "optional": true,
-        "default": "ask",
-        "project": false
+        "project": false,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"ask\" | \"always\" | \"never\""
       },
       "defaultProvider": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "defaultThinkingLevel": {
-        "source": "pi",
-        "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\"",
-        "type": "enum",
         "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\""
       },
       "defaultTools": {
-        "source": "pi",
-        "typeExpression": "string[]",
-        "type": "array",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "array",
+        "typeExpression": "string[]"
       },
       "doubleEscapeAction": {
-        "source": "pi",
-        "typeExpression": "\"fork\" | \"tree\" | \"none\"",
-        "type": "enum",
         "enum": ["fork", "tree", "none"],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"fork\" | \"tree\" | \"none\""
       },
       "editorPaddingX": {
-        "source": "pi",
-        "typeExpression": "number",
-        "type": "number",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "number",
+        "typeExpression": "number"
       },
       "enableAnalytics": {
+        "optional": true,
+        "project": true,
         "source": "pi",
-        "typeExpression": "boolean",
         "type": "boolean",
-        "optional": true,
-        "project": true
-      },
-      "enabledModels": {
-        "source": "pi",
-        "typeExpression": "string[]",
-        "type": "array",
-        "optional": true,
-        "project": true
+        "typeExpression": "boolean"
       },
       "enableInstallTelemetry": {
-        "source": "pi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "enableSkillCommands": {
-        "source": "pi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "boolean",
+        "typeExpression": "boolean"
+      },
+      "enabledModels": {
+        "optional": true,
+        "project": true,
+        "source": "pi",
+        "type": "array",
+        "typeExpression": "string[]"
       },
       "extensions": {
-        "source": "pi",
-        "typeExpression": "string[]",
-        "type": "array",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "array",
+        "typeExpression": "string[]"
       },
       "externalEditor": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "fermentV2": {
-        "source": "kimchi",
-        "type": "object",
-        "typeExpression": "FermentV2Settings",
+        "optional": true,
+        "project": false,
         "properties": {
           "autoResume": {
-            "typeExpression": "boolean",
+            "optional": true,
             "type": "boolean",
-            "optional": true
+            "typeExpression": "boolean"
           },
           "defaultTokenBudget": {
-            "typeExpression": "number",
+            "optional": true,
             "type": "number",
-            "optional": true
+            "typeExpression": "number"
           },
           "evaluationTimeoutMs": {
-            "typeExpression": "number",
+            "optional": true,
             "type": "number",
-            "optional": true
+            "typeExpression": "number"
           },
           "maxConsecutiveErrors": {
-            "typeExpression": "number",
+            "optional": true,
             "type": "number",
-            "optional": true
+            "typeExpression": "number"
           },
           "maxUnchangedContinuations": {
-            "typeExpression": "number",
+            "optional": true,
             "type": "number",
-            "optional": true
+            "typeExpression": "number"
           }
         },
-        "optional": true,
-        "project": false
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "FermentV2Settings"
       },
       "followUpMode": {
-        "source": "pi",
-        "typeExpression": "\"all\" | \"one-at-a-time\"",
-        "type": "enum",
         "enum": ["all", "one-at-a-time"],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"all\" | \"one-at-a-time\""
       },
       "fullscreenCopyOnSelect": {
-        "source": "pi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "fullscreenExitOutput": {
-        "source": "pi",
-        "typeExpression": "\"transcript\" | \"resume-hint\"",
-        "type": "enum",
         "enum": ["transcript", "resume-hint"],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"transcript\" | \"resume-hint\""
       },
       "fullscreenScrollbar": {
-        "source": "pi",
-        "typeExpression": "\"auto\" | \"always\" | \"hidden\"",
-        "type": "enum",
         "enum": ["auto", "always", "hidden"],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"auto\" | \"always\" | \"hidden\""
       },
       "hidePhaseChanges": {
-        "source": "kimchi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": false
+        "project": false,
+        "source": "kimchi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "hideThinkingBlock": {
-        "source": "pi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "httpIdleTimeoutMs": {
-        "source": "pi",
-        "typeExpression": "number",
-        "type": "number",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "number",
+        "typeExpression": "number"
       },
       "httpProxy": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": false
+        "project": false,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "images": {
-        "source": "pi",
-        "typeExpression": "ImageSettings",
-        "type": "object",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "object",
+        "typeExpression": "ImageSettings"
       },
       "lastChangelogVersion": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "lastTerminalWarnings": {
-        "source": "kimchi",
-        "typeExpression": "{ [x: string]: string; }",
-        "type": "object",
         "additionalProperties": {
-          "typeExpression": "string",
-          "type": "string"
+          "type": "string",
+          "typeExpression": "string"
         },
         "optional": true,
-        "project": false
+        "project": false,
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "{ [x: string]: string; }"
       },
       "markdown": {
-        "source": "pi",
-        "typeExpression": "MarkdownSettings",
-        "type": "object",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "object",
+        "typeExpression": "MarkdownSettings"
       },
       "modelMetadata": {
-        "source": "kimchi",
         "additionalProperties": {
           "properties": {
             "description": {
+              "optional": true,
               "type": "string",
-              "typeExpression": "string",
-              "optional": true
+              "typeExpression": "string"
             },
             "reasoning": {
+              "optional": true,
               "type": "boolean",
-              "typeExpression": "boolean",
-              "optional": true
+              "typeExpression": "boolean"
             },
             "tier": {
               "enum": ["light", "standard", "heavy"],
+              "optional": true,
               "type": "enum",
-              "typeExpression": "\"light\" | \"standard\" | \"heavy\"",
-              "optional": true
+              "typeExpression": "\"light\" | \"standard\" | \"heavy\""
             },
             "vision": {
+              "optional": true,
               "type": "boolean",
-              "typeExpression": "boolean",
-              "optional": true
+              "typeExpression": "boolean"
             }
           },
           "type": "object",
           "typeExpression": "object"
         },
-        "type": "object",
-        "typeExpression": "Record<string, ModelCustomMetadata>",
         "optional": true,
-        "project": false
+        "project": false,
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "Record<string, ModelCustomMetadata>"
       },
       "modelRoles": {
-        "source": "kimchi",
-        "type": "object",
-        "typeExpression": "ModelRoles",
+        "optional": true,
+        "project": false,
         "properties": {
           "builder": {
-            "typeExpression": "string | string[]",
-            "type": "union",
             "description": "Code implementation model(s).",
-            "optional": true
+            "optional": true,
+            "type": "union",
+            "typeExpression": "string | string[]"
           },
           "compactor": {
-            "typeExpression": "string",
-            "type": "string",
+            "description": "Context summarization model.",
             "optional": true,
-            "description": "Context summarization model."
+            "type": "string",
+            "typeExpression": "string"
           },
           "explorer": {
-            "typeExpression": "string | string[]",
-            "type": "union",
             "description": "Codebase exploration model(s).",
-            "optional": true
+            "optional": true,
+            "type": "union",
+            "typeExpression": "string | string[]"
           },
           "judge": {
-            "typeExpression": "string | string[]",
-            "type": "union",
             "description": "Ferment judge model(s): verification triage and final grading calls.",
-            "optional": true
+            "optional": true,
+            "type": "union",
+            "typeExpression": "string | string[]"
           },
           "orchestrator": {
-            "typeExpression": "string",
-            "type": "string",
             "description": "Main model: runs the orchestrator loop, delegates work to other roles.",
-            "optional": true
+            "optional": true,
+            "type": "string",
+            "typeExpression": "string"
           },
           "planner": {
-            "typeExpression": "string | string[]",
-            "type": "union",
             "description": "Planning model(s): designs the approach, writes specs.",
-            "optional": true
+            "optional": true,
+            "type": "union",
+            "typeExpression": "string | string[]"
           },
           "researcher": {
-            "typeExpression": "string | string[]",
-            "type": "union",
             "description": "Research model(s): research beyond codebase — web search, documentation lookup, external sources.",
-            "optional": true
+            "optional": true,
+            "type": "union",
+            "typeExpression": "string | string[]"
           },
           "reviewer": {
-            "typeExpression": "string | string[]",
-            "type": "union",
             "description": "Code review model(s).",
-            "optional": true
+            "optional": true,
+            "type": "union",
+            "typeExpression": "string | string[]"
           }
         },
-        "optional": true,
-        "project": false
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "ModelRoles"
       },
       "modelThinkingLevels": {
-        "source": "pi",
-        "typeExpression": "{ [x: string]: ThinkingLevel; }",
-        "type": "object",
         "additionalProperties": {
-          "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\"",
+          "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
           "type": "enum",
-          "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+          "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\""
         },
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "object",
+        "typeExpression": "{ [x: string]: ThinkingLevel; }"
       },
       "multiModel": {
-        "source": "kimchi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": false
+        "project": false,
+        "source": "kimchi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "npmCommand": {
-        "source": "pi",
-        "typeExpression": "string[]",
-        "type": "array",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "array",
+        "typeExpression": "string[]"
       },
       "outputPad": {
-        "source": "pi",
-        "typeExpression": "0 | 1",
-        "type": "enum",
         "enum": [0, 1],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "0 | 1"
       },
       "packages": {
-        "source": "pi",
-        "typeExpression": "PackageSource[]",
-        "type": "array",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "array",
+        "typeExpression": "PackageSource[]"
       },
       "prompts": {
-        "source": "pi",
-        "typeExpression": "string[]",
-        "type": "array",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "array",
+        "typeExpression": "string[]"
       },
       "quietStartup": {
-        "source": "pi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "resources": {
-        "source": "kimchi",
-        "typeExpression": "{ [x: `hooks.${string}`]: boolean; [x: `extensions.${string}`]: boolean; [x: `tools.${string}`]: boolean; [x: `plugins.${string}`]: boolean; }",
-        "type": "object",
         "additionalProperties": {
-          "typeExpression": "boolean",
-          "type": "boolean"
+          "type": "boolean",
+          "typeExpression": "boolean"
         },
         "optional": true,
-        "project": false
+        "project": false,
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "{ [x: `hooks.${string}`]: boolean; [x: `extensions.${string}`]: boolean; [x: `tools.${string}`]: boolean; [x: `plugins.${string}`]: boolean; }"
       },
       "retry": {
-        "source": "pi",
-        "typeExpression": "RetrySettings",
-        "type": "object",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "object",
+        "typeExpression": "RetrySettings"
       },
       "sessionDir": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "shellCommandPrefix": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "shellPath": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "shellProfileApiKeyMigrationDismissed": {
-        "source": "kimchi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": false
+        "project": false,
+        "source": "kimchi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "showCacheMissNotices": {
-        "source": "pi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "showHardwareCursor": {
-        "source": "pi",
-        "typeExpression": "boolean",
-        "type": "boolean",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "boolean",
+        "typeExpression": "boolean"
       },
       "skills": {
-        "source": "pi",
-        "typeExpression": "string[]",
-        "type": "array",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "array",
+        "typeExpression": "string[]"
       },
       "statusLine": {
-        "source": "kimchi",
-        "typeExpression": "{ pinned: StatusLineElementId[]; }",
-        "type": "object",
+        "optional": true,
+        "project": false,
         "properties": {
+          "command": {
+            "optional": true,
+            "type": "string",
+            "typeExpression": "string"
+          },
           "pinned": {
-            "typeExpression": "StatusLineElementId[]",
-            "type": "array",
             "items": {
-              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\"",
-              "type": "enum",
               "enum": [
                 "permissions",
                 "model",
@@ -2105,106 +2105,101 @@
                 "team",
                 "credits",
                 "budget"
-              ]
+              ],
+              "type": "enum",
+              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\""
             },
-            "optional": true
-          },
-          "command": {
-            "typeExpression": "string",
-            "type": "string",
-            "optional": true
+            "optional": true,
+            "type": "array",
+            "typeExpression": "StatusLineElementId[]"
           }
         },
-        "optional": true,
-        "project": false
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "{ pinned: StatusLineElementId[]; }"
       },
       "steeringMode": {
-        "source": "pi",
-        "typeExpression": "\"all\" | \"one-at-a-time\"",
-        "type": "enum",
         "enum": ["all", "one-at-a-time"],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"all\" | \"one-at-a-time\""
       },
       "terminal": {
-        "source": "pi",
-        "typeExpression": "TerminalSettings",
-        "type": "object",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "object",
+        "typeExpression": "TerminalSettings"
       },
       "theme": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "themes": {
-        "source": "pi",
-        "typeExpression": "string[]",
-        "type": "array",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "array",
+        "typeExpression": "string[]"
       },
       "thinkingBudgets": {
-        "source": "pi",
-        "typeExpression": "ThinkingBudgetsSettings",
-        "type": "object",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "object",
+        "typeExpression": "ThinkingBudgetsSettings"
       },
       "trackingId": {
-        "source": "pi",
-        "typeExpression": "string",
-        "type": "string",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "string",
+        "typeExpression": "string"
       },
       "transport": {
-        "source": "pi",
-        "typeExpression": "\"sse\" | \"websocket\" | \"websocket-cached\" | \"auto\"",
-        "type": "enum",
         "enum": ["sse", "websocket", "websocket-cached", "auto"],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"sse\" | \"websocket\" | \"websocket-cached\" | \"auto\""
       },
       "treeFilterMode": {
-        "source": "pi",
-        "typeExpression": "\"all\" | \"default\" | \"no-tools\" | \"user-only\" | \"labeled-only\"",
-        "type": "enum",
         "enum": ["all", "default", "no-tools", "user-only", "labeled-only"],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"all\" | \"default\" | \"no-tools\" | \"user-only\" | \"labeled-only\""
       },
       "tuiMode": {
-        "source": "pi",
-        "typeExpression": "\"regular\" | \"fullscreen\"",
-        "type": "enum",
         "enum": ["regular", "fullscreen"],
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "enum",
+        "typeExpression": "\"regular\" | \"fullscreen\""
       },
       "warnings": {
-        "source": "pi",
-        "typeExpression": "WarningSettings",
-        "type": "object",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "object",
+        "typeExpression": "WarningSettings"
       },
       "websocketConnectTimeoutMs": {
-        "source": "pi",
-        "typeExpression": "number",
-        "type": "number",
         "optional": true,
-        "project": true
+        "project": true,
+        "source": "pi",
+        "type": "number",
+        "typeExpression": "number"
       }
     }
-  },
-  "provenance": {
-    "extractorSchema": 4,
-    "kimchiVersion": "1.9.1",
-    "piVersion": "0.85.1"
   },
   "virtualPackages": [
     "@earendil-works/pi-agent-core",
