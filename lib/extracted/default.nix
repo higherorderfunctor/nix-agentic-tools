@@ -128,16 +128,21 @@ in {
       committed = dir;
       extracted.${host} = package.passthru.extracted;
       inherit name;
+      # `facts` and `consumers` are this builder's own surfaces; an owner's
+      # `results` (reconcile output) may not shadow them, or a supplied
+      # `facts.failures = []` would silence every merge failure.
       results =
-        {facts = ownerFacts;}
-        // lib.optionalAttrs (needs != []) {
-          consumers = facts.expect {
-            inherit (ownerFacts) aggregate;
-            consumer = name;
-            inherit needs;
-          };
-        }
-        // results;
+        lib.throwIf (results ? consumers || results ? facts)
+        "mkOwnerCheck ${name}: results.facts and results.consumers are reserved; pass reconcile results under their own surface names"
+        (results
+          // {
+            consumers = facts.expect {
+              inherit (ownerFacts) aggregate;
+              consumer = name;
+              inherit needs;
+            };
+            facts = ownerFacts;
+          });
       sidecar = "packages/${name}/extracted";
     };
 

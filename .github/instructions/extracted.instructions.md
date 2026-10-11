@@ -247,9 +247,12 @@ and read its files.
 `mkOwnerCheck { dir; name; package; needs ? []; results ? {}; }` in
 `lib/extracted/default.nix` loads an owner's facts, checks its optional consumer
 needs and supplied annotation `results`, and compares the host's
-`package.passthru.extracted`. `dir` names the committed facts directory; `name`
-identifies the check and its `packages/<name>/extracted` regeneration paths,
-independently of that directory's physical location.
+`package.passthru.extracted`. `results.facts` and `results.consumers` are the
+builder's own surfaces; a `results` that names either is refused, so a supplied
+`facts.failures = []` can never silence a merge failure. `dir` names the
+committed facts directory; `name` identifies the check and its
+`packages/<name>/extracted` regeneration paths, independently of that
+directory's physical location.
 
 `mkDriftCheck` accepts, in addition to today's single `committed` and
 `extracted`, per-system inputs. Owners never name a per-system raw file:
