@@ -3,6 +3,7 @@
 > **Last verified:** 2026-10-10 — Kiro is the first per-system owner: its
 > `packages/kiro-cli/extracted/` holds one raw per host plus declarations and
 > decisions, merged by `lib.extracted`; other owners keep one shared sidecar.
+> Kiro hook triggers come from the KAS engine's trigger map, not ELF greps.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -377,6 +378,20 @@ allowlist, and a merge that consults that very set. It evaluates their validated
 expressions and the selected merge helper with inert loaders in an isolated
 JavaScript VM. Missing or ambiguous anchors fail.
 
+Hook triggers take the same road one bundle over. The chat ELF names only some
+of the v3 triggers (five were once recorded as "documented but absent" by a grep
+of a hand-written candidate list, and `SessionEnd` was unknown to it). The
+engine's own vocabulary is one `Object.freeze` map in the KAS bundle
+`acp-server.js`, which the extractor unpacks offline through the same launch
+helper as `kiro-bundle-patch-drift` (`vu.kiroMaterializeKas`).
+`extract/hook-triggers.mjs` locates the map by content (the one frozen object
+with a `SessionStart` key, compared as the decoded property name so a quoted key
+matches too), requires literal string entries, at least eight canonical triggers
+including `SessionStart` and `PreToolUse`, and an identity entry for each, and
+emits `hookTriggers` plus the alias map `hookTriggerAliases`; the hook record's
+trigger soft enum suggests both. Both are `host-run` because the bundle exists
+only after the binary runs.
+
 #### An anchor can lose its TYPE information without losing its match
 
 The shape assertions above all assume the anchor still says what it captured.
@@ -473,16 +488,15 @@ out, and they apply to any extractor that probes a packaged artifact:
   the patch cannot disagree about which file they mean. It anchors on the
   rollout-manifest key AND on a native-executable magic number — the second
   anchor is what stops a ~400-byte shell wrapper that merely mentions the key
-  from being selected, which would make every trigger probe come up empty and
-  fail for an invented reason. Resolving in the builder rather than at eval also
-  keeps the IFD profile unchanged: `passthru.extracted` is still consumed only
-  by `nix build`.
+  from being selected, which would make every read come up empty and fail for an
+  invented reason. Resolving in the builder rather than at eval also keeps the
+  IFD profile unchanged: `passthru.extracted` is still consumed only by
+  `nix build`.
 - **Classify the tool's exit status; never blanket-tolerate it.** `grep` exits 1
-  for "no match" (a real, expected verdict here — it is what populates
-  `documentedAbsent`) and 2 for "could not read the file". Tolerate 1, treat 2
-  as fatal, and say in the message which of the two you are reporting. Every
-  failure message on the locate path now states that it is a LOCATION failure
-  and that nothing was probed.
+  for "no match" and 2 for "could not read the file". Where no-match is a real
+  verdict, tolerate 1, treat 2 as fatal, and say in the message which of the two
+  you are reporting. Every failure message on the locate path states that it is
+  a LOCATION failure and that nothing was extracted.
 
 The general form: **an absent anchor and an unreadable artifact must never share
 a message.** They have different fixes — one is "re-derive the regex against the

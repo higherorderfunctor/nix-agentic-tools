@@ -61,8 +61,10 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
         python3=${pkgs.python3}/bin/python3
         chat=$("$python3" ${vu.kiroLocateChatScript pkgs} ${pkgs.ai.kiro-cli.unwrapped})
-        "$python3" ${../extract/embedded-tui.py} kas "$chat" "$TMPDIR/acp-server.js" \
-          ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+        ${vu.kiroMaterializeKas pkgs {
+          chat = "$chat";
+          dest = "$TMPDIR/acp-server.js";
+        }}
         "$python3" ${../lib/kiro-bundle-patch.py} "$TMPDIR/acp-server.js" --check
         ${pkgs.coreutils}/bin/touch "$out"
       '';

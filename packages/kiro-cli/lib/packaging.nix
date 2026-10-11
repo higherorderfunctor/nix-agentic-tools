@@ -22,9 +22,9 @@ rec {
   #     file that merely mentions the key) can never be selected in its place.
   #
   # The magic check is what stops "found something" from being mistaken for
-  # "found the ELF". Selecting a ~400-byte wrapper would make every trigger
-  # probe below come up empty and report a vocabulary change that did not
-  # happen — the exact misdiagnosis this locator exists to prevent.
+  # "found the ELF". Selecting a ~400-byte wrapper would make every read below
+  # come up empty and report a vocabulary change that did not happen — the
+  # exact misdiagnosis this locator exists to prevent.
   kiroChatLocatorPy = ''
     import mmap
     import os
@@ -129,7 +129,8 @@ rec {
   # f13ff45a, twelve greps failed with "No such file or directory" and the build
   # announced "upstream changed the hook-trigger vocabulary". A missing binary
   # and a changed binary are different bugs with different fixes; do not let
-  # these messages drift back together.
+  # these messages drift back together. (The trigger greps are gone: triggers
+  # now come from the engine's own map, `kiroHookTriggersExtractScript`.)
   kiroLocateChatScript = pkgs:
     pkgs.writeText "kiro-locate-chat-binary.py" ''
       ${kiroChatLocatorPy}
@@ -141,8 +142,8 @@ rec {
           sys.stderr.write(
               "kiro-locate: cannot locate the kiro chat binary - %r is not a "
               "directory, so nothing was searched. This is a LOCATION failure "
-              "(bad root, or the package layout moved); the hook-trigger "
-              "vocabulary was never probed.\n" % root
+              "(bad root, or the package layout moved); nothing was "
+              "extracted.\n" % root
           )
           sys.exit(1)
 
@@ -152,8 +153,8 @@ rec {
           sys.stderr.write(
               "kiro-locate: cannot locate the kiro chat binary - no native "
               "executable under %r carries the rollout manifest. This is a "
-              "LOCATION failure, NOT a hook-trigger vocabulary change: nothing "
-              "was probed. Either the root points at a wrapper-only output "
+              "LOCATION failure, NOT a vocabulary change: nothing was "
+              "extracted. Either the root points at a wrapper-only output "
               "(nixpkgs moved the real binaries to a separate derivation - "
               "check `passthru.unwrapped`), or upstream stopped shipping the "
               "manifest in the chat binary.\n" % root
@@ -168,8 +169,8 @@ rec {
           sys.stderr.write(
               "kiro-locate: ambiguous - %d native executables under %r carry "
               "the rollout manifest, and the extract must describe exactly "
-              "one. This is a LOCATION failure, NOT a hook-trigger vocabulary "
-              "change: nothing was probed.\n%s\n"
+              "one. This is a LOCATION failure, NOT a vocabulary change: "
+              "nothing was extracted.\n%s\n"
               % (len(matches), root, "\n".join("  " + m for m in matches))
           )
           sys.exit(1)
@@ -177,27 +178,6 @@ rec {
       sys.stdout.write(matches[0])
     '';
 
-  # Kiro hook triggers — the northbound soft-enum `knownTriggers`. Unlike Claude,
-  # Kiro has NO clean extract-all anchor: its PascalCase trigger names are polluted
-  # by the camelCase `ChatTriggerType` telemetry enum + unrelated tokens, so a
-  # mkClaudeExtract-style array grep would capture red herrings. Instead PROBE a
-  # baked candidate universe (the union of documented v2+v3 triggers) for binary
-  # presence — present -> `hookTriggers`, absent -> `documentedAbsent`
-  # (doc-ahead-of-binary). Fail loud if NONE present (anchor gone = binary
-  # hook-trigger shape change), mirroring mkClaudeExtract's guards. A brand-new
-  # trigger absent from the candidate universe is invisible here — the impure
-  # docs-diff (deferred) covers that; grow `candidates` from the docs on a new one.
-  #   root: store path of the derivation that CARRIES the kiro binaries — its
-  #         `$out`, never a path inside `bin/`. The chat binary is resolved
-  #         under it by CONTENT, inside the builder, by `kiroLocateChatScript`;
-  #         nothing about the wrapper naming is assumed. Pass the UNWRAPPED
-  #         derivation where nixpkgs splits one out, since a wrapper-only output
-  #         carries no binary to probe.
-  #   pkgs: nixpkgs set (gnugrep, coreutils, jq, python3 — python3 drives both
-  #         the content-based locate and the rollout-manifest extraction, the
-  #         latter not being expressible as a line-oriented grep because the
-  #         entries span newlines).
-  #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
   # Reads the rollout manifest the kiro chat binary carries in rodata and emits
   # its feature names, vendor states and patchability as JSON. Genuinely
   # extracted, never curated: the
@@ -277,6 +257,27 @@ rec {
       exec ${pkgs.nodejs}/bin/node ${../extract/settings.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
     '';
 
+  # Run the chat binary until it unpacks its KAS engine, and copy the engine
+  # bundle `acp-server.js` to `dest`. Offline: a dummy API key in a throwaway
+  # HOME, no login. The extractor and `kiro-bundle-patch-drift` share this one
+  # invocation; `chat` and `dest` are shell words, quoted here.
+  kiroMaterializeKas = pkgs: {
+    chat,
+    dest,
+  }: ''
+    "${pkgs.python3}/bin/python3" ${../extract/embedded-tui.py} kas "${chat}" "${dest}" ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+  '';
+
+  # TypeScript locates the engine's frozen hook-trigger map by content and
+  # asserts its shape; emits `hookTriggers` (canonical) and
+  # `hookTriggerAliases` (alias -> canonical).
+  kiroHookTriggersExtractScript = pkgs:
+    pkgs.writeShellScript "kiro-hook-triggers-extract" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      exec ${pkgs.nodejs}/bin/node ${../extract/hook-triggers.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
+    '';
+
   kiroFakeKasScript = pkgs:
     pkgs.writeTextFile {
       name = "kiro-extract-fake-kas";
@@ -284,6 +285,15 @@ rec {
       text = "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../extract/fake-kas.py;
     };
 
+  # Every fact the kiro chat binary carries, as one JSON raw.
+  #   root: store path of the derivation that CARRIES the kiro binaries — its
+  #         `$out`, never a path inside `bin/`. The chat binary is resolved
+  #         under it by CONTENT, inside the builder, by `kiroLocateChatScript`;
+  #         nothing about the wrapper naming is assumed. Pass the UNWRAPPED
+  #         derivation where nixpkgs splits one out, since a wrapper-only output
+  #         carries no binary to read.
+  #   pkgs: nixpkgs set.
+  #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
   mkKiroExtract = {
     pkgs,
     root,
@@ -291,59 +301,27 @@ rec {
   }: ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    grep="${pkgs.gnugrep}/bin/grep"
     jq="${pkgs.jq}/bin/jq"
-    sort="${pkgs.coreutils}/bin/sort"
     python3="${pkgs.python3}/bin/python3"
 
-    # STEP 1 — LOCATE. Resolved by content in the builder, so eval does no
-    # filesystem guessing and the IFD profile is unchanged. Its own failures are
-    # phrased as location failures and are not reachable from step 2's message.
+    # LOCATE. Resolved by content in the builder, so eval does no filesystem
+    # guessing and the IFD profile is unchanged. Its own failures are phrased
+    # as location failures.
     kiroChatBin=$("$python3" ${kiroLocateChatScript pkgs} "${root}")
 
-    # Belt and braces, and NOT redundant: it fires before the probe loop, so a
-    # path that is somehow unreadable is reported as such instead of turning
-    # every grep below into a false "trigger absent" verdict.
     if [ ! -f "$kiroChatBin" ] || [ ! -r "$kiroChatBin" ]; then
-      echo "kiro-extract: located chat binary '$kiroChatBin' is missing or unreadable; nothing was probed (LOCATION failure, not a vocabulary change)" >&2
+      echo "kiro-extract: located chat binary '$kiroChatBin' is missing or unreadable; nothing was extracted (LOCATION failure, not a vocabulary change)" >&2
       exit 1
     fi
 
-    # STEP 2 — PROBE. Documented v2+v3 trigger universe: Jun-5 docs (5) + v3
-    # docs (11) + the v2 `AgentSpawn` name (v3 maps it -> SessionStart).
-    # Alphabetical; grow from docs.
-    candidates=(AgentSpawn Manual PostFileCreate PostFileDelete PostFileSave PostTaskExec PostToolUse PreTaskExec PreToolUse SessionStart Stop UserPromptSubmit)
-
-    present=()
-    absent=()
-    for t in "''${candidates[@]}"; do
-      # Status is captured and CLASSIFIED rather than swallowed. grep exits 1
-      # for "no match" — the documented-absent case this loop is built around —
-      # and 2 for "could not read the file". The old `|| true` collapsed the two
-      # into "absent", so twelve unreadable-file errors presented as an empty
-      # trigger vocabulary. Tolerate 1; never tolerate 2.
-      kiroGrepStatus=0
-      "$grep" -qaF -e "$t" "$kiroChatBin" || kiroGrepStatus=$?
-      case "$kiroGrepStatus" in
-        0) present+=("$t") ;;
-        1) absent+=("$t") ;;
-        *)
-          echo "kiro-extract: grep exited $kiroGrepStatus reading '$kiroChatBin' while probing trigger '$t' — the binary could not be read, so no conclusion about the trigger vocabulary is possible" >&2
-          exit 1
-          ;;
-      esac
-    done
-    if [ "''${#present[@]}" -lt 1 ]; then
-      echo "kiro-extract: no documented trigger present in '$kiroChatBin' (the binary was read successfully, so upstream changed the hook-trigger vocabulary)" >&2
-      exit 1
-    fi
-
-    hookTriggersJson=$(printf '%s\n' "''${present[@]}" | "$sort" -u | "$jq" -R . | "$jq" -s .)
-    if [ "''${#absent[@]}" -gt 0 ]; then
-      documentedAbsentJson=$(printf '%s\n' "''${absent[@]}" | "$sort" -u | "$jq" -R . | "$jq" -s .)
-    else
-      documentedAbsentJson='[]'
-    fi
+    # Hook triggers come from the v3 engine's own frozen trigger map in the
+    # KAS bundle the chat binary unpacks on first run, not from the ELF.
+    kasJs="$PWD/acp-server.js"
+    ${kiroMaterializeKas pkgs {
+      chat = "$kiroChatBin";
+      dest = "$kasJs";
+    }}
+    hookTriggersJson=$(${kiroHookTriggersExtractScript pkgs} "$kasJs")
     rolloutJson=$("$python3" ${kiroRolloutExtractScript pkgs} "$kiroChatBin")
     # The chat executable materializes its embedded TUI JavaScript on first
     # launch. Since 2.23.0 the JS is no longer present as plaintext in the ELF,
@@ -358,12 +336,11 @@ rec {
 
     # `-S` sorts every object's keys, so both hosts emit one shape and the
     # field order written here carries no meaning.
-    "$jq" -nS --argjson documentedAbsent "$documentedAbsentJson" \
-      --argjson hookTriggers "$hookTriggersJson" \
+    "$jq" -nS --argjson hooks "$hookTriggersJson" \
       --argjson models "$modelsJson" \
       --argjson rollout "$rolloutJson" \
       --argjson settings "$settingsJson" \
-      '{documentedAbsent: $documentedAbsent, hookTriggers: $hookTriggers, models: $models, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
+      '{hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, models: $models, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
   '';
 
   # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to
