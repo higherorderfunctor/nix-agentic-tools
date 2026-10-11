@@ -26,7 +26,7 @@
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
   platformSrc = sources.${stdenv.hostPlatform.system} or (throw "claude-code: unsupported system ${stdenv.hostPlatform.system}");
 in
-  stdenv.mkDerivation (finalAttrs: {
+  stdenv.mkDerivation {
     pname = "claude-code";
     inherit (sources) version;
     src = fetchurl {inherit (platformSrc) url hash;};
@@ -57,17 +57,13 @@ in
           "x86_64-linux" = ver: "${manifestBase}/${ver}/linux-x64/claude";
           "aarch64-darwin" = ver: "${manifestBase}/${ver}/darwin-arm64/claude";
         };
-        # Regenerate the committed sidecar from the freshly-bumped binary
-        # in the SAME update/claude-code PR (no intra-PR drift). See
-        # `vu.mkExtractRegen` for why the `nix fmt` pass is load-bearing.
-        extraExtract = vu.mkExtractRegen {
-          attr = "claude-code";
-          dest = repoPath ../../../extracted.json;
-          inherit pkgs;
-        };
+        # Regenerate both committed raws from the freshly-bumped binaries
+        # in the SAME update/claude-code PR (no intra-PR drift). The drift
+        # check's regenerate command includes the load-bearing `nix fmt` pass.
+        extraExtract = (import ../../../../../lib/extracted {inherit pkgs;}).regenCommand {name = "claude-code";};
         inherit pkgs;
       };
-      # THIS package's own binary -> committed-sidecar shape: the settings
+      # Each pinned platform's binary -> committed-raw shape: the settings
       # schema comes from the binary's own emitter (unpacked module graph +
       # census), the model catalog and launch pins from anchored greps.
       # IFD-safe: consumed ONLY by `nix build` (drift check + update
@@ -76,29 +72,28 @@ in
       # `runCommand`, NOT `runCommandLocal`. runCommandLocal adds
       # `allowSubstitutes = false`, which bars this output from ever being
       # fetched from the binary cache — so every PR and every local `nix flake check`
-      # re-derives it, and because the input is `finalAttrs.finalPackage`
-      # that means realizing the ~390 MB claude binary locally to produce a
-      # ~90 KB JSON. With `runCommand` the sidecar substitutes and the binary
-      # is only fetched when it actually moved.
+      # re-derives it, fetching the ~390 MB claude binary locally to produce
+      # a ~90 KB JSON. With `runCommand` the raw substitutes and the binary
+      # is only fetched when it actually moved. Extraction reads the fetched
+      # bytes without executing them, so both platforms build on any host and
+      # need no Linux interpreter patch.
       #
       # `nodejs_24` and not `nodejs`: census.mjs drives `node:module`'s
       # `registerHooks`, which needs Node >= 22.15. Pinned so a nixpkgs
       # default bump cannot regress it.
-      extracted =
-        pkgs.runCommand "claude-code-extracted.json" {
+      extractedFor = lib.genAttrs (builtins.attrNames (builtins.removeAttrs sources ["version"])) (system:
+        pkgs.runCommand "claude-code-${system}-extracted.json" {
           nativeBuildInputs = [pkgs.jq pkgs.nodejs_24 pkgs.python3];
-        } (
-          vu.mkClaudeExtract {
-            assets = ../../../extract;
-            bin = "${finalAttrs.finalPackage}/bin/claude";
-            inherit pkgs;
-            dest = "$out";
-          }
-        );
+        } (vu.mkClaudeExtract {
+          assets = ../../../extract;
+          bin = fetchurl {inherit (sources.${system}) url hash;};
+          inherit pkgs;
+          dest = "$out";
+        }));
     };
     meta = {
       mainProgram = "claude";
       license = lib.licenses.unfree;
       description = "Anthropic's Claude Code CLI";
     };
-  })
+  }

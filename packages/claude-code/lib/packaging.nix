@@ -1,8 +1,8 @@
 rec {
   # Extract the claude-code facts that mkClaude.nix's option surface is built
   # from, emitting `{effortLevels, hookEvents, launchEffortPins, models,
-  # settings, settingsBooleanKeys}` to `dest` (default stdout). Single source of
-  # the extraction logic — used by claude-code.nix's passthru.extracted (and,
+  # settings}` to `dest` (default stdout). Single source of the extraction
+  # logic — used by claude-code.nix's passthru.extractedFor (and,
   # transitively, by mkUpdateScript's extraExtract).
   #
   # TWO mechanisms, and the split is the whole design:
@@ -235,7 +235,6 @@ rec {
          launchEffortPins: $pins,
          models: $models,
          settings: $census[0].settings,
-         settingsBooleanKeys: $census[0].legacy.settingsBooleanKeys,
        }' > "${dest}"
   '';
 }
