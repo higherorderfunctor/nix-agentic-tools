@@ -11,7 +11,7 @@ from artifacts import downloaded
 # Generated documents are checked by `test`. Patched Kiro has dedicated native
 # jobs without cache uploads; it must never enter the public build cache.
 EXCLUDED = {
-    "kiro-cli-workflows",
+    "kiro-cli-rollout-canary",
     "repo-contributing",
     "repo-readme",
 }

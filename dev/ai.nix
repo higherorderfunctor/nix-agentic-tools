@@ -216,9 +216,8 @@ in {
         };
         # Select v3 so this configuration's hooks and slash commands load.
         v3 = true;
-        # Exercise the patched-package path. Devenv cannot set the global
-        # chat.enableWorkflows gate; Home Manager users set
-        # ai.kiro.cli.workflows.enable; see packages/kiro-cli/docs/workflow-gating.md.
+        # Workflows are GA; devenv still needs the global chat.enableWorkflows
+        # setting. See packages/kiro-cli/docs/workflow-gating.md.
         workflows.enable = true;
       };
     };

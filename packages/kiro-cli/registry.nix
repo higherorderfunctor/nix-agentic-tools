@@ -64,12 +64,8 @@
         }
       ];
     };
-    # kiro-workflows: the THREE independent gates on the `workflows` feature,
-    # all of which fail silently, and the extracted workspace-settings allowlist
-    # that makes gate 3 global-only. Scoped to the module that implies the
-    # setting and asserts the allowlist, plus the two overlay files that
-    # extract and patch — a change to any of those changes what a consumer must
-    # set to get a working `/workflow`.
+    # Friendly and raw feature gates, including global-only client settings,
+    # share the extracted rollout and workspace-settings contracts.
     kiro-workflows = {
       scopes = [
         "packages/${facetOwner}/packages/ai/kiro-cli/package.nix"

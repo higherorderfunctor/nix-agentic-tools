@@ -121,16 +121,20 @@ def credentials(manifest):
             assert "fixture-token" not in result.stderr + result.stdout
 
 
-def workflows(script, root):
-    argv = [sys.executable, script, "workflows", str(root)]
-    run(argv, warning="ai.kiro.cli.workflows.enable or ai.kiro.cli.unlockedRolloutFeatures")
-    settings = root / "settings/cli.json"
-    settings.parent.mkdir(parents=True)
-    for value in ['{}', '{"chat.enableWorkflows":false}', 'invalid']:
-        settings.write_text(value)
-        run(argv, warning="ai.kiro.cli.workflows.enable or ai.kiro.cli.unlockedRolloutFeatures")
-    settings.write_text('{"chat.enableWorkflows":true}')
-    run(argv)
+def global_feature_notices(script, root):
+    for feature, setting in [("codeToSpec", "chat.enableC2s"), ("workflows", "chat.enableWorkflows")]:
+        config = root / feature
+        argv = [sys.executable, script, "global-feature", str(config), feature, setting]
+        needle = f"ai.kiro.cli.{feature}.enable"
+        run(argv, warning=needle)
+        settings = config / "settings/cli.json"
+        settings.parent.mkdir(parents=True)
+        for value in ['{}', json.dumps({setting: False}), 'invalid', '[]', json.dumps({setting: "true"})]:
+            settings.write_text(value)
+            result = run(argv, warning=needle)
+            assert setting in result.stderr
+        settings.write_text(json.dumps({setting: True}))
+        run(argv)
 
 
 def manifest(script, suffix="-ai-delivery-files.json"):
@@ -193,7 +197,7 @@ with tempfile.TemporaryDirectory() as directory:
     files(sys.argv[1], root)
     guard(sys.argv[2], root / "guard")
     credentials(sys.argv[3])
-    workflows(sys.argv[1], root / "workflows")
+    global_feature_notices(sys.argv[1], root / "global-feature-notices")
     wiring(sys.argv[4])
     kimchi_wiring(sys.argv[5])
     shared_agents_md_wiring(sys.argv[6])

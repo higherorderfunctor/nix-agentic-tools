@@ -44,7 +44,7 @@ inputs.nix-agentic-tools = {
 # builds without it.
 nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 
-# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-cli-workflows.
+# Unfree: claude-code, copilot-cli, kimchi-docs and kiro-cli.
 # Allow them in the nixpkgs.config your pkgs comes from (NixOS's when
 # useGlobalPkgs is set).
 
@@ -88,7 +88,7 @@ services.mcp-servers.servers.github-mcp = {
 
 ```yaml
 # devenv.yaml
-# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-cli-workflows.
+# Unfree: claude-code, copilot-cli, kimchi-docs and kiro-cli.
 # Opt in as for nixpkgs.
 allowUnfree: true
 inputs:
@@ -531,9 +531,15 @@ ai.kiro = {
 
 Package, process environment, shell, extra packages, native CLI settings, trust
 flags, tweaks, rollout features and FHS selection all use `cli`. Agents, hooks,
-permissions, MCP/LSP, context, rules and skills stay shared. Workflows imply the
-global chat setting on Home Manager; devenv requires that setting in the user's
-global config and warns if it is missing. Delegate routing defaults the two
+permissions, MCP/LSP, context, rules and skills stay shared. Workflows are
+generally available since Kiro 2.26.0; the switch selects the v3 engine's client
+setting without a binary patch. Friendly switches also cover
+`backgroundExecution`, `codeToSpec`, `kvim` and `sandbox`.
+`cli.features.<name>.enable` exposes every extracted rollout name, while
+`cli.native.settings.chat.keybindings` types the extracted key bindings. Home
+Manager implies workflows and Code-to-Spec's global chat settings; devenv
+requires those settings in the user's global config and warns when a friendly
+switch requests a setting that is missing. Delegate routing defaults the two
 workflow tweaks when it reaches that managed CLI, and advertises `run_workflow`
 only when workflows are enabled.
 

@@ -86,14 +86,14 @@ curl() {
 
 class CoverageTest(unittest.TestCase):
     def setUp(self):
-        self.names = ["alpha", "beta", "delta", "epsilon", "gamma", "new-package", "kiro-cli-workflows"]
+        self.names = ["alpha", "beta", "delta", "epsilon", "gamma", "new-package", "kiro-cli-rollout-canary"]
         self.plans = [ci.partition(self.names, i, 5) for i in range(5)]
 
     def test_added_package_is_covered_and_patched_kiro_excluded(self):
         ci.validate_coverage(self.plans, 5)
         names = [n for p in self.plans for n in p["packages"]]
         self.assertEqual(names.count("new-package"), 1)
-        self.assertNotIn("kiro-cli-workflows", names)
+        self.assertNotIn("kiro-cli-rollout-canary", names)
 
     def test_missing_duplicate_or_different_source_shards_fail(self):
         changed = copy.deepcopy(self.plans)
