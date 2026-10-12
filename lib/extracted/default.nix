@@ -96,7 +96,7 @@
       '';
   };
 in {
-  inherit (facts) children expect get getFor load merge;
+  inherit (facts) children expect get load merge;
   inherit (import ./reconcile.nix {inherit lib;}) reconcile;
   inherit mkDriftCheck;
   index = facts.index pkgs;

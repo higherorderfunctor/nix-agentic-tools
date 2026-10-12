@@ -1,5 +1,5 @@
 # The extracted facts contract (dev/fragments/extracted/facts-contract.md).
-# load, merge, children, get, getFor and expect need only lib, like reconcile; an
+# load, merge, children, get and expect need only lib, like reconcile; an
 # option module can call them before `pkgs` exists; index takes `pkgs` itself.
 {lib}: let
   inherit (import ../runtime-values {inherit lib;}) classify;
@@ -16,23 +16,21 @@
   covers = pattern: path: builtins.length pattern <= builtins.length path && segmentsMatch pattern path;
   leads = pattern: path: builtins.length path < builtins.length pattern && segmentsMatch pattern path;
 
-  fits = {
-    bool = builtins.isBool;
-    count = value: builtins.isInt value && value >= 0;
-    list = builtins.isList;
-    object = builtins.isAttrs;
-    set = value: builtins.isList value && lib.all builtins.isString value;
-    string = builtins.isString;
+  types = {
+    bool.combine = "and";
+    bool.fits = builtins.isBool;
+    count.combine = "equal";
+    count.fits = value: builtins.isInt value && value >= 0;
+    list.combine = "equal";
+    list.fits = builtins.isList;
+    object.combine = "equal";
+    object.fits = builtins.isAttrs;
+    set.combine = "intersection";
+    set.fits = value: builtins.isList value && lib.all builtins.isString value;
+    string.combine = "equal";
+    string.fits = builtins.isString;
   };
-  defaultCombine = {
-    bool = "and";
-    count = "equal";
-    list = "equal";
-    object = "equal";
-    set = "intersection";
-    string = "equal";
-  };
-  everyType = builtins.attrNames fits;
+  everyType = builtins.attrNames types;
   # The closed combine vocabulary, less `prefer:<system>`: the types each
   # combine applies to and, for a reducer, how it reduces every system's value.
   combiners = let
@@ -138,7 +136,7 @@
       combine =
         if valid
         then decision.combine
-        else defaultCombine.${type} or "equal";
+        else types.${type}.combine or "equal";
       ignored = lib.optionals valid (decision.ignore or []);
       finish =
         if type == "set"
@@ -168,7 +166,7 @@
         inherit (builtins.head instanceMatches) path;
         bySystem = lib.listToAttrs (map (match: lib.nameValuePair match.system match.value) instanceMatches);
         missing = lib.filter (system: !bySystem ? ${system} && lib.hasAttrByPath (lib.take anchorLength path) (rawFor system)) required;
-        mistyped = lib.filter (system: !(fits.${type} or (_: false)) bySystem.${system}) (builtins.attrNames bySystem);
+        mistyped = lib.filter (system: !(types.${type}.fits or (_: false)) bySystem.${system}) (builtins.attrNames bySystem);
         prepared = lib.mapAttrs (_: prepare) bySystem;
         values = builtins.attrValues prepared;
         agreed = lib.all (value: value == builtins.head values) values;
@@ -250,7 +248,7 @@
     problem =
       entry.failure or {
         details = entry.bySystem;
-        fix = "read it with getFor <system>, or add a decisions.json row that combines it";
+        fix = "per-platform: no combined value; read bySystem from the index, or add a decisions.json row that combines it";
         kind = entry.combine;
       };
   in
@@ -299,8 +297,6 @@ in {
         systems = configured;
       }
       // {inherit systems;};
-
-  getFor = system: aggregate: key: aggregate.${key}.bySystem.${system};
 
   expect = {
     aggregate,

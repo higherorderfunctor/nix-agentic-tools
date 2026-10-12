@@ -192,9 +192,21 @@ _: {
       scopes = [
         "checks/extracted/**"
         "lib/extracted/**"
+        "lib/git-tool-settings/**"
+        "packages/*/extract/**"
         "packages/*/extracted/**"
+        "packages/chatgpt-codex/lib/**"
+        "packages/claude-code/lib/**"
+        "packages/delegate-routing/probes/**"
+        "packages/git-absorb/lib/**"
+        "packages/git-branchless/lib/**"
+        "packages/git-revise/lib/**"
+        "packages/glab/lib/**"
+        "packages/kimchi/lib/**"
+        "packages/kiro-cli/lib/**"
+        "packages/semble/lib/**"
       ];
-      sources = ["facts-contract"];
+      sources = ["facts-architecture" "facts-contract"];
     };
     facets = {
       scopes = [
