@@ -10,7 +10,7 @@
 # drvPath or out path strings, or whether one evaluates; nothing is built.
 #
 #   A  the overlay over a foreign nixpkgs gives `ciPackages`' drv for every
-#      claimed leaf, and the claim list is complete
+#      claimed leaf, and the claim list is complete except named CI-only leaves
 #   B  `packages` and `legacyPackages` give `ciPackages`' drvs; only the unfree
 #      leaves are missing from `packages`, and they refuse in `legacyPackages`;
 #      every free leaf also evaluates on this flake's nixpkgs with NO config,
@@ -66,7 +66,9 @@
 
   # ── A: overlay re-export ───────────────────────────────────────────
   repoDocs = builtins.filter (lib.hasPrefix "repo-") (builtins.attrNames ciPackages);
-  leafNames = sorted (lib.subtractLists repoDocs (builtins.attrNames ciPackages));
+  # This validation recipe must stay outside every public package surface.
+  ciOnlyNames = ["kiro-cli-rollout-canary"];
+  leafNames = sorted (lib.subtractLists (ciOnlyNames ++ repoDocs) (builtins.attrNames ciPackages));
   claimNames = sorted (lib.unique (map lib.last claimedPaths));
   overlayMismatches =
     map (keyPath: "overlay ${lib.concatStringsSep "." keyPath} differs from ciPackages.${lib.last keyPath}")
@@ -389,10 +391,14 @@
     lib.optional (claimedPaths == []) "A: no claimed paths; the overlay re-exports nothing"
     ++ lib.optional (claimNames != leafNames)
     "A: claim basenames ${toString claimNames} != ciPackages leaves ${toString leafNames}"
+    ++ lib.concatMap (name:
+      lib.optional (!(ciPackages ? ${name})) "A: CI-only ${name} is missing from ciPackages"
+      ++ lib.optional (publicPackages ? ${name} || legacyPackages ? ${name} || overlaid.ai ? ${name}) "A: CI-only ${name} leaked into a public package surface")
+    ciOnlyNames
     ++ map (message: "A: ${message}") overlayMismatches
     ++ map (message: "B: ${message}") publicMismatches
     ++ lib.optional (unfreeNames == []) "B: no unfree leaf; the unfree filter is untested"
-    ++ lib.optional (sorted (lib.subtractLists publicNames (builtins.attrNames ciPackages)) != unfreeNames)
+    ++ lib.optional (sorted (lib.subtractLists (ciOnlyNames ++ publicNames) (builtins.attrNames ciPackages)) != unfreeNames)
     "B: ciPackages minus packages is not exactly the unfree leaves ${toString unfreeNames}"
     ++ map (message: "C: ${message}") consumerMismatches
     ++ lib.optional (drvOf foreign.hello == drvOf pkgs.hello)

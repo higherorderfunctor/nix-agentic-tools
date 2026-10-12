@@ -34,17 +34,17 @@ def save(ledger, entries):
     temporary.replace(ledger)
 
 
-def workflows(config_dir):
+def global_feature(config_dir, feature, setting):
     settings = config_dir / "settings/cli.json"
     try:
-        enabled = json.loads(settings.read_text()).get("chat.enableWorkflows") is True
+        enabled = json.loads(settings.read_text()).get(setting) is True
     except (OSError, ValueError, AttributeError):
         enabled = False
     if not enabled:
         print(
-            "WARNING: Kiro workflows requested by ai.kiro.cli.workflows.enable or ai.kiro.cli.unlockedRolloutFeatures, but "
+            f"WARNING: Kiro {feature} requested by ai.kiro.cli.{feature}.enable, but "
             f"devenv cannot enable its global setting: {settings} does not set "
-            "chat.enableWorkflows=true. Configure ai.kiro.cli.native.settings.chat.enableWorkflows "
+            f"{setting}=true. Configure ai.kiro.cli.native.settings.{setting} "
             "in Home Manager; the project setting is not honored.",
             file=sys.stderr,
         )
@@ -85,8 +85,8 @@ def inspect(root, state, desired, current=()):
 
 if __name__ == "__main__":
     try:
-        if sys.argv[1] == "workflows":
-            workflows(Path(sys.argv[2]))
+        if sys.argv[1] == "global-feature":
+            global_feature(Path(sys.argv[2]), sys.argv[3], sys.argv[4])
         elif sys.argv[1] == "snapshot":
             snapshot(Path(sys.argv[2]), json.loads(Path(sys.argv[3]).read_text()))
         else:

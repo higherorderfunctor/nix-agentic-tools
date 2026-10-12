@@ -76,10 +76,9 @@ rec {
         return found
   '';
 
-  # The ONE rollout-entry rule, interpolated into both the extractor
-  # (`kiroRolloutExtractScript`) and the patcher (`mkKiroRolloutPatch`) so they
-  # cannot disagree about which entries are patchable: what the sidecar reports
-  # as `rolloutPatchability` is exactly what the patcher would accept or refuse.
+  # Shared rollout-entry matcher: extraction and patch refusal use the
+  # unmatched-site count returned by rollout_sites. The patcher also checks
+  # replacement width and rejects names with no manifest entry.
   # A vendor state can be extracted without being patchable.
   kiroRolloutEntryPy = ''
     import re
@@ -117,8 +116,6 @@ rec {
     def wide_enough(name, hit):
         return hit.end() - hit.start() >= len(unlocked(name))
 
-    def is_patchable(name, hits, unmatched):
-        return unmatched == 0 and len(hits) > 0 and all(wide_enough(name, m) for m in hits)
   '';
 
   # Resolve the ONE kiro chat binary under a package root, printing its path.
@@ -228,7 +225,7 @@ rec {
               for name in sorted(states):
                   hits, unmatched = rollout_sites(mm, name)
                   patchability[name] = {
-                      "patchable": is_patchable(name, hits, unmatched),
+                      "patchable": unmatched == 0,
                       "unmatchedSites": unmatched,
                   }
       names = sorted(states)

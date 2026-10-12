@@ -1,10 +1,8 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-11 — package build runners use no CI-only
-> substituter, no shard mirrors a runtime closure into the project cache, every
-> Cachix step holding the token filters kiro out of the push, and the darwin
-> `extracted-facts` owner matrix produces Codex and Kiro host-run facts on every
-> PR, with its outcome required by the build contexts.
+> **Last verified:** 2026-10-11 — native Kiro jobs build the CI-only rollout
+> canary without publishing it; scope includes the aggregate inputs and shared
+> restriction predicate.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -252,6 +250,11 @@ runs may finish their bot updates. Other branches upload an
 `<owner>-extracted-aarch64-darwin` artifact, print copy commands derived from
 the owner's changed files, and fail until those measurements are committed. CI
 names owner directories only; the drift library chooses the raw paths.
+
+The internal `kiro-cli-rollout-canary` patches every feature whose aggregate
+vendor state needs a patch and whose measured patchability is true. Its scope
+includes `rollout-canary.nix`, `extracted/*`, `extract/*` and the shared facts
+library. It stays outside public package discovery and cache-writing shards.
 
 The Cachix action owns shard uploads and its finalization remains part of the
 worker outcome. Do not also start nix-fast-build's optional uploader: its

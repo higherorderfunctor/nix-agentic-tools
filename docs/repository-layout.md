@@ -23,7 +23,7 @@ packages/
   kiro-cli/                         One package owner
     packages/ai/
       kiro-cli/package.nix          Native package namespace
-      kiro-cli-workflows/package.nix
+    rollout-canary.nix                CI-only rollout byte-patch validation
     modules/
       devenv/default.nix            Consumer project configuration
       homeManager/default.nix       Consumer home configuration
@@ -98,9 +98,12 @@ Consumers use `overlays.default`, the module package defaults, or the flat flake
 outputs; all of them hand out the same builds of this flake's own nixpkgs.
 `packages` holds the free leaves, `legacyPackages` every leaf plus the nested
 roots (unfree ones need the consumer's opt-in), and `ciPackages` is the
-unfree-enabled set CI builds. The flat outputs derive from native package
-basenames, with no compatibility aliases for earlier prefixed names. Consumer
-repository updates are separate from this repository redesign.
+unfree-enabled set CI builds. The `kiro-cli-rollout-canary` checks every
+measured patchable rollout entry that needs a patch. It is exposed only through
+`ciPackages` and is excluded from cache-writing native shards. The flat outputs
+derive from native package basenames, with no compatibility aliases for earlier
+prefixed names. Consumer repository updates are separate from this repository
+redesign.
 
 For contribution contracts and the pitfalls that tests enforce, read
 [Package ownership and native composition](../dev/fragments/facets/package-ownership.md).
