@@ -183,15 +183,15 @@ a prefix of a declared path is undeclared and is classified like any other.
 `ignore` as a combine drops the key from the aggregate only; its raws are still
 validated and `type-mismatch`, `missing-system` and `declared-gone` still fire.
 
-### `children`, `get` and `getFor`
+### `children` and `get`
 
 `get aggregate "<key>"` returns the combined value. `get` on a key without a
 combined value throws naming the key, the failure and the fix: the entry's
 `failure` (for `divergent`, the paste-ready `decisions.json` row), or for a
-`per-platform` key the advice to read it with `getFor`. A key absent from the
-aggregate (undeclared, or `declared-gone`) throws naming the key and both
-remedies. There is no fallback value. `getFor system aggregate "<key>"` returns
-that system's raw value for any key.
+`per-platform` key the advice to read `bySystem` from the index, or add a
+`decisions.json` row that combines it. A key absent from the aggregate
+(undeclared, or `declared-gone`) throws naming the key and both remedies. There
+is no fallback value.
 
 `children aggregate "<pattern>"` reads a declared key pattern containing exactly
 one `<name>` segment and returns `{ "<child>" = <combined value>; }` for its
@@ -279,7 +279,42 @@ regenerator on the current host.
 `lib/extracted/` and `checks/extracted/` reads a per-system raw path, reaches
 into `bySystem`, or defines a combine. Owners supply data and extractors only.
 
-## Fixtures
+## Fixtures (`checks/extracted/facts.nix`)
 
-Contract cases live in `checks/extracted/facts.nix` and
-`checks/extracted/drift.nix`.
+Eval-time cases in the style of `checks/extracted/reconcile.nix`, each naming
+its refused input or its visible result, plus one derivation that asserts the
+`divergent` message contains the paste-ready row.
+
+1. Two systems agree: aggregate carries the value, no failures.
+2. Differ with a rule: `set` intersection by default; `bool` and; `count` with a
+   `max` or `min` decision; `bool` with `or`; `string` with
+   `prefer:x86_64-linux`.
+3. Differ without a rule: `divergent`, and `fix` is a complete decisions row.
+4. New key, undeclared, not secret-shaped: no failure, listed in `undeclared`.
+5. New key, undeclared, secret-shaped: `undeclared-secret`.
+6. Declared key absent everywhere: `declared-gone`.
+7. Type mismatch: a string where `count` is declared.
+8. `per-platform`: no combined value; `get` throws with the reader remedy.
+9. `expect`: a satisfied set and a failed set, failure names the consumer.
+10. Wildcard declaration applies to every child, and a new child is covered. A
+    disappearing child keeps its sole value even when the preferred system lacks
+    it.
+11. `bad-decision`: unknown combine; blank reason; row for an undeclared key.
+12. `ignore` removes an element before intersection.
+13. `missing-system`: declared for both, present in one.
+14. `live` with `systems = []`: no system required, no failure; `get` on a
+    divergent key throws and the entry carries merge's failure, and
+    `extracted-facts-divergent-fix` evaluates that `get` in a dummy-store
+    `nix-instantiate` to assert its message names the key and the row.
+15. `load` (fixture directories under `checks/extracted/load/`): both configured
+    raws present, plus one for a system outside `config/systems.nix` that is
+    never read, merge clean with their decision applied; with Darwin's raw
+    absent, every declared key fails `missing-system` naming it, and a
+    `prefer:aarch64-darwin` decision is not a `bad-decision`. `load` on a
+    directory without `facts.json` throws. A measured-once directory with one
+    raw and every declaration requiring only that system loads without failures.
+
+`checks/extracted/drift.nix` runs `mkDriftCheck`'s script per case; a case with
+`regenerate` also reads the per-system regenerate script's text, which must name
+the compared sidecar and omit the unused one, including the other system's raw
+when the owner was measured once.

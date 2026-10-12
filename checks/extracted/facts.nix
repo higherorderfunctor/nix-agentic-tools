@@ -73,7 +73,7 @@
       per-platform-throws = refuses platform.aggregate pattern;
     };
 
-    # Decisions: consumer combinations and their defaults. A key `k`
+    # Decisions: the combine vocabulary and the defaults table. A key `k`
     # differs (or not) across systems; columns: combine, type, Darwin raw,
     # Linux raw, combined value. `set` is compared without order.
     combines = let
@@ -93,10 +93,15 @@
       decided = combined true;
     in {
       bool-and = byDefault "and" "bool" true false false;
+      bool-or = decided "or" "bool" true false true;
+      count-max = decided "max" "count" 3 5 5;
+      count-min = decided "min" "count" 3 5 3;
       list-agree = byDefault "equal" "list" ["b" "a"] ["b" "a"] ["b" "a"];
       object-agree = byDefault "equal" "object" {a.b = 1;} {a.b = 1;} {a.b = 1;};
       set-intersection = byDefault "intersection" "set" ["a" "b"] ["c" "b"] ["b"];
       set-union = decided "union" "set" ["a" "b"] ["c" "b"] ["c" "b" "a"];
+      string-agree = byDefault "equal" "string" "same" "same" "same";
+      string-prefer = decided "prefer:x86_64-linux" "string" "darwin-value" "linux-value" "linux-value";
     };
 
     # `merge`, failure kinds: `divergent` under an effective `equal`, with
@@ -128,30 +133,35 @@
     };
 
     # Decisions table and `bad-decision`: one row for the string key `mode`,
-    # differing from a valid row in the fields shown and refused.
+    # differing from a valid row in the fields shown, accepted or refused.
     decisions = let
-      verdict = key: fields:
+      verdict = accepted: key: fields:
         kinds (run {
           declarations.mode = static "string";
           decisions.${key} = decision "equal" // fields;
           raws = both {mode = "same";};
         })
-        == ["bad-decision"];
-      refuse = verdict "mode";
+        == lib.optional (!accepted) "bad-decision";
+      accept = verdict true "mode";
+      refuse = verdict false "mode";
     in {
       # `and` on a string would otherwise throw inside the reducer.
       combine-and-on-string = refuse {combine = "and";};
       combine-max-on-string = refuse {combine = "max";};
       combine-unknown = refuse {combine = "average";};
+      date-leap = accept {decided = "2024-02-29";};
       date-malformed = refuse {decided = "2026-1-01";};
       date-month-13 = refuse {decided = "2026-13-01";};
       date-placeholder = refuse {decided = "YYYY-MM-DD";};
+      # Calendar validity is not checked: the field is provenance.
+      date-well-formed = accept {decided = "2026-02-31";};
       ignore-non-collection = refuse {ignore = ["x"];};
       reason-blank = refuse {reason = " ";};
       reason-todo = refuse {reason = "TODO";};
       reason-todo-colon = refuse {reason = "TODO:";};
       reason-todo-indented = refuse {reason = "  TODO: why";};
-      undeclared-key = verdict "ghost" {};
+      reason-todo-prefixed-word = accept {reason = "TODO entries are excluded because they are not implemented commands";};
+      undeclared-key = verdict false "ghost" {};
     };
 
     # Decisions: `ignore` as a combine drops the key from the aggregate, so
@@ -168,12 +178,24 @@
         kinds result == expected && !(result.aggregate ? k);
     in {
       declared-gone = ignored "count" {} {} ["declared-gone"];
+      drops-count = ignored "count" {k = 3;} {k = 5;} [];
+      drops-set = ignored "set" {k = ["a"];} {k = ["b"];} [];
       missing-system = ignored "count" {} {k = 5;} ["missing-system"];
       type-mismatch = ignored "count" {k = "five";} {k = "five";} ["type-mismatch"];
     };
 
+    # Decisions: `ignore` removes elements before combining.
+    ignoreElements.before-intersection =
+      get
+      (run {
+        declarations.models = static "set";
+        decisions.models = decision "intersection" // {ignore = ["preview"];};
+        raws = both {models = ["a" "preview"];};
+      }).aggregate "models"
+      == ["a"];
+
     # `merge`, failure kinds: `declared-gone` (with its fix) and
-    # `missing-system` name the absent declaration or required system.
+    # `missing-system`; a `live` key with `systems = []` requires nothing.
     presence = let
       gone = run {
         declarations.lastRun = static "string";
@@ -181,6 +203,16 @@
       };
     in {
       declared-gone = kinds gone == ["declared-gone"] && (lib.head gone.failures).fix == "delete the declaration for `lastRun`";
+      live-no-systems =
+        (run {
+          declarations.lastRun = {
+            source = "live";
+            systems = [];
+            type = "string";
+          };
+          raws = both {};
+        }).failures
+        == [];
       missing-system =
         kinds (run {
           declarations.limit = static "count";
@@ -343,10 +375,12 @@
       }) {};
       gone = state disappearing {};
       emptied = state (both {features = {};}) {};
+      preferred = state disappearing {"features.<name>.state" = decision "prefer:x86_64-linux";};
     in {
       covers-every-child = covered.failures == [] && covered.undeclared == [] && get covered.aggregate "features.new.state" == "off" && get covered.aggregate "features.old.state" == "on";
       disappearing-child = gone.failures == [] && builtins.attrNames gone.aggregate."features.new.state".bySystem == ["aarch64-darwin"] && get gone.aggregate "features.new.state" == "on";
       emptied-parent = emptied.failures == [] && emptied.aggregate == {};
+      prefer-sole-value = preferred.failures == [] && get preferred.aggregate "features.new.state" == "on";
     };
   };
   failures = lib.concatLists (lib.mapAttrsToList (group: rows: map (row: "${group}.${row}") (builtins.attrNames (lib.filterAttrs (_: passed: !passed) rows))) groups);

@@ -59,9 +59,13 @@ serves a named consumer. Concretely:
 - **No wrapper over the readers.** Owner libs call `load`, `get` and `children`
   directly. A helper that re-shapes the aggregate for one owner is the first
   step back to per-owner merge logic.
-- **Fixtures pin what owners use.** The combine vocabulary is closed and
-  documented in the contract; a fixture row for a combine or source no owner
-  declares pins knowledge, not behavior, and is removed.
+- **Fixtures are the library's regression suite, not a mirror of owners.** Every
+  combine, source and failure kind in the contract's closed vocabulary keeps one
+  positive and one refusal case, whether or not an owner selects it today
+  (operator, 2026-10-11: a combine with no current user is still part of the
+  library). A fixture is deleted only together with the behavior it pins. What
+  is NOT kept is a fixture for an owner-shaped scenario, such as a presence row
+  or a second platform for a measured-once owner.
 - **Delete in the PR that removes the last caller.** `mkExtractRegen`,
   `mkRegenerateExtracted` and single-mode `mkDriftCheck` outlived their last
   caller by three PRs because deletion was "a later batch". It is not.

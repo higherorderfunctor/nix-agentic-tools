@@ -74,7 +74,7 @@
       0) echo "extracted-contract-guard: ''${#files[@]} files clean" ;;
       1)
         echo "FAIL: per-owner code above reads a per-system raw, bySystem, or defines a combine." >&2
-        echo "Read facts through lib.extracted (get, getFor, expect); combine rules go in decisions.json." >&2
+        echo "Read facts through lib.extracted (get, expect); combine rules go in decisions.json." >&2
         exit 1
         ;;
       *) exit "$status" ;;
