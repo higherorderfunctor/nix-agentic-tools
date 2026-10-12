@@ -52,10 +52,13 @@ serves a named consumer. Concretely:
 
 - **A fact needs a reader in the same PR.** A declaration no `get` or `children`
   call consumes is not declared. Measured data with no reader stays in the raw,
-  undeclared, where the index still shows it.
-- **An `expect` row carries a value or a `contains`.** Presence-only rows are
-  forbidden: `get` already throws on a missing key, so a presence row is the
-  same check written twice.
+  undeclared: `load` lists it under `undeclared` and the index omits it, so
+  declaring it is what makes it visible, and a reader is what earns the
+  declaration.
+- **An owner's `expect` row carries a value or a `contains`.** The lib accepts a
+  presence-only need (`{ key = "..."; }`), and the fixtures keep that working;
+  owners do not write one, because `get` already throws on a missing key, so a
+  presence row is the same check written twice.
 - **Measured once means one raw.** An owner whose extraction is the same on
   every host commits `x86_64-linux.json` only, with
   `"systems": ["x86_64-linux"]` on every row; the darwin CI leg verifies against
