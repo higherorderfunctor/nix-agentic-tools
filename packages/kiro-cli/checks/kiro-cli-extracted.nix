@@ -12,6 +12,7 @@
   ...
 }: {
   checks = let
+    inherit (import ../lib/friendly-features.nix) featureSettingImplications friendlyRolloutFeatures;
     inherit (pkgs.stdenv.hostPlatform) system;
     inherit (extractedLib {inherit pkgs;}) mkOwnerCheck;
   in
@@ -51,32 +52,33 @@
     // mkOwnerCheck {
       dir = ../extracted;
       name = "kiro-cli";
-      needs = [
-        {
-          contains = "SessionStart";
-          key = "hookTriggers";
-        }
-        {
-          contains = "workflows";
+      needs =
+        [
+          {
+            contains = "SessionStart";
+            key = "hookTriggers";
+          }
+          {
+            contains = "chat.modelDefaults";
+            key = "settingKeys";
+          }
+          {
+            contains = "chat.defaultModel";
+            key = "workspaceOverridableSettings";
+          }
+          {
+            contains = "chat.enableTangentMode";
+            key = "workspaceOverridableSettings";
+          }
+        ]
+        ++ map (feature: {
+          contains = feature;
           key = "rolloutFeatures";
-        }
-        {
-          contains = "chat.enableWorkflows";
+        }) (builtins.attrValues friendlyRolloutFeatures)
+        ++ map (setting: {
+          contains = "chat.${setting}";
           key = "settingKeys";
-        }
-        {
-          contains = "chat.modelDefaults";
-          key = "settingKeys";
-        }
-        {
-          contains = "chat.defaultModel";
-          key = "workspaceOverridableSettings";
-        }
-        {
-          contains = "chat.enableTangentMode";
-          key = "workspaceOverridableSettings";
-        }
-      ];
+        }) (builtins.attrValues featureSettingImplications);
       package = self.ciPackages.${system}.kiro-cli;
     };
 }

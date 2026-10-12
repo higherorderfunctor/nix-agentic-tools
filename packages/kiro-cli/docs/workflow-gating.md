@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-11 — rollout options consume the facts aggregate;
 > GA workflows keep the stock package, and friendly switches imply client
-> settings only in their native scope.
+> settings only in their native scope. Friendly-switch rollout and setting
+> dependencies share one table with the owner's consumer expectations.
 
 Workflows have been generally available since **Kiro CLI 2.26.0**. Their pinned
 rollout state is 100% for all users with no channel restriction, so enabling
@@ -11,8 +12,8 @@ the global `chat.enableWorkflows` client setting.
 
 ```nix
 ai.kiro = {
-  enable = true;
   cli = {
+    enable = true;
     v3 = true;
     workflows.enable = true;
   };

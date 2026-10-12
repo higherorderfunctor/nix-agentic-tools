@@ -50,19 +50,9 @@
     lib.filter (name: rolloutCoverage.needsPatch (kiroFact "rolloutStates.${name}"))
     (enabledRolloutFeatures cfg);
 
-  friendlyRolloutFeatures = {
-    backgroundExecution = "background_execution";
-    codeToSpec = "c2s";
-    kvim = "kvim";
-    sandbox = "local_sandbox";
-    workflows = "workflows";
-  };
+  inherit (import ./friendly-features.nix) featureSettingImplications friendlyRolloutFeatures;
   rolloutFriendlyOptions = lib.mapAttrs' (name: feature: lib.nameValuePair feature name) friendlyRolloutFeatures;
   friendlyFeatureNames = builtins.attrNames friendlyRolloutFeatures;
-  featureSettingImplications = {
-    codeToSpec = "enableC2s";
-    workflows = "enableWorkflows";
-  };
   needsGlobalNotice = setting: !(builtins.elem "chat.${setting}" workspaceOverridableSettings);
 
   # A hook action: `command` (subprocess) or `agent` (inline prompt appended to
