@@ -618,9 +618,9 @@ are ignored.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-11 — git-tool sidecar discovery runs the extracted
-> facts contract regenerator and stages the files in each owner’s `extracted/`
-> directory; Semble’s grouped package updater owns both snapshots.
+> **Last verified:** 2026-10-11 — update scripts run `regenCommand` through
+> owner checks’ `passthru.regenerate` and stage committed files under each
+> owner’s `extracted/` directory.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken

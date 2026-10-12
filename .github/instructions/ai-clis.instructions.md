@@ -370,8 +370,8 @@ Each names a fixable entry (set `extensions` or rename the server, or
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-10 — the `kiro-patched` tripwire asserts the whole
-> patched closure is absent from the public cache; no job pushes any kiro path.
+> **Last verified:** 2026-10-11 — CLI measurements live under `extracted/`;
+> updates run `regenCommand` through owner checks’ `passthru.regenerate`.
 
 ### Overview
 
@@ -410,7 +410,7 @@ re-composes the public package through upstream's wrapper.
 the `sources.json` pins (nixpkgs' version is not an argument, and
 `buildRustPackage` reads its argument `cargoHash`, so `cargoDeps` is restated).
 nixpkgs' `no-daemon_auto_start.patch` is dropped: our modules write that setting
-and `extracted.json` records the binary's own defaults.
+and declared facts under `extracted/` record the binary's own defaults.
 
 - postInstall assembles upstream's complete package as `$out/libexec/codex`
   (`codex-package.json`, `bin/codex`, `bin/codex-code-mode-host`,
@@ -470,8 +470,9 @@ Each uses an update strategy managed by `config.update.targets` (see owner
 - `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release
   tag; the same update pins the matching release source (shared by the source
   build and the extractor), exact pi npm package, and pi declaration
-  dependencies, then regenerates `extracted.json` with nixpkgs' TypeScript
-  compiler API, derives the Go floor before the proxy-helper vendor hash, and
+  dependencies, then runs `lib.extracted.regenCommand` through the owner check's
+  `passthru.regenerate`; its extractor uses nixpkgs' TypeScript compiler API.
+  The update derives the Go floor before the proxy-helper vendor hash, and
   refreshes pnpm dependencies
 - `kiro-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   version from AWS manifest endpoint

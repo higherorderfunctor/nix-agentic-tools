@@ -7,9 +7,9 @@ applyTo: "checks/git-tool-settings/**,lib/git-tool-settings/**,packages/git-abso
 
 # Git tool settings: census, sidecar, generator
 
-> **Last verified:** 2026-10-11 — git-absorb, git-branchless and git-revise use
-> measured-once extracted facts; shared readers assemble the plain census tree,
-> and update discovery runs the contract regenerator.
+> **Last verified:** 2026-10-11 — measured-once git-tool facts use
+> `mkOwnerCheck`; update discovery invokes `regenCommand` and the check’s
+> `passthru.regenerate`.
 >
 > **Settled — do not relitigate.**
 >

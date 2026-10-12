@@ -7,9 +7,9 @@ applyTo: "packages/git-branchless/**"
 
 # git-branchless config extraction
 
-> **Last verified:** 2026-10-11 — measured-once facts are declared in
-> `extracted/facts.json`; shared `load`/`get` readers and `mkOwnerCheck` replace
-> the single sidecar, and update discovery runs the contract regenerator.
+> **Last verified:** 2026-10-11 — measured-once declared facts use shared
+> readers and `mkOwnerCheck`; update discovery invokes `regenCommand` and the
+> check’s `passthru.regenerate`.
 >
 > **Settled — do not relitigate.**
 >

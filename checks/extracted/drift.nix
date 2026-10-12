@@ -1,4 +1,4 @@
-# mkDriftCheck in both input shapes. Each case runs the generated drift
+# mkDriftCheck with per-system inputs. Each case runs the generated drift
 # script outside its derivation, so a case that must fail can, and asserts
 # the exit status and the message the operator reads. A case with
 # `regenerate` reads the per-system regenerate script's text for the
@@ -72,21 +72,6 @@
       regenerate = {
         names = ["${sidecar}/${host}.json"];
         omits = ["${sidecar}/${other}.json"];
-      };
-    };
-    single-drift = {
-      args = {
-        committed = raw "committed" {a = 1;};
-        extracted = raw "extracted" {a = 2;};
-        sidecar = "packages/fake/extracted.json";
-      };
-      fails = ["packages/fake/extracted.json"];
-    };
-    single-match = {
-      args = {
-        committed = raw "committed" {a = 1;};
-        extracted = raw "extracted" {a = 1;};
-        sidecar = "packages/fake/extracted.json";
       };
     };
     # Every drifted system is named before the check fails.

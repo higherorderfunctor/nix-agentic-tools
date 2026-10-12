@@ -7,8 +7,8 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-11 — fact layout follows the extracted contract;
-> Kiro hook triggers come from the KAS engine's trigger map, not ELF greps.
+> **Last verified:** 2026-10-11 — owner checks use `mkOwnerCheck`;
+> `regenCommand` runs their `passthru.regenerate` over declared extracted raws.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -178,13 +178,13 @@ minutes later inside `nix-update`.
 
 Owners receive `extractedLib` through the repository’s recipe and check
 contexts; applying it with `{inherit pkgs;}` provides
-`mkDriftCheck { name; extracted; committed; sidecar; results ? {}; }`. The
-builder returns `{ "${name}-extracted" = drv; }`, including the Semble language
-and template checks. A mismatch prints the command to build
-`checks.<system>.<name>-extracted.passthru.extracted`, copy it over the
-committed sidecar and format it. That passthru remains buildable while drift is
-red. Optional reconciliation `results` come from committed files; their failures
-fail the build after drift passes.
+`mkOwnerCheck { dir; name; package; needs ? []; results ? {}; }`. The builder
+returns `{ "${name}-extracted" = drv; }`, including the Semble language and
+template checks. A mismatch prints the command to run
+`checks.<system>.<name>-extracted.passthru.regenerate`, which rewrites and
+formats the committed raws. That passthru remains runnable while drift is red.
+Optional reconciliation `results` come from committed files; their failures fail
+the build after drift passes.
 
 `reconcile` takes one table per surface with `facts`, hand `rows`, optional
 `needs`, allowed hand `fields`, explicit `secretNeeds`, and named `uses`. New
@@ -198,23 +198,22 @@ strings and string-to-string maps. Failures are `removed`, `needs-human`,
 `secret`, and `bad-row`; descriptions and ordinary controls prose are optional.
 Kimchi secret environment rows must state what they control.
 
-`mkExtractRegen` takes `attr`, `dest`, and an optional `extract` passthru key
-(default `extracted`); it writes and formats the sidecar.
-`mkRegenerateExtracted` lists these destinations in `passthru.sidecars` for the
-update scripts to stage. Hand annotation files are never regenerated.
-`lib/git-tool-settings/rules.nix` and Kimchi's `extract/rules.nix` share their
-rules between consumers and drift checks. Extractor floors detect collapsed
-surfaces; live consumer checks detect removed names used by this repo, including
-the git presets' typed-option check.
+Owner update scripts run `lib.extracted.regenCommand { name; }`, which invokes
+the owner check's `passthru.regenerate`. Packages with discovery-driven
+regeneration list the committed files under `extracted/` in
+`passthru.regenerateExtracted.sidecars` for update staging. Hand annotation
+files are never regenerated. `lib/git-tool-settings/rules.nix` and Kimchi's
+`extract/rules.nix` share their rules between consumers and drift checks.
+Extractor floors detect collapsed surfaces; live consumer checks detect removed
+names used by this repo, including the git presets' typed-option check.
 
-Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
-sidecar that is COMMITTED: `packages/<owner>/extracted.json`, or for a
-per-system owner the `packages/<owner>/extracted/` directory. Binary probes use
-`mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract`; glab, Kimchi and
+Each measured package exposes a BUILD-time `passthru.extracted` and commits
+declared facts and measured raws in `packages/<owner>/extracted/`. Binary probes
+use `mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract`; glab, Kimchi and
 git-branchless instead measure pinned source inputs (git-branchless with a
 tree-sitter walk of its patched source, `packages/git-branchless/extract/`).
-Consumers read the committed file, never the derivation, so option surfaces
-derived from it cost no IFD. Kimchi's `ai.kimchi.native.*` types are generated
+Consumers read the committed facts through `lib.extracted`, so option surfaces
+derived from them cost no IFD. Kimchi's `ai.kimchi.native.*` types are generated
 from its declared facts in `packages/kimchi/extracted/`
 (`packages/kimchi/lib/extracted.nix` reads them through `lib.extracted`), and
 git-branchless's typed settings likewise (`lib/git-tool-settings`, called from
@@ -269,14 +268,15 @@ Owner layout, combination and platform rules live in the
 
 #### The sidecar SELF-HEAL loop, and how to debug it when it does not fire
 
-The invariant is that a committed `*-extracted.json` always describes the
-CURRENTLY pinned artifact. Nothing enforces that continuously. Two halves
-cooperate, and it is worth knowing which is which before reaching for a fix:
+The invariant is that committed extracted raws always describe the CURRENTLY
+pinned artifact. Nothing enforces that continuously. Two halves cooperate, and
+it is worth knowing which is which before reaching for a fix:
 
-1. **The self-heal** — `mkUpdateScript`'s `extraExtract`, which every extracted
-   package supplies via the shared `vu.mkExtractRegen`. It rebuilds
-   `passthru.extracted` and copies it over the committed path, so a version bump
-   carries its own new sidecar and the drift check never sees a stale one.
+1. **The self-heal** — update scripts run `lib.extracted.regenCommand { name; }`
+   through `mkUpdateScript`'s `extraExtract` or discovery-driven
+   `passthru.regenerateExtracted`. The owner check's `passthru.regenerate`
+   rebuilds and formats the measured raws, so a version bump carries its own new
+   facts.
 2. **The backstop** — `checks/<pkg>-extracted.nix`, which compares committed
    against freshly-built.
 
@@ -285,15 +285,15 @@ that the self-heal did not run.** Regenerating the JSON by hand turns the check
 green while leaving the mechanism broken, and it will be red again on the next
 bump. Fix the wiring; the file is a symptom.
 
-**A `passthru.extracted` with no matching `extraExtract` is therefore a LATENT
-bump failure**, not a cosmetic gap: it is guaranteed red the first time the
-version moves, and completely silent before that. glab shipped that way and the
-gap sat invisible from #560 until its first-ever bump (#621). If you add another
+**A `passthru.extracted` with no regeneration path is therefore a LATENT bump
+failure**, not a cosmetic gap: it is guaranteed red the first time the version
+moves, and completely silent before that. glab shipped that way and the gap sat
+invisible from #560 until its first-ever bump (#621). If you add another
 extracted package, wire the regeneration in the same commit.
 
-Where it runs, which is what determines when it CANNOT run: `extraExtract` is
-spliced into `mkUpdateScript`'s `commitCandidate`, immediately after the sidecar
-`mv`. That is on the VERSION-BUMP path only. Consequences:
+For `mkUpdateScript` callers, `extraExtract` is spliced into `mkUpdateScript`'s
+`commitCandidate`, immediately after the sidecar `mv`. That is on the
+VERSION-BUMP path only. Consequences:
 
 - **An extract that changes with no version bump does NOT self-heal.** Editing
   `mkClaudeExtract`'s remaining grep anchors or its census walker, or glab's Go
@@ -321,7 +321,7 @@ Debugging entry points when a bump PR still goes red:
 - **Check ordering** for a package whose extract builds from source rather than
   probing a prebuilt binary. glab is the only one today: its extract realizes
   `src` and `goModules`, which hold `lib.fakeHash` until the src and vendor
-  fixers have run, so `mkExtractRegen` must come AFTER them — it is passed as
+  fixers have run, so `regenCommand` must come AFTER them — it is passed as
   `mkGoUpdateExtract`'s `extraAfter` for exactly that reason. Reversed, it fails
   on the hash mismatch instead of producing a schema.
 - **Check visibility of the new sources.json.** The regeneration `nix build`s
@@ -330,9 +330,9 @@ Debugging entry points when a bump PR still goes red:
   invisible to eval, and the extract would silently describe the OLD version —
   the same class of trap as "Flake Source Visibility" in the nix-standards
   fragment.
-- **A green drift check but a red `checks.formatting`** means the `nix fmt` step
-  is what is missing, not the extraction. See `mkExtractRegen`'s comment for why
-  that pass is load-bearing rather than tidiness.
+- **A green drift check but a red `checks.formatting`** means the formatting
+  step is missing. The owner check's `passthru.regenerate` formats the raws it
+  writes.
 
 **That drift check does not tell you the extraction is CORRECT.** The update
 pipeline's `extraExtract` hook regenerates the sidecar inside the same bump PR,
