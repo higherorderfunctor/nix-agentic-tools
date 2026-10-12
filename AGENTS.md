@@ -131,8 +131,21 @@ for it. When several entries match, their guidance composes.
   - Match:
     - `checks/extracted/**`
     - `lib/extracted/**`
+    - `lib/git-tool-settings/**`
+    - `packages/*/extract/**`
     - `packages/*/extracted/**`
+    - `packages/chatgpt-codex/lib/**`
+    - `packages/claude-code/lib/**`
+    - `packages/delegate-routing/probes/**`
+    - `packages/git-absorb/lib/**`
+    - `packages/git-branchless/lib/**`
+    - `packages/git-revise/lib/**`
+    - `packages/glab/lib/**`
+    - `packages/kimchi/lib/**`
+    - `packages/kiro-cli/lib/**`
+    - `packages/semble/lib/**`
   - Read:
+    - [`dev/fragments/extracted/facts-architecture.md`](dev/fragments/extracted/facts-architecture.md)
     - [`dev/fragments/extracted/facts-contract.md`](dev/fragments/extracted/facts-contract.md)
 - **`facets`**
   - Match:
