@@ -288,7 +288,7 @@ method("createNewSessionState", (text) => {
   text = replace(
     text,
     "{ let p =",
-    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId, t.cwd) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd); let p =",
+    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId, t.cwd) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd, nixWorktrees.requestRoot(t)); let p =",
   );
   text = replace(
     text,
@@ -306,7 +306,7 @@ method("hydrateSessionForLoad", (text) =>
   replace(
     text,
     "lBr(w); let v =",
-    "lBr(w); m.nixWorkspaceRoots = nixRoots.requestAuthority(r) ?? { version: 1, protocol: Uke(r, d) }; m.nixPromptSnapshot = n ? nixPrompts.storedSnapshot(n.metadata) : await nixPrompts.resolveSnapshot(this.homeDir, d ? undefined : r.cwd); let v =",
+    "lBr(w); m.nixWorkspaceRoots = nixRoots.requestAuthority(r) ?? { version: 1, protocol: Uke(r, d) }; m.nixPromptSnapshot = n ? nixPrompts.storedSnapshot(n.metadata) : await nixPrompts.resolveSnapshot(this.homeDir, d ? undefined : r.cwd, nixWorktrees.requestRoot(r)); let v =",
   ),
 );
 method("createSessionState", (text) =>
@@ -388,7 +388,7 @@ for (let index = 0; index < edits.length; index++) {
 const importAt = source.startsWith("#!") ? source.indexOf("\n") + 1 : 0;
 source =
   source.slice(0, importAt) +
-  `import * as nixPrompts from "./prompt-files.mjs";\nimport * as nixRoots from "./additional-roots.mjs";\n` +
+  `import * as nixPrompts from "./prompt-files.mjs";\nimport * as nixWorktrees from "./worktree-policy.mjs";\nimport * as nixRoots from "./additional-roots.mjs";\n` +
   source.slice(importAt);
 const diagnostics = ts.createSourceFile(
   path,

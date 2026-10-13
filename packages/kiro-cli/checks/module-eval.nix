@@ -92,6 +92,90 @@ in {
             };
           in
             lib.any (a: !a.assertion && lib.hasInfix "relativeFileCheckPaths has been removed" a.message) result.config.assertions) [true false]
+      )
+      [
+        {
+          eval = evalHm;
+          settings = hmCliSettings;
+        }
+        {
+          eval = evalDevenv;
+          settings = dvCliSettings;
+        }
+      ]
+    );
+
+    module-kiro-worktree-policy = mkTest "kiro-worktree-policy" (
+      lib.all (
+        runner: let
+          evaluate = extra: runner.eval (lib.recursiveUpdate {ai.kiro.cli.enable = true;} extra);
+          delivered = extra: runner.settings (evaluate extra);
+          value = extra: (delivered extra)."chat.worktrees" or null;
+          native = setting: {
+            ai.worktrees.enable = true;
+            ai.kiro.cli.native.settings = setting;
+          };
+          succeeds = setting: (builtins.tryEval (builtins.deepSeq (delivered (native setting)) true)).success;
+          active = {ai.worktrees.enable = true;};
+          engineRejected = engine:
+            lib.any (a: !a.assertion)
+            (evaluate {
+              ai.worktrees.enable = true;
+              ai.kiro.cli.native.settings.chat.agentEngine = engine;
+            }).config.assertions;
+        in
+          value {}
+          == null
+          && value active == {enable = true;}
+          && value {ai.worktrees.enable = false;} == {enable = false;}
+          && value {ai.kiro.worktrees.enable = false;} == {enable = false;}
+          && value {
+            ai.worktrees.enable = true;
+            ai.kiro.worktrees.enable = false;
+          }
+          == {enable = false;}
+          && value {
+            ai.worktrees.enable = true;
+            ai.kiro.worktrees.enable = null;
+          }
+          == {enable = true;}
+          && value {
+            ai.worktrees.enable = false;
+            ai.kiro.worktrees.enable = true;
+          }
+          == {enable = true;}
+          && lib.all (setting: value (native setting) == {enable = false;}) [
+            {chat.worktrees.enable = false;}
+            {"chat.worktrees".enable = false;}
+          ]
+          && lib.all (setting: value (native setting) == null) [
+            {chat.worktrees = null;}
+            {"chat.worktrees" = null;}
+          ]
+          && lib.all (setting: !succeeds {chat.worktrees = setting;} && !succeeds {"chat.worktrees" = setting;}) [
+            {}
+            {enable = "yes";}
+            {enable = null;}
+            {
+              enable = true;
+              extra = false;
+            }
+            true
+          ]
+          && !engineRejected "v3"
+          && lib.all engineRejected [null "v1" "v2"]
+          && lib.all (a: a.assertion)
+          (evaluate {
+            ai.worktrees.enable = false;
+            ai.kiro.cli.native.settings.chat.agentEngine = "v2";
+          }).config.assertions
+          && lib.any (warning: lib.hasInfix "chat.worktrees" warning)
+          (evaluate {
+            ai.worktrees.enable = true;
+            ai.kiro.cli.package = null;
+          }).config.warnings
+          && lib.all (retired: lib.any (a: !a.assertion && lib.hasInfix "stripVendorWorktreeSteering has been removed" a.message) (evaluate {ai.kiro.cli.tweaks.stripVendorWorktreeSteering = retired;}).config.assertions) [true false]
+          && lib.all (runtime: !(builtins.hasAttr "worktrees" (evaluate active).options.ai.${runtime})) ["claude" "codex" "copilot" "kimchi"]
       ) [
         {
           eval = evalHm;
@@ -235,6 +319,15 @@ in {
           && chat.additionalDirectories.type.check null
           && !chat.additionalDirectories.type.check [""]
           && !chat.additionalDirectories.type.check [42]
+          && chat.worktrees.type.check {enable = true;}
+          && chat.worktrees.type.check {enable = false;}
+          && chat.worktrees.type.check null
+          && !chat.worktrees.type.check {}
+          && !chat.worktrees.type.check {enable = 1;}
+          && !chat.worktrees.type.check {
+            enable = true;
+            extra = false;
+          }
           && lib.all chat.agentEngine.type.check [null "v1" "v2" "v3"]
           && !chat.agentEngine.type.check "unknown"
           && lib.all chat.ui.type.check [null "legacy" "tui"]
@@ -720,30 +813,6 @@ in {
         builtins.all (entry: entry.assertion) evaluated.config.assertions
         && evaluated.config.packages == []
         && evaluated.config.warnings == []
-    );
-
-    module-kiro-package-null-explicit-tweaks-warn = mkTest "kiro-package-null-explicit-tweaks-warn" (
-      let
-        warns = eval: name: let
-          warnings = active:
-            (eval {
-              ai.kiro = {
-                cli = {
-                  enable = true;
-                  package = null;
-                  tweaks.${name} = active;
-                };
-              };
-            }).config.warnings;
-        in
-          warnings true
-          == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.tweaks.${name}. Unset them or set ai.kiro.cli.package."]
-          && warnings false == [];
-      in
-        builtins.all (
-          eval:
-            builtins.all (warns eval) ["stripVendorWorktreeSteering"]
-        ) [evalHm evalDevenv]
     );
 
     module-kiro-package-null-explicit-ssh-workaround-warns = mkTest "kiro-package-null-explicit-ssh-workaround-warns" (
@@ -2277,33 +2346,6 @@ in {
           ];
       in
         soleSame a b
-    );
-
-    # Boolean tweaks default off and select package-bound patches on either backend.
-    module-kiro-boolean-tweaks-default-off-and-parity = mkTest "kiro-boolean-tweaks-default-off-and-parity" (
-      let
-        forks = eval: select: name: let
-          a = eval {
-            ai.kiro = {
-              cli = {
-                enable = true;
-              };
-            };
-          };
-          b = eval {
-            ai.kiro = {
-              cli = {
-                enable = true;
-                tweaks.${name} = true;
-              };
-            };
-          };
-        in
-          !a.config.ai.kiro.cli.tweaks.${name} && soleFork (kiroPackageDrvs (select a)) (kiroPackageDrvs (select b));
-        names = ["stripVendorWorktreeSteering"];
-      in
-        builtins.all (forks evalHm (v: v.config.home.packages)) names
-        && builtins.all (forks evalDevenv (v: v.config.packages)) names
     );
 
     # The patch re-joins the preserved vendor text directly after the

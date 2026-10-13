@@ -148,6 +148,13 @@
     }
     else {};
 
+  resolvedWorktrees = {
+    enable = aiCommon.resolveOverride {
+      topValue = config.ai.worktrees.enable;
+      cliValue = cfg.worktrees.enable;
+    };
+  };
+
   # Module-contributed process env, delivered on the internal channel rather
   # than through `ai.<cli>.environmentVariables` — see the note on
   # `_sandboxSafeSshCommand` in sharedOptions.nix for why internal contributions
@@ -279,6 +286,10 @@
     };
     skills = {
       type = lib.types.attrsOf lib.types.path;
+    };
+    worktrees = {
+      default = resolvedWorktrees;
+      type = aiCommon.worktreesType;
     };
   };
   checkRecord = import ./checkRecord.nix {inherit lib;};
@@ -683,6 +694,13 @@ in {
           `ai.${appRecord.name}.native.settings`, including an explicit null,
           to arbitrate against the derived value.
         '';
+      };
+    }
+    // lib.optionalAttrs (supportsPool "worktrees") {
+      worktrees = lib.mkOption {
+        type = aiCommon.worktreesType;
+        default = {};
+        description = "Runtime worktree policy. Null enable inherits ai.worktrees.enable; false withdraws an inherited policy. Lowered at default priority so native settings can override it.";
       };
     }
     // lib.optionalAttrs (supportsPool "context") {

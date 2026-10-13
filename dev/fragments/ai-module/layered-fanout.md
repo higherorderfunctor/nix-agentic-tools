@@ -1,7 +1,8 @@
 ## ai.\* Layered Fanout Pattern
 
 > **Last verified:** 2026-10-13 — shared option declarations register fanout
-> surfaces; decomposition warns automatically for every unsupported request.
+> surfaces; decomposition warns automatically for unsupported requests,
+> including the nullable worktree policy.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -246,6 +247,13 @@ constructor and transform both validate it.
   shared devenv AGENTS.md, Codex and Kimchi contribute every resolved inline or
   indexed rule; Kiro contributes only rules resolved to `always`. The keyed
   writer deduplicates byte-identical same-key contributions.
+- **Worktree policy uses nullable scalar inheritance.** The shared
+  `ai.worktrees.enable` and Kiro override use null for unspecified/inherit and
+  false for explicit disable. Only Kiro supports the pool; its normalized value
+  lowers at `mkDefault` to native `chat.worktrees`. Ordinary unset repository
+  defaults emit no key and therefore preserve global settings. No wrapper or new
+  settings writer participates.
+
 - **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
   for each supported pool and is public, writable with `mkForce`. Keyed pools
   have neutral `{}` option defaults and receive the root-to-runtime fold as

@@ -11,6 +11,7 @@ import {
   sep,
 } from "node:path";
 import { settingsLayers } from "./session-settings.mjs";
+import * as worktrees from "./worktree-policy.mjs";
 
 const authority = Symbol("host workspace roots");
 const metadataKey = "nixWorkspaceRoots";
@@ -34,10 +35,11 @@ async function canonical(path) {
 export async function resolveRequest(homeDir, request, roots) {
   // roots comes from the vendor validator, retaining protocol failures.
   const candidates = [...roots];
-  for (const { path, base, value } of await settingsLayers(
-    homeDir,
-    request.cwd,
-  )) {
+  const layers = await settingsLayers(homeDir, request.cwd);
+  const worktreeRoot = worktrees.enabled(layers)
+    ? await worktrees.discover(request.cwd)
+    : undefined;
+  for (const { path, base, value } of layers) {
     const entries = value["chat.additionalDirectories"];
     if (entries === undefined) continue;
     if (!Array.isArray(entries)) fail(`${path}: expected an array of paths`);
@@ -53,6 +55,7 @@ export async function resolveRequest(homeDir, request, roots) {
       );
     }
   }
+  if (worktreeRoot) candidates.push(worktreeRoot);
   const seen = new Set(),
     unique = [];
   for (const root of candidates) {
@@ -62,14 +65,17 @@ export async function resolveRequest(homeDir, request, roots) {
       unique.push(root);
     }
   }
-  return {
-    ...request,
-    additionalDirectories: unique.slice(1),
-    [authority]: Object.freeze({
-      version: 1,
-      protocol: Object.freeze([...roots]),
-    }),
-  };
+  return worktrees.carry(
+    {
+      ...request,
+      additionalDirectories: unique.slice(1),
+      [authority]: Object.freeze({
+        version: 1,
+        protocol: Object.freeze([...roots]),
+      }),
+    },
+    worktreeRoot,
+  );
 }
 
 export async function residentRequest(request, resident) {

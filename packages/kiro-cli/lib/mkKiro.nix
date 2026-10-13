@@ -693,6 +693,14 @@
         message = "ai.kiro.cli.native.settings.chat.additionalDirectories requires the v3 engine; additional workspace roots are implemented by the packaged KAS.";
       }
       {
+        assertion = cfg.cli.tweaks.stripVendorWorktreeSteering == null;
+        message = "ai.kiro.cli.tweaks.stripVendorWorktreeSteering has been removed. Remove this option and use ai.worktrees.enable (or ai.kiro.worktrees.enable) for sibling worktrees with workflow-owned creation and user-controlled PR merging. Custom worktreeGuidance prompt files remain available.";
+      }
+      {
+        assertion = !worktreePolicyEnabled cfg || effectiveEngine cfg == "v3";
+        message = "ai.kiro.cli.native.settings.chat.worktrees.enable requires the v3 engine; worktree policy is implemented by the packaged KAS.";
+      }
+      {
         assertion = ((nativeSettings cfg)."chat.promptFiles" or {}) == {} || effectiveEngine cfg == "v3";
         message = "ai.kiro.cli.native.settings.chat.promptFiles requires the v3 engine; the file-backed prompt slots are implemented by the packaged KAS.";
       }
@@ -907,7 +915,7 @@
     if (effectiveRolloutFeatures cfg) == []
     then cfg.cli.package
     else cfg.cli.package.withRolloutFeatures (effectiveRolloutFeatures cfg);
-  hasBundlePatches = cfg: cfg.cli.tweaks.identity.enable || enabledBooleanTweaks cfg != [];
+  hasBundlePatches = cfg: cfg.cli.tweaks.identity.enable;
   promptFileSlots = ["identity" "workflowFileCheckGuidance" "worktreeGuidance"];
   promptFileType = lib.types.nullOr (lib.types.either lib.types.path lib.types.nonEmptyStr);
   promptFilesType = lib.types.nullOr (lib.types.addCheck
@@ -917,11 +925,16 @@
   additionalDirectoriesType = lib.types.nullOr (lib.types.addCheck
     (lib.types.listOf additionalDirectoryType)
     (value: lib.all additionalDirectoryType.check value));
+  worktreePolicyType = lib.types.nullOr (lib.types.addCheck
+    (lib.types.attrsOf lib.types.bool)
+    (value: builtins.attrNames value == ["enable"] && builtins.isBool value.enable));
+  worktreePolicyEnabled = cfg: ((nativeSettings cfg)."chat.worktrees" or {}).enable or false;
   nativeSettingTypes = {
     "chat.additionalDirectories" = additionalDirectoriesType;
     "chat.agentEngine" = lib.types.nullOr (lib.types.enum ["v1" "v2" "v3"]);
     "chat.promptFiles" = promptFilesType;
     "chat.ui" = lib.types.nullOr (lib.types.enum ["legacy" "tui"]);
+    "chat.worktrees" = worktreePolicyType;
   };
   effectiveEngine = cfg: import ./effective-engine.nix (nativeSettings cfg);
   resolvePackage = cfg: let
@@ -937,17 +950,11 @@
           if cfg.cli.tweaks.identity.enable
           then cfg.cli.tweaks.identity.text
           else null;
-        replace = enabledBooleanTweaks cfg;
       };
-
-  # Boolean `ai.kiro.cli.tweaks` that each select one fixed-text bundle
-  # replacement; the names are the patcher's `FIXED` keys.
-  booleanTweaks = ["stripVendorWorktreeSteering"];
-  enabledBooleanTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) booleanTweaks;
 
   # Native startup and TUI settings have different project-scope consumers.
   # Native repo-readable exceptions; chat.ui is verified only by settings reads.
-  kasWorkspaceSettings = ["chat.additionalDirectories" "chat.promptFiles"];
+  kasWorkspaceSettings = ["chat.additionalDirectories" "chat.promptFiles" "chat.worktrees"];
   nativeRepoSettings = ["chat.agentEngine" "chat.ui"];
   workspaceOverridableSettings = lib.unique (kiroFact "workspaceOverridableSettings" ++ nativeRepoSettings ++ kasWorkspaceSettings);
 
@@ -1229,6 +1236,7 @@ in
       "rules"
       "shell"
       "skills"
+      "worktrees"
     ];
     defaults = {
       package = pkgs.ai.kiro-cli;
@@ -1374,6 +1382,11 @@ in
                       default = null;
                       description = "Native UI preference. Repository settings override the global value; actual UI dispatch remains upstream policy. Distinct from the TUI chat.uiMode setting.";
                     };
+                    worktrees = lib.mkOption {
+                      type = worktreePolicyType;
+                      default = null;
+                      description = "Packaged KAS sibling-worktree policy: exactly { enable = boolean; }. Null omits this setting. Overrides shared worktrees policy. Enabled policy requires V3 and does not grant filesystem permissions.";
+                    };
                   };
                 };
                 default = {};
@@ -1484,16 +1497,10 @@ in
             description = "Removed: use native.settings.chat.additionalDirectories and explicit filesystem permissions.";
           };
           stripVendorWorktreeSteering = lib.mkOption {
-            type = lib.types.bool;
-            default = false;
-            description = ''
-              Remove the vendor workflow worktree paragraph (worktrees under
-              `.worktrees/`, rebased onto and fast-forwarding the checked-out base
-              branch), for repositories whose own instructions supply the git
-              workflow. Uses the same build-time KAS patch selection as
-              `tweaks.identity`, on Home Manager and devenv. Missing or duplicate
-              selected source text fails the build.
-            '';
+            type = lib.types.nullOr lib.types.bool;
+            default = null;
+            visible = false;
+            description = "Removed: use ai.worktrees.enable or native worktreeGuidance prompt files.";
           };
         };
         useFhsSandbox = lib.mkOption {
@@ -1611,6 +1618,7 @@ in
     };
     config = {
       backend,
+      normalized,
       cfg,
       mergedEnvironmentVariables,
       nativeAgents,
@@ -1675,6 +1683,11 @@ in
             name = "ai.kiro.cli.native.settings.chat.promptFiles";
           }
           {
+            active = worktreePolicyEnabled cfg;
+            explicit = true;
+            name = "ai.kiro.cli.native.settings.chat.worktrees (ai.worktrees policy)";
+          }
+          {
             active = moduleEnvironmentVariables != {};
             explicit = explicitAt [["ai" "gitSshConfigWorkaround"]];
             name = "ai.gitSshConfigWorkaround";
@@ -1685,12 +1698,6 @@ in
             name = "ai.kiro.cli.tweaks.identity";
           }
         ]
-        ++ map (name: {
-          active = cfg.cli.tweaks.${name};
-          explicit = explicitAt [["ai" "kiro" "cli" "tweaks" name]];
-          name = "ai.kiro.cli.tweaks.${name}";
-        })
-        booleanTweaks
         ++ [
           {
             active = resolvedShell != null;
@@ -1752,6 +1759,9 @@ in
       };
     in
       lib.mkMerge ([
+          (lib.mkIf (normalized.worktrees.enable != null) {
+            ai.kiro.cli.native.settings.chat.worktrees = lib.mkDefault {inherit (normalized.worktrees) enable;};
+          })
           (featureImplications backend cfg)
           (lib.optionalAttrs (!isHm && options ? enterShell) {
             enterShell = lib.concatStrings (lib.mapAttrsToList (name: setting:

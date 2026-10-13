@@ -1,7 +1,6 @@
 """Exercise decoded patching, interpolation preservation and fail-closed drift."""
 
 import importlib.util
-import itertools
 import json
 from pathlib import Path
 import subprocess
@@ -42,23 +41,22 @@ def bundle(quote='"'):
 
 class PatchTests(unittest.TestCase):
     def test_quotes_selection_and_observed_values(self):
-        subsets = [names for r in range(len(patcher.FIXED) + 1) for names in itertools.combinations(patcher.FIXED, r)]
         for quote in ('"', "'", '`'):
             data = bundle(quote)
             corpus = extract(data)
-            for identity, names in itertools.product((IDENTITY, None), subsets):
-                with self.subTest(quote=quote, identity=identity, names=names):
-                    result, errors = patcher.patch(data, corpus, patcher.replacements(identity, names))
+            for identity in (IDENTITY, None):
+                with self.subTest(quote=quote, identity=identity):
+                    result, errors = patcher.patch(data, corpus, patcher.replacements(identity))
                     self.assertEqual(errors, [])
                     observed = json.loads(subprocess.check_output([
                         "node", "-e", result.decode() + "console.log(JSON.stringify([identity(),steering,workflow,assembled('RUNTIME')]));"
                     ]))
                     sentence = identity or patcher.IDENTITY_SENTENCE
                     self.assertEqual(observed[0], sentence + ' Terminal guidance.')
-                    self.assertEqual(observed[1], "Before\n\n" + ("" if "stripVendorWorktreeSteering" in names else patcher.WORKTREE_PARAGRAPH) + "After")
+                    self.assertEqual(observed[1], "Before\n\n" + patcher.WORKTREE_PARAGRAPH + "After")
                     self.assertEqual(observed[2], patcher.FILE_CHECK_PARAGRAPH)
                     self.assertEqual(observed[3], 'before RUNTIME after ' + sentence + ' Terminal guidance. tail')
-                    if identity is None and not names:
+                    if identity is None:
                         self.assertEqual(result, data)
 
     def test_interpolation_is_not_executed_and_boundaries_are_exact(self):
@@ -77,11 +75,11 @@ class PatchTests(unittest.TestCase):
         data = bundle()
         corpus = extract(data)
         self.assertEqual(patcher.patch(data + b' ', corpus, [])[1], ['corpus does not describe the source bundle'])
-        for name, source, _ in patcher.replacements(IDENTITY, patcher.FIXED):
+        for name, source, _ in patcher.replacements(IDENTITY):
             for count in (0, 2):
                 changed = data.replace(json.dumps(source)[1:-1].encode(), b'changed') if count == 0 else data + ('\nconst duplicate=' + json.dumps(source) + ';').encode()
                 changed_corpus = extract(changed)
-                result, errors = patcher.patch(changed, changed_corpus, patcher.replacements(IDENTITY, patcher.FIXED))
+                result, errors = patcher.patch(changed, changed_corpus, patcher.replacements(IDENTITY))
                 self.assertIsNone(result)
                 self.assertIn(f'{name}: expected decoded source text once, found {count}; bundle drift', errors)
         with tempfile.TemporaryDirectory() as tmp:
@@ -89,7 +87,7 @@ class PatchTests(unittest.TestCase):
             (root/'in.js').write_bytes(data + b' ')
             (root/'corpus.json').write_text(json.dumps(corpus))
             (root/'out.js').write_bytes(b'untouched')
-            result = subprocess.run([sys.executable, PATCHER, str(root/'in.js'), str(root/'corpus.json'), str(root/'out.js'), '--replace', 'stripVendorWorktreeSteering'], capture_output=True)
+            result = subprocess.run([sys.executable, PATCHER, str(root/'in.js'), str(root/'corpus.json'), str(root/'out.js'), '--check'], capture_output=True)
             self.assertEqual(result.returncode, 1)
             self.assertEqual((root/'out.js').read_bytes(), b'untouched')
 
@@ -106,6 +104,12 @@ class PatchTests(unittest.TestCase):
         result, errors = patcher.patch(data, extract(data), [('fixture', 'vendor', 'ours')])
         self.assertIsNone(result)
         self.assertEqual(errors, ['fixture: tagged template has runtime-defined decoding'])
+
+    def test_retired_selectors_are_refused(self):
+        for name in ('relativeFileCheckPaths', 'stripVendorWorktreeSteering'):
+            result = subprocess.run([sys.executable, PATCHER, 'unused', 'unused', '--replace', name], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(f"invalid choice: '{name}'", result.stderr)
 
     def test_invalid_identity_is_rejected(self):
         for identity in ('', 'no punctuation', 'Bad `identity`.', 'Bad ${identity}.'):

@@ -604,6 +604,16 @@ shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
 
+Kiro alone consumes the `worktrees` pool. Its shared `enable` type is nullable:
+null inherits or remains unspecified, while false is an explicit withdrawal. The
+root-to-runtime fold uses the existing scalar override rule and exposes
+`ai.kiro.normalized.worktrees`; Kiro lowers it once into native settings at
+`mkDefault`. Untouched defaults emit no native key, preserving an independently
+configured global policy. Claude, Codex, Copilot and Kimchi warn when the root
+pool is set and declare no runtime worktrees option. This policy is delivered
+through the existing settings surface, not a new file writer or permission
+grant.
+
 Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
 `mcpServers`, `rules`, `settings`, and `skills`. Its rules share Codex's flat
 AGENTS.md handling: Home Manager writes the user harness file, while devenv

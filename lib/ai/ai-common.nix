@@ -506,6 +506,15 @@ in {
     };
   };
 
+  # Null preserves the consumer's global native policy; false explicitly opts out.
+  worktreesType = lib.types.submodule {
+    options.enable = lib.mkOption {
+      type = lib.types.nullOr lib.types.bool;
+      default = null;
+      description = "Enable sibling worktrees with workflow-owned creation and user-controlled PR merging. Null is unspecified (inherits at runtime scope); false explicitly disables. Currently consumed only by Kiro.";
+    };
+  };
+
   # Recursively filter null values from an attrset (for typed settings
   # with freeformType where defaults are null). Also removes empty
   # sub-attrsets left after filtering.
