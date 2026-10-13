@@ -7,12 +7,14 @@ applyTo: "packages/microvm/**"
 
 # MicroVM sandbox implementation
 
-> **Last verified:** 2026-10-12 — the three-field factory and both host module
-> sinks use the pinned microvm guest runner.
+<!-- cspell:ignore ACPI sysfs -->
 
-The public `lib.ai.mkSandbox pkgs {pkg; binName; outName;}` factory owns the
-guest definition and standalone launcher. The shared host option `ai.sandboxes`
-has only those fields, with `outName` defaulting to its attribute name. Backend
+> **Last verified:** 2026-10-12 — the two-field factory forwards runtime argv
+> through QEMU firmware configuration.
+
+The public `lib.ai.mkSandbox pkgs {exe; outName;}` factory owns the guest
+definition and standalone launcher. The shared host option `ai.sandboxes` has
+only those fields, with `outName` defaulting to its attribute name. Backend
 modules differ only in the package installation sink. The repository binds the
 factory into `ai.internal.mkSandbox`, declared alongside the other shared
 internal bindings in `sharedOptions.nix`, so backend imports need no consumer
@@ -30,10 +32,26 @@ powering off. The unprivileged service requests reboot through its privileged
 without a second host control process, but the program's exit code is not
 transmitted. No serial getty competes with the process for its console.
 
-The host wrapper checks KVM permissions and rejects arguments before allocating
-its unique temporary runtime directory. The runner executes inside that
-directory, and the wrapper's exit trap removes it. Avoid `exec` at that call:
-replacing the shell would bypass the cleanup trap.
+The host wrapper accepts zero arguments or removes one leading `--`, rejecting
+other prefixes before checking KVM and allocating its unique temporary runtime
+directory. It serializes the remaining arguments with NUL separators; zero
+arguments produce an empty file, distinct from one empty argument. QEMU reads
+that relative `argv` file through `-fw_cfg`, so changing arguments never
+rebuilds the guest and adds no share. The `qemu_fw_cfg` driver exposes the blob
+in sysfs; privileged `ExecStartPre` installs it into the service's private
+runtime directory. The unprivileged guest wrapper reads it with Bash `mapfile`
+and executes the shell-quoted fixed `exe` with the resulting array. No argument
+string is evaluated as shell syntax. Keep the executable's Nix string context
+intact: it supplies the package dependency without a separate package field.
+
+The pinned QEMU microvm machine exposes fw_cfg with the existing ACPI setup. The
+sysfs raw file reports size zero despite containing data; streaming reads work,
+including payloads larger than a page. This narrow read-only blob replaces the
+need for any host control-directory share.
+
+The runner executes inside that directory, and the wrapper's exit trap removes
+it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
+trap.
 
 The user-facing contract and host preparation are documented in
 `packages/microvm/modules/README.md`. The owner checks cover empty imports,
