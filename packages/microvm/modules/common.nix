@@ -17,18 +17,14 @@ in {
       description = "Fresh Linux KVM guests running one package executable on the serial console.";
       type = lib.types.attrsOf (lib.types.submodule ({name, ...}: {
         options = {
-          binName = lib.mkOption {
+          exe = lib.mkOption {
             type = lib.types.str;
-            description = "Executable name in pkg/bin.";
+            description = "Absolute guest executable path, usually lib.getExe or lib.getExe' applied to a package.";
           };
           outName = lib.mkOption {
             default = name;
             type = lib.types.str;
             description = "Host wrapper executable name.";
-          };
-          pkg = lib.mkOption {
-            type = lib.types.package;
-            description = "Package to run in the guest.";
           };
         };
       }));

@@ -8,10 +8,9 @@ modules leaves `ai.sandboxes = {}` and installs no sandbox.
 For Home Manager, import this flake's `homeManagerModules.default` and declare:
 
 ```nix
-{pkgs, ...}: {
+{lib, pkgs, ...}: {
   ai.sandboxes.sandbox-hello = {
-    pkg = pkgs.hello;
-    binName = "hello";
+    exe = lib.getExe pkgs.hello;
   };
 }
 ```
@@ -22,20 +21,27 @@ adds them to `packages`. Run `sandbox-hello` to boot the guest and print Hello's
 output. `outName` optionally overrides the wrapper name, which otherwise
 defaults to the attribute name.
 
-The plain factory takes the caller's package set and the same three fields:
+The plain factory takes the caller's package set and the same two fields:
 
 ```nix
 inputs.nix-agentic-tools.lib.ai.mkSandbox pkgs {
-  pkg = pkgs.hello;
-  binName = "hello";
+  exe = lib.getExe pkgs.hello;
   outName = "sandbox-hello";
 }
 ```
 
 The result is a standalone package with `bin/sandbox-hello`. The source of
 microvm.nix comes from this flake's pinned input; consumers need no separate
-microvm input or module arguments. `binName` and `outName` must be single names,
-not paths. Additional factory fields and launcher arguments are rejected.
+microvm input or module arguments. `exe` must be an absolute executable path;
+use `lib.getExe' pkg "name"` to select a binary explicitly. Its Nix string
+context keeps the package in the launcher closure. `outName` must be a single
+name, not a path. Additional factory fields are rejected.
+
+Run without arguments to invoke the executable without arguments. To pass guest
+arguments, put `--` first: `sandbox-hello -- --version`. The launcher removes
+that first delimiter and preserves every remaining argument, including empty
+arguments and a second literal `--`. Arguments before the delimiter are reserved
+for sandbox options; none are currently supported, so they fail with exit 2.
 
 ## Host setup
 
@@ -49,22 +55,27 @@ launch. The launcher reports a clear error when `/dev/kvm` access is missing.
 
 ## Guest boundaries and console limits
 
-The guest runs the selected `${pkg}/bin/${binName}` as the unprivileged
-`sandbox` user, with serial input and output. It has one virtual CPU, 1 GiB RAM,
-no network interface, and no host home or project mount. The only host share is
-the entire `/nix/store`, served read-only over 9p. Treat that store as visible
-to the guest: it can contain more than the selected executable's closure.
+The guest runs the selected `exe` as the unprivileged `sandbox` user, with
+serial input and output. It has one virtual CPU, 1 GiB RAM, no network
+interface, and no host home or project mount. The only host share is the entire
+`/nix/store`, served read-only over 9p. Treat that store as visible to the
+guest: it can contain more than the selected executable's closure.
 
 The guest uses a tmpfs root and a guest-local tmpfs at `/nix/.rw-store` for the
 writable store overlay. Home, temporary files and store changes disappear when
 the guest stops. Each launch uses a unique temporary host runtime directory;
-normal launcher completion removes it. Simultaneous launches use separate
-directories. The selected process's completion requests a guest reboot, which
-stops the QEMU runner through `-no-reboot`.
+normal launcher completion or runner failure removes it. Simultaneous launches
+use separate directories. Guest arguments travel as a NUL-delimited file through
+QEMU's read-only firmware configuration interface; they add no host filesystem
+share and do not appear in QEMU's command line or the guest kernel command line.
+The guest copies this blob into its private service runtime directory before
+executing the selected program. The VM build is reused across invocations. The
+selected process's completion requests a guest reboot, which stops the QEMU
+runner through `-no-reboot`.
 
 This is a serial console wrapper, not a transparent replacement for the program:
 boot logs share its output, interactive terminal behavior differs, and it does
-not forward the program's exit status. It forwards no host arguments,
-environment, credentials, workspace, or network. There is no usable
-authenticated project or coding-harness workflow yet. Use a small deterministic
-command to check the primitive before trying an interactive program.
+not forward the program's exit status. It forwards no host environment,
+credentials, workspace, or network. There is no usable authenticated project or
+coding-harness workflow yet. Use a small deterministic command to check the
+primitive before trying an interactive program.
