@@ -75,8 +75,13 @@
     then pkgs.kiro-cli-unwrapped
     else pkgs.kiro-cli;
 
-  mkKiroCliWithPayload = rawFeatures: bundlePatches: fhsPayload: let
+  mkKiroCliWithPayload = rawFeatures: bundlePatches: defaultEngine: fhsPayload: let
     kas = mkKas bundlePatches;
+    acpDefault = import ../../../lib/acp-default.nix {inherit (pkgs) lib;} defaultEngine;
+    inherit (import ../../../lib/native-argv.nix) chatValueFlags launcherValueFlags;
+    engineFlags = valueFlags:
+      pkgs.lib.optionalString (defaultEngine != null)
+      ("--run " + pkgs.lib.escapeShellArg (acpDefault valueFlags));
     managedKas = (bundlePatches.identity or null) != null || (bundlePatches.replace or []) != [];
     kasFlags = "${
       if managedKas
@@ -133,15 +138,15 @@
               }
               rm "$out/bin/kiro-cli"
               makeWrapper "$out/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli" "$out/bin/kiro-cli" \
-                --set-default TERM xterm-256color ${kasFlags} \
+                --set-default TERM xterm-256color ${kasFlags} ${engineFlags launcherValueFlags} \
                 --argv0 "$out/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli"
             ''
             else ''
-              wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color ${kasFlags}
+              wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color ${kasFlags} ${engineFlags launcherValueFlags}
             ''
           )
           + ''
-            wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color ${kasFlags}
+            wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color ${kasFlags} ${engineFlags chatValueFlags}
           ''
           # Deliberately AFTER the wrapProgram calls: the patcher finds the ELF by
           # content, so it is indifferent to how many times wrappers have renamed
@@ -189,8 +194,8 @@
             );
 
             inherit kas;
-            withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches null;
-            withRolloutFeatures = features: mkKiroCliWithPayload features bundlePatches null;
+            withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches defaultEngine null;
+            withRolloutFeatures = features: mkKiroCliWithPayload features bundlePatches defaultEngine null;
 
             # Re-compose the public Linux FHS package around a configured
             # payload without reimplementing nixpkgs' buildFHSEnv expression.
@@ -198,7 +203,8 @@
             # the synthesized root, where launcher dispatch can actually reach
             # it. Like withRolloutFeatures, the result is unguarded but can only
             # be reached through the guarded public package.
-            withFhsPayload = mkKiroCliWithPayload rawFeatures bundlePatches;
+            withAcpDefault = engine: mkKiroCliWithPayload rawFeatures bundlePatches engine null;
+            withFhsPayload = mkKiroCliWithPayload rawFeatures bundlePatches defaultEngine;
           };
       }
       # `optionalAttrs`, NOT an `optionalString` inside an always-present attr.
@@ -310,6 +316,6 @@
           };
       });
 
-  mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures {} null;
+  mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures {} null null;
 in
   mkKiroCli []

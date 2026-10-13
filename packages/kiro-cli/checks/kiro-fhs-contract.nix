@@ -12,14 +12,14 @@
         inherit (pkgs) lib;
         inherit pkgs;
       }).wrapPackage;
-    selectedKiroPackage = (kiroPackage.withBundlePatches {
+    selectedKiroPackage = ((kiroPackage.withAcpDefault "v3").withBundlePatches {
       identity = "Custom identity. Another sentence!";
       replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
     }).withRolloutFeatures ["background_execution"];
     trustedKiroPackage = wrapKiroPackage {
       package = selectedKiroPackage;
       trustedMcpTools = ["fs_read"];
-      v3 = false;
+      defaultEngine = "v3";
     };
   in
     pkgs.runCommandLocal "kiro-fhs-contract-check" {} ''

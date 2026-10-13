@@ -40,10 +40,9 @@ for name, variant in variants.items():
                            "KIRO_KAS_NODE_PATH": str(node), "KIRO_DISABLE_TELEMETRY": "1",
                            "KIRO_API_KEY": "offline-dispatch-fixture", "TERM": "dumb"}
                     args = [variant["package"] + "/bin/" + command, mode]
-                    # The real factory wrapper defaults only the launcher to v3;
-                    # direct-chat engine selection remains explicit.
-                    if command == "kiro-cli-chat":
-                        args += ["--agent-engine", "v3"]
+                    settings = home / ".kiro/settings/cli.json"
+                    settings.parent.mkdir(parents=True, exist_ok=True)
+                    settings.write_text(json.dumps({"chat.agentEngine": "v3"}))
                     if mode == "chat":
                         args += ["--no-interactive", "--model", "nix-no-such-model", "offline dispatch fixture"]
                     result = subprocess.run(args, env=env, cwd=work, input="", capture_output=True, text=True, timeout=30)
@@ -64,13 +63,24 @@ for name, variant in variants.items():
                        input="", capture_output=True, text=True, timeout=30)
         expected = variant["server"] if variant["managed"] else str(override)
         assert expected in json.loads(capture.read_text()), (name, "override precedence")
-        # An explicit v2 choice beats the injected launcher --v3. Its own
+        # An explicit v2 choice beats the package ACP default. Its own
         # validation error is before auth/network and before any KAS process.
         capture.unlink()
-        result = subprocess.run([variant["package"] + "/bin/kiro-cli", "acp", "--agent-engine=v2", "--auth-method", "client"],
-                                env=env, cwd=tmp, input="", capture_output=True, text=True, timeout=30)
-        assert result.returncode == 2 and "only supported with --agent-engine=v3" in result.stderr, result.stderr
-        assert not capture.exists(), "explicit v2 started KAS"
+        for command in ("kiro-cli", "kiro-cli-chat"):
+            for flags in (["--agent-engine=v2"], ["--agent-engine", "v2"]):
+                result = subprocess.run([variant["package"] + "/bin/" + command, "acp", *flags, "--auth-method", "client"],
+                                        env=env, cwd=tmp, input="", capture_output=True, text=True, timeout=30)
+                assert result.returncode == 2 and "only supported with --agent-engine=v3" in result.stderr, result.stderr
+                assert not capture.exists(), "explicit v2 started KAS"
+        # Defaults remain idempotent with explicit flags and a trailing --.
+        for command, flags in (("kiro-cli", ["--v3", "acp"]),
+                               ("kiro-cli-chat", ["acp", "--agent-engine=v3"]),
+                               ("kiro-cli-chat", ["acp", "--"]),
+                               ("kiro-cli-chat", ["--cloud", "acp"])):
+            capture.unlink(missing_ok=True)
+            result = subprocess.run([variant["package"] + "/bin/" + command, *flags],
+                                    env=env, cwd=tmp, input="", capture_output=True, text=True, timeout=30)
+            assert result.returncode == 0 and capture.exists(), (command, flags, result.stderr)
         # Remove both overrides and initialize through native ACP with real Node.
         del env["KIRO_KAS_NODE_PATH"]
         del env["KIRO_KAS_SERVER_PATH"]

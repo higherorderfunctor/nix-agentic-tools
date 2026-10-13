@@ -80,7 +80,6 @@
   wrap = secretEnv:
     (import ../../packages/kiro-cli/lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage {
       package = stub;
-      v3 = false;
       trustedMcpTools = [];
       inherit secretEnv;
       secretOptionPaths.PROBE = "ai.kiro.mcpServers.probe.headers.Authorization";
