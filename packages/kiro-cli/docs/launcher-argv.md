@@ -103,13 +103,15 @@ KAS reads the flat `chat.promptFiles` object from global and repository
 `settings/cli.json` at conversation creation. The semantic slots are `identity`,
 `workflowFileCheckGuidance` and `worktreeGuidance`. It starts with the three
 selected packaged texts, overlays global slots, then repository slots. Existing
-identity, relative-file-check and stripped-worktree tweak choices determine
-those defaults, preserving their on/off behavior. A null slot restores the
-packaged selection. The global root is `KIRO_HOME` when set, otherwise the
-session home plus `.kiro`; relative global paths use the settings file
-directory, while repository paths use the session working directory. Regular
-UTF-8 files up to 1 MiB are accepted, including empty text. Malformed settings,
-files or persisted snapshots fail visibly.
+identity and stripped-worktree tweak choices determine those defaults,
+preserving their on/off behavior. The file-check slot retains the vendor
+absolute-path text; sibling roots use `chat.additionalDirectories` rather than
+the retired relative-path workaround. A null slot restores the packaged
+selection. The global root is `KIRO_HOME` when set, otherwise the session home
+plus `.kiro`; relative global paths use the settings file directory, while
+repository paths use the session working directory. Regular UTF-8 files up to 1
+MiB are accepted, including empty text. Malformed settings, files or persisted
+snapshots fail visibly.
 
 The session owns a frozen resolved snapshot. Initial metadata persistence must
 succeed before creation returns; `_meta.kiro.nixPromptSnapshot` is reserved and
@@ -222,7 +224,7 @@ The extraction sources stay distinct:
 `kiro-bundle-patch` executes synthetic fixtures across single, double and
 template quotes, UTF-8 offsets, escaped content and runtime holes; it refuses
 stale corpora, tagged selections and anchor drift. The real
-`kiro-bundle-patch-drift` check runs on both native builders, compares all eight
+`kiro-bundle-patch-drift` check runs on both native builders, compares all four
 tweak selections, checks JavaScript syntax, executes only the changed standalone
 literal tokens to verify their values, and proves all other decoded text and
 source bytes survive. Existing KAS resource, initialization and dispatch checks
