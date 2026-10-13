@@ -896,8 +896,14 @@
     then cfg.cli.package
     else cfg.cli.package.withRolloutFeatures (effectiveRolloutFeatures cfg);
   hasBundlePatches = cfg: cfg.cli.tweaks.identity.enable || enabledBooleanTweaks cfg != [];
+  promptFileSlots = ["identity" "workflowFileCheckGuidance" "worktreeGuidance"];
+  promptFileType = lib.types.nullOr (lib.types.either lib.types.path lib.types.nonEmptyStr);
+  promptFilesType = lib.types.nullOr (lib.types.addCheck
+    (lib.types.attrsOf promptFileType)
+    (value: lib.all (name: builtins.elem name promptFileSlots && promptFileType.check value.${name}) (builtins.attrNames value)));
   nativeSettingTypes = {
     "chat.agentEngine" = lib.types.nullOr (lib.types.enum ["v1" "v2" "v3"]);
+    "chat.promptFiles" = promptFilesType;
     "chat.ui" = lib.types.nullOr (lib.types.enum ["legacy" "tui"]);
   };
   effectiveEngine = cfg: import ./effective-engine.nix (nativeSettings cfg);
@@ -927,8 +933,8 @@
   nativeRepoSettings = ["chat.agentEngine" "chat.ui"];
   workspaceOverridableSettings = lib.unique (kiroFact "workspaceOverridableSettings" ++ nativeRepoSettings);
 
-  # The FLATTEN BOUNDARY: every dotted path kiro's binary names as a complete
-  # setting key. Union of native and TUI measured lists, because they cover different
+  # The FLATTEN BOUNDARY: measured complete keys plus explicit KAS extensions.
+  # Union of native and TUI measured lists, because they cover different
   # ground — the key registry is all `chat.*`, the workspace allowlist adds
   # `toolSearch.*`, `compaction.*` and `knowledge.*` — and taking the union is
   # the policy the sidecar deliberately leaves to its consumer.
@@ -946,7 +952,12 @@
     invalid = lib.filterAttrs (key: type: !type.check (flat.${key} or null)) nativeSettingTypes;
   in
     if invalid == {}
-    then aiCommon.filterNulls flat
+    then
+      aiCommon.filterNulls (builtins.removeAttrs flat ["chat.promptFiles"])
+      // lib.optionalAttrs ((flat."chat.promptFiles" or null) != null) {
+        # Null slots reset to packaged defaults and must survive JSON emission.
+        "chat.promptFiles" = flat."chat.promptFiles";
+      }
     else throw "ai.kiro.cli.native.settings has invalid native values (including flat dotted keys): ${lib.concatStringsSep ", " (builtins.attrNames invalid)}";
 
   # The dotted keys a given config would write, in the flattened form the
@@ -1313,6 +1324,11 @@ in
                       };
                       default = {};
                       description = "Chat key bindings generated from the pinned setting registry; unknown keys remain available through freeform settings.";
+                    };
+                    promptFiles = lib.mkOption {
+                      type = promptFilesType;
+                      default = null;
+                      description = "File-backed identity, workflowFileCheckGuidance and worktreeGuidance slots. Global paths resolve beside settings/cli.json; repository paths resolve from the session working directory. Repository slots override global slots; a null slot restores the packaged selected default. Text is resolved once and persisted for each new conversation, inherited by workflow children and forks, and retained on resume. Existing vendor template semantics apply. Requires the packaged KAS and the declared v3 engine.";
                     };
                     ui = lib.mkOption {
                       type = nativeSettingTypes."chat.ui";
