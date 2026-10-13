@@ -1,6 +1,6 @@
 # Kiro Workflow Engine — Working Notes
 
-> **Last verified:** 2026-10-11 — GA workflows require v3 and their global
+> **Last verified:** 2026-10-13 — GA workflows require v3 and their global
 > client setting; older engine measurements retain their provenance.
 
 ## What this is, and how much to trust it
@@ -1498,43 +1498,44 @@ definition can launch clean on one input set and be refused on another with no
 edit at all, which is the strongest argument for `E-FILE-CHECK-PATH-TEMPLATE`
 rejecting every templated path regardless.
 
-**4. Stop-condition state must live inside the repository.** Which of two
-failure modes you get is decided by the branch above, not by the CLI version. A
-path the containment check actually **reaches** — fully literal, or made literal
-by declared-input substitution — fails the run at LAUNCH with
+**4. Stop-condition state must live inside an admitted workspace root.** Which
+of two failure modes you get is decided by the branch above, not by the CLI
+version. A path the containment check actually **reaches** — fully literal, or
+made literal by declared-input substitution — fails the run at LAUNCH with
 `WorkflowFileCheckPathOutsideWorkspaceError`, naming both the resolved path and
 the allowed roots. A path that **skips** that check reaches evaluation instead,
 where it evaluates to `false` **permanently**, with no error, so the loop burns
 every iteration it has. Never `/tmp`.
 
-Write the path **relative**: it resolves against the workspace root by
-construction, and step agents' cwd is that same root, so the writing step and
-the check agree without any interpolation. Since at least 2.21.4 the vendor's
-workflow-creator prompt prescribes absolute `{{worktree_path}}/…` paths. These
-fail for sibling worktrees outside the workspace. Require workspace-relative
-fileCheck paths in the `workflowPrompt` brief, or opt into
-`ai.kiro.cli.tweaks.relativeFileCheckPaths = true` on Home Manager or devenv
-(default false). In the pinned bundle the conflicting paragraph begins "Every
-path in a prompt or stop condition is absolute" and explicitly extends that rule
-to `fileCheck.path`. This exact-match tweak keeps absolute interpolation for
-every other file a step prompt names. It tells the workflow creator that the
-step writes the stop-condition file, and `fileCheck.path` checks it, at the same
-plain workspace-relative path, without templates or an absolute worktree prefix.
-It keeps the vendor's warning that a path that never resolves spins the loop to
-`maxIterations`. It corrects prompt guidance; it does not change the engine's
-path validation or template resolution. Creator behavior with the tweak enabled
-is unmeasured until an opted-in sibling-worktree run. And `stopWhen`'s
-`"{{id.output}} contains <text>"` form matches against _captured output_, so it
-inherits the empty-capture hazard wholesale — under a cheap model the condition
-can never match and the loop silently runs to `maxIterations` (ledger §7.6).
+The packaged KAS supports sibling workspaces through
+`ai.kiro.cli.native.settings.chat.additionalDirectories`, an additive global and
+repository list. Declare the sibling root and grant the required filesystem
+permissions separately: admitting a root is not a permission grant. The writing
+step and `fileCheck.path` can then use the same absolute
+`{{worktree_path}}/.agents/...` path. The isolated pinned-vendor checks in
+`packages/kiro-cli/checks/additional-roots.mjs` exercise the actual policy,
+`fs_write` and file-check functions: allowed writes and checks agree; explicit
+denials, absent grants, symlink escapes and an unrelated common Git directory do
+not gain write permission. These are offline constructor/tool checks, not a live
+workflow model run.
+
+`ai.kiro.cli.tweaks.relativeFileCheckPaths` has been removed; remove either old
+boolean value and configure the roots and permissions above. The vendor's
+absolute-path instruction and configurable `workflowFileCheckGuidance` prompt
+slot remain available. And `stopWhen`'s `"{{id.output}} contains <text>"` form
+matches against _captured output_, so it inherits the empty-capture hazard
+wholesale — under a cheap model the condition can never match and the loop
+silently runs to `maxIterations` (ledger §7.6).
 
 The repository no longer injects per-turn workflow reminders or decodes the
 vendor steering. The separate opt-in
 `ai.kiro.cli.tweaks.stripVendorWorktreeSteering` removes the vendor paragraph
 assigning worktree setup and a fast-forward of the checked-out base branch to
-workflows, leaving git workflow to repository instructions. Each selected
-replacement applies independently: exact source drift warns and skips only that
-replacement at launch, and fails CI. The launcher uses stock when none apply.
+workflows, leaving git workflow to repository instructions. Selected text
+replacements run when the packaged KAS is built; missing or ambiguous source
+anchors fail the build. Launch uses that fixed package path, with no launch-time
+patch attempt or drift fallback. With no text tweaks selected, vendor prompt
+text is preserved while the packaged session extensions remain available.
 
 ### Small things that save a run
 

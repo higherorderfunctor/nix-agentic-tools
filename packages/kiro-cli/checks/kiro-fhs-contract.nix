@@ -14,7 +14,7 @@
       }).wrapPackage;
     selectedKiroPackage = (kiroPackage.withBundlePatches {
       identity = "Custom identity. Another sentence!";
-      replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+      replace = ["stripVendorWorktreeSteering"];
     }).withRolloutFeatures ["background_execution"];
     trustedKiroPackage = wrapKiroPackage {
       package = selectedKiroPackage;

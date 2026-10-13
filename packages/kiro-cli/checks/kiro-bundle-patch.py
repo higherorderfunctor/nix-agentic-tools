@@ -56,7 +56,7 @@ class PatchTests(unittest.TestCase):
                     sentence = identity or patcher.IDENTITY_SENTENCE
                     self.assertEqual(observed[0], sentence + ' Terminal guidance.')
                     self.assertEqual(observed[1], "Before\n\n" + ("" if "stripVendorWorktreeSteering" in names else patcher.WORKTREE_PARAGRAPH) + "After")
-                    self.assertEqual(observed[2], patcher.RELATIVE_FILE_CHECK_PARAGRAPH if "relativeFileCheckPaths" in names else patcher.FILE_CHECK_PARAGRAPH)
+                    self.assertEqual(observed[2], patcher.FILE_CHECK_PARAGRAPH)
                     self.assertEqual(observed[3], 'before RUNTIME after ' + sentence + ' Terminal guidance. tail')
                     if identity is None and not names:
                         self.assertEqual(result, data)
@@ -89,7 +89,7 @@ class PatchTests(unittest.TestCase):
             (root/'in.js').write_bytes(data + b' ')
             (root/'corpus.json').write_text(json.dumps(corpus))
             (root/'out.js').write_bytes(b'untouched')
-            result = subprocess.run([sys.executable, PATCHER, str(root/'in.js'), str(root/'corpus.json'), str(root/'out.js'), '--replace', 'relativeFileCheckPaths'], capture_output=True)
+            result = subprocess.run([sys.executable, PATCHER, str(root/'in.js'), str(root/'corpus.json'), str(root/'out.js'), '--replace', 'stripVendorWorktreeSteering'], capture_output=True)
             self.assertEqual(result.returncode, 1)
             self.assertEqual((root/'out.js').read_bytes(), b'untouched')
 

@@ -685,6 +685,14 @@
   in
     [
       {
+        assertion = cfg.cli.tweaks.relativeFileCheckPaths == null;
+        message = "ai.kiro.cli.tweaks.relativeFileCheckPaths has been removed. Remove this option, configure cli.native.settings.chat.additionalDirectories for sibling workspace roots, and grant required filesystem permissions separately. Workflow writes and fileCheck.path now use the same absolute path.";
+      }
+      {
+        assertion = ((nativeSettings cfg)."chat.additionalDirectories" or []) == [] || effectiveEngine cfg == "v3";
+        message = "ai.kiro.cli.native.settings.chat.additionalDirectories requires the v3 engine; additional workspace roots are implemented by the packaged KAS.";
+      }
+      {
         assertion = ((nativeSettings cfg)."chat.promptFiles" or {}) == {} || effectiveEngine cfg == "v3";
         message = "ai.kiro.cli.native.settings.chat.promptFiles requires the v3 engine; the file-backed prompt slots are implemented by the packaged KAS.";
       }
@@ -905,7 +913,12 @@
   promptFilesType = lib.types.nullOr (lib.types.addCheck
     (lib.types.attrsOf promptFileType)
     (value: lib.all (name: builtins.elem name promptFileSlots && promptFileType.check value.${name}) (builtins.attrNames value)));
+  additionalDirectoryType = lib.types.either lib.types.path lib.types.nonEmptyStr;
+  additionalDirectoriesType = lib.types.nullOr (lib.types.addCheck
+    (lib.types.listOf additionalDirectoryType)
+    (value: lib.all additionalDirectoryType.check value));
   nativeSettingTypes = {
+    "chat.additionalDirectories" = additionalDirectoriesType;
     "chat.agentEngine" = lib.types.nullOr (lib.types.enum ["v1" "v2" "v3"]);
     "chat.promptFiles" = promptFilesType;
     "chat.ui" = lib.types.nullOr (lib.types.enum ["legacy" "tui"]);
@@ -929,12 +942,12 @@
 
   # Boolean `ai.kiro.cli.tweaks` that each select one fixed-text bundle
   # replacement; the names are the patcher's `FIXED` keys.
-  booleanTweaks = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+  booleanTweaks = ["stripVendorWorktreeSteering"];
   enabledBooleanTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) booleanTweaks;
 
   # Native startup and TUI settings have different project-scope consumers.
   # Native repo-readable exceptions; chat.ui is verified only by settings reads.
-  kasWorkspaceSettings = ["chat.promptFiles"];
+  kasWorkspaceSettings = ["chat.additionalDirectories" "chat.promptFiles"];
   nativeRepoSettings = ["chat.agentEngine" "chat.ui"];
   workspaceOverridableSettings = lib.unique (kiroFact "workspaceOverridableSettings" ++ nativeRepoSettings ++ kasWorkspaceSettings);
 
@@ -1311,6 +1324,21 @@ in
                 type = lib.types.submodule {
                   freeformType = (pkgs.formats.json {}).type;
                   options = {
+                    additionalDirectories = lib.mkOption {
+                      type = additionalDirectoriesType;
+                      default = null;
+                      description = ''
+                        Additional KAS workspace roots. Global and repository lists
+                        are additive. Relative paths resolve from the global settings
+                        directory or repository cwd, respectively. Canonical duplicates
+                        are removed while preserving protocol roots and nested roots.
+                        Empty lists add nothing; Nix null omits the setting. Raw JSON
+                        null is invalid. New and cold-resumed
+                        conversations resolve settings again; resident sessions retain
+                        their admitted roots. Workspace membership does not grant tool
+                        permissions. Requires the v3 engine and managed Kiro package.
+                      '';
+                    };
                     agentEngine = lib.mkOption {
                       type = nativeSettingTypes."chat.agentEngine";
                       default = "v3";
@@ -1479,16 +1507,10 @@ in
             '';
           };
           relativeFileCheckPaths = lib.mkOption {
-            type = lib.types.bool;
-            default = false;
-            description = ''
-              Replace the vendor workflow instruction to use absolute stop-condition
-              paths: the step writes the stop-condition file, and `fileCheck.path`
-              checks it, at the same plain workspace-relative path, without
-              templates. Absolute worktree paths can be rejected for sibling worktrees.
-              Uses the shared build-time KAS patch selection on Home Manager and
-              devenv. Missing or duplicate selected source text fails the build.
-            '';
+            type = lib.types.nullOr lib.types.bool;
+            default = null;
+            visible = false;
+            description = "Removed: use native.settings.chat.additionalDirectories and explicit filesystem permissions.";
           };
           stripVendorWorktreeSteering = lib.mkOption {
             type = lib.types.bool;
@@ -1696,6 +1718,11 @@ in
       packageDependentReasons =
         wrapperPackageReasons
         ++ [
+          {
+            active = ((nativeSettings cfg)."chat.additionalDirectories" or []) != [];
+            explicit = true;
+            name = "ai.kiro.cli.native.settings.chat.additionalDirectories";
+          }
           {
             active = ((nativeSettings cfg)."chat.promptFiles" or {}) != {};
             explicit = true;

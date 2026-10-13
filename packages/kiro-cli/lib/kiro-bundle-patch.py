@@ -9,10 +9,8 @@ import sys
 IDENTITY_SENTENCE = 'You are Kiro CLI, an agentic AI software engineer that runs in the command line.'
 WORKTREE_PARAGRAPH = "When a task should run in a worktree, the **workflow owns the worktree setup** — do NOT create the worktree yourself. Say in the `workflowPrompt` brief that a worktree is needed and let the generated workflow's first step create it (`git worktree add .worktrees/<name> -b <branch> <base>`, where `<base>` is the branch checked out in the user's repo, which is not necessarily the default branch; name it in the brief) and run all later steps targeting that worktree. Derive a descriptive `<name>`/`<branch>` from the task. The workflow's final step rebases the branch onto `<base>` and fast-forwards `<base>` from the user's checkout (`git -C <repo> merge --ff-only <branch>`), because git will not move a branch that is checked out in another worktree; you remove the worktree and branch after the run completes (an in-worktree step can't safely delete the directory it is running in).\n\n"
 FILE_CHECK_PARAGRAPH = '13. **Every path in a prompt or stop condition is absolute.** Step agents\' cwd is the parent session\'s workspace, not a worktree or subdirectory, so a relative path in a prompt silently resolves to the wrong place. Interpolate an input (e.g. `{{worktree_path}}/src/file.ts`) for every file a step reads, writes, or commits, and tell worktree steps to use `git -C <absolute worktree>` rather than describing the worktree as their "working directory". The same applies to `fileCheck.path` in a `stopCondition` or `completion`: relative paths resolve against the workflow\'s workspace root, and a path that never resolves evaluates false forever — the loop then spins to `maxIterations` instead of stopping.'
-RELATIVE_FILE_CHECK_PARAGRAPH = '13. **Every path in a step prompt is absolute, except the stop-condition file.** Step agents\' cwd is the parent session\'s workspace, not a worktree or subdirectory, so a relative path in a prompt silently resolves to the wrong place. Interpolate an input (e.g. `{{worktree_path}}/src/file.ts`) for every other file a step reads, writes, or commits, and tell worktree steps to use `git -C <absolute worktree>` rather than describing the worktree as their "working directory". The file a `stopCondition` or `completion` checks is written by the step and checked by `fileCheck.path` at the same relative path: a plain path relative to the workflow workspace root (e.g. `.agents/tasks/review.json`), without templates or an absolute worktree prefix. Step agents\' cwd is that root, so the writing step and the check agree. A path that never resolves evaluates false forever — the loop then spins to `maxIterations` instead of stopping.'
 
 FIXED = {
-    "relativeFileCheckPaths": (FILE_CHECK_PARAGRAPH, RELATIVE_FILE_CHECK_PARAGRAPH),
     "stripVendorWorktreeSteering": (WORKTREE_PARAGRAPH, ""),
 }
 
@@ -95,7 +93,7 @@ def main():
                 args.prompt_defaults.mkdir(parents=True, exist_ok=True)
                 defaults = {
                     "identity": identity.strip() if identity is not None else IDENTITY_SENTENCE,
-                    "workflowFileCheckGuidance": RELATIVE_FILE_CHECK_PARAGRAPH if "relativeFileCheckPaths" in args.replace else FILE_CHECK_PARAGRAPH,
+                    "workflowFileCheckGuidance": FILE_CHECK_PARAGRAPH,
                     "worktreeGuidance": "" if "stripVendorWorktreeSteering" in args.replace else WORKTREE_PARAGRAPH,
                 }
                 for name, text in defaults.items():

@@ -407,11 +407,9 @@
       enabled = change {ai.kiro.cli.workflows.enable = true;};
       enabledSkill = readSkill enabled "kiro";
       tweaksOn = result:
-        result.config.ai.kiro.cli.tweaks.relativeFileCheckPaths
-        && result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
+        result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
       tweaksOff = result:
-        !result.config.ai.kiro.cli.tweaks.relativeFileCheckPaths
-        && !result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
+        !result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
       workflowChange = config: change (lib.recursiveUpdate {ai.kiro.cli.workflows.enable = true;} config);
       hidden = config: !(lib.hasInfix "`run_workflow`" (readSkill (workflowChange config) "kiro"));
       effective = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques;
@@ -443,7 +441,6 @@
       })
       && tweaksOff (workflowChange {
         ai.kiro.cli.tweaks = {
-          relativeFileCheckPaths = false;
           stripVendorWorktreeSteering = false;
         };
       })

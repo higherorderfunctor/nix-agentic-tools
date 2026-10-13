@@ -1,7 +1,8 @@
 # Delegate routing package
 
 > **Last verified:** 2026-10-14 — Kiro owns engine defaults and warnings;
-> routing only resolves workflow visibility.
+> routing only resolves workflow visibility; sibling roots use explicit
+> settings.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -139,10 +140,12 @@ the Kiro module is untouched. The package's existing launchers read the
 persisted settings for ACP; no routing wrapper reads config.
 
 When an enabled runtime reaches Kiro directly or through external delegation,
-the program defaults `cli.tweaks.relativeFileCheckPaths` and
-`cli.tweaks.stripVendorWorktreeSteering` to true only when
+the program defaults `cli.tweaks.stripVendorWorktreeSteering` to true only when
 `cli.workflows.enable` is true and the CLI package is managed. Explicit false
-wins; identity is not enabled.
+wins; identity is not enabled. Sibling workflow directories must be declared
+through `cli.native.settings.chat.additionalDirectories` and granted filesystem
+permissions separately. The retired `relativeFileCheckPaths` workaround is no
+longer selected.
 
 Kiro's `run_workflow` appears only with `cli.workflows.enable`, effective V3,
 and no explicit false for `cli.native.settings.chat.enableWorkflows`. Devenv's

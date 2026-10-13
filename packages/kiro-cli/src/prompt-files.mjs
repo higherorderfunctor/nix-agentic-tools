@@ -1,7 +1,8 @@
 // Loaded by package-bound KAS. All mutable state belongs to a conversation.
 import { constants } from "node:fs";
-import { open, readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { open } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
+import { settingsLayers } from "./session-settings.mjs";
 
 const slots = ["identity", "workflowFileCheckGuidance", "worktreeGuidance"];
 const limit = 1024 * 1024;
@@ -70,21 +71,7 @@ export function snapshotMetadata(meta, snapshot) {
     : { ...clean, kiro: { ...clean?.kiro, [key]: snapshot } };
 }
 
-async function settings(path) {
-  let bytes;
-  try {
-    bytes = await readFile(path, "utf8");
-  } catch (error) {
-    if (error.code === "ENOENT") return {};
-    fail(path, error.message);
-  }
-  let value;
-  try {
-    value = JSON.parse(bytes);
-  } catch (error) {
-    fail(path, error.message);
-  }
-  if (!object(value)) fail(path, "settings must be an object");
+function mapping(value, path) {
   const mapping = value["chat.promptFiles"];
   if (mapping === undefined) return {};
   if (!object(mapping)) fail(path, "chat.promptFiles must be an object");
@@ -109,16 +96,9 @@ export async function resolveSnapshot(homeDir, cwd) {
       ]),
     ),
   );
-  const globalPath = join(
-    process.env.KIRO_HOME || join(homeDir, ".kiro"),
-    "settings",
-    "cli.json",
-  );
-  const layers = [[globalPath, dirname(globalPath)]];
-  if (cwd) layers.push([join(cwd, ".kiro/settings/cli.json"), cwd]);
   const selected = {};
-  for (const [path, base] of layers)
-    for (const [slot, file] of Object.entries(await settings(path)))
+  for (const { path, base, value } of await settingsLayers(homeDir, cwd))
+    for (const [slot, file] of Object.entries(mapping(value, path)))
       selected[slot] =
         file === null ? null : isAbsolute(file) ? file : resolve(base, file);
   for (const [slot, file] of Object.entries(selected)) {

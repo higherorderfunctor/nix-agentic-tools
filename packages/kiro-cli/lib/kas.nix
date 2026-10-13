@@ -43,7 +43,9 @@ in
         ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
       ${vu.kiroPromptsExtractScript pkgs} "$server" > selected-corpus.json
       node ${../src/patch-prompt-files.mjs} "$server" "$defaults" ${pkgs.typescript_5}/lib/node_modules/typescript selected-corpus.json
+      cp ${../src/additional-roots.mjs} "$(dirname "$server")/additional-roots.mjs" # bare-commands: ok — stdenv installPhase
       cp ${../src/prompt-files.mjs} "$(dirname "$server")/prompt-files.mjs" # bare-commands: ok — stdenv installPhase
+      cp ${../src/session-settings.mjs} "$(dirname "$server")/session-settings.mjs" # bare-commands: ok — stdenv installPhase
       node --check "$server"
       runHook postInstall
     '';

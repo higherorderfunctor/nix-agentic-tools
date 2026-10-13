@@ -34,8 +34,8 @@ def without_changed(data, chunks, indexes):
 
 with tempfile.TemporaryDirectory() as tmp:
     path = Path(tmp) / "server.js"
-    for enabled, relative, strip in itertools.product((False, True), repeat=3):
-        names = [name for name, value in zip(patcher.FIXED, (relative, strip)) if value]
+    for enabled, strip in itertools.product((False, True), repeat=2):
+        names = [name for name, value in zip(patcher.FIXED, (strip,)) if value]
         items = patcher.replacements(identity if enabled else None, names)
         result, errors = patcher.patch(stock, corpus, items)
         assert not errors, errors
@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory() as tmp:
             expected = before_chunk['text']
             for _, source, replacement in items:
                 expected = expected.replace(source, replacement)
-            assert after_chunk['text'] == expected, (enabled, relative, strip, i)
+            assert after_chunk['text'] == expected, (enabled, strip, i)
             if expected != before_chunk['text']:
                 changed.append(i)
                 # Execute only this parser-identified standalone literal. The
@@ -75,6 +75,6 @@ with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(["node", "--check", str(path)], check=True)
         assert (defaults / "identity.txt").read_text() == (identity if enabled else patcher.IDENTITY_SENTENCE)
         assert (defaults / "worktreeGuidance.txt").read_text() == ("" if strip else patcher.WORKTREE_PARAGRAPH)
-        assert (defaults / "workflowFileCheckGuidance.txt").read_text() == (patcher.RELATIVE_FILE_CHECK_PARAGRAPH if relative else patcher.FILE_CHECK_PARAGRAPH)
+        assert (defaults / "workflowFileCheckGuidance.txt").read_text() == patcher.FILE_CHECK_PARAGRAPH
     assert Path(patched_path).read_bytes() == path.read_bytes(), 'packaged selection differs from text and session hooks'
-print('PASS: eight selections preserve unselected source before hooks; selected default files, hook syntax and real package agree')
+print('PASS: four selections preserve unselected source before hooks; selected default files, hook syntax and real package agree')

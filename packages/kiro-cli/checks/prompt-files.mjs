@@ -4,13 +4,16 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import vm from "node:vm";
 
 const [server, typescript] = process.argv.slice(2);
 const nixPrompts = await import(
   pathToFileURL(join(dirname(server), "prompt-files.mjs"))
+);
+const nixRoots = await import(
+  pathToFileURL(join(dirname(server), "additional-roots.mjs"))
 );
 const ts = createRequire(import.meta.url)(typescript);
 const source = await readFile(server, "utf8");
@@ -98,6 +101,7 @@ const context = vm.createContext(
     Set,
     console,
     nixPrompts,
+    nixRoots,
     // Host and message-builder boundaries, not prompt constructors.
     E: (initialize) => initialize,
     Ife: () => "Fixture OS",
@@ -511,7 +515,9 @@ try {
     N6t: (value) => value,
     Pze: () => undefined,
     U6t: () => undefined,
-    Uke: (request, empty) => (empty ? [] : [request.cwd]),
+    Aae: { isAbsolute },
+    jf: { isAbsolute },
+    Rn: Error,
     Urt: () => false,
     VEe: () => ({}),
     Y9e: "fixture",
@@ -531,23 +537,25 @@ try {
     AIt: () => undefined,
     zrt: () => ({}),
   });
+  for (const name of ["Uke", "tBr", "rBr"]) loadFunction(name);
   loadFunction("Ile");
   loadFunction("K3o");
   // The heavyweight session constructor owns many unrelated host services.
   // Evaluate its actual snapshot field, so the lifecycle fixture cannot pass by
   // manually supplying a carrier that the production constructor dropped.
-  const stateCarrier = unique((node) => {
-    if (
-      !ts.isPropertyAssignment(node) ||
-      node.name.getText(ast) !== "nixPromptSnapshot"
-    )
-      return false;
-    let owner = node.parent;
-    while (owner && !ts.isMethodDeclaration(owner)) owner = owner.parent;
-    return owner?.name.getText(ast) === "createSessionState";
-  }, "createSessionState snapshot carrier");
+  const stateCarrier = (property) =>
+    unique((node) => {
+      if (!ts.isPropertyAssignment(node) || node.name.getText(ast) !== property)
+        return false;
+      let owner = node.parent;
+      while (owner && !ts.isMethodDeclaration(owner)) owner = owner.parent;
+      return owner?.name.getText(ast) === "createSessionState";
+    }, "createSessionState snapshot carrier");
   const constructCarrier = evaluate(
-    `(c) => (${stateCarrier.initializer.getText(ast)})`,
+    `(c) => (${stateCarrier("nixPromptSnapshot").initializer.getText(ast)})`,
+  );
+  const constructRoots = evaluate(
+    `(c) => (${stateCarrier("nixWorkspaceRoots").initializer.getText(ast)})`,
   );
   const states = new Map(),
     records = new Map();
@@ -643,6 +651,7 @@ try {
         modeId: mode,
         registry: built.registry,
         nixPromptSnapshot: constructCarrier(features),
+        nixWorkspaceRoots: constructRoots(features),
         featureConfig: { get: () => false },
         repositories: [],
         pendingNotifications: [],
@@ -658,14 +667,27 @@ try {
   ])
     host[name] = { pushToSession: silent };
   const create = method("createNewSessionState");
-  const newLocal = (id, cwd, internal) =>
+  const newLocal = async (id, cwd, internal) =>
     residentAdmission.call(
       host,
       { kind: "create-exclusive", sessionId: id },
-      (register) =>
+      async (register) =>
         create.call(
           host,
-          { cwd, _meta: { kiro: { nixPromptSnapshot: b } } },
+          await nixRoots.resolveRequest(
+            home,
+            {
+              cwd,
+              _meta: {
+                kiro: {
+                  nixPromptSnapshot: b,
+                  nixWorkspaceRoots: { version: 99 },
+                  serverSession: { ownerSessionId: id },
+                },
+              },
+            },
+            [cwd],
+          ),
           {},
           {},
           id,
@@ -679,7 +701,22 @@ try {
     );
   await writeFile(join(repoA, "identity.txt"), "ACP_A.");
   await writeSettings(repoSettings(repoA), { identity: "identity.txt" });
+  await writeFile(
+    repoSettings(repoB),
+    JSON.stringify({
+      "chat.promptFiles": { identity: "identity.txt" },
+      "chat.additionalDirectories": ["../b-extra"],
+    }),
+  );
   await Promise.all([newLocal("acp-a", repoA), newLocal("acp-b", repoB)]);
+  assert.deepEqual(
+    [...states.get("acp-b").state.workspacePaths],
+    [repoB, join(tmp, "b-extra")],
+  );
+  assert.deepEqual(records.get("acp-b").metadata._meta.kiro.nixWorkspaceRoots, {
+    version: 1,
+    protocol: [repoB],
+  });
   assert.equal(
     states.get("acp-a").state.nixPromptSnapshot.slots.identity,
     "ACP_A.",
@@ -702,6 +739,7 @@ try {
     states.get("acp-a").state.nixPromptSnapshot,
   );
   states.delete("acp-a");
+  assert.deepEqual(await nixRoots.ownerRoots(host, "acp-a"), [repoA]);
   const hydrated = await method("hydrateSessionForLoad").call(
     host,
     "session/load",
@@ -713,6 +751,25 @@ try {
     silent,
   );
   assert.equal(hydrated.session.nixPromptSnapshot.slots.identity, "ACP_A.");
+  await writeSettings(repoSettings(repoB), { identity: "identity.txt" });
+  const coldRoots = await method("hydrateSessionForLoad").call(
+    host,
+    "session/load",
+    await nixRoots.resolveRequest(home, { sessionId: "acp-b", cwd: repoB }, [
+      repoB,
+    ]),
+    records.get("acp-b"),
+    {},
+    false,
+    outbound,
+    silent,
+  );
+  assert.deepEqual([...coldRoots.session.workspacePaths], [repoB]);
+  assert.equal(
+    coldRoots.session.nixPromptSnapshot.slots.identity,
+    b.slots.identity,
+  );
+
   await newLocal("cold-child", repoA, {
     role: "workflow-step",
     ownerSessionId: "acp-a",
@@ -748,6 +805,31 @@ try {
     records.get("forked").metadata._meta.kiro.nixPromptSnapshot.slots.identity,
     "ACP_A.",
   );
+  const movedFork = await method("forkSession").call(
+    {
+      loadParentSession: async () => records.get("acp-a"),
+      persistence: host.persistence,
+    },
+    {
+      sessionId: "acp-a",
+      cwd: repoB,
+      additionalDirectories: [join(tmp, "explicit-fork")],
+      parentWorkspacePaths: [repoA],
+      createdReason: "rewind",
+    },
+  );
+  assert.deepEqual(movedFork.metadata._meta.kiro.nixWorkspaceRoots.protocol, [
+    repoB,
+    join(tmp, "explicit-fork"),
+  ]);
+  const restoredFork = await nixRoots.restoreRequest(host, {
+    sessionId: "forked",
+    cwd: repoB,
+  });
+  assert.equal(restoredFork.cwd, repoB);
+  assert.deepEqual(restoredFork.additionalDirectories, [
+    join(tmp, "explicit-fork"),
+  ]);
   host.persistence.saveSession = async () => {
     throw new Error("fixture durable save failed");
   };
