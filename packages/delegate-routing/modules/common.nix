@@ -206,7 +206,6 @@ in {
       (lib.optionalAttrs kiroDeclared {
         kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null) {
           tweaks = lib.mkIf config.ai.kiro.cli.workflows.enable {
-            relativeFileCheckPaths = lib.mkDefault true;
             stripVendorWorktreeSteering = lib.mkDefault true;
           };
         };

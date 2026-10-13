@@ -1,7 +1,8 @@
 # Kiro Workflow Engine — Mechanics and Measured Behavior
 
-> **Last verified:** 2026-10-11 — GA workflow prerequisites replace the
-> historical rollout unlock.
+> **Last verified:** 2026-10-13 — GA workflow prerequisites replace the
+> historical rollout unlock; packaged additional roots are distinguished from
+> the historical upstream TUI measurement.
 
 Reference for adopting the workflow engine in another repository. Written for a
 reader who was not present for the experiments.
@@ -419,16 +420,24 @@ the `watch` handler docs also treat it as an allowed root for `prRef`
 resolution. Nothing in the agent-facing tool surface sets it, so treat it as
 read-only context rather than a lever.
 
-**Nor does the TUI set it, which is why no Nix option can deliver one.**
-Measured 2026-08-11 in the v3 bundle: the root set is built as
-`[options.workspacePath, ...options.additionalDirectories ?? []]`, and `tui.js`
-calls `newSession({cwd: process.cwd(), mcpServers: [], …})` with the field
-absent — so under the TUI the allowed-root set is exactly `[cwd]`. Only an ACP
-client can populate the second slot. That closes off the shape this repo reaches
-for by reflex, the `_integration_writable_roots` pattern Codex uses
-(`packages/chatgpt-codex/lib/mkCodex.nix`): there is no config file to write the
-roots into and no launcher flag to inject them through. Under the TUI the launch
-directory is the only lever there is.
+**The upstream TUI did not set it in the measured 2026-08-11 bundle.** That
+bundle built the root set as
+`[options.workspacePath, ...options.additionalDirectories ?? []]`, while
+`tui.js` called `newSession({cwd: process.cwd(), mcpServers: [], …})` with the
+field absent. Its TUI therefore admitted exactly `[cwd]`; an ACP client could
+supply the extra roots. That measured upstream surface offered neither a
+settings key nor a launcher flag for this purpose.
+
+The current **packaged KAS extension** adds
+`ai.kiro.cli.native.settings.chat.additionalDirectories` on library, Home
+Manager and devenv paths. It combines global and repository lists with protocol
+roots at session admission, including terminal-created sessions. Relative global
+entries resolve beside the global settings file; repository entries resolve from
+the conversation cwd. Workspace membership does not grant tool permissions:
+configure those separately. This extension changes the packaged server, not the
+historical upstream measurement above. See
+[the settings contract](../../packages/kiro-cli/docs/settings-shape.md#additional-workspace-roots)
+for resume behavior, migration and the explicit runtime V2 boundary.
 
 Validating the _agent_ side is no better covered, and it fails in a shape worth
 knowing before you build a pre-flight on it: `kiro-cli agent validate` exits 0
