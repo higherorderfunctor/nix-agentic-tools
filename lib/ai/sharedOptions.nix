@@ -515,6 +515,13 @@ in {
         visible = false;
         description = "Evaluated generated-file treefmt configuration.";
       };
+      mkSandbox = lib.mkOption {
+        default = throw "ai.internal.mkSandbox: compose this flake's homeManagerModules.default or devenvModules.nix-agentic-tools";
+        internal = true;
+        type = lib.types.functionTo (lib.types.functionTo lib.types.package);
+        visible = false;
+        description = "Sandbox factory bound to this flake's pinned microvm source.";
+      };
       # The `ai` root, which most module package defaults read.
       packages = lib.mkOption {
         type = lib.types.raw;

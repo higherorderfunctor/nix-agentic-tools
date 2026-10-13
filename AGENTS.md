@@ -315,6 +315,11 @@ for it. When several entries match, their guidance composes.
     - `packages/mcp-services/modules/homeManager/default.nix`
   - Read:
     - [`dev/fragments/mcp-services/service-host-contract.md`](dev/fragments/mcp-services/service-host-contract.md)
+- **`microvm`**
+  - Match:
+    - `packages/microvm/**`
+  - Read:
+    - [`packages/microvm/docs/sandbox.md`](packages/microvm/docs/sandbox.md)
 - **`nix-standards`**
   - Match:
     - `**/*.nix`
