@@ -228,6 +228,8 @@ _: {
     # editing ai modules don't.
     flake = {
       scopes = [
+        ".github/actions/check-cache/**"
+        ".github/workflows/hestia-gc.yml"
         "flake.nix"
         "devenv.nix"
       ];
@@ -460,8 +462,10 @@ _: {
     # config.update.targets.
     pipeline = {
       scopes = [
+        ".github/actions/check-cache/**"
         ".github/actions/warm-ifd/**"
         ".github/workflows/ci.yml"
+        ".github/workflows/hestia-gc.yml"
         ".github/workflows/update.yml"
         "config/fragment-categories.nix"
         "config/generate-update-ninja.nix"

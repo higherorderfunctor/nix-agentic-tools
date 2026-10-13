@@ -1,0 +1,21 @@
+name: CI check cache
+description:
+  Configure the pinned Hestia cache with the same upstream filters in every job.
+
+inputs:
+  read-only:
+    description: Consume the cache without registering built paths.
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: Mic92/hestia@dfed9ced335d28978ba74e513939a10db1f71025 # v3.1.0
+      with:
+        version: v3.1.0
+        # Retain devenv-signed evaluation inputs; exclude public dependencies.
+        upstream-cache-filter: "true"
+        upstream-cache-key-names:
+          cache.nixos.org-1 nix-agentic-tools.cachix.org-1
+        filter-drv-closures: "true"
+        read-only: ${{ inputs.read-only }}
