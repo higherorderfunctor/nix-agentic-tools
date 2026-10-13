@@ -1,10 +1,10 @@
 {
   "hookTriggerAliases": {
-    "source": "host-run",
+    "source": "static",
     "type": "object"
   },
   "hookTriggers": {
-    "source": "host-run",
+    "source": "static",
     "type": "set"
   },
   "rolloutFeatures": {

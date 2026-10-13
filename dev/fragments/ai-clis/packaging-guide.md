@@ -1,7 +1,8 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-11 — the CI-only rollout canary reads the aggregate
-> facts and patches only restricted features measured patchable.
+> **Last verified:** 2026-10-13 — Kiro binds the full selected KAS runtime from
+> its fetched release input; proprietary KAS outputs retain the kiro-cli cache
+> exclusion and full-closure cache exclusion contract.
 
 ### Overview
 
@@ -234,6 +235,14 @@ be attributed to a release. Caching them bought nothing regardless: the version
 comes from the committed sidecar, not IFD, so **eval never needs the source and
 nix fetches `src` only when it must BUILD** — anyone with a cache hit never
 touches it, and anyone without is building from source anyway.
+
+KAS outputs are named `kiro-cli-kas[-patched]-<version>`, so the same upload
+filter excludes them. They are unfree release data (agent metadata declares
+`AWS-IPL`), not an independently sourced open-source package. The CLI's runtime
+closure contains its one selected KAS, so the full-closure cache exclusion check
+also covers that payload. Native package and KAS share the fetched source; KAS
+extracts directly from it, avoiding a dependency cycle. See the Kiro launcher
+fragment for archive validation, patch selection and runtime checks.
 
 ### The overrideAttrs Pattern
 

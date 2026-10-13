@@ -12,13 +12,19 @@
         inherit (pkgs) lib;
         inherit pkgs;
       }).wrapPackage;
+    selectedKiroPackage = (kiroPackage.withBundlePatches {
+      identity = "Custom identity. Another sentence!";
+      replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+    }).withRolloutFeatures ["background_execution"];
     trustedKiroPackage = wrapKiroPackage {
-      package = kiroPackage;
+      package = selectedKiroPackage;
       trustedMcpTools = ["fs_read"];
       v3 = false;
     };
   in
     pkgs.runCommandLocal "kiro-fhs-contract-check" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       ${
         if isLinux
         then ''
@@ -164,6 +170,13 @@
             || nat_fail "configured FHS root no longer supplies kiro-cli-chat"
           ${pkgs.gnugrep}/bin/grep -qF -- '--trust-tools=fs_read' "$nat_trusted_chat" \
             || nat_fail "trustedMcpTools wrapper is not inside the FHS command path"
+          ${pkgs.gnugrep}/bin/grep -qF -- '${selectedKiroPackage.unwrapped}/bin/kiro-cli-chat' "$nat_trusted_chat" \
+            || nat_fail "FHS trust wrapper lost the selected rollout/prompt payload"
+          for nat_command in kiro-cli kiro-cli-chat; do
+            ${pkgs.gnugrep}/bin/grep -qF -- '${selectedKiroPackage.kas}/node_modules/@kiro/agent/dist/server/acp-server.js' \
+              "${selectedKiroPackage.unwrapped}/bin/$nat_command" \
+              || nat_fail "selected native command lost its fixed KAS path"
+          done
         ''
         else ''
           # Darwin has no upstream buildFHSEnv layer, so there is no FHS contract

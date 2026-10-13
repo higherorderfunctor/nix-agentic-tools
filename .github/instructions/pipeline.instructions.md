@@ -7,9 +7,9 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-11 — native Kiro jobs build the CI-only rollout
-> canary without publishing it; scope includes the aggregate inputs and shared
-> restriction predicate.
+> **Last verified:** 2026-10-12 — native Kiro jobs check packaged KAS selection,
+> resources, ACP and dispatch on both platforms alongside extracted metadata and
+> the unpublished rollout canary.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -232,12 +232,14 @@ after receipt upload. The two dedicated `kiro-patched` jobs, `test`, and
 remains manual-only; its extracted deterministic contracts remain in `test`.
 
 Generated documents stay in the flake checks. Kiro's scoped native jobs build
-the extracted-metadata drift check on both Linux and Darwin, covering TUI
-materialization on macOS where the Linux-only flake check cannot. These jobs
-explicitly enable and assert the Nix sandbox before the materializer executes;
-Darwin's Nix default does not provide that guarantee. Patched proprietary Kiro
-stays in those jobs without cache publication; every Cachix step holding the
-token, package matrix and update workers alike, carries `pushFilter: kiro-cli`.
+the extracted-metadata drift check and packaged KAS checks on both Linux and
+Darwin. They cover TUI materialization, strict vendor patch selection, native
+resources, ACP initialization and fresh/stale-cache dispatch on macOS where the
+Linux-only flake check cannot. These jobs explicitly enable and assert the Nix
+sandbox before the materializer executes; Darwin's Nix default does not provide
+that guarantee. Patched proprietary Kiro stays in those jobs without cache
+publication; every Cachix step holding the token, package matrix and update
+workers alike, carries `pushFilter: kiro-cli`.
 
 Codex and Kiro facts are host-run, so Linux updates can regenerate only their
 Linux raws. The darwin `extracted-facts` job runs on every PR with the sorted

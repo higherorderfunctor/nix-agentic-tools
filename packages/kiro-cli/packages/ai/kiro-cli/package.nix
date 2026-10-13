@@ -21,20 +21,19 @@
     if pkgs.lib.hasSuffix ".dmg" platformSrc.url
     then "dmg"
     else "tar.gz";
-  # Parameterized on the rollout features to unlock, and self-referential via
-  # `passthru.withRolloutFeatures`, so a consumer asks for a variant without
-  # reaching into the overlay.
-  #
-  # The DEFAULT (`[]`) must stay byte-identical to the unparameterized
-  # derivation this replaced: `optionalString` yields "", `postFixup` is
-  # unchanged, the drvPath is unchanged, preserving existing cache hits.
-  # Do NOT "simplify" this by always appending the patch step.
-  # Canonicalized HERE rather than at the call site, because this is where
-  # derivation identity is decided: the feature list is comma-joined into
-  # `postFixup`, so an unsorted or duplicated list yields a different drvPath
-  # for a semantically identical set — two redundant ~556 MB builds. Doing it
-  # here covers every caller of `withRolloutFeatures`, not just the module.
-  # `[]` sorts to `[]`, so the default derivation is untouched.
+  # Both selected prompt patches and rollout features follow every public,
+  # direct and FHS payload route. The native output binds one selected KAS;
+  # KAS depends only on the fetched release input, never on the native output.
+  releaseSource = fetchurl {
+    inherit (platformSrc) url hash;
+    name = "kiro-cli-source-${sources.version}-${system}.${srcExt}";
+  };
+  mkKas = import ../../../lib/kas.nix {
+    inherit pkgs;
+    src = releaseSource;
+    inherit (basePackage) sourceRoot;
+    inherit (sources) version;
+  };
   canonFeatures = fs: pkgs.lib.sort (a: b: a < b) (pkgs.lib.unique fs);
 
   # nixpkgs SPLIT this package (f13ff45a, 2026-08): the real `mkDerivation`
@@ -76,7 +75,14 @@
     then pkgs.kiro-cli-unwrapped
     else pkgs.kiro-cli;
 
-  mkKiroCliWithPayload = rawFeatures: fhsPayload: let
+  mkKiroCliWithPayload = rawFeatures: bundlePatches: fhsPayload: let
+    kas = mkKas bundlePatches;
+    managedKas = (bundlePatches.identity or null) != null || (bundlePatches.replace or []) != [];
+    kasFlags = "${
+      if managedKas
+      then "--set"
+      else "--set-default"
+    } KIRO_KAS_SERVER_PATH ${kas}/node_modules/@kiro/agent/dist/server/acp-server.js --set-default KIRO_KAS_NODE_PATH ${pkgs.nodejs}/bin/node";
     rolloutFeatures = canonFeatures rawFeatures;
 
     # Name infix that makes a PATCHED build self-identifying. Both variants
@@ -107,34 +113,17 @@
         # A fixed-output path embeds the NAME, so adopting this moves the src
         # path and therefore every output built from it. That churn is paid
         # ONCE, and the next version bump would have rebuilt them anyway.
-        src = fetchurl {
-          inherit (platformSrc) url hash;
-          name = "kiro-cli-source-${sources.version}-${system}.${srcExt}";
-        };
+        src = releaseSource;
 
         nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [makeWrapper];
 
         postFixup =
           (attrs.postFixup or "")
-          # On darwin the launcher locates `kiro-cli-chat` by argv[0]-relative
-          # .app BUNDLE DISCOVERY: argv[0]'s parent must literally be
-          # `…/Kiro CLI.app/Contents/MacOS`, or it falls back to
-          # `$HOME/.local/bin/kiro-cli-chat` — on any Mac that has run the DMG,
-          # an UNPATCHED build. PATH is never consulted, and current_exe() is
-          # not canonicalized (a symlink to the .app binary still fails —
-          # measured). wrapProgram's own `--inherit-argv0` therefore breaks
-          # discovery, so on darwin we override argv[0] with the bundle path;
-          # makeWrapper documents "whichever comes last of --argv0 and
-          # --inherit-argv0 wins", and wrapProgram injects --inherit-argv0
-          # BEFORE user args. Measured on hardware 2026-08-04 (2.16.0 store,
-          # 2.16.1 DMG): the exec -a "<bundle path>" shape resolves the store's
-          # .app sibling and hands KIRO_ENABLED_FEATURES=["workflows","tangent"]
-          # to kas/2.16.0. See packages/kiro-cli/docs/launcher-argv.md.
-          #
-          # The `test -e` is a fail-loud layout guard: argv[0] is just a string
-          # (the exec'd file is the hidden wrapped binary), so if the bundle
-          # path ever moves, the wrapper would build fine and discovery would
-          # silently regress to the DMG fallback again.
+          # Darwin's NSBundle dispatch must stay in this package's .app. Passing
+          # only an app-shaped argv0 while exec'ing wrapProgram's hidden bin
+          # symlink fell back to HOME/.local/bin on 2.29.1 in native CI. Point
+          # both the executable filename and argv0 at the actual app binary.
+          # Remove only the upstream bin symlink; never move the app binary.
           + (
             if pkgs.stdenv.hostPlatform.isDarwin
             then ''
@@ -142,15 +131,17 @@
                 echo "kiro-cli: .app bundle layout moved; darwin argv0 fix needs updating" >&2
                 exit 1
               }
-              wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color \
+              rm "$out/bin/kiro-cli"
+              makeWrapper "$out/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli" "$out/bin/kiro-cli" \
+                --set-default TERM xterm-256color ${kasFlags} \
                 --argv0 "$out/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli"
             ''
             else ''
-              wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color
+              wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color ${kasFlags}
             ''
           )
           + ''
-            wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color
+            wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color ${kasFlags}
           ''
           # Deliberately AFTER the wrapProgram calls: the patcher finds the ELF by
           # content, so it is indifferent to how many times wrappers have renamed
@@ -192,12 +183,14 @@
             extracted = pkgs.runCommandLocal "kiro-cli-extracted.json" {} (
               vu.mkKiroExtract {
                 dest = "$out";
-                inherit pkgs;
+                inherit kas pkgs;
                 root = "${finalAttrs.finalPackage}";
               }
             );
 
-            withRolloutFeatures = mkKiroCli;
+            inherit kas;
+            withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches null;
+            withRolloutFeatures = features: mkKiroCliWithPayload features bundlePatches null;
 
             # Re-compose the public Linux FHS package around a configured
             # payload without reimplementing nixpkgs' buildFHSEnv expression.
@@ -205,7 +198,7 @@
             # the synthesized root, where launcher dispatch can actually reach
             # it. Like withRolloutFeatures, the result is unguarded but can only
             # be reached through the guarded public package.
-            withFhsPayload = mkKiroCliWithPayload rawFeatures;
+            withFhsPayload = mkKiroCliWithPayload rawFeatures bundlePatches;
           };
       }
       # `optionalAttrs`, NOT an `optionalString` inside an always-present attr.
@@ -215,8 +208,6 @@
       # feature, and silently costs the cache hit this option exists to preserve.
       # Measured — it did move the default drvPath before this was corrected.
       #
-      # Compare the default drvPath against origin/main when changing this
-      # attrset: comparing two evaluations of the new code misses regressions.
       // pkgs.lib.optionalAttrs (rolloutFeatures != []) {
         # This is the 621 MiB proprietary ELF — the derivation the rollout
         # patch actually rewrites, and the one whose leak prompted this. It
@@ -236,7 +227,7 @@
       # Re-wrap through upstream's own expression rather than reimplementing it,
       # so the FHS sandbox (and whatever upstream adds to that wrapper next)
       # comes along for free. `fhsPayload` is normally null, which preserves the
-      # byte-identical pinned default. The module supplies a wrapped payload only
+      # default pinned payload. The module supplies a wrapped payload only
       # when chat-only configuration must live inside the synthesized root.
       #
       # `passthru` is NOT a derivation input, so re-attaching ours to the join
@@ -319,6 +310,6 @@
           };
       });
 
-  mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures null;
+  mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures {} null;
 in
   mkKiroCli []

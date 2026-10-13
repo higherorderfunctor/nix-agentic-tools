@@ -18,11 +18,6 @@
   inherit (kiroWrapper) wrapperReasons;
   wrapKiroPackage = kiroWrapper.wrapPackage;
 
-  # One launch-time materializer patches the user's installed KAS bundle.
-  # CI can unpack the pinned bundle offline; launch must resolve the bundle
-  # actually installed, including after CLI upgrades. See identityBundle.nix.
-  mkBundleMaterializer = import ./identityBundle.nix {inherit lib pkgs;};
-
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
   frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
 
@@ -270,10 +265,8 @@
   # Only `dispatchKind` and the nested `effect`/`indexType` are real closed
   # enums in Kiro's schema, so only those are `types.enum` here. Kiro's other
   # enum-looking fields are runtime tables that skip-with-warning, and the
-  # schema itself lives in a bundle downloaded at runtime under
-  # ~/.local/share/kiro-cli/kas/ — NOT in the Nix store — so it cannot feed
-  # the drift-checked extraction sidecar the way `hookTriggers` does. Closed
-  # enums copied from it by hand would rot unguarded; they stay `str`.
+  # schema itself lives in package-bound KAS. Only hook triggers currently
+  # have a drift-checked extractor; unmeasured runtime enums stay `str`.
   #
   # v3 agent schema (`<configDir>/agents/<name>.{json,md}`; global
   # ~/.kiro or project .kiro): { name, description, model, prompt,
@@ -726,8 +719,8 @@
       {
         # The exact sentence replacement leaves the following terminal prose
         # intact, so the identity must close its own sentence. Validate at eval:
-        # launch intentionally falls back after a patch error, and a rejected
-        # identity belongs at the configuration site rather than at launch.
+        # a rejected identity belongs at the configuration site before building
+        # the selected package.
         assertion =
           !cfg.cli.tweaks.identity.enable
           || builtins.match ".*[.!?][[:space:]]*" cfg.cli.tweaks.identity.text != null;
@@ -896,34 +889,27 @@
       rules
     else rules;
 
-  # Package selection is shared by both backends; GA features preserve stock.
-  resolvePackage = cfg:
+  # Shared by the manual factory and both module backends. Applying either
+  # selector first preserves the other through the package's passthru contract.
+  resolveRolloutPackage = cfg:
     if (effectiveRolloutFeatures cfg) == []
     then cfg.cli.package
     else cfg.cli.package.withRolloutFeatures (effectiveRolloutFeatures cfg);
-
-  # ── Engine-bundle rewrites, shared by BOTH backends (config parity) ────────
-  # These three live here rather than in either backend block for the same
-  # reason `resolvePackage` does: a surface configurable under home-manager
-  # must be configurable under devenv, and one definition is what keeps the two
-  # from drifting.
-
-  # The materializer is version-pinned, so it must be built from the RESOLVED
-  # package (a rollout-unlocked variant is a different derivation but the same
-  # version) rather than from `cfg.cli.package`.
-  resolveBundleMaterializer = cfg: let
-    replace = enabledBooleanTweaks cfg;
+  hasBundlePatches = cfg: cfg.cli.tweaks.identity.enable || enabledBooleanTweaks cfg != [];
+  resolvePackage = cfg: let
+    package = resolveRolloutPackage cfg;
   in
-    if !cfg.cli.tweaks.identity.enable && replace == []
-    then null
+    if !hasBundlePatches cfg || package == null
+    then package
+    else if !(package ? withBundlePatches)
+    then throw "ai.kiro.cli.tweaks requires a package exposing passthru.withBundlePatches (use this flake's kiro-cli package)."
     else
-      mkBundleMaterializer {
+      package.withBundlePatches {
         identity =
           if cfg.cli.tweaks.identity.enable
           then cfg.cli.tweaks.identity.text
           else null;
-        inherit replace;
-        cliVersion = (resolvePackage cfg).version;
+        replace = enabledBooleanTweaks cfg;
       };
 
   # Boolean `ai.kiro.cli.tweaks` that each select one fixed-text bundle
@@ -1172,7 +1158,6 @@
             }.${name}.headers.${header}";
           }) (lib.filterAttrs (_: builtins.isAttrs) (server.headers or {})))
         mergedServers));
-      bundleMaterializer = resolveBundleMaterializer cfg;
     };
 in
   lib.ai.app.mkRuntime {
@@ -1386,7 +1371,7 @@ in
         };
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
         # off, and with none enabled the managed install launches the stock
-        # bundle: no materializer, no patched copy, no wrapper reason.
+        # bundle from the pinned release, without changing its prompt bytes.
         tweaks = {
           identity = lib.mkOption {
             type = aiTypes.optionalTextSource {
@@ -1407,16 +1392,12 @@ in
               and file tree, so it is the highest-leverage place to state what the
               agent IS.
 
-              Mechanically: the patched engine bundle is materialized under
-              `$XDG_CACHE_HOME/nix-agentic-tools/kiro-bundle/` at launch and
-              selected via `KIRO_KAS_SERVER_PATH`. Vendor state is never modified.
-              The exact vendor sentence is defined in `kiro-bundle-patch.py` and
-              checked against the pinned bundle in CI.
-
-              FAIL-OPEN: if the engine bundle cannot be resolved or the vendor
-              source text no longer occurs exactly once, a named warning goes to stderr.
-              Each drifted replacement is skipped independently; healthy replacements
-              still apply. With none applied, the CLI launches UNPATCHED.
+              The selected KAS is extracted from the pinned CLI release and patched
+              at build time. Both launcher and direct chat use its fixed store path;
+              no user cache participates in selection. Every selected source must
+              occur exactly once or the build fails. Unselected text is preserved.
+              Managed patches replace an inherited KIRO_KAS_SERVER_PATH; with all
+              tweaks disabled that explicit override remains available.
 
               May not contain a backtick or `''${` — the value is spliced into a JS
               template literal.
@@ -1430,9 +1411,8 @@ in
               paths: the step writes the stop-condition file, and `fileCheck.path`
               checks it, at the same plain workspace-relative path, without
               templates. Absolute worktree paths can be rejected for sibling worktrees.
-              Uses the shared exact-match bundle materializer on Home Manager and
-              devenv. Source drift warns and skips this replacement independently;
-              the pinned-bundle CI check fails on missing or duplicate source text.
+              Uses the shared build-time KAS patch selection on Home Manager and
+              devenv. Missing or duplicate selected source text fails the build.
             '';
           };
           stripVendorWorktreeSteering = lib.mkOption {
@@ -1441,13 +1421,10 @@ in
             description = ''
               Remove the vendor workflow worktree paragraph (worktrees under
               `.worktrees/`, rebased onto and fast-forwarding the checked-out base
-              branch) at launch, for repositories
-              whose own instructions supply the git workflow. Uses the same
-              exact-match bundle materializer as `tweaks.identity`, on Home
-              Manager and devenv. A source-text drift prints a warning and
-              skips this replacement; healthy replacements still apply. With none
-              applied, Kiro launches unpatched. The pinned-bundle CI check fails on either
-              missing or duplicate text.
+              branch), for repositories whose own instructions supply the git
+              workflow. Uses the same build-time KAS patch selection as
+              `tweaks.identity`, on Home Manager and devenv. Missing or duplicate
+              selected source text fails the build.
             '';
           };
         };
@@ -1629,11 +1606,11 @@ in
       wrapperPackageReasons =
         lib.mapAttrsToList (key: reason:
           reason // {explicit = explicitAt wrapperReasonPaths.${key};})
-        (builtins.removeAttrs (wrapperReasons {
+        (wrapperReasons {
           environmentVariables = mergedEnvironmentVariables;
           inherit (cfg.cli) extraPackages trustedMcpTools v3;
           inherit (kiroSecrets) secretEnv;
-        }) ["bundle"]);
+        });
       # Beside the wrapper's own reasons: package-dependent options the
       # wrapper itself does not read, but that still need the managed
       # package to do anything. `gitSshConfigWorkaround` defaults to `true`

@@ -7,8 +7,9 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-11 — owner checks use `mkOwnerCheck`;
-> `regenCommand` runs their `passthru.regenerate` over declared extracted raws.
+> **Last verified:** 2026-10-13 — Kiro KAS extraction is static from the fetched
+> native release; TUI remains a sandboxed host-run extraction. Neither is read
+> from a derivation at evaluation.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -375,19 +376,16 @@ allowlist, and a merge that consults that very set. It evaluates their validated
 expressions and the selected merge helper with inert loaders in an isolated
 JavaScript VM. Missing or ambiguous anchors fail.
 
-Hook triggers take the same road one bundle over. The chat ELF names only some
-of the v3 triggers (five were once recorded as "documented but absent" by a grep
-of a hand-written candidate list, and `SessionEnd` was unknown to it). The
-engine's own vocabulary is one `Object.freeze` map in the KAS bundle
-`acp-server.js`, which the extractor unpacks offline through the same launch
-helper as `kiro-bundle-patch-drift` (`vu.kiroMaterializeKas`).
-`extract/hook-triggers.mjs` locates the map by content (the one frozen object
-with a `SessionStart` key, compared as the decoded property name so a quoted key
-matches too), requires literal string entries, at least eight canonical triggers
-including `SessionStart` and `PreToolUse`, and an identity entry for each, and
-emits `hookTriggers` plus the alias map `hookTriggerAliases`; the hook record's
-trigger soft enum suggests both. Both are `host-run` because the bundle exists
-only after the binary runs.
+Hook triggers come from the package-bound KAS `acp-server.js`, statically
+extracted from the fetched release before native CLI packaging. The hook map
+facts are now `static`; TUI settings remain `host-run`. The KAS extractor
+selects the target Mach-O architecture, validates its compressed frame checksum
+and full archive layout, and installs one selected runtime tree. The final CLI
+may reference KAS; KAS never references the final CLI. No consumer reads the
+output at evaluation. `extract/hook-triggers.mjs` still locates the frozen map
+by decoded `SessionStart` key, requires literal entries and canonical identity
+entries, and emits `hookTriggers` plus `hookTriggerAliases`. See
+`packages/kiro-cli/docs/launcher-argv.md` for package and patch selection.
 
 #### An anchor can lose its TYPE information without losing its match
 

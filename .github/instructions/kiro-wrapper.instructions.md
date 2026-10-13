@@ -7,9 +7,9 @@ applyTo: "packages/kiro-cli/checks/kiro-fhs-contract.nix,packages/kiro-cli/check
 
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-10-07 — package selection, environment and FHS
-> controls use `ai.kiro.cli`; the recorded upstream sandbox measurements below
-> are unchanged.
+> **Last verified:** 2026-10-13 — package-bound KAS/Node paths and selected
+> prompt patches follow the native payload through FHS and direct launch. The
+> recorded upstream sandbox measurements below are unchanged.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
@@ -135,7 +135,7 @@ ai.kiro.cli.useFhsSandbox = false;
 That removes bubblewrap from Kiro's launch chain and restores the host's normal
 namespace and PATH resolution. It does not select a separately packaged binary:
 rollout patches, version pinning, TERM defaults, environment variables, secrets,
-identity materialization, and argv injection still use the same overlay payload
+build-time KAS selection, and argv injection still use the same overlay payload
 and wrapper helpers. A custom `ai.kiro.cli.package` must expose
 `passthru.unwrapped` on every rollout-resolved variant; otherwise evaluation
 fails with a named assertion instead of silently retaining the sandbox. Direct
@@ -256,9 +256,10 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-11 — rollout options read the facts aggregate; GA
-> workflows preserve the stock package and require v3 plus their global client
-> setting.
+> **Last verified:** 2026-10-13 — the native package binds one KAS extracted
+> from its release input; selected prompt replacements fail closed at build
+> time. Darwin packaging points both the executable filename and argv0 at the
+> app binary; native CI verifies fresh-home dispatch.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -353,76 +354,73 @@ Two different rules, for two different reasons — do not "make them consistent"
   `kiro-cli-chat --trust-tools=…` is an "unexpected argument". It is appended
   and gated.
 
-### `KIRO_KAS_SERVER_PATH` — an ENV injection, not a flag
+### Package-bound KAS and selected prompt patches
 
-`ai.kiro.cli.tweaks` adds a third thing the wrapper does. It is deliberately not
-in the table above, because it is not argv at all:
+The native package's ordinary `makeWrapper` setup binds `KIRO_KAS_SERVER_PATH`
+and `KIRO_KAS_NODE_PATH` for both `kiro-cli` and `kiro-cli-chat`. KAS comes from
+that CLI release's fetched input, never from the user's unpacked cache. Fresh
+launches and launches with an older cache therefore use the same selected store
+tree. Darwin's launcher still receives its app-bundle argv0, and its raw chat
+sibling inherits these exports. Linux FHS and direct payloads share them.
 
-| Binary                         | Variable               | When                                                                                              |
-| ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------- |
-| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `tweaks.identity.enable`, `tweaks.relativeFileCheckPaths` or `tweaks.stripVendorWorktreeSteering` |
+`lib/kas.nix` extracts the complete runtime through `extract/embedded-kas.py`.
+The extractor first selects the target CPU slice of a universal Mach-O (the
+Darwin release contains two different KAS archives), scans zstd frames, and
+requires exactly one KAS tar with the expected server/package layout and WASM
+resources. It validates the compressed frame's SHA-256 against the digest
+embedded in that slice. Unrelated compressed resources are ignored; corrupt,
+ambiguous, unsafe or incomplete KAS archives fail. Archive members and link
+targets cannot escape the extraction root. Linux's bundled native libraries and
+ripgrep receive ordinary Nix loader fixups. No native CLI byte patch is added.
 
-Four properties worth knowing before touching it:
+The dependency graph is release input → selected KAS → native CLI → optional
+FHS/configuration wrappers. KAS never depends on the final CLI, so this is
+acyclic and requires no evaluation-time extraction. Each configured runtime
+references one installed KAS tree, with its full dependencies/resources copied
+from the archive. There is no installed pristine tree underneath a patched one.
+The native executable still carries upstream's embedded compressed bytes; those
+and fetched build inputs are not a second installed runtime. Ordinary
+input-addressed builds share identical selections, but do not promise
+cross-release deduplication merely because two releases contain equal payloads.
 
-- **It is exported in BOTH wrappers.** The launcher resolves `kiro-cli-chat`
-  through PATH, so the variable would normally be inherited down the chain — but
-  `kiro-cli-chat` invoked directly is a supported entry point, and it is the
-  binary that actually spawns node. Exporting in one place only patches the
-  composed path and silently misses the direct one.
-- **The CLI option defaults select the stock bundle.** Delegate routing supplies
-  `mkDefault true` for both workflow tweaks when it reaches a managed CLI with
-  `cli.workflows.enable`; an explicit false wins. Identity remains opt-in. With
-  no tweak enabled there is no materializer, no wrapper reason and no patched
-  copy. `tweaks.identity.text` supplies inline identity prose and
-  `tweaks.identity.source` reads a packaged file;
-  `tweaks.identity.enable = false` disables either form explicitly. The boolean
-  `tweaks.stripVendorWorktreeSteering` (default false) removes the vendor
-  paragraph assigning worktree setup and a fast-forward of the checked-out base
-  branch to workflows, for repositories whose own instructions supply the git
-  workflow. `tweaks.relativeFileCheckPaths` (default false) replaces the vendor
-  workflow paragraph that requires absolute stop-condition paths. The step
-  writes the stop-condition file, and `fileCheck.path` checks it, at the same
-  plain path relative to the workflow workspace root, without templates or an
-  absolute worktree prefix. Every other file in a step prompt keeps the
-  absolute-path guidance.
-- **It is computed at LAUNCH, not at eval.** The value is the stdout of a
-  materializer that resolves the installed engine bundle, applies selected
-  exact-byte replacements to a mirrored copy, and caches the result. The engine
-  bundle is unpacked from the binary on first use and never lands in the nix
-  store, so there is nothing to point at until the CLI has run once — on a fresh
-  machine the first launch is legitimately unpatched.
-- **It FAILS OPEN per replacement.** A source that occurs zero or multiple times
-  is skipped with a warning naming it (`identity`, `relativeFileCheckPaths` or
-  `stripVendorWorktreeSteering`). Healthy replacements still apply and the
-  wrapper uses the patched copy when at least one succeeds. The cached copy
-  keeps those warnings and replays them on every later launch. If none apply, or
-  bundle resolution or materialization fails, the wrapper clears any inherited
-  `KIRO_KAS_SERVER_PATH` and starts Kiro with the stock bundle. That is a
-  deliberate asymmetry with the argv injections, which cannot fail: refusing to
-  start would let a vendor reshuffle brick the CLI over a cosmetic prompt edit.
-  The stderr line is what keeps it from being SILENT. CI fails closed for each
-  source: every supported replacement must match exactly once in the pinned
-  bundle.
+`passthru.withBundlePatches { identity; replace; }` selects the existing tweaks
+at build time; `withRolloutFeatures`, `withFhsPayload` and `unwrapped` preserve
+that selection. The factory uses the same selector on both backends. Every
+selected exact source must occur once or the entire build fails before writing
+patched output. Unselected prompt bytes remain unchanged. The independent CI
+drift check requires all three supported anchors in real vendor data on each
+platform even when a consumer disables them.
 
-Bundle mechanics live in `packages/kiro-cli/lib/identityBundle.nix`. Its cache
-key covers the engine bundle, selected replacements and patcher source. The
-small replacement list in `kiro-bundle-patch.py` pins the exact identity
-sentence, workflow file-check paragraph and escaped worktree paragraph from the
-vendor's JavaScript. One function checks each source against the original bytes
-and replaces each unique match; it does not parse function names or decode the
-steering block. Bytes outside those sources stay unchanged. A materialization
-with no successful replacement never marks the cache ready; a partial one stores
-its skip warnings in `.skipped` beside `.ready`. A per-key lock sits outside the
-rebuilt directory and covers the readiness check through publication, so
-concurrent launches cannot delete a bundle already returned to another launch.
+All tweaks still default off. Delegate routing supplies `mkDefault true` for
+workflow tweaks only on its reached managed workflow CLI; explicit false wins.
+Identity remains opt-in through `text` or `source`, with explicit
+`enable = false` disabling either. Identity changes only the first sentence; the
+workflow tweaks retain the existing relative file-check guidance and deletion of
+vendor worktree ownership/merge guidance. Configurable prompt files, additional
+roots and engine-default changes are separate work.
 
-`kiro-bundle-patch` checks byte preservation, missing and duplicate sources,
-JavaScript execution, cache reuse, concurrent launch publication and warnings
-with successful fallback despite an inherited bundle override through both
-launch entry points. `kiro-bundle-patch-drift` materializes the pinned KAS
-bundle offline and requires both exact sources once, even if the consuming
-configuration disables a patch. The module checks cover the stock default and
-each opt-in tweak selecting the patched path on both backends.
+Inherited overrides have deliberate precedence: all-off uses `--set-default` for
+the server, preserving a caller's explicit `KIRO_KAS_SERVER_PATH`. Any managed
+tweak uses `--set` so another server cannot silently discard it.
+`KIRO_KAS_NODE_PATH` always defaults to the packaged Node and still accepts an
+explicit caller override. These are fixed package paths, with no launch-time
+materializer or cache-selection fallback.
+
+KAS is proprietary release data (`@kiro/agent` declares `AWS-IPL`); no
+open-source repository has been established for this payload. Its derivation
+names start with `kiro-cli-kas`, selected changes add `-patched`, and both stay
+under the existing `kiro-cli` cache exclusion. The native package's full closure
+cache exclusion check includes KAS. Neither the package nor its facts are read
+at evaluation from a derivation output.
+
+`kiro-kas-extraction` covers discovery/architecture/checksum and unsafe archive
+refusals. `kiro-bundle-patch` covers strict selected-anchor refusal and decoded
+synthetic JavaScript behavior. `kiro-bundle-patch-drift` checks every vendor
+selection, real native image/ONNX modules, WASM solving, shipped ripgrep, and
+ACP initialization. `kiro-kas-dispatch` exercises real launcher/direct chat,
+CLI/ACP, fresh/stale homes, override precedence and explicit V2 selection. The
+FHS contract check separately inspects the command paths inside the synthesized
+root; nested bubblewrap execution is not portable inside a Nix build sandbox.
 
 ### `extraPackages` — a PATH prefix, not an FHS rebuild
 
@@ -478,15 +476,15 @@ was invoked (measured 2026-08-04, store 2.16.0). That measurement does not prove
 the current post-split chain: the FHS profile ordering above now resolves the
 raw rootfs command first.
 
-### darwin resolves by argv[0] bundle discovery, and PATH is never consulted
+### Darwin bundle discovery must reach the packaged app
 
 The same decoy — `command -v` confirmed resolving to it — is **never invoked**
 on darwin, tested with both the .app binary and the wrapped launcher via
 `mcp list`, a subcommand the forwarding table shows dispatching. Instead the
-darwin launcher requires argv[0]'s parent to LITERALLY be
-`…/Kiro CLI.app/Contents/MacOS`; when it is not, it falls back to
-`$HOME/.local/bin/kiro-cli-chat` — on any Mac that has run the DMG installer, an
-unpatched build. There is no `KIRO_*` env override for the chat path.
+historical Darwin launcher probes associated successful dispatch with
+`…/Kiro CLI.app/Contents/MacOS` as argv0's parent. Failed discovery falls back
+to `$HOME/.local/bin/kiro-cli-chat` — on any Mac that has run the DMG installer,
+an unpatched build. There is no `KIRO_*` env override for the chat path.
 
 Measured on one machine, `--v3`, all `KIRO_*` stripped (store 2.16.0, DMG
 2.16.1):
@@ -498,14 +496,22 @@ Measured on one machine, `--v3`, all `KIRO_*` stripped (store 2.16.0, DMG
 | symlink → .app binary                      | `~/.local/bin`     | `["tangent"]` ✗             |
 | hand-written `exec -a "$APP" "$APP"`       | store .app sibling | `["workflows","tangent"]` ✓ |
 
-Row 3 is the trap: **removing wrapProgram does not fix it** — argv[0] is not
-canonicalized, so a symlink is not enough; the string itself must be the bundle
-path. The fix is therefore in
-`packages/kiro-cli/packages/ai/kiro-cli/package.nix`: a darwin-only trailing
-`--argv0` on the launcher's wrapProgram call naming the bundle path (makeWrapper
-documents that whichever of `--argv0`/`--inherit-argv0` comes LAST wins, and
-wrapProgram injects `--inherit-argv0` before user args). The chat binary does no
-bundle discovery for itself, so its wrapProgram stays untouched.
+The historical measurements above established the argv0 workaround for those
+releases. Native 2.29.1 CI later demonstrated that the same wrapper, with an
+app-shaped argv0 but `bin/.kiro-cli-wrapped` as its executable filename, still
+fell back to the empty home's `.local/bin`. That failure occurs before KAS
+starts. Static ARM64 disassembly of that release identifies the chat chooser
+calling `macos_utils::get_bundle_path_for_executable`, which obtains
+`NSBundle.mainBundle.bundleURL` and appends `Contents/MacOS/kiro-cli-chat`. An
+absent bundle result selects the home fallback. This chooser does not read
+argv0; the historical argv0 explanation was too strong.
+
+The package now removes only upstream's `bin/kiro-cli` symlink and uses
+`makeWrapper` with the real app binary as its target, retaining that same path
+as `--argv0`. Both executable filename and argv0 therefore identify the packaged
+app. It preserves the native launcher's dispatch and leaves the app binary in
+place. The fresh-home native dispatch check must pass without installing a
+fallback binary. Direct chat keeps its existing wrapper.
 
 **Standing decision, made explicitly rather than inherited:** post-fix, the
 darwin launcher resolves the RAW .app-sibling chat binary — never this repo's
@@ -541,9 +547,9 @@ translation remains an independent v3 path; devenv no longer depends on an
 equivalent file writer to recover a wrapper the FHS root skipped.
 
 All other configuration remains outside the FHS package. Static and secret
-environment exports, `extraPackages`, identity materialization, and `--v3` are
-inherited across bubblewrap and keep their established ordering. Moving only the
-shadowed chat-specific injection is what limits the behavioral change.
+environment exports, `extraPackages`, and `--v3` are inherited across bubblewrap
+and keep their established ordering. Moving only the shadowed chat-specific
+injection is what limits the behavioral change.
 
 `ai.kiro.cli.useFhsSandbox = false` skips this package-composition layer
 entirely and applies the ordinary wrappers to `passthru.unwrapped`. That is an
@@ -617,13 +623,10 @@ interactive half — under v3 an `ask` rule is resolved with the client over ACP
 equivalent, so on the devenv backend a withheld `--trust-tools` is not recovered
 declaratively — the grant is simply absent for that session.
 
-> **Probing v3 at all: for POLICY, grep the JS, not the ELF.** The v3 engine is
-> NOT in the Nix-store binary. It is a separately downloaded Node bundle under
-> `~/.local/share/kiro-cli/kas/<version>/node_modules/@kiro/agent/`, and the
-> Rust binary only spawns it. A `strings` sweep over the 555 MB ELF finds
-> nothing about policy and produces a confident WRONG answer — that is measured,
-> not hypothetical. Read `acp-server.js` and `tui.js` first; where the ELF and
-> the JS disagree on policy, the JS wins.
+> **Probing v3 policy:** read the packaged KAS JavaScript at
+> `kiro-cli.kas/node_modules/@kiro/agent/dist/server/acp-server.js`. The Rust
+> binary spawns this runtime; a plaintext scan of its compressed embedded bytes
+> does not enumerate JavaScript policy. TUI remains a separate embedded asset.
 >
 > **Do NOT generalize that to feature GATING — there the ELF wins, and reading
 > only the JS produces exactly the confident wrong answer this note warns
@@ -771,12 +774,11 @@ Run against the **unwrapped** binary out of `nix build` — a bare `PATH` lookup
 finds the wrapper, which is the thing under test.
 
 On **darwin**, add two probes the PATH recipe cannot express: confirm the
-generated launcher shim still ends in
-`exec -a "<…>/Kiro CLI.app/Contents/ MacOS/kiro-cli"` (the trailing `--argv0`
-must keep beating the injected `--inherit-argv0` across makeWrapper bumps), and
-confirm a session launched via `kiro-cli` still resolves the STORE's chat
-sibling rather than `~/.local/bin` — a DMG-installed Mac is the only place the
-fallback can demonstrate itself. The decoy-on-PATH probe is meaningless there.
+generated launcher shim names the real app binary as both its `exec` target and
+`-a` argv0, and confirm a session launched via `kiro-cli` still resolves the
+STORE's chat sibling rather than `~/.local/bin`. The native CI fixture
+deliberately has no home-installed fallback, so failed discovery fails the
+check. The decoy-on-PATH probe is meaningless there.
 
 Pinning `$KB` is necessary but **not sufficient for the launcher** on Linux: it
 re-resolves `kiro-cli-chat` through `PATH` at runtime, so a wrapped
@@ -859,7 +861,7 @@ probe the unwrapped CLI at all (see the re-measure recipe above), and
 
 This governs THIS module's wrappers only. The darwin OVERLAY shim
 (`packages/kiro-cli/packages/ai/kiro-cli/package.nix`) deliberately ends in
-`exec -a "<bundle path>"` — the argv[0] override IS the bundle-discovery fix —
+`exec -a "<bundle path>" "<bundle path>"` to keep dispatch in the packaged app —
 and the check never reads that shim, so no carve-out is needed there. Do not
 "fix" its argv0 back to `"$0"`.
 
