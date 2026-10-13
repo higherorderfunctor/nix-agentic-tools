@@ -1,6 +1,6 @@
 // Loaded by package-bound KAS. All mutable state belongs to a conversation.
 import { constants } from "node:fs";
-import { open } from "node:fs/promises";
+import { open, readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { settingsLayers } from "./session-settings.mjs";
 
@@ -85,7 +85,7 @@ function mapping(value, path) {
   return mapping;
 }
 
-export async function resolveSnapshot(homeDir, cwd) {
+export async function resolveSnapshot(homeDir, cwd, worktreeRoot) {
   const defaults = Object.fromEntries(
     await Promise.all(
       slots.map(async (slot) => [
@@ -108,6 +108,20 @@ export async function resolveSnapshot(homeDir, cwd) {
     } catch (error) {
       fail(slot, error.message);
     }
+  }
+  if (worktreeRoot && !selected.worktreeGuidance) {
+    const parts = JSON.parse(
+      await readFile(
+        new URL("./prompt-defaults/worktree-policy.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    defaults.worktreeGuidance =
+      parts[0] +
+      "'" +
+      `${worktreeRoot}/<name>`.replaceAll("'", "'\"'\"'") +
+      "'" +
+      parts[1];
   }
   return validateSnapshot({ version: 1, slots: defaults });
 }

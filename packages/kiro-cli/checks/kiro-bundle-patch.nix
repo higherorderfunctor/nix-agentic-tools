@@ -2,7 +2,6 @@
   package = pkgs.ai.kiro-cli;
   patched = package.withBundlePatches {
     identity = "Custom identity. Another sentence!";
-    replace = ["stripVendorWorktreeSteering"];
   };
   wrap = package: package.unwrapped;
   variants = pkgs.writeText "kiro-cli-kas-dispatch.json" (builtins.toJSON {
@@ -63,7 +62,7 @@ in {
           --zstd ${pkgs.zstd}/bin/zstd
         vendor_server="$PWD/vendor/node_modules/@kiro/agent/dist/server/acp-server.js"
         python3 ${../lib/kiro-bundle-patch.py} "$vendor_server" ${package.kas.promptCorpus} --check
-        python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} "$vendor_server" ${server patched.kas} ${package.kas.promptCorpus} ${(import ../lib/packaging.nix).kiroPromptsExtractScript pkgs} ${../src/patch-prompt-files.mjs} ${pkgs.typescript_5}/lib/node_modules/typescript
+        python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} "$vendor_server" ${server package.kas} ${server patched.kas} ${package.kas.promptCorpus} ${(import ../lib/packaging.nix).kiroPromptsExtractScript pkgs} ${../src/patch-prompt-files.mjs} ${pkgs.typescript_5}/lib/node_modules/typescript
         KIRO_DISABLE_TELEMETRY=1 AWS_EC2_METADATA_DISABLED=true node ${./additional-roots.mjs} ${server patched.kas} ${pkgs.typescript_5}/lib/node_modules/typescript ${patched.kas}/node_modules
         node ${./prompt-files.mjs} ${server patched.kas} ${pkgs.typescript_5}/lib/node_modules/typescript
         python3 ${./kas-smoke.py} ${pkgs.nodejs}/bin/node ${server patched.kas}

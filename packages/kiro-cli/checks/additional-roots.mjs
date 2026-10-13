@@ -58,6 +58,7 @@ try {
     "additional-roots.mjs",
     "prompt-files.mjs",
     "session-settings.mjs",
+    "worktree-policy.mjs",
     "prompt-defaults",
   ])
     await fs.symlink(
@@ -283,6 +284,203 @@ try {
       )
     ).sessionId,
     "spec",
+  );
+
+  // Worktree policy discovery is local to admission, never process cwd.
+  const worktrees = await import(
+    pathToFileURL(path.join(tmp, "worktree-policy.mjs"))
+  );
+  const git = (...args) =>
+    execFileSync("git", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  const repoC = path.join(tmp, "policy-c"),
+    repoD = path.join(tmp, "policy-d "),
+    linked = path.join(tmp, "linked-c");
+  for (const repo of [repoC, repoD]) {
+    await fs.mkdir(repo);
+    git("init", repo);
+    await fs.mkdir(path.dirname(repoFile(repo)), { recursive: true });
+    await fs.writeFile(
+      repoFile(repo),
+      JSON.stringify({ "chat.worktrees": { enable: true } }),
+    );
+  }
+  git(
+    "-C",
+    repoC,
+    "-c",
+    "user.name=Fixture",
+    "-c",
+    "user.email=fixture@example.invalid",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "--allow-empty",
+    "-m",
+    "fixture",
+  );
+  git("-C", repoC, "worktree", "add", "-b", "linked", linked);
+  const cwdBefore = process.cwd();
+  assert.deepEqual(
+    await Promise.all([repoC, linked, repoD].map(worktrees.discover)),
+    [`${repoC}-worktrees`, `${repoC}-worktrees`, `${repoD}-worktrees`],
+  );
+  assert.equal(process.cwd(), cwdBefore);
+  for (const suffix of ["\t", "\ninvalid"]) {
+    const special = path.join(tmp, `policy-special${suffix}`);
+    git("init", special);
+    if (suffix === "\t")
+      assert.equal(await worktrees.discover(special), `${special}-worktrees`);
+    else
+      await assert.rejects(
+        worktrees.discover(special),
+        /newlines are unsupported/,
+      );
+  }
+  const originalPath = process.env.PATH;
+  try {
+    process.env.PATH = "";
+    assert.equal(await worktrees.discover(linked), `${repoC}-worktrees`);
+  } finally {
+    process.env.PATH = originalPath;
+  }
+  await assert.rejects(fs.stat(`${repoC}-worktrees`), { code: "ENOENT" });
+  // Only the automatically derived destination refuses symlinks. Explicit
+  // additional-directory aliases keep their existing canonical semantics.
+  const destination = `${repoC}-worktrees`;
+  await fs.mkdir(path.dirname(repoFile(linked)), { recursive: true });
+  await fs.writeFile(
+    repoFile(linked),
+    JSON.stringify({ "chat.worktrees": { enable: true } }),
+  );
+  for (const target of [repoC, a, path.join(tmp, "dangling-target")]) {
+    await fs.symlink(target, destination);
+    await assert.rejects(
+      worktrees.discover(linked),
+      /derived destination must not be a symlink/,
+    );
+    observed = undefined;
+    await assert.rejects(
+      Agent.prototype.newSessionAdmitted.call(host, {
+        cwd: linked,
+        mcpServers: [],
+      }),
+      /derived destination must not be a symlink/,
+    );
+    assert.equal(
+      observed,
+      undefined,
+      "symlink admission refuses before persistence",
+    );
+    await fs.unlink(destination);
+  }
+  await fs.mkdir(destination);
+  assert.equal(await worktrees.discover(linked), destination);
+  const linkedRoots = Uke(await resolve({ cwd: linked }), false);
+  await assert.rejects(
+    rootsApi.validateWorkflowRoots(
+      { sessionState: () => ({ workspacePaths: linkedRoots }) },
+      "linked",
+      [path.join(repoC, ".git")],
+    ),
+    /no longer authorized/,
+  );
+  await fs.rmdir(destination);
+  assert.equal(await worktrees.discover(linked), destination);
+  await assert.rejects(fs.lstat(destination), { code: "ENOENT" });
+
+  assert.equal(await worktrees.discover(a), undefined);
+  for (const invalid of [
+    null,
+    true,
+    {},
+    { enable: 1 },
+    { enable: true, path: "x" },
+  ])
+    assert.throws(
+      () =>
+        worktrees.enabled([
+          { path: "fixture", value: { "chat.worktrees": invalid } },
+        ]),
+      /chat.worktrees/,
+    );
+  assert.equal(
+    worktrees.enabled([
+      { value: { "chat.worktrees": { enable: true } } },
+      { value: { "chat.worktrees": { enable: false } } },
+    ]),
+    false,
+  );
+  const bare = path.join(tmp, "bare.git"),
+    separate = path.join(tmp, "separate");
+  git("init", "--bare", bare);
+  git("init", `--separate-git-dir=${path.join(tmp, "git-storage")}`, separate);
+  await assert.rejects(worktrees.discover(bare), /chat.worktrees/);
+  await assert.rejects(worktrees.discover(separate), /chat.worktrees/);
+  const disguised = path.join(tmp, "disguised"),
+    storage = path.join(tmp, "storage");
+  await fs.mkdir(storage);
+  git("init", `--separate-git-dir=${path.join(storage, ".git")}`, disguised);
+  await assert.rejects(worktrees.discover(disguised), /chat.worktrees/);
+  await fs.writeFile(
+    repoFile(a),
+    JSON.stringify({ "chat.worktrees": { enable: true } }),
+  );
+  assert.deepEqual(Uke(await resolve({ cwd: a }), false), [
+    a,
+    path.join(tmp, "global-root"),
+  ]);
+  await settings(repoFile(a), ["../a-extra"]);
+  // Actual admission forwards both configured roots and the computed sibling.
+  for (const method of ["newSessionAdmitted", "loadSessionAdmitted"]) {
+    await assert.rejects(
+      Agent.prototype[method].call(host, {
+        cwd: repoC,
+        sessionId: "policy",
+        mcpServers: [],
+      }),
+      (error) => error === stop,
+    );
+    assert.deepEqual(observed, [
+      repoC,
+      path.join(tmp, "global-root"),
+      `${repoC}-worktrees`,
+    ]);
+  }
+  const policyRequest = await resolve({ cwd: repoC });
+  const policySnapshot = await (
+    await import(pathToFileURL(path.join(tmp, "prompt-files.mjs")))
+  ).resolveSnapshot(home, repoC, worktrees.requestRoot(policyRequest));
+  const policyMetadata = {
+    workspacePaths: Uke(policyRequest, false),
+    _meta: rootsApi.authorityMetadata(
+      {},
+      rootsApi.requestAuthority(policyRequest),
+    ),
+  };
+  const policyOwner = {
+    homeDir: home,
+    sessionState: () => undefined,
+    persistence: { loadSessionMetadata: async () => policyMetadata },
+  };
+  await fs.writeFile(
+    repoFile(repoC),
+    JSON.stringify({ "chat.worktrees": { enable: false } }),
+  );
+  assert.deepEqual(await rootsApi.ownerRoots(policyOwner, "policy"), [
+    repoC,
+    path.join(tmp, "global-root"),
+  ]);
+  assert.ok(
+    policySnapshot.slots.worktreeGuidance.includes(`${repoC}-worktrees/<name>`),
+  );
+  await assert.rejects(
+    rootsApi.validateWorkflowRoots(policyOwner, "policy", [
+      `${repoC}-worktrees/future`,
+    ]),
+    /no longer authorized/,
   );
 
   // Detached workflow owner provenance: saved config roots are not protocol.
@@ -590,7 +788,7 @@ try {
     ])
       await fs.mkdir(p, { recursive: true });
     let commonGit;
-    if (kind === "common-git") {
+    {
       const git = (...args) =>
         execFileSync("git", args, {
           encoding: "utf8",
@@ -616,29 +814,34 @@ try {
         "-m",
         "fixture",
       );
-      git("-C", primary, "worktree", "add", "-b", "review", sibling);
+      if (kind === "common-git")
+        git("-C", primary, "worktree", "add", "-b", "review", sibling);
       commonGit = git(
         "-C",
-        sibling,
+        primary,
         "rev-parse",
         "--path-format=absolute",
         "--git-common-dir",
       );
       assert.equal(commonGit, path.join(primary, ".git"));
     }
-    await settings(repoFile(primary), ["../repo-worktrees/review"]);
+    const admissionCwd = kind === "common-git" ? sibling : primary;
+    await fs.mkdir(path.dirname(repoFile(admissionCwd)), { recursive: true });
+    await fs.writeFile(
+      repoFile(admissionCwd),
+      JSON.stringify({ "chat.worktrees": { enable: true } }),
+    );
     const request = await rootsApi.resolveRequest(
       fixtureHome,
-      { cwd: primary },
-      [primary],
+      { cwd: admissionCwd },
+      [admissionCwd],
     );
-    // A linked worktree's common Git directory is a separate resource. Declare
-    // only the worktree for this case, leaving its primary checkout outside.
-    const roots = kind === "common-git" ? [sibling] : Uke(request, false);
+    const roots = Uke(request, false);
+    assert.deepEqual(roots, [admissionCwd, path.dirname(sibling)]);
     const cwd = roots[0],
       resolver = new yce(roots, fixtureHome),
       disk = new h5(cwd);
-    const policyDir = $qr(sibling, fixtureHome);
+    const policyDir = $qr(path.dirname(sibling), fixtureHome);
     await fs.mkdir(policyDir, { recursive: true });
     const rules =
       kind === "no-grant"
@@ -647,7 +850,7 @@ try {
             {
               capability: "fs_write",
               effect: kind === "denied" ? "deny" : "allow",
-              match: [".agents/**"],
+              match: ["review/.agents/**"],
             },
           ];
     await fs.writeFile(

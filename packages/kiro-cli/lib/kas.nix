@@ -46,6 +46,9 @@ in
       cp ${../src/additional-roots.mjs} "$(dirname "$server")/additional-roots.mjs" # bare-commands: ok — stdenv installPhase
       cp ${../src/prompt-files.mjs} "$(dirname "$server")/prompt-files.mjs" # bare-commands: ok — stdenv installPhase
       cp ${../src/session-settings.mjs} "$(dirname "$server")/session-settings.mjs" # bare-commands: ok — stdenv installPhase
+      cp ${../src/worktree-policy.mjs} "$(dirname "$server")/worktree-policy.mjs" # bare-commands: ok
+      substituteInPlace "$(dirname "$server")/worktree-policy.mjs" \
+        --replace-fail 'exec("git",' 'exec("${pkgs.git}/bin/git",'
       node --check "$server"
       runHook postInstall
     '';

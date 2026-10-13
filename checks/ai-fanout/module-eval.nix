@@ -14,6 +14,41 @@
   settingsHarnessNames = lib.remove "kiro" harnessNames;
 in {
   checks = {
+    module-worktrees-excluded-runtime-output = mkTest "worktrees-excluded-runtime-output" (
+      lib.all (
+        evaluate:
+          lib.all (
+            runtime: let
+              base = {
+                ai = {
+                  ${runtime}.enable = true;
+                  settings.reasoningEffort = "high";
+                };
+              };
+              baseline = evaluate base;
+              enabled = evaluate (lib.recursiveUpdate base {ai.worktrees.enable = true;});
+              disabled = evaluate (lib.recursiveUpdate base {ai.worktrees.enable = false;});
+              worktreeWarnings = result: builtins.filter (lib.hasInfix "ai.worktrees is set") result.config.warnings;
+              output = result:
+                lib.mapAttrs (_: entry: {
+                  text = entry.text or null;
+                  source = toString (entry.source or "");
+                }) (harness.deliveredFiles result.config);
+            in
+              builtins.attrNames (output baseline)
+              != []
+              && output baseline == output enabled
+              && baseline.config.ai.${runtime}.native.settings == enabled.config.ai.${runtime}.native.settings
+              && !(enabled.options.ai.${runtime} ? worktrees)
+              && worktreeWarnings baseline == []
+              && builtins.length (worktreeWarnings enabled) == 1
+              && builtins.length (worktreeWarnings disabled) == 1
+              && lib.hasInfix "${runtime}" (builtins.head (worktreeWarnings enabled))
+          )
+          settingsHarnessNames
+      ) [evalHm evalDevenv]
+    );
+
     module-package-copilot-rules-backend-gate = let
       declaration = {
         ai.copilot.enable = true;

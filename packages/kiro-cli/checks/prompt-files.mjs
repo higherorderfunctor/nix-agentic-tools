@@ -1,6 +1,7 @@
 // Isolated construction from the actual patched vendor AST. No KAS startup,
 // authentication, transport send, or model service is evaluated by this test.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -11,6 +12,9 @@ import vm from "node:vm";
 const [server, typescript] = process.argv.slice(2);
 const nixPrompts = await import(
   pathToFileURL(join(dirname(server), "prompt-files.mjs"))
+);
+const nixWorktrees = await import(
+  pathToFileURL(join(dirname(server), "worktree-policy.mjs"))
 );
 const nixRoots = await import(
   pathToFileURL(join(dirname(server), "additional-roots.mjs"))
@@ -102,6 +106,7 @@ const context = vm.createContext(
     console,
     nixPrompts,
     nixRoots,
+    nixWorktrees,
     // Host and message-builder boundaries, not prompt constructors.
     E: (initialize) => initialize,
     Ife: () => "Fixture OS",
@@ -443,6 +448,58 @@ try {
   assert.ok(custom[0].content.includes("A_FILE_CHECK {{worktree_path}}"));
   assert.ok(custom[0].content.includes("Machine ID: FIXTURE_MACHINE"));
   assert.ok(!custom[0].content.includes(b.slots.workflowFileCheckGuidance));
+  // Policy guidance uses the exact admitted root; custom files retain priority.
+  const policyRoot = join(tmp, "repo-worktrees");
+  await writeSettings(repoSettings(repoA), {
+    worktreeGuidance: "worktree.txt",
+  });
+  assert.equal(
+    (await nixPrompts.resolveSnapshot(home, repoA, policyRoot)).slots
+      .worktreeGuidance,
+    a.slots.worktreeGuidance,
+  );
+  const policySnapshot = await nixPrompts.resolveSnapshot(
+    home,
+    undefined,
+    policyRoot,
+  );
+  const unusualRoot = "/tmp/repo's $(literal)-worktrees";
+  const quotedPolicy = await nixPrompts.resolveSnapshot(
+    home,
+    undefined,
+    unusualRoot,
+  );
+  assert.ok(
+    quotedPolicy.slots.worktreeGuidance.includes(
+      "git worktree add '/tmp/repo'\"'\"'s $(literal)-worktrees/<name>'",
+    ),
+  );
+  renderer.agentContext = {
+    ...agentContext,
+    nixPromptSnapshot: policySnapshot,
+  };
+  renderer.steering = [context.z$o(policySnapshot)];
+  for (const messages of [
+    await method("getSystemPromptMessages", "hbe").call(renderer, {
+      workspace,
+      shellTypeInfo: { shellType: "fixture-shell" },
+      machineId: workspace.machineId,
+      includeFileTree: false,
+    }),
+    await method("getSystemPromptMessages", "W9").call(
+      renderer,
+      creator.prompt,
+      workspace,
+      { shellType: "fixture-shell" },
+    ),
+  ]) {
+    const assembled = messages[0].content;
+    assert.ok(assembled.includes(`${policyRoot}/<name>`));
+    assert.ok(assembled.includes("workflow owns the worktree setup"));
+    assert.ok(assembled.includes("The user controls merging"));
+    assert.ok(!assembled.includes("git -C <repo> merge --ff-only"));
+    assert.ok(!assembled.includes("git worktree add .worktrees/"));
+  }
   renderer.getSystemPromptMessages = () => {
     throw new Error("saved msg0 was rebuilt");
   };
@@ -873,6 +930,54 @@ try {
   assert.deepEqual(restoredFork.additionalDirectories, [
     join(tmp, "explicit-fork"),
   ]);
+  execFileSync("git", ["init", repoB], { stdio: "ignore" });
+  await writeFile(
+    repoSettings(repoB),
+    JSON.stringify({ "chat.worktrees": { enable: true } }),
+  );
+  await newLocal("policy-parent", repoB);
+  const admittedPolicy = states.get("policy-parent").state;
+  assert.deepEqual(
+    [...admittedPolicy.workspacePaths],
+    [repoB, `${repoB}-worktrees`],
+  );
+  assert.ok(
+    admittedPolicy.nixPromptSnapshot.slots.worktreeGuidance.includes(
+      `${repoB}-worktrees/<name>`,
+    ),
+  );
+  await newLocal("policy-child", repoB, {
+    role: "workflow-step",
+    ownerSessionId: "policy-parent",
+  });
+  assert.equal(
+    states.get("policy-child").state.nixPromptSnapshot,
+    admittedPolicy.nixPromptSnapshot,
+  );
+  await writeFile(
+    repoSettings(repoB),
+    JSON.stringify({ "chat.worktrees": { enable: false } }),
+  );
+  states.delete("policy-parent");
+  const policyCold = await method("hydrateSessionForLoad").call(
+    host,
+    "session/load",
+    await nixRoots.resolveRequest(
+      home,
+      { sessionId: "policy-parent", cwd: repoB },
+      [repoB],
+    ),
+    records.get("policy-parent"),
+    {},
+    false,
+    outbound,
+    silent,
+  );
+  assert.deepEqual([...policyCold.session.workspacePaths], [repoB]);
+  assert.deepEqual(
+    policyCold.session.nixPromptSnapshot,
+    admittedPolicy.nixPromptSnapshot,
+  );
   host.persistence.saveSession = async () => {
     throw new Error("fixture durable save failed");
   };
