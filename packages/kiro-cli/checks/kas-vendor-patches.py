@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 
-patcher_path, stock_path, patched_path, corpus_path, extractor = sys.argv[1:]
+patcher_path, stock_path, patched_path, corpus_path, extractor, hooks, typescript = sys.argv[1:]
 spec = importlib.util.spec_from_file_location("patcher", patcher_path)
 patcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(patcher)
@@ -60,5 +60,21 @@ with tempfile.TemporaryDirectory() as tmp:
         assert without_changed(stock, corpus['chunks'], changed) == without_changed(result, after['chunks'], changed)
         if not items:
             assert result == stock
-    assert Path(patched_path).read_bytes() == result, 'packaged selection differs from the three selected patches'
-print('PASS: eight vendor selections preserve decoded unselected text and all bytes outside changed literals; real package matches')
+        defaults = Path(tmp) / "prompt-defaults"
+        identity_path = Path(tmp) / "identity.txt"
+        identity_path.write_text(identity)
+        command = [sys.executable, patcher_path, stock_path, corpus_path, str(path), "--prompt-defaults", str(defaults)]
+        if enabled:
+            command += ["--identity-file", str(identity_path)]
+        for name in names:
+            command += ["--replace", name]
+        subprocess.run(command, check=True)
+        selected_corpus = Path(tmp) / "selected-corpus.json"
+        selected_corpus.write_text(json.dumps(after))
+        subprocess.run(["node", hooks, str(path), str(defaults), typescript, str(selected_corpus)], check=True)
+        subprocess.run(["node", "--check", str(path)], check=True)
+        assert (defaults / "identity.txt").read_text() == (identity if enabled else patcher.IDENTITY_SENTENCE)
+        assert (defaults / "worktreeGuidance.txt").read_text() == ("" if strip else patcher.WORKTREE_PARAGRAPH)
+        assert (defaults / "workflowFileCheckGuidance.txt").read_text() == (patcher.RELATIVE_FILE_CHECK_PARAGRAPH if relative else patcher.FILE_CHECK_PARAGRAPH)
+    assert Path(patched_path).read_bytes() == path.read_bytes(), 'packaged selection differs from text and session hooks'
+print('PASS: eight selections preserve unselected source before hooks; selected default files, hook syntax and real package agree')

@@ -11,6 +11,36 @@ the shipped TUI merge allows 23, including in 2.22.1. The TUI project-local
 guard follows that consumer. Declared repo-readable native keys are explicit
 exceptions, not a union with the broader native settings reads scope.
 
+### File-backed prompt slots
+
+`cli.native.settings.chat.promptFiles` is a KAS extension, separate from the
+measured native and TUI settings registries. It is an opaque flat-setting value
+on library, Home Manager and devenv paths:
+
+```nix
+ai.kiro.cli.native.settings.chat.promptFiles = {
+  identity = ./prompts/identity.txt;
+  workflowFileCheckGuidance = "prompts/file-check.txt";
+  worktreeGuidance = null;
+};
+```
+
+Only these three keys are accepted; values are nonempty paths or null. Omitted
+slots inherit, while an explicit null restores the selected packaged text, so
+recursive null filtering must stop before this object. Repository settings merge
+over global settings slot by slot. String paths resolve beside the global
+settings file or from the repository session directory respectively; Nix paths
+become store paths. Flat dotted spelling receives the same validation and
+flatten boundary.
+
+A nonempty mapping requires the effective declared engine to be V3. Explicit
+runtime V2 flags can still bypass KAS, including with manually written JSON;
+there is no config-reading wrapper that rejects this case. The selected KAS
+resolves and persists text once for a new conversation. File edits apply to new
+conversations; resumes, workflow children and forks keep the original snapshot.
+See [launcher-argv.md](launcher-argv.md) for lifecycle, template semantics and
+legacy-session limits.
+
 ### Model suggestions
 
 `cli.native.settings.chat.defaultModel` accepts any string and suggests model
@@ -109,8 +139,8 @@ agree by construction.
 
 ### If a future setting is still written wrong
 
-The boundary only knows the keys the binary names. A setting absent from all
-three lists flattens all the way, so an object-valued one added outside the
+The boundary knows measured keys and explicit KAS extensions. A setting absent
+from those lists flattens all the way, so an object-valued one added outside the
 registry would regress silently — the same failure this fixed, in a key nobody
 measured. `module-kiro-devenv-object-valued-setting-stays-nested` and its HM
 twin pin the behavior; `module-kiro-scalar-setting-still-flattens` is the

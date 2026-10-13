@@ -73,6 +73,7 @@ def main():
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--identity-file", type=Path)
     parser.add_argument("--replace", action="append", choices=FIXED, default=[])
+    parser.add_argument("--prompt-defaults", type=Path)
     args = parser.parse_args()
     if not args.check and args.destination is None:
         parser.error("destination is required unless --check is set")
@@ -80,7 +81,8 @@ def main():
         identity = (IDENTITY_SENTENCE if args.check else
                     args.identity_file.read_text() if args.identity_file else None)
         items = replacements(identity, list(FIXED) if args.check else args.replace)
-        result, errors = patch(args.source.read_bytes(), json.loads(args.corpus.read_text()), items)
+        corpus = json.loads(args.corpus.read_text())
+        result, errors = patch(args.source.read_bytes(), corpus, items)
         for error in errors:
             print(f"FAIL: kiro-bundle-patch: {error}", file=sys.stderr)
         if errors:
@@ -89,6 +91,19 @@ def main():
             print("PASS: " + ", ".join(name for name, _, _ in items) + " decoded sources each occur once")
         else:
             args.destination.write_bytes(result)
+            if args.prompt_defaults:
+                args.prompt_defaults.mkdir(parents=True, exist_ok=True)
+                defaults = {
+                    "identity": identity.strip() if identity is not None else IDENTITY_SENTENCE,
+                    "workflowFileCheckGuidance": RELATIVE_FILE_CHECK_PARAGRAPH if "relativeFileCheckPaths" in args.replace else FILE_CHECK_PARAGRAPH,
+                    "worktreeGuidance": "" if "stripVendorWorktreeSteering" in args.replace else WORKTREE_PARAGRAPH,
+                }
+                for name, text in defaults.items():
+                    (args.prompt_defaults / f"{name}.txt").write_text(text)
+                chunk = corpus["chunks"][corpus["groups"]["workflowOrchestration"]["chunk"]]["text"]
+                if chunk.count(WORKTREE_PARAGRAPH) != 1:
+                    raise ValueError("worktree guidance: expected one corpus slot")
+                (args.prompt_defaults / "worktree-parts.json").write_text(json.dumps(chunk.split(WORKTREE_PARAGRAPH)))
     except (OSError, ValueError) as exc:
         print(f"FAIL: kiro-bundle-patch: {exc}", file=sys.stderr)
         return 1

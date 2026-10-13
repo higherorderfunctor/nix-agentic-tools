@@ -35,6 +35,64 @@
     else builtins.readFile entry.content.source;
 in {
   checks = {
+    module-kiro-prompt-files = mkTest "kiro-prompt-files" (
+      lib.all (
+        runner: let
+          evaluate = settings:
+            runner.eval {
+              ai.kiro.cli = {
+                enable = true;
+                native.settings = settings;
+              };
+            };
+          delivered = settings: runner.settings (evaluate settings);
+          succeeds = settings: (builtins.tryEval (builtins.deepSeq (delivered settings) true)).success;
+          mapping = {
+            identity = "/tmp/identity.txt";
+            worktreeGuidance = null;
+          };
+          rejected = engine:
+            lib.any (a: !a.assertion)
+            (evaluate {
+              chat.agentEngine = engine;
+              chat.promptFiles = mapping;
+            }).config.assertions;
+        in
+          (delivered {chat.promptFiles = mapping;})."chat.promptFiles"
+          == mapping
+          && (delivered {"chat.promptFiles" = mapping;})."chat.promptFiles" == mapping
+          && !(delivered {} ? "chat.promptFiles")
+          && !rejected "v3"
+          && lib.all rejected [null "v1" "v2"]
+          && !succeeds {"chat.promptFiles" = {unknown = "x";};}
+          && !succeeds {"chat.promptFiles" = {identity = 42;};}
+          && !succeeds {chat.promptFiles = {identity = "";};}
+          && lib.all (
+            settings: let
+              result = runner.eval {
+                ai.gitSshConfigWorkaround = false;
+                ai.kiro.cli = {
+                  enable = true;
+                  package = null;
+                  native.settings = settings;
+                };
+              };
+            in
+              builtins.all (a: a.assertion) result.config.assertions
+              && lib.any (warning: lib.hasInfix "chat.promptFiles" warning) result.config.warnings
+          ) [{chat.promptFiles = mapping;} {"chat.promptFiles" = mapping;}]
+      ) [
+        {
+          eval = evalHm;
+          settings = hmCliSettings;
+        }
+        {
+          eval = evalDevenv;
+          settings = dvCliSettings;
+        }
+      ]
+    );
+
     module-kiro-native-engine-defaults = mkTest "kiro-native-engine-defaults" (
       lib.all (
         runner: let
@@ -86,6 +144,35 @@ in {
         }
       ]
     );
+
+    module-kiro-native-setting-types-parity = mkTest "kiro-native-setting-types-parity" (let
+      runtime = import ../lib/mkKiro.nix {
+        lib = lib // {ai = import ../../../lib/ai {inherit lib;};};
+        inherit pkgs;
+      };
+      settingsOptions = [
+        runtime.options.cli.native.settings
+        (evalHm {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
+        (evalDevenv {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
+      ];
+    in
+      lib.all (
+        settings: let
+          chat = (settings.type.getSubOptions []).chat.type.getSubOptions [];
+        in
+          lib.all chat.agentEngine.type.check [null "v1" "v2" "v3"]
+          && !chat.agentEngine.type.check "unknown"
+          && lib.all chat.ui.type.check [null "legacy" "tui"]
+          && !chat.ui.type.check "unknown"
+          && chat.promptFiles.type.check {
+            identity = ./module-eval.nix;
+            worktreeGuidance = null;
+          }
+          && chat.promptFiles.type.check {workflowFileCheckGuidance = "relative.txt";}
+          && !chat.promptFiles.type.check {unknown = "x";}
+          && !chat.promptFiles.type.check {identity = 42;}
+      )
+      settingsOptions);
 
     module-kiro-native-engine-warnings = mkTest "kiro-native-engine-warnings" (
       lib.all (evaluate:
@@ -575,7 +662,7 @@ in {
             }).config.warnings;
         in
           warnings true
-          == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.tweaks.${name}. Unset them or set ai.kiro.cli.package."]
+          == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro package; the system binary runs without them): ai.kiro.cli.tweaks.${name}. Unset them or set ai.kiro.cli.package."]
           && warnings false == [];
       in
         builtins.all (
@@ -600,7 +687,7 @@ in {
       in
         builtins.all (entry: entry.assertion) evaluated.config.assertions
         && evaluated.config.warnings
-        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.gitSshConfigWorkaround. Unset them or set ai.kiro.cli.package."]
+        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro package; the system binary runs without them): ai.gitSshConfigWorkaround. Unset them or set ai.kiro.cli.package."]
     );
 
     # Kiro persists effort only inside per-model `chat.modelDefaults` records,
