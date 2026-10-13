@@ -357,14 +357,20 @@
         ["ai" runtime "lspServers" "probe"]
       ])
     ["copilot" "kiro"]) ["devenv" "hm"];
+  caseMode = case: case.mode or "devenv";
+  # Cases share each identical enabled-empty control by backend and runtime.
+  emptyCaseWarnings = lib.mapAttrs (mode: modeCases:
+    lib.genAttrs (map (case: case.runtime) modeCases)
+    (runtime: evaluate mode (harness.setEnable runtime true)))
+  (lib.groupBy caseMode cases);
   casePass = case: let
-    mode = case.mode or "devenv";
+    mode = caseMode case;
     input = lib.setAttrByPath case.path case.value;
     needle = lib.showOption case.path + (case.suffix or "");
     enabled = harness.setEnable case.runtime true;
   in
     contains needle (evaluate mode (lib.recursiveUpdate enabled input))
-    && !contains needle (evaluate mode enabled)
+    && !contains needle emptyCaseWarnings.${mode}.${case.runtime}
     && evaluate mode input == [];
   kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [
     {
