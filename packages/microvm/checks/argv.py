@@ -1,3 +1,4 @@
+# cspell:ignore ABRT virtio
 """Exercise the production host parser and guest decoder without KVM."""
 
 import concurrent.futures
@@ -8,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 
-launcher, runner, guest, python = sys.argv[1:]
+launcher, runner, guest, python, completion, systemctl = sys.argv[1:]
 cases = [
     [],
     ["--"],
@@ -41,6 +42,7 @@ with tempfile.TemporaryDirectory() as directory:
         "time.sleep(0.2)\n"
         "os.environ['SANDBOX_ARGV_FILE'] = str(cwd / 'argv')\n"
         f"subprocess.run([{str(guest_script)!r}], check=True)\n"
+        "(cwd / 'status').write_text(os.environ.get('GUEST_STATUS', 'exited:0\\n'))\n"
         "raise SystemExit(int(os.environ.get('RUNNER_EXIT', '0')))\n"
     )
     stub.chmod(0o755)
@@ -74,7 +76,62 @@ with tempfile.TemporaryDirectory() as directory:
         assert not result.stdout
     env["RUNNER_EXIT"] = "17"
     result = invoke([])
-    assert result.returncode == 17
+    assert result.returncode == 125
+    assert "VM runner failed" in result.stderr
     runtime_dir = next(line.removeprefix("RUNTIME=") for line in result.stdout.splitlines() if line.startswith("RUNTIME="))
     assert not Path(runtime_dir).exists()
-print("PASS: parser, exact argv, zero/empty distinction, injection, parallel isolation and cleanup")
+    env.pop("RUNNER_EXIT")
+    for status, expected in [
+        ("exited:42\n", 42),
+        ("exited:255\n", 255),
+        ("killed:TERM\n", 143),
+        ("killed:32\n", 160),
+        ("killed:33\n", 161),
+        ("killed:0\n", 125),
+        ("killed:65\n", 125),
+        ("dumped:ABRT\n", 134),
+        ("", 125),
+        ("exited:256\n", 125),
+        ("exited:0\nexited:42\n", 125),
+        ("killed:INVALID\n", 125),
+    ]:
+        env["GUEST_STATUS"] = status
+        result = invoke([])
+        assert result.returncode == expected, (status, result.returncode, result.stderr)
+        if expected == 125:
+            assert "without a valid guest completion" in result.stderr
+    assert sorted(p.name for p in root.iterdir()) == ["guest", "host", "runner"]
+print("PASS: parser, exact argv, zero/empty distinction, injection, parallel isolation, completion statuses, VM failure and cleanup")
+
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    reboot = root / "reboot"
+    reboot.write_text(f"#!{python}\nimport os, pathlib\npathlib.Path(os.environ['REBOOT_FILE']).touch()\n")
+    reboot.chmod(0o755)
+    reporter = root / "reporter"
+    source = Path(completion).read_text()
+    assert source.count(systemctl) == 1
+    reporter.write_text(source.replace(systemctl, str(reboot)).replace("/dev/virtio-ports/sandbox.status", '"$STATUS_FILE"'))
+    reporter.chmod(0o755)
+    status_file = root / "status"
+    reboot_file = root / "rebooted"
+    env = {k: v for k, v in os.environ.items() if k not in ("EXIT_CODE", "EXIT_STATUS", "SERVICE_RESULT")}
+    env.update(STATUS_FILE=str(status_file), REBOOT_FILE=str(reboot_file))
+    for service, code, status, expected in [
+        ("success", "exited", "0", "exited:0\n"),
+        ("exit-code", "exited", "42", "exited:42\n"),
+        ("signal", "killed", "TERM", "killed:TERM\n"),
+        ("core-dump", "dumped", "ABRT", "dumped:ABRT\n"),
+        ("exit-code", "", "", ""),  # ExecStartPre fails; no main process.
+        ("timeout", "killed", "TERM", ""),
+    ]:
+        result = subprocess.run([str(reporter)], env=dict(env, SERVICE_RESULT=service, EXIT_CODE=code, EXIT_STATUS=status), capture_output=True)
+        assert result.returncode == 0, result.stderr
+        assert reboot_file.exists()
+        assert (status_file.read_text() if status_file.exists() else "") == expected
+        status_file.unlink(missing_ok=True)
+        reboot_file.unlink()
+    result = subprocess.run([str(reporter)], env=dict(env, SERVICE_RESULT="success", EXIT_CODE="exited", EXIT_STATUS="0", STATUS_FILE=str(root / "missing" / "status")), capture_output=True)
+    assert result.returncode != 0
+    assert reboot_file.exists()
+print("PASS: guest completion, preparation failure, timeout rejection and reboot after reporting failure")

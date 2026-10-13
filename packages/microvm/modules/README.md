@@ -1,3 +1,5 @@
+<!-- cspell:ignore virtio -->
+
 # MicroVM sandboxes
 
 `ai.sandboxes.<name>` installs a console launcher for one package executable in
@@ -73,9 +75,15 @@ executing the selected program. The VM build is reused across invocations. The
 selected process's completion requests a guest reboot, which stops the QEMU
 runner through `-no-reboot`.
 
+The launcher returns the selected process's exit code, or 128 plus the signal
+number if a signal kills it. VM runner failure or missing completion returns 125
+and prints a diagnostic; guest exit 125 has the same number without that
+diagnostic. Completion travels through a separate root-only virtio serial port,
+so program output cannot forge success.
+
 This is a serial console wrapper, not a transparent replacement for the program:
-boot logs share its output, interactive terminal behavior differs, and it does
-not forward the program's exit status. It forwards no host environment,
-credentials, workspace, or network. There is no usable authenticated project or
-coding-harness workflow yet. Use a small deterministic command to check the
-primitive before trying an interactive program.
+boot logs share its output and interactive terminal behavior differs. It
+forwards no host environment, credentials, workspace, or network. There is no
+usable authenticated project or coding-harness workflow yet. Use a small
+deterministic command to check the primitive before trying an interactive
+program.

@@ -1,3 +1,4 @@
+# cspell:ignore chardev dports virtio virtserialport
 {
   harness,
   lib,
@@ -24,6 +25,22 @@
   package = factory args;
   guest = package.guest.config;
   moduleConfig.ai.sandboxes.sandbox-hello = builtins.removeAttrs args ["outName"];
+  statusFixture = pkgs.writeScriptBin "sandbox-status-fixture" ''
+    #!${lib.getExe pkgs.python3}
+    import os, signal, sys
+    port = "/dev/virtio-ports/sandbox.status"
+    assert os.stat(port).st_mode & 0o777 == 0o600
+    try:
+        open(port, "w")
+    except PermissionError:
+        print("PASS: completion port denies guest writes", flush=True)
+    else:
+        raise AssertionError("guest can forge completion")
+    print("exited:0", flush=True)  # Console text must not override the real status.
+    if sys.argv[1] == "signal":
+        os.kill(os.getpid(), signal.SIGTERM)
+    sys.exit(int(sys.argv[1]))
+  '';
 in {
   checks =
     {
@@ -41,7 +58,9 @@ in {
           ${lib.getExe argvPackage} \
           ${argvPackage.guest.config.microvm.declaredRunner}/bin/microvm-run \
           ${argvPackage.guest.config.systemd.services.sandbox.serviceConfig.ExecStart} \
-          ${lib.getExe pkgs.python3}
+          ${lib.getExe pkgs.python3} \
+          ${lib.removePrefix "+" argvPackage.guest.config.systemd.services.sandbox.serviceConfig.ExecStopPost} \
+          ${pkgs.systemd}/bin/systemctl
         ${pkgs.gnugrep}/bin/grep -Fx ${lib.escapeShellArg (builtins.unsafeDiscardStringContext (toString argvFixture))} \
           ${pkgs.closureInfo {rootPaths = [argvPackage];}}/store-paths
         touch "$out"
@@ -74,9 +93,12 @@ in {
         && (builtins.head guest.microvm.shares).proto == "9p"
         && (builtins.head guest.microvm.shares).readOnly
         && guest.systemd.services.sandbox.serviceConfig.User == "sandbox"
-        && guest.microvm.qemu.extraArgs == ["-fw_cfg" "name=opt/sandbox.argv,file=argv"]
+        && builtins.elem "virtserialport,chardev=status,name=sandbox.status" guest.microvm.qemu.extraArgs
         && builtins.elem "qemu_fw_cfg" guest.boot.kernelModules
-        && guest.systemd.services.sandbox.serviceConfig.ExecStopPost == "+${pkgs.systemd}/bin/systemctl --no-block reboot"
+        && builtins.elem "virtio_console" guest.boot.kernelModules
+        && builtins.elem "dev-virtio\\x2dports-sandbox.status.device" guest.systemd.services.sandbox.requires
+        && lib.hasInfix ''OWNER="root", GROUP="root", MODE="0600"'' guest.services.udev.extraRules
+        && lib.hasPrefix "+/nix/store/" guest.systemd.services.sandbox.serviceConfig.ExecStopPost
         && builtins.all (a: a.assertion) guest.assertions
       );
       microvm-sandbox-invalid-name = mkTest "microvm-sandbox-invalid-name" (
@@ -92,5 +114,9 @@ in {
         && map (p: p.drvPath) (evalDevenv moduleConfig).config.packages == [package.drvPath]
         && (evalHm moduleConfig).config.ai.sandboxes.sandbox-hello.outName == "sandbox-hello"
       );
+      microvm-sandbox-status-launcher = factory {
+        exe = lib.getExe statusFixture;
+        outName = "sandbox-status-fixture";
+      };
     };
 }

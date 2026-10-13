@@ -1,9 +1,9 @@
 # MicroVM sandbox implementation
 
-<!-- cspell:ignore ACPI sysfs -->
+<!-- cspell:ignore ACPI chardev sysfs virtio -->
 
-> **Last verified:** 2026-10-12 — the two-field factory forwards runtime argv
-> through QEMU firmware configuration.
+> **Last verified:** 2026-10-12 — the launcher forwards guest completion through
+> a root-only virtio serial port.
 
 The public `lib.ai.mkSandbox pkgs {exe; outName;}` factory owns the guest
 definition and standalone launcher. The shared host option `ai.sandboxes` has
@@ -20,10 +20,17 @@ the lower mount. Root is tmpfs as well; no disk, NIC, home or workspace is
 shared.
 
 QEMU's upstream runner has `-no-reboot`, because its microvm machine can hang on
-powering off. The unprivileged service requests reboot through its privileged
-`ExecStopPost` command after either success or failure. This stops the VM
-without a second host control process, but the program's exit code is not
-transmitted. No serial getty competes with the process for its console.
+powering off. The service's privileged `ExecStopPost` writes systemd's
+main-process `EXIT_CODE` and `EXIT_STATUS` through
+`/dev/virtio-ports/sandbox.status`, then requests reboot even if reporting
+fails. A root-only udev rule prevents the unprivileged process from forging
+completion. The unit waits for this device before starting; the reporter accepts
+ordinary completion results only, and unset main-process status (including
+preparation failure) produces no record. QEMU writes the separate file chardev
+into the private host runtime directory. Console output is never parsed. The
+existing store share already enables PCI in the upstream runner; virtio serial
+uses that bus on Linux guests without adding a mount. No serial getty competes
+with the process for its console.
 
 The host wrapper accepts zero arguments or removes one leading `--`, rejecting
 other prefixes before checking KVM and allocating its unique temporary runtime
@@ -41,6 +48,13 @@ The pinned QEMU microvm machine exposes fw_cfg with the existing ACPI setup. The
 sysfs raw file reports size zero despite containing data; streaming reads work,
 including payloads larger than a page. This narrow read-only blob replaces the
 need for any host control-directory share.
+
+After a successful runner exit, the host validates the completion record and
+returns the guest exit code (0–255), or 128 plus the signal number for a killed
+process. A failed runner takes precedence over any record. Missing or malformed
+completion and VM failure return 125 with a diagnostic, so a normal VM shutdown
+alone cannot imply guest success. Guest exit 125 shares that numerical value but
+has no infrastructure diagnostic.
 
 The runner executes inside that directory, and the wrapper's exit trap removes
 it. Avoid `exec` at that call: replacing the shell would bypass the cleanup
