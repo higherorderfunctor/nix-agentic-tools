@@ -53,12 +53,13 @@
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
-  # The skill's Kiro evidence covers the v3 engine only. Default v3 on only
-  # when ai.kiro.cli.package != null: the managed wrapper carries --v3 to launches.
+  # The skill's Kiro evidence covers V3. Native settings select terminal
+  # engines; the managed package supplies the matching ACP default.
   reachesKiro = lib.any (runtime:
     sourceEnabled runtime
     && builtins.elem "kiro" ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates))
   supportedRuntimes;
+  kiroEngine = import ../../kiro-cli/lib/effective-engine.nix (config.ai.kiro.cli.native.settings or {});
   kiroV3Declared = lib.hasAttrByPath ["ai" "kiro" "cli" "v3"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
   techniques = familyFunctions.effectiveTechniques config;
@@ -219,8 +220,8 @@ in {
     warnings =
       map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}. Disable that runtime reminder or use devenv.")
       (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes)
-      ++ lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
-        ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
+      ++ lib.optional (kiroV3Declared && reachesKiro && kiroEngine != "v3") ''
+        ai.programs.delegate-routing reaches Kiro, but effective native chat.agentEngine is not v3. The
         skill's Kiro behavior is verified on the v3 engine only; sessions on
         another engine may not delegate as the skill describes.
       '';

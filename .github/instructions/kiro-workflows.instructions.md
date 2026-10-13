@@ -7,12 +7,10 @@ applyTo: "packages/kiro-cli/packages/ai/kiro-cli/package.nix,packages/kiro-cli/l
 
 ## Kiro feature availability and client settings
 
-> **Last verified:** 2026-10-14 — rollout options consume the facts aggregate;
+> **Last verified:** 2026-10-13 — rollout options consume the facts aggregate;
 > GA workflows keep the stock package, and friendly switches imply client
 > settings only in their native scope. Friendly-switch rollout and setting
 > dependencies share one table with the owner's consumer expectations.
-> Unrecognized setting keys warn and pass through on Home Manager; the workspace
-> assertion refuses every key outside the measured allowlist on devenv.
 
 Workflows have been generally available since **Kiro CLI 2.26.0**. Their pinned
 rollout state is 100% for all users with no channel restriction, so enabling
@@ -39,11 +37,14 @@ workflow choice per session.
 
 ### Friendly switches
 
-Every friendly switch requires `cli.v3 = true`. The switches share declarations
-and package selection across Home Manager and devenv; client settings are
-implied only where the pinned client honors them. A friendly switch implies its
-raw feature at default priority. Explicitly disabling that raw feature while
-leaving the friendly switch enabled fails an assertion on both backends.
+Every friendly switch requires the effective declared
+`cli.native.settings.chat.agentEngine` to be `"v3"` (the managed default). An
+explicit `"v2"` or null does not satisfy that requirement, even with
+`cli.v3 = true`. The switches share declarations and package selection across
+Home Manager and devenv; client settings are implied only where the pinned
+client honors them. A friendly switch implies its raw feature at default
+priority. Explicitly disabling that raw feature while leaving the friendly
+switch enabled fails an assertion on both backends.
 
 | `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                                                                                              |
 | ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -83,18 +84,11 @@ direct callers' feature lists.
 
 `cli.native.settings.chat.keybindings` generates nullable string options from
 every extracted `chat.keybindings.*` setting key. Known keys reject non-string
-values; Home Manager also accepts unknown keys through the native JSON freeform
-tail. Key bindings use Kiro's own syntax, such as `"ctrl+x"`. Null preserves the
-vendor binding. The workspace allowlist decides which settings devenv can
-deliver, including key bindings: every key outside it is refused at evaluation
-instead of written into a file Kiro ignores. An unrecognized complete file key
-produces a spelling warning on both backends and passes through on Home Manager,
-preserving forward compatibility there. `cli.allowUnrecognizedSettings`
-suppresses intentional spelling warnings without bypassing devenv's workspace
-guard; entries that become known warn as stale. Path syntax and literal dotted
-key examples are in [settings-shape.md](settings-shape.md). Inspection uses the
-registry and workspace facts plus the existing `telemetry.enabled` typed option;
-it does not infer a nested schema for object-valued settings.
+values; unknown keys remain available through the native JSON freeform tail. Key
+bindings use Kiro's own syntax, such as `"ctrl+x"`. Null preserves the vendor
+binding. The workspace allowlist decides which settings devenv can deliver,
+including key bindings: a global-only key is refused at evaluation instead of
+written into a file Kiro ignores.
 
 ### The scope boundary comes from the pinned client
 

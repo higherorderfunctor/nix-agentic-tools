@@ -7,6 +7,8 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest setEnable;
+  kiroSettings = import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;};
+  effectiveEngine = import ../../kiro-cli/lib/effective-engine.nix;
   runtimes = ["claude" "codex" "kimchi" "kiro"];
   scenario.ai = {
     claude.enable = true;
@@ -362,15 +364,14 @@
       && lib.hasInfix "claude-opus-*" claude
       && lib.hasInfix "gpt-*-sol" claude
     );
-    # The skill's Kiro evidence covers the v3 engine only: reaching Kiro turns it
-    # on by default, the program being off leaves Kiro alone, and an explicit
-    # consumer value wins.
+    # Kiro now defaults to V3 independently of routing. Disabling or not reaching
+    # routing leaves that settings default intact; explicit opt-out still wins.
     "module-delegate-routing-${name}-kiro-v3" = mkTest "delegate-routing-${name}-kiro-v3" (
       result.config.ai.kiro.cli.v3
       && !(builtins.any (lib.hasInfix "ai.kiro.cli.v3") result.config.warnings)
-      && !(change {ai.programs.delegate-routing.enable = false;}).config.ai.kiro.cli.v3
+      && (change {ai.programs.delegate-routing.enable = false;}).config.ai.kiro.cli.v3
       && (change {ai.programs.delegate-routing.runtimes.kiro.enable = false;}).config.ai.kiro.cli.v3
-      && !(change {
+      && (change {
         ai.programs.delegate-routing.runtimes = {
           kiro.enable = false;
           claude.manualExternalDelegates = ["kimchi"];
@@ -379,12 +380,62 @@
       && (let
         unmanaged = change {ai.kiro.cli.package = null;};
       in
-        !unmanaged.config.ai.kiro.cli.v3
+        unmanaged.config.ai.kiro.cli.v3
         && !(builtins.any (lib.hasInfix "ai.kiro.cli.package is null") unmanaged.config.warnings))
       && (let
         optedOut = change {ai.kiro.cli.v3 = false;};
       in
-        !optedOut.config.ai.kiro.cli.v3 && builtins.any (lib.hasInfix "ai.kiro.cli.v3 is false") optedOut.config.warnings)
+        !optedOut.config.ai.kiro.cli.v3 && builtins.any (lib.hasInfix "effective native chat.agentEngine is not v3") optedOut.config.warnings)
+    );
+    "module-delegate-routing-${name}-kiro-effective-engine" = mkTest "delegate-routing-${name}-kiro-effective-engine" (
+      lib.all (case: let
+        evaluated = change {ai.kiro.cli = {workflows.enable = true;} // case.cli;};
+        advertised = lib.hasInfix "`run_workflow`" (readSkill evaluated "kiro");
+        warned = builtins.any (lib.hasInfix "effective native chat.agentEngine is not v3") evaluated.config.warnings;
+        delivered =
+          if !(evaluated.config.ai.kiro.files ? ".kiro/settings/cli.json")
+          then {}
+          else if name == "hm"
+          then kiroSettings.hmCliSettings evaluated
+          else kiroSettings.dvCliSettings evaluated;
+      in
+        advertised
+        == case.v3
+        && warned == !case.v3
+        && effectiveEngine evaluated.config.ai.kiro.cli.native.settings == effectiveEngine delivered) ([
+          {
+            cli = {};
+            v3 = true;
+          }
+          {
+            cli.v3 = false;
+            v3 = false;
+          }
+          {
+            cli = {
+              v3 = false;
+              native.settings.chat.agentEngine = "v3";
+            };
+            v3 = true;
+          }
+          {
+            cli.native.settings = {
+              chat.agentEngine = "v3";
+              "chat.agentEngine" = null;
+            };
+            v3 = false;
+          }
+        ]
+        ++ lib.concatMap (engine: [
+          {
+            cli.native.settings.chat.agentEngine = engine;
+            v3 = engine == "v3";
+          }
+          {
+            cli.native.settings."chat.agentEngine" = engine;
+            v3 = engine == "v3";
+          }
+        ]) [null "v1" "v2" "v3"])
     );
     "module-delegate-routing-${name}-kiro-workflows" = mkTest "delegate-routing-${name}-kiro-workflows" (let
       enabled = change {ai.kiro.cli.workflows.enable = true;};

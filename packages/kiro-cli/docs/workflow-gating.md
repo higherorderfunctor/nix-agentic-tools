@@ -32,11 +32,14 @@ workflow choice per session.
 
 ### Friendly switches
 
-Every friendly switch requires `cli.v3 = true`. The switches share declarations
-and package selection across Home Manager and devenv; client settings are
-implied only where the pinned client honors them. A friendly switch implies its
-raw feature at default priority. Explicitly disabling that raw feature while
-leaving the friendly switch enabled fails an assertion on both backends.
+Every friendly switch requires the effective declared
+`cli.native.settings.chat.agentEngine` to be `"v3"` (the managed default). An
+explicit `"v2"` or null does not satisfy that requirement, even with
+`cli.v3 = true`. The switches share declarations and package selection across
+Home Manager and devenv; client settings are implied only where the pinned
+client honors them. A friendly switch implies its raw feature at default
+priority. Explicitly disabling that raw feature while leaving the friendly
+switch enabled fails an assertion on both backends.
 
 | `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                                                                                              |
 | ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
