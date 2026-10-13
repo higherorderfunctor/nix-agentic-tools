@@ -35,8 +35,8 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     drv = self.ciPackages.${system};
 
-    # dev/ai.nix gates Semble's install on `isCI`, and nothing else may read
-    # it: the committed bytes must not depend on who evaluates them. Both
+    # dev/ai.nix gates interactive package installation on `isCI`; the
+    # committed bytes must not depend on who evaluates them. Both
     # values are evaluated and their instruction plans must agree.
     evalRepo = isCI:
       harness.evalDevenvModules [

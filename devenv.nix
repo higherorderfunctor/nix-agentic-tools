@@ -63,6 +63,7 @@ in {
     ./packages/delegate-routing/modules/devenv
     ./packages/kimchi/modules/devenv
     ./packages/kiro-cli/modules/devenv
+    ./packages/microvm/modules/devenv
     ./packages/peer-communication/modules/devenv
     ./packages/semble/modules/devenv
     # This repository's `ai.*` configuration. It consumes `ai.*` exactly as
