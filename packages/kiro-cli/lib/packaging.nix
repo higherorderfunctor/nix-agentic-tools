@@ -254,17 +254,6 @@ rec {
       exec ${pkgs.nodejs}/bin/node ${../extract/settings.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
     '';
 
-  # Run the chat binary until it unpacks its KAS engine, and copy the engine
-  # bundle `acp-server.js` to `dest`. Offline: a dummy API key in a throwaway
-  # HOME, no login. The extractor and `kiro-bundle-patch-drift` share this one
-  # invocation; `chat` and `dest` are shell words, quoted here.
-  kiroMaterializeKas = pkgs: {
-    chat,
-    dest,
-  }: ''
-    "${pkgs.python3}/bin/python3" ${../extract/embedded-tui.py} kas "${chat}" "${dest}" ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-  '';
-
   # TypeScript locates the engine's frozen hook-trigger map by content and
   # asserts its shape; emits `hookTriggers` (canonical) and
   # `hookTriggerAliases` (alias -> canonical).
@@ -294,6 +283,7 @@ rec {
   mkKiroExtract = {
     pkgs,
     root,
+    kas,
     dest ? "/dev/stdout",
   }: ''
     set -euETo pipefail
@@ -311,13 +301,9 @@ rec {
       exit 1
     fi
 
-    # Hook triggers come from the v3 engine's own frozen trigger map in the
-    # KAS bundle the chat binary unpacks on first run, not from the ELF.
-    kasJs="$PWD/acp-server.js"
-    ${kiroMaterializeKas pkgs {
-      chat = "$kiroChatBin";
-      dest = "$kasJs";
-    }}
+    # KAS is already extracted from the release input; reading it never runs
+    # native code or selects a cache. TUI extraction below remains host-run.
+    kasJs="${kas}/node_modules/@kiro/agent/dist/server/acp-server.js"
     hookTriggersJson=$(${kiroHookTriggersExtractScript pkgs} "$kasJs")
     rolloutJson=$("$python3" ${kiroRolloutExtractScript pkgs} "$kiroChatBin")
     # The chat executable materializes its embedded TUI JavaScript on first
@@ -325,7 +311,7 @@ rec {
     # so both settings fields come from that authoritative TUI source. The
     # materializer stops before agent startup and has only a fake KAS available.
     tuiJs="$PWD/kiro-tui.js"
-    "$python3" ${../extract/embedded-tui.py} tui "$kiroChatBin" "$tuiJs" ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt ${kiroFakeKasScript pkgs}
+    "$python3" ${../extract/embedded-tui.py} "$kiroChatBin" "$tuiJs" ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt ${kiroFakeKasScript pkgs}
     settingsJson=$(${kiroSettingsExtractScript pkgs} "$tuiJs")
     # `-S` sorts every object's keys, so both hosts emit one shape and the
     # field order written here carries no meaning.

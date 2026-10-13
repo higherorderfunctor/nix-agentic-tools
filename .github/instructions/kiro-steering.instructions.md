@@ -7,7 +7,8 @@ applyTo: "lib/ai/ai-common.nix,lib/ai/transformers/kiro.nix,packages/kiro-cli/**
 
 # Steering inclusion modes: what actually loads in the CLI
 
-> **Last verified:** 2026-09-30 — portable rule triggers now resolve before the
+> **Last verified:** 2026-10-13 — package-bound KAS replaces runtime cache
+> discovery in the re-measure recipe. Portable rule triggers resolve before the
 > Kiro transformer; `ai.kiro.rules.<name>.inclusion` remains its scalar native
 > override. `lib/ai/transformers/kiro.nix` emits a multi-path `fileMatchPattern`
 > as a block sequence and passes scalar data unquoted to the shared frontmatter
@@ -181,20 +182,19 @@ consumers.
 
 ## How to re-measure on a bump
 
-The engine ships as plain, readable, comment-bearing JS — not a hostile blob. It
-is extracted to a local cache, so do not hardcode the path; recover it:
+The engine ships as JavaScript in the package-bound KAS tree. Build the pinned
+runtime without launching the CLI:
 
 ```bash
-kiro-cli acp &                    # then, in another shell:
-pgrep -fa acp-server              # the argv names the real acp-server.js
+nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli.kas
 ```
 
-That resolves to
-`~/.local/share/kiro-cli/kas/<ver>-<sha>/node_modules/@kiro/agent/dist/server/acp-server.js`,
-and the `.d.ts` siblings in `dist/` are not minified at all, which makes them
-the fastest way to recover structure. The authoritative version is
-`@kiro/agent`'s `package.json` version — it is what the server logs at startup,
-and it matches neither the CLI version nor the cache directory name.
+Read `node_modules/@kiro/agent/dist/server/acp-server.js` beneath that output;
+on Darwin select `aarch64-darwin`. Its `.d.ts` siblings in `dist/` retain
+readable structure. The authoritative engine version is `@kiro/agent`'s
+`package.json` version, which differs from the CLI release version. Existing
+user caches can be useful historical comparisons but never select the managed
+package's production runtime.
 
 Two traps when reading it:
 

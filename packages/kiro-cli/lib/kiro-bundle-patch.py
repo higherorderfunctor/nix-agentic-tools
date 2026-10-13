@@ -1,8 +1,7 @@
 """Apply named exact-byte replacements to Kiro's extracted KAS bundle.
 
-Each selected source must occur exactly once. CI fails on every drifted
-replacement; launch warns and skips only that replacement, using stock when
-none apply. No JavaScript parsing or steering decoding is
+Each selected source must occur exactly once; any drift refuses the entire
+build before writing output. No JavaScript parsing or steering decoding is
 needed: the sources below are the pinned bundle's literal bytes.
 """
 
@@ -44,18 +43,16 @@ def replacements(identity=None, names=()):
 
 
 def patch(data, items):
-    """Return the independently patched bytes (or None) and named drift errors."""
+    """Return patched bytes, or no output if any selected source drifted."""
     errors = []
     result = data
-    applied = False
     for name, source, replacement in items:
         count = data.count(source)
         if count != 1:
             errors.append(f"{name}: expected exact source text once, found {count}; bundle drift")
         else:
             result = result.replace(source, replacement, 1)
-            applied = True
-    return (result if applied else None), errors
+    return (None if errors else result), errors
 
 
 def main():
@@ -74,18 +71,15 @@ def main():
         items = replacements(identity, list(FIXED) if args.check else args.replace)
         result, errors = patch(args.source.read_bytes(), items)
         for error in errors:
-            print(f"FAIL: kiro-bundle-patch: {error}" if args.check else
-                  f"WARNING: kiro-bundle-patch: {error}; replacement skipped", file=sys.stderr)
-        if args.check:
-            if errors:
-                return 1
-            print("PASS: " + ", ".join(name for name, _, _ in items) + " exact sources each occur once")
-        elif result is None:
+            print(f"FAIL: kiro-bundle-patch: {error}", file=sys.stderr)
+        if errors:
             return 1
+        if args.check:
+            print("PASS: " + ", ".join(name for name, _, _ in items) + " exact sources each occur once")
         else:
             args.destination.write_bytes(result)
     except (OSError, ValueError) as exc:
-        print(f"WARNING: kiro-bundle-patch: {exc}; launching unpatched", file=sys.stderr)
+        print(f"FAIL: kiro-bundle-patch: {exc}", file=sys.stderr)
         return 1
     return 0
 

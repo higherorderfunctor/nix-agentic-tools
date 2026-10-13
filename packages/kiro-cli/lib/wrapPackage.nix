@@ -77,15 +77,10 @@
     environmentVariables ? {},
     environmentVariablesName ? "ai.environmentVariables / ai.kiro.cli.environmentVariables",
     extraPackages ? [],
-    bundleMaterializer ? null,
     secretEnv ? {},
     trustedMcpTools ? [],
     v3 ? false,
   }: {
-    bundle = {
-      active = bundleMaterializer != null;
-      name = "ai.kiro.cli.tweaks";
-    };
     environmentVariables = {
       active = environmentVariables != {};
       name = environmentVariablesName;
@@ -119,14 +114,12 @@
     extraPackages ? [],
     secretEnv ? {},
     secretOptionPaths ? {},
-    bundleMaterializer ? null,
   }: let
     reasons = wrapperReasons {
-      inherit environmentVariables extraPackages bundleMaterializer secretEnv trustedMcpTools v3;
+      inherit environmentVariables extraPackages secretEnv trustedMcpTools v3;
     };
     hasEnv = reasons.environmentVariables.active;
     hasExtraPackages = reasons.extraPackages.active;
-    hasBundle = reasons.bundle.active;
     hasSecret = reasons.secrets.active;
     hasTrust = reasons.trustedMcpTools.active;
     hasV3 = reasons.v3.active;
@@ -192,30 +185,6 @@
       export PATH=${lib.escapeShellArg (lib.makeBinPath extraPackages)}''${PATH:+:"$PATH"}
     '';
 
-    # Point the engine at a bundle with selected exact-match prompt patches.
-    # Materialization is LAZY (at launch) rather than at activation, because the
-    # engine bundle is unpacked from the binary on first use: at activation time
-    # on a fresh machine there is nothing to patch yet. It is idempotent and
-    # cached, so every later launch checks readiness under the per-key lock.
-    #
-    # FAIL-OPEN, deliberately. The materializer writes a reason to stderr and
-    # exits non-zero when it cannot resolve a bundle, and the launch then
-    # proceeds unpatched. The alternative -- refusing to start -- would let a
-    # vendor reshuffle brick the terminal agent over a prompt patch,
-    # which is a worse failure than unpatched steering. The stderr line is
-    # what keeps it from being SILENT.
-    #
-    # Exported in BOTH wrappers: the launcher resolves `kiro-cli-chat` through
-    # PATH so the variable would normally be inherited, but `kiro-cli-chat`
-    # invoked directly is a supported entry point and must patch too.
-    bundleInjection = lib.optionalString hasBundle ''
-      if nat_kas_server="$(${lib.getExe bundleMaterializer})"; then
-        export KIRO_KAS_SERVER_PATH="$nat_kas_server"
-      else
-        unset KIRO_KAS_SERVER_PATH
-      fi
-    '';
-
     # `--v3` is injected for EVERY subcommand, because it is global and because
     # that is what makes it reach `acp`: the launcher rewrites its own `--v3`
     # into `--agent-engine v3` — TWO tokens; the error text's `--agent-engine=v3`
@@ -231,19 +200,17 @@
     # There is deliberately no `--tui` injection. The option that produced it
     # was REMOVED, not merely defaulted off — see the note at the top of this
     # file for the measurements behind that.
-    launcherInjection =
-      lib.concatStringsSep "\n"
-      (lib.filter (s: s != "") [bundleInjection v3Block]);
+    launcherInjection = v3Block;
 
     # `--trust-tools` on the chat binary: appended, and gated to the subcommands
     # that declare it. Not idempotence-guarded — unlike `--tui`, repeating it is
     # accepted rather than fatal.
     #
     # `acp` is conditional, because THE TWO WRAPPERS COMPOSE. The launcher
-    # resolves `kiro-cli-chat` through PATH — ON LINUX; darwin resolves by
-    # argv[0] .app bundle discovery instead and never runs this wrapper via
-    # the launcher at all (see launcher-argv.md, "darwin resolves by argv[0]
-    # bundle discovery") — so in a real Linux profile `kiro-cli acp` runs the
+    # resolves `kiro-cli-chat` through PATH — ON LINUX; Darwin uses app bundle
+    # discovery instead and never runs this wrapper via the launcher (see
+    # launcher-argv.md, "Darwin bundle discovery must reach the packaged app").
+    # In a real Linux profile `kiro-cli acp` runs the
     # launcher wrapper AND then this one:
     #
     #   kiro-cli acp
@@ -341,20 +308,18 @@
         name = "kiro-cli-wrapped";
         paths = [package];
         postBuild = ''
-          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasV3 || hasBundle) ''
+          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasV3) ''
             rm -f "$out/bin/kiro-cli"
             ln -s ${mkWrapper "kiro-cli-launcher" {
               realBin = "${package}/bin/kiro-cli";
               injection = launcherInjection;
             }} "$out/bin/kiro-cli"
           ''}
-          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasTrust || hasBundle) ''
+          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasTrust) ''
             rm -f "$out/bin/kiro-cli-chat"
             ln -s ${mkWrapper "kiro-cli-chat-wrapper" {
               realBin = "${package}/bin/kiro-cli-chat";
-              injection =
-                lib.concatStringsSep "\n"
-                (lib.filter (s: s != "") [bundleInjection trustInjection]);
+              injection = trustInjection;
             }} "$out/bin/kiro-cli-chat"
           ''}
         '';
@@ -369,7 +334,6 @@ in {
     environmentVariables ? {},
     extraPackages ? [],
     secretEnv ? {},
-    bundleMaterializer ? null,
     useFhsSandbox ? true,
     secretOptionPaths ? {},
   }: let
@@ -405,7 +369,7 @@ in {
   in
     wrapDirect {
       package = selectedPackage;
-      inherit environmentVariables extraPackages bundleMaterializer secretEnv secretOptionPaths v3;
+      inherit environmentVariables extraPackages secretEnv secretOptionPaths v3;
       trustedMcpTools =
         if placeTrustInsideFhs
         then []

@@ -38,15 +38,12 @@ def signal_group(child, sig):
             pass
 
 
-# Usage: embedded-tui.py <tui|kas> <binary> <destination> <cert-file> [fake-kas]
-mode, binary, destination, cert_file, *extra = sys.argv[1:]
-if mode not in ("tui", "kas") or len(extra) != (mode == "tui"):
-    raise ValueError("tui mode needs a fake KAS; kas mode does not")
-engine = "node_modules/@kiro/agent/dist/server/acp-server.js"
-asset_name = "tui.js" if mode == "tui" else "acp-server.js"
-what = "checksum-validated embedded TUI" if mode == "tui" else "KAS engine bundle"
-timeout = 120 if mode == "tui" else 180
-with tempfile.TemporaryDirectory(prefix=f"kiro-{mode}-") as root:
+# The remaining host-run extractor is TUI-only; KAS uses embedded-kas.py.
+binary, destination, cert_file, fake_kas = sys.argv[1:]
+asset_name = "tui.js"
+what = "checksum-validated embedded TUI"
+timeout = 120
+with tempfile.TemporaryDirectory(prefix="kiro-tui-") as root:
     root = Path(root)
     home = root / "home"
     workspace = root / "workspace"
@@ -62,12 +59,11 @@ with tempfile.TemporaryDirectory(prefix=f"kiro-{mode}-") as root:
         "XDG_CACHE_HOME": str(root / "cache"),
         "XDG_CONFIG_HOME": str(root / "config"),
     }
-    if mode == "tui":
-        # Stop before agent startup; only the TUI needs the fake KAS.
-        env.update(KIRO_KAS_NODE_PATH=extra[0], KIRO_KAS_SERVER_PATH=extra[0])
+    # Stop before agent startup; only the TUI needs the fake KAS.
+    env.update(KIRO_KAS_NODE_PATH=fake_kas, KIRO_KAS_SERVER_PATH=fake_kas)
     master, slave = pty.openpty()
     child = subprocess.Popen(
-        [binary, *(["--v3", "chat"] if mode == "tui" else ["acp", "--agent-engine", "v3"])],
+        [binary, "--v3", "chat"],
         cwd=workspace,
         env=env,
         stdin=slave,
@@ -89,13 +85,7 @@ with tempfile.TemporaryDirectory(prefix=f"kiro-{mode}-") as root:
             # Poll before finding: an asset written just before exit is valid.
             exited = child.poll() is not None
             verified = []
-            if mode == "kas":
-                # KAS renames its complete version directory out of staging.
-                verified = [
-                    path for path in root.glob("home/**/kiro-cli/kas/*/" + engine)
-                    if not path.parents[5].name.startswith(".")
-                ]
-            for asset in root.rglob("tui.js") if mode == "tui" else []:
+            for asset in root.rglob("tui.js"):
                 checksum = asset.with_name("tui.js.sha256")
                 if checksum.is_file():
                     expected = checksum.read_text().strip()
@@ -127,5 +117,5 @@ with tempfile.TemporaryDirectory(prefix=f"kiro-{mode}-") as root:
         signal_group(child, signal.SIGKILL)
         child.wait()
 
-if mode == "tui" and Path(destination).stat().st_size < 100_000:
+if Path(destination).stat().st_size < 100_000:
     raise RuntimeError("embedded TUI is unexpectedly small")

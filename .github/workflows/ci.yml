@@ -411,15 +411,20 @@ jobs:
         with:
           systems: ${{ matrix.system }}
 
-      # The Linux flake check covers this drift assertion, but flake check on
-      # ubuntu omits Darwin. Exercise first-run TUI materialization and the
-      # settings parser natively on both Kiro-supported platforms here.
-      - name: Check extracted Kiro metadata
+      # Flake check on ubuntu omits Darwin. Exercise extracted metadata and
+      # packaged KAS patching, native resources, ACP and dispatch on both
+      # Kiro-supported platforms here.
+      - name: Check extracted metadata and packaged KAS
         if: steps.scope.outputs.needed == 'true'
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          nix build ".#checks.${{ matrix.system }}.kiro-cli-extracted" --no-link
+          nix build \
+            ".#checks.${{ matrix.system }}.kiro-cli-extracted" \
+            ".#checks.${{ matrix.system }}.kiro-bundle-patch-drift" \
+            ".#checks.${{ matrix.system }}.kiro-kas-dispatch" \
+            ".#checks.${{ matrix.system }}.kiro-kas-extraction" \
+            --no-link
 
       - name: Build patched Kiro without the project cache
         id: build-patched

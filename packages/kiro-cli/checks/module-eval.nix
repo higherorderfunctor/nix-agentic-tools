@@ -1899,8 +1899,7 @@ in {
         soleFork a b
     );
 
-    # devenv parity: the materializer is threaded through the SHARED
-    # `resolveBundleMaterializer`, so a fork here proves both backends wire it.
+    # The shared package selector carries the same KAS patches on both backends.
     module-kiro-devenv-identity-forks-package = mkTest "kiro-devenv-identity-forks-package" (
       let
         a =
@@ -1971,7 +1970,7 @@ in {
         soleSame a b
     );
 
-    # Both boolean tweaks default off and select the materializer on either backend.
+    # Both boolean tweaks default off and select package-bound patches on either backend.
     module-kiro-boolean-tweaks-default-off-and-parity = mkTest "kiro-boolean-tweaks-default-off-and-parity" (
       let
         forks = eval: select: name: let
@@ -2003,9 +2002,7 @@ in {
     # The patch re-joins the preserved vendor text directly after the
     # replacement, so an identity that does not close its own final sentence
     # MERGES into it. Caught at EVAL rather than by the bundle patcher's
-    # backstop, because the patcher runs on a FAIL-OPEN launch path — a value rejected
-    # there presents as "the identity silently did nothing", which is the exact
-    # shape that let a multi-sentence identity ship broken.
+    # backstop, so malformed identity prose fails before a package build.
     module-kiro-identity-requires-sentence-punctuation = mkTest "kiro-identity-requires-sentence-punctuation" (
       let
         ev = evalHm {

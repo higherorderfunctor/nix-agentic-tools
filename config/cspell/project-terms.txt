@@ -1,4 +1,5 @@
 AWSLAMBDA
+CFFIXED
 CLOUDSDK
 COLORFGBG
 COLORTERM
@@ -64,6 +65,7 @@ bwrap
 bypassable
 cachix
 caddyfile
+calcsize
 calen
 cancelchild
 cands
@@ -219,6 +221,7 @@ libsecret
 libstdc
 libtinfo
 libx
+libzstd
 licence
 licences
 lifecycles
@@ -434,6 +437,7 @@ unapprove
 unbuildable
 uncacheable
 uncallable
+undmg
 ungated
 ungroomed
 unhide
@@ -469,3 +473,4 @@ ymtdzzz
 zdiff
 zebrafish
 zereight
+zstd

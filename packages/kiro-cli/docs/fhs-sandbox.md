@@ -1,8 +1,8 @@
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-10-07 — package selection, environment and FHS
-> controls use `ai.kiro.cli`; the recorded upstream sandbox measurements below
-> are unchanged.
+> **Last verified:** 2026-10-13 — package-bound KAS/Node paths and selected
+> prompt patches follow the native payload through FHS and direct launch. The
+> recorded upstream sandbox measurements below are unchanged.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
@@ -128,7 +128,7 @@ ai.kiro.cli.useFhsSandbox = false;
 That removes bubblewrap from Kiro's launch chain and restores the host's normal
 namespace and PATH resolution. It does not select a separately packaged binary:
 rollout patches, version pinning, TERM defaults, environment variables, secrets,
-identity materialization, and argv injection still use the same overlay payload
+build-time KAS selection, and argv injection still use the same overlay payload
 and wrapper helpers. A custom `ai.kiro.cli.package` must expose
 `passthru.unwrapped` on every rollout-resolved variant; otherwise evaluation
 fails with a named assertion instead of silently retaining the sandbox. Direct
