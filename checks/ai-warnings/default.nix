@@ -131,12 +131,8 @@
             ${field} =
               {
                 args = ["probe"];
-                command = "probe";
-                env.PROBE = "";
-                headers.Authorization = "";
                 package = pkgs.hello;
                 settings.probe = true;
-                timeout = 1;
               }.${
                 field
               };
@@ -144,8 +140,8 @@
         suffix = ".${field}";
       }) (
         if http
-        then ["args" "command" "env" "package" "settings"]
-        else ["headers" "settings" "timeout"]
+        then ["args" "package" "settings"]
+        else ["settings"]
       )) [false true]
     ++ map (surface: {
       runtime = "claude";
@@ -483,7 +479,64 @@
     builtins.elem ["ai" row.ecosystem "native" "agents"] (row.inputOptions or [])
     == (records.${row.ecosystem} ? agentNativeType))
   (lib.filter (row: row.surface == "agents") policy.rows);
+  deliveryWarnings = import ../../lib/ai/delivery-warnings.nix {inherit lib;};
   mcp = import ../../lib/mcp.nix {inherit lib;};
+  # These four input combinations exercise the warning interface directly;
+  # args, package, and settings retain their module-backed cases above.
+  mcpFieldCases = [
+    {
+      expected = "ai.claude.mcpServers.probe.command is set but devenv does not deliver it to claude (reason: HTTP MCP entries use url; this stdio field is not rendered.)";
+      fixture = {
+        command = "probe";
+        url = "https://example.invalid";
+      };
+    }
+    {
+      expected = "ai.claude.mcpServers.probe.env is set but devenv does not deliver it to claude (reason: HTTP MCP entries use url; this stdio field is not rendered.)";
+      fixture = {
+        env.PROBE = "";
+        url = "https://example.invalid";
+      };
+    }
+    {
+      expected = "ai.claude.mcpServers.probe.headers is set but devenv does not deliver it to claude (reason: This HTTP MCP field is not rendered for stdio.)";
+      fixture = {
+        command = "probe";
+        headers.Authorization = "";
+      };
+    }
+    {
+      expected = "ai.claude.mcpServers.probe.timeout is set but devenv does not deliver it to claude (reason: This HTTP MCP field is not rendered for stdio.)";
+      fixture = {
+        command = "probe";
+        timeout = 1;
+      };
+    }
+  ];
+  # The hand-built config carries the module-derived shared-surface list, so
+  # the decomposition reads real surfaces (all absent here) instead of none.
+  mcpFieldWarnings = enable: fixture:
+    deliveryWarnings {
+      appRecord = records.claude;
+      backend = "devenv";
+      config.ai = {
+        claude = {
+          inherit enable;
+          mcpServers.probe = fixture;
+        };
+        internal.sharedSurfaces = (harness.evalDevenv {}).config.ai.internal.sharedSurfaces;
+      };
+    };
+  mcpFieldCasesPass =
+    lib.all (case:
+      mcpFieldWarnings true case.fixture
+      == [case.expected]
+      && mcpFieldWarnings false case.fixture == [])
+    mcpFieldCases
+    && lib.all (fixture: mcpFieldWarnings true fixture == []) [
+      {url = "https://example.invalid";}
+      {command = "probe";}
+    ];
   # `isDarwin` is forced in BOTH directions rather than left to the host: this
   # check runs on x86_64-linux and aarch64-darwin, so reading the real platform
   # would make the non-Darwin arms assert nothing on the Darwin runner.
@@ -500,7 +553,7 @@
       };
     };
   in
-    import ../../lib/ai/delivery-warnings.nix {inherit lib;} {
+    deliveryWarnings {
       appRecord = records.kiro // {pkgs.stdenv.hostPlatform.isDarwin = darwin;};
       inherit backend;
       inherit
@@ -551,6 +604,7 @@ in {
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
       && lib.all (case: assert lib.assertMsg (casePass case) "warning gap ${case.runtime}/${case.mode}/${lib.showOption case.path}"; true) gapCases
       && lib.assertMsg consumedRootsQuiet "consumed shared surfaces must not warn"
+      && lib.assertMsg mcpFieldCasesPass "Claude MCP field warnings match their literal paths, reasons, and disabled/absent controls"
       && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
       && lib.assertMsg effortSilent "delivered or withheld reasoning effort must not warn"
       && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
