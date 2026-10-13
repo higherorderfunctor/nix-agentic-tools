@@ -1139,6 +1139,48 @@ in {
         (hmCliSettings result)."chat.defaultModel" == "some-future-model"
     );
 
+    # Inspect the suggestion arm separately: accepting through `str` alone
+    # would hide a stale or missing independently pinned catalog.
+    module-kiro-default-model-suggestions-parity = mkTest "kiro-default-model-suggestions-parity" (
+      let
+        runtime = import ../lib/mkKiro.nix {
+          lib = lib // {ai = import ../../../lib/ai {inherit lib;};};
+          inherit pkgs;
+        };
+        settingsOptions = [
+          runtime.options.cli.native.settings
+          (evalHm {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
+          (evalDevenv {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
+        ];
+        extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
+        catalog = extracted.get (extracted.load {dir = ../../kiro-model-catalog/extracted;}).aggregate "models";
+        modelType = settings: ((settings.type.getSubOptions []).chat.type.getSubOptions []).defaultModel.type;
+      in
+        lib.all (settings: let
+          type = modelType settings;
+          suggestions = type.nestedTypes.elemType.nestedTypes.left;
+        in
+          suggestions.functor.payload.values
+          == catalog
+          && !(suggestions.check "some-future-model")
+          && type.check "some-future-model"
+          && !(type.check 42))
+        settingsOptions
+    );
+
+    module-kiro-devenv-default-model-known-and-arbitrary-accepted = mkTest "kiro-devenv-default-model-known-and-arbitrary-accepted" (
+      lib.all (model: let
+        result = evalDevenv {
+          ai.kiro.cli = {
+            enable = true;
+            native.settings.chat.defaultModel = model;
+          };
+        };
+      in
+        (dvCliSettings result)."chat.defaultModel" == model)
+      ["auto" "some-future-model"]
+    );
+
     # v3 = true triggers the HM wrapper (appends --v3 to the launcher).
     # Stub can't introspect postBuild, but a named symlinkJoin
     # ("kiro-cli-wrapped") is a strong signal the wrapper fired — same

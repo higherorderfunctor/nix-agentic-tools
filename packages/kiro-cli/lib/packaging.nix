@@ -327,17 +327,12 @@ rec {
     tuiJs="$PWD/kiro-tui.js"
     "$python3" ${../extract/embedded-tui.py} tui "$kiroChatBin" "$tuiJs" ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt ${kiroFakeKasScript pkgs}
     settingsJson=$(${kiroSettingsExtractScript pkgs} "$tuiJs")
-    # Model availability is server-side and account-dependent. Suggestions come
-    # from the public documentation snapshot, refreshed independently of releases.
-    modelsJson=$("$python3" ${../extract/models.py} ids ${../model-catalog.json})
-
     # `-S` sorts every object's keys, so both hosts emit one shape and the
     # field order written here carries no meaning.
     "$jq" -nS --argjson hooks "$hookTriggersJson" \
-      --argjson models "$modelsJson" \
       --argjson rollout "$rolloutJson" \
       --argjson settings "$settingsJson" \
-      '{hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, models: $models, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
+      '{hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
   '';
 
   # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to

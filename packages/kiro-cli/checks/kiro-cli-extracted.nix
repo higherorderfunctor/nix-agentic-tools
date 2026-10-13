@@ -1,6 +1,5 @@
 # Drift check — the committed packages/kiro-cli/extracted/<host>.json must
-# match what the packaged kiro binary and the committed public model-table
-# snapshot contain, the facts must merge across systems, and the facts the
+# match what the packaged kiro binary contains, the facts must merge across systems, and the facts the
 # Kiro modules were written against must still hold. Blocking (a typed trigger
 # vanishing is a correctness signal the typed surface must react to). The build
 # of passthru.extracted also enforces the shape assertions baked into
@@ -43,11 +42,6 @@
           done
           touch "$out"
         '';
-      kiro-models-fixtures = pkgs.runCommand "kiro-models-fixtures" {} ''
-        ${pkgs.python3}/bin/python3 ${./kiro-models.py} \
-          ${../extract/models.py} ${../model-catalog.json}
-        touch "$out"
-      '';
     }
     // mkOwnerCheck {
       dir = ../extracted;

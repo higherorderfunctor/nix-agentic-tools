@@ -225,6 +225,14 @@ for it. When several entries match, their guidance composes.
     - `packages/kiro-cli/lib/mkKiro.nix`
   - Read:
     - [`packages/kiro-cli/docs/agents.md`](packages/kiro-cli/docs/agents.md)
+- **`kiro-model-catalog`**
+  - Match:
+    - `dev/tasks/check.nix`
+    - `packages/kiro-cli/checks/module-eval.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+    - `packages/kiro-model-catalog/**`
+  - Read:
+    - [`packages/kiro-model-catalog/docs/model-catalog.md`](packages/kiro-model-catalog/docs/model-catalog.md)
 - **`kiro-settings`**
   - Match:
     - `lib/ai/ai-common.nix`

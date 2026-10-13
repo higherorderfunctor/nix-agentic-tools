@@ -44,7 +44,7 @@ inputs.nix-agentic-tools = {
 # builds without it.
 nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 
-# Unfree: claude-code, copilot-cli, kimchi-docs and kiro-cli.
+# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-model-catalog.
 # Allow them in the nixpkgs.config your pkgs comes from (NixOS's when
 # useGlobalPkgs is set).
 
@@ -88,7 +88,7 @@ services.mcp-servers.servers.github-mcp = {
 
 ```yaml
 # devenv.yaml
-# Unfree: claude-code, copilot-cli, kimchi-docs and kiro-cli.
+# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-model-catalog.
 # Opt in as for nixpkgs.
 allowUnfree: true
 inputs:

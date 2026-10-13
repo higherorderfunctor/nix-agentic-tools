@@ -360,7 +360,6 @@ jobs:
                   packages/kiro-cli/extract/* | \
                   packages/kiro-cli/extracted/* | \
                   packages/kiro-cli/lib/packaging.nix | \
-                  packages/kiro-cli/model-catalog.json | \
                   packages/kiro-cli/packages/* | \
                   packages/kiro-cli/rollout-canary.nix | \
                   packages/kiro-cli/sources.json | \

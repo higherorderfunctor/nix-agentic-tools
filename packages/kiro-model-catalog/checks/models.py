@@ -1,7 +1,6 @@
 """Exercise the public catalog parser, including both observed account catalogs."""
 
 import importlib.util
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -31,7 +30,7 @@ class ModelExtraction(unittest.TestCase):
             glm-5 gpt-5.6-luna gpt-5.6-sol gpt-5.6-terra minimax-m2.1
             minimax-m2.5 qwen3-coder-next
         """.split())
-        extracted = set(models.model_ids(json.loads(snapshot.read_text())))
+        extracted = set(models.model_ids(models.capture(snapshot.read_text())))
         self.assertEqual(observed - extracted, set())
 
     def test_table_boundaries_annotations_and_new_versions(self):
@@ -50,7 +49,7 @@ class ModelExtraction(unittest.TestCase):
                 self.assertEqual(models.model_ids(models.capture(document(*names))), [
                     "auto", "claude-fable-5", "claude-fable-5.1",
                 ])
-        current = models.model_ids(json.loads(snapshot.read_text()))
+        current = models.model_ids(models.capture(snapshot.read_text()))
         self.assertIn("claude-fable-5", current)
         self.assertIn("claude-fable-5.1", current)
 
@@ -85,7 +84,7 @@ class ModelExtraction(unittest.TestCase):
                 models.capture(document(*names))
 
     def test_invalid_snapshot_shape_fails(self):
-        for catalog in (None, [], {}, {"source": models.SOURCE, "models": [None]}):
+        for catalog in (None, {}, [None]):
             with self.subTest(catalog=catalog), self.assertRaises(ValueError):
                 models.model_ids(catalog)
 

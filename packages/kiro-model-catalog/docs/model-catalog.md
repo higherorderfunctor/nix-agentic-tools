@@ -1,0 +1,53 @@
+# Kiro public model catalog
+
+> **Last verified:** 2026-10-12 — public-document pins, model facts and updates
+> are independent of the proprietary CLI release.
+
+### Model suggestions are a public catalog, not an account entitlement list
+
+`cli.native.settings.chat.defaultModel` reads the `models` fact from
+`packages/kiro-model-catalog/extracted/` through `lib.extracted` as a soft enum.
+Any string remains accepted across the library, Home Manager and devenv.
+Suggestions come from
+[Kiro's public comparison table](https://kiro.dev/docs/models.md), fetched with
+the independent package recipe's pinned content hash. The package version
+records the capture date. Evaluation reads only committed model facts; the build
+parses the fixed-output source offline without a Kiro CLI dependency.
+
+The `kiro-model-catalog` update target fetches the public page independently of
+CLI releases. Unchanged bytes leave the pin, date and facts untouched. Changed
+content must parse successfully before the source hash and date are written;
+`lib.extracted.regenCommand` then regenerates only this owner's measured-once
+raw. `kiro-model-catalog-extracted` checks source drift and the `auto`
+suggestion; Darwin verifies the same committed raw. The `kiro-cli` update target
+and its binary extractor never read model documentation.
+
+The optional authenticated `check:model-staleness` reads
+`kiro-model-catalog.json` from the extracted index. It checks that local account
+IDs are covered by the suggestions; it cannot prove global model availability.
+
+Names are normalized to lowercase, hyphenated CLI suggestions, preserving dotted
+versions and the documented Sonnet 4.0 → `claude-sonnet-4` spelling. The parser
+fails on unknown naming formats, duplicate IDs, malformed rows, or a missing
+table. These are suggestions derived from documentation, not a claim that every
+account can use every listed model. Documentation can still lag a server
+rollout.
+
+The current snapshot covers all 19 IDs observed across the two accounts below.
+Its `claude-fable-5.1` suggestion is inferred from the public display name; that
+CLI spelling has not been verified against an authenticated account. The parser
+also retains `claude-fable-5`, observed in Kiro 2.22.1's bundled
+`feature-pipeline` and `semantic-review-multi-model` recipes via the token-free
+ACP `_kiro/workflow/listRecipes` method. The recipe ID does not establish that
+Fable 5 and 5.1 are aliases, so both suggestions are retained. An unknown naming
+format or an unavailable public source fails only the isolated model-catalog
+update target until the source recovers or the normalization is reviewed.
+
+**Settled — do not relitigate:** Kiro 2.22.1 requires login for
+`chat --list-models --format json` under an isolated home. The same version
+returned 14 IDs for one account and nine for a second, free account on
+2026-09-19, with 19 distinct IDs between them. The native binary and its
+embedded archives did not contain Opus 5 or Sonnet 5 IDs. Kiro Crew's static
+registry also omitted them; newer IDs appeared in UI fixtures, not a maintained
+complete catalog. A free CI account, a binary string scan, or Crew's fallback
+registry cannot establish a complete suggestion list.
