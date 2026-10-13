@@ -14,24 +14,6 @@
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
   platformSrc = sources.${system} or (throw "kiro-cli: unsupported system ${system}");
 
-  # Models can ship without a CLI release. Run this on every update sweep,
-  # outside mkUpdateScript's version-equality early exit. Only the update job
-  # accesses the network; build-time extraction consumes the committed snapshot.
-  refreshModels = pkgs.writeShellScript "refresh-kiro-models" ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    modelTmp=$(${pkgs.coreutils}/bin/mktemp -d)
-    trap '${pkgs.coreutils}/bin/rm -rf "$modelTmp"' EXIT
-    modelSource=$(${pkgs.jq}/bin/jq -er '.source' ${repoPath ../../../model-catalog.json})
-    ${pkgs.curl}/bin/curl --fail --silent --show-error --location \
-      --retry 2 --max-time 60 "$modelSource" -o "$modelTmp/models.md"
-    ${pkgs.python3}/bin/python3 ${../../../extract/models.py} capture \
-      "$modelTmp/models.md" > "$modelTmp/catalog.json"
-    ${pkgs.coreutils}/bin/cp "$modelTmp/catalog.json" ${repoPath ../../../model-catalog.json}
-    ${pkgs.nix}/bin/nix fmt -- ${repoPath ../../../model-catalog.json}
-    ${(extractedLib {inherit pkgs;}).regenCommand {name = "kiro-cli";}}
-  '';
-
   # Derived from the URL rather than branched on the platform, so a future
   # third platform picks up whichever archive form it publishes instead of
   # silently inheriting the linux suffix.
@@ -185,29 +167,19 @@
         passthru =
           (attrs.passthru or {})
           // {
-            inherit refreshModels;
-            updateScript = let
-              updateBinary = vu.mkUpdateScript {
-                sourcesFile = repoPath ../../../sources.json;
-
-                pname = "kiro-cli";
-                versionCheck.cmd = "${pkgs.curl}/bin/curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | ${pkgs.jq}/bin/jq -r '.version'";
-                platforms = {
-                  "x86_64-linux" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-x86_64-linux.tar.gz";
-                  "aarch64-darwin" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/Kiro%20CLI.dmg";
-                };
-                inherit pkgs;
+            updateScript = vu.mkUpdateScript {
+              sourcesFile = repoPath ../../../sources.json;
+              pname = "kiro-cli";
+              versionCheck.cmd = "${pkgs.curl}/bin/curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | ${pkgs.jq}/bin/jq -r '.version'";
+              platforms = {
+                "aarch64-darwin" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/Kiro%20CLI.dmg";
+                "x86_64-linux" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-x86_64-linux.tar.gz";
               };
-            in
-              pkgs.writeShellScript "update-kiro-cli" ''
-                set -euETo pipefail
-                shopt -s inherit_errexit 2>/dev/null || :
-                ${updateBinary}
-                ${refreshModels}
-              '';
+              extraExtract = (extractedLib {inherit pkgs;}).regenCommand {name = "kiro-cli";};
+              inherit pkgs;
+            };
 
-            # Pure extraction from THIS package's chat binary and the committed
-            # public model table. IFD-safe:
+            # Pure extraction from THIS package's chat binary. IFD-safe:
             # consumed ONLY by `nix build` (drift check + update script), never
             # readFile'd at eval.
             #

@@ -14,6 +14,7 @@
     glab = ../../packages/glab/extracted;
     kimchi = ../../packages/kimchi/extracted;
     kiro-cli = ../../packages/kiro-cli/extracted;
+    kiro-model-catalog = ../../packages/kiro-model-catalog/extracted;
     semble = ../../packages/semble/extracted;
   };
 in {

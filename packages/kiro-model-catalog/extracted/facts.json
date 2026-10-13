@@ -1,0 +1,7 @@
+{
+  "models": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "set"
+  }
+}

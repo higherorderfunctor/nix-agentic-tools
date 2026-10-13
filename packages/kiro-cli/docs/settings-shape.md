@@ -1,10 +1,11 @@
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-10 — Kiro CLI settings use
+> **Last verified:** 2026-10-12 — Kiro CLI settings use
 > `ai.kiro.cli.native.settings`; settings extraction requires the shipped TUI
 > registry, workspace allowlist and merge, and historical no-workspace-merge
 > support is removed. Kiro excludes normalized settings. Extracted facts live in
-> `packages/kiro-cli/extracted/` and are read through `lib.extracted`.
+> `packages/kiro-cli/extracted/` and are read through `lib.extracted`; model
+> suggestions have an independent public-document owner.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -12,47 +13,14 @@ the shipped TUI merge allows 23, including in 2.22.1. The package's
 project-local guard must follow the TUI consumer, so extraction uses the
 materialized source.
 
-### Model suggestions are a public catalog, not an account entitlement list
+### Model suggestions
 
-`cli.native.settings.chat.defaultModel` reads the extracted `models` fact as a
-soft enum. Any string remains accepted. The model field is derived from
-`model-catalog.json`, a snapshot of the names in
-[Kiro's public comparison table](https://kiro.dev/docs/models.md). The other
-extracted fields still come from the pinned binary.
-
-The update script refreshes that snapshot and rebuilds the extraction on every
-scheduled sweep, even when the CLI version is unchanged.
-`passthru.refreshModels` exposes the same refresh for a deliberate local run.
-Flake checks use only committed data and the packaged binary; no login or
-network is needed inside the extraction build.
-
-Names are normalized to lowercase, hyphenated CLI suggestions, preserving dotted
-versions and the documented Sonnet 4.0 → `claude-sonnet-4` spelling. The parser
-fails on unknown naming formats, duplicate IDs, malformed rows, or a missing
-table. These are suggestions derived from documentation, not a claim that every
-account can use every listed model. Documentation can still lag a server
-rollout; the optional authenticated `check:model-staleness` compares a local
-account's IDs as a subset and now fails on omissions.
-
-The current snapshot covers all 19 IDs observed across the two accounts below.
-Its `claude-fable-5.1` suggestion is inferred from the public display name; that
-CLI spelling has not been verified against an authenticated account. The parser
-also retains `claude-fable-5`, observed in Kiro 2.22.1's bundled
-`feature-pipeline` and `semantic-review-multi-model` recipes via the token-free
-ACP `_kiro/workflow/listRecipes` method. The recipe ID does not establish that
-Fable 5 and 5.1 are aliases, so both suggestions are retained. An unknown naming
-format or an unavailable public source fails the isolated Kiro update target,
-including any simultaneous binary version bump, until the source recovers or the
-normalization is reviewed.
-
-**Settled — do not relitigate:** Kiro 2.22.1 requires login for
-`chat --list-models --format json` under an isolated home. The same version
-returned 14 IDs for one account and nine for a second, free account on
-2026-09-19, with 19 distinct IDs between them. The native binary and its
-embedded archives did not contain Opus 5 or Sonnet 5 IDs. Kiro Crew's static
-registry also omitted them; newer IDs appeared in UI fixtures, not a maintained
-complete catalog. A free CI account, a binary string scan, or Crew's fallback
-registry cannot establish a complete suggestion list.
+`cli.native.settings.chat.defaultModel` accepts any string and suggests model
+slugs from the independently pinned `kiro-model-catalog` package. Its
+public-document source, refresh and parsing contract live in
+[model-catalog.md](../../kiro-model-catalog/docs/model-catalog.md). The binary
+facts under `packages/kiro-cli/extracted/` contain only engine and settings
+measurements.
 
 ### Flat settings and object values
 

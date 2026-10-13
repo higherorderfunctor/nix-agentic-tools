@@ -1,8 +1,16 @@
 {
-  "hookTriggerAliases": { "source": "host-run", "type": "object" },
-  "hookTriggers": { "source": "host-run", "type": "set" },
-  "models": { "source": "static", "type": "set" },
-  "rolloutFeatures": { "source": "static", "type": "set" },
+  "hookTriggerAliases": {
+    "source": "host-run",
+    "type": "object"
+  },
+  "hookTriggers": {
+    "source": "host-run",
+    "type": "set"
+  },
+  "rolloutFeatures": {
+    "source": "static",
+    "type": "set"
+  },
   "rolloutPatchability.<name>.patchable": {
     "source": "static",
     "type": "bool"
@@ -11,7 +19,16 @@
     "source": "static",
     "type": "count"
   },
-  "rolloutStates.<name>": { "source": "static", "type": "object" },
-  "settingKeys": { "source": "host-run", "type": "set" },
-  "workspaceOverridableSettings": { "source": "host-run", "type": "set" }
+  "rolloutStates.<name>": {
+    "source": "static",
+    "type": "object"
+  },
+  "settingKeys": {
+    "source": "host-run",
+    "type": "set"
+  },
+  "workspaceOverridableSettings": {
+    "source": "host-run",
+    "type": "set"
+  }
 }

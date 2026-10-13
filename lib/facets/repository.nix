@@ -15,13 +15,14 @@
   # path into the repository's lib/ directory.
   extractedLib = import ../extracted;
   gitToolExtraction = import ../git-tool-settings/extraction.nix;
+  webDocsLib = import ../web-docs;
   packageWorldFor = pkgs: let
     system = pkgs.stdenv.hostPlatform.system;
   in
     facets.realizePackages {
       inherit index inputs pkgs system;
       scopeArgs = {
-        inherit extractedLib gitToolExtraction repoPath;
+        inherit extractedLib gitToolExtraction repoPath webDocsLib;
         fragmentsLib = import ../fragments.nix {inherit lib;};
         # `generatedLib pkgs`: the builder generated files are formatted in.
         generatedLib = import ../generated.nix {inherit lib;};

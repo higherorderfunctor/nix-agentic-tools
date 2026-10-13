@@ -5,7 +5,6 @@ import json
 import re
 from pathlib import Path
 
-SOURCE = "https://kiro.dev/docs/models.md"
 # Kiro 2.22.1's unauthenticated _kiro/workflow/listRecipes contains this
 # additional ID in feature-pipeline and semantic-review-multi-model. It does
 # not establish that the public Fable 5.1 display and Fable 5 are aliases.
@@ -17,10 +16,7 @@ MODEL_SHAPE = re.compile(
 )
 
 
-def model_ids(catalog):
-    if not isinstance(catalog, dict) or catalog.get("source") != SOURCE:
-        raise ValueError("expected a public Kiro model-table snapshot")
-    names = catalog.get("models")
+def model_ids(names):
     if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
         raise ValueError("expected model display names")
     ids = []
@@ -69,19 +65,17 @@ def capture(document):
         if name.startswith("**") and name.endswith("**"):
             name = name[2:-2]
         names.append(name)
-    catalog = {"models": sorted(names), "source": SOURCE}
-    model_ids(catalog)
-    return catalog
+    model_ids(names)
+    return sorted(names)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["capture", "ids"])
     parser.add_argument("source", type=Path)
     args = parser.parse_args()
     try:
         data = args.source.read_text(encoding="utf-8")
-        result = capture(data) if args.action == "capture" else model_ids(json.loads(data))
+        result = {"models": model_ids(capture(data))}
     except (OSError, ValueError) as error:
         parser.exit(1, f"kiro-model-extract: {error}\n")
     print(json.dumps(result, indent=2))

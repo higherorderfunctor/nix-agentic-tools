@@ -1,8 +1,7 @@
 # Contracts for the opt-in `kimchi-docs` skill.
 #
-# `kimchi-docs-links` lints the FETCHER script; it never opens the snapshot. The
-# build check below is the first consumer that reads the packaged snapshot
-# itself, so it is what makes `docs.kimchi-docs` more than bytes nothing reads.
+# Shared `web-docs-fixtures` covers fetching and updating both documentation
+# owners. These checks read the installed snapshot and its delivered skill.
 {
   lib,
   pkgs,

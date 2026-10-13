@@ -32,12 +32,12 @@ in {
             # The merged fact, as checks.<host>.extracted-index writes it.
             host=$(nix eval --raw --impure --expr builtins.currentSystem)
             facts=$(nix build --no-link --print-out-paths ".#checks.$host.extracted-index")
-            committed=$(jq -r '.models.value[]' "$facts/kiro-cli.json" | sort -u)
+            committed=$(jq -r '.models.value[]' "$facts/kiro-model-catalog.json" | sort -u)
             missing=$(comm -23 <(printf '%s\n' "$model_ids") <(printf '%s\n' "$committed") || true)
             if [ -z "$missing" ]; then
               log "Kiro: OK — extracted model suggestions cover this account's catalog"
             else
-              log "Kiro: DRIFT — live ids missing from models in packages/kiro-cli/extracted/:"
+              log "Kiro: DRIFT — live ids missing from models in packages/kiro-model-catalog/extracted/:"
               printf '    %s\n' $missing >&2
               exit 1
             fi
