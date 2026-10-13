@@ -25,7 +25,7 @@
   # two silently-wrong singletons can pass VACUOUSLY. Asserting the match count
   # as part of the returned boolean fixes both.
   kiroWrappedDrvs = packages:
-    map (p: p.drvPath) (lib.filter (p: p.name == "kiro-cli-wrapped") packages);
+    map (p: p.drvPath) (lib.filter (p: lib.hasPrefix "kiro-cli" p.name) packages);
 
   # Exactly one wrapper on each side, and they must DIFFER (the unlock forked).
   soleFork = a: b:

@@ -5,7 +5,7 @@
 # to pass `{}` here and export through its native `env` attrset instead; that
 # wrote the PROJECT SHELL, handing every variable to the developer's own
 # session, so it was retired on 2026-08-10. devenv also still needs the flag
-# injection so `devenv shell` launches the v3 TUI exactly like HM does.
+# handling so chat trust grants behave consistently on both backends.
 #
 # `extraPackages` is a separate PATH prefix, not another environment-variable
 # entry. Keeping it separate lets the generated wrapper prepend store-backed
@@ -19,42 +19,8 @@
 # other export stays outer and inherited. `useFhsSandbox = false` instead selects
 # the same pinned `passthru.unwrapped` payload directly.
 #
-# ── The argv contract ──────────────────────────────────────────────────────
-# `--v3` is a LAUNCHER-GLOBAL option, so it is injected BEFORE any subcommand.
-# Appending it instead is what made `kiro-cli acp` die with "error: unexpected
-# argument found" — the flag was in the wrong argv POSITION, not unsupported by
-# `acp`. Prepended, every subcommand accepts it.
-#
-# `--trust-tools` is different in kind: the chat binary declares it on the
-# `chat` and `acp` SUBCOMMANDS and not at top level, so it is appended and
-# gated. Do not "make these consistent" — they are opposite cases.
-#
-# ── Why there is no `--tui` here ────────────────────────────────────────────
-# There used to be an `ai.kiro.tui` option that injected `--tui` and implied
-# `--v3`. It was removed. `--tui` selects the new TUI harness for the OLD
-# engine, and v3 already uses that harness — so under v3 the flag is redundant,
-# and it is going away with v3 anyway. Anyone who still wants it on an older
-# engine can pass it on the command line.
-#
-# The implication was NOT decoration, which is why it cannot simply be dropped
-# from a config without also switching to `v3`. Measured on 2.16.0:
-#
-#   kiro-cli --tui       -> error: Conflicting options: --tui cannot be used
-#                           with --agent-engine=v1
-#   kiro-cli --tui --v3  -> works
-#   kiro-cli-chat chat --tui --agent-engine=v2 -> parses (reaches input check)
-#
-# The chat binary defaults to **v1** and `--tui` conflicts with it, while the
-# launcher injects no engine of its own. So bare `--tui` was always broken and
-# `tui = true` only worked because it silently dragged `--v3` along.
-#
-# That default is v1, not the v2 this file long claimed on the strength of a
-# help string. Nothing here depends on the specific value — the trust gate asks
-# only "is it v3" — which is why its fallback below is a sentinel rather than a
-# version number.
-#
-# Measured against kiro-cli 2.16.0; see packages/kiro-cli/docs/launcher-argv.md
-# for the probe transcript and how to re-measure on a version bump.
+# Terminal engines come from delivered settings; ACP defaults belong to the
+# package's existing build launcher. This layer only adds chat-specific trust.
 {
   lib,
   pkgs,
@@ -62,16 +28,11 @@
   inherit
     (import ../../../lib/idempotentFlags.nix {inherit lib;})
     gateOnSubcommand
-    idempotentFlagBlock
     optionValueBlock
     ;
 
-  # Value-taking options whose values must not be mistaken for a subcommand.
-  # Only the chat binary's list survives: the launcher-side list existed for the
-  # removed `--tui` gate, which was the sole caller that had to distinguish a
-  # bare launch (`kiro-cli --agent acp` is a bare launch, not the `acp`
-  # subcommand). `--v3` is injected unconditionally and needs no such gate.
-  chatValueFlags = ["--resume-id"];
+  # Chat globals whose values must not be mistaken for a subcommand.
+  inherit (import ./native-argv.nix) chatValueFlags;
 
   wrapperReasons = {
     environmentVariables ? {},
@@ -79,7 +40,6 @@
     extraPackages ? [],
     secretEnv ? {},
     trustedMcpTools ? [],
-    v3 ? false,
   }: {
     environmentVariables = {
       active = environmentVariables != {};
@@ -97,10 +57,6 @@
       active = trustedMcpTools != [];
       name = "ai.kiro.cli.trustedMcpTools";
     };
-    v3 = {
-      active = v3;
-      name = "ai.kiro.cli.v3";
-    };
   };
 
   # Build one ordinary wrapper layer around the package passed here. The
@@ -108,7 +64,7 @@
   # upstream FHS package or on its unwrapped payload.
   wrapDirect = {
     package,
-    v3,
+    defaultEngine ? null,
     trustedMcpTools,
     environmentVariables ? {},
     extraPackages ? [],
@@ -116,13 +72,12 @@
     secretOptionPaths ? {},
   }: let
     reasons = wrapperReasons {
-      inherit environmentVariables extraPackages secretEnv trustedMcpTools v3;
+      inherit environmentVariables extraPackages secretEnv trustedMcpTools;
     };
     hasEnv = reasons.environmentVariables.active;
     hasExtraPackages = reasons.extraPackages.active;
     hasSecret = reasons.secrets.active;
     hasTrust = reasons.trustedMcpTools.active;
-    hasV3 = reasons.v3.active;
     needsWrapper = lib.any (reason: reason.active) (lib.attrValues reasons);
     trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
     # env baked as `export`s (was makeWrapper `--set`), so the hand-written
@@ -185,85 +140,9 @@
       export PATH=${lib.escapeShellArg (lib.makeBinPath extraPackages)}''${PATH:+:"$PATH"}
     '';
 
-    # `--v3` is injected for EVERY subcommand, because it is global and because
-    # that is what makes it reach `acp`: the launcher rewrites its own `--v3`
-    # into `--agent-engine v3` — TWO tokens; the error text's `--agent-engine=v3`
-    # is clap's diagnostic formatting, not the argv — on the dispatched
-    # subcommand. A caller's explicit
-    # `--agent-engine=vN` still wins — upstream resolves that, so this wrapper
-    # deliberately implements no precedence of its own.
-    v3Block = lib.optionalString hasV3 (idempotentFlagBlock {
-      flags = ["--v3"];
-      position = "prepend";
-    });
-
-    # There is deliberately no `--tui` injection. The option that produced it
-    # was REMOVED, not merely defaulted off — see the note at the top of this
-    # file for the measurements behind that.
-    launcherInjection = v3Block;
-
-    # `--trust-tools` on the chat binary: appended, and gated to the subcommands
-    # that declare it. Not idempotence-guarded — unlike `--tui`, repeating it is
-    # accepted rather than fatal.
-    #
-    # `acp` is conditional, because THE TWO WRAPPERS COMPOSE. The launcher
-    # resolves `kiro-cli-chat` through PATH — ON LINUX; Darwin uses app bundle
-    # discovery instead and never runs this wrapper via the launcher (see
-    # launcher-argv.md, "Darwin bundle discovery must reach the packaged app").
-    # In a real Linux profile `kiro-cli acp` runs the
-    # launcher wrapper AND then this one:
-    #
-    #   kiro-cli acp
-    #     -> launcher wrapper prepends --v3
-    #     -> launcher rewrites --v3 to `--agent-engine v3`, resolves
-    #        kiro-cli-chat on PATH -> lands here
-    #     -> this wrapper appends --trust-tools
-    #     => error: the following arguments are not supported with
-    #        --agent-engine=v3: --trust-tools
-    #
-    # The deciding fact is the EFFECTIVE engine, which only argv knows: a
-    # caller's `--agent-engine` overrides the injected `--v3`, so neither
-    # direction can be settled at eval time. Both are real and measured:
-    #
-    #   kiro-cli --v3 acp --agent-engine=v2 --trust-tools=x   -> runs (v2)
-    #   kiro-cli      acp --agent-engine=v3 --trust-tools=x   -> CONFLICT
-    #
-    # So the engine is resolved at runtime, from argv, falling back to THE CHAT
-    # BINARY'S OWN default rather than to what this Nix config bakes in. That
-    # distinction is the whole point: this wrapper cannot assume the launcher
-    # wrapper is in the chain. `kiro-cli-chat acp` invoked directly runs the
-    # binary's default engine however `v3 = true` is set, so defaulting to v3
-    # here withheld `--trust-tools` from a session that would have accepted it.
-    #
-    # The fallback token is deliberately a SENTINEL, not a version. All the gate
-    # asks is "is the effective engine v3", so any non-v3 value is equivalent —
-    # and naming a specific one invites exactly the drift this comment used to
-    # carry: it claimed `v2` on the strength of a `[default: v2]` help string,
-    # while 2.16.0 actually defaults to v1 (measured: `kiro-cli-chat chat --tui`
-    # fails with `--tui cannot be used with --agent-engine=v1`). A sentinel
-    # cannot go stale when upstream moves the default again.
-    #
-    # Nothing is lost on the normal path, because the launcher does not merely
-    # set a mood — it REWRITES argv. `kiro-cli --v3 acp` arrives here as an
-    # explicit `acp --agent-engine v3` (measured), which `nat_engine` reads
-    # directly, so the withhold still fires through the token rather than
-    # through a guess.
-    #
-    # Why upstream forbids it there — NOT because v3 dropped the flag; under v3
-    # `chat` still honours it. `--trust-tools` is a CLIENT-SIDE knob: kiro's TUI
-    # re-emits it onto the downstream ACP argv. Its auto-answer of
-    # `allow_always` — including the explicit branch for the v3 "kas" engine —
-    # is gated on `--trust-all-tools`, a DIFFERENT flag; `trustTools` occurs
-    # exactly once in `tui.js`, in the flag-spec table, and is never read by the
-    # approval handler. On the `acp` arm kiro-cli IS the agent and the external
-    # ACP client owns that answer, so the flag has nothing agent-side to bind
-    # to. Withholding costs little, with one caveat worth stating: under
-    # home-manager `trustedMcpTools` is ALSO translated into
-    # `settings/permissions.yaml` (`mkPermissionRules`), which the v3 agent
-    # reads — but that translation is home-manager-only, so on the devenv
-    # backend the withheld grant is not recovered declaratively. The interactive
-    # half is an ACP `session/request_permission` round-trip the CLI flag could
-    # never have participated in either way. `chat` stays unconditional.
+    # ACP v3 rejects --trust-tools; chat still accepts it. An explicit engine
+    # wins over the declared package ACP default, which is injected later by
+    # the build launcher. This wrapper never reads persisted settings.
     trustAppend = "set -- \"$@\" ${lib.escapeShellArg "--trust-tools=${trustToolsCsv}"}";
     trustInjection = lib.optionalString hasTrust (
       lib.concatStringsSep "\n" [
@@ -275,7 +154,11 @@
             subcommands = ["acp" "chat"];
             valueFlags = chatValueFlags;
           } (lib.concatStringsSep "\n" [
-            "if [ \"$nat_sub\" != acp ] || [ \"\${nat_engine:-unspecified}\" != v3 ]; then"
+            "if [ \"$nat_sub\" != acp ] || [ \"\${nat_engine:-${
+              if defaultEngine == null
+              then "unspecified"
+              else defaultEngine
+            }}\" != v3 ]; then"
             "  ${trustAppend}"
             "fi"
           ]))
@@ -308,11 +191,10 @@
         name = "kiro-cli-wrapped";
         paths = [package];
         postBuild = ''
-          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasV3) ''
+          ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret) ''
             rm -f "$out/bin/kiro-cli"
             ln -s ${mkWrapper "kiro-cli-launcher" {
               realBin = "${package}/bin/kiro-cli";
-              injection = launcherInjection;
             }} "$out/bin/kiro-cli"
           ''}
           ${lib.optionalString (hasEnv || hasExtraPackages || hasSecret || hasTrust) ''
@@ -329,7 +211,7 @@ in {
 
   wrapPackage = {
     package,
-    v3,
+    defaultEngine ? null,
     trustedMcpTools,
     environmentVariables ? {},
     extraPackages ? [],
@@ -352,7 +234,7 @@ in {
     innerTrustPackage =
       (wrapDirect {
         package = package.unwrapped;
-        v3 = false;
+        inherit defaultEngine;
         inherit trustedMcpTools;
       }).overrideAttrs (_: {
         # nixpkgs' FHS expression inherits these from its payload. Ordinary
@@ -369,7 +251,7 @@ in {
   in
     wrapDirect {
       package = selectedPackage;
-      inherit environmentVariables extraPackages secretEnv secretOptionPaths v3;
+      inherit environmentVariables extraPackages secretEnv secretOptionPaths defaultEngine;
       trustedMcpTools =
         if placeTrustInsideFhs
         then []

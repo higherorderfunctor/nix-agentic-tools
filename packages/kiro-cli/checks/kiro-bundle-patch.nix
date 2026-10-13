@@ -4,16 +4,7 @@
     identity = "Custom identity. Another sentence!";
     replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
   };
-  wrap = package:
-    (import ../lib/wrapPackage.nix {
-      inherit pkgs;
-      inherit (pkgs) lib;
-    }).wrapPackage {
-      inherit package;
-      trustedMcpTools = [];
-      useFhsSandbox = false;
-      v3 = true;
-    };
+  wrap = package: (package.withAcpDefault "v3").unwrapped;
   variants = pkgs.writeText "kiro-cli-kas-dispatch.json" (builtins.toJSON {
     stock = {
       package = wrap package;
@@ -45,6 +36,7 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         python3 ${./kas-dispatch.py} ${variants} ${./kas-smoke.py}
+        python3 ${./native-startup.py} ${wrap package}
         touch "$out"
       '';
     kiro-kas-extraction =

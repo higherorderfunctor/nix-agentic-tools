@@ -35,6 +35,134 @@
     else builtins.readFile entry.content.source;
 in {
   checks = {
+    module-kiro-native-engine-defaults = mkTest "kiro-native-engine-defaults" (
+      lib.all (
+        runner: let
+          evaluate = cli: runner.eval {ai.kiro.cli = {enable = true;} // cli;};
+          flat = cli: let
+            result = evaluate cli;
+          in
+            if result.config.ai.kiro.files ? ".kiro/settings/cli.json"
+            then runner.settings result
+            else {};
+          rejected = cli: lib.any (a: !a.assertion) (evaluate cli).config.assertions;
+        in
+          (flat {})."chat.agentEngine"
+          == "v3"
+          && !(flat {v3 = false;} ? "chat.agentEngine")
+          && !(flat {native.settings.chat.agentEngine = null;} ? "chat.agentEngine")
+          && (flat {native.settings.chat.agentEngine = "v2";})."chat.agentEngine" == "v2"
+          && (flat {native.settings."chat.agentEngine" = "v2";})."chat.agentEngine" == "v2"
+          && !(flat {native.settings."chat.agentEngine" = null;} ? "chat.agentEngine")
+          && rejected {
+            native.settings."chat.agentEngine" = "v2";
+            workflows.enable = true;
+          }
+          && (flat {
+            v3 = false;
+            native.settings.chat.agentEngine = "v3";
+          })."chat.agentEngine"
+          == "v3"
+          && (flat {native.settings.chat.ui = "legacy";})."chat.ui" == "legacy"
+          && !rejected {native.settings.chat.agentEngine = "v2";}
+          && rejected {
+            native.settings.chat.agentEngine = "v2";
+            workflows.enable = true;
+          }
+          && rejected {
+            native.settings.chat.agentEngine = null;
+            workflows.enable = true;
+          }
+          && !rejected {
+            v3 = false;
+            native.settings.chat.agentEngine = "v3";
+            workflows.enable = true;
+          }
+      ) [
+        {
+          eval = evalHm;
+          settings = hmCliSettings;
+        }
+        {
+          eval = evalDevenv;
+          settings = dvCliSettings;
+        }
+      ]
+    );
+
+    module-kiro-native-setting-types-parity = mkTest "kiro-native-setting-types-parity" (let
+      runtime = import ../lib/mkKiro.nix {
+        lib = lib // {ai = import ../../../lib/ai {inherit lib;};};
+        inherit pkgs;
+      };
+      settingsOptions = [
+        runtime.options.cli.native.settings
+        (evalHm {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
+        (evalDevenv {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
+      ];
+    in
+      lib.all (
+        settings: let
+          chat = (settings.type.getSubOptions []).chat.type.getSubOptions [];
+        in
+          lib.all chat.agentEngine.type.check [null "v1" "v2" "v3"]
+          && !chat.agentEngine.type.check "unknown"
+          && lib.all chat.ui.type.check [null "legacy" "tui"]
+          && !chat.ui.type.check "unknown"
+      )
+      settingsOptions);
+
+    module-kiro-native-flat-types = mkTest "kiro-native-flat-types" (
+      lib.all (
+        runner: let
+          delivered = settings: let
+            result = runner.eval {
+              ai.kiro.cli = {
+                enable = true;
+                native.settings = settings;
+              };
+            };
+          in
+            runner.settings result;
+          succeeds = settings: (builtins.tryEval (builtins.deepSeq (delivered settings) true)).success;
+        in
+          !succeeds {"chat.ui" = "unknown";}
+          && !succeeds {chat.ui = "unknown";}
+          && !succeeds {"chat.agentEngine" = "unknown";}
+          && succeeds {"chat.ui" = "tui";}
+          && succeeds {"chat.ui" = "legacy";}
+          && !(delivered {
+            chat.ui = "tui";
+            "chat.ui" = null;
+          } ? "chat.ui")
+      ) [
+        {
+          eval = evalHm;
+          settings = hmCliSettings;
+        }
+        {
+          eval = evalDevenv;
+          settings = dvCliSettings;
+        }
+      ]
+    );
+
+    module-kiro-native-object-boundary = mkTest "kiro-native-object-boundary" (
+      let
+        service = {
+          endpoint = "https://example.invalid";
+          region = "us-east-1";
+        };
+        result = evalHm {
+          ai.kiro.cli = {
+            enable = true;
+            native.settings.api.cps.service = service;
+          };
+        };
+      in
+        (hmCliSettings result)."api.cps.service" == service
+    );
+
     module-kiro-wrapper-prepend-both = mkTest "kiro-wrapper-prepend-both" (
       let
         b = idempotentFlags.idempotentFlagBlock {
@@ -327,7 +455,7 @@ in {
           then selected.config.ai.kiro.cli.native.settings.chat.enableC2s == null && selected.config.ai.kiro.cli.native.settings.chat.enableWorkflows == null
           else if backend == "hm"
           then setting == true && explicitFalse.config.ai.kiro.cli.native.settings.chat.${case.setting} == false
-          else setting == null && !(selected.config.ai.kiro.files ? ".kiro/settings/cli.json")
+          else setting == null && !(builtins.hasAttr "chat.${case.setting}" (dvCliSettings selected))
         )
         && lib.any (item: !item.assertion && lib.hasInfix "ai.kiro.cli.${name}.enable requires" item.message) requiresV3.config.assertions
         && lib.any (item:
@@ -390,7 +518,7 @@ in {
       in
         builtins.all (entry: entry.assertion) evaluated.config.assertions
         && evaluated.config.warnings
-        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.v3. Unset them or set ai.kiro.cli.package."]
+        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.native.settings.chat.agentEngine (ACP default). Unset them or set ai.kiro.cli.package."]
     );
 
     # Defaults (including the default-on `ai.gitSshConfigWorkaround`) stay
@@ -794,6 +922,7 @@ in {
         cfg = servers: {
           ai.kiro = {
             cli.enable = true;
+            cli.v3 = false;
             mcpServers = servers;
           };
         };
@@ -848,6 +977,7 @@ in {
       cfg = servers: {
         ai.kiro = {
           cli.enable = true;
+          cli.v3 = false;
           mcpServers = servers;
         };
       };
@@ -1085,7 +1215,10 @@ in {
     # it is the live migration contract every recorded copy hangs off.
     module-kiro-hm-empty-settings-emits-writer = mkTest "kiro-hm-empty-settings-emits-writer" (
       let
-        evaluated = evalHm {ai.kiro.cli.enable = true;};
+        evaluated = evalHm {
+          ai.kiro.cli.enable = true;
+          ai.kiro.cli.v3 = false;
+        };
         target = hmMcpDirTarget evaluated;
       in
         lib.hasInfix "--phase all" evaluated.config.home.activation.kiroMcpJson.text
@@ -1181,10 +1314,7 @@ in {
       ["auto" "some-future-model"]
     );
 
-    # v3 = true triggers the HM wrapper (appends --v3 to the launcher).
-    # Stub can't introspect postBuild, but a named symlinkJoin
-    # ("kiro-cli-wrapped") is a strong signal the wrapper fired — same
-    # fidelity as the copilot wrapper tests.
+    # The managed ACP default selects the configured build on Home Manager.
     module-kiro-hm-v3-wraps-package = mkTest "kiro-hm-v3-wraps-package" (
       let
         result = evalHm {
@@ -1197,7 +1327,7 @@ in {
         };
         packages = result.config.home.packages;
       in
-        lib.any (p: p.name == "kiro-cli-wrapped") packages
+        lib.any (p: p.drvPath == (pkgs.ai.kiro-cli.withAcpDefault "v3").drvPath) packages
     );
 
     # The `tui` option is GONE. It injected `--tui` and implied `--v3`; `--tui`
@@ -1295,7 +1425,11 @@ in {
     # consumer, including those who never asked for a dark-shipped feature.
     module-kiro-rollout-default-is-stock = mkTest "kiro-rollout-default-is-stock" (
       let
-        packages = (evalHm {ai.kiro.cli.enable = true;}).config.home.packages;
+        packages =
+          (evalHm {
+            ai.kiro.cli.enable = true;
+            ai.kiro.cli.v3 = false;
+          }).config.home.packages;
       in
         lib.any (p: (p.drvPath or null) == pkgs.ai.kiro-cli.drvPath) packages
     );
@@ -1375,6 +1509,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
+              v3 = false;
               useFhsSandbox = false;
             };
           };
@@ -1394,6 +1529,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
+              v3 = false;
               useFhsSandbox = false;
             };
           };
@@ -1417,13 +1553,14 @@ in {
           };
         };
       };
+      selected = pkgs.ai.kiro-cli.withAcpDefault "v3";
     in
       mkWrapperGrepTest {
         name = "kiro-devenv-fhs-opt-out-wrapper-targets-unwrapped";
         package = builtins.head result.config.packages;
         bin = "kiro-cli";
-        needles = ["${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli"];
-        absentNeedles = ["${pkgs.ai.kiro-cli}/bin/kiro-cli"];
+        needles = ["${selected.unwrapped}/bin/kiro-cli"];
+        absentNeedles = ["${selected}/bin/kiro-cli" "${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli"];
       };
 
     # #956's exact backend: with no unrelated wrapper reason, trustedMcpTools
@@ -1589,12 +1726,13 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
+              v3 = false;
               features.background_execution.enable = true;
             };
           };
         };
         asserts =
-          builtins.filter (a: lib.hasInfix "requires `v3 = true`" a.message)
+          builtins.filter (a: lib.hasInfix "a rollout patch requires" a.message)
           ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == false
@@ -1614,7 +1752,7 @@ in {
           };
         };
         asserts =
-          builtins.filter (a: lib.hasInfix "requires `v3 = true`" a.message)
+          builtins.filter (a: lib.hasInfix "a rollout patch requires" a.message)
           ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == true
@@ -1839,7 +1977,7 @@ in {
     # registry entries, so upstream naming the parent would trip this.
     module-kiro-flatten-boundary-has-no-prefix-pairs = mkTest "kiro-flatten-boundary-has-no-prefix-pairs" (
       let
-        keys = lib.unique (kiroFact "settingKeys" ++ kiroFact "workspaceOverridableSettings");
+        keys = lib.unique (kiroFact "nativeSettingKeys" ++ kiroFact "settingKeys" ++ kiroFact "workspaceOverridableSettings");
         nested =
           builtins.filter (
             a: builtins.any (b: a != b && lib.hasPrefix "${a}." b) keys
@@ -2047,9 +2185,7 @@ in {
         && failing "Are you sure about that?" == []
     );
 
-    # Devenv parity: v3 must wrap here too. Disable the Git SSH default so v3 is
-    # the sole wrapper reason; otherwise this passes vacuously on the environment
-    # export even if the flag wiring disappears.
+    # Devenv selects the same configured build without an extra engine wrapper.
     module-kiro-devenv-v3-wraps-package = mkTest "kiro-devenv-v3-wraps-package" (
       let
         result = evalDevenv {
@@ -2063,7 +2199,7 @@ in {
         };
         packages = result.config.packages;
       in
-        lib.any (p: p.name == "kiro-cli-wrapped") packages
+        lib.any (p: p.drvPath == (pkgs.ai.kiro-cli.withAcpDefault "v3").drvPath) packages
     );
 
     # devenv parity for the removal: the option must be absent on both backends.
@@ -2087,8 +2223,13 @@ in {
     module-kiro-devenv-no-flags-no-wrap = mkTest "kiro-devenv-no-flags-no-wrap" (
       let
         result = evalDevenv {
-          ai.kiro.cli.enable = true;
-          ai.gitSshConfigWorkaround = false;
+          ai = {
+            gitSshConfigWorkaround = false;
+            kiro.cli = {
+              enable = true;
+              v3 = false;
+            };
+          };
         };
         packages = result.config.packages;
       in
@@ -2164,6 +2305,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
+              v3 = false;
               trustedMcpTools = ["@openmemory"];
             };
           };
@@ -2425,6 +2567,7 @@ in {
       let
         result = evalHm {
           ai.kiro.cli.enable = true;
+          ai.kiro.cli.v3 = false;
         };
         packages = result.config.home.packages;
         first = builtins.head packages;
@@ -3553,10 +3696,16 @@ in {
         };
       in
         dvCliSettings result
-        == {"chat.enableTangentMode" = true;}
+        == {
+          "chat.agentEngine" = "v3";
+          "chat.enableTangentMode" = true;
+        }
         && lib.hasInfix "--phase all" result.config.tasks."ai:kiro:materialize-mcp".exec
         && !(result.config.files ? ".kiro/settings/cli.json")
-        && !((dvMcpDirTarget (evalDevenv {ai.kiro.cli.enable = true;})).units ? "cli.json")
+        && !((dvMcpDirTarget (evalDevenv {
+          ai.kiro.cli.enable = true;
+          ai.kiro.cli.v3 = false;
+        })).units ? "cli.json")
     );
 
     # Devenv: Kiro context joins the shared repository-root AGENTS.md.
