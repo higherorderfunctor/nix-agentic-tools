@@ -1,4 +1,4 @@
-# cspell:ignore vcpu
+# cspell:ignore chardev dports vcpu virtio virtserialport
 {
   inputs,
   lib,
@@ -14,13 +14,28 @@
       exec ${lib.escapeShellArg exe} "''${args[@]}"
     '';
   };
+  guestCompletion = import ../../../lib/strict-shell-application.nix pkgs {
+    name = "sandbox-completion";
+    text = ''
+      # Reboot stops the upstream runner, which uses -no-reboot, even if reporting fails.
+      trap '${pkgs.systemd}/bin/systemctl --no-block reboot' EXIT
+      case "''${SERVICE_RESULT:-}" in
+        success|exit-code|signal|core-dump)
+          if [[ -n ''${EXIT_CODE:-} && -n ''${EXIT_STATUS:-} ]]; then
+            printf '%s:%s\n' "$EXIT_CODE" "$EXIT_STATUS" > /dev/virtio-ports/sandbox.status
+          fi
+          ;;
+        *) ;;
+      esac
+    '';
+  };
   guest = import "${pkgs.path}/nixos/lib/eval-config.nix" {
     system = pkgs.stdenv.hostPlatform.system;
     inherit pkgs;
     modules = [
       inputs.microvm.nixosModules.microvm
       {
-        boot.kernelModules = ["qemu_fw_cfg"];
+        boot.kernelModules = ["qemu_fw_cfg" "virtio_console"];
         fileSystems."/nix/.rw-store" = {
           fsType = "tmpfs";
           neededForBoot = true;
@@ -30,7 +45,16 @@
           hypervisor = "qemu";
           interfaces = [];
           mem = 1024;
-          qemu.extraArgs = ["-fw_cfg" "name=opt/sandbox.argv,file=argv"];
+          qemu.extraArgs = [
+            "-fw_cfg"
+            "name=opt/sandbox.argv,file=argv"
+            "-device"
+            "virtio-serial-pci"
+            "-chardev"
+            "file,id=status,path=status"
+            "-device"
+            "virtserialport,chardev=status,name=sandbox.status"
+          ];
           shares = [
             {
               mountPoint = "/nix/.ro-store";
@@ -47,15 +71,18 @@
         };
         networking.hostName = "sandbox";
         nixpkgs.hostPlatform = pkgs.stdenv.hostPlatform;
+        services.udev.extraRules = ''
+          SUBSYSTEM=="virtio-ports", ATTR{name}=="sandbox.status", OWNER="root", GROUP="root", MODE="0600"
+        '';
         system.stateVersion = "26.05";
         systemd.services = {
           sandbox = {
-            after = ["systemd-modules-load.service" "systemd-user-sessions.service"];
+            after = ["dev-virtio\\x2dports-sandbox.status.device" "systemd-modules-load.service" "systemd-user-sessions.service"];
+            requires = ["dev-virtio\\x2dports-sandbox.status.device"];
             serviceConfig = {
               ExecStart = lib.getExe guestCommand;
               ExecStartPre = "+${pkgs.coreutils}/bin/install -m 0444 /sys/firmware/qemu_fw_cfg/by_name/opt/sandbox.argv/raw /run/sandbox/argv";
-              # Reboot stops the upstream QEMU runner, which uses -no-reboot.
-              ExecStopPost = "+${pkgs.systemd}/bin/systemctl --no-block reboot";
+              ExecStopPost = "+${lib.getExe guestCompletion}";
               RuntimeDirectory = "sandbox";
               RuntimeDirectoryMode = "0700";
               StandardError = "tty";
@@ -65,6 +92,7 @@
                 if pkgs.stdenv.hostPlatform.isx86_64
                 then "/dev/ttyS0"
                 else "/dev/ttyAMA0";
+              Type = "exec";
               User = "sandbox";
               WorkingDirectory = "/home/sandbox";
             };
@@ -107,7 +135,25 @@ in
         if (( $# != 0 )); then
           printf '%s\0' "$@" > argv
         fi
-        ${runner}/bin/microvm-run
+        : > status
+        if ${runner}/bin/microvm-run; then
+          status="$(< status)"
+          if [[ $status =~ ^exited:([0-9]{1,3})$ ]] && (( 10#''${BASH_REMATCH[1]} <= 255 )); then
+            exit "$((10#''${BASH_REMATCH[1]}))"
+          elif [[ $status =~ ^(killed|dumped):([A-Z0-9+]+)$ ]]; then
+            signal="''${BASH_REMATCH[2]}"
+            if [[ ! $signal =~ ^[0-9]+$ ]]; then
+              signal=$(kill -l "$signal") || signal=0
+            fi
+            if [[ $signal =~ ^[0-9]{1,2}$ ]] && (( 10#$signal >= 1 && 10#$signal <= 64 )); then
+              exit "$((128 + 10#$signal))"
+            fi
+          fi
+          echo '${outName}: VM stopped without a valid guest completion status' >&2
+        else
+          echo '${outName}: VM runner failed' >&2
+        fi
+        exit 125
       '';
     }).overrideAttrs (old: {
       passthru = (old.passthru or {}) // {inherit guest;};
