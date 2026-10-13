@@ -34,7 +34,7 @@ in {
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        python3 ${./kiro-bundle-patch.py} ${../lib/kiro-bundle-patch.py}
+        python3 ${./kiro-bundle-patch.py} ${../lib/kiro-bundle-patch.py} ${(import ../lib/packaging.nix).kiroPromptsExtractScript pkgs}
         touch "$out"
       '';
     kiro-kas-dispatch =
@@ -65,8 +65,8 @@ in {
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        python3 ${../lib/kiro-bundle-patch.py} ${server package.kas} --check
-        python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} ${server package.kas} ${server patched.kas}
+        python3 ${../lib/kiro-bundle-patch.py} ${server package.kas} ${package.kas.promptCorpus} --check
+        python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} ${server package.kas} ${server patched.kas} ${package.kas.promptCorpus} ${(import ../lib/packaging.nix).kiroPromptsExtractScript pkgs}
         python3 ${./kas-smoke.py} ${pkgs.nodejs}/bin/node ${server patched.kas}
         touch "$out"
       '';

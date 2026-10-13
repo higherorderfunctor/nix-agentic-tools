@@ -256,11 +256,10 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-14 — KAS patch selection takes only the two
-> fixed-text workflow prompt tweaks; the native package binds one KAS extracted
-> from its release input; selected prompt replacements fail closed at build
-> time. Darwin packaging points both the executable filename and argv0 at the
-> app binary; native CI verifies fresh-home dispatch.
+> **Last verified:** 2026-10-13 — the native package binds one KAS extracted
+> from its release input; prompt inspection, selected patches and drift facts
+> share a decoded AST corpus. Extraction remains static and lazy; native CI
+> verifies packaged dispatch on both platforms.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -384,19 +383,22 @@ and fetched build inputs are not a second installed runtime. Ordinary
 input-addressed builds share identical selections, but do not promise
 cross-release deduplication merely because two releases contain equal payloads.
 
-`passthru.withBundlePatches { replace; }` selects the existing tweaks at build
-time; `withRolloutFeatures`, `withFhsPayload` and `unwrapped` preserve that
-selection. The factory uses the same selector on both backends. Every selected
-exact source must occur once or the entire build fails before writing patched
-output. Unselected prompt bytes remain unchanged. The independent CI drift check
-requires both supported anchors in real vendor data on each platform even when a
-consumer disables them.
+`passthru.withBundlePatches { identity; replace; }` selects the existing tweaks
+at build time; `withRolloutFeatures`, `withFhsPayload` and `unwrapped` preserve
+that selection. The factory uses the same selector on both backends. Every
+selected decoded source must occur in exactly one AST chunk or the entire build
+fails before writing patched output. Only selected literal tokens are serialized
+again; other source bytes and all unselected decoded text remain unchanged. The
+independent CI drift check requires all three supported anchors in real vendor
+data on each platform even when a consumer disables them.
 
 All tweaks still default off. Delegate routing supplies `mkDefault true` for
 workflow tweaks only on its reached managed workflow CLI; explicit false wins.
-The workflow tweaks retain the existing relative file-check guidance and
-deletion of vendor worktree ownership/merge guidance. Configurable prompt files,
-additional roots and engine-default changes are separate work.
+Identity remains opt-in through `text` or `source`, with explicit
+`enable = false` disabling either. Identity changes only the first sentence; the
+workflow tweaks retain the existing relative file-check guidance and deletion of
+vendor worktree ownership/merge guidance. Configurable prompt files, additional
+roots and engine-default changes are separate work.
 
 Inherited overrides have deliberate precedence: all-off uses `--set-default` for
 the server, preserving a caller's explicit `KIRO_KAS_SERVER_PATH`. Any managed
@@ -421,6 +423,86 @@ CLI/ACP, fresh/stale homes, override precedence and explicit V2 selection. The
 FHS contract check separately inspects the command paths inside the synthesized
 root; nested bubblewrap execution is not portable inside a Nix build sandbox.
 
+### Prompt corpus and the static/runtime boundary
+
+Build `ciPackages.<system>.kiro-cli.kas.promptCorpus` explicitly to inspect the
+packaged server. This lazy, proprietary JSON output is outside the CLI runtime
+closure and keeps the `kiro-cli` cache exclusion prefix. Selected KAS builds
+instead extract a temporary corpus from their own freshly unpacked server before
+patching; they never depend on an installed stock KAS.
+
+`extract/prompts.mjs` uses the existing TypeScript parser. It reads every string
+literal and every template's static chunks, including short strings, with UTF-8
+byte ranges into the fingerprinted source. Untagged chunks contain cooked text.
+Chunks marked `tagged: true` contain TypeScript parser text, not a promised
+cooked or effective value: legal invalid escapes in tagged templates can have an
+undefined cooked value. It does not import KAS or evaluate vendor expressions.
+Isolated evaluation cannot recover session-dependent prompt builders without
+fabricating runtime services, so AST extraction is the narrower technique here.
+The entire literal index is a searchable superset, **not a claim that every
+bundled string is a prompt**.
+
+Five inspected entry points are named separately: identity, system features,
+Vibe, workflow creator and workflow orchestration. Each points to its decoded
+chunk and containing callable's range when one exists. Select their source
+ranges in the same packaged server to inspect callers and branches; minified
+names are not stable identifiers. The corpus also contains the workspace, shell,
+steering, tool-description, spec, agent-profile and memory guidance those entry
+points alone do not enumerate. No keyword or length filter excludes newly
+shipped strings.
+
+Each JavaScript template records an ordered sequence of chunk references and
+exact interpolation expressions with source ranges, with tagged chunks subject
+to the parser-text limitation above. Nested templates have their own records.
+Expressions such as clock reads, workspace lookups, feature branches and helper
+calls remain unevaluated. Mustache-shaped text such as `{{machineId}}` and
+`{{worktree_path}}` remains decoded literal text: it is a later formatting
+boundary, not JavaScript interpolation. Concatenation, conditional inclusion,
+session state, external prompt files, and saved-session prompt reuse remain
+runtime assembly; the corpus does not claim to reconstruct the effective prompt
+of a session. In particular, a persisted initial system message may bypass fresh
+prompt construction.
+
+`lib/kiro-bundle-patch.py` finds the existing named selections in these decoded
+chunks, checks the source fingerprint and uniqueness, and replaces only the
+selected token contents. Quoting changes in a release no longer invalidate a
+decoded match. Serialization escapes the actual quote and template delimiters,
+preserving interpolation expressions. Tagged templates are refused because a tag
+may interpret raw escapes differently. Missing or duplicate decoded matches fail
+closed before any output write.
+
+The existing owner extraction/check/regeneration contract carries the corpus
+digest, chunk/template counts and named groups alongside other Kiro facts. These
+measurements remain raw drift evidence, not an unused declared API. The real
+vendor check consumes named groups to assert the inspected entry points and
+their interpolation boundaries. Full vendor prompt text stays in the explicit
+inspection artifact, not the committed fact files. Ordinary module/package
+evaluation reads committed facts and never realizes this corpus through IFD.
+
+Inspect the full corpus with Node or Python: JavaScript strings can contain lone
+UTF-16 surrogate code units, which the JSON preserves but `jq` rejects. The
+facts pipeline reads only the scalar summary through Node before combining it
+with other facts.
+
+The extraction sources stay distinct:
+
+| Artifact                      | Facts                                     | Technique                                                                              |
+| ----------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| KAS JavaScript                | Hook vocabulary, prompt corpus            | Static TypeScript AST; decoded literal text and unresolved expressions                 |
+| Native chat executable        | Rollout manifest and patchability         | Validated text matching against embedded manifest entries                              |
+| Public documentation snapshot | Model suggestions                         | Separate `kiro-model-catalog` owner and document parser                                |
+| TUI JavaScript                | Settings registry and workspace allowlist | Sandboxed host materialization, then AST validation and isolated expression evaluation |
+
+`kiro-bundle-patch` executes synthetic fixtures across single, double and
+template quotes, UTF-8 offsets, escaped content and runtime holes; it refuses
+stale corpora, tagged selections and anchor drift. The real
+`kiro-bundle-patch-drift` check runs on both native builders, compares all eight
+tweak selections, checks JavaScript syntax, executes only the changed standalone
+literal tokens to verify their values, and proves all other decoded text and
+source bytes survive. Existing KAS resource, initialization and dispatch checks
+remain in place. Native Darwin execution is CI evidence; parsing a Darwin bundle
+on Linux alone is not that evidence.
+
 ### `extraPackages` — a PATH prefix, not an FHS rebuild
 
 `ai.kiro.cli.extraPackages` adds one more environment-only injection to both the
@@ -439,9 +521,10 @@ same-named command already in the synthesized root wins. This option is for
 supplying missing tools; Darwin has no later FHS reordering.
 
 The empty list is inert and produces no wrapper by itself. A non-empty list
-creates the wrapper even when no env, argv, or secret injection is configured.
-It does not alter argv, and `packages/kiro-cli/checks/kiro-wrapper-argv.nix`
-runs both entry points to assert the prefix and inherited tail together.
+creates the wrapper even when no env, argv, identity, or secret injection is
+configured. It does not alter argv, and
+`packages/kiro-cli/checks/kiro-wrapper-argv.nix` runs both entry points to
+assert the prefix and inherited tail together.
 
 On Linux this crosses the upstream FHS visibility boundary because `/nix` is
 mounted and PATH is preserved; it does not merge packages into the synthesized

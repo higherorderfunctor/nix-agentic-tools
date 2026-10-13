@@ -264,6 +264,14 @@ rec {
       exec ${pkgs.nodejs}/bin/node ${../extract/hook-triggers.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
     '';
 
+  # Static prompt inspection uses the same AST corpus as selected patch builds.
+  kiroPromptsExtractScript = pkgs:
+    pkgs.writeShellScript "kiro-prompts-extract" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      exec ${pkgs.nodejs}/bin/node ${../extract/prompts.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
+    '';
+
   kiroFakeKasScript = pkgs:
     pkgs.writeTextFile {
       name = "kiro-extract-fake-kas";
@@ -305,6 +313,9 @@ rec {
     # native code or selects a cache. TUI extraction below remains host-run.
     kasJs="${kas}/node_modules/@kiro/agent/dist/server/acp-server.js"
     hookTriggersJson=$(${kiroHookTriggersExtractScript pkgs} "$kasJs")
+    # JS permits lone surrogate code units; jq rejects those valid JSON string
+    # escapes. Read only the scalar summary through Node before jq combines it.
+    promptsJson=$(${pkgs.nodejs}/bin/node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).summary))' ${kas.promptCorpus})
     rolloutJson=$("$python3" ${kiroRolloutExtractScript pkgs} "$kiroChatBin")
     # The chat executable materializes its embedded TUI JavaScript on first
     # launch. Since 2.23.0 the JS is no longer present as plaintext in the ELF,
@@ -318,7 +329,8 @@ rec {
     "$jq" -nS --argjson hooks "$hookTriggersJson" \
       --argjson rollout "$rolloutJson" \
       --argjson settings "$settingsJson" \
-      '{hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
+      --argjson prompts "$promptsJson" \
+      '$prompts + {hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
   '';
 
   # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to

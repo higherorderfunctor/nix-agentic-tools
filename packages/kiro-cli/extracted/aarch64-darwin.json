@@ -30,6 +30,16 @@
     "Stop",
     "UserPromptSubmit"
   ],
+  "promptCorpusSha256": "1446b0a58ff87dfbf9b93ad7fdd040fefafdcfaeede24e78c58853eb940818ae",
+  "promptGroups": [
+    "identity",
+    "systemFeatures",
+    "vibe",
+    "workflowCreator",
+    "workflowOrchestration"
+  ],
+  "promptStaticChunks": 143404,
+  "promptTemplates": 8431,
   "rolloutFeatures": [
     "background_execution",
     "c2s",
