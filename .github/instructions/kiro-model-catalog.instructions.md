@@ -8,7 +8,8 @@ applyTo: "dev/tasks/check.nix,packages/kiro-cli/checks/module-eval.nix,packages/
 # Kiro public model catalog
 
 > **Last verified:** 2026-10-12 — public-document pins, model facts and updates
-> are independent of the proprietary CLI release.
+> are independent of the proprietary CLI release; Kiro and Kimchi share the
+> documentation snapshot and update machinery.
 
 ### Model suggestions are a public catalog, not an account entitlement list
 
@@ -17,17 +18,24 @@ applyTo: "dev/tasks/check.nix,packages/kiro-cli/checks/module-eval.nix,packages/
 Any string remains accepted across the library, Home Manager and devenv.
 Suggestions come from
 [Kiro's public comparison table](https://kiro.dev/docs/models.md), fetched with
-the independent package recipe's pinned content hash. The package version
+the independent recipe's pinned recursive snapshot hash. The package version
 records the capture date. Evaluation reads only committed model facts; the build
 parses the fixed-output source offline without a Kiro CLI dependency.
 
-The `kiro-model-catalog` update target fetches the public page independently of
-CLI releases. Unchanged bytes leave the pin, date and facts untouched. Changed
-content must parse successfully before the source hash and date are written;
-`lib.extracted.regenCommand` then regenerates only this owner's measured-once
-raw. `kiro-model-catalog-extracted` checks source drift and the `auto`
-suggestion; Darwin verifies the same committed raw. The `kiro-cli` update target
-and its binary extractor never read model documentation.
+The `kiro-model-catalog` update target uses `webDocsLib.mkSnapshot` from
+`lib/web-docs`, also used by `kimchi-docs`. Its explicit URL-to-path source
+mapping produces `models.md` in a recursively hashed fixed-output snapshot. The
+shared updater fetches in scratch space, validates with the owner parser, hashes
+upstream bytes separately from generated dated files, and leaves unchanged pins,
+dates and facts untouched. Changed snapshots calculate their NAR hash before
+checked atomic writes of the inline recipe pins; `lib.extracted.regenCommand`
+then regenerates this owner's measured-once raw. A regeneration failure restores
+the original pins. The existing regenerator owns fact writes and formatting; a
+failure during those writes can require rerunning regeneration. Neither snapshot
+construction nor parser execution occurs during evaluation.
+`kiro-model-catalog-extracted` checks source drift and the `auto` suggestion;
+Darwin verifies the same committed raw. The `kiro-cli` update target and its
+binary extractor never read model documentation.
 
 The optional authenticated `check:model-staleness` reads
 `kiro-model-catalog.json` from the extracted index. It checks that local account

@@ -1,7 +1,6 @@
 {pkgs, ...}: {
   imports = [
     ./checks/docs-skill.nix
-    ./checks/kimchi-docs-links.nix
     ./checks/kimchi-extracted.nix
     ./checks/module-eval.nix
     ./checks/native-options.nix

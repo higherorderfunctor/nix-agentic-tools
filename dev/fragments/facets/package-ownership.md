@@ -1,7 +1,8 @@
 ## Package ownership and native composition
 
 > **Last verified:** 2026-10-12 — module containers permit a regular README.md
-> alongside backend directories and private Nix sidecars.
+> alongside backend directories and private Nix sidecars; shared documentation
+> snapshots use the injected `webDocsLib` builder.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -85,10 +86,10 @@ hybrid package. Preserve namespace neighbors and replace package leaves whole.
 Package recipes receive `pkgs` through native `callPackage` scopes built by
 `buildOverlay`. Shared helpers arrive as `scopeArgs` from
 `lib/facets/repository.nix` (`extractedLib`, `fragmentsLib`, `generatedLib`,
-`gitToolExtraction`, `packageLib`, `repoPath`, `traceSource`). The extraction
-builders take `{pkgs}`; owner checks receive them as module arguments as well.
-Recipes should not encode a relative route back to the repository root. That
-`pkgs` is this flake's nixpkgs (`natSets`) for every output, the exported
+`gitToolExtraction`, `packageLib`, `repoPath`, `traceSource`, `webDocsLib`). The
+extraction builders take `{pkgs}`; owner checks receive them as module arguments
+as well. Recipes should not encode a relative route back to the repository root.
+That `pkgs` is this flake's nixpkgs (`natSets`) for every output, the exported
 overlay and the module defaults; a consumer's `final` reaches a recipe only
 through the overlay's fallback (unsupported system, cross, non-default libc) or
 when the consumer sets `follows`. No consumer config reaches `natSets`; the

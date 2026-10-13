@@ -1,7 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-11 — native-option fixtures vary aggregate values
-> directly, preserving the factory's facts interface.
+> **Last verified:** 2026-10-12 — documentation snapshots share `lib/web-docs`
+> with the Kiro public model catalog; native-option fixtures vary aggregate
+> values directly, preserving the factory's facts interface.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -657,6 +658,21 @@ rewriting and stripping are disabled to preserve Bun's compiled module graph.
 The install check requires the exact release version, a runnable helper, and the
 theme, export, and bundled-skill assets. Linux and Darwin builds run in CI. The
 source-build switch itself does not alter discovery or configuration behavior.
+
+## Documentation snapshot
+
+`pkgs.docs.kimchi-docs` uses the shared `webDocsLib.mkSnapshot` builder. The
+recipe configures the published root index, allowed path tree, robots
+exclusions, required substantive index and dated attribution. The shared crawler
+follows same-site Markdown index links, normalizes fetched files and hashes
+content before adding attribution. An unchanged complete snapshot leaves inline
+pins and the capture date untouched. Attribution-only edits update the output
+hash while retaining the capture date. The installed tree retains `llms.txt`,
+`docs/` and `ATTRIBUTION`; its recursive hash is pinned independently of the CLI
+release. Both Linux and Darwin build the same bytes, without evaluation-time
+network or IFD. `checks.web-docs-fixtures` reconstructs the current complete
+tree offline and verifies both upstream content identity and the final recursive
+hash.
 
 ## Immutable skill discovery
 

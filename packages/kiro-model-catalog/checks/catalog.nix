@@ -13,9 +13,7 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         ${pkgs.python3}/bin/python3 ${./models.py} \
-          ${../extract/models.py} ${package.src}
-        ${pkgs.python3}/bin/python3 ${./update.py} \
-          ${../extract} ${../packages/docs/kiro-model-catalog/package.nix} ${package.src}
+          ${../extract/models.py} ${package.src}/models.md
         touch "$out"
       '';
     }
