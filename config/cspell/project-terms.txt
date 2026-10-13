@@ -270,6 +270,7 @@ netrc
 newfstatat
 niks
 nixbld
+nixbuild
 nixd
 nixos
 nixpkgs
@@ -309,6 +310,7 @@ passwordless
 pasteable
 patchability
 pdsolve
+peaceiris
 pipelock
 pipewrench
 pkgs
