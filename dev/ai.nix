@@ -41,6 +41,26 @@ in {
     # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
     shell = pkgs.bash;
 
+    # Fresh guests have no host/project config paths; select the raw harnesses.
+    sandboxes = lib.optionalAttrs (pkgs.stdenv.hostPlatform.isLinux && !isCI) {
+      claude-sandbox = {
+        binName = "claude";
+        pkg = pkgs.ai.claude-code;
+      };
+      codex-sandbox = {
+        binName = "codex";
+        pkg = pkgs.ai.chatgpt-codex;
+      };
+      kimchi-sandbox = {
+        binName = "kimchi";
+        pkg = pkgs.ai.kimchi;
+      };
+      kiro-sandbox = {
+        binName = "kiro-cli";
+        pkg = pkgs.ai.kiro-cli;
+      };
+    };
+
     programs.delegate-routing = {
       enable = true;
       # The package ships no Kimchi-served families.
