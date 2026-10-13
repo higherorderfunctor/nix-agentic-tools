@@ -7,8 +7,8 @@ applyTo: "checks/*/default.nix,checks/facets/**,flake.nix,lib/facets.nix,lib/fac
 
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-11 — CI-only validation recipes stay outside native
-> public package discovery; owners receive the shared extraction library.
+> **Last verified:** 2026-10-12 — module containers permit a regular README.md
+> alongside backend directories and private Nix sidecars.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -108,7 +108,14 @@ raw leaf values. Functions retain their `functionArgs`; option declarations,
 option types, and callable attrsets are atomic values whose internals must stay
 lazy. Private helpers beside that entry point are not exported automatically.
 Backend directories require `default.nix`; ordinary `.nix` sidecars in
-`modules/` remain private to the backend modules that import them.
+`modules/` remain private to the backend modules that import them. A regular
+`modules/README.md` documents the consumer contract and is ignored by module
+discovery; other non-module entries remain errors.
+
+`repository.moduleInternals` binds shared module dependencies in
+`lib/ai/sharedOptions.nix`. The sandbox factory carries the pinned microvm input
+there as `ai.internal.mkSandbox`, so host modules can build guest wrappers
+without asking consumers to inject flake inputs through `specialArgs`.
 
 The flat flake package projections (`packages`, `ciPackages`, and the flat part
 of `legacyPackages`) come from indexed leaf basenames. It rejects collisions,

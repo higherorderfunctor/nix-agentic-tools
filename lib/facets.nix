@@ -217,6 +217,7 @@ in rec {
       moduleNames = sortNames (attrNames moduleEntries);
       unknownModules = filter (moduleName:
         !elem moduleName ["devenv" "homeManager"]
+        && !(moduleEntries.${moduleName} == "regular" && moduleName == "README.md")
         && !(moduleEntries.${moduleName} == "regular" && hasSuffix ".nix" moduleName))
       moduleNames;
       invalidModules = filter (

@@ -1,0 +1,3 @@
+{
+  imports = [./checks/sandbox.nix];
+}
