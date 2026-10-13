@@ -15,7 +15,7 @@ variants = json.loads(Path(sys.argv[1]).read_text())
 
 def capture_node(root):
     capture, node = root / "capture.json", root / "node"
-    node.write_text("#!" + sys.executable + "\nimport json,sys\nfrom pathlib import Path\nPath(" + repr(str(capture)) + ").write_text(json.dumps(sys.argv))\n")
+    node.write_text("#!" + sys.executable + "\nimport json,os,sys\nfrom pathlib import Path\nPath(" + repr(str(capture)) + ").write_text(json.dumps(sys.argv))\nPath(" + repr(str(root / "capture-env.json")) + ").write_text(json.dumps({\"KIRO_HOME\": os.environ.get(\"KIRO_HOME\")}))\n")
     node.chmod(0o755)
     return capture, node
 
@@ -35,7 +35,7 @@ for name, variant in variants.items():
                         old.write_text("throw Error('stale KAS selected');")
                     capture, node = capture_node(root)
                     env = {"PATH": variant["package"] + "/bin:" + os.environ["PATH"],
-                           "HOME": str(home), "CFFIXED_USER_HOME": str(home),
+                           "HOME": str(home), "CFFIXED_USER_HOME": str(home), "KIRO_HOME": str(root / "kiro-home"),
                            "XDG_CACHE_HOME": str(root / "cache"), "XDG_CONFIG_HOME": str(root / "config"),
                            "KIRO_KAS_NODE_PATH": str(node), "KIRO_DISABLE_TELEMETRY": "1",
                            "KIRO_API_KEY": "offline-dispatch-fixture", "TERM": "dumb"}
@@ -43,6 +43,9 @@ for name, variant in variants.items():
                     settings = home / ".kiro/settings/cli.json"
                     settings.parent.mkdir(parents=True, exist_ok=True)
                     settings.write_text(json.dumps({"chat.agentEngine": "v2"}))
+                    kiro_settings = root / "kiro-home/settings/cli.json"
+                    kiro_settings.parent.mkdir(parents=True)
+                    kiro_settings.write_text(settings.read_text())
                     repo_settings = work / ".kiro/settings/cli.json"
                     repo_settings.parent.mkdir(parents=True)
                     repo_settings.write_text(json.dumps({"chat.agentEngine": "v3"}))
@@ -52,6 +55,7 @@ for name, variant in variants.items():
                     assert capture.exists(), (name, stale, args, result.returncode, result.stderr)
                     argv = json.loads(capture.read_text())
                     assert variant["server"] in argv, (name, stale, args, argv)
+                    assert json.loads((root / "capture-env.json").read_text())["KIRO_HOME"] == str(root / "kiro-home"), (command, mode, "KIRO_HOME handoff")
                     assert list(home.glob("**/kas/*/node_modules/@kiro/agent/dist/server/acp-server.js")) == ([old] if stale else []), "unexpected cache extraction"
     # Every payload selects its packaged server and warns once about overrides.
     with tempfile.TemporaryDirectory() as tmp:

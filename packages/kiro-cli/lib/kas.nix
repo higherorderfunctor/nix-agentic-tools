@@ -16,6 +16,7 @@ in
   pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
     pname = "kiro-cli-kas" + lib.optionalString selected "-patched";
     inherit src sourceRoot version;
+    outputs = ["out" "corpus"];
     nativeBuildInputs =
       [pkgs.nodejs pkgs.python3]
       ++ lib.optional pkgs.stdenv.hostPlatform.isLinux pkgs.autoPatchelfHook
@@ -34,22 +35,21 @@ in
         --zstd-library ${lib.getLib pkgs.zstd}/lib/libzstd${pkgs.stdenv.hostPlatform.extensions.sharedLibrary} \
         --zstd ${pkgs.zstd}/bin/zstd
       server="$out/node_modules/@kiro/agent/dist/server/acp-server.js"
-      ${lib.optionalString selected ''
-        ${vu.kiroPromptsExtractScript pkgs} "$server" > prompt-corpus.json
-        python3 ${./kiro-bundle-patch.py} "$server" prompt-corpus.json "$server" \
-          ${lib.optionalString (identity != null) "--identity-file ${lib.escapeShellArg (pkgs.writeText "kiro-cli-identity.txt" identity)}"} \
-          ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
-      ''}
+      ${vu.kiroPromptsExtractScript pkgs} "$server" > "$corpus"
+      defaults="$(dirname "$server")/prompt-defaults"
+      python3 ${./kiro-bundle-patch.py} "$server" "$corpus" "$server" \
+        --prompt-defaults "$defaults" \
+        ${lib.optionalString (identity != null) "--identity-file ${lib.escapeShellArg (pkgs.writeText "kiro-cli-identity.txt" identity)}"} \
+        ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
+      ${vu.kiroPromptsExtractScript pkgs} "$server" > selected-corpus.json
+      node ${../src/patch-prompt-files.mjs} "$server" "$defaults" ${pkgs.typescript_5}/lib/node_modules/typescript selected-corpus.json
+      cp ${../src/prompt-files.mjs} "$(dirname "$server")/prompt-files.mjs" # bare-commands: ok — stdenv installPhase
       node --check "$server"
       runHook postInstall
     '';
-    # Explicit inspection output: proprietary text stays outside the runtime
-    # closure. Selected builds use their own temporary corpus, never this one.
-    passthru.promptCorpus = pkgs.runCommand "kiro-cli-prompt-corpus-${version}" {inherit (finalAttrs) meta;} ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      ${vu.kiroPromptsExtractScript pkgs} ${finalAttrs.finalPackage}/node_modules/@kiro/agent/dist/server/acp-server.js > "$out"
-    '';
+    # Original release facts, before text or session hooks. No out -> corpus
+    # reference, and no second installed pristine runtime or extraction build.
+    passthru.promptCorpus = finalAttrs.finalPackage.corpus;
     meta = {
       description = "KAS runtime embedded in the pinned Kiro CLI release (AWS-IPL)";
       homepage = "https://kiro.dev";
