@@ -628,8 +628,21 @@ jobs:
       # Customization still produces a separate patched build; this job's
       # Cachix client is read-only. The base package is built and published
       # by the authenticated package matrix above.
-      - name: Run flake checks
-        run: nix flake check
+      # Same-repository runs evaluate every output here and leave BUILDING the
+      # checks to the required `checks-matrix` gate below, which evaluates
+      # once and builds each ownership group on its own runner. Fork PRs skip
+      # that gate (read-only Hestia), so they keep the single full check.
+      - name:
+          Evaluate flake outputs (same repository) or run full flake checks
+          (fork)
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          if [ "$HESTIA_READ_ONLY" = true ]; then
+            nix flake check
+          else
+            nix flake check --no-build
+          fi
 
       # ~90-day reminder to re-check that the delegate-routing per-turn reminder
       # still satisfies the heron_brook clamp's escape clause.
@@ -682,10 +695,11 @@ jobs:
           fi
           echo "heron_brook mitigation review due ${review_by} (today ${today}) — OK."
 
-  # DEMONSTRATION, not a required context: `test` above stays the gate. These
-  # three jobs evaluate the Linux checks ONCE with Hestia's matrix subaction,
-  # then build each uncached ownership group (`meta.hestia.group` in
-  # `ciChecks`) by drv path, with no flake evaluation in the workers.
+  # The check gate. `checks-matrix` is a required context; `test` above only
+  # evaluates. These three jobs evaluate the Linux checks ONCE with Hestia's
+  # matrix subaction, then build each uncached ownership group
+  # (`meta.hestia.group` in `ciChecks`) by drv path, with no flake evaluation
+  # in the workers.
   #
   # The evaluator is nix-eval-jobs with its worker garbage collector
   # re-enabled (dev/ci-check-evaluator.nix). Stock nix-eval-jobs sets
@@ -835,9 +849,11 @@ jobs:
   # Fails unless evaluation succeeded and every planned leg succeeded: the
   # matrix is fixed by checks-eval and does not fail fast. An all-cached plan
   # has no workers and passes.
+  # Required context. A fork PR has no evaluator run, so its `test` job built
+  # every check itself and this gate passes on that job's success instead.
   checks-matrix:
-    needs: [checks-eval, checks-build]
-    if: always() && needs.checks-eval.result != 'skipped'
+    needs: [checks-eval, checks-build, test]
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -846,9 +862,14 @@ jobs:
           ANY_JOBS: ${{ needs.checks-eval.outputs.any-jobs }}
           BUILD_RESULT: ${{ needs.checks-build.result }}
           EVAL_RESULT: ${{ needs.checks-eval.result }}
+          TEST_RESULT: ${{ needs.test.result }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
+          if [ "$EVAL_RESULT" = skipped ]; then
+            test "$TEST_RESULT" = success
+            exit 0
+          fi
           test "$EVAL_RESULT" = success
           case "$ANY_JOBS" in
             false) test "$BUILD_RESULT" = skipped ;;
