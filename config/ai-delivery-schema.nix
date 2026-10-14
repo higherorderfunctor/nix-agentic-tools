@@ -1,12 +1,21 @@
-# Hand-authored vocabulary, writer schema and matrix partition contract.
+# Shared option vocabulary, writer schema and matrix partition contract.
 {lib}: let
   ecosystems = import ../lib/ai/runtimes.nix;
   modes = ["devenv" "hm"];
-  surfaces = ["agents" "context" "environmentVariables" "hooks" "lspServers" "mcpServers" "permissions" "rules" "settings" "skills"];
-  # Pools whose root entries a runtime can withdraw one name at a time
-  # (`ai.<runtime>.<pool>.<name> = null`). The others compose root and
-  # per-runtime values, so a root request for them has no per-runtime remedy.
-  keyedSurfaces = ["agents" "environmentVariables" "lspServers" "mcpServers" "rules" "skills"];
+  # Reading declaration metadata is pure: no module evaluation or pkgs needed.
+  sharedOptions =
+    (import ../lib/ai/sharedOptions.nix {
+      inherit lib;
+      config = null;
+      options = null;
+      pkgs = null;
+    }).options.ai;
+  sharedSurfaces = sharedOptions.internal.sharedSurfaces.default;
+  # Permissions has no normalized root option: it inventories native policy
+  # files only, whose vocabularies cannot be translated losslessly across apps.
+  policyOnlySurfaces = ["permissions"];
+  surfaces = lib.sort builtins.lessThan (sharedSurfaces ++ policyOnlySurfaces);
+  keyedSurfaces = lib.filter (surface: sharedOptions.${surface}.keyedSurface or false) sharedSurfaces;
   primitives = ["notApplicable" "ownLeaves" "ownPathDeclarative" "ownPathManaged" "ownWrapper"];
   imperativePrimitives = ["ownLeaves" "ownPathManaged"];
   key = row: "${row.surface}/${row.ecosystem}/${row.mode}";
@@ -37,6 +46,16 @@
     && (!(writer ? constantGate) || nonBlank writer.constantGate)
     && (!(writer ? declarationIndependent) || nonBlank writer.declarationIndependent)
     && (!(writer ? exemption) || (nonBlank (writer.exemption.reason or "") && nonBlank (writer.exemption.evidence or "")));
+  # A native writer can coexist with a normalized gap; a hand-authored
+  # normalized absence or launcher claim cannot contradict its declaration.
+  validateSupport = records: rows:
+    map (row: let
+      backends = records.${row.ecosystem}.surfaceSupport.${row.surface}.backends or [];
+    in
+      assert lib.assertMsg (!(builtins.elem row.surface sharedSurfaces)
+        || (row.primitive != "notApplicable") == builtins.elem row.mode backends)
+      "ai-delivery: hand row ${key row} (${row.primitive}) contradicts runtime record ${row.ecosystem}.surfaceSupport.${row.surface}.backends = ${builtins.toJSON backends}"; row)
+    rows;
   expectedKeys = lib.concatMap (surface: lib.concatMap (ecosystem: map (mode: "${surface}/${ecosystem}/${mode}") modes) ecosystems) surfaces;
   validateRows = {
     derivedKeys,
@@ -51,5 +70,5 @@
       && lib.intersectLists derivedKeys handKeys == []
     ) "ai-delivery: derived and hand-authored rows must partition every surface/ecosystem in BOTH hm and devenv exactly once"; rows;
 in {
-  inherit ecosystems expectedKeys imperativePrimitives key keyedSurfaces modes primitives surfaces validateRows validWriter writersOf;
+  inherit ecosystems expectedKeys imperativePrimitives key keyedSurfaces modes primitives sharedSurfaces surfaces validateRows validateSupport validWriter writersOf;
 }

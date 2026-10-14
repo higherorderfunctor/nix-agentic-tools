@@ -1,7 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> **Last verified:** 2026-10-14 — shell participates in delivery policy through
+> settings writers, launcher ownership and record-derived Copilot absences.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -115,6 +115,11 @@ the production patch and executes both branches without credentials;
 `module-kimchi-shell` checks root, runtime, null and native precedence on both
 backends. Devenv settings require a trusted project and the existing exact-cwd
 launcher guard.
+
+Delivery policy includes shell from the same shared option registration. Its
+physical rows associate Claude and Kimchi with their settings files, and Codex
+and Kiro with their process launchers; Copilot absence and its reason derive
+from the runtime record. Shell stays scalar and is not a keyed withdrawal pool.
 
 ### Kiro's FHS root does not change the shell default
 

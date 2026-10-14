@@ -1,7 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> **Last verified:** 2026-10-14 — option declarations supply policy surfaces and
+> keyed withdrawal; runtime declarations supply normalized policy gaps.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -610,8 +610,10 @@ contributes keyed units to the single repository aggregate.
 
 `sharedSurfaceOptions` in `sharedOptions.nix` is the registration of shared
 fanout surfaces. Its keys declare root options and populate the read-only
-internal `sharedSurfaces` list. Every runtime's `surfaceSupport` maps a surface
-name to `{backends?; reason?; gaps?;}`. Presence defaults to both backends;
+internal `sharedSurfaces` list. A keyed root option uses `keyedOption` metadata
+so delivery policy derives its keyed withdrawal list from the same declarations.
+Every runtime's `surfaceSupport` maps a surface name to
+`{backends?; reason?; gaps?;}`. Presence defaults to both backends;
 `backends = []` consumes nothing and declares no normalized runtime option. A
 non-empty backend list keeps both backend option trees, even where delivery is
 unavailable. Omitted surfaces warn with the generic reason.
@@ -625,14 +627,15 @@ the portable root. Predicates and dynamic reasons receive the backend, config,
 runtime cfg, field value, whole entry value, path and entry name. Keyed runtime
 replacements and tombstones withdraw inherited entries before warnings.
 
-Policy rows continue describing physical delivery and native diagnostics; they
-no longer choose normalized delivery warnings or override their reasons. Package
-rule contributors consult the record's backend reach before writing. Native
-diagnostics belong to runtime factories. Transport-dependent MCP field warnings
-and final-file replacement warnings remain generic in the shared reader. Kiro
-Home Manager LSP delivery is conditional on launching with $HOME as the
-workspace; Home Manager has no launch workspace value, so a populated LSP
-declaration always explains that condition. Devenv LSP stays quiet.
+Policy rows derive normalized absence and static gaps from the records alongside
+physical delivery and native diagnostics; they no longer choose normalized
+delivery warnings or override their reasons. Package rule contributors consult
+the record's backend reach before writing. Native diagnostics belong to runtime
+factories. Transport-dependent MCP field warnings and final-file replacement
+warnings remain generic in the shared reader. Kiro Home Manager LSP delivery is
+conditional on launching with $HOME as the workspace; Home Manager has no launch
+workspace value, so a populated LSP declaration always explains that condition.
+Devenv LSP stays quiet.
 
 Diagnostic units currently enumerate per-runtime pools at the runtime root. A
 future gap on launcher-prefixed `shell` or `environmentVariables` needs that

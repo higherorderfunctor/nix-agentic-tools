@@ -1,8 +1,6 @@
 # Consumer facts and independent input probes. Physical paths, methods and
 # activation names belong to the generated delivery matrix.
 {lib}: let
-  kimchiHookEvents = import ../packages/kimchi/lib/hook-events.nix;
-  portableHookEvents = (import ../lib/ai/hooks.nix {inherit lib;}).portableEvents;
   optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
   absent = reason: {
     inherit reason;
@@ -64,7 +62,7 @@
     else
       [["ai" surface]]
       ++ lib.optional (builtins.elem surface (builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) optionPaths.records.${ecosystem}.surfaceSupport))) (
-        if surface == "environmentVariables"
+        if builtins.elem surface ["environmentVariables" "shell"]
         then optionPaths.launcher ecosystem surface
         else ["ai" ecosystem surface]
       );
@@ -73,34 +71,19 @@
     hm = value;
   };
   handDefinitions = {
-    context = {
-      copilot = {hm = absent "Home Manager context is deliberately inert: the .github context surface is project-scoped.";};
-    };
     environmentVariables = {
-      claude = both (absent "Claude excludes the environmentVariables pool; native.settings.env is delivered through settings instead.");
       codex = lib.genAttrs modes (mode: wrapper mode "codex");
       copilot = lib.genAttrs modes (mode: wrapper mode "copilot");
       kimchi = lib.genAttrs modes (mode: wrapper mode "kimchi");
       kiro = lib.genAttrs modes (mode: wrapper mode "kiro-cli");
     };
-    hooks = {
-      copilot = both (absent "Copilot excludes the hooks pool and no native hook writer exists.");
-      # Kimchi's own lifecycle reader takes only a trusted project's
-      # .kimchi/hooks.json and .kimchi/hooks.local.json; its user-scope routes
-      # are not sinks Home Manager can own (the reason says why).
-      kimchi = {hm = absent "Kimchi reads its own lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). It has two user-scope routes, and neither is a sink Home Manager can own. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:75-80) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";};
-    };
-    lspServers = {
-      claude.devenv = absent "Parity gap: Claude devenv exists but never consumes mergedLspServers or writes LSP configuration.";
-      codex = both (absent "Codex excludes the lspServers pool.");
-      kimchi = both (absent "Kimchi excludes the lspServers pool.");
-    };
     permissions = {
       copilot = both (absent "No permissions option or translation exists; arbitrary native.settings keys do not establish a permissions contract.");
       kiro = {devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";};
     };
-    rules = {
-      copilot = {hm = absent "Home Manager rules are deliberately inert; the agents pool is a separate surface, not a rules fallback.";};
+    shell = {
+      codex = lib.genAttrs modes (mode: wrapper mode "codex");
+      kiro = lib.genAttrs modes (mode: wrapper mode "kiro-cli");
     };
   };
   hand = builtins.listToAttrs (lib.concatMap (surface:
@@ -147,6 +130,11 @@
     # Kiro retirement row this is the probe it always had.
     else if row.surface == "context"
     then probe ["ai" row.ecosystem "context"] {text = "probe";} {}
+    else if row.surface == "shell"
+    then
+      if row.ecosystem == "claude"
+      then probe (optionPaths.nativeSettings "claude") {env.CLAUDE_CODE_SHELL = "/bin/bash";} {}
+      else probe ["ai" "kimchi" "native" "harnessSettings"] {shellPath = "/bin/bash";} {}
     else if row.surface == "hooks"
     then hookProbe
     else if row.surface == "mcpServers"
@@ -217,12 +205,6 @@
   # Diagnostic-only writers name inputs the primary writer cannot consume;
   # they do not alter lowering or the physical delivery matrix.
   supplements = {
-    "hooks/kimchi/devenv" = [
-      ((absent "Kimchi's lifecycle event list has no PermissionRequest event; projectHooksFor filters it out (packages/kimchi/lib/mkKimchi.nix).")
-        // {inputOptions = map (event: ["ai" "hooks" event]) (lib.subtractLists kimchiHookEvents portableHookEvents);})
-    ];
-    "hooks/kiro/devenv" = [kiroPortableHooksGap];
-    "hooks/kiro/hm" = [kiroPortableHooksGap];
     "settings/claude/devenv" = [
       ((absent "unpinLaunchEffort is an explicit HM-only global ~/.claude.json operation; devenv does not mutate HOME.")
         // {
@@ -230,17 +212,9 @@
           warnOnlyExplicit = true;
         })
     ];
-    "settings/kiro/devenv" = [kiroEffortGap];
-    "settings/kiro/hm" = [kiroEffortGap];
   };
-  kiroEffortGap =
-    (absent "Kiro persists effort only in per-model chat.modelDefaults records; shared reasoningEffort has no lossless target. Use ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort for the native per-model value (packages/kiro-cli/lib/mkKiro.nix).")
-    // {inputOptions = [["ai" "settings"]];};
-  kiroPortableHooksGap =
-    (absent "Kiro's v3 trigger schema has no lossless mapping from portable command hooks; its native hooks are a separate surface (packages/kiro-cli/lib/mkKiro.nix).")
-    // {inputOptions = [["ai" "hooks"]];};
 in {
-  inherit annotate hand key metadata supplements;
+  inherit absent annotate hand key metadata supplements;
   pruneTrigger = mode: primitive:
     if primitive == "ownLeaves"
     then ownRetraction mode

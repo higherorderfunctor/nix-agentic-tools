@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> **Last verified:** 2026-10-14 — delivery policy derives shared surfaces, keyed
+> withdrawal and normalized gaps from option and runtime declarations.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -297,12 +297,34 @@ them or retroactively establish the order of historical matrix derivation.
 
 ### Generated delivery matrix
 
-`config/ai-delivery.nix` remains a pure `{lib}` import. Its schema and consumer
-facts are hand-authored; physical writer records come from the committed
-`config/ai-delivery-generated.nix`. The partition requires every matrix cell
-exactly once across derived and hand-authored rows. Absence reasons, package
-wrappers, input associations and behavioral probes remain independent of the
-observed delivery implementation.
+`config/ai-delivery.nix` remains a pure `{lib}` import.
+`config/ai-delivery-schema.nix` reads `sharedSurfaceOptions` through its
+internal `sharedSurfaces` option default; keyed withdrawal is metadata on those
+same root declarations. Neither import evaluates a module or needs a package
+set. Permissions is the sole policy-only surface because it inventories native
+policy vocabularies, with no normalized root translation. Shell participates:
+Claude and Kimchi use their settings writers, Codex and Kiro their launchers,
+and Copilot has a derived absence.
+
+Physical writer records come from committed `config/ai-delivery-generated.nix`.
+Runtime `surfaceSupport` generates whole-surface/backend absences and their
+reasons. A native writer can exist alongside an unavailable normalized pool
+(Kiro hooks and settings); that cell retains its physical primary writer and
+gains a derived diagnostic child. Static record gaps project into diagnostic
+children too. Gaps requiring keyed entries, effective scalar selection,
+predicates or dynamic reasons remain record-only diagnostics: a static matrix
+input path cannot preserve those semantics. Hand rows add launcher ownership or
+native-only permission evidence; contradictory normalized hand absences and
+launcher claims fail naming the hand cell and runtime declaration. Input
+associations and behavioral probes remain independent consumer facts. Claude's
+`unpinLaunchEffort` remains a native-only supplement because normalized record
+gaps cannot address that separate option or its explicit-priority gate.
+
+The partition requires every cell exactly once across physical, support-derived
+and hand-authored primary rows. Adding a shared surface or dropping runtime
+support creates absence cells without policy edits. A runtime that claims
+support still needs a physical or launcher writer: no absence is invented to
+conceal missing implementation.
 
 `checks/ai-delivery/generate.nix` evaluates populated specimens at default
 config directories. It reads typed files and activation ledgers, resolves
@@ -314,16 +336,17 @@ portable surface, so the specimen maps it to no cell. Codex's
 `app-server-daemon/settings.json` holds daemon configuration
 (`native.daemonSettings`), not a portable surface, and maps to no cell either.
 
-The production gate compares live absence against hand-authored gaps in both
-directions. Its three body arms stay; derived names make the first arm's name
-agreement a tautology, not a stronger check. Empty-declaration survival and body
-variation still discriminate.
+The production gate compares live file absence against primary policy rows in
+both directions; launchers have no file entry and are exempt from that
+correspondence. Its three body arms stay; derived names make the first arm's
+name agreement a tautology, not a stronger check. Empty-declaration survival and
+body variation still discriminate.
 
-Regeneration evaluates the check set, and the check set asserts the committed
-matrix, so a change that moves a cell (a runtime joining the layer, say) cannot
-regenerate through the check attribute alone: bypass the `ai-delivery` and
-`ai-delivery-fixtures` asserts and the partition assertion in a scratch tree,
-build the observer, and restore them before committing.
+Regeneration evaluates the check set, which asserts the committed matrix. Adding
+an unsupported cell now derives its absence without bootstrapping. Adding a
+supported physical cell can still fail the partition before the observer runs.
+Seed that cell from the already observed writer it shares, regenerate, then
+require observer byte identity; the seed is not evidence on its own.
 
 Regenerate the data with
 `nix build .#checks.x86_64-linux.ai-delivery-generated.generated --no-link --print-out-paths`,
