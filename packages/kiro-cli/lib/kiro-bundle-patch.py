@@ -9,7 +9,6 @@ import argparse
 from pathlib import Path
 import sys
 
-IDENTITY_SENTENCE = b"You are Kiro CLI, an agentic AI software engineer that runs in the command line."
 WORKTREE_PARAGRAPH = b"When a task should run in a worktree, the **workflow owns the worktree setup** \\u2014 do NOT create the worktree yourself. Say in the `workflowPrompt` brief that a worktree is needed and let the generated workflow\\'s first step create it (`git worktree add .worktrees/<name> -b <branch> <base>`, where `<base>` is the branch checked out in the user\\'s repo, which is not necessarily the default branch; name it in the brief) and run all later steps targeting that worktree. Derive a descriptive `<name>`/`<branch>` from the task. The workflow\\'s final step rebases the branch onto `<base>` and fast-forwards `<base>` from the user\\'s checkout (`git -C <repo> merge --ff-only <branch>`), because git will not move a branch that is checked out in another worktree; you remove the worktree and branch after the run completes (an in-worktree step can\\'t safely delete the directory it is running in).\\n\\n"
 FILE_CHECK_PARAGRAPH = rb'''13. **Every path in a prompt or stop condition is absolute.** Step agents\' cwd is the parent session\'s workspace, not a worktree or subdirectory, so a relative path in a prompt silently resolves to the wrong place. Interpolate an input (e.g. `{{worktree_path}}/src/file.ts`) for every file a step reads, writes, or commits, and tell worktree steps to use `git -C <absolute worktree>` rather than describing the worktree as their "working directory". The same applies to `fileCheck.path` in a `stopCondition` or `completion`: relative paths resolve against the workflow\'s workspace root, and a path that never resolves evaluates false forever \u2014 the loop then spins to `maxIterations` instead of stopping.'''
 # Our authored replacement, spelled out so the text Kiro receives is readable
@@ -30,16 +29,8 @@ FIXED = {
 }
 
 
-def replacements(identity=None, names=()):
-    items = []
-    if identity is not None:
-        identity = identity.strip()
-        if not identity or identity[-1:] not in (b".", b"!", b"?"):
-            raise ValueError("identity: replacement must end with sentence punctuation (. ! ?)")
-        if b"`" in identity or b"${" in identity:
-            raise ValueError("identity: replacement may not contain a backtick or `${`")
-        items.append(("identity", IDENTITY_SENTENCE, identity))
-    return items + [(name, *FIXED[name]) for name in names]
+def replacements(names):
+    return [(name, *FIXED[name]) for name in names]
 
 
 def patch(data, items):
@@ -60,15 +51,12 @@ def main():
     parser.add_argument("source", type=Path)
     parser.add_argument("destination", nargs="?", type=Path)
     parser.add_argument("--check", action="store_true")
-    parser.add_argument("--identity-file", type=Path)
     parser.add_argument("--replace", action="append", choices=FIXED, default=[])
     args = parser.parse_args()
     if not args.check and args.destination is None:
         parser.error("destination is required unless --check is set")
     try:
-        identity = (IDENTITY_SENTENCE if args.check else
-                    args.identity_file.read_bytes() if args.identity_file else None)
-        items = replacements(identity, list(FIXED) if args.check else args.replace)
+        items = replacements(list(FIXED) if args.check else args.replace)
         result, errors = patch(args.source.read_bytes(), items)
         for error in errors:
             print(f"FAIL: kiro-bundle-patch: {error}", file=sys.stderr)
@@ -78,7 +66,7 @@ def main():
             print("PASS: " + ", ".join(name for name, _, _ in items) + " exact sources each occur once")
         else:
             args.destination.write_bytes(result)
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
         print(f"FAIL: kiro-bundle-patch: {exc}", file=sys.stderr)
         return 1
     return 0

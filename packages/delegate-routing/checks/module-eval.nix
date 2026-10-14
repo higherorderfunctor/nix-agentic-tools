@@ -401,7 +401,6 @@
     in
       tweaksOff result
       && tweaksOn enabled
-      && !enabled.config.ai.kiro.cli.tweaks.identity.enable
       && tweaksOff (workflowChange {ai.programs.delegate-routing.enable = false;})
       && tweaksOff (workflowChange {ai.kiro.cli.package = null;})
       && tweaksOff (workflowChange {

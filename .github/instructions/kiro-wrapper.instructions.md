@@ -256,10 +256,11 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-13 — the native package binds one KAS extracted
-> from its release input; selected prompt replacements fail closed at build
-> time. Darwin packaging points both the executable filename and argv0 at the
-> app binary; native CI verifies fresh-home dispatch.
+> **Last verified:** 2026-10-14 — only the two workflow prompt tweaks remain;
+> the native package binds one KAS extracted from its release input; selected
+> prompt replacements fail closed at build time. Darwin packaging points both
+> the executable filename and argv0 at the app binary; native CI verifies
+> fresh-home dispatch.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -383,21 +384,19 @@ and fetched build inputs are not a second installed runtime. Ordinary
 input-addressed builds share identical selections, but do not promise
 cross-release deduplication merely because two releases contain equal payloads.
 
-`passthru.withBundlePatches { identity; replace; }` selects the existing tweaks
-at build time; `withRolloutFeatures`, `withFhsPayload` and `unwrapped` preserve
-that selection. The factory uses the same selector on both backends. Every
-selected exact source must occur once or the entire build fails before writing
-patched output. Unselected prompt bytes remain unchanged. The independent CI
-drift check requires all three supported anchors in real vendor data on each
-platform even when a consumer disables them.
+`passthru.withBundlePatches { replace; }` selects the existing tweaks at build
+time; `withRolloutFeatures`, `withFhsPayload` and `unwrapped` preserve that
+selection. The factory uses the same selector on both backends. Every selected
+exact source must occur once or the entire build fails before writing patched
+output. Unselected prompt bytes remain unchanged. The independent CI drift check
+requires both supported anchors in real vendor data on each platform even when a
+consumer disables them.
 
 All tweaks still default off. Delegate routing supplies `mkDefault true` for
 workflow tweaks only on its reached managed workflow CLI; explicit false wins.
-Identity remains opt-in through `text` or `source`, with explicit
-`enable = false` disabling either. Identity changes only the first sentence; the
-workflow tweaks retain the existing relative file-check guidance and deletion of
-vendor worktree ownership/merge guidance. Configurable prompt files, additional
-roots and engine-default changes are separate work.
+The workflow tweaks retain the existing relative file-check guidance and
+deletion of vendor worktree ownership/merge guidance. Configurable prompt files,
+additional roots and engine-default changes are separate work.
 
 Inherited overrides have deliberate precedence: all-off uses `--set-default` for
 the server, preserving a caller's explicit `KIRO_KAS_SERVER_PATH`. Any managed
@@ -440,10 +439,9 @@ same-named command already in the synthesized root wins. This option is for
 supplying missing tools; Darwin has no later FHS reordering.
 
 The empty list is inert and produces no wrapper by itself. A non-empty list
-creates the wrapper even when no env, argv, identity, or secret injection is
-configured. It does not alter argv, and
-`packages/kiro-cli/checks/kiro-wrapper-argv.nix` runs both entry points to
-assert the prefix and inherited tail together.
+creates the wrapper even when no env, argv, or secret injection is configured.
+It does not alter argv, and `packages/kiro-cli/checks/kiro-wrapper-argv.nix`
+runs both entry points to assert the prefix and inherited tail together.
 
 On Linux this crosses the upstream FHS visibility boundary because `/nix` is
 mounted and PATH is preserved; it does not merge packages into the synthesized

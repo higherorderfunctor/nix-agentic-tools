@@ -77,7 +77,7 @@
 
   mkKiroCliWithPayload = rawFeatures: bundlePatches: fhsPayload: let
     kas = mkKas bundlePatches;
-    managedKas = (bundlePatches.identity or null) != null || (bundlePatches.replace or []) != [];
+    managedKas = (bundlePatches.replace or []) != [];
     kasFlags = "${
       if managedKas
       then "--set"

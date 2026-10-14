@@ -1,7 +1,6 @@
 {pkgs, ...}: let
   package = pkgs.ai.kiro-cli;
   patched = package.withBundlePatches {
-    identity = "Custom identity. Another sentence!";
     replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
   };
   wrap = package:
