@@ -935,7 +935,8 @@
       lib.subtractLists ["enable" "location"] (builtins.attrNames value)
       == []
       && builtins.isBool (value.enable or null)
-      && builtins.isString (value.location or "")));
+      # attrsOf checks elements only when merging; flat dotted keys skip that merge.
+      && (!(value ? location) || lib.types.nonEmptyStr.check value.location)));
   worktreePolicyEnabled = cfg: ((nativeSettings cfg)."chat.worktrees" or {}).enable or false;
   # Static templates fail at eval; KAS applies the same rule to hand-written JSON.
   unknownWorktreeVariables = cfg:
