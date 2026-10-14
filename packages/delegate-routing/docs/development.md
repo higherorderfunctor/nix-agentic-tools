@@ -142,12 +142,12 @@ persisted settings for ACP; no routing wrapper reads config.
 Routing enables no prompt tweaks or worktree policy. Both
 `relativeFileCheckPaths` and `stripVendorWorktreeSteering` are retired and
 produce migration errors when explicitly configured on an enabled runtime.
-Consumers can enable `ai.worktrees.enable` for the sibling-worktree convention,
-or declare explicit roots through
+Consumers can enable `ai.worktrees.enable` for the worktree convention (whose
+root is writable), or declare explicit roots through
 `cli.native.settings.chat.additionalDirectories`. Relative permission rules
-apply there, so built-in modes and bundled profiles get default reads while
-custom agents use their own rules, and default writes require permission grants.
-Identity remains opt-in.
+apply in explicit roots, so built-in modes and bundled profiles get default
+reads while custom agents use their own rules, and default writes require
+permission grants. Identity remains opt-in.
 
 Kiro's `run_workflow` appears only with `cli.workflows.enable`, effective V3,
 and no explicit false for `cli.native.settings.chat.enableWorkflows`. Devenv's

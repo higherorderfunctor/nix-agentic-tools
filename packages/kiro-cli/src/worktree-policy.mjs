@@ -1,18 +1,18 @@
 // Admission-only discovery; workflow steps own creation and user-owned policy.
 import { execFile } from "node:child_process";
 import { lstat, realpath, stat } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
-const rootKey = Symbol("resolved worktree policy root");
+const policyKey = Symbol("resolved worktree policy");
 
 function fail(message) {
   throw new Error(`chat.worktrees: ${message}`);
 }
 
-export function enabled(layers) {
-  let result = false;
+export function policy(layers) {
+  let result;
   for (const { path, value } of layers) {
     const policy = value["chat.worktrees"];
     if (policy === undefined) continue;
@@ -20,16 +20,37 @@ export function enabled(layers) {
       !policy ||
       typeof policy !== "object" ||
       Array.isArray(policy) ||
-      Object.keys(policy).join() !== "enable" ||
-      typeof policy.enable !== "boolean"
+      Object.keys(policy).some(
+        (key) => !["enable", "location"].includes(key),
+      ) ||
+      typeof policy.enable !== "boolean" ||
+      (policy.location !== undefined &&
+        (typeof policy.location !== "string" ||
+          policy.location.length === 0 ||
+          policy.location.includes("\0")))
     )
-      fail(`${path}: expected { enable: boolean }`);
-    result = policy.enable;
+      fail(`${path}: expected { enable: boolean, location?: nonempty string }`);
+    // Fixed variables only; discover resolves a relative rendering against {{primary}}.
+    const [unknown] = [...(policy.location ?? "").matchAll(/\{\{([^{}]*)\}\}/g)]
+      .map((match) => match[1])
+      .filter((name) => name !== "primary" && name !== "repo");
+    if (unknown !== undefined)
+      fail(`${path}: unknown location variable {{${unknown}}}`);
+    result = policy;
   }
-  return result;
+  return result?.enable
+    ? { location: result.location ?? "../{{repo}}-worktrees" }
+    : undefined;
 }
 
-export async function discover(cwd) {
+// Layouts without a derivable primary checkout admit no root; the policy still
+// selects PR guidance, without a destination.
+function noRoot(cwd, reason) {
+  console.warn(`chat.worktrees: ${cwd}: ${reason}; no worktree root admitted`);
+  return { root: undefined };
+}
+
+export async function discover(cwd, location) {
   const env = { ...process.env, LC_ALL: "C" };
   for (const key of ["GIT_COMMON_DIR", "GIT_DIR", "GIT_WORK_TREE"])
     delete env[key];
@@ -56,16 +77,16 @@ export async function discover(cwd) {
   }
   const [common, bare, ...extra] = discovered.split("\n");
   if (extra.length)
-    fail("repository paths containing newlines are unsupported");
+    return noRoot(cwd, "repository paths containing newlines are unsupported");
   if (bare !== "false" || basename(common) !== ".git")
-    fail("expected a normal primary checkout or linked worktree");
+    return noRoot(cwd, "not a normal primary checkout or linked worktree");
   const commonPath = await realpath(common);
   const primary = dirname(commonPath);
   const locations = (
     await git(cwd, "--absolute-git-dir", "--show-toplevel")
   ).split("\n");
   if (locations.length !== 2)
-    fail("repository paths containing newlines are unsupported");
+    return noRoot(cwd, "repository paths containing newlines are unsupported");
   const [gitDir, topLevel] = await Promise.all(
     locations.map((path) => realpath(path)),
   );
@@ -76,21 +97,29 @@ export async function discover(cwd) {
       : dirname(gitDir) !== join(commonPath, "worktrees")) ||
     (await realpath(await git(primary, "--show-toplevel"))) !== primary
   )
-    fail("separate Git directories and bare repositories are unsupported");
-  const destination = `${primary}-worktrees`;
+    return noRoot(
+      cwd,
+      "submodules, separate Git directories and bare repositories are unsupported",
+    );
+  const destination = resolve(
+    primary,
+    location.replace(/\{\{(primary|repo)\}\}/g, (_, name) =>
+      name === "repo" ? basename(primary) : primary,
+    ),
+  );
   try {
     if ((await lstat(destination)).isSymbolicLink())
       fail(`derived destination must not be a symlink: ${destination}`);
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  return destination;
+  return { root: destination };
 }
 
-export function carry(request, root) {
-  return { ...request, [rootKey]: root };
+export function carry(request, worktree) {
+  return { ...request, [policyKey]: worktree };
 }
 
-export function requestRoot(request) {
-  return request[rootKey];
+export function requestPolicy(request) {
+  return request[policyKey];
 }

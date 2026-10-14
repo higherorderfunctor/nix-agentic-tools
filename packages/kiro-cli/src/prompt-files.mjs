@@ -85,7 +85,7 @@ function mapping(value, path) {
   return mapping;
 }
 
-export async function resolveSnapshot(homeDir, cwd, worktreeRoot) {
+export async function resolveSnapshot(homeDir, cwd, worktree) {
   const defaults = Object.fromEntries(
     await Promise.all(
       slots.map(async (slot) => [
@@ -109,18 +109,19 @@ export async function resolveSnapshot(homeDir, cwd, worktreeRoot) {
       fail(slot, error.message);
     }
   }
-  if (worktreeRoot && !selected.worktreeGuidance) {
+  if (worktree && !selected.worktreeGuidance) {
     const parts = JSON.parse(
       await readFile(
         new URL("./prompt-defaults/worktree-policy.json", import.meta.url),
         "utf8",
       ),
     );
+    // A layout without a derivable root keeps the PR guidance without naming a destination.
     defaults.worktreeGuidance =
       parts[0] +
-      "'" +
-      `${worktreeRoot}/<name>`.replaceAll("'", "'\"'\"'") +
-      "'" +
+      (worktree.root
+        ? "'" + `${worktree.root}/<name>`.replaceAll("'", "'\"'\"'") + "'"
+        : "<path>") +
       parts[1];
   }
   return validateSnapshot({ version: 1, slots: defaults });

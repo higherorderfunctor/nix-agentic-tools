@@ -1532,7 +1532,8 @@ silently runs to `maxIterations` (ledger §7.6).
 
 The blanket `ai.kiro.cli.tweaks.stripVendorWorktreeSteering` option is retired.
 Use `ai.worktrees.enable` (or its Kiro override) for workflow-owned creation in
-the primary checkout's sibling worktree directory, with PR creation and
+the rendered `ai.worktrees.location` (by default the primary checkout's sibling
+worktree directory, which is then writable), with PR creation and
 user-controlled merging followed by cleanup. The packaged policy preserves the
 vendor's creation guidance instead of deleting the whole paragraph. A custom
 `worktreeGuidance` prompt file overrides the prose without disabling root

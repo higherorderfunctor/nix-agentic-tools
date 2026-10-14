@@ -454,21 +454,17 @@ try {
     worktreeGuidance: "worktree.txt",
   });
   assert.equal(
-    (await nixPrompts.resolveSnapshot(home, repoA, policyRoot)).slots
+    (await nixPrompts.resolveSnapshot(home, repoA, { root: policyRoot })).slots
       .worktreeGuidance,
     a.slots.worktreeGuidance,
   );
-  const policySnapshot = await nixPrompts.resolveSnapshot(
-    home,
-    undefined,
-    policyRoot,
-  );
+  const policySnapshot = await nixPrompts.resolveSnapshot(home, undefined, {
+    root: policyRoot,
+  });
   const unusualRoot = "/tmp/repo's $(literal)-worktrees";
-  const quotedPolicy = await nixPrompts.resolveSnapshot(
-    home,
-    undefined,
-    unusualRoot,
-  );
+  const quotedPolicy = await nixPrompts.resolveSnapshot(home, undefined, {
+    root: unusualRoot,
+  });
   assert.ok(
     quotedPolicy.slots.worktreeGuidance.includes(
       "git worktree add '/tmp/repo'\"'\"'s $(literal)-worktrees/<name>'",

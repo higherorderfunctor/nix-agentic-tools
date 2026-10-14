@@ -36,8 +36,9 @@ export async function resolveRequest(homeDir, request, roots) {
   // roots comes from the vendor validator, retaining protocol failures.
   const candidates = [...roots];
   const layers = await settingsLayers(homeDir, request.cwd);
-  const worktreeRoot = worktrees.enabled(layers)
-    ? await worktrees.discover(request.cwd)
+  const policy = worktrees.policy(layers);
+  const worktree = policy
+    ? await worktrees.discover(request.cwd, policy.location)
     : undefined;
   for (const { path, base, value } of layers) {
     const entries = value["chat.additionalDirectories"];
@@ -55,7 +56,7 @@ export async function resolveRequest(homeDir, request, roots) {
       );
     }
   }
-  if (worktreeRoot) candidates.push(worktreeRoot);
+  if (worktree?.root) candidates.push(worktree.root);
   const seen = new Set(),
     unique = [];
   for (const root of candidates) {
@@ -74,8 +75,21 @@ export async function resolveRequest(homeDir, request, roots) {
         protocol: Object.freeze([...roots]),
       }),
     },
-    worktreeRoot,
+    worktree,
   );
+}
+
+// Membership alone leaves writes prompting. Only the admitted policy root is
+// writable; generic configured roots keep the vendor default.
+export async function writableRoot(homeDir, roots) {
+  if (!roots.length) return undefined;
+  const policy = worktrees.policy(await settingsLayers(homeDir, roots[0]));
+  const root =
+    policy && (await worktrees.discover(roots[0], policy.location))?.root;
+  if (!root) return undefined;
+  const key = await canonical(root);
+  for (const candidate of roots)
+    if ((await canonical(candidate)) === key) return candidate;
 }
 
 export async function residentRequest(request, resident) {
