@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-09 — Kiro launcher controls, including enable, use
-> `ai.kiro.cli`; root enable is read-only and derived from that switch.
+> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
+> runtime cannot consume them; keyed tombstones still withdraw entries.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -218,10 +218,10 @@ constructor and transform both validate it.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use
-  `enable = false` on the replacement entry. Unsupported root fanout degrades
-  before this boundary and has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so
-  explicit entries within the same layer still win before cross-level
-  composition.
+  `enable = false` on the replacement entry. Unsupported root requests warn and
+  lower to the neutral value before this boundary; there is no L3 option. L1→L2
+  and L2b→L3 use `mkDefault` so explicit entries within the same layer still win
+  before cross-level composition.
 - **One package owner per key and scope.** Definition-provenance checks reject
   two packages claiming one root key or one per-runtime key. A root key and its
   runtime replacement are different scopes and do not collide.

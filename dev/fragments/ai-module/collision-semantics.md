@@ -1,8 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-07 — Kiro environment pool provenance follows
-> `ai.kiro.cli.environmentVariables`; replacement and null withdrawal semantics
-> are unchanged.
+> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
+> runtime cannot consume them; keyed tombstones still withdraw entries.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -19,7 +18,7 @@ commit.
 
 | ID  | Boundary                                          | Unit    | Behavior                                                                                                                                          |
 | --- | ------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                |
+| B0  | root pool → runtime lacking that pool             | pool    | Warn for a non-empty request and lower to the neutral value; the per-runtime option does not exist.                                               |
 | B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                              |
 | B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
 | B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
@@ -81,8 +80,8 @@ precedence. They are intentionally gone. A root and runtime same-key pair is no
 longer a collision.
 
 Unsupported per-runtime options remain absent. Root fanout to an unsupported
-runtime degrades to `{}` before merging, based on the app record's
-`supportedPools` list.
+runtime warns for a non-empty request and lowers to `{}` before merging, based
+on the app record's `supportedPools` list.
 
 ### Managed-proxy ownership exception
 

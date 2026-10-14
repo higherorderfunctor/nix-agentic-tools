@@ -1,8 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-12 — documentation snapshots share `lib/web-docs`
-> with the Kiro public model catalog; native-option fixtures vary aggregate
-> values directly, preserving the factory's facts interface.
+> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
+> runtime cannot consume them; keyed tombstones still withdraw entries.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -510,12 +509,10 @@ Claude Code hook adapter (`extensions.claude-code-hook-adapter`,
 `defaultEnabled: false`, `src/resources/definitions.ts:75-80`) reads
 `~/.claude/settings.json`
 (`src/extensions/claude-code-hook-adapter/definition.ts:25-28`), which Claude's
-own delivery already writes. The policy row is `absent` with that reason. Both
-shared-pool exclusions are silent, because `ai.hooks` composes with
-`ai.kimchi.hooks` and nothing Kimchi-scoped can withdraw it: a warning would
-repeat on every activation (the root-pool rule in the ai-module fanout
-fragment). A non-empty `ai.kimchi.hooks` still warns on Home Manager. Locked by
-`module-kimchi-hooks`.
+own delivery already writes. The policy row is `absent` with that reason.
+Non-empty shared hook requests warn for unsupported events or backends, naming
+the option, Kimchi and the reason. Non-empty `ai.kimchi.hooks` requests warn on
+Home Manager too. Locked by `module-kimchi-hooks`.
 
 The bash-hook directory (`harness/hooks/bash`, `.kimchi/hooks/bash`) is
 deliberately not a sink: those scripts filter or rewrite the bash tool only, a
@@ -529,9 +526,9 @@ The app record's `supportedPools` is exactly `agents`, `context`,
 `environmentVariables`, `hooks`, `mcpServers`, `rules`, `settings`, and
 `skills`. Kimchi has no native path-scoped rule loader, so rules use the same
 flat AGENTS.md handling as Codex. LSP and shell-selection landing keys remain
-absent; root values for them remain valid and silently degrade for Kimchi.
-`settings` is the uniform closed normalized namespace; its current field lowers
-to `defaultThinkingLevel` in the mutable harness settings document.
+absent; shared requests remain valid and warn because Kimchi cannot consume
+them. `settings` is the uniform closed normalized namespace; its current field
+lowers to `defaultThinkingLevel` in the mutable harness settings document.
 
 The four keyed pools Kimchi consumes (`environmentVariables`, `mcpServers`,
 `rules`, and `skills`) follow the shared atomic replacement rule. A

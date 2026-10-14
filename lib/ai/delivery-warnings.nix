@@ -53,20 +53,9 @@
     surface = lib.last path;
     value = get path;
   in
-    # A bare root pool is a FAN-OUT request whose documented behavior is to
-    # degrade for a runtime that cannot consume it. A root warning needs a
-    # per-runtime remedy, or it repeats on every activation forever. Only a
-    # keyed pool the runtime supports has one: `ai.<runtime>.<pool>.<name> =
-    # null` tombstones that name, which is what `rootRemaining` subtracts. An
-    # unsupported pool has no per-runtime option at all (declaring one is an
-    # unknown-option error by design), and a non-keyed pool (`context`, `hooks`)
-    # composes root and per-runtime values, so nothing per-runtime withdraws
-    # the root one. Those exclusions are recorded in this policy's row and in
-    # the pool's own option description instead. A per-runtime path always
-    # reports: that one the consumer wrote directly and can delete.
-    if builtins.length path == 2 && !(supports surface && builtins.elem surface keyed)
-    then false
-    else if builtins.elem surface keyed
+    # Root requests warn even when the runtime cannot withdraw them. Keyed
+    # pools still subtract per-runtime replacements and tombstones by name.
+    if builtins.elem surface keyed
     then
       (
         if builtins.length path == 2

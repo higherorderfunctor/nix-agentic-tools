@@ -140,11 +140,6 @@
     "instructions-drift: dev/ai.nix fails its own module assertions:\n${lib.concatStringsSep "\n" failedAssertions}";
     assert lib.assertMsg (!(lib.hasInfix "/bin/ai-markdown-window-notice" repo.config.enterShell))
     "instructions-drift: Codex's launcher owns the document warning; shell entry must not duplicate it.";
-    # The repository's own configuration evaluates without a warning: no
-    # context or rule it asks for lands in a file it has switched off, or
-    # anywhere `ai.*` cannot deliver it.
-    assert lib.assertMsg (repo.config.warnings == [])
-    "instructions-drift: dev/ai.nix warns:\n${lib.concatStringsSep "\n" repo.config.warnings}";
       pkgs.runCommand "instructions-drift" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

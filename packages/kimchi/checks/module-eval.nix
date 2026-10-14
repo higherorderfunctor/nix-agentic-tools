@@ -1033,11 +1033,9 @@ in {
     # src/extensions/hook-adapters/discovery.ts:130-190), and never writes it.
     # Its event set has no PermissionRequest, so that event is left out of the
     # file rather than written as bytes nothing reads. Home Manager has no
-    # user-scope lifecycle file it can own: it writes nothing. Only the
-    # per-runtime ai.kimchi.hooks warns there; the shared pool composes with it,
-    # so nothing Kimchi-scoped could silence a root warning, and both root
-    # exclusions stay silent. Each silence sits beside a warning from the same
-    # evaluation, so an evaluation that stopped producing warnings fails.
+    # user-scope lifecycle file it can own: it writes nothing. Shared requests
+    # warn for that missing sink and the unsupported PermissionRequest event;
+    # per-runtime Home Manager requests warn for the missing sink too.
     module-kimchi-hooks = mkTest "kimchi-hooks" (
       let
         config.ai = {
@@ -1074,7 +1072,12 @@ in {
             kimchi.enable = true;
           };
         };
-        mentions = needle: lib.any (lib.hasInfix needle);
+        policy = import ../../../config/ai-delivery.nix {inherit lib;};
+        hookWarning = mode: path: reason: "${lib.showOption path} is set but ${mode} does not deliver it to kimchi (reason: ${reason})";
+        projectEventWarning =
+          hookWarning "devenv" ["ai" "hooks" "PermissionRequest"]
+          (lib.head policy.definitions.hooks.kimchi.devenv.additionalWriters).reason;
+        hmHookWarning = path: hookWarning "hm" path policy.definitions.hooks.kimchi.hm.reason;
         hmHookPaths = lib.filter (lib.hasInfix "hooks") (builtins.attrNames hm.config.home.file);
       in
         fromGeneratedTree ".kimchi/hooks.json" devenv.config.files.".kimchi/hooks.json"
@@ -1105,15 +1108,14 @@ in {
             ];
           };
         }
-        && !mentions "ai.hooks" devenv.config.warnings
+        && devenv.config.warnings == [projectEventWarning]
         && !(onlyPermissionRequest.config.files ? ".kimchi/hooks.json")
-        && onlyPermissionRequest.config.warnings == []
+        && onlyPermissionRequest.config.warnings == [projectEventWarning]
         && !((evalDevenv {ai.kimchi.enable = true;}).config.files ? ".kimchi/hooks.json")
+        && (evalDevenv {ai.kimchi.enable = true;}).config.warnings == []
         && hmHookPaths == []
-        && !mentions "ai.hooks is set" hm.config.warnings
-        && mentions "ai.kimchi.hooks is set but hm does not deliver it to kimchi" hm.config.warnings
-        && mentions "claude-code-hook-adapter" hm.config.warnings
-        && hmRootOnly.config.warnings == []
+        && hm.config.warnings == map hmHookWarning [["ai" "hooks"] ["ai" "kimchi" "hooks"]]
+        && hmRootOnly.config.warnings == [(hmHookWarning ["ai" "hooks"])]
         && (evalHm {ai.kimchi.enable = true;}).config.warnings == []
     );
 

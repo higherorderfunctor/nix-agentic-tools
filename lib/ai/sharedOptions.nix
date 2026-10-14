@@ -345,7 +345,8 @@ in {
         Typed settings whose values preserve the same meaning across multiple
         AI runtimes. Each `ai.<runtime>.settings` field narrows this root
         default when non-null; Kiro declares none, because it persists effort
-        only per model, and ignores the root value without a warning. The current `reasoningEffort` field lowers to
+        only per model; a shared request warns because Kiro cannot consume it.
+        The current `reasoningEffort` field lowers to
         Claude `effortLevel`, Codex `model_reasoning_effort`, Copilot
         `effortLevel` and Kimchi `defaultThinkingLevel`; the enum is their
         exact persisted semantic intersection. On devenv, Copilot's value
@@ -443,8 +444,8 @@ in {
         is left out for it. Kimchi has no user-scope lifecycle file Home
         Manager can own, so Home Manager delivers nothing to it; its opt-in
         Claude Code hook adapter reads `~/.claude/settings.json` instead. Both
-        exclusions are silent: a shared pool has no per-runtime remedy, so a
-        warning would repeat on every activation. Kiro is excluded because its
+        exclusions warn with the shared option, runtime and reason. Kiro is
+        excluded because its
         v3 trigger schema is not semantically interchangeable.
       '';
     };
@@ -574,9 +575,10 @@ in {
         `ai.<name>.environmentVariables.SHELL` (`ai.kiro.cli.environmentVariables.SHELL` for Kiro) beats this option, the same way
         an explicit `settings.env` entry beats it for Claude. Copilot and
         Kimchi are
-        deliberately excluded rather than silently ignored: neither one's
-        shell selection has been established, so `ai.copilot.shell` and
-        `ai.kimchi.shell` do not exist and setting either is an eval error.
+        excluded because their shell selection has not been established;
+        shared requests warn with the option, runtime and reason.
+        `ai.copilot.shell` and `ai.kimchi.shell` do not exist and setting
+        either is an eval error.
 
         Takes a **package, not a path**, and that is load-bearing. Every
         runtime here falls back when the configured shell is unusable, and

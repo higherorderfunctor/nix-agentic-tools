@@ -1,9 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-11 — Codex launcher flags reconcile against the
-> `cli.globalFlags` fact in `packages/chatgpt-codex/extracted/`; Kiro uses
-> `ai.kiro.cli.enable` and its read-only runtime enable is derived from the
-> launcher switch.
+> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
+> runtime cannot consume them; keyed tombstones still withdraw entries.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -367,14 +365,14 @@ enabled ecosystem whose native model preserves the option's semantics):
   through `resolveOverride`. Claude, Codex, Copilot and Kimchi lower the
   resolved value to native `effortLevel`, `model_reasoning_effort`,
   `effortLevel` and harness `defaultThinkingLevel`, respectively. Kiro has no
-  lossless target, so it declares no pool and ignores the root value without a
-  warning, like any unsupported pool. Copilot's devenv lowering is the one
-  partial delivery: the repository `effortLevel` reaches only its interactive
-  session, so `lib/ai/delivery-warnings.nix` warns there until the native value
-  is withheld with null. Values that only one runtime persists remain under that
-  runtime's native settings. An explicit native effort key still has normal
-  option priority over the derived normalized default, and a native null
-  excludes that runtime from emission.
+  lossless target, so it declares no pool and warns when shared reasoning effort
+  is requested. Copilot's devenv lowering is the one partial delivery: the
+  repository `effortLevel` reaches only its interactive session, so
+  `lib/ai/delivery-warnings.nix` warns there until the native value is withheld
+  with null. Values that only one runtime persists remain under that runtime's
+  native settings. An explicit native effort key still has normal option
+  priority over the derived normalized default, and a native null excludes that
+  runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
@@ -442,11 +440,11 @@ enabled ecosystem whose native model preserves the option's semantics):
   executable; bare-file derivations remain direct output paths. Kimchi reads the
   same Claude shape from a trusted project's `.kimchi/hooks.json`, so devenv
   writes shared plus `ai.kimchi.hooks` groups there; PermissionRequest is not a
-  Kimchi event and is left out silently. Kimchi has no user-scope lifecycle file
-  Home Manager can own, so its Home Manager row is an explicit exclusion: silent
-  for the shared pool, warned for `ai.kimchi.hooks`. Kiro's v3 trigger records
-  remain native-only, but their `action.command` resolves a package through the
-  same shared `commandType`. Delegate-routing contributes its reminder to native
+  Kimchi event and is omitted with a warning. Kimchi has no user-scope lifecycle
+  file Home Manager can own, so its Home Manager row warns for shared `ai.hooks`
+  and per-runtime `ai.kimchi.hooks` requests. Kiro's v3 trigger records remain
+  native-only, but their `action.command` resolves a package through the same
+  shared `commandType`. Delegate-routing contributes its reminder to native
   per-runtime hooks, preserving these backend exclusions; package details live
   in `packages/delegate-routing/docs/development.md`.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
@@ -606,20 +604,14 @@ Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
 AGENTS.md handling: Home Manager writes the user harness file, while devenv
 contributes keyed units to the single repository aggregate.
 
-A non-empty ROOT request is SILENT whenever nothing per-runtime can withdraw it
-— no assertion, and no activation warning either. That covers an excluded pool
-and a non-keyed pool (`context`, `hooks`), whose root and per-runtime values
-compose, so a pool a runtime supports on one backend and not the other (Kimchi's
-`ai.hooks` on Home Manager) stays silent too. A warning there would repeat on
-every activation forever, and the only remedy would be taking the shared value
-away from every other runtime. The exclusion is recorded in the pool's option
-description and in the delivery matrix instead. A root KEYED pool warns only for
-names the runtime has not withdrawn with `ai.<runtime>.<pool>.<name> = null`
-(`config/ai-delivery.nix` `keyedSurfaces`). A PER-RUNTIME request a backend
-cannot deliver does warn (`lib/ai/delivery-warnings.nix`), because that one the
-consumer wrote directly and can delete. Package rule contributors must instead
-gate their writes by backend delivery capability; `mkSkillPackageModule` applies
-that gate from the delivery policy before writing a per-runtime rules pool.
+A non-empty shared request warns when an enabled runtime cannot consume it,
+including excluded pools, non-keyed pools and backend-specific gaps. Every
+warning names the option, runtime and reason, even when it repeats on activation
+and has no per-runtime remedy. Keyed runtime replacements and tombstones still
+withdraw inherited entries before warnings are computed. Per-runtime requests
+that a backend cannot deliver warn too. Package rule contributors gate their
+writes by backend delivery capability; `mkSkillPackageModule` applies that gate
+before writing a per-runtime rules pool.
 
 A context or rule unit that resolves for a runtime but lands in a file whose
 final entry has `content.enable = false` warns too, root or per-runtime: the

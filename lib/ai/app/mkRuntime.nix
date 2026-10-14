@@ -20,7 +20,7 @@
 #     options ? {};                  # shared option declarations (both backends see these)
 #     supportedPools ? [];           # normalized ai.* pools the runtime consumes.
 #                                    # Unsupported per-runtime pool options are absent;
-#                                    # root values for them degrade instead of fanning out.
+#                                    # non-empty root requests warn instead of fanning out.
 #                                    # Same-named native options in `options` are independent.
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
