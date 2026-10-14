@@ -913,7 +913,7 @@
   promptFilesType = lib.types.nullOr (lib.types.addCheck
     (lib.types.attrsOf promptFileType)
     (value: lib.all (name: builtins.elem name promptFileSlots && promptFileType.check value.${name}) (builtins.attrNames value)));
-  additionalDirectoryType = lib.types.either lib.types.path lib.types.nonEmptyStr;
+  additionalDirectoryType = lib.types.nonEmptyStr;
   additionalDirectoriesType = lib.types.nullOr (lib.types.addCheck
     (lib.types.listOf additionalDirectoryType)
     (value: lib.all additionalDirectoryType.check value));
@@ -1300,8 +1300,11 @@ in
                         Empty lists add nothing; Nix null omits the setting. Raw JSON
                         null is invalid. New and cold-resumed
                         conversations resolve settings again; resident sessions retain
-                        their admitted roots. Workspace membership does not grant tool
-                        permissions. Requires the v3 engine and managed Kiro package.
+                        their admitted roots. Membership enables the vendor default fs_read
+                        ./** allow rule for each root. Default writes still prompt;
+                        configure permissions to narrow reads or grant writes. Added roots do
+                        not contribute .kiro/settings/mcp.json: only global and cwd
+                        MCP configuration loads. Requires the v3 engine and managed Kiro package.
                       '';
                     };
                     agentEngine = lib.mkOption {

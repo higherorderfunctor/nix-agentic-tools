@@ -1,6 +1,6 @@
 # Kiro Workflow Engine — Working Notes
 
-> **Last verified:** 2026-10-13 — GA workflows require v3 and their global
+> **Last verified:** 2026-10-14 — GA workflows require v3 and their global
 > client setting; older engine measurements retain their provenance.
 
 ## What this is, and how much to trust it
@@ -1492,11 +1492,11 @@ Second, the escape is conditional on the leading reference being **undeclared**.
 launch rejection of `{{worktree_path}}/.agents/tasks/…/rebase3-review.json`,
 whose error quoted the resolved sibling-worktree path.
 
-That resolves the ledger's disagreement with this section rather than
-overturning either: both are right, for different input sets. It also means a
-definition can launch clean on one input set and be refused on another with no
-edit at all, which is the strongest argument for `E-FILE-CHECK-PATH-TEMPLATE`
-rejecting every templated path regardless.
+A templated `fileCheck.path` is safe only when its references are declared
+inputs and resolve inside an admitted workspace root. The fixture corpus
+deliberately enforces a stricter literal-relative-path policy through
+`E-FILE-CHECK-PATH-TEMPLATE`; it is not a restriction on configured runtime
+roots.
 
 **4. Stop-condition state must live inside an admitted workspace root.** Which
 of two failure modes you get is decided by the branch above, not by the CLI
@@ -1509,9 +1509,10 @@ every iteration it has. Never `/tmp`.
 
 The packaged KAS supports sibling workspaces through
 `ai.kiro.cli.native.settings.chat.additionalDirectories`, an additive global and
-repository list. Declare the sibling root and grant the required filesystem
-permissions separately: admitting a root is not a permission grant. The writing
-step and `fileCheck.path` can then use the same absolute
+repository list. Admitting a root enables the vendor default `fs_read ./**`
+allow rule there. Default writes still prompt; configure permissions to narrow
+reads or grant writes. Added roots do not load their MCP configuration. The
+writing step and `fileCheck.path` can then use the same absolute
 `{{worktree_path}}/.agents/...` path. The isolated pinned-vendor checks in
 `packages/kiro-cli/checks/additional-roots.mjs` exercise the actual policy,
 `fs_write` and file-check functions: allowed writes and checks agree; explicit

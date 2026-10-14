@@ -1,4 +1,4 @@
-// Root membership is an input to vendor policy, never a permission grant.
+// Root membership enables the vendor default fs_read ./** allow rule for that root.
 import { realpath } from "node:fs/promises";
 import {
   basename,
@@ -137,17 +137,35 @@ export function authorityMetadata(meta, value) {
   return { ...clean, kiro: { ...clean?.kiro, [metadataKey]: validate(value) } };
 }
 
-export async function ownerRoots(agent, owner, visited = new Set()) {
+export async function ownerRoots(
+  agent,
+  owner,
+  visited = new Set(),
+  childRoots,
+) {
   if (!owner) fail("workflow has no owning session");
   if (visited.has(owner)) fail("cyclic persisted workspace ownership");
   visited.add(owner);
   const resident = agent.sessionState(owner);
   if (resident) return resident.workspacePaths;
   const metadata = await agent.persistence.loadSessionMetadata(owner);
-  if (!metadata) fail(`workflow owner ${owner} is unavailable`);
+  if (!metadata) {
+    if (!childRoots?.length) fail(`workflow owner ${owner} is unavailable`);
+    // Vendor eviction may remove an owner first. Reauthorize its child from cwd;
+    // saved configured roots must not become protocol authority after revocation.
+    const request = await resolveRequest(
+      agent.homeDir,
+      { cwd: childRoots[0] },
+      [childRoots[0]],
+    );
+    return [request.cwd, ...request.additionalDirectories];
+  }
   const { owner: parent, protocol } = storedAuthority(metadata);
   if (parent) {
-    await validateSubset(await ownerRoots(agent, parent, visited), protocol);
+    await validateSubset(
+      await ownerRoots(agent, parent, visited, protocol),
+      protocol,
+    );
     return protocol;
   }
   if (protocol.length === 0) return [];

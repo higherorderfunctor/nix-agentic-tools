@@ -1,5 +1,5 @@
 # contract.jq — the Kiro CLI v3 workflow-definition contract, as an executable
-# checker.
+# checker for this fixture corpus. Its POLICY rules are not runtime restrictions.
 #
 # WHY THIS EXISTS. The engine ships a `validate_workflow` tool that would answer
 # every question below authoritatively. It is unreachable: R-workflow-4 shows the
@@ -205,7 +205,7 @@ def jsonpath_errors($where):
 # THROWS `FileCheckPathOutsideWorkspaceError`. It is never resolved against the
 # process cwd.
 #
-# The templated case is POLICY, and it is the subtle one. The load-time
+# The templated case is fixture-corpus POLICY, not a runtime prohibition. The load-time
 # validator's containment loop (src/workflow/validate.ts,
 # `containmentErrorsForPaths`) opens with:
 #
@@ -231,14 +231,9 @@ def jsonpath_errors($where):
 #   undeclared -> survives as `{{…}}`, `firstRef === 0`, skipped, and the loop
 #                 silently never terminates
 #
-# So a templated path is not reliably unchecked NOR reliably checked -- it is
-# whichever the run's input set makes it, which the definition cannot see. That
-# is a strictly better reason to reject all of them than the original "unchecked
-# at author time", and it is why `code_basis` stays "policy": this rejects more
-# than the engine does, on purpose. Measured from a live launch rejection of
-# `{{worktree_path}}/…` (a declared input) alongside the ledger's own probe of
-# an undeclared `{{workdir}}/…` that passed -- two observations that look
-# contradictory until substitution order explains both.
+# Runtime templates are safe when declared inputs resolve inside admitted roots.
+# This fixture corpus keeps literal relative paths so it can validate definitions
+# without a session's input values or configured additional roots.
 #
 # Note also that `firstRef === 0` is NOT the engine's only skip: the
 # template-later branch additionally does `if (lastSep === -1) continue;` and
@@ -255,16 +250,10 @@ def file_check_path_errors($where):
   else
     (if (contains("{{") or contains("}}"))
      then [err("E-FILE-CHECK-PATH-TEMPLATE"; $where;
-               "fileCheck.path " + tojson + " is templated, so whether the engine validates it "
-               + "at all depends on the run's inputs, which this definition cannot pin down. A "
-               + "reference that IS a declared input is substituted before the containment "
-               + "check, so the run is REJECTED AT LAUNCH if the result lands outside the "
-               + "workspace roots -- which is what happens when the interpolated root is a "
-               + "worktree SIBLING of the checkout rather than a subdirectory of it. A "
-               + "reference that is NOT declared survives as a template, skips the check "
-               + "entirely, and the loop instead never terminates. Write the literal relative "
-               + "path instead: it resolves against the workspace root by construction, and "
-               + "step agents' cwd is that same root, so the writing step and the check agree.")]
+               "fileCheck.path " + tojson + " is templated. This fixture-corpus policy requires "
+               + "literal relative paths. Runtime templates are safe only when every reference "
+               + "is a declared input resolving inside an admitted workspace root; added roots "
+               + "can admit sibling worktrees. This checker does not resolve runtime inputs.")]
      else []
      end)
     + (if startswith("/")

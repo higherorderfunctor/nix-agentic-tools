@@ -11,7 +11,9 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 > native per-model remedy; native inventory extends flatten boundaries;
 > repo-readable exceptions are declared and ACP reads persisted engine settings.
 > Prompt-file slots preserve null resets and additional workspace roots use
-> additive lists across all three configuration methods.
+> additive lists across all three configuration methods. Added roots enable
+> default reads but do not load MCP configuration; evicted workflow owners use
+> fresh cwd authorization for their children.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -21,34 +23,50 @@ exceptions, not a union with the broader native settings reads scope.
 
 ### Additional workspace roots
 
-`cli.native.settings.chat.additionalDirectories` is a packaged KAS extension:
+`cli.native.settings.chat.additionalDirectories` is a packaged KAS extension.
+For repository/devenv scope:
 
 ```nix
 ai.kiro.cli.native.settings.chat.additionalDirectories = ["../worktrees"];
 ```
 
-The list contains nonempty strings or Nix paths. Nix null omits the setting;
-empty lists add nothing. Raw JSON null is invalid. KAS combines global and
-repository lists with the protocol roots. Relative global entries resolve beside
-`settings/cli.json` under `KIRO_HOME` (or `~/.kiro`); repository entries resolve
-from the conversation cwd. Existing ancestors are canonicalized for
-deduplication, preserving the first spelling, protocol order and nested roots.
-Missing directories are not created.
+For Home Manager, use an absolute path to avoid resolving beside global
+settings:
+
+```nix
+ai.kiro.cli.native.settings.chat.additionalDirectories = ["/home/alice/projects/worktrees"];
+```
+
+The list contains nonempty strings; Nix path values are refused to avoid copying
+writable directories into the store. Nix null omits the setting; empty lists add
+nothing. Raw JSON null is invalid. KAS combines global and repository lists with
+the protocol roots. Relative global entries resolve beside `settings/cli.json`
+under `KIRO_HOME` (or `~/.kiro`); repository entries resolve from the
+conversation cwd. Existing ancestors are canonicalized for deduplication,
+preserving the first spelling, protocol order and nested roots. Missing
+directories are not created.
 
 New conversations and cold resumes resolve current settings. Resident resumes
 retain their admitted roots. Saved provenance distinguishes protocol roots from
 configured roots, so removing a setting revokes it on a cold resume. Workflow
 children inherit the owner's admitted roots; detached children validate against
-the owner's current roots. Older sessions without provenance treat their saved
-roots as protocol roots and cannot reconstruct which were previously configured.
+the owner's current roots. If the vendor evicts an owner, its child resolves
+current settings from its own cwd and validates its saved roots against that
+result; revoked roots still fail. Older sessions without provenance treat their
+saved roots as protocol roots and cannot reconstruct which were previously
+configured.
 
-Workspace membership does **not** grant filesystem permission. Tool policy still
-checks reads and writes, including symlink escapes; configure permission rules
-separately. Workflow writes and `fileCheck.path` can use the identical absolute
-`{{worktree_path}}/.agents/...` path inside an admitted root. The old
-`cli.tweaks.relativeFileCheckPaths` option is removed: either boolean value
-produces a migration error. The `workflowFileCheckGuidance` prompt slot remains
-available; this change does not replace the vendor's absolute-path guidance.
+Workspace membership enables the vendor default `fs_read ./**` allow rule for
+each root, and writes under write-allowing presets. Default writes still prompt;
+configure permission rules to narrow reads or grant writes. Tool policy still
+checks symlink escapes. The server patch ignores added roots'
+`.kiro/settings/mcp.json`; only global and session-cwd MCP configuration loads,
+with cwd overriding a same-named global server. Workflow writes and
+`fileCheck.path` can use the identical absolute `{{worktree_path}}/.agents/...`
+path inside an admitted root. The old `cli.tweaks.relativeFileCheckPaths` option
+is removed: either boolean value produces a migration error. The
+`workflowFileCheckGuidance` prompt slot remains available; this change does not
+replace the vendor's absolute-path guidance.
 
 The setting requires a declarative v3 engine and the managed package. Explicit
 `package = null` produces the existing grouped inert-settings warning. A manual
