@@ -1,21 +1,20 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-14 — shared option declarations register fanout
-> surfaces and decomposition warns for every unsupported request; Kimchi
-> consumes resolved shell through Pi harness settings, patched to honor it.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
 ### One record is the capability source
 
 Every `mkRuntime` record declares the normalized pools its runtime exposes in
-`supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
-places:
+`surfaceSupport`. `mkBackendTransform.nix` reads that build-time declaration in
+four places:
 
 - only supported per-runtime pool options are declared;
 - only supported pools participate in shared/per-runtime merging;
 - only supported root pools reach the delivery callback; and
-- `shell` resolution runs only when `shell` is in the list.
+- `shell` resolution runs only when its declared backend list is non-empty.
 
 An unsupported per-runtime write is therefore an "option does not exist" eval
 error. An unsupported ROOT value is different: root `ai.*` is the portable
@@ -25,20 +24,21 @@ does not exist, and root `ai.shell` warns for Copilot instead of reaching it.
 
 The root declarations in `sharedOptions.nix`'s `sharedSurfaceOptions` also
 register the shared fanout names. `app/decompose.nix` compares those names with
-`supportedPools` and generates unsupported-root warnings automatically, even for
-third-party runtime records; policy can improve a reason but is never a coverage
-gate. Backend-specific and field-level drops still need their own diagnostics.
+`surfaceSupport` and generates unsupported-root warnings automatically, even for
+third-party runtime records. The declaration also holds backend-specific reach,
+conditional support and nested field/event gaps; policy does not drive these
+normalized diagnostics.
 
-The list is read off the RECORD, keeping it a build-time parameter in the same
-category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
-it cannot reintroduce the `_module.args` recursion documented against
+The declaration is read off the RECORD, keeping it a build-time parameter in the
+same category as `backend`. It forces neither `config` nor the factory's `pkgs`,
+so it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
 A same-named native option does not imply normalized-pool support.
 Runtime-shaped passthrough now lives under `native.settings`, independently of
-the capability list. Normalized `settings` is the deliberate uniform exception:
-Claude, Codex, Copilot and Kimchi list it; Kiro excludes it because effort is
-persisted per model.
+the capability declaration. Normalized `settings` is the deliberate uniform
+exception: Claude, Codex, Copilot and Kimchi consume it; Kiro declares no
+backend because effort is persisted per model.
 
 ### `ai.shell` deliberately uses null-as-inherit
 
@@ -79,8 +79,9 @@ feature default without replacing unrelated leaves.
 
 `mkBackendTransform.nix` declares `shell` below the record's
 `launcherOptionsPath` (`ai.kiro.cli.shell` for Kiro, `ai.<name>.shell`
-elsewhere) and computes `resolvedShell` only when `shell` appears in the app
-record's `supportedPools`. There is no sibling shell-specific capability flag.
+elsewhere) and computes `resolvedShell` only when the app record's
+`surfaceSupport.shell.backends` is non-empty. There is no sibling shell-specific
+capability flag.
 
 | runtime | knob                       | delivery                                           |
 | ------- | -------------------------- | -------------------------------------------------- |

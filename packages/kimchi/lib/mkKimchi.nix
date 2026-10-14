@@ -760,17 +760,39 @@ in
       Kimchi discovers only `AGENTS.md` there unless the package is overridden
       compatibly. Devenv always writes project-root `AGENTS.md`.
     '';
-    supportedPools = [
-      "agents"
-      "context"
-      "environmentVariables"
-      "hooks"
-      "mcpServers"
-      "rules"
-      "settings"
-      "shell"
-      "skills"
-    ];
+    surfaceSupport = {
+      agents = {
+        gaps = [
+          {
+            each = true;
+            path = ["tools"];
+            reason = {name, ...}: "Kimchi matches its own lowercase builtins, so the agent gets every tool. Set ${lib.showOption ["ai" "kimchi" "agents" name]} to native Kimchi Markdown with its own `tools:` line to apply the guardrail there.";
+          }
+        ];
+      };
+      context = {};
+      environmentVariables = {};
+      hooks = {
+        backends = ["devenv"];
+        reason = "Kimchi reads its own lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). It has two user-scope routes, and neither is a sink Home Manager can own. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:75-80) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";
+        gaps =
+          map (event: {
+            path = [event];
+            rootOnly = true;
+            reason = "Kimchi's lifecycle event list has no ${event} event; projectHooksFor filters it out (packages/kimchi/lib/mkKimchi.nix).";
+          })
+          (lib.subtractLists (import ./hook-events.nix) sharedHooks.portableEvents);
+      };
+      lspServers = {
+        backends = [];
+        reason = "Kimchi excludes the lspServers pool.";
+      };
+      mcpServers = {};
+      rules = {};
+      settings = {};
+      shell = {};
+      skills = {};
+    };
     defaults = {
       package = pkgs.ai.kimchi;
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "kimchi";

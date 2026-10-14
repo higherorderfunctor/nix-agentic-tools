@@ -1182,16 +1182,64 @@ in
     # target and declares no `ai.kiro.settings` (see docs/settings-shape.md).
     # A shared `ai.settings.reasoningEffort` request warns because Kiro has
     # no lossless normalized target.
-    supportedPools = [
-      "agents"
-      "context"
-      "environmentVariables"
-      "lspServers"
-      "mcpServers"
-      "rules"
-      "shell"
-      "skills"
-    ];
+    surfaceSupport = {
+      agents = {
+        gaps = [
+          {
+            each = true;
+            path = ["tools"];
+            when = {
+              cfg,
+              name,
+              ...
+            }:
+              (cfg.native.agents.${name}.tools or null) == null;
+            reason = {name, ...}: "Kiro takes capability tags, not Claude/Copilot tool names. Set ${lib.showOption ["ai" "kiro" "native" "agents" name "tools"]} (capability tags) and permissions to apply the guardrail there.";
+          }
+        ];
+      };
+      context = {};
+      environmentVariables = {};
+      hooks = {
+        backends = [];
+        reason = "Kiro's v3 trigger schema has no lossless mapping from portable command hooks; its native hooks are a separate surface (packages/kiro-cli/lib/mkKiro.nix).";
+      };
+      lspServers = {
+        gaps = [
+          {
+            backends = ["hm"];
+            reason = "Kiro reads settings/lsp.json relative to the workspace; Home Manager writes it under $HOME/.kiro, so it is delivered only when the workspace is $HOME. Use the devenv backend for a project workspace.";
+          }
+        ];
+      };
+      mcpServers = {};
+      rules = {
+        gaps = [
+          {
+            each = true;
+            path = ["inclusion"];
+            when = {
+              name,
+              entryValue,
+              ...
+            }:
+              aiCommon.resolveInclusion {
+                runtime = "kiro";
+                inherit name;
+                rule = entryValue;
+              }
+              == "manual";
+            reason = "Kiro CLI does not load manual steering; this mode only works in IDE clients.";
+          }
+        ];
+      };
+      settings = {
+        backends = [];
+        reason = "Kiro persists effort only in per-model chat.modelDefaults records; shared reasoningEffort has no lossless target. Use ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort for the native per-model value (packages/kiro-cli/lib/mkKiro.nix).";
+      };
+      shell = {};
+      skills = {};
+    };
     defaults = {
       package = pkgs.ai.kiro-cli;
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "kiro-cli";
@@ -1584,6 +1632,39 @@ in
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       isHm = backend == "hm";
+      message = path: reason: "${lib.showOption path} is set but ${backend} does not deliver it to kiro (reason: ${reason})";
+      hookWarnings = lib.concatMap (name: let
+        hook = cfg.hooks.${name};
+        # The payload the selected action.type ignores, and whether it is set.
+        # Unset prompts still carry record fields; inspect their content.
+        ignored =
+          if hook.action.type == "agent"
+          then {command = builtins.isString hook.action.command && hook.action.command != "";}
+          else {prompt = aiCommon.hasContent hook.action.prompt;};
+      in
+        lib.optionals (hook.enabled != false) (
+          lib.optional (hook.action.type == "agent" && hook.timeout != null)
+          (message ["ai" "kiro" "hooks" name "timeout"] "Agent hook actions have no subprocess timeout.")
+          ++ lib.concatLists (lib.mapAttrsToList (field: set:
+            lib.optional set
+            (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
+          ignored)
+        )) (builtins.attrNames cfg.hooks);
+      # `--trust-tools` reaches the chat binary on BOTH backends, so this is a
+      # withhold test rather than a platform test. Two argv paths drop the flag:
+      # Darwin's launcher resolves the chat binary by app-bundle discovery and never
+      # runs the wrapper that appends it, and the `acp` subcommand rejects it under
+      # the v3 engine (packages/kiro-cli/lib/wrapPackage.nix:194-256). Exactly one
+      # composition recovers the grant declaratively — Home Manager with v3, where
+      # mkPermissionRules also writes it into settings/permissions.yaml
+      # (packages/kiro-cli/lib/mkKiro.nix:707-742) — so that is the only case
+      # suppressed, and the devenv half that the wrapper's own comment says is not
+      # recovered declaratively now reports instead of staying silent.
+      trustToolsWarnings = lib.optional (cfg.cli.trustedMcpTools
+        != []
+        && (pkgs.stdenv.hostPlatform.isDarwin || cfg.cli.v3)
+        && !(cfg.cli.v3 && backend == "hm"))
+      (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
       nativeAgentPlans = lib.mapAttrs mkNativeAgentPlan nativeAgents;
       settingsDir = "${cfg.configDir}/settings";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
@@ -1701,7 +1782,7 @@ in
               ++ mkAgentFormatAssertions nativeAgentPlans
               ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);
           }
-          (lib.optionalAttrs (options ? warnings) {warnings = packageWarnings;})
+          (lib.optionalAttrs (options ? warnings) {warnings = packageWarnings ++ hookWarnings ++ trustToolsWarnings;})
           {
             # Writer identities survive empty declarations: N→0 must retract
             # earlier files, including when the final hook disappears.

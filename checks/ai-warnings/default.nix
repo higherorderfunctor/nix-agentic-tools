@@ -275,7 +275,7 @@
       map (runtime: {
         inherit mode runtime;
         path = ["ai" "shell"];
-        reason = "${runtime}'s supportedPools excludes shell; its runtime record does not consume this shared surface.";
+        reason = "${runtime}'s surfaceSupport does not consume this shared surface.";
         value = pkgs.bash;
       }) ["copilot"]
       ++ [
@@ -304,6 +304,16 @@
         value = sample.hooks.PreToolUse;
       }
     ];
+  kiroHomeLspReason = "Kiro reads settings/lsp.json relative to the workspace; Home Manager writes it under $HOME/.kiro, so it is delivered only when the workspace is $HOME. Use the devenv backend for a project workspace.";
+  kiroHomeLspWarns = lib.all (path:
+    casePass {
+      count = 1;
+      mode = "hm";
+      inherit path;
+      reason = kiroHomeLspReason;
+      runtime = "kiro";
+      value = sample.lspServers;
+    }) [["ai" "lspServers"] ["ai" "kiro" "lspServers"]];
   consumedRootsQuiet = lib.all (mode:
     lib.all (case:
       evaluate mode (lib.recursiveUpdate (harness.setEnable case.runtime true)
@@ -397,13 +407,8 @@
   # the root and the per-runtime path, so no warning may name that field: it
   # would claim a gap the factory closes.
   #
-  # Beyond that field, a cell warns exactly when the policy records a gap for
-  # it. rowCase owns the cells that record one; here, a cell that records none
-  # must stay silent. That silence says the warnings match the policy, NOT that
-  # every file is read: Kiro's Home Manager copy lands at
-  # $HOME/.kiro/settings/lsp.json and is live only when the workspace is $HOME
-  # (mkKiro.nix), yet `lspServers/kiro/hm` records no gap. Recording one moves
-  # that cell to rowCase rather than failing this assertion.
+  # Kiro's Home Manager LSP file is workspace-relative, so both declaration
+  # scopes diagnose its conditional reach rather than claiming global support.
   deliveredLspSilent = lib.all (mode:
     lib.all (runtime: let
       recordedGap = lib.any (row: row.surface == "lspServers" && row.ecosystem == runtime && row.mode == mode) gaps;
@@ -415,7 +420,7 @@
         }));
       in
         !contains (lib.showOption (path ++ ["extensions"])) messages
-        && (recordedGap || messages == []))
+        && (recordedGap || (mode == "hm" && runtime == "kiro") || messages == []))
       [
         ["ai" "lspServers" "probe"]
         ["ai" runtime "lspServers" "probe"]
@@ -552,19 +557,32 @@
         cli = {inherit trustedMcpTools v3;};
       };
     };
+    platformPkgs =
+      pkgs
+      // {
+        stdenv =
+          pkgs.stdenv
+          // {
+            hostPlatform = pkgs.stdenv.hostPlatform // {isDarwin = darwin;};
+          };
+      };
+    record = import ../../packages/kiro-cli/lib/mkKiro.nix {
+      lib = harness.hmLib;
+      pkgs = platformPkgs;
+    };
   in
-    deliveryWarnings {
-      appRecord = records.kiro // {pkgs.stdenv.hostPlatform.isDarwin = darwin;};
-      inherit backend;
-      inherit
+    (lib.evalModules {
+      modules = [
+        harness.aiBase.sharedOptions
         (
           if backend == "hm"
-          then harness.evalHm declaration
-          else harness.evalDevenv declaration
+          then harness.hmStubs
+          else harness.devenvStubs
         )
-        config
-        ;
-    };
+        (harness.aiBase.app.${backend + "Transform"} record)
+        {config = declaration;}
+      ];
+    }).config.warnings;
 in {
   imports = [./runtime.nix];
   checks = {
@@ -607,6 +625,7 @@ in {
       && lib.assertMsg mcpFieldCasesPass "Claude MCP field warnings match their literal paths, reasons, and disabled/absent controls"
       && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
       && lib.assertMsg effortSilent "delivered or withheld reasoning effort must not warn"
+      && lib.assertMsg kiroHomeLspWarns "Kiro HM LSP warns once at root/runtime scope and stays quiet when empty or disabled"
       && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
       && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
     );

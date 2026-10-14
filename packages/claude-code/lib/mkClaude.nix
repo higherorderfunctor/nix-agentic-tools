@@ -237,17 +237,24 @@ in
     inherit pkgs;
     name = "claude";
     contextFilename = "CLAUDE.md";
-    supportedPools = [
-      "agents"
-      "context"
-      "hooks"
-      "lspServers"
-      "mcpServers"
-      "rules"
-      "settings"
-      "shell"
-      "skills"
-    ];
+    surfaceSupport = {
+      agents = {};
+      context = {};
+      environmentVariables = {
+        backends = [];
+        reason = "Claude excludes the environmentVariables pool; native.settings.env is delivered through settings instead.";
+      };
+      hooks = {};
+      lspServers = {
+        backends = ["hm"];
+        reason = "Parity gap: Claude devenv exists but never consumes mergedLspServers or writes LSP configuration.";
+      };
+      mcpServers = {};
+      rules = {};
+      settings = {};
+      shell = {};
+      skills = {};
+    };
     defaults = {
       package = pkgs.ai.claude-code;
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "claude-code";
@@ -597,6 +604,7 @@ in
       mergedServers,
       mergedSkills,
       moduleEnvironmentVariables,
+      options,
       resolvedSettings,
       resolvedShell,
       topHooks,
@@ -654,6 +662,11 @@ in
         else ["claude" "code" "enable"];
     in
       lib.mkMerge [
+        (lib.optionalAttrs (options ? warnings) {
+          warnings =
+            lib.optional (!isHm && cfg.plugins != {})
+            "ai.claude.plugins is set but ${backend} does not deliver it to claude (reason: The devenv backend has no writer for this Claude surface.)";
+        })
         # Unrecognized-key guard for the freeform native.settings tail. One
         # builder, both backends — see nativeFileAssertions.
         {assertions = nativeFileAssertions cfg;}

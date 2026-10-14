@@ -216,16 +216,36 @@ in
       Home Manager declares the same option for schema parity and warns about
       non-empty rules it cannot deliver.
     '';
-    supportedPools = [
-      "agents"
-      "context"
-      "environmentVariables"
-      "lspServers"
-      "mcpServers"
-      "rules"
-      "settings"
-      "skills"
-    ];
+    surfaceSupport = {
+      agents = {};
+      context = {
+        backends = ["devenv"];
+        reason = "Home Manager context is deliberately inert: the .github context surface is project-scoped.";
+      };
+      environmentVariables = {};
+      hooks = {
+        backends = [];
+        reason = "Copilot excludes the hooks pool and no native hook writer exists.";
+      };
+      lspServers = {};
+      mcpServers = {};
+      rules = {
+        backends = ["devenv"];
+        reason = "Home Manager rules are deliberately inert; the agents pool is a separate surface, not a rules fallback.";
+      };
+      settings = {
+        gaps = [
+          {
+            backends = ["devenv"];
+            effective = true;
+            path = ["reasoningEffort"];
+            when = {cfg, ...}: (cfg.native.settings.effortLevel or null) != null;
+            reason = "devenv delivers it as the repository effortLevel, which copilot -p, --acp and --server ignore; they read effort from the user settings file. Set ai.copilot.native.settings.effortLevel = null to withhold it.";
+          }
+        ];
+      };
+      skills = {};
+    };
     defaults = {
       package = pkgs.ai.copilot-cli;
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "copilot-cli";
@@ -279,6 +299,8 @@ in
     config = {
       backend,
       cfg,
+      config,
+      options,
       hasMergedContext,
       mergedAgents,
       mergedContext,
@@ -307,9 +329,15 @@ in
       settings = aiCommon.filterNulls cfg.native.settings;
       unknownRepositorySettings = builtins.filter (key: !(repositorySettingKinds ? ${key})) (builtins.attrNames settings);
       mistypedRepositorySettings = builtins.filter (key: repositorySettingKinds ? ${key} && !(repositorySettingKinds.${key} settings.${key})) (builtins.attrNames settings);
+      gitRoot = lib.attrByPath ["git" "root"] null config;
+      devenvRoot = lib.attrByPath ["devenv" "root"] null config;
+      repositoryWarnings =
+        lib.optional (!isHm && settings != {} && gitRoot != null && devenvRoot != null && gitRoot != devenvRoot)
+        "ai.copilot.native.settings is set but ${backend} does not deliver it to copilot (reason: Copilot reads .github/copilot/settings.json from the git root (${toString gitRoot}), but devenv writes it under the devenv root (${toString devenvRoot}). Run devenv from the git root, or set the keys, including a lowered effortLevel, to null.)";
       relativeTrustedFolders = builtins.filter (folder: !(lib.hasPrefix "/" folder)) cfg.trustedFolders;
     in
       lib.mkMerge [
+        (lib.optionalAttrs (options ? warnings) {warnings = repositoryWarnings;})
         # `projectDir` is shared for option-tree parity and discoverability, but
         # HM cannot give a project-relative path honest semantics. Keep the
         # native default inert and reject customization rather than silently

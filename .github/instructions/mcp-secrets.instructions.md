@@ -7,8 +7,8 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-10-09 — Kiro CLI configuration lives under
-> `ai.kiro.cli`; MCP delivery remains runtime-owned.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -72,11 +72,12 @@ top-level owner is lazy because it exists solely to serve its enabled fanout
 consumers. `sharedOptions.nix` discovers every runtime option subtree carrying
 the internal `_normalizedPools.mcpServers` capability marker;
 `mkBackendTransform.nix` declares it exactly when the app record's
-`supportedPools` contains `mcpServers`. The explicit marker is load-bearing:
-public records may have an unrelated same-named native `mcpServers` option when
-they do not support the normalized pool. Discovery must remain dynamic because a
-hard-coded first-party runtime list would let custom runtimes receive lowered
-loopback entries without an owner or evade duplicate-key diagnostics.
+`surfaceSupport.mcpServers` declares a non-empty backend list. The explicit
+marker is load-bearing: public records may have an unrelated same-named native
+`mcpServers` option when they do not support the normalized pool. Discovery must
+remain dynamic because a hard-coded first-party runtime list would let custom
+runtimes receive lowered loopback entries without an owner or evade
+duplicate-key diagnostics.
 
 This is not merely a nicer delivery mechanism — it dissolves the scope mismatch
 documented below, because **there is no client-side credential left to get

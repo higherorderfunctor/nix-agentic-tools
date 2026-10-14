@@ -1,7 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
-> runtime cannot consume them; keyed tombstones still withdraw entries.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -81,7 +81,7 @@ longer a collision.
 
 Unsupported per-runtime options remain absent. Root fanout to an unsupported
 runtime warns for a non-empty request and lowers to `{}` before merging, based
-on the app record's `supportedPools` list.
+on the app record's `surfaceSupport` declaration.
 
 ### Managed-proxy ownership exception
 
@@ -278,7 +278,7 @@ inline or store-backed alike; nothing is measured at eval, so a store-backed
 1. Declare root and per-runtime values as `attrsOf (nullOr <valueType>)`, or use
    a non-null submodule with an entry-local suppression flag when leaf merging
    is part of the pool's explicit contract.
-2. Add the capability to each consuming app record's `supportedPools`.
+2. Add the capability to each consuming app record's `surfaceSupport`.
 3. Route root and runtime values through `mergePool` before any translation or
    emission.
 4. Add the pool to `normalizedPoolNames` in

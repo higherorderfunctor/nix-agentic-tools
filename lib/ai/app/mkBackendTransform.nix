@@ -70,8 +70,8 @@
     sharedTargets = sharedAgentsMdTargets;
     hasContext = normalizedHasContext;
   };
-  supportedPools = appRecord.supportedPools or [];
-  supportsPool = poolName: builtins.elem poolName supportedPools;
+  supportedSurfaces = builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) (appRecord.surfaceSupport or {}));
+  supportsPool = poolName: builtins.elem poolName supportedSurfaces;
   # Per-runtime entries replace root entries atomically. For nullable pools,
   # null is filtered after precedence so it suppresses a same-key root entry.
   mergePool = poolName: topPool: cliPool:
@@ -424,7 +424,7 @@
   # no launcher and lowers the parts into `settings.env` instead.
   callbackArgs = {
     inherit backend cfg config moduleEnvironmentVariables options;
-    normalized = lib.genAttrs supportedPools (pool: lib.getAttrFromPath (normalizedPath pool) cfg);
+    normalized = lib.genAttrs supportedSurfaces (pool: lib.getAttrFromPath (normalizedPath pool) cfg);
     launcherEnvironment =
       moduleEnvironmentVariables
       // lib.optionalAttrs (callbackArgs.resolvedShell != null) {
@@ -687,7 +687,7 @@ in {
     }
     // lib.optionalAttrs (supportsPool "context") {
       context = lib.mkOption {
-        type = aiCommon.runtimeContextModule (appRecord.contextFilename or (throw "${appRecord.name}: supportedPools includes context but the app record has no contextFilename"));
+        type = aiCommon.runtimeContextModule (appRecord.contextFilename or (throw "${appRecord.name}: supportedSurfaces includes context but the app record has no contextFilename"));
         default = {};
         description =
           appRecord.contextDescription or ''

@@ -63,7 +63,7 @@
     then [["ai" "kiro" "hooks"] ["ai" "kiro" "hooksDir"] ["ai" "kiro" "hooksJson"]]
     else
       [["ai" surface]]
-      ++ lib.optional (builtins.elem surface optionPaths.records.${ecosystem}.supportedPools) (
+      ++ lib.optional (builtins.elem surface (builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) optionPaths.records.${ecosystem}.surfaceSupport))) (
         if surface == "environmentVariables"
         then optionPaths.launcher ecosystem surface
         else ["ai" ecosystem surface]
@@ -84,7 +84,7 @@
       kiro = lib.genAttrs modes (mode: wrapper mode "kiro-cli");
     };
     hooks = {
-      copilot = both (absent "Copilot's supportedPools excludes hooks and no native hook writer exists.");
+      copilot = both (absent "Copilot excludes the hooks pool and no native hook writer exists.");
       # Kimchi's own lifecycle reader takes only a trusted project's
       # .kimchi/hooks.json and .kimchi/hooks.local.json; its user-scope routes
       # are not sinks Home Manager can own (the reason says why).
@@ -92,8 +92,8 @@
     };
     lspServers = {
       claude.devenv = absent "Parity gap: Claude devenv exists but never consumes mergedLspServers or writes LSP configuration.";
-      codex = both (absent "Codex's supportedPools excludes lspServers.");
-      kimchi = both (absent "Kimchi's supportedPools excludes lspServers.");
+      codex = both (absent "Codex excludes the lspServers pool.");
+      kimchi = both (absent "Kimchi excludes the lspServers pool.");
     };
     permissions = {
       copilot = both (absent "No permissions option or translation exists; arbitrary native.settings keys do not establish a permissions contract.");

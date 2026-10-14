@@ -23,7 +23,7 @@
   policy = import ../../config/ai-delivery.nix {inherit lib;};
   runtime = appRecord.name;
   cfg = config.ai.${runtime};
-  supports = pool: builtins.elem pool (appRecord.supportedPools or []);
+  supports = pool: (appRecord.surfaceSupport.${pool}.backends or []) != [];
   get = path: lib.attrByPath path null config;
   live = surface: pool:
     lib.filterAttrs
@@ -78,32 +78,26 @@
     && row.mode == backend
     && (row.primitive == "notApplicable" || row ? deliveryGap))
   (lib.concatMap policy.writersOf policy.rows);
-  unsupportedRoot = path:
+  normalizedPath = path:
     builtins.length path
-    == 2
-    && builtins.elem (lib.last path) decomposition.unsupported;
+    >= 2
+    && (builtins.elem (builtins.elemAt path 1) config.ai.internal.sharedSurfaces
+      || (builtins.length path
+        >= 3
+        && builtins.elemAt path 1 == runtime
+        && supports (builtins.elemAt path 2)));
   decomposition = import ./app/decompose.nix {inherit lib;} {
-    inherit appRecord message present;
+    inherit appRecord backend config entries message nonEmpty present;
     sharedSurfaces = config.ai.internal.sharedSurfaces;
-    reasonFor = path: let
-      row = lib.findFirst (row: builtins.elem path (row.inputOptions or [])) null gapRows;
-    in
-      if row == null
-      then null
-      else row.deliveryGap or row.reason;
   };
   rowWarnings = lib.concatMap (row:
     map (path: message path (row.deliveryGap or row.reason))
     (builtins.filter (path:
-      !(unsupportedRoot path)
+      !(normalizedPath path)
       && present path
       && (!(row.warnOnlyExplicit or false)
         || (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500)) (row.inputOptions or [])))
   gapRows;
-  effortPath =
-    if (cfg.settings.reasoningEffort or null) != null
-    then ["ai" runtime "settings" "reasoningEffort"]
-    else ["ai" "settings" "reasoningEffort"];
   entries = pool:
     lib.optionals (supports pool) (
       (lib.mapAttrsToList (name: value: {
@@ -122,59 +116,6 @@
       then (entry.value.${field} or {}) != {}
       else nonEmpty (entry.value.${field} or null)
     ) (message (entry.path ++ [field]) reason);
-  # A normalized agent's `tools` names Claude/Copilot tools. A runtime with
-  # another vocabulary does not lower it, so the guardrail it expresses is
-  # lost unless restated natively; a native `tools` for the same agent is that
-  # restatement and silences the warning.
-  agentToolReasons = {
-    codex = _: "Codex agents have no equivalent tool allowlist field.";
-    kimchi = name: "Kimchi matches its own lowercase builtins, so the agent gets every tool. Set ${lib.showOption ["ai" "kimchi" "agents" name]} to native Kimchi Markdown with its own `tools:` line to apply the guardrail there.";
-    kiro = name: "Kiro takes capability tags, not Claude/Copilot tool names. Set ${lib.showOption ["ai" "kiro" "native" "agents" name "tools"]} (capability tags) and permissions to apply the guardrail there.";
-  };
-  agentWarnings = lib.optionals (agentToolReasons ? ${runtime}) (lib.concatMap (entry:
-    lib.optionals ((cfg.native.agents.${entry.name}.tools or null) == null)
-    (fieldWarning entry "tools" (agentToolReasons.${runtime} entry.name))) (entries "agents"));
-  ruleWarnings = lib.optionals (runtime == "kiro") (lib.concatMap (entry:
-    lib.optional (aiCommon.resolveInclusion {
-        runtime = "kiro";
-        inherit (entry) name;
-        rule = entry.value;
-      }
-      == "manual")
-    (message (entry.path ++ ["inclusion"]) "Kiro CLI does not load manual steering; this mode only works in IDE clients.")) (entries "rules"));
-  hookWarnings = lib.optionals (runtime == "kiro") (lib.concatMap (name: let
-    hook = cfg.hooks.${name};
-    # The payload the selected action.type ignores, and whether it is set.
-    # Unset prompts still carry record fields; inspect their content.
-    ignored =
-      if hook.action.type == "agent"
-      then {command = nonEmpty hook.action.command;}
-      else {prompt = aiCommon.hasContent hook.action.prompt;};
-  in
-    lib.optionals (hook.enabled != false) (
-      lib.optional (hook.action.type == "agent" && hook.timeout != null)
-      (message ["ai" "kiro" "hooks" name "timeout"] "Agent hook actions have no subprocess timeout.")
-      ++ lib.concatLists (lib.mapAttrsToList (field: set:
-        lib.optional set
-        (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
-      ignored)
-    )) (builtins.attrNames cfg.hooks));
-  # `--trust-tools` reaches the chat binary on BOTH backends, so this is a
-  # withhold test rather than a platform test. Two argv paths drop the flag:
-  # Darwin's launcher resolves the chat binary by app-bundle discovery and never
-  # runs the wrapper that appends it, and the `acp` subcommand rejects it under
-  # the v3 engine (packages/kiro-cli/lib/wrapPackage.nix:194-256). Exactly one
-  # composition recovers the grant declaratively — Home Manager with v3, where
-  # mkPermissionRules also writes it into settings/permissions.yaml
-  # (packages/kiro-cli/lib/mkKiro.nix:707-742) — so that is the only case
-  # suppressed, and the devenv half that the wrapper's own comment says is not
-  # recovered declaratively now reports instead of staying silent.
-  trustToolsWarnings = lib.optional (runtime
-    == "kiro"
-    && cfg.cli.trustedMcpTools != []
-    && ((appRecord.pkgs.stdenv.hostPlatform.isDarwin or false) || cfg.cli.v3)
-    && !(cfg.cli.v3 && backend == "hm"))
-  (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
   mcpWarnings = lib.concatMap (entry: let
     srv = entry.value;
     http = (srv.url or null) != null;
@@ -194,27 +135,6 @@
         else "This HTTP MCP field is not rendered for stdio."
       ))
     ignored) (entries "mcpServers");
-  # Copilot's devenv settings land in the repository settings file, whose
-  # reach is narrower than the user file Home Manager writes. Copilot resolves
-  # it against the git root of the directory it runs in, so a devenv root
-  # below the git root writes a file Copilot never opens. And only the
-  # interactive session reads a repository `effortLevel`; `-p`, `--acp` and
-  # `--server` read effort from the user file alone (copilot-cli 1.0.88
-  # app.js). Each warning names a per-runtime remedy: withhold the native
-  # value with null.
-  copilotRepositorySettings = lib.filterAttrs (_: value: value != null) (cfg.native.settings or {});
-  gitRoot = get ["git" "root"];
-  devenvRoot = get ["devenv" "root"];
-  copilotWarnings = lib.optionals (runtime == "copilot" && backend == "devenv") (
-    lib.optional (copilotRepositorySettings != {} && gitRoot != null && devenvRoot != null && gitRoot != devenvRoot)
-    (message ["ai" "copilot" "native" "settings"] "Copilot reads .github/copilot/settings.json from the git root (${toString gitRoot}), but devenv writes it under the devenv root (${toString devenvRoot}). Run devenv from the git root, or set the keys, including a lowered effortLevel, to null.")
-    ++ lib.optional (get effortPath != null && copilotRepositorySettings ? effortLevel)
-    "${lib.showOption effortPath} reaches copilot through devenv in interactive sessions only (reason: devenv delivers it as the repository effortLevel, which copilot -p, --acp and --server ignore; they read effort from the user settings file). Set ai.copilot.native.settings.effortLevel = null to withhold it."
-  );
-  # Personal plugins are user-scope; a project has nowhere to put one.
-  claudeWarnings =
-    lib.optional (runtime == "claude" && backend == "devenv" && nonEmpty (cfg.plugins or {}))
-    (message ["ai" "claude" "plugins"] "The devenv backend has no writer for this Claude surface.");
   # A context or rule unit whose file is switched off or replaced. The unit
   # was requested and resolved, and the file that would carry it either has
   # `content.enable = false` or carries a consumer's own bytes instead of the
@@ -282,4 +202,4 @@ in
   then []
   else
     lib.unique
-    (decomposition.warnings ++ rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings ++ contextWarnings ++ offRuleWarnings)
+    (decomposition.warnings ++ rowWarnings ++ mcpWarnings ++ contextWarnings ++ offRuleWarnings)

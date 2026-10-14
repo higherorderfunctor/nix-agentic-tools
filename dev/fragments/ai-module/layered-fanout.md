@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-13 — shared option declarations register fanout
-> surfaces; decomposition warns automatically for every unsupported request.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -262,11 +262,12 @@ constructor and transform both validate it.
   them at one priority, which the record rejects, and computing that priority
   reads the source — a build during evaluation for a derivation.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
-  whose `supportedPools` lists `settings` declares the same closed `settings`
-  submodule; Kiro does not, because it persists effort only per model. Each
-  field resolves root versus per-runtime with `resolveOverride`; native lowering
-  remains per-runtime and may support only a subset of fields. Runtime-shaped
-  passthrough is separate under `native.settings` and is not a normalized pool.
+  whose `surfaceSupport.settings` declares a non-empty backend list receives the
+  same closed `settings` submodule; Kiro does not, because it persists effort
+  only per model. Each field resolves root versus per-runtime with
+  `resolveOverride`; native lowering remains per-runtime and may support only a
+  subset of fields. Runtime-shaped passthrough is separate under
+  `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -355,7 +356,7 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   place. The builder reads `poolOptions` by pool name, so
   `lib/ai/app/checkRecord.nix` rejects any other key, in `mkRuntime` and again
   in the transform: `agents`, a pool outside `environmentVariables` and
-  `lspServers`, one the record's `supportedPools` omits, or `agentsDir` without
+  `lspServers`, one the record's `surfaceSupport` omits, or `agentsDir` without
   `agents`. It also rejects `agentNativeType` without `agentTransformer` or the
   reverse, either one, `agentsDirSuffixes` or `agentsDescriptionSuffix` without
   the agents pool, and an empty or non-string `agentsDirSuffixes`. The native
@@ -411,12 +412,13 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 1. Add L2 option `ai.<X>` to `sharedSurfaceOptions` in
    `lib/ai/sharedOptions.nix`. This is also the shared fanout registration:
    decomposition automatically warns for every enabled runtime whose
-   `supportedPools` omits `X`; no per-gap policy row is needed. Add policy only
-   for a better reason, a backend-specific gap or a partially delivered field.
+   `surfaceSupport` does not consume `X`; no per-gap policy row is needed.
+   Declare backend-specific gaps and partially delivered fields on the runtime
+   record.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline, gated on the
    pool, with a `poolOptions` override slot for per-runtime descriptions or
    types. Declare it in each per-CLI factory only when the shape itself differs.
-3. Add `X` to `supportedPools` only on app records whose delivery `config`
+3. Declare `surfaceSupport.X` only on app records whose delivery `config`
    consumes it. The normalized `settings` pool follows the same rule: a runtime
    with no lossless target for any field (Kiro) leaves it out, and one that
    lowers only some fields keeps it and warns for the rest.

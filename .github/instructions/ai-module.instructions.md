@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-13 — shared option declarations register fanout
-> surfaces; decomposition shares its unsupported set with delivery diagnostics.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -378,12 +378,12 @@ enabled ecosystem whose native model preserves the option's semantics):
   `effortLevel` and harness `defaultThinkingLevel`, respectively. Kiro has no
   lossless target, so it declares no pool and warns when shared reasoning effort
   is requested. Copilot's devenv lowering is the one partial delivery: the
-  repository `effortLevel` reaches only its interactive session, so
-  `lib/ai/delivery-warnings.nix` warns there until the native value is withheld
-  with null. Values that only one runtime persists remain under that runtime's
-  native settings. An explicit native effort key still has normal option
-  priority over the derived normalized default, and a native null excludes that
-  runtime from emission.
+  repository `effortLevel` reaches only its interactive session, so its
+  `surfaceSupport.settings` declaration warns there until the native value is
+  withheld with null. Values that only one runtime persists remain under that
+  runtime's native settings. An explicit native effort key still has normal
+  option priority over the derived normalized default, and a native null
+  excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
@@ -424,8 +424,8 @@ enabled ecosystem whose native model preserves the option's semantics):
   the complete file; `parseCompare` compares parsed frontmatter values. `tools`
   uses Claude and Copilot's tool names and renders a non-empty value as their
   frontmatter allowlist; `null` and `[]` both omit it. Codex, Kimchi and Kiro
-  drop it, and `lib/ai/delivery-warnings.nix` warns at the path that set it,
-  naming the native remedy (Kimchi Markdown;
+  drop it, and the record's `surfaceSupport.agents` gap warns at the path that
+  set it, naming the native remedy (Kimchi Markdown;
   `ai.kiro.native.agents.<name>.tools` and `permissions`); a native `tools` on
   the same agent silences it. Claude writes `.claude/agents/<name>.md` on both
   backends through `agent.renderFile`. A path-like raw entry — a Nix path, a
@@ -604,34 +604,47 @@ documented composition semantics.
 
 ### Per-pool capability gate
 
-Every app record carries one `supportedPools` list. The shared transformer uses
-it for the per-runtime option schema, keyed-pool merge, delivery callback, and
-shell resolution. A per-runtime pool write that the runtime cannot consume is
-therefore an unknown-option error. A ROOT pool value stays portable and degrades
-to the neutral value for an incapable runtime.
+Every app record carries one `surfaceSupport` declaration. The shared
+transformer uses it for the per-runtime option schema, keyed-pool merge,
+delivery callback, and shell resolution. A per-runtime pool write that the
+runtime cannot consume is therefore an unknown-option error. A ROOT pool value
+stays portable and degrades to the neutral value for an incapable runtime.
 
 Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
 `mcpServers`, `rules`, `settings`, and `skills`. Its rules share Codex's flat
 AGENTS.md handling: Home Manager writes the user harness file, while devenv
 contributes keyed units to the single repository aggregate.
 
-`sharedSurfaceOptions` in `sharedOptions.nix` is the single registration of
-shared fanout surfaces: its keys declare root options and populate the read-only
-internal `sharedSurfaces` list. `app/decompose.nix` compares that registration
-with each runtime record's `supportedPools` and warns for every non-empty
-unhandled request, including public third-party `mkRuntime` records. A new
-shared declaration needs no per-gap policy row to be diagnosed. Policy rows
-remain for better reasons, backend-specific gaps and partial field delivery;
-they can improve a structural warning's reason but cannot suppress it. Every
-warning names the option, runtime and reason, even when it repeats on activation
-and has no per-runtime remedy. Keyed runtime replacements and tombstones still
-withdraw inherited entries before warnings are computed. Per-runtime requests
-that a backend cannot deliver warn too. Package rule contributors gate their
-writes by backend delivery capability; `mkSkillPackageModule` applies that gate
-before writing a per-runtime rules pool. Two residual silent cases remain: a
-runtime lists a surface in `supportedPools` but does not lower it on one
-backend, or a future root fanout option is declared outside
-`sharedSurfaceOptions`.
+`sharedSurfaceOptions` in `sharedOptions.nix` is the registration of shared
+fanout surfaces. Its keys declare root options and populate the read-only
+internal `sharedSurfaces` list. Every runtime's `surfaceSupport` maps a surface
+name to `{backends?; reason?; gaps?;}`. Presence defaults to both backends;
+`backends = []` consumes nothing and declares no normalized runtime option. A
+non-empty backend list keeps both backend option trees, even where delivery is
+unavailable. Omitted surfaces warn with the generic reason.
+
+`app/decompose.nix` derives unavailable-backend, whole-surface, nested and
+conditional warnings from those declarations, including for third-party
+`mkRuntime` records. A gap names a relative `path`, a reason and optional
+backend restriction or `when` predicate; `each` checks keyed entries,
+`effective` checks the winning scalar input, and `rootOnly` restricts a gap to
+the portable root. Predicates and dynamic reasons receive the backend, config,
+runtime cfg, field value, whole entry value, path and entry name. Keyed runtime
+replacements and tombstones withdraw inherited entries before warnings.
+
+Policy rows continue describing physical delivery and native diagnostics; they
+no longer choose normalized delivery warnings or override their reasons. Package
+rule contributors consult the record's backend reach before writing. Native
+diagnostics belong to runtime factories. Transport-dependent MCP field warnings
+and final-file replacement warnings remain generic in the shared reader. Kiro
+Home Manager LSP delivery is conditional on launching with $HOME as the
+workspace; Home Manager has no launch workspace value, so a populated LSP
+declaration always explains that condition. Devenv LSP stays quiet.
+
+Diagnostic units currently enumerate per-runtime pools at the runtime root. A
+future gap on launcher-prefixed `shell` or `environmentVariables` needs that
+enumeration to follow `launcherOptionsPath`; no current declaration has such a
+gap. This limitation does not change lowering or existing warning coverage.
 
 A context or rule unit that resolves for a runtime but lands in a file whose
 final entry has `content.enable = false` warns too, root or per-runtime: the
@@ -988,8 +1001,8 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
-> runtime cannot consume them; keyed tombstones still withdraw entries.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -1069,7 +1082,7 @@ longer a collision.
 
 Unsupported per-runtime options remain absent. Root fanout to an unsupported
 runtime warns for a non-empty request and lowers to `{}` before merging, based
-on the app record's `supportedPools` list.
+on the app record's `surfaceSupport` declaration.
 
 ### Managed-proxy ownership exception
 
@@ -1266,7 +1279,7 @@ inline or store-backed alike; nothing is measured at eval, so a store-backed
 1. Declare root and per-runtime values as `attrsOf (nullOr <valueType>)`, or use
    a non-null submodule with an entry-local suppression flag when leaf merging
    is part of the pool's explicit contract.
-2. Add the capability to each consuming app record's `supportedPools`.
+2. Add the capability to each consuming app record's `surfaceSupport`.
 3. Route root and runtime values through `mergePool` before any translation or
    emission.
 4. Add the pool to `normalizedPoolNames` in
@@ -1417,8 +1430,8 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-13 — shared option declarations register fanout
-> surfaces; decomposition warns automatically for every unsupported request.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1679,11 +1692,12 @@ constructor and transform both validate it.
   them at one priority, which the record rejects, and computing that priority
   reads the source — a build during evaluation for a derivation.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
-  whose `supportedPools` lists `settings` declares the same closed `settings`
-  submodule; Kiro does not, because it persists effort only per model. Each
-  field resolves root versus per-runtime with `resolveOverride`; native lowering
-  remains per-runtime and may support only a subset of fields. Runtime-shaped
-  passthrough is separate under `native.settings` and is not a normalized pool.
+  whose `surfaceSupport.settings` declares a non-empty backend list receives the
+  same closed `settings` submodule; Kiro does not, because it persists effort
+  only per model. Each field resolves root versus per-runtime with
+  `resolveOverride`; native lowering remains per-runtime and may support only a
+  subset of fields. Runtime-shaped passthrough is separate under
+  `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -1772,7 +1786,7 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   place. The builder reads `poolOptions` by pool name, so
   `lib/ai/app/checkRecord.nix` rejects any other key, in `mkRuntime` and again
   in the transform: `agents`, a pool outside `environmentVariables` and
-  `lspServers`, one the record's `supportedPools` omits, or `agentsDir` without
+  `lspServers`, one the record's `surfaceSupport` omits, or `agentsDir` without
   `agents`. It also rejects `agentNativeType` without `agentTransformer` or the
   reverse, either one, `agentsDirSuffixes` or `agentsDescriptionSuffix` without
   the agents pool, and an empty or non-string `agentsDirSuffixes`. The native
@@ -1828,12 +1842,13 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 1. Add L2 option `ai.<X>` to `sharedSurfaceOptions` in
    `lib/ai/sharedOptions.nix`. This is also the shared fanout registration:
    decomposition automatically warns for every enabled runtime whose
-   `supportedPools` omits `X`; no per-gap policy row is needed. Add policy only
-   for a better reason, a backend-specific gap or a partially delivered field.
+   `surfaceSupport` does not consume `X`; no per-gap policy row is needed.
+   Declare backend-specific gaps and partially delivered fields on the runtime
+   record.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline, gated on the
    pool, with a `poolOptions` override slot for per-runtime descriptions or
    types. Declare it in each per-CLI factory only when the shape itself differs.
-3. Add `X` to `supportedPools` only on app records whose delivery `config`
+3. Declare `surfaceSupport.X` only on app records whose delivery `config`
    consumes it. The normalized `settings` pool follows the same rule: a runtime
    with no lossless target for any field (Kiro) leaves it out, and one that
    lowers only some fields keeps it and warns for the rest.
@@ -1878,22 +1893,21 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-14 — shared option declarations register fanout
-> surfaces and decomposition warns for every unsupported request; Kimchi
-> consumes resolved shell through Pi harness settings, patched to honor it.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
 ### One record is the capability source
 
 Every `mkRuntime` record declares the normalized pools its runtime exposes in
-`supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
-places:
+`surfaceSupport`. `mkBackendTransform.nix` reads that build-time declaration in
+four places:
 
 - only supported per-runtime pool options are declared;
 - only supported pools participate in shared/per-runtime merging;
 - only supported root pools reach the delivery callback; and
-- `shell` resolution runs only when `shell` is in the list.
+- `shell` resolution runs only when its declared backend list is non-empty.
 
 An unsupported per-runtime write is therefore an "option does not exist" eval
 error. An unsupported ROOT value is different: root `ai.*` is the portable
@@ -1903,20 +1917,21 @@ does not exist, and root `ai.shell` warns for Copilot instead of reaching it.
 
 The root declarations in `sharedOptions.nix`'s `sharedSurfaceOptions` also
 register the shared fanout names. `app/decompose.nix` compares those names with
-`supportedPools` and generates unsupported-root warnings automatically, even for
-third-party runtime records; policy can improve a reason but is never a coverage
-gate. Backend-specific and field-level drops still need their own diagnostics.
+`surfaceSupport` and generates unsupported-root warnings automatically, even for
+third-party runtime records. The declaration also holds backend-specific reach,
+conditional support and nested field/event gaps; policy does not drive these
+normalized diagnostics.
 
-The list is read off the RECORD, keeping it a build-time parameter in the same
-category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
-it cannot reintroduce the `_module.args` recursion documented against
+The declaration is read off the RECORD, keeping it a build-time parameter in the
+same category as `backend`. It forces neither `config` nor the factory's `pkgs`,
+so it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
 A same-named native option does not imply normalized-pool support.
 Runtime-shaped passthrough now lives under `native.settings`, independently of
-the capability list. Normalized `settings` is the deliberate uniform exception:
-Claude, Codex, Copilot and Kimchi list it; Kiro excludes it because effort is
-persisted per model.
+the capability declaration. Normalized `settings` is the deliberate uniform
+exception: Claude, Codex, Copilot and Kimchi consume it; Kiro declares no
+backend because effort is persisted per model.
 
 ### `ai.shell` deliberately uses null-as-inherit
 
@@ -1957,8 +1972,9 @@ feature default without replacing unrelated leaves.
 
 `mkBackendTransform.nix` declares `shell` below the record's
 `launcherOptionsPath` (`ai.kiro.cli.shell` for Kiro, `ai.<name>.shell`
-elsewhere) and computes `resolvedShell` only when `shell` appears in the app
-record's `supportedPools`. There is no sibling shell-specific capability flag.
+elsewhere) and computes `resolvedShell` only when the app record's
+`surfaceSupport.shell.backends` is non-empty. There is no sibling shell-specific
+capability flag.
 
 | runtime | knob                       | delivery                                           |
 | ------- | -------------------------- | -------------------------------------------------- |

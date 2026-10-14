@@ -162,7 +162,7 @@
     (lib.filterAttrs (_path: runtimeFiles.isLive) files);
   # One registration declares every shared fanout surface and supplies the
   # decompose step with its names. Adding a declaration here automatically
-  # warns for every enabled runtime whose supportedPools omits it.
+  # warns for every enabled runtime whose surfaceSupport omits it.
   sharedSurfaceOptions = {
     agents = lib.mkOption {
       type = lib.types.attrsOf (lib.types.nullOr agent.semanticAgentType);
