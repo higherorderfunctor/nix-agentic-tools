@@ -53,13 +53,6 @@
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
-  # The skill's Kiro evidence covers V3. Native settings select terminal
-  # engines; the managed package supplies the matching ACP default.
-  reachesKiro = lib.any (runtime:
-    sourceEnabled runtime
-    && builtins.elem "kiro" ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates))
-  supportedRuntimes;
-  kiroDeclared = lib.hasAttrByPath ["ai" "kiro" "cli" "native"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
   techniques = familyFunctions.effectiveTechniques config;
   flattenedFamilies = familyFunctions.flatten portable.families;
@@ -201,15 +194,6 @@ in {
           techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
         });
       }
-      # Guarded on the declaration: a consumer without the Kiro module has no
-      # ai.kiro.cli settings to set.
-      (lib.optionalAttrs kiroDeclared {
-        kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null) {
-          tweaks = lib.mkIf config.ai.kiro.cli.workflows.enable {
-            stripVendorWorktreeSteering = lib.mkDefault true;
-          };
-        };
-      })
       (lib.genAttrs reminderRuntimes (runtime:
         lib.mkIf (reminderHookEnabled runtime)
         (reminder.hooks.${runtime} portable.reminder.text)))

@@ -229,7 +229,8 @@ in {
         settings: let
           chat = (settings.type.getSubOptions []).chat.type.getSubOptions [];
         in
-          chat.additionalDirectories.type.check [./module-eval.nix "../sibling"]
+          chat.additionalDirectories.type.check ["../sibling"]
+          && !chat.additionalDirectories.type.check [./module-eval.nix]
           && chat.additionalDirectories.type.check []
           && chat.additionalDirectories.type.check null
           && !chat.additionalDirectories.type.check [""]

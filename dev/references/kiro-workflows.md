@@ -1,6 +1,6 @@
 # Kiro Workflow Engine — Mechanics and Measured Behavior
 
-> **Last verified:** 2026-10-13 — GA workflow prerequisites replace the
+> **Last verified:** 2026-10-14 — GA workflow prerequisites replace the
 > historical rollout unlock; packaged additional roots are distinguished from
 > the historical upstream TUI measurement.
 
@@ -376,11 +376,12 @@ hence checked, and the error quoted the RESOLVED sibling-worktree path. Row 5's
 `{{workdir}}` evidently was not substituted in that probe, which is why the two
 observations disagree without either being wrong.
 
-The practical rule is the one that survives both: **do not put a template in
-`fileCheck.path` at all.** Whether it is validated depends on the input set,
-which the definition itself cannot see — which is exactly the reasoning
-`E-FILE-CHECK-PATH-TEMPLATE` in `fixtures/kiro-primitives/workflows/contract.jq`
-already encodes. That rule needs no change.
+A templated `fileCheck.path` is safe only when its references are declared
+inputs and resolve inside an admitted workspace root. The checker in
+`fixtures/kiro-primitives/workflows/contract.jq` retains its stricter
+fixture-corpus policy: `E-FILE-CHECK-PATH-TEMPLATE` rejects templates because
+those fixtures use literal relative paths. That policy does not constrain
+configured runtime roots.
 
 The `fileCheck` workspace-root check behaves as a **prefix test on literal
 text**: the literal prefix running up to the first template reference is
