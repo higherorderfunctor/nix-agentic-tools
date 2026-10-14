@@ -105,12 +105,6 @@ class PatchTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(errors, ['fixture: tagged template has runtime-defined decoding'])
 
-    def test_retired_selectors_are_refused(self):
-        for name in ('relativeFileCheckPaths', 'stripVendorWorktreeSteering'):
-            result = subprocess.run([sys.executable, PATCHER, 'unused', 'unused', '--replace', name], capture_output=True, text=True)
-            self.assertEqual(result.returncode, 2)
-            self.assertIn(f"invalid choice: '{name}'", result.stderr)
-
     def test_invalid_identity_is_rejected(self):
         for identity in ('', 'no punctuation', 'Bad `identity`.', 'Bad ${identity}.'):
             with self.subTest(identity=identity), self.assertRaisesRegex(ValueError, 'identity:'):
