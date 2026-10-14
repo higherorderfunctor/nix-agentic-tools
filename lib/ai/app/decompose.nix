@@ -32,9 +32,9 @@
       if gap.each or false
       then entries surface
       else units surface;
-    tail = gap.path or [];
+    gapPath = gap.path or [];
     warnings = entry: let
-      value = lib.attrByPath tail null entry.value;
+      value = lib.attrByPath gapPath null entry.value;
       args =
         entry
         // {
@@ -46,13 +46,13 @@
       selected =
         !(gap.effective or false)
         || (builtins.length entry.path == 3)
-        == (lib.attrByPath ([surface] ++ tail) null cfg != null);
+        == (lib.attrByPath ([surface] ++ gapPath) null cfg != null);
       active =
         builtins.elem backend (gap.backends or ["devenv" "hm"])
         && (!(gap.rootOnly or false) || builtins.length entry.path == 2)
         && selected
         && (
-          if tail == []
+          if gapPath == []
           then present entry.path
           else nonEmpty value
         )
@@ -62,7 +62,7 @@
         then gap.reason args
         else gap.reason;
     in
-      lib.optional active (message (entry.path ++ tail) reason);
+      lib.optional active (message (entry.path ++ gapPath) reason);
   in
     lib.concatMap warnings candidates;
   surfaceWarnings = surface: let
