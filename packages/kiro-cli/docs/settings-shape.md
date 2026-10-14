@@ -3,6 +3,7 @@
 > **Last verified:** 2026-10-14 — unsupported root reasoning effort warns with a
 > native per-model remedy; native inventory extends flatten boundaries;
 > repo-readable exceptions are declared and ACP reads persisted engine settings.
+> Prompt-file slots preserve null resets across all three configuration methods.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
