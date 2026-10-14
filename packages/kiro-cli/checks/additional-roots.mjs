@@ -338,6 +338,12 @@ try {
     ["nested", path.join(repoC, "nested")],
   ])
     assert.equal(await discover(linked, location), expected);
+  // A rendering at or above the primary checkout would grant writes over it.
+  for (const location of [".", "..", "{{primary}}", "/", "nested/.."])
+    await assert.rejects(
+      discover(linked, location),
+      /location must not cover the primary checkout/,
+    );
   assert.equal(process.cwd(), cwdBefore);
   for (const suffix of ["\t", "\ninvalid"]) {
     const special = path.join(tmp, `policy-special${suffix}`);
@@ -526,9 +532,27 @@ try {
     ]);
   }
   const policyRequest = await resolve({ cwd: repoC });
-  const policySnapshot = await (
-    await import(pathToFileURL(path.join(tmp, "prompt-files.mjs")))
-  ).resolveSnapshot(home, repoC, worktrees.requestPolicy(policyRequest));
+  const promptsApi = await import(
+    pathToFileURL(path.join(tmp, "prompt-files.mjs"))
+  );
+  const policySnapshot = await promptsApi.resolveSnapshot(
+    home,
+    repoC,
+    worktrees.requestPolicy(policyRequest),
+  );
+  // An evicted owner's child re-derives the same policy guidance from its cwd.
+  assert.deepEqual(
+    await promptsApi.ownerSnapshot(
+      {
+        homeDir: home,
+        sessionState: () => undefined,
+        persistence: { loadSessionMetadata: async () => undefined },
+      },
+      "evicted",
+      repoC,
+    ),
+    policySnapshot,
+  );
   const policyMetadata = {
     workspacePaths: Uke(policyRequest, false),
     _meta: rootsApi.authorityMetadata(
@@ -1084,12 +1108,18 @@ try {
       assert.equal(check, "FileCheckPathOutsideWorkspaceError");
     if (kind === "no-grant") {
       assert.equal(prompts, policyRoot ? 0 : 1);
-      // The grant never reaches the session cwd.
+      // The grant never reaches a session cwd outside the policy root; a
+      // linked worktree inside the root is covered by it.
       const decision = await policy.evaluateSingleResource(
         { capability: "fs_write", resource: "result.txt" },
         { workspaceRoot: cwd },
       );
       assert.equal(decision.effect, "ask");
+      const insideRoot = await policy.evaluateSingleResource(
+        { capability: "fs_write", resource: "result.txt" },
+        { workspaceRoot: sibling },
+      );
+      assert.equal(insideRoot.effect, policyRoot ? "allow" : "ask");
     }
     results.push({ rootSource, kind, writes, prompts, check });
     policy.dispose?.();

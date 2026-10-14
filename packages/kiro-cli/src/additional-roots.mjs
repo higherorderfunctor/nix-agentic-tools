@@ -36,10 +36,7 @@ export async function resolveRequest(homeDir, request, roots) {
   // roots comes from the vendor validator, retaining protocol failures.
   const candidates = [...roots];
   const layers = await settingsLayers(homeDir, request.cwd);
-  const policy = worktrees.policy(layers);
-  const worktree = policy
-    ? await worktrees.discover(request.cwd, policy.location)
-    : undefined;
+  const worktree = await worktrees.admit(layers, request.cwd);
   for (const { path, base, value } of layers) {
     const entries = value["chat.additionalDirectories"];
     if (entries === undefined) continue;
@@ -83,9 +80,9 @@ export async function resolveRequest(homeDir, request, roots) {
 // writable; generic configured roots keep the vendor default.
 export async function writableRoot(homeDir, roots) {
   if (!roots.length) return undefined;
-  const policy = worktrees.policy(await settingsLayers(homeDir, roots[0]));
-  const root =
-    policy && (await worktrees.discover(roots[0], policy.location))?.root;
+  const root = (
+    await worktrees.admit(await settingsLayers(homeDir, roots[0]), roots[0])
+  )?.root;
   if (!root) return undefined;
   const key = await canonical(root);
   for (const candidate of roots)

@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { open, readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { settingsLayers } from "./session-settings.mjs";
+import { admit } from "./worktree-policy.mjs";
 
 const slots = ["identity", "workflowFileCheckGuidance", "worktreeGuidance"];
 const limit = 1024 * 1024;
@@ -139,7 +140,11 @@ export async function ownerSnapshot(agent, owner, cwd) {
     fail("workflow", `owner session ${owner} is unavailable`);
   // Vendor eviction may remove an owner first; resolve from the child's cwd,
   // matching the cwd reauthorization of its workspace roots.
-  return resolveSnapshot(agent.homeDir, cwd);
+  return resolveSnapshot(
+    agent.homeDir,
+    cwd,
+    await admit(await settingsLayers(agent.homeDir, cwd), cwd),
+  );
 }
 
 export function profile(definition, source, snapshot, original) {
