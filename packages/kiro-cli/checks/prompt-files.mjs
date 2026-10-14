@@ -598,7 +598,13 @@ try {
     reconcileMcpForAllSessions: silent,
     extractCallerClientId: () => undefined,
     outboundFor: () => outbound,
-    workflowRuntime: { pushCheckpointAvailability: async () => {} },
+    workflowRuntime: {
+      bindLoadedStepSession: async (state, owner) => {
+        assert.equal(state.sessionId, "cold-child");
+        assert.equal(owner, "acp-a");
+      },
+      pushCheckpointAvailability: async () => {},
+    },
     governed: {},
     pushGovernanceState: silent,
     emitMcpStatus: silent,
@@ -778,6 +784,27 @@ try {
     states.get("cold-child").state.nixPromptSnapshot.slots.identity,
     "ACP_A.",
   );
+  // Cold child hydration survives owner eviction using current cwd authority.
+  const evictedRecord = records.get("acp-a");
+  records.delete("acp-a");
+  states.delete("acp-a");
+  states.delete("cold-child");
+  const orphan = await method("hydrateSessionForLoad").call(
+    host,
+    "session/load",
+    await nixRoots.restoreRequest(host, {
+      sessionId: "cold-child",
+      cwd: repoA,
+    }),
+    records.get("cold-child"),
+    {},
+    false,
+    outbound,
+    silent,
+  );
+  assert.deepEqual([...orphan.session.workspacePaths], [repoA]);
+  assert.equal(orphan.session.nixPromptSnapshot.slots.identity, "ACP_A.");
+  records.set("acp-a", evictedRecord);
   Object.assign(context, {
     sx: (value) => value,
     nKi: (messages) => ({ messages }),

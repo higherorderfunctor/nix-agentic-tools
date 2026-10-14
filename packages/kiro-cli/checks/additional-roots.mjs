@@ -67,10 +67,25 @@ try {
   await fs.writeFile(
     path.join(tmp, "vendor.mjs"),
     source.slice(0, cut.getStart(ast)) +
-      `\nexport {fqe,h5,Xjc,mB,M$t,h0o,oPt,yce,ho,$qr,Uke,T9r,${agentName} as Agent};\nexport function workflowRegistry(roots, owner) { return (${registryBuilder.initializer.getText(ast)})(roots, owner); }\n`,
+      `\nexport {fqe,h5,Xjc,mB,M$t,h0o,oPt,yce,ho,$qr,Uke,T9r,m9o,S8e,${agentName} as Agent};\nexport function workflowRegistry(roots, owner) { return (${registryBuilder.initializer.getText(ast)})(roots, owner); }\n`,
   );
   const vendor = await import(pathToFileURL(path.join(tmp, "vendor.mjs")));
-  const { fqe, h5, Xjc, mB, M$t, h0o, oPt, yce, ho, $qr, Uke, Agent } = vendor;
+  const {
+    fqe,
+    h5,
+    Xjc,
+    mB,
+    M$t,
+    h0o,
+    oPt,
+    yce,
+    ho,
+    $qr,
+    Uke,
+    Agent,
+    m9o,
+    S8e,
+  } = vendor;
   const rootsApi = await import(
     pathToFileURL(path.join(tmp, "additional-roots.mjs"))
   );
@@ -350,6 +365,53 @@ try {
     }),
     /no longer authorized/,
   );
+  // An evicted owner must not strand its child or preserve revoked extra roots.
+  const evictedOwner = {
+    ...childOwner,
+    persistence: {
+      loadSessionMetadata: async (id) =>
+        id === "child" ? childMetadata : undefined,
+    },
+  };
+  assert.deepEqual(await rootsApi.ownerRoots(evictedOwner, "child"), [a]);
+  assert.deepEqual(
+    rootsApi.requestAuthority(
+      await rootsApi.restoreRequest(evictedOwner, {
+        sessionId: "child",
+        cwd: a,
+      }),
+    ),
+    rootsApi.requestAuthority(childRequest),
+  );
+  const childWithExtra = {
+    ...evictedOwner,
+    persistence: {
+      loadSessionMetadata: async (id) =>
+        id === "child"
+          ? {
+              workspacePaths: [a, path.join(tmp, "a-extra")],
+              _meta: rootsApi.authorityMetadata(
+                {},
+                {
+                  version: 1,
+                  protocol: [a, path.join(tmp, "a-extra")],
+                  owner: "parent",
+                },
+              ),
+            }
+          : undefined,
+    },
+  };
+  await assert.rejects(
+    rootsApi.ownerRoots(childWithExtra, "child"),
+    /no longer authorized/,
+  );
+  await settings(repoFile(a), ["../a-extra"]);
+  assert.deepEqual(await rootsApi.ownerRoots(childWithExtra, "child"), [
+    a,
+    path.join(tmp, "a-extra"),
+  ]);
+  await settings(repoFile(a), []);
   const cyclic = {
     ...owner,
     persistence: { loadSessionMetadata: async () => childMetadata },
@@ -399,7 +461,94 @@ try {
     /invalid persisted/,
   );
 
-  // Real vendor permission/admission/fs_write and identical absolute fileCheck.
+  // The actual MCP loader keeps each concurrent session's cwd, never its added
+  // roots. Inert ports capture file declarations without starting MCP servers.
+  const mcpHome = path.join(tmp, "mcp-home"),
+    mcpCwd = path.join(tmp, "mcp-cwd"),
+    mcpOther = path.join(tmp, "mcp-other"),
+    mcpAdded = path.join(tmp, "mcp-added");
+  for (const [root, name] of [
+    [mcpHome, "global"],
+    [mcpCwd, "cwd"],
+    [mcpOther, "other"],
+    [mcpAdded, "added"],
+  ]) {
+    const dir = path.join(root, ".kiro/settings");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(
+      path.join(dir, "mcp.json"),
+      JSON.stringify({ mcpServers: { [name]: { command: name } } }),
+    );
+  }
+  const sessions = new Map();
+  let fileConfigs, staged;
+  const watched = [];
+  const manager = Object.assign(Object.create(S8e.prototype), {
+    homeDir: mcpHome,
+    workspaceTrusted: true,
+    globalEnvVars: {},
+    pluginServers: {},
+    configWatcher: { addWorkspacePaths: (roots) => watched.push(roots) },
+    items: {
+      openSession: (id, roots) => sessions.set(id, roots),
+      closeSession: (id) => sessions.delete(id),
+      roots: () => [...new Set([...sessions.values()].flat())],
+      restate: (configs) => {
+        fileConfigs = configs;
+      },
+      merged: () => [],
+      stateWorkspace: (_port, configs) => {
+        staged = configs;
+      },
+    },
+  });
+  manager.setWorkspacePaths([mcpCwd, mcpAdded], "one", {});
+  manager.setWorkspacePaths([mcpOther, mcpAdded], "two", {});
+  assert.deepEqual(Object.keys(fileConfigs.user.servers), ["global"]);
+  assert.deepEqual([...fileConfigs.workspaces.keys()], [mcpCwd, mcpOther]);
+  assert.deepEqual(Object.keys(fileConfigs.workspaces.get(mcpCwd).servers), [
+    "cwd",
+  ]);
+  assert.deepEqual(Object.keys(fileConfigs.workspaces.get(mcpOther).servers), [
+    "other",
+  ]);
+  assert.deepEqual(watched, [[mcpCwd], [mcpOther]]);
+  manager.stateWorkspace([mcpCwd, mcpAdded], {});
+  assert.deepEqual([...staged.keys()], [mcpCwd]);
+  manager.removeSessionWorkspacePaths("one");
+  assert.deepEqual([...fileConfigs.workspaces.keys()], [mcpOther]);
+
+  // Default vendor reads flip from ask to allow only for a configured root.
+  await settings(globalFile, []);
+  await settings(repoFile(a), ["../a-extra"]);
+  const readRequest = await rootsApi.resolveRequest(home, { cwd: a }, [a]);
+  for (const [roots, target, expected] of [
+    [[a], path.join(tmp, "a-extra/result.txt"), "ask"],
+    [Uke(readRequest, false), path.join(tmp, "a-extra/result.txt"), "allow"],
+    [Uke(readRequest, false), path.join(tmp, "unrelated/result.txt"), "ask"],
+  ]) {
+    const policy = new M$t({
+      homeDir: home,
+      workspaceRoots: roots,
+      workspaceTrusted: true,
+      agentPermissions: m9o([]),
+    });
+    const root = new yce(roots, home).resolveWorkspaceRoot(target);
+    const decision = await policy.evaluateSingleResource(
+      {
+        capability: "fs_read",
+        resource: root ? path.relative(root, target) : target,
+      },
+      { workspaceRoot: root },
+    );
+    assert.equal(decision.effect, expected);
+    if (expected === "allow")
+      assert.deepEqual(decision.matchedRule.match, ["./**"]);
+    policy.dispose?.();
+  }
+
+  // Actual admission/write/fileCheck agreement; denied, no-grant, symlink and
+  // common-git negatives are vendor-contract guards, not root-resolution tests.
   const results = [];
   await settings(globalFile, []);
   for (const kind of [
@@ -602,7 +751,7 @@ try {
     }),
   );
   console.log(
-    "PASS: configured roots, actual new/load admission, detached provenance revocation, vendor policy/write/fileCheck (5 cases)",
+    "PASS: configured roots, actual new/load admission, detached provenance revocation and owner eviction, cwd-only MCP across sessions, default fs_read, write/fileCheck agreement, vendor-contract guards (denied/no-grant/symlink/common-git)",
   );
 } finally {
   if (previousHome === undefined) delete process.env.KIRO_HOME;

@@ -258,6 +258,32 @@ fn("A9r", (text) =>
   ),
 );
 
+// MCP configuration belongs to each session's cwd, not its added roots. Limit
+// registration before the manager combines roots across concurrent sessions.
+method("setWorkspacePaths", (text) =>
+  replace(
+    text,
+    "this.items.openSession(r, t, n)",
+    "this.items.openSession(r, t = t.slice(0, 1), n)",
+  ),
+);
+edit(
+  unique(
+    (n) =>
+      ts.isMethodDeclaration(n) &&
+      n.name.getText(file) === "stateWorkspace" &&
+      ts.isVariableDeclaration(n.parent.parent) &&
+      n.parent.parent.name.getText(file) === "S8e",
+    "MCP workspace staging",
+  ),
+  (text) =>
+    replace(
+      text,
+      "this.readWorkspaceFiles(t)",
+      "this.readWorkspaceFiles(t.slice(0, 1))",
+    ),
+);
+
 method("createNewSessionState", (text) => {
   text = replace(
     text,
@@ -272,7 +298,8 @@ method("createNewSessionState", (text) => {
   return replace(
     text,
     "S.error(`[KiroAgent] Failed to save session ${i}:`, pe);",
-    "S.error(`[KiroAgent] Failed to save session ${i}:`, pe); if (nixSnapshot !== null || le.nixWorkspaceRoots !== undefined) throw pe;",
+    // Creation must be durable before the caller receives a session.
+    "S.error(`[KiroAgent] Failed to save session ${i}:`, pe); throw pe;",
   );
 });
 method("hydrateSessionForLoad", (text) =>

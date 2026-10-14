@@ -146,13 +146,10 @@ compare the result with emitted settings on both backends. A consumer without
 the Kiro module is untouched. The package's existing launchers read the
 persisted settings for ACP; no routing wrapper reads config.
 
-When an enabled runtime reaches Kiro directly or through external delegation,
-the program defaults `cli.tweaks.stripVendorWorktreeSteering` to true only when
-`cli.workflows.enable` is true and the CLI package is managed. Explicit false
-wins; identity is not enabled. Sibling workflow directories must be declared
-through `cli.native.settings.chat.additionalDirectories` and granted filesystem
-permissions separately. The retired `relativeFileCheckPaths` workaround is no
-longer selected.
+Routing does not select Kiro prompt tweaks. The vendor worktree guidance remains
+available when workflows are enabled. Sibling workflow directories use
+`cli.native.settings.chat.additionalDirectories`; membership enables default
+reads, while default writes require permission grants.
 
 Kiro's `run_workflow` appears only with `cli.workflows.enable`, effective V3,
 and no explicit false for `cli.native.settings.chat.enableWorkflows`. Devenv's
