@@ -809,6 +809,17 @@ try {
   );
   assert.deepEqual([...orphan.session.workspacePaths], [repoA]);
   assert.equal(orphan.session.nixPromptSnapshot.slots.identity, "ACP_A.");
+  // A detached step created after owner eviction resolves from its cwd.
+  await writeFile(join(repoA, "identity.txt"), "EVICTED_A.");
+  await newLocal("evicted-child", repoA, {
+    role: "workflow-step",
+    ownerSessionId: "acp-a",
+  });
+  assert.equal(
+    states.get("evicted-child").state.nixPromptSnapshot.slots.identity,
+    "EVICTED_A.",
+  );
+  await rm(join(repoA, "identity.txt"));
   records.set("acp-a", evictedRecord);
   Object.assign(context, {
     sx: (value) => value,
