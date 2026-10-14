@@ -25,6 +25,7 @@
     settings.reasoningEffort = "high";
     shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
+    worktrees.enable = true;
   };
   evaluateSupport = backend: record: requests: enabled:
     lib.evalModules {
