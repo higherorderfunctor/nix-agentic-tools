@@ -1,6 +1,8 @@
 # Consumer facts and independent input probes. Physical paths, methods and
 # activation names belong to the generated delivery matrix.
 {lib}: let
+  kimchiHookEvents = import ../packages/kimchi/lib/hook-events.nix;
+  portableHookEvents = (import ../lib/ai/hooks.nix {inherit lib;}).portableEvents;
   optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
   absent = reason: {
     inherit reason;
@@ -217,7 +219,7 @@
   supplements = {
     "hooks/kimchi/devenv" = [
       ((absent "Kimchi's lifecycle event list has no PermissionRequest event; projectHooksFor filters it out (packages/kimchi/lib/mkKimchi.nix).")
-        // {inputOptions = [["ai" "hooks" "PermissionRequest"]];})
+        // {inputOptions = map (event: ["ai" "hooks" event]) (lib.subtractLists kimchiHookEvents portableHookEvents);})
     ];
     "hooks/kiro/devenv" = [kiroPortableHooksGap];
     "hooks/kiro/hm" = [kiroPortableHooksGap];
@@ -228,7 +230,12 @@
           warnOnlyExplicit = true;
         })
     ];
+    "settings/kiro/devenv" = [kiroEffortGap];
+    "settings/kiro/hm" = [kiroEffortGap];
   };
+  kiroEffortGap =
+    (absent "Kiro persists effort only in per-model chat.modelDefaults records; shared reasoningEffort has no lossless target. Use ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort for the native per-model value (packages/kiro-cli/lib/mkKiro.nix).")
+    // {inputOptions = [["ai" "settings"]];};
   kiroPortableHooksGap =
     (absent "Kiro's v3 trigger schema has no lossless mapping from portable command hooks; its native hooks are a separate surface (packages/kiro-cli/lib/mkKiro.nix).")
     // {inputOptions = [["ai" "hooks"]];};

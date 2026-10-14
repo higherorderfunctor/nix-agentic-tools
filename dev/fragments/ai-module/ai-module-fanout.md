@@ -1,13 +1,17 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-13 — shared option declarations register fanout
-> surfaces; decomposition warns automatically for every unsupported request.
+> surfaces; decomposition shares its unsupported set with delivery diagnostics.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
 > wrongly. Full lineage:
 > `git show d1c28a21:dev/fragments/ai-module/ai-module-fanout.md`.
 >
+> - **Root silence for unsupported runtimes is rejected.** It was the design,
+>   rejected by the operator on 2026-10-13; repeated activation warnings,
+>   including Copilot's, are accepted. Prior design:
+>   `git show origin/main:dev/fragments/ai-module/ai-module-fanout.md`.
 > - **No per-backend delivery callback on the runtime record.** A backend spec's
 >   own `config` let a runtime lower each backend separately, and the untyped
 >   callbacks grew into near-duplicate per-backend delivery bodies that the
@@ -617,7 +621,10 @@ and has no per-runtime remedy. Keyed runtime replacements and tombstones still
 withdraw inherited entries before warnings are computed. Per-runtime requests
 that a backend cannot deliver warn too. Package rule contributors gate their
 writes by backend delivery capability; `mkSkillPackageModule` applies that gate
-before writing a per-runtime rules pool.
+before writing a per-runtime rules pool. Two residual silent cases remain: a
+runtime lists a surface in `supportedPools` but does not lower it on one
+backend, or a future root fanout option is declared outside
+`sharedSurfaceOptions`.
 
 A context or rule unit that resolves for a runtime but lands in a file whose
 final entry has `content.enable = false` warns too, root or per-runtime: the

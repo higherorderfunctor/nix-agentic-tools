@@ -19,5 +19,7 @@
   in
     lib.optional (present path)
     (message path reason);
-in
-  lib.concatMap warning unsupported
+in {
+  inherit unsupported;
+  warnings = lib.concatMap warning unsupported;
+}

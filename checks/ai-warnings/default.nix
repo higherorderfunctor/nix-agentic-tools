@@ -312,8 +312,9 @@
         }
         {
           inherit mode;
+          count = 1;
           path = ["ai" "settings"];
-          reason = "kiro's supportedPools excludes settings; its runtime record does not consume this shared surface.";
+          reason = "Kiro persists effort only in per-model chat.modelDefaults records; shared reasoningEffort has no lossless target. Use ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort for the native per-model value (packages/kiro-cli/lib/mkKiro.nix).";
           runtime = "kiro";
           value.reasoningEffort = "high";
         }
@@ -457,8 +458,10 @@
       then builtins.elem needle
       else contains needle;
     enabled = harness.setEnable case.runtime true;
+    messages = evaluate mode (lib.recursiveUpdate enabled input);
   in
-    present (evaluate mode (lib.recursiveUpdate enabled input))
+    present messages
+    && (!(case ? count) || builtins.length messages == case.count)
     && !present emptyCaseWarnings.${mode}.${case.runtime}
     && evaluate mode input == [];
   kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [

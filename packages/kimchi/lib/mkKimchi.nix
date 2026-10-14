@@ -240,32 +240,7 @@
   # `resources`, which the launcher delivers instead.
   projectHarnessSettings = cfg: aiCommon.filterNulls (cfg.native.harnessSettings // {resources = null;});
 
-  # Kimchi 1.1.37's lifecycle events, FULL_COMMAND_HOOK_EVENTS
-  # (src/extensions/hook-adapters/discovery.ts:29-50). Every portable event
-  # except PermissionRequest is among them, and the reader skips an event
-  # outside this list without a word (:131).
-  hookEvents = [
-    "MessageEnd"
-    "MessageStart"
-    "ModelSelect"
-    "Notification"
-    "PostCompact"
-    "PostToolBatch"
-    "PostToolUse"
-    "PostToolUseFailure"
-    "PreCompact"
-    "PreToolUse"
-    "SessionEnd"
-    "SessionStart"
-    "Stop"
-    "StopFail"
-    "SubagentStart"
-    "SubagentStop"
-    "TaskCompleted"
-    "TurnStart"
-    "UserBash"
-    "UserPromptSubmit"
-  ];
+  hookEvents = import ./hook-events.nix;
   # Shared groups first, Kimchi's own appended, restricted to the events
   # Kimchi reads. Unsupported shared events are omitted with a warning naming
   # the option, Kimchi and the missing event.

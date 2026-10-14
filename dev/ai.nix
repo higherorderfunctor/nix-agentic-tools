@@ -16,6 +16,9 @@
     package = pkgs.ai.mcpServers.agnix-mcp;
     command = "${pkgs.ai.mcpServers.agnix-mcp}/bin/agnix-mcp";
   };
+  # zsh has OOM'd this machine on `/nix/store/*/bin`; bash is ~185x cheaper.
+  # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
+  shell = pkgs.bash;
   # A per-runtime or stacked-workflows rule at a fragment category's key would
   # silently hide that fragment, so fail on any overlap.
   shadowed =
@@ -36,10 +39,6 @@ in {
   ai = {
     context.text = gen.context;
     rules = gen.rules // swsRouter;
-
-    # zsh has OOM'd this machine on `/nix/store/*/bin`; bash is ~185x cheaper.
-    # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
-    shell = pkgs.bash;
 
     # Fresh guests have no host/project config paths; select the raw harnesses.
     sandboxes = lib.optionalAttrs (pkgs.stdenv.hostPlatform.isLinux && !isCI) {
@@ -189,6 +188,7 @@ in {
     };
 
     claude = {
+      inherit shell;
       context.text = ''
         ## Path-scoped rules
 
@@ -204,6 +204,7 @@ in {
       };
     };
     codex = {
+      inherit shell;
       enable = true;
       # AGENTS.md exceeds Codex's 32 KiB default; raise its read limit to keep the tail.
       projectDocMaxBytes = 131072;
@@ -222,6 +223,7 @@ in {
     kiro = {
       mcpServers.agnix = agnixMcp;
       cli = {
+        inherit shell;
         enable = true;
         tweaks = {
           # Replacing only the opening sentence preserves the vendor's behavioral prose.

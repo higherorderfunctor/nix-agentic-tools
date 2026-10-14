@@ -81,9 +81,8 @@
   unsupportedRoot = path:
     builtins.length path
     == 2
-    && builtins.elem (lib.last path) config.ai.internal.sharedSurfaces
-    && !(supports (lib.last path));
-  sharedWarnings = import ./app/decompose.nix {inherit lib;} {
+    && builtins.elem (lib.last path) decomposition.unsupported;
+  decomposition = import ./app/decompose.nix {inherit lib;} {
     inherit appRecord message present;
     sharedSurfaces = config.ai.internal.sharedSurfaces;
     reasonFor = path: let
@@ -283,4 +282,4 @@ in
   then []
   else
     lib.unique
-    (sharedWarnings ++ rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings ++ contextWarnings ++ offRuleWarnings)
+    (decomposition.warnings ++ rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings ++ contextWarnings ++ offRuleWarnings)
