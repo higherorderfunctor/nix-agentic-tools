@@ -7,9 +7,8 @@ applyTo: "packages/kiro-cli/checks/kiro-fhs-contract.nix,packages/kiro-cli/check
 
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-10-13 — package-bound KAS/Node paths and selected
-> prompt patches follow the native payload through FHS and direct launch. The
-> recorded upstream sandbox measurements below are unchanged.
+> **Last verified:** 2026-10-14 — the FHS chat wrapper passes trust grants to
+> the payload, which resolves ACP engine settings before applying them.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
@@ -87,7 +86,10 @@ normal `kiro-cli` launch finds it before the inherited profile PATH reaches any
 outer wrapper. When `trustedMcpTools` is non-empty, this repo re-composes
 nixpkgs' FHS package around a chat-only wrapped payload instead. The command at
 that same `/usr/bin` path is then the configured wrapper, so launcher-dispatched
-devenv sessions do not silently lose `--trust-tools`.
+devenv sessions do not silently lose the grant. It passes the grant through a
+private environment value to the payload launcher, which resolves ACP engine
+settings before deciding whether `--trust-tools` is accepted and clears that
+value before native execution.
 
 ## Supplying missing tools
 
@@ -256,9 +258,8 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 ## Kiro launch defaults and argument composition
 
-> **Last verified:** 2026-10-13 — terminal defaults are delivered settings; ACP
-> defaults use the existing package build launcher and preserve explicit engine
-> arguments. Native Darwin checks exercise the same contract in CI.
+> **Last verified:** 2026-10-14 — ACP reads engine settings in the payload
+> launchers; the packaged KAS wins over inherited overrides.
 >
 > Full historical measurements:
 > `git show 8be06935:packages/kiro-cli/docs/launcher-argv.md`.
@@ -268,40 +269,28 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 Managed library, Home Manager and devenv configurations default
 `cli.native.settings.chat.agentEngine` to `"v3"` through the existing settings
 writer. Native terminal selection is explicit CLI > repository settings > global
-settings. There is no terminal `--v3` injection and no wrapper reads
-configuration files. A repository choosing V2 therefore overrides a global V3
-default; an explicit terminal `--v3`, `--v2` or `--agent-engine` overrides
-persisted settings.
+settings. There is no terminal `--v3` injection. Every module feature is built
+and tested against V3; other native engine values, including null (automatic
+selection), warn. V3-only features additionally reject incompatible
+declarations.
 
-`cli.v3` remains a compatibility switch, defaulting true. False withholds its
-default; it does **not** force V2. An explicit native engine overrides the
-switch, and explicit null withholds both the terminal setting and ACP default.
-V3-only feature assertions use this effective declared engine, not the
-compatibility boolean. Null is unknown and cannot satisfy a V3 requirement.
+ACP does not read persisted `chat.agentEngine` itself. The payload's existing
+`makeWrapper` launchers read `$KIRO_HOME/settings/cli.json` (default
+`~/.kiro/settings/cli.json`) then `./.kiro/settings/cli.json`, with the repo
+value winning. On `acp` only, they add `--agent-engine <value>` when a value
+exists and no explicit engine flag was supplied. Both `--agent-engine` spellings
+and launcher `--v1`, `--v2`, `--v3` win. Shared argv helpers skip value-taking
+globals when recognizing ACP and stop at `--`. Without a setting, argv stays
+unchanged. Settings changes do not create a new payload derivation.
 
-ACP does not read persisted `chat.agentEngine` for engine selection. The
-package's `withAcpDefault` composes a declared default into its existing
-`makeWrapper` launchers for both `kiro-cli` and `kiro-cli-chat`. The same small
-argv block, using `lib/idempotentFlags.nix`, adds
-`--agent-engine=<declared engine>` only on ACP and only without explicit engine
-arguments. Both spellings of `--agent-engine` survive; a caller's
-launcher-global `--v3` also survives without a second selector. Value-taking
-globals are skipped when recognizing ACP; `--agent acp` is a terminal
-invocation, not an ACP subcommand. Native `--repo` also consumes a value;
-`--cloud` is boolean. The package and trust wrappers share these measured value
-flags. A literal `--` stops detection.
-
-This is a managed default. The bare package retains upstream terminal behavior.
-Arbitrary runtime edits of repository settings do not change the configured ACP
-default. Changing the native resolver or rejecting future V3-only features after
-an explicit runtime V2 choice requires a separate design decision; neither is
-implemented by a config-reading wrapper or a Rust logic patch here.
+Devenv's `.kiro` output, including the engine setting, applies when starting
+Kiro at the project root: Kiro does not find that root from a subdirectory.
 
 ### Package and platform composition
 
-`withAcpDefault`, `withBundlePatches` and `withRolloutFeatures` preserve each
-other. Linux applies defaults in the unwrapped payload before nixpkgs builds the
-FHS root around it. `useFhsSandbox = false` selects that same payload directly.
+`withBundlePatches` and `withRolloutFeatures` preserve each other. Linux applies
+the settings bridge in the unwrapped payload before nixpkgs builds the FHS root
+around it. `useFhsSandbox = false` selects that same payload directly.
 
 Darwin's launcher shim executes the real packaged `.app` binary and sets argv0
 to that path; an app-shaped argv0 alone on a hidden `bin` symlink was
@@ -311,18 +300,23 @@ direct `bin/kiro-cli-chat` has its own guarded default. Never change the Darwin
 shim to `exec -a "$0"`: it must retain the real app path as executable and
 argv0.
 
-KAS paths, TERM and platform setup remain ordinary build wrapper arguments. The
-engine helper neither reads nor writes settings, authenticates, or selects a
-cache. Explicit native UI policy remains unchanged; no wrapper injects `--tui`.
+The packaged KAS always wins: both launchers set `KIRO_KAS_SERVER_PATH` with
+`--set`. A differing inherited path produces one stderr line saying it was
+detected and ignored and naming the selected path; the same path is silent. The
+main launcher exports the selected path before dispatch, so the direct chat
+launcher does not repeat the warning. TERM and platform setup remain ordinary
+build wrapper arguments. No wrapper injects `--tui`.
 
 ### Trust injection remains engine-sensitive
 
-`--trust-tools` is a chat-subcommand option, so the module wrapper appends it to
+`--trust-tools` is a chat-subcommand option, so the payload launcher adds it to
 `chat` and `acp` only. ACP with V3 rejects it, while terminal V3 accepts it. The
-wrapper reads explicit `--agent-engine` from argv; when absent it uses the same
-declared ACP default that the later build wrapper supplies. Direct chat and
-launcher dispatch must agree. It never derives an engine by reading a settings
-file.
+payload first resolves the effective ACP engine from argv and settings, then
+applies the configured trust grant only when that engine accepts it. The
+module's chat wrapper hands the grant through `NAT_KIRO_TRUST_TOOLS`; the
+payload unsets that private value before executing the native binary. This order
+prevents a repository V3 override from receiving a conflicting `--trust-tools`
+flag.
 
 Linux's FHS root supplies `/usr/bin/kiro-cli-chat` ahead of inherited PATH. An
 outer chat wrapper would be bypassed on launcher dispatch, so trust handling is
