@@ -65,17 +65,15 @@
   # control through the actual factory. Unsupported runtime options use root.
   gaps = lib.filter (row: row.primitive == "notApplicable" || row ? deliveryGap) policy.rows;
   rowCase = row: let
-    supported = builtins.elem row.surface records.${row.ecosystem}.supportedPools;
     enabled = harness.setEnable row.ecosystem true;
     empty = evaluate row.mode enabled;
     messagesFor = path: evaluate row.mode (lib.recursiveUpdate enabled (lib.setAttrByPath path sample.${row.surface}));
     warns = path: let
       messages = messagesFor path;
-      needle = lib.showOption path;
+      needle = "${lib.showOption path} is set but ${row.mode} does not deliver it to ${row.ecosystem} (reason: ${row.deliveryGap or row.reason})";
     in
-      contains needle messages
-      && contains (row.deliveryGap or row.reason) messages
-      && !contains needle empty;
+      builtins.elem needle messages
+      && !(builtins.elem needle empty);
     path =
       if row.surface == "settings"
       then ["ai" row.ecosystem "native" "settings"]
@@ -89,18 +87,6 @@
     # default instead of staying silently unexercised.
     if row.surface == "permissions" && row.ecosystem != "kiro"
     then row.inputOptions == []
-    # A bare root pool is deliberately silent unless the runtime can tombstone
-    # it one name at a time: an excluded pool has no per-runtime option, and a
-    # non-keyed pool (context, hooks) composes root with per-runtime, so the
-    # warning would have no consumer remedy. The silence is the assertion. A
-    # supported non-keyed pool must still warn for its PER-RUNTIME path, which
-    # is also what proves this evaluation produces warnings at all.
-    else if builtins.length path == 2 && !(supported && builtins.elem row.surface policy.keyedSurfaces)
-    then
-      messagesFor path
-      == []
-      && empty == []
-      && (!supported || warns ["ai" row.ecosystem row.surface])
     else warns path;
   # `ai.kiro.cli.trustedMcpTools` is NOT a case here: the wrapper appends
   # `--trust-tools` on both backends, so a devenv consumer setting it has no
@@ -108,10 +94,6 @@
   # `acp` arm and Darwin's bundle-discovery launcher — is asserted by
   # ai-warnings-darwin-trust below.
   #
-  # Root pools nothing per-runtime can withdraw (`ai.hooks` on
-  # Kiro, `ai.shell` on Kimchi and Copilot, `ai.context` on Copilot's and
-  # `ai.hooks` on Kimchi's Home Manager rows) are not cases either: they are
-  # silent by design, and rowCase above asserts that silence.
   cases =
     [
       {
@@ -275,14 +257,120 @@
       ["ai" "settings" "reasoningEffort"]
       ["ai" "copilot" "settings" "reasoningEffort"]
     ];
-  # Effort stays silent wherever the factory closes the gap or the runtime has
-  # no per-runtime remedy. Kimchi lowers losslessly on both backends, and
-  # Copilot on Home Manager, whose user file every mode reads. Copilot on
-  # devenv is silent once the consumer withholds the native value, which is
-  # the remedy its warning names. Kiro persists effort only per model, so it
-  # declares no normalized settings pool, and a bare root value for an
-  # unsupported pool does not warn (packages/kiro-cli/checks:
-  # kiro-settings-pool-excluded).
+  rootGapRequests = [
+    {
+      modes = ["hm"];
+      runtime = "copilot";
+      surface = "context";
+    }
+    {
+      runtime = "claude";
+      surface = "environmentVariables";
+    }
+    {
+      runtime = "copilot";
+      surface = "hooks";
+    }
+    {
+      modes = ["hm"];
+      runtime = "kimchi";
+      surface = "hooks";
+    }
+    {
+      runtime = "codex";
+      surface = "lspServers";
+    }
+    {
+      runtime = "kimchi";
+      surface = "lspServers";
+    }
+  ];
+  gapCases =
+    lib.concatMap (request:
+      map (mode: {
+        inherit mode;
+        inherit (request) runtime;
+        path = ["ai" request.surface];
+        reason = policy.definitions.${request.surface}.${request.runtime}.${mode}.reason;
+        value = sample.${request.surface};
+      }) (request.modes or ["devenv" "hm"]))
+    rootGapRequests
+    ++ lib.concatMap (mode:
+      map (runtime: {
+        inherit mode runtime;
+        path = ["ai" "shell"];
+        reason = "${runtime}'s supportedPools excludes shell; its runtime record does not consume this shared surface.";
+        value = pkgs.bash;
+      }) ["copilot" "kimchi"]
+      ++ [
+        {
+          inherit mode;
+          path = ["ai" "hooks"];
+          reason = "Kiro's v3 trigger schema has no lossless mapping from portable command hooks; its native hooks are a separate surface (packages/kiro-cli/lib/mkKiro.nix).";
+          runtime = "kiro";
+          value = sample.hooks;
+        }
+        {
+          inherit mode;
+          count = 1;
+          path = ["ai" "settings"];
+          reason = "Kiro persists effort only in per-model chat.modelDefaults records; shared reasoningEffort has no lossless target. Use ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort for the native per-model value (packages/kiro-cli/lib/mkKiro.nix).";
+          runtime = "kiro";
+          value.reasoningEffort = "high";
+        }
+      ]) ["devenv" "hm"]
+    ++ [
+      {
+        mode = "devenv";
+        path = ["ai" "hooks" "PermissionRequest"];
+        reason = "Kimchi's lifecycle event list has no PermissionRequest event; projectHooksFor filters it out (packages/kimchi/lib/mkKimchi.nix).";
+        runtime = "kimchi";
+        value = sample.hooks.PreToolUse;
+      }
+    ];
+  consumedRootsQuiet = lib.all (mode:
+    lib.all (case:
+      evaluate mode (lib.recursiveUpdate (harness.setEnable case.runtime true)
+        (lib.setAttrByPath case.path case.value))
+      == []) [
+      {
+        path = ["ai" "context"];
+        runtime = "claude";
+        value = sample.context;
+      }
+      {
+        path = ["ai" "environmentVariables"];
+        runtime = "codex";
+        value = sample.environmentVariables;
+      }
+      {
+        path = ["ai" "hooks"];
+        runtime = "claude";
+        value = sample.hooks;
+      }
+      {
+        path = ["ai" "hooks" "PermissionRequest"];
+        runtime = "claude";
+        value = sample.hooks.PreToolUse;
+      }
+      {
+        path = ["ai" "lspServers"];
+        runtime = "copilot";
+        value = sample.lspServers;
+      }
+      {
+        path = ["ai" "settings" "reasoningEffort"];
+        runtime = "kimchi";
+        value = "high";
+      }
+      {
+        path = ["ai" "shell"];
+        runtime = "codex";
+        value = pkgs.bash;
+      }
+    ]) ["devenv" "hm"];
+  # Supported effort delivery stays quiet; withholding Copilot's native
+  # repository value also withdraws its partial-delivery warning.
   effortSilent = lib.all ({
     runtime,
     modes,
@@ -322,11 +410,6 @@
         ["ai" "kimchi" "settings" "reasoningEffort"]
       ];
     }
-    {
-      runtime = "kiro";
-      modes = ["devenv" "hm"];
-      paths = [["ai" "settings" "reasoningEffort"]];
-    }
   ];
   # Copilot and Kiro both render an LSP server's `extensions` (Copilot as
   # `fileExtensions`, Kiro as `file_extensions`), on both backends and at both
@@ -358,19 +441,28 @@
       ])
     ["copilot" "kiro"]) ["devenv" "hm"];
   caseMode = case: case.mode or "devenv";
-  # Cases share each identical enabled-empty control by backend and runtime.
+  # Memoize identical enabled-empty controls across both case collections.
   emptyCaseWarnings = lib.mapAttrs (mode: modeCases:
     lib.genAttrs (map (case: case.runtime) modeCases)
     (runtime: evaluate mode (harness.setEnable runtime true)))
-  (lib.groupBy caseMode cases);
+  (lib.groupBy caseMode (cases ++ gapCases));
   casePass = case: let
     mode = caseMode case;
     input = lib.setAttrByPath case.path case.value;
-    needle = lib.showOption case.path + (case.suffix or "");
+    needle =
+      if case ? reason
+      then "${lib.showOption case.path} is set but ${mode} does not deliver it to ${case.runtime} (reason: ${case.reason})"
+      else lib.showOption case.path + (case.suffix or "");
+    present =
+      if case ? reason
+      then builtins.elem needle
+      else contains needle;
     enabled = harness.setEnable case.runtime true;
+    messages = evaluate mode (lib.recursiveUpdate enabled input);
   in
-    contains needle (evaluate mode (lib.recursiveUpdate enabled input))
-    && !contains needle emptyCaseWarnings.${mode}.${case.runtime}
+    present messages
+    && (!(case ? count) || builtins.length messages == case.count)
+    && !present emptyCaseWarnings.${mode}.${case.runtime}
     && evaluate mode input == [];
   kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [
     {
@@ -435,17 +527,6 @@
         config
         ;
     };
-  # A hand-built config, not a harness eval: every policy path goes through
-  # lib.attrByPath, which answers `null` for a shared pool a minimal
-  # composition never declared, and the real module trees always declare them
-  # all. Each branch of `present` has to read that null as "nothing requested"
-  # instead of crashing the whole evaluation.
-  undeclaredSharedPools = backend:
-    import ../../lib/ai/delivery-warnings.nix {inherit lib;} {
-      appRecord = records.copilot;
-      inherit backend;
-      config.ai.copilot.enable = true;
-    };
 in {
   imports = [./runtime.nix];
   checks = {
@@ -483,8 +564,10 @@ in {
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
       lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
+      && lib.all (case: assert lib.assertMsg (casePass case) "warning gap ${case.runtime}/${case.mode}/${lib.showOption case.path}"; true) gapCases
+      && lib.assertMsg consumedRootsQuiet "consumed shared surfaces must not warn"
       && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
-      && lib.assertMsg effortSilent "reasoning effort warns where the factory closes the gap or no per-runtime remedy exists"
+      && lib.assertMsg effortSilent "delivered or withheld reasoning effort must not warn"
       && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
       && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
     );
@@ -725,8 +808,14 @@ in {
         };
       }
       == []
-      && undeclaredSharedPools "hm" == []
-      && undeclaredSharedPools "devenv" == []
+      && evaluate "devenv" {
+        ai.claude = {
+          enable = true;
+          lspServers.probe = null;
+        };
+        ai.lspServers = sample.lspServers;
+      }
+      == []
     );
   };
 }

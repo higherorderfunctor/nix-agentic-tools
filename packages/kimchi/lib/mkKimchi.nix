@@ -240,36 +240,10 @@
   # `resources`, which the launcher delivers instead.
   projectHarnessSettings = cfg: aiCommon.filterNulls (cfg.native.harnessSettings // {resources = null;});
 
-  # Kimchi 1.1.37's lifecycle events, FULL_COMMAND_HOOK_EVENTS
-  # (src/extensions/hook-adapters/discovery.ts:29-50). Every portable event
-  # except PermissionRequest is among them, and the reader skips an event
-  # outside this list without a word (:131).
-  hookEvents = [
-    "MessageEnd"
-    "MessageStart"
-    "ModelSelect"
-    "Notification"
-    "PostCompact"
-    "PostToolBatch"
-    "PostToolUse"
-    "PostToolUseFailure"
-    "PreCompact"
-    "PreToolUse"
-    "SessionEnd"
-    "SessionStart"
-    "Stop"
-    "StopFail"
-    "SubagentStart"
-    "SubagentStop"
-    "TaskCompleted"
-    "TurnStart"
-    "UserBash"
-    "UserPromptSubmit"
-  ];
+  hookEvents = import ./hook-events.nix;
   # Shared groups first, Kimchi's own appended, restricted to the events
-  # Kimchi reads. The one portable event it lacks can only arrive through the
-  # shared pool, which has no per-runtime remedy, so it is dropped silently
-  # (see the root-pool rule in lib/ai/delivery-warnings.nix).
+  # Kimchi reads. Unsupported shared events are omitted with a warning naming
+  # the option, Kimchi and the missing event.
   projectHooksFor = {
     cfg,
     topHooks,
@@ -920,7 +894,7 @@ in
           and from the exact devenv root. Home Manager delivers nothing and
           warns about this option: Kimchi has no user-scope lifecycle hook
           file Home Manager can own. `ai.hooks`' PermissionRequest is not a
-          Kimchi event, so it is left out silently. If Kimchi's opt-in Claude
+          Kimchi event, so it is omitted with a warning. If Kimchi's opt-in Claude
           Code hook adapter is enabled, a shared hook that also reaches
           `.claude/settings.json` fires twice.
         '';

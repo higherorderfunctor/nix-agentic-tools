@@ -7,8 +7,85 @@
   ...
 }: let
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) ai devenvStubs factoryProxyServer hmStubs mkProxyTestRecord mkTest;
+  sharedRequests = {
+    agents.probe = {
+      description = "probe";
+      instructions.text = "probe";
+    };
+    context.text = "probe";
+    environmentVariables.PROBE = "value";
+    hooks.PreToolUse = [{hooks = [{command = "true";}];}];
+    lspServers.probe = {
+      command = "probe";
+      extensions = ["nix"];
+    };
+    # A wholly unsupported MCP surface gets one surface diagnostic, even
+    # when its transport would also drop fields on a capable runtime.
+    mcpServers.probe = {
+      command = "probe";
+      headers.Authorization = "probe";
+    };
+    rules.probe.text = "probe";
+    settings.reasoningEffort = "high";
+    shell = pkgs.bash;
+    skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
+  };
+  decomposeCase = backend: supportedPools: let
+    record = ai.app.mkRuntime {
+      inherit pkgs supportedPools;
+      name = "testapp";
+      # A same-named native option does not elect to handle shared hooks.
+      options.hooks = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+      };
+    };
+    evaluate = requests: enabled:
+      lib.evalModules {
+        modules = [
+          ai.sharedOptions
+          (
+            if backend == "hm"
+            then hmStubs
+            else devenvStubs
+          )
+          {
+            options.warnings = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [];
+            };
+          }
+          (ai.app.${backend + "Transform"} record)
+          {config.ai = requests // {testapp.enable = enabled;};}
+        ];
+      };
+    evaluated = evaluate sharedRequests true;
+    warnings = evaluated.config.warnings;
+    unsupported = lib.subtractLists supportedPools evaluated.config.ai.internal.sharedSurfaces;
+  in
+    # Every registered surface is exercised, and each unsupported surface
+    # gets exactly one diagnostic through the public factory on both backends.
+    builtins.attrNames sharedRequests
+    == evaluated.config.ai.internal.sharedSurfaces
+    && builtins.length warnings == builtins.length unsupported
+    && lib.all (surface:
+      builtins.length (lib.filter
+        (lib.hasPrefix "ai.${surface} is set but ${backend} does not deliver it to testapp (reason: ")
+        warnings)
+      == 1)
+    unsupported
+    && lib.all (surface: !(lib.any (lib.hasPrefix "ai.${surface} is set but ") warnings)) supportedPools
+    && (evaluate {} true).config.warnings == []
+    && (evaluate sharedRequests false).config.warnings == []
+    && (supportedPools == [] || evaluated.config.ai.testapp.normalized.skills == sharedRequests.skills);
 in {
   checks = {
+    factory-mkRuntime-decompose-no-surfaces = mkTest "mkRuntime-decompose-no-surfaces" (
+      lib.all (backend: decomposeCase backend []) ["devenv" "hm"]
+    );
+    factory-mkRuntime-decompose-one-surface = mkTest "mkRuntime-decompose-one-surface" (
+      lib.all (backend: decomposeCase backend ["skills"]) ["devenv" "hm"]
+    );
     # ── mkRuntime tests ───────────────────────────────────────────────
     # The per-backend seam is retired: delivery is ONE record-level `config`,
     # and a backend spec takes only installPackage, migrationConfig and

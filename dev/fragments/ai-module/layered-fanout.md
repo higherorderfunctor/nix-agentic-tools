@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-09 — Kiro launcher controls, including enable, use
-> `ai.kiro.cli`; root enable is read-only and derived from that switch.
+> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> surfaces; decomposition warns automatically for every unsupported request.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -218,10 +218,10 @@ constructor and transform both validate it.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use
-  `enable = false` on the replacement entry. Unsupported root fanout degrades
-  before this boundary and has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so
-  explicit entries within the same layer still win before cross-level
-  composition.
+  `enable = false` on the replacement entry. Unsupported root requests warn and
+  lower to the neutral value before this boundary; there is no L3 option. L1→L2
+  and L2b→L3 use `mkDefault` so explicit entries within the same layer still win
+  before cross-level composition.
 - **One package owner per key and scope.** Definition-provenance checks reject
   two packages claiming one root key or one per-runtime key. A root key and its
   runtime replacement are different scopes and do not collide.
@@ -408,7 +408,11 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 
 ### Adding a new concern X
 
-1. Add L2 option `ai.<X>` in `lib/ai/sharedOptions.nix`.
+1. Add L2 option `ai.<X>` to `sharedSurfaceOptions` in
+   `lib/ai/sharedOptions.nix`. This is also the shared fanout registration:
+   decomposition automatically warns for every enabled runtime whose
+   `supportedPools` omits `X`; no per-gap policy row is needed. Add policy only
+   for a better reason, a backend-specific gap or a partially delivered field.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline, gated on the
    pool, with a `poolOptions` override slot for per-runtime descriptions or
    types. Declare it in each per-CLI factory only when the shape itself differs.

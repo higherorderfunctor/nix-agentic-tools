@@ -1,8 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-08 — `launcherOptionsPath` places Kiro environment
-> and shell options, including their normalized inputs, under `ai.kiro.cli`;
-> Codex always installs one launcher with an offline document preflight.
+> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> surfaces; decomposition warns automatically for every unsupported request.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -19,9 +18,16 @@ places:
 
 An unsupported per-runtime write is therefore an "option does not exist" eval
 error. An unsupported ROOT value is different: root `ai.*` is the portable
-surface, so its fanout degrades to the pool's neutral value for that runtime.
-For example, Kimchi exposes `rules` but not `shell`: `ai.kimchi.rules` exists,
-while `ai.kimchi.shell` does not and root `ai.shell` does not reach Kimchi.
+surface, so a non-empty request warns and lowers to the pool's neutral value for
+that enabled runtime. For example, Kimchi exposes `rules` but not `shell`:
+`ai.kimchi.rules` exists, while `ai.kimchi.shell` does not and root `ai.shell`
+does not reach Kimchi.
+
+The root declarations in `sharedOptions.nix`'s `sharedSurfaceOptions` also
+register the shared fanout names. `app/decompose.nix` compares those names with
+`supportedPools` and generates unsupported-root warnings automatically, even for
+third-party runtime records; policy can improve a reason but is never a coverage
+gate. Backend-specific and field-level drops still need their own diagnostics.
 
 The list is read off the RECORD, keeping it a build-time parameter in the same
 category as `backend`. It forces neither `config` nor the factory's `pkgs`, so

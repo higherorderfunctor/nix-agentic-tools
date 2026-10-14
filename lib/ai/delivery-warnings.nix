@@ -53,20 +53,9 @@
     surface = lib.last path;
     value = get path;
   in
-    # A bare root pool is a FAN-OUT request whose documented behavior is to
-    # degrade for a runtime that cannot consume it. A root warning needs a
-    # per-runtime remedy, or it repeats on every activation forever. Only a
-    # keyed pool the runtime supports has one: `ai.<runtime>.<pool>.<name> =
-    # null` tombstones that name, which is what `rootRemaining` subtracts. An
-    # unsupported pool has no per-runtime option at all (declaring one is an
-    # unknown-option error by design), and a non-keyed pool (`context`, `hooks`)
-    # composes root and per-runtime values, so nothing per-runtime withdraws
-    # the root one. Those exclusions are recorded in this policy's row and in
-    # the pool's own option description instead. A per-runtime path always
-    # reports: that one the consumer wrote directly and can delete.
-    if builtins.length path == 2 && !(supports surface && builtins.elem surface keyed)
-    then false
-    else if builtins.elem surface keyed
+    # Root requests warn even when the runtime cannot withdraw them. Keyed
+    # pools still subtract per-runtime replacements and tombstones by name.
+    if builtins.elem surface keyed
     then
       (
         if builtins.length path == 2
@@ -80,38 +69,53 @@
       )
       != {}
     else if surface == "context"
-    then value != null && ((value.source or null) != null || (value.text or "") != null && (value.text or "") != "")
+    then aiCommon.hasContent value
     else nonEmpty value;
   message = path: reason: "${lib.showOption path} is set but ${backend} does not deliver it to ${runtime} (reason: ${reason})";
-  rowWarnings = lib.concatMap (row:
-    lib.optionals (row.ecosystem
-      == runtime
-      && row.mode == backend
-      && (row.primitive == "notApplicable" || row ? deliveryGap))
-    (map (path: message path (row.deliveryGap or row.reason))
-      (builtins.filter (path:
-        present path
-        && (!(row.warnOnlyExplicit or false)
-          || (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500)) (row.inputOptions or []))))
+  gapRows = builtins.filter (row:
+    row.ecosystem
+    == runtime
+    && row.mode == backend
+    && (row.primitive == "notApplicable" || row ? deliveryGap))
   (lib.concatMap policy.writersOf policy.rows);
+  unsupportedRoot = path:
+    builtins.length path
+    == 2
+    && builtins.elem (lib.last path) decomposition.unsupported;
+  decomposition = import ./app/decompose.nix {inherit lib;} {
+    inherit appRecord message present;
+    sharedSurfaces = config.ai.internal.sharedSurfaces;
+    reasonFor = path: let
+      row = lib.findFirst (row: builtins.elem path (row.inputOptions or [])) null gapRows;
+    in
+      if row == null
+      then null
+      else row.deliveryGap or row.reason;
+  };
+  rowWarnings = lib.concatMap (row:
+    map (path: message path (row.deliveryGap or row.reason))
+    (builtins.filter (path:
+      !(unsupportedRoot path)
+      && present path
+      && (!(row.warnOnlyExplicit or false)
+        || (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500)) (row.inputOptions or [])))
+  gapRows;
   effortPath =
     if (cfg.settings.reasoningEffort or null) != null
     then ["ai" runtime "settings" "reasoningEffort"]
     else ["ai" "settings" "reasoningEffort"];
   entries = pool:
-    (lib.mapAttrsToList (name: value: {
-      inherit name value;
-      path = ["ai" pool name];
-    }) (rootRemaining pool))
-    ++ (lib.mapAttrsToList (name: value: {
+    lib.optionals (supports pool) (
+      (lib.mapAttrsToList (name: value: {
         inherit name value;
-        path = ["ai" runtime pool name];
-      })
-      (
-        if supports pool
-        then live pool (cfg.${pool} or {})
-        else {}
-      ));
+        path = ["ai" pool name];
+      }) (rootRemaining pool))
+      ++ (lib.mapAttrsToList (name: value: {
+          inherit name value;
+          path = ["ai" runtime pool name];
+        })
+        (live pool (cfg.${pool} or {})))
+    );
   fieldWarning = entry: field: reason:
     lib.optional (
       if builtins.elem field ["env" "headers"]
@@ -278,4 +282,4 @@ in
   then []
   else
     lib.unique
-    (rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings ++ contextWarnings ++ offRuleWarnings)
+    (decomposition.warnings ++ rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings ++ contextWarnings ++ offRuleWarnings)
