@@ -541,6 +541,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # Forks consume accessible caches without requiring cache writes.
+      HESTIA_READ_ONLY:
+        ${{ github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
       - uses: actions/checkout@v6
       - name: Test CI workflow gates
@@ -548,6 +553,7 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           python3 dev/scripts/test-ci-packages.py
+          python3 dev/scripts/test-ci-cache.py
           python3 dev/scripts/test-update-matrix.py
       - uses: cachix/install-nix-action@v31
         with:
@@ -564,6 +570,25 @@ jobs:
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
+
+      - name: Install CI-only check cache
+        uses: ./.github/actions/check-cache
+        with:
+          read-only: ${{ env.HESTIA_READ_ONLY }}
+
+      - name: Retain original patched evaluation input
+        if: ${{ env.HESTIA_READ_ONLY != 'true' }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          eval_input="$(nix eval --raw .#.ciEvaluationInputs.x86_64-linux.devenv-nixpkgs)"
+          nix path-info "$eval_input"
+          "$HESTIA_BIN" hook --socket "$HESTIA_SOCKET" "$eval_input"
+          "$HESTIA_BIN" drain --socket "$HESTIA_SOCKET"
+          eval_name="${eval_input##*/}"
+          curl --fail --silent --show-error \
+            "http://${HESTIA_LISTEN}/${eval_name%%-*}.narinfo" > "$RUNNER_TEMP/evaluation-input.narinfo"
+          command grep -Fx "StorePath: $eval_input" "$RUNNER_TEMP/evaluation-input.narinfo"
 
       # Warm the flake eval cache BEFORE the check. Same IFD-fetch flake as
       # the build job: overlays read fetchFromGitHub sources at eval time,

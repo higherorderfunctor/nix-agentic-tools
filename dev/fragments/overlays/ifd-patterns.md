@@ -1,8 +1,8 @@
 ## IFD Patterns and Gotchas
 
 > **Last verified:** 2026-10-13 — Kiro KAS extraction is static from the fetched
-> native release; TUI remains a sandboxed host-run extraction. Neither is read
-> from a derivation at evaluation.
+> native release; TUI remains a sandboxed host-run extraction. The Linux test
+> job explicitly retains the patched devenv nixpkgs evaluation-only source.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -60,6 +60,12 @@ Key properties of IFD in nix:
   are not affected by it.
 - **`--allow-import-from-derivation true` is required** on nix commands when
   `restrict-eval` or sandbox settings would otherwise block IFD.
+
+The Linux test job's Hestia cache is installed before this warming. Its patched
+devenv nixpkgs source is registered explicitly because evaluation-only IFD paths
+need not appear in runtime or derivation closures. See
+`dev/fragments/flake/binary-cache.md` for the original-path contract, positive
+cache-entry verification, filters and cold-cache fallback.
 
 ### Metadata discovery before warming
 

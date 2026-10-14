@@ -208,6 +208,13 @@
         };
       });
 
+    # Evaluation-only IFD roots can be absent from check/runtime closures.
+    # String coercion preserves the original output; a path value is copied
+    # under a different store name by `nix eval --raw`.
+    ciEvaluationInputs = forAllSystems (system: {
+      devenv-nixpkgs = toString inputs.devenv.inputs.nixpkgs.legacyPackages.${system}.path;
+    });
+
     # Every package under its flat name plus the nested roots (`ai`, `docs`,
     # ...), checked by plain nixpkgs: `nix run <this flake>#claude-code`
     # resolves here and needs the caller's unfree opt-in

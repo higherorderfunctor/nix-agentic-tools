@@ -1,8 +1,8 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-12 — native Kiro jobs check packaged KAS selection,
-> resources, ACP and dispatch on both platforms alongside extracted metadata and
-> the unpublished rollout canary.
+> **Last verified:** 2026-10-13 — Linux test installs Hestia before IFD warming
+> and explicitly retains its original patched evaluation input; native Kiro
+> coverage and the test execution entrypoint remain unchanged.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -263,6 +263,16 @@ worker outcome. Do not also start nix-fast-build's optional uploader: its
 duplicate daemon required forced shutdowns in passing macOS jobs. This is
 separate from the old single-user store migration deadlock, which the shared
 multi-user Nix installer fixed.
+
+### Linux check cache
+
+The existing Linux `test` job installs the pinned Hestia helper before IFD
+warming, explicitly registers and verifies the original patched devenv nixpkgs
+source, then runs the unchanged `nix flake check` entrypoint. Public checks and
+package-matrix Cachix publication retain their existing behavior. The daily
+`hestia-gc.yml` job bounds stale CI-only roots and packs. Cache filters, source
+identity, scope and fallback limitations are documented in
+`dev/fragments/flake/binary-cache.md`.
 
 ### Reports and deliberate manual updates
 

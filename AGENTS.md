@@ -162,6 +162,8 @@ for it. When several entries match, their guidance composes.
     - [`dev/fragments/facets/package-ownership.md`](dev/fragments/facets/package-ownership.md)
 - **`flake`**
   - Match:
+    - `.github/actions/check-cache/**`
+    - `.github/workflows/hestia-gc.yml`
     - `flake.nix`
     - `devenv.nix`
   - Read:
@@ -353,8 +355,10 @@ for it. When several entries match, their guidance composes.
     - [`dev/fragments/packaging/platforms.md`](dev/fragments/packaging/platforms.md)
 - **`pipeline`**
   - Match:
+    - `.github/actions/check-cache/**`
     - `.github/actions/warm-ifd/**`
     - `.github/workflows/ci.yml`
+    - `.github/workflows/hestia-gc.yml`
     - `.github/workflows/update.yml`
     - `config/fragment-categories.nix`
     - `config/generate-update-ninja.nix`

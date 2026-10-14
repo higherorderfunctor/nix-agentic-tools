@@ -1,0 +1,32 @@
+name: CI check cache GC
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: hestia-gc
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  gc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - uses: ./.github/actions/check-cache
+        with:
+          read-only: "true"
+      - name: Collect stale CI-only cache roots and packs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          "$HESTIA_BIN" gc
