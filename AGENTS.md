@@ -364,6 +364,7 @@ for it. When several entries match, their guidance composes.
     - `config/generate-update-ninja.nix`
     - `config/update-targets.nix`
     - `dev/ai.nix`
+    - `dev/ci-check-evaluator.nix`
     - `dev/generate.nix`
     - `dev/scripts/ci-*.py`
     - `dev/scripts/test-ci-*.py`

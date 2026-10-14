@@ -6,6 +6,9 @@ inputs:
   read-only:
     description: Consume the cache without registering built paths.
     default: "false"
+  wait-manifest-version:
+    description: Wait for the evaluating job's registered derivation closures.
+    default: "0"
 
 runs:
   using: composite
@@ -19,3 +22,4 @@ runs:
           cache.nixos.org-1 nix-agentic-tools.cachix.org-1
         filter-drv-closures: "true"
         read-only: ${{ inputs.read-only }}
+        wait-manifest-version: ${{ inputs.wait-manifest-version }}

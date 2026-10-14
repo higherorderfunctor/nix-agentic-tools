@@ -1,8 +1,9 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-13 — Linux test installs Hestia before IFD warming
-> and explicitly retains its original patched evaluation input; native Kiro
-> coverage and the test execution entrypoint remain unchanged.
+> **Last verified:** 2026-10-14 — Linux test installs Hestia before IFD warming
+> and explicitly retains its original patched evaluation input; a non-required
+> eval-once check matrix runs beside it; native Kiro coverage and the test
+> execution entrypoint remain unchanged.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -273,6 +274,19 @@ package-matrix Cachix publication retain their existing behavior. The daily
 `hestia-gc.yml` job bounds stale CI-only roots and packs. Cache filters, source
 identity, scope and fallback limitations are documented in
 `dev/fragments/flake/binary-cache.md`.
+
+Beside it, three NON-required jobs demonstrate eval-once check building.
+`checks-eval` runs Hestia's matrix subaction over `.#.ciChecks.x86_64-linux`
+(one row per `meta.hestia.group`), `checks-build` builds each uncached row as
+`<drvPath>^*` without flake evaluation, and `checks-matrix` fails on a failed
+evaluation or a failed or cancelled worker; an all-cached plan passes. Hestia
+keeps nix-eval-jobs' stdout to itself and lists only uncached rows by their
+first member, so a wrapper captures the raw rows of that same evaluation. The
+plan check requires the evaluated attrs to equal `checks.x86_64-linux` attr
+names and the planned drvs to equal the uncached ones.
+
+`ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
+`dev/ci-check-evaluator.nix` records why.
 
 ### Reports and deliberate manual updates
 
