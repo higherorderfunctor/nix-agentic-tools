@@ -8,14 +8,14 @@
   # lib/testing/module-harness.nix declares `warnings` in both backend stubs,
   # so this reads the module-system branch of mkBackendTransform rather than
   # extending the eval to create the option a real backend always has.
-  evaluate = mode: config:
+  evalConfig = mode: config:
     (
       if mode == "hm"
       then harness.evalHm config
       else harness.evalDevenv config
     )
-    .config
-    .warnings;
+    .config;
+  evaluate = mode: config: (evalConfig mode config).warnings;
   inherit
     (import ../../lib/ai/option-paths.nix {
       lib = harness.hmLib;
@@ -58,7 +58,7 @@
       }
     ];
     rules.probe.text = "probe";
-    settings.model = "probe";
+    settings.reasoningEffort = "high";
     shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
   };
@@ -89,34 +89,14 @@
     if row.surface == "permissions" && row.ecosystem != "kiro"
     then row.inputOptions == []
     else warns path;
-  # `ai.kiro.cli.trustedMcpTools` is NOT a case here: the wrapper appends
-  # `--trust-tools` on both backends, so a devenv consumer setting it has no
-  # delivery gap to be told about. The narrower withhold it does have — the v3
-  # `acp` arm and Darwin's bundle-discovery launcher — is asserted by
-  # ai-warnings-darwin-trust below.
-  #
-  cases =
-    [
-      {
-        runtime = "copilot";
-        path = ["ai" "copilot" "context"];
-        value.text = "probe";
-        mode = "hm";
-      }
-      {
-        runtime = "copilot";
-        path = ["ai" "copilot" "rules"];
-        value.probe.text = "probe";
-        mode = "hm";
-      }
-    ]
-    # A normalized `tools` list is Claude/Copilot tool names; runtimes with
-    # another vocabulary drop it and say so at the path that set it.
-    ++ map (runtime: {
+  # Conditional record gaps keep focused requests that trigger their predicates.
+  requestedCases =
+    map (runtime: {
       inherit runtime;
+      surface = "agents";
+      gapPath = ["tools"];
       path = ["ai" "agents" "probe"];
       value = sample.agents.probe // {tools = ["Read"];};
-      suffix = ".tools";
     }) ["codex" "kimchi" "kiro"]
     ++ lib.concatMap (http:
       map (field: {
@@ -160,7 +140,8 @@
           text = "probe";
           inclusion = ["manual"];
         };
-        suffix = ".inclusion";
+        surface = "rules";
+        gapPath = ["inclusion"];
       }
       {
         runtime = "kiro";
@@ -169,7 +150,8 @@
           text = "probe";
           inclusion = "manual";
         };
-        suffix = ".inclusion";
+        surface = "rules";
+        gapPath = ["inclusion"];
       }
       # A consumer key may contain a dot of its own: `foo.bar.md` lands at key
       # `foo.bar`. The rendered path has to quote it, or the message names an
@@ -181,7 +163,8 @@
           text = "probe";
           inclusion = "manual";
         };
-        suffix = ".inclusion";
+        surface = "rules";
+        gapPath = ["inclusion"];
       }
       {
         runtime = "kiro";
@@ -227,140 +210,156 @@
     # and `--server` read effort from the user settings file. So the request
     # warns at whichever path supplied it.
     ++ map (path: {
+      mode = "devenv";
       runtime = "copilot";
+      surface = "settings";
+      gapPath = ["reasoningEffort"];
       inherit path;
       value = "high";
     }) [
       ["ai" "settings" "reasoningEffort"]
       ["ai" "copilot" "settings" "reasoningEffort"]
     ];
-  rootGapRequests = [
-    {
-      modes = ["hm"];
-      runtime = "copilot";
-      surface = "context";
-    }
-    {
-      runtime = "claude";
-      surface = "environmentVariables";
-    }
-    {
-      runtime = "copilot";
-      surface = "hooks";
-    }
-    {
-      modes = ["hm"];
-      runtime = "kimchi";
-      surface = "hooks";
-    }
-    {
-      runtime = "codex";
-      surface = "lspServers";
-    }
-    {
-      runtime = "kimchi";
-      surface = "lspServers";
-    }
-  ];
-  gapCases =
-    lib.concatMap (request:
+  cases = lib.concatMap (case:
+    if case ? gapPath && !(case ? mode)
+    then map (mode: case // {inherit mode;}) policy.modes
+    else [case])
+  requestedCases;
+  sharedSurfaces = (harness.evalDevenv {}).config.ai.internal.sharedSurfaces;
+  # Refuse a newly registered surface or nested gap without a populated probe.
+  gapSamples.hooks.PermissionRequest = sample.hooks.PreToolUse;
+  sampleAt = surface: path:
+    lib.attrByPath ([surface] ++ path)
+    (throw "warning sample missing for ${lib.showOption (["ai" surface] ++ path)}")
+    (
+      if path == []
+      then sample
+      else lib.recursiveUpdate sample gapSamples
+    );
+  supportFor = runtime: surface: records.${runtime}.surfaceSupport.${surface} or {};
+  surfacePaths = runtime: surface: let
+    support = supportFor runtime surface;
+  in
+    [["ai" surface]]
+    ++ lib.optional ((support.backends or []) != [])
+    (["ai" runtime]
+      ++ lib.optionals (builtins.elem surface ["environmentVariables" "shell"])
+      records.${runtime}.launcherOptionsPath
+      ++ [surface]);
+  surfaceCells = lib.concatMap (runtime:
+    lib.concatMap (surface:
       map (mode: {
-        inherit mode;
-        inherit (request) runtime;
-        path = ["ai" request.surface];
-        reason = policy.definitions.${request.surface}.${request.runtime}.${mode}.reason;
-        value = sample.${request.surface};
-      }) (request.modes or ["devenv" "hm"]))
-    rootGapRequests
-    ++ lib.concatMap (mode:
-      map (runtime: {
-        inherit mode runtime;
-        path = ["ai" "shell"];
-        reason = "${runtime}'s surfaceSupport does not consume this shared surface.";
-        value = pkgs.bash;
-      }) ["copilot"]
-      ++ [
-        {
-          inherit mode;
-          path = ["ai" "hooks"];
-          reason = "Kiro's v3 trigger schema has no lossless mapping from portable command hooks; its native hooks are a separate surface (packages/kiro-cli/lib/mkKiro.nix).";
-          runtime = "kiro";
-          value = sample.hooks;
-        }
-        {
-          inherit mode;
-          count = 1;
-          path = ["ai" "settings"];
-          reason = "Kiro persists effort only in per-model chat.modelDefaults records; shared reasoningEffort has no lossless target. Use ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort for the native per-model value (packages/kiro-cli/lib/mkKiro.nix).";
-          runtime = "kiro";
-          value.reasoningEffort = "high";
-        }
-      ]) ["devenv" "hm"]
-    ++ [
-      {
-        mode = "devenv";
-        path = ["ai" "hooks" "PermissionRequest"];
-        reason = "Kimchi's lifecycle event list has no PermissionRequest event; projectHooksFor filters it out (packages/kimchi/lib/mkKimchi.nix).";
-        runtime = "kimchi";
-        value = sample.hooks.PreToolUse;
-      }
-    ];
-  kiroHomeLspReason = "Kiro reads settings/lsp.json relative to the workspace; Home Manager writes it under $HOME/.kiro, so it is delivered only when the workspace is $HOME. Use the devenv backend for a project workspace.";
-  kiroHomeLspWarns = lib.all (path:
-    casePass {
+        inherit mode runtime surface;
+        support = supportFor runtime surface;
+      })
+      policy.modes)
+    sharedSurfaces)
+  (builtins.attrNames records);
+  delivered = cell: builtins.elem cell.mode (cell.support.backends or []);
+  surfaceCases = lib.concatMap (cell:
+    map (path:
+      cell
+      // {
+        inherit path;
+        value = sampleAt cell.surface [];
+      })
+    (surfacePaths cell.runtime cell.surface))
+  surfaceCells;
+  absenceReason = case:
+    case.support.reason or (let
+      writers = lib.concatMap policy.writersOf (lib.filter (row:
+        row.ecosystem == case.runtime && row.surface == case.surface && row.mode == case.mode)
+      policy.rows);
+      absent = lib.filter (writer:
+        (writer.primitive == "notApplicable" || writer ? deliveryGap)
+        && builtins.elem ["ai" case.surface] (writer.inputOptions or []))
+      writers;
+    in
+      if builtins.length absent == 1
+      then (builtins.head absent).deliveryGap or (builtins.head absent).reason
+      else throw "expected one policy absence writer for ${case.runtime}/${case.mode}/${case.surface}");
+  missingCases = map (case:
+    case
+    // {
+      reason = absenceReason case;
       count = 1;
-      mode = "hm";
-      inherit path;
-      reason = kiroHomeLspReason;
-      runtime = "kiro";
-      value = sample.lspServers;
-    }) [["ai" "lspServers"] ["ai" "kiro" "lspServers"]];
-  consumedRootsQuiet = lib.all (mode:
-    lib.all (case:
-      evaluate mode (lib.recursiveUpdate (harness.setEnable case.runtime true)
-        (lib.setAttrByPath case.path case.value))
-      == []) [
-      {
-        path = ["ai" "context"];
-        runtime = "claude";
-        value = sample.context;
-      }
-      {
-        path = ["ai" "environmentVariables"];
-        runtime = "codex";
-        value = sample.environmentVariables;
-      }
-      {
-        path = ["ai" "hooks"];
-        runtime = "claude";
-        value = sample.hooks;
-      }
-      {
-        path = ["ai" "hooks" "PermissionRequest"];
-        runtime = "claude";
-        value = sample.hooks.PreToolUse;
-      }
-      {
-        path = ["ai" "lspServers"];
-        runtime = "copilot";
-        value = sample.lspServers;
-      }
-      {
-        path = ["ai" "settings" "reasoningEffort"];
-        runtime = "kimchi";
-        value = "high";
-      }
-      {
-        path = ["ai" "shell"];
-        runtime = "codex";
-        value = pkgs.bash;
-      }
-      {
-        path = ["ai" "shell"];
-        runtime = "kimchi";
-        value = pkgs.bash;
-      }
-    ]) ["devenv" "hm"];
+    })
+  (lib.filter (case: !(delivered case)) surfaceCases);
+  conditional = gap: gap ? when || (gap.each or false) || (gap.effective or false);
+  staticCases = lib.concatMap (cell:
+    lib.concatMap (gap:
+      map (path:
+        cell
+        // {
+          count = 1;
+          path = path ++ (gap.path or []);
+          inherit (gap) reason;
+          value = sampleAt cell.surface (gap.path or []);
+        })
+      (
+        if gap.rootOnly or false
+        then [(builtins.head (surfacePaths cell.runtime cell.surface))]
+        else surfacePaths cell.runtime cell.surface
+      ))
+    (lib.filter (gap:
+      !(conditional gap) && builtins.elem cell.mode (gap.backends or policy.modes))
+    (cell.support.gaps or [])))
+  (lib.filter delivered surfaceCells);
+  gapCases = missingCases ++ staticCases;
+  conditionalGaps = lib.concatMap (cell:
+    map (gap: cell // {inherit gap;})
+    (lib.filter (gap:
+      conditional gap && builtins.elem cell.mode (gap.backends or policy.modes))
+    (cell.support.gaps or [])))
+  (lib.filter delivered surfaceCells);
+  matchesGap = case: recorded:
+    case.runtime
+    == recorded.runtime
+    && (case.surface or null) == recorded.surface
+    && (case.gapPath or []) == (recorded.gap.path or [])
+    && caseMode case == recorded.mode
+    && (!(recorded.gap.rootOnly or false) || builtins.elemAt case.path 1 == recorded.surface);
+  conditionalDeclarations = lib.concatMap (runtime:
+    lib.concatMap (surface:
+      map (gap: {inherit gap runtime surface;})
+      (lib.filter conditional (records.${runtime}.surfaceSupport.${surface}.gaps or [])))
+    (builtins.attrNames records.${runtime}.surfaceSupport))
+  (builtins.attrNames records);
+  # Every declaration needs a reachable witness, even before activation filters.
+  declarationsCovered = lib.all (declared:
+    assert lib.assertMsg (lib.any (recorded:
+      recorded.runtime
+      == declared.runtime
+      && recorded.surface == declared.surface
+      && (recorded.gap.path or []) == (declared.gap.path or [])
+      && lib.any (case: matchesGap case recorded) cases)
+    conditionalGaps)
+    "conditional warning declaration has no reachable case: ${declared.runtime}/${declared.surface}/${lib.showOption (declared.gap.path or [])}"; true)
+  conditionalDeclarations;
+  # Each active backend also needs its own explicit request.
+  conditionalCovered = lib.all (recorded:
+    assert lib.assertMsg (lib.any (case: matchesGap case recorded) cases)
+    "conditional warning gap has no case: ${recorded.runtime}/${recorded.mode}/${recorded.surface}/${lib.showOption (recorded.gap.path or [])}"; true)
+  conditionalGaps;
+  supportedCases = lib.filter delivered surfaceCases;
+  consumedRootsQuiet = lib.all (case: let
+    messages =
+      evaluate case.mode (lib.recursiveUpdate (harness.setEnable case.runtime true)
+        (lib.setAttrByPath case.path case.value));
+    allowed = map expectedMessage (lib.filter (gap:
+      gap.runtime == case.runtime && gap.mode == case.mode && gap.path == case.path)
+    staticCases);
+    prefix = "${lib.showOption case.path} is set but ${case.mode} does not deliver it to ${case.runtime} (reason:";
+  in
+    lib.assertMsg (lib.all (message: !(lib.hasPrefix prefix message) || builtins.elem message allowed) messages)
+    "supported surface warned: ${case.runtime}/${case.mode}/${lib.showOption case.path}")
+  supportedCases;
+  expectedMessage = case: "${lib.showOption case.path} is set but ${case.mode} does not deliver it to ${case.runtime} (reason: ${case.reason})";
+  portableEventSilent = lib.all (mode:
+    evaluate mode (lib.recursiveUpdate (harness.setEnable "claude" true)
+      (lib.setAttrByPath ["ai" "hooks" "PermissionRequest"] gapSamples.hooks.PermissionRequest))
+    == [])
+  policy.modes;
   # Supported effort delivery stays quiet; withholding Copilot's native
   # repository value also withdraws its partial-delivery warning.
   effortSilent = lib.all ({
@@ -436,16 +435,51 @@
   casePass = case: let
     mode = caseMode case;
     input = lib.setAttrByPath case.path case.value;
+    recorded = lib.filter (matchesGap case) conditionalGaps;
+    gap =
+      if case ? gapPath
+      then
+        if builtins.length recorded == 1
+        then (builtins.head recorded).gap
+        else throw "conditional warning case must match one record gap: ${case.runtime}/${mode}/${lib.showOption case.path}"
+      else null;
+    warningPath =
+      if gap != null && (gap.each or false)
+      then case.path ++ case.gapPath
+      else case.path;
+    recordedReason =
+      if gap == null
+      then case.reason or null
+      else gap.reason;
+    reason =
+      if builtins.isFunction recordedReason
+      then
+        recordedReason {
+          backend = mode;
+          cfg = evaluation.ai.${case.runtime};
+          config = evaluation;
+          entryValue = case.value;
+          name = lib.last case.path;
+          inherit (case) path;
+          value = lib.attrByPath (case.gapPath or []) null case.value;
+        }
+      else recordedReason;
     needle =
-      if case ? reason
-      then "${lib.showOption case.path} is set but ${mode} does not deliver it to ${case.runtime} (reason: ${case.reason})"
+      if reason != null
+      then
+        expectedMessage (case
+          // {
+            inherit mode reason;
+            path = warningPath;
+          })
       else lib.showOption case.path + (case.suffix or "");
     present =
-      if case ? reason
+      if reason != null
       then builtins.elem needle
       else contains needle;
     enabled = harness.setEnable case.runtime true;
-    messages = evaluate mode (lib.recursiveUpdate enabled input);
+    evaluation = evalConfig mode (lib.recursiveUpdate enabled input);
+    messages = evaluation.warnings;
   in
     present messages
     && (!(case ? count) || builtins.length messages == case.count)
@@ -491,28 +525,28 @@
   # args, package, and settings retain their module-backed cases above.
   mcpFieldCases = [
     {
-      expected = "ai.claude.mcpServers.probe.command is set but devenv does not deliver it to claude (reason: HTTP MCP entries use url; this stdio field is not rendered.)";
+      field = "command";
       fixture = {
         command = "probe";
         url = "https://example.invalid";
       };
     }
     {
-      expected = "ai.claude.mcpServers.probe.env is set but devenv does not deliver it to claude (reason: HTTP MCP entries use url; this stdio field is not rendered.)";
+      field = "env";
       fixture = {
         env.PROBE = "";
         url = "https://example.invalid";
       };
     }
     {
-      expected = "ai.claude.mcpServers.probe.headers is set but devenv does not deliver it to claude (reason: This HTTP MCP field is not rendered for stdio.)";
+      field = "headers";
       fixture = {
         command = "probe";
         headers.Authorization = "";
       };
     }
     {
-      expected = "ai.claude.mcpServers.probe.timeout is set but devenv does not deliver it to claude (reason: This HTTP MCP field is not rendered for stdio.)";
+      field = "timeout";
       fixture = {
         command = "probe";
         timeout = 1;
@@ -534,9 +568,12 @@
       };
     };
   mcpFieldCasesPass =
-    lib.all (case:
-      mcpFieldWarnings true case.fixture
-      == [case.expected]
+    lib.all (case: let
+      messages = mcpFieldWarnings true case.fixture;
+    in
+      builtins.length messages
+      == 1
+      && lib.hasPrefix "ai.claude.mcpServers.probe.${case.field} is set but devenv does not deliver it to claude (reason:" (builtins.head messages)
       && mcpFieldWarnings false case.fixture == [])
     mcpFieldCases
     && lib.all (fixture: mcpFieldWarnings true fixture == []) [
@@ -622,11 +659,13 @@ in {
       lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
       && lib.all (case: assert lib.assertMsg (casePass case) "warning gap ${case.runtime}/${case.mode}/${lib.showOption case.path}"; true) gapCases
+      && declarationsCovered
+      && conditionalCovered
+      && lib.assertMsg portableEventSilent "Claude delivers the portable PermissionRequest event"
       && lib.assertMsg consumedRootsQuiet "consumed shared surfaces must not warn"
-      && lib.assertMsg mcpFieldCasesPass "Claude MCP field warnings match their literal paths, reasons, and disabled/absent controls"
+      && lib.assertMsg mcpFieldCasesPass "Claude MCP field warnings match their paths, backend, runtime, count, and disabled/absent controls"
       && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
       && lib.assertMsg effortSilent "delivered or withheld reasoning effort must not warn"
-      && lib.assertMsg kiroHomeLspWarns "Kiro HM LSP warns once at root/runtime scope and stays quiet when empty or disabled"
       && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
       && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
     );

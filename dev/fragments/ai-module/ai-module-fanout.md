@@ -1,7 +1,8 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-14 — option declarations supply policy surfaces and
-> keyed withdrawal; runtime declarations supply normalized policy gaps.
+> keyed withdrawal; runtime declarations supply normalized policy gaps and the
+> warning suite generates coverage for every runtime, surface and backend.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -626,6 +627,16 @@ backend restriction or `when` predicate; `each` checks keyed entries,
 the portable root. Predicates and dynamic reasons receive the backend, config,
 runtime cfg, field value, whole entry value, path and entry name. Keyed runtime
 replacements and tombstones withdraw inherited entries before warnings.
+
+`checks/ai-warnings` generates populated, empty and disabled probes from the
+real runtime records, the evaluated shared-surface registry and both backends.
+It covers every unavailable surface, declared-but-unavailable runtime option,
+and static record gap; every supported cell gets a control against the
+whole-surface unsupported warning. Samples must exist for each shared surface
+and static gap path. Conditional, keyed-entry and effective-value gaps retain
+explicit runtime/path cases, whose exhaustiveness assertion names any uncovered
+record gap. Expected normalized reasons come from the records, including dynamic
+reasons.
 
 Policy rows derive normalized absence and static gaps from the records alongside
 physical delivery and native diagnostics; they no longer choose normalized
