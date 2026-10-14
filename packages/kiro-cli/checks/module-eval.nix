@@ -662,7 +662,7 @@ in {
             }).config.warnings;
         in
           warnings true
-          == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro package; the system binary runs without them): ai.kiro.cli.tweaks.${name}. Unset them or set ai.kiro.cli.package."]
+          == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.tweaks.${name}. Unset them or set ai.kiro.cli.package."]
           && warnings false == [];
       in
         builtins.all (
@@ -687,7 +687,7 @@ in {
       in
         builtins.all (entry: entry.assertion) evaluated.config.assertions
         && evaluated.config.warnings
-        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro package; the system binary runs without them): ai.gitSshConfigWorkaround. Unset them or set ai.kiro.cli.package."]
+        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.gitSshConfigWorkaround. Unset them or set ai.kiro.cli.package."]
     );
 
     # Kiro persists effort only inside per-model `chat.modelDefaults` records,
