@@ -216,16 +216,11 @@ protection are separate checks.
 ### Renovate owns Actions pins
 
 `renovate.json5` hands GitHub Actions `uses:` refs to the Mend-hosted Renovate
-app and nothing else: `enabledManagers` is the github-actions manager plus one
-regex manager, so `flake.lock`, `devenv.lock` and `sources.json` stay with this
-sweep. Every ref is pinned to a full SHA with a semver comment; the regex
-manager owns the Hestia step whose `with: version:` picks the downloaded binary,
-so its SHA, comment and binary version move from one lookup. Updates wait 3 days
-(`minimumReleaseAge`), land as one `renovate/github-actions` PR per run in the
-02:00-05:59 UTC window between sweeps, and merge through GitHub auto-merge under
-the same required checks and thread rule as `update/*`. The cleanup above only
-matches `update/*`, so the two never touch each other's branches. Runner images
-(`runs-on`) are excluded.
+app and nothing else; the file's comments say what each option does. Two facts
+the file cannot tell you: updates land on one standing grouped branch,
+`renovate/github-actions`, refreshed across runs rather than one PR per run, and
+the cleanup above only matches `update/*`, so the two never touch each other's
+branches.
 
 Enabling `sha_pinning_required` is ordered: install the Mend Renovate app, widen
 the Hestia allowlist entries to `@*` (`.github/repo-settings.yml`; an exact-SHA
@@ -249,9 +244,10 @@ receipts must agree on the package universe and assign every package exactly
 once. The existing required `build (x86_64-linux, ubuntu-latest)` and
 `build (aarch64-darwin, macos-latest)` contexts check worker outcomes and
 complete native coverage. Both fail if any worker fails, including a failure
-after receipt upload. The two dedicated `kiro-patched` jobs, `test`, and
-`gitleaks` remain the other four required contexts. The full Devenv Diagnostic
-remains manual-only; its extracted deterministic contracts remain in `test`.
+after receipt upload. The two dedicated `kiro-patched` jobs, `checks-matrix`,
+`test`, and `gitleaks` are the other five required contexts; since 2026-10-14
+`checks-matrix` builds every flake check and `test` only runs the workflow gate
+scripts. The full Devenv Diagnostic remains manual-only.
 
 Generated documents stay in the flake checks. Kiro's scoped native jobs build
 the extracted-metadata drift check and packaged KAS checks on both Linux and
