@@ -181,10 +181,10 @@ in
     src = kimchiSource;
 
     # Source changes, one concern per patch; each opens with its own rationale.
-    # They touch disjoint files, so order does not matter. `patch` finds a hunk
-    # at shifted lines and tolerates small edits at its edges (default fuzz); a
-    # hunk that still cannot apply fails the build.
+    # Refuse changed hunk context on upstream drift instead of applying fuzz.
+    patchFlags = ["-p1" "--fuzz=0"];
     patches = [
+      ./command-shell.patch
       ./disable-self-update.patch
       ./keep-telemetry-opt-out.patch
       ./remote-feature-toggles.patch

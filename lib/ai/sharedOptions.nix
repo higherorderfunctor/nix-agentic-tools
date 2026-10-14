@@ -390,28 +390,29 @@
         Override per app with `ai.<name>.shell` (`ai.kiro.cli.shell` for Kiro); a non-null per-app value
         wins, `null` inherits this one.
 
-        Fans out to **Claude, Codex and Kiro only**. Claude reads
+        Fans out to **Claude, Codex, Kimchi and Kiro**. Claude reads
         `CLAUDE_CODE_SHELL` from its settings file; Codex and Kiro read
         `SHELL` from their own process environment and receive it baked into
         their launcher wrapper, on both backends. An explicit
         `ai.<name>.environmentVariables.SHELL` (`ai.kiro.cli.environmentVariables.SHELL` for Kiro) beats this option, the same way
-        an explicit `settings.env` entry beats it for Claude. Copilot and
-        Kimchi are
-        excluded because their shell selection has not been established;
-        shared requests warn with the option, runtime and reason.
-        `ai.copilot.shell` and `ai.kimchi.shell` do not exist and setting
-        either is an eval error.
+        an explicit `settings.env` entry beats it for Claude. Kimchi receives
+        `native.harnessSettings.shellPath` through its generated settings;
+        an explicit native value wins. The packaged Kimchi patch makes both
+        short and background bash commands honor that existing Pi setting.
+        Copilot is excluded because its shell selection has not been
+        established; a shared request warns with the option, runtime and
+        reason, and `ai.copilot.shell` does not exist.
 
-        Takes a **package, not a path**, and that is load-bearing. Every
-        runtime here falls back when the configured shell is unusable, and
-        two of them do it without a usable diagnostic: Claude silently
+        Takes a **package, not a path**, and that is load-bearing. Some
+        runtimes fall back when the configured shell is unusable, including
+        two without a usable diagnostic: Claude silently
         resolves its own bash (measured — it ignores even an explicit
         `SHELL`), and Codex falls back to the *password-database* shell,
         which is exactly the shell an operator is likely trying to move off.
         A package is guaranteed to exist in the store at activation and is
         GC-rooted by the generation that references it, so that entire class
         of silent no-op is eliminated by construction instead of by a runtime
-        check none of these runtimes performs.
+        check. Kimchi rejects a nonexistent explicit shell path.
       '';
     };
     skills = lib.mkOption {
