@@ -447,7 +447,11 @@ try {
     parentRepo = path.join(tmp, "parentRepo"),
     child = path.join(parentRepo, "child"),
     bareClone = path.join(tmp, "bare-clone.git"),
-    bareTree = path.join(tmp, "bare-tree");
+    bareTree = path.join(tmp, "bare-tree"),
+    // A bare clone at <dir>/.git passes the `.git` basename test; only the
+    // primary-toplevel probe can reject it.
+    dotGitBare = path.join(tmp, "dot-git-bare"),
+    dotGitTree = path.join(dotGitBare, "main");
   git("init", "--bare", bare);
   git("init", parentRepo);
   git(
@@ -465,11 +469,28 @@ try {
   git("init", `--separate-git-dir=${path.join(storage, ".git")}`, disguised);
   git("clone", "--bare", repoC, bareClone);
   git("-C", bareClone, "worktree", "add", "-b", "tree", bareTree);
+  git("clone", "--bare", repoC, path.join(dotGitBare, ".git"));
+  git(
+    "-C",
+    path.join(dotGitBare, ".git"),
+    "worktree",
+    "add",
+    "-b",
+    "tree",
+    dotGitTree,
+  );
   const warnings = [];
   const warn = console.warn;
   console.warn = (message) => warnings.push(message);
   try {
-    for (const layout of [bare, separate, disguised, child, bareTree]) {
+    for (const layout of [
+      bare,
+      separate,
+      disguised,
+      child,
+      bareTree,
+      dotGitTree,
+    ]) {
       assert.deepEqual(await worktrees.discover(layout, sibling), {
         root: undefined,
       });

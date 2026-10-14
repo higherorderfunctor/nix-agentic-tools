@@ -10,7 +10,7 @@
 > detached run rebuilds. Nullable shared worktree policy preserves unspecified
 > and explicit false through native lowering; its location template renders per
 > session and may not cover the checkout, its root alone is writable, and
-> non-derivable Git layouts degrade instead of failing.
+> non-derivable Git layouts and failing Git probes degrade instead of failing.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -133,13 +133,15 @@ Non-Git sessions gain no root and keep the vendor guidance. Layouts without a
 derivable primary checkout (submodules, worktrees of a bare clone, separate Git
 directories and bare repositories) admit no root and log a `chat.worktrees`
 warning, but still select the PR guidance, with a `<path>` placeholder instead
-of a destination. Only a malformed `chat.worktrees` value, a location covering
-the primary checkout, a symlink at the rendered destination, or an unexpected
-Git failure fails the session. Admission rejects an existing symlink at the
-rendered destination, including a dangling one; explicit additional-directory
-aliases retain their separate behavior. This is an admission-time check, not a
-guarantee against a later filesystem change. New and cold-resumed sessions
-recompute roots; resident sessions retain their admitted roots.
+of a destination. A failing Git probe other than "not a git repository" (a bare
+clone at `<dir>/.git`, or Git refusing a repository it does not trust) degrades
+the same way. Only a malformed `chat.worktrees` value, a location covering the
+primary checkout, or a symlink at the rendered destination fails the session.
+Admission rejects an existing symlink at the rendered destination, including a
+dangling one; explicit additional-directory aliases retain their separate
+behavior. This is an admission-time check, not a guarantee against a later
+filesystem change. New and cold-resumed sessions recompute roots; resident
+sessions retain their admitted roots.
 
 For new conversations, the selected default worktree guidance keeps workflow
 ownership of creation and names the admitted destination. It replaces automatic
