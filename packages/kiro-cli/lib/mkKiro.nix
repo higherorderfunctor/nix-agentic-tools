@@ -1385,7 +1385,7 @@ in
                     worktrees = lib.mkOption {
                       type = worktreePolicyType;
                       default = null;
-                      description = "Packaged KAS sibling-worktree policy: exactly { enable = boolean; }. Null omits this setting. Overrides shared worktrees policy. Enabled policy requires V3 and does not grant filesystem permissions.";
+                      description = "Packaged KAS sibling-worktree policy: exactly { enable = boolean; }. Null omits this setting. Overrides shared worktrees policy. Enabled policy requires V3. Admitted roots enable the vendor default fs_read ./** allow rule; default writes still prompt.";
                     };
                   };
                 };
