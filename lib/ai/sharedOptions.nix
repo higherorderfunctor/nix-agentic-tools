@@ -423,7 +423,7 @@
     worktrees = lib.mkOption {
       type = aiCommon.worktreesType "../{{repo}}-worktrees";
       default = {};
-      description = "Shared worktree policy (enable plus a location template), currently consumed only by Kiro. Unspecified enable emits no native setting; the runtime default is off. Other enabled runtimes warn when this pool is set because they cannot consume it.";
+      description = "Shared worktree policy (enable plus a location template), currently consumed only by Kiro. Unspecified enable emits no native setting; the runtime default is off. Other enabled runtimes warn when `ai.worktrees.enable` is set (true or false) because they cannot consume it; a location alone requests nothing and does not warn.";
     };
   };
 in {

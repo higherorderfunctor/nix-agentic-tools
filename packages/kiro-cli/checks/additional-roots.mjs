@@ -344,6 +344,14 @@ try {
       discover(linked, location),
       /location must not cover the primary checkout/,
     );
+  // The cover test is by path segment: a checkout named "..repo" sits inside
+  // its parent even though the relative path starts with "..".
+  const dotted = path.join(tmp, "..repo");
+  git("init", dotted);
+  await assert.rejects(
+    discover(dotted, "{{primary}}/.."),
+    /location must not cover the primary checkout/,
+  );
   assert.equal(process.cwd(), cwdBefore);
   for (const suffix of ["\t", "\ninvalid"]) {
     const special = path.join(tmp, `policy-special${suffix}`);

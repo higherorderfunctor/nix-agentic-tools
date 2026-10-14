@@ -3,7 +3,7 @@
 > **Last verified:** 2026-10-14 — shared option declarations register fanout
 > surfaces; decomposition shares unsupported requests with diagnostics; Kiro
 > selects its engine through native settings and lowers the worktree policy's
-> location template.
+> location template; other runtimes warn only when its `enable` is set.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -613,9 +613,10 @@ root-to-runtime fold applies the existing scalar override rule to each field and
 exposes `ai.kiro.normalized.worktrees`; Kiro lowers it once into native settings
 at `mkDefault`. Untouched defaults emit no native key, preserving an
 independently configured global policy. Claude, Codex, Copilot and Kimchi warn
-when the root pool is set and declare no runtime worktrees option. The Nix layer
-writes only that setting; rendering the template and granting writes in its root
-happen per session in the packaged KAS.
+when `ai.worktrees.enable` is set, true or false, and declare no runtime
+worktrees option; a location alone requests nothing and does not warn. The Nix
+layer writes only that setting; rendering the template and granting writes in
+its root happen per session in the packaged KAS.
 
 Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
 `mcpServers`, `rules`, `settings`, and `skills`. Its rules share Codex's flat

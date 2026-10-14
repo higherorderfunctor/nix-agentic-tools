@@ -382,7 +382,7 @@ instruction building.
 | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Copilot + Kiro; Claude has no project LSP route (warns); Codex has no native LSP registry |
 | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
 | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. Copilot is explicitly excluded |
-| Worktree policy | N/A | `ai.worktrees.{enable,location}` (Kiro only; Claude, Codex, Copilot and Kimchi warn when it is set) | Same; repository layer |
+| Worktree policy | N/A | `ai.worktrees.{enable,location}` (Kiro only; Claude, Codex, Copilot and Kimchi warn when `ai.worktrees.enable` is set, true or false) | Same; repository layer |
 | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
 ### Kimchi project delivery
