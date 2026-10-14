@@ -148,8 +148,9 @@ persisted settings for ACP; no routing wrapper reads config.
 
 Routing does not select Kiro prompt tweaks. The vendor worktree guidance remains
 available when workflows are enabled. Sibling workflow directories use
-`cli.native.settings.chat.additionalDirectories`; membership enables default
-reads, while default writes require permission grants.
+`cli.native.settings.chat.additionalDirectories`; relative permission rules
+apply there, so built-in modes and bundled profiles get default reads while
+custom agents use their own rules, and default writes require permission grants.
 
 Kiro's `run_workflow` appears only with `cli.workflows.enable`, effective V3,
 and no explicit false for `cli.native.settings.chat.enableWorkflows`. Devenv's

@@ -1509,16 +1509,18 @@ every iteration it has. Never `/tmp`.
 
 The packaged KAS supports sibling workspaces through
 `ai.kiro.cli.native.settings.chat.additionalDirectories`, an additive global and
-repository list. Admitting a root enables the vendor default `fs_read ./**`
-allow rule there. Default writes still prompt; configure permissions to narrow
-reads or grant writes. Added roots do not load their MCP configuration. The
-writing step and `fileCheck.path` can then use the same absolute
-`{{worktree_path}}/.agents/...` path. The isolated pinned-vendor checks in
-`packages/kiro-cli/checks/additional-roots.mjs` exercise the actual policy,
-`fs_write` and file-check functions: allowed writes and checks agree; explicit
-denials, absent grants, symlink escapes and an unrelated common Git directory do
-not gain write permission. These are offline constructor/tool checks, not a live
-workflow model run.
+repository list. Relative permission rules apply in every admitted root; for
+built-in modes and bundled profiles that includes the vendor default
+`fs_read ./**` allow, and custom agents use their own rules. Default writes
+still prompt; configure permissions to narrow reads or grant writes. Added
+roots' `.kiro/settings/mcp.json` is ignored; custom agent profiles there still
+load and may declare `mcpServers`. The writing step and `fileCheck.path` can
+then use the same absolute `{{worktree_path}}/.agents/...` path. The isolated
+pinned-vendor checks in `packages/kiro-cli/checks/additional-roots.mjs` exercise
+the actual policy, `fs_write` and file-check functions: allowed writes and
+checks agree; explicit denials, absent grants, symlink escapes and an unrelated
+common Git directory do not gain write permission. These are offline
+constructor/tool checks, not a live workflow model run.
 
 `ai.kiro.cli.tweaks.relativeFileCheckPaths` has been removed; remove either old
 boolean value and configure the roots and permissions above. The vendor's

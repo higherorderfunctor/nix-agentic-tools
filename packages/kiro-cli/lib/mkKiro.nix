@@ -1335,11 +1335,14 @@ in
                         Empty lists add nothing; Nix null omits the setting. Raw JSON
                         null is invalid. New and cold-resumed
                         conversations resolve settings again; resident sessions retain
-                        their admitted roots. Membership enables the vendor default fs_read
-                        ./** allow rule for each root. Default writes still prompt;
+                        their admitted roots. Relative permission rules apply in every admitted
+                        root; for built-in modes and bundled profiles that includes the
+                        vendor default fs_read ./** allow, and custom agents use their own
+                        rules. Default writes still prompt;
                         configure permissions to narrow reads or grant writes. Added roots do
                         not contribute .kiro/settings/mcp.json: only global and cwd
-                        MCP configuration loads. Requires the v3 engine and managed Kiro package.
+                        mcp.json loads; custom agent profiles there still load and may
+                        declare mcpServers. Requires the v3 engine and managed Kiro package.
                       '';
                     };
                     agentEngine = lib.mkOption {
