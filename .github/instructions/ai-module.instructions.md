@@ -7,10 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-11 — Codex launcher flags reconcile against the
-> `cli.globalFlags` fact in `packages/chatgpt-codex/extracted/`; Kiro uses
-> `ai.kiro.cli.enable` and its read-only runtime enable is derived from the
-> launcher switch.
+> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> surfaces; decomposition warns automatically for every unsupported request.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -374,14 +372,14 @@ enabled ecosystem whose native model preserves the option's semantics):
   through `resolveOverride`. Claude, Codex, Copilot and Kimchi lower the
   resolved value to native `effortLevel`, `model_reasoning_effort`,
   `effortLevel` and harness `defaultThinkingLevel`, respectively. Kiro has no
-  lossless target, so it declares no pool and ignores the root value without a
-  warning, like any unsupported pool. Copilot's devenv lowering is the one
-  partial delivery: the repository `effortLevel` reaches only its interactive
-  session, so `lib/ai/delivery-warnings.nix` warns there until the native value
-  is withheld with null. Values that only one runtime persists remain under that
-  runtime's native settings. An explicit native effort key still has normal
-  option priority over the derived normalized default, and a native null
-  excludes that runtime from emission.
+  lossless target, so it declares no pool and warns when shared reasoning effort
+  is requested. Copilot's devenv lowering is the one partial delivery: the
+  repository `effortLevel` reaches only its interactive session, so
+  `lib/ai/delivery-warnings.nix` warns there until the native value is withheld
+  with null. Values that only one runtime persists remain under that runtime's
+  native settings. An explicit native effort key still has normal option
+  priority over the derived normalized default, and a native null excludes that
+  runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
@@ -449,11 +447,11 @@ enabled ecosystem whose native model preserves the option's semantics):
   executable; bare-file derivations remain direct output paths. Kimchi reads the
   same Claude shape from a trusted project's `.kimchi/hooks.json`, so devenv
   writes shared plus `ai.kimchi.hooks` groups there; PermissionRequest is not a
-  Kimchi event and is left out silently. Kimchi has no user-scope lifecycle file
-  Home Manager can own, so its Home Manager row is an explicit exclusion: silent
-  for the shared pool, warned for `ai.kimchi.hooks`. Kiro's v3 trigger records
-  remain native-only, but their `action.command` resolves a package through the
-  same shared `commandType`. Delegate-routing contributes its reminder to native
+  Kimchi event and is omitted with a warning. Kimchi has no user-scope lifecycle
+  file Home Manager can own, so its Home Manager row warns for shared `ai.hooks`
+  and per-runtime `ai.kimchi.hooks` requests. Kiro's v3 trigger records remain
+  native-only, but their `action.command` resolves a package through the same
+  shared `commandType`. Delegate-routing contributes its reminder to native
   per-runtime hooks, preserving these backend exclusions; package details live
   in `packages/delegate-routing/docs/development.md`.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
@@ -613,20 +611,20 @@ Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
 AGENTS.md handling: Home Manager writes the user harness file, while devenv
 contributes keyed units to the single repository aggregate.
 
-A non-empty ROOT request is SILENT whenever nothing per-runtime can withdraw it
-— no assertion, and no activation warning either. That covers an excluded pool
-and a non-keyed pool (`context`, `hooks`), whose root and per-runtime values
-compose, so a pool a runtime supports on one backend and not the other (Kimchi's
-`ai.hooks` on Home Manager) stays silent too. A warning there would repeat on
-every activation forever, and the only remedy would be taking the shared value
-away from every other runtime. The exclusion is recorded in the pool's option
-description and in the delivery matrix instead. A root KEYED pool warns only for
-names the runtime has not withdrawn with `ai.<runtime>.<pool>.<name> = null`
-(`config/ai-delivery.nix` `keyedSurfaces`). A PER-RUNTIME request a backend
-cannot deliver does warn (`lib/ai/delivery-warnings.nix`), because that one the
-consumer wrote directly and can delete. Package rule contributors must instead
-gate their writes by backend delivery capability; `mkSkillPackageModule` applies
-that gate from the delivery policy before writing a per-runtime rules pool.
+`sharedSurfaceOptions` in `sharedOptions.nix` is the single registration of
+shared fanout surfaces: its keys declare root options and populate the read-only
+internal `sharedSurfaces` list. `app/decompose.nix` compares that registration
+with each runtime record's `supportedPools` and warns for every non-empty
+unhandled request, including public third-party `mkRuntime` records. A new
+shared declaration needs no per-gap policy row to be diagnosed. Policy rows
+remain for better reasons, backend-specific gaps and partial field delivery;
+they can improve a structural warning's reason but cannot suppress it. Every
+warning names the option, runtime and reason, even when it repeats on activation
+and has no per-runtime remedy. Keyed runtime replacements and tombstones still
+withdraw inherited entries before warnings are computed. Per-runtime requests
+that a backend cannot deliver warn too. Package rule contributors gate their
+writes by backend delivery capability; `mkSkillPackageModule` applies that gate
+before writing a per-runtime rules pool.
 
 A context or rule unit that resolves for a runtime but lands in a file whose
 final entry has `content.enable = false` warns too, root or per-runtime: the
@@ -983,9 +981,8 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-07 — Kiro environment pool provenance follows
-> `ai.kiro.cli.environmentVariables`; replacement and null withdrawal semantics
-> are unchanged.
+> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
+> runtime cannot consume them; keyed tombstones still withdraw entries.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -1002,7 +999,7 @@ commit.
 
 | ID  | Boundary                                          | Unit    | Behavior                                                                                                                                          |
 | --- | ------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                |
+| B0  | root pool → runtime lacking that pool             | pool    | Warn for a non-empty request and lower to the neutral value; the per-runtime option does not exist.                                               |
 | B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                              |
 | B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
 | B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
@@ -1064,8 +1061,8 @@ precedence. They are intentionally gone. A root and runtime same-key pair is no
 longer a collision.
 
 Unsupported per-runtime options remain absent. Root fanout to an unsupported
-runtime degrades to `{}` before merging, based on the app record's
-`supportedPools` list.
+runtime warns for a non-empty request and lowers to `{}` before merging, based
+on the app record's `supportedPools` list.
 
 ### Managed-proxy ownership exception
 
@@ -1413,8 +1410,8 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-09 — Kiro launcher controls, including enable, use
-> `ai.kiro.cli`; root enable is read-only and derived from that switch.
+> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> surfaces; decomposition warns automatically for every unsupported request.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1631,10 +1628,10 @@ constructor and transform both validate it.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use
-  `enable = false` on the replacement entry. Unsupported root fanout degrades
-  before this boundary and has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so
-  explicit entries within the same layer still win before cross-level
-  composition.
+  `enable = false` on the replacement entry. Unsupported root requests warn and
+  lower to the neutral value before this boundary; there is no L3 option. L1→L2
+  and L2b→L3 use `mkDefault` so explicit entries within the same layer still win
+  before cross-level composition.
 - **One package owner per key and scope.** Definition-provenance checks reject
   two packages claiming one root key or one per-runtime key. A root key and its
   runtime replacement are different scopes and do not collide.
@@ -1821,7 +1818,11 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 
 ### Adding a new concern X
 
-1. Add L2 option `ai.<X>` in `lib/ai/sharedOptions.nix`.
+1. Add L2 option `ai.<X>` to `sharedSurfaceOptions` in
+   `lib/ai/sharedOptions.nix`. This is also the shared fanout registration:
+   decomposition automatically warns for every enabled runtime whose
+   `supportedPools` omits `X`; no per-gap policy row is needed. Add policy only
+   for a better reason, a backend-specific gap or a partially delivered field.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline, gated on the
    pool, with a `poolOptions` override slot for per-runtime descriptions or
    types. Declare it in each per-CLI factory only when the shape itself differs.
@@ -1870,9 +1871,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-08 — `launcherOptionsPath` places Kiro environment
-> and shell options, including their normalized inputs, under `ai.kiro.cli`;
-> Codex always installs one launcher with an offline document preflight.
+> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> surfaces; decomposition warns automatically for every unsupported request.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1889,9 +1889,16 @@ places:
 
 An unsupported per-runtime write is therefore an "option does not exist" eval
 error. An unsupported ROOT value is different: root `ai.*` is the portable
-surface, so its fanout degrades to the pool's neutral value for that runtime.
-For example, Kimchi exposes `rules` but not `shell`: `ai.kimchi.rules` exists,
-while `ai.kimchi.shell` does not and root `ai.shell` does not reach Kimchi.
+surface, so a non-empty request warns and lowers to the pool's neutral value for
+that enabled runtime. For example, Kimchi exposes `rules` but not `shell`:
+`ai.kimchi.rules` exists, while `ai.kimchi.shell` does not and root `ai.shell`
+does not reach Kimchi.
+
+The root declarations in `sharedOptions.nix`'s `sharedSurfaceOptions` also
+register the shared fanout names. `app/decompose.nix` compares those names with
+`supportedPools` and generates unsupported-root warnings automatically, even for
+third-party runtime records; policy can improve a reason but is never a coverage
+gate. Backend-specific and field-level drops still need their own diagnostics.
 
 The list is read off the RECORD, keeping it a build-time parameter in the same
 category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
