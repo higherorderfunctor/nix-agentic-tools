@@ -609,6 +609,16 @@ delivery callback, and shell resolution. A per-runtime pool write that the
 runtime cannot consume is therefore an unknown-option error. A ROOT pool value
 stays portable and degrades to the neutral value for an incapable runtime.
 
+Kiro alone consumes the `worktrees` pool. Its shared `enable` type is nullable:
+null inherits or remains unspecified, while false is an explicit withdrawal. The
+root-to-runtime fold uses the existing scalar override rule and exposes
+`ai.kiro.normalized.worktrees`; Kiro lowers it once into native settings at
+`mkDefault`. Untouched defaults emit no native key, preserving an independently
+configured global policy. Claude, Codex, Copilot and Kimchi warn when the root
+pool is set and declare no runtime worktrees option. This policy is delivered
+through the existing settings surface, not a new file writer or permission
+grant.
+
 Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
 `mcpServers`, `rules`, `settings`, and `skills`. Its rules share Codex's flat
 AGENTS.md handling: Home Manager writes the user harness file, while devenv
@@ -1439,8 +1449,9 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 ## ai.\* Layered Fanout Pattern
 
 > **Last verified:** 2026-10-14 — delivery policy derives shared surfaces, keyed
-> withdrawal and normalized gaps from option and runtime declarations;
-> `poolOptions` covers `agentsDir` and `environmentVariables` only.
+> withdrawal and normalized gaps from option and runtime declarations, including
+> the nullable worktree policy; `poolOptions` covers `agentsDir` and
+> `environmentVariables` only.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1685,6 +1696,13 @@ constructor and transform both validate it.
   shared devenv AGENTS.md, Codex and Kimchi contribute every resolved inline or
   indexed rule; Kiro contributes only rules resolved to `always`. The keyed
   writer deduplicates byte-identical same-key contributions.
+- **Worktree policy uses nullable scalar inheritance.** The shared
+  `ai.worktrees.enable` and Kiro override use null for unspecified/inherit and
+  false for explicit disable. Only Kiro supports the pool; its normalized value
+  lowers at `mkDefault` to native `chat.worktrees`. Ordinary unset repository
+  defaults emit no key and therefore preserve global settings. No wrapper or new
+  settings writer participates.
+
 - **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
   for each supported pool and is public, writable with `mkForce`. Keyed pools
   have neutral `{}` option defaults and receive the root-to-runtime fold as
