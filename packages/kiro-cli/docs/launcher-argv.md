@@ -4,7 +4,9 @@
 > launchers; the packaged KAS wins over inherited overrides.
 >
 > Full historical measurements:
-> `git show 8be06935:packages/kiro-cli/docs/launcher-argv.md`.
+> `git show 8be06935:packages/kiro-cli/docs/launcher-argv.md`. KAS file-backed
+> prompts persist per conversation and inherit through workflow children and
+> forks.
 
 ### Terminal and ACP have different consumers
 

@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
 > normalized backend reach and nested delivery diagnostics; native inventory
 > extends flatten boundaries; repo-readable exceptions are declared and ACP
-> reads persisted engine settings.
+> reads persisted engine settings. Prompt-file slots preserve null resets across
+> all three configuration methods.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while

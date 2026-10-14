@@ -685,6 +685,10 @@
   in
     [
       {
+        assertion = ((nativeSettings cfg)."chat.promptFiles" or {}) == {} || effectiveEngine cfg == "v3";
+        message = "ai.kiro.cli.native.settings.chat.promptFiles requires the v3 engine; the file-backed prompt slots are implemented by the packaged KAS.";
+      }
+      {
         # No resolved package at all (`package = null`) means no wrapper is
         # built, so this constraint — which is about what the WRAPPER can
         # select from — does not apply; it must not fire on null alone.
@@ -930,8 +934,9 @@
 
   # Native startup and TUI settings have different project-scope consumers.
   # Native repo-readable exceptions; chat.ui is verified only by settings reads.
+  kasWorkspaceSettings = ["chat.promptFiles"];
   nativeRepoSettings = ["chat.agentEngine" "chat.ui"];
-  workspaceOverridableSettings = lib.unique (kiroFact "workspaceOverridableSettings" ++ nativeRepoSettings);
+  workspaceOverridableSettings = lib.unique (kiroFact "workspaceOverridableSettings" ++ nativeRepoSettings ++ kasWorkspaceSettings);
 
   # The FLATTEN BOUNDARY: measured complete keys plus explicit KAS extensions.
   # Union of native and TUI measured lists, because they cover different
@@ -1691,6 +1696,11 @@ in
       packageDependentReasons =
         wrapperPackageReasons
         ++ [
+          {
+            active = ((nativeSettings cfg)."chat.promptFiles" or {}) != {};
+            explicit = true;
+            name = "ai.kiro.cli.native.settings.chat.promptFiles";
+          }
           {
             active = moduleEnvironmentVariables != {};
             explicit = explicitAt [["ai" "gitSshConfigWorkaround"]];
