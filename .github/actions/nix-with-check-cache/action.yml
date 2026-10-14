@@ -1,0 +1,31 @@
+name: Nix with the CI check cache
+description: >-
+  Install Nix with flake config and the sandbox, assert both applied, enable the
+  nix-agentic-tools Cachix cache, then install the Hestia check cache. Requires
+  the repository checkout, which holds the local actions it uses.
+
+inputs:
+  wait-manifest-version:
+    description: Wait for the evaluating job's registered derivation closures.
+    default: "0"
+
+runs:
+  using: composite
+  steps:
+    - uses: cachix/install-nix-action@v31
+      with:
+        extra_nix_config: |
+          accept-flake-config = true
+          sandbox = true
+    - uses: ./.github/actions/assert-nix-config
+      with:
+        require: |
+          ^accept-flake-config = true
+          ^sandbox = true
+    - uses: cachix/cachix-action@v17
+      with:
+        name: nix-agentic-tools
+    - name: Install CI-only check cache
+      uses: ./.github/actions/check-cache
+      with:
+        wait-manifest-version: ${{ inputs.wait-manifest-version }}

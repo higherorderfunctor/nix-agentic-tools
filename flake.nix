@@ -106,6 +106,12 @@
       root = ./.;
     };
     updateRegistry = repository.update;
+    checkWorlds = forAllSystems (system:
+      repository.checkWorldFor {
+        inherit self updateRegistry;
+        pkgs = pkgsFor system;
+        rootModules = (import ./lib/testing/discover.nix {inherit lib;}) ./checks;
+      });
   in {
     overlays.default = repository.overlay;
 
@@ -185,12 +191,30 @@
     in
       repository.libraryFor baseLib;
 
-    checks = forAllSystems (system:
-      repository.checksFor {
-        inherit self updateRegistry;
-        pkgs = pkgsFor system;
-        rootModules = (import ./lib/testing/discover.nix {inherit lib;}) ./checks;
-      });
+    checks = forAllSystems (system: checkWorlds.${system}.checks);
+
+    ciChecks = forAllSystems (system:
+      lib.mapAttrs (name: check:
+        check
+        // {
+          # Only the scheduling group is needed by the matrix evaluator; merge
+          # into the check's own meta rather than replacing it.
+          meta =
+            (check.meta or {})
+            // {
+              hestia.group = let
+                claim = checkWorlds.${system}.claims.${name};
+              in
+                if claim.owner == "<root>"
+                then "workspace-${baseNameOf (dirOf (toString claim.source))}"
+                else "owner-${claim.owner}";
+            };
+        })
+      checkWorlds.${system}.checks);
+
+    ciCheckEvaluator =
+      forAllSystems (system:
+        import ./dev/ci-check-evaluator.nix {pkgs = pkgsFor system;});
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.

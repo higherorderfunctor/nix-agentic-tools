@@ -1,8 +1,9 @@
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-13 — the Linux test job retains check outputs and
-> the original patched devenv nixpkgs input in a separate Hestia cache; Semble
-> publication remains in the package matrix.
+> **Last verified:** 2026-10-14 — the Linux test job retains check outputs and
+> the original patched devenv nixpkgs input in a separate Hestia cache; the
+> non-required check matrix registers drv closures there; Semble publication
+> remains in the package matrix.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -71,3 +72,10 @@ access. No live warm-cache result or speedup is established by local validation.
 mode and `actions: write` for garbage collection, limiting stale roots and packs
 within GitHub's shared cache quota. Garbage collection does not prevent GitHub's
 own expiry or LRU eviction. This cache carries no Cachix publishing token.
+
+The non-required `checks-eval` job registers every evaluated `.drv` closure in
+the same cache. Its workers pass the eval job's `manifest-version` through the
+helper's `wait-manifest-version` input and run `hestia prefetch` before
+building: with `filter-drv-closures`, the public references are omitted from the
+closure and prefetch prepares them. Fork PRs skip that matrix, since a read-only
+cache cannot register the closures the workers need.

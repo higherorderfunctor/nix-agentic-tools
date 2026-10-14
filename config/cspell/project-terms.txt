@@ -1,9 +1,11 @@
 AWSLAMBDA
+Boehm
 CFFIXED
 CLOUDSDK
 COLORFGBG
 COLORTERM
 Consolas
+DONT
 GHOSTTY
 GOARCH
 GOTOOLCHAIN
@@ -189,6 +191,7 @@ indexedlog
 inferera
 inlines
 inspectable
+installables
 ints
 ironsh
 isaacphi
@@ -364,6 +367,7 @@ rootfs
 rsbuild
 rspack
 rsyncs
+rtrimstr
 rumdl
 rvben
 sandboxed
@@ -402,6 +406,7 @@ stopword
 streamable
 strflocaltime
 strs
+subaction
 subdirs
 subkeys
 subshell

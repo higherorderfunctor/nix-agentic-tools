@@ -1,7 +1,8 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-12 — module containers permit a regular README.md
-> alongside backend directories and private Nix sidecars; shared documentation
+> **Last verified:** 2026-10-14 — `checkWorldFor` returns checks with their
+> ownership claims; the flake derives `checks` and the CI-only `ciChecks` from
+> it; module containers permit a regular README.md; shared documentation
 > snapshots use the injected `webDocsLib` builder.
 
 An owner directory groups the implementation, checks, and declarative metadata
@@ -45,6 +46,14 @@ imported module arguments see the combined `config`, `options`, and
 hide another owner's claim. Native package option types reject non-derivation
 check values. Root groups cover workspace policy and genuine cross-owner
 contracts.
+
+`repository.checkWorldFor` realizes the checks once and returns `checks` plus
+`claims`, each check's `{owner, source}` (`owner = "<root>"` for a root
+concern). The claims are `deepSeq`'d so they never retain the evaluated world.
+`checksFor` is its `.checks`. The flake builds one `checkWorlds.<system>` and
+derives both `checks` and the CI-only `ciChecks` from it; `ciChecks` merges
+`meta.hestia.group` (`owner-<owner>` or `workspace-<concern dir>`) into each
+check's own `meta` so Hestia's matrix schedules one row per ownership group.
 
 The shared harness in `lib/testing/module-harness.nix` discovers backend imports
 from the same owner index as production. Package check modules may contribute

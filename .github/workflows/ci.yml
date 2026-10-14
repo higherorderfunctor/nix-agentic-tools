@@ -682,6 +682,180 @@ jobs:
           fi
           echo "heron_brook mitigation review due ${review_by} (today ${today}) — OK."
 
+  # DEMONSTRATION, not a required context: `test` above stays the gate. These
+  # three jobs evaluate the Linux checks ONCE with Hestia's matrix subaction,
+  # then build each uncached ownership group (`meta.hestia.group` in
+  # `ciChecks`) by drv path, with no flake evaluation in the workers.
+  #
+  # The evaluator is nix-eval-jobs with its worker garbage collector
+  # re-enabled (dev/ci-check-evaluator.nix). Stock nix-eval-jobs sets
+  # GC_DONT_GC and runs out of memory on this check set; with the collector on,
+  # one worker evaluated all 1051 checks in ~9 GB.
+  #
+  # Fork PRs skip it: a read-only Hestia cannot register the drv closures the
+  # workers substitute, so there is nothing to build by drv path.
+  checks-eval:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    outputs:
+      any-jobs: ${{ steps.matrix.outputs.any-jobs }}
+      manifest-version: ${{ steps.matrix.outputs.manifest-version }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/nix-with-check-cache
+      - name: Warm IFD sources (retry, best-effort)
+        uses: ./.github/actions/warm-ifd
+        with:
+          systems: x86_64-linux
+
+      # Hestia reads nix-eval-jobs' stdout itself and emits only uncached
+      # rows, each naming its first member's attr. The wrapper keeps every raw
+      # row of the SAME evaluation for the coverage check below.
+      - name: Build the check evaluator
+        id: evaluator
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          evaluator="$(nix build --no-link --print-out-paths .#.ciCheckEvaluator.x86_64-linux)"
+          capture="$RUNNER_TEMP/capture-check-rows"
+          cat > "$capture" <<'EOF'
+          #!/usr/bin/env bash
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          status=0
+          "$@" > "$CHECK_ROWS" || status=$?
+          cat "$CHECK_ROWS"
+          exit "$status"
+          EOF
+          chmod +x "$capture"
+          echo "CHECK_ROWS=$RUNNER_TEMP/rows.jsonl" >> "$GITHUB_ENV"
+          echo "command=$capture $evaluator/bin/nix-eval-jobs --workers 1 --max-memory-size 12288" >> "$GITHUB_OUTPUT"
+
+      # `.#.` selects the attr path exactly; nix-eval-jobs resolves the
+      # fragment like `nix build`, so the rows' attrs are bare check names.
+      - name: Evaluate Linux checks once and plan uncached groups
+        id: matrix
+        uses: Mic92/hestia/matrix@dfed9ced335d28978ba74e513939a10db1f71025 # v3.1.0
+        with:
+          flake: .#.ciChecks.x86_64-linux
+          nix-eval-jobs: ${{ steps.evaluator.outputs.command }}
+          runner-map: x86_64-linux=ubuntu-latest
+
+      # The evaluated attrs must be exactly the public checks, and every
+      # uncached derivation must be in exactly one row. The second evaluation
+      # runs after the matrix evaluator exited. The matrix goes through a
+      # quoted heredoc, not `env:`: a cold plan nears Linux's 128 KiB limit on
+      # one environment string.
+      - name: Verify the plan covers every public check
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          cat > "$RUNNER_TEMP/matrix.json" <<'JSON'
+          ${{ steps.matrix.outputs.matrix }}
+          JSON
+          nix eval --json .#.checks.x86_64-linux --apply builtins.attrNames > "$RUNNER_TEMP/checks.json"
+          jq -n \
+            --slurpfile rows "$CHECK_ROWS" \
+            --slurpfile names "$RUNNER_TEMP/checks.json" \
+            --slurpfile matrix "$RUNNER_TEMP/matrix.json" '
+            ($names[0] | sort) as $public
+            | $matrix[0].include as $include
+            | [$include[].installables | split(" ")[] | select(. != "")] as $installables
+            | ($installables | map(rtrimstr("^*"))) as $planned
+            | ([$rows[] | select(.isCached == false) | .drvPath] | unique) as $pending
+            | {
+                checks: ($public | length),
+                evaluated: ($rows | length),
+                cached: ([$rows[] | select(.isCached == true)] | length),
+                rows: ($include | length),
+                planned: ($planned | length),
+                failures: [
+                  ($rows[]
+                    | select((.attrPath | length) != 1 or .system != "x86_64-linux")
+                    | "malformed row \(.attr)"),
+                  (if ([$rows[].attrPath[0]] | sort) != $public
+                    then "evaluated attrs differ from the public checks" else empty end),
+                  (if ($planned | sort) != $pending
+                    then "planned derivations differ from the uncached derivations" else empty end)
+                ]
+              }' > "$RUNNER_TEMP/plan-report.json"
+          jq -r '"| \(keys_unsorted[:-1] | join(" | ")) |",
+            "|\(keys_unsorted[:-1] | map(" --- ") | join("|"))|",
+            "| \([.[]][:-1] | map(tostring) | join(" | ")) |"' \
+            "$RUNNER_TEMP/plan-report.json" >> "$GITHUB_STEP_SUMMARY"
+          if jq -e '.failures | length > 0' "$RUNNER_TEMP/plan-report.json" > /dev/null; then
+            jq -r '.failures[] | "::error::\(.)"' "$RUNNER_TEMP/plan-report.json"
+            exit 1
+          fi
+
+      - name: Upload check plan evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: checks-plan
+          path: |
+            ${{ runner.temp }}/checks.json
+            ${{ runner.temp }}/matrix.json
+            ${{ runner.temp }}/plan-report.json
+            ${{ runner.temp }}/rows.jsonl
+          if-no-files-found: warn
+
+  checks-build:
+    name: checks (${{ matrix.name }})
+    needs: checks-eval
+    if: needs.checks-eval.outputs.any-jobs == 'true'
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.checks-eval.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      INSTALLABLES: ${{ matrix.installables }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/nix-with-check-cache
+        with:
+          wait-manifest-version:
+            ${{ needs.checks-eval.outputs.manifest-version }}
+      # The upstream filter omits public references from the drv closures, so
+      # prefetch prepares them before importing the Hestia-backed part.
+      - name: Build evaluated derivations without flake evaluation
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          read -r -a installables <<< "$INSTALLABLES"
+          "$HESTIA_BIN" prefetch "${installables[@]}"
+          nix build --no-link -L "${installables[@]}"
+
+  # Fails unless evaluation succeeded and every planned leg succeeded: the
+  # matrix is fixed by checks-eval and does not fail fast. An all-cached plan
+  # has no workers and passes.
+  checks-matrix:
+    needs: [checks-eval, checks-build]
+    if: always() && needs.checks-eval.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require successful evaluation and workers
+        env:
+          ANY_JOBS: ${{ needs.checks-eval.outputs.any-jobs }}
+          BUILD_RESULT: ${{ needs.checks-build.result }}
+          EVAL_RESULT: ${{ needs.checks-eval.result }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          test "$EVAL_RESULT" = success
+          case "$ANY_JOBS" in
+            false) test "$BUILD_RESULT" = skipped ;;
+            true) test "$BUILD_RESULT" = success ;;
+            *) exit 1 ;;
+          esac
+
   # The full `devenv test` smoke suite and #821 telemetry remain available as
   # the manual Devenv Diagnostic workflow. Its extracted deterministic
   # contracts live in the flake checks above, so no automatic PR or push path
