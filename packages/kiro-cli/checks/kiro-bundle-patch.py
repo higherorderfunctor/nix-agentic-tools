@@ -87,7 +87,7 @@ class PatchTests(unittest.TestCase):
             (root/'in.js').write_bytes(data + b' ')
             (root/'corpus.json').write_text(json.dumps(corpus))
             (root/'out.js').write_bytes(b'untouched')
-            result = subprocess.run([sys.executable, PATCHER, str(root/'in.js'), str(root/'corpus.json'), str(root/'out.js'), '--check'], capture_output=True)
+            result = subprocess.run([sys.executable, PATCHER, str(root/'in.js'), str(root/'corpus.json'), str(root/'out.js')], capture_output=True)
             self.assertEqual(result.returncode, 1)
             self.assertEqual((root/'out.js').read_bytes(), b'untouched')
 
