@@ -1428,7 +1428,7 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> **Last verified:** 2026-10-14 — shared option declarations register fanout
 > surfaces; decomposition warns automatically for unsupported requests,
 > including the nullable worktree policy.
 >
