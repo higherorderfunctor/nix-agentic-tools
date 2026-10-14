@@ -29,9 +29,9 @@ composed registry and ninja DAG:
   nix-update to refresh both hashes. `agnix` and `git-absorb` use
   `buildRustPackage`'s equivalent `cargoHash` shorthand; git-branchless instead
   imports the lock from its flake input.
-- **Go packages with a sidecar `vendorHash`** (`beads` and its paired nested
-  `dolt`, `cli-proxy-api`, `gh`, `gluetun`, `iron-proxy`, `kimchi`,
-  `oh-my-posh`, `otel-tui`, `pipelock` — kimchi records the hash for its nested
+- **Go packages with a sidecar `vendorHash`** (`beads`, `cliproxyapi`, `dolt`
+  (paired with `beads`), `gh`, `gluetun`, `iron-proxy`, `kimchi`, `oh-my-posh`,
+  `otel-tui`, `pipelock` — kimchi records the hash for its nested
   `proxy-helper`, not for a top-level Go build): the custom archive update
   script needs an explicit dependency-hash repair, so `vendorHash` goes in the
   sidecar. `mkUpdateScript` rebuilds the sidecar from scratch, destroying any
@@ -270,7 +270,7 @@ Fetching itself is nixpkgs' to test.
 | btop                | generic    | GitHub archive              | cmake (nixpkgs override)  | `btop`                | —             | --version           |
 | bun                 | generic    | GitHub releases             | pre-built binary          | `bun`                 | —             | —                   |
 | catppuccin-btop     | generic    | GitHub archive              | files only                | —                     | —             | —                   |
-| cli-proxy-api       | generic    | GitHub archive              | go (source)               | —                     | — (subPkg)    | -h                  |
+| cliproxyapi         | generic    | GitHub archive              | go (nixpkgs override)     | `cliproxyapi`         | go test       | --version           |
 | dns-root-hints      | generic    | InterNIC (no version)       | files only                | —                     | —             | —                   |
 | fblog               | generic    | GitHub archive              | cargo (nixpkgs override)  | `fblog`               | —             | --version           |
 | gluetun             | generic    | GitHub archive              | go (linux only)           | —                     | — (subPkg)    | starts + exits      |
