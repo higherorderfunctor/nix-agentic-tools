@@ -1,15 +1,14 @@
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-14 — unsupported root reasoning effort warns and
-> names the native per-model remedy; native startup inventory extends flatten
-> boundaries and managed engine defaults use persisted terminal settings plus a
-> declared ACP default.
+> **Last verified:** 2026-10-14 — unsupported root reasoning effort warns with a
+> native per-model remedy; native inventory extends flatten boundaries;
+> repo-readable exceptions are declared and ACP reads persisted engine settings.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
 the shipped TUI merge allows 23, including in 2.22.1. The TUI project-local
-guard follows that consumer. Separately measured native startup keys are
-explicit exceptions, not a union with the broader native settings reads scope.
+guard follows that consumer. Declared repo-readable native keys are explicit
+exceptions, not a union with the broader native settings reads scope.
 
 ### Model suggestions
 
@@ -122,9 +121,9 @@ control that the walk does not stop EARLY, which would write nested
 `chat.agentEngine` is nullable and typed as `v1`, `v2` or `v3`; `chat.ui` is
 nullable and typed as `legacy` or `tui`. Freeform settings and typed keybindings
 remain available. Native repository settings override global values for these
-two startup keys, so `nativeStartupWorkspaceSettings` admits them separately
-from the TUI allowlist. Settings precedence alone does not establish which UI
-launches.
+two repo-readable keys, so the declared `nativeRepoSettings` admits them
+separately from the TUI allowlist. Settings precedence alone does not establish
+which UI launches.
 
 For pinned 2.29.1 on Linux, a PTY probe with `chat.agentEngine = "v3"` observed
 successful `execve` of Bun running `tui.js chat` in four cases: no UI setting,
@@ -136,15 +135,14 @@ access and used the existing fake KAS fixture. Bun subsequently aborted, so this
 establishes dispatch only, not UI health. Darwin and other engines were not
 measured. No UI default or upstream dispatch policy is changed here.
 
-Managed configurations default the engine to V3 through the settings writer.
-`cli.v3 = false` withholds that default without forcing V2; an explicit native
-engine or null wins over the compatibility switch. Terminal CLI flags override
-persisted choices. ACP uses the same declared engine through the existing
-package build launcher because ACP does not consult persisted engine settings.
+Managed configurations default the engine to V3 through the settings writer. An
+explicit native null leaves selection to Kiro. Terminal CLI flags override
+persisted choices. ACP reads the same engine settings through the existing
+package build launchers because ACP does not consult persisted engine settings.
 The bare package retains upstream terminal defaults. See
 [launcher-argv.md](launcher-argv.md) for precedence, opt-out semantics and
 platform composition.
 
-Delegate-routing workflow visibility and engine mismatch warnings reuse the Kiro
+Delegate-routing workflow visibility and module engine warnings reuse the Kiro
 declared-engine resolver. Flat keys take precedence over nested defaults,
 including explicit null, exactly as in delivered settings.

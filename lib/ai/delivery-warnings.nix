@@ -159,22 +159,15 @@
         (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
       ignored)
     )) (builtins.attrNames cfg.hooks));
-  # `--trust-tools` reaches the chat binary on BOTH backends, so this is a
-  # withhold test rather than a platform test. Two argv paths drop the flag:
-  # Darwin's launcher resolves the chat binary by app-bundle discovery and never
-  # runs the wrapper that appends it, and the `acp` subcommand rejects it under
-  # the v3 engine (packages/kiro-cli/lib/wrapPackage.nix:194-256). Exactly one
-  # composition recovers the grant declaratively — Home Manager with v3, where
-  # mkPermissionRules also writes it into settings/permissions.yaml
-  # (packages/kiro-cli/lib/mkKiro.nix:707-742) — so that is the only case
-  # suppressed, and the devenv half that the wrapper's own comment says is not
-  # recovered declaratively now reports instead of staying silent.
+  # Darwin bundle discovery bypasses the chat wrapper's grant; ACP V3 rejects
+  # --trust-tools. Only HM with declared V3 recovers it via permissions.yaml.
+  kiroV3 = import ../../packages/kiro-cli/lib/effective-engine.nix cfg.cli.native.settings == "v3";
   trustToolsWarnings = lib.optional (runtime
     == "kiro"
     && cfg.cli.trustedMcpTools != []
-    && ((appRecord.pkgs.stdenv.hostPlatform.isDarwin or false) || cfg.cli.v3)
-    && !(cfg.cli.v3 && backend == "hm"))
-  (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
+    && ((appRecord.pkgs.stdenv.hostPlatform.isDarwin or false) || kiroV3)
+    && !(kiroV3 && backend == "hm"))
+  (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with the effective native engine v3 recovers it declaratively through settings/permissions.yaml.");
   mcpWarnings = lib.concatMap (entry: let
     srv = entry.value;
     http = (srv.url or null) != null;

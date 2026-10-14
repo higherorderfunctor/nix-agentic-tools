@@ -65,10 +65,6 @@
             key = "workspaceOverridableSettings";
           }
         ]
-        ++ map (key: {
-          contains = key;
-          key = "nativeStartupWorkspaceSettings";
-        }) ["chat.agentEngine" "chat.ui"]
         ++ [
           {
             contains = "api.cps.service";

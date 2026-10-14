@@ -1,8 +1,7 @@
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-10-13 — package-bound KAS/Node paths and selected
-> prompt patches follow the native payload through FHS and direct launch. The
-> recorded upstream sandbox measurements below are unchanged.
+> **Last verified:** 2026-10-14 — the FHS chat wrapper passes trust grants to
+> the payload, which resolves ACP engine settings before applying them.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
@@ -80,7 +79,10 @@ normal `kiro-cli` launch finds it before the inherited profile PATH reaches any
 outer wrapper. When `trustedMcpTools` is non-empty, this repo re-composes
 nixpkgs' FHS package around a chat-only wrapped payload instead. The command at
 that same `/usr/bin` path is then the configured wrapper, so launcher-dispatched
-devenv sessions do not silently lose `--trust-tools`.
+devenv sessions do not silently lose the grant. It passes the grant through a
+private environment value to the payload launcher, which resolves ACP engine
+settings before deciding whether `--trust-tools` is accepted and clears that
+value before native execution.
 
 ## Supplying missing tools
 

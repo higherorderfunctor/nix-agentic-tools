@@ -1,4 +1,4 @@
-"""Host-run native settings inventory and narrow startup scope contract.
+"""Host-run native settings inventory and repo-readable native keys.
 
 These are native settings reads, separate from the TUI workspace allowlist and UI dispatch.
 No account, model request, or inherited user configuration participates.
@@ -42,7 +42,7 @@ def extract(binary):
             return {row["key"]: row.get("current_value") for row in rows}
 
         inventory = read()
-        # Only startup-consumed exceptions are admitted by the project writer.
+        # These repo-readable native keys are admitted by the project writer.
         # A broader native census must never widen the separate TUI contract.
         global_values = {"chat.agentEngine": "v3", "chat.ui": "legacy"}
         repo_values = {"chat.agentEngine": "v2", "chat.ui": "tui"}
@@ -54,7 +54,6 @@ def extract(binary):
         assert all(selected[key] == value for key, value in repo_values.items()), selected
         return {
             "nativeSettingKeys": sorted(inventory),
-            "nativeStartupWorkspaceSettings": sorted(repo_values),
         }
 
 

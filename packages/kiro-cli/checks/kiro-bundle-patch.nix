@@ -4,17 +4,15 @@
     identity = "Custom identity. Another sentence!";
     replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
   };
-  wrap = package: (package.withAcpDefault "v3").unwrapped;
+  wrap = package: package.unwrapped;
   variants = pkgs.writeText "kiro-cli-kas-dispatch.json" (builtins.toJSON {
     stock = {
       package = wrap package;
       server = server package.kas;
-      managed = false;
     };
     patched = {
       package = wrap patched;
       server = server patched.kas;
-      managed = true;
     };
   });
   server = kas: "${kas}/node_modules/@kiro/agent/dist/server/acp-server.js";

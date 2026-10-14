@@ -1,7 +1,7 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-10-09 — Kiro CLI configuration lives under
-> `ai.kiro.cli`; MCP delivery remains runtime-owned.
+> **Last verified:** 2026-10-14 — Kiro native engine defaults can be overridden
+> by repo settings or flags.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -415,8 +415,9 @@ the project file only when a server is declared.
 
 - A credential url reads its secret at ACTIVATION, so a consumer wiring
   sops-nix/agenix must order the mcp.json activation AFTER the secret provider.
-- `--classic` (non-v3) ships the literal header placeholder → failed auth, not a
-  leak; the factory wrapper forces `--v3`.
+- V2 ships the literal header placeholder → failed auth, not a leak. The module
+  defaults the native engine setting to V3; an explicit `--v2` or a repository
+  V2 setting overrides that default.
 - Static tokens only; rotate = re-export + restart (no refresh hook).
 
 Claude's files are not merge candidates: its `.claude/settings.json` and its

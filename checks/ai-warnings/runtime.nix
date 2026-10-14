@@ -112,19 +112,15 @@ in {
     && enabled.config.tasks."ai:delivery:observe-retired".before == ["devenv:files:cleanup"]
     && lib.hasInfix "workflows" (featureWarning {
       workflows.enable = true;
-      v3 = true;
     })
     && !(lib.hasInfix "global-feature" (featureWarning {
       features.workflows.enable = true;
-      v3 = true;
     }))
     && lib.hasInfix "codeToSpec" (featureWarning {
       codeToSpec.enable = true;
-      v3 = true;
     })
     && !(lib.hasInfix "global-feature" (featureWarning {
       features.c2s.enable = true;
-      v3 = true;
     }))
     && !(lib.hasInfix "workflows" (featureWarning {}))
   );

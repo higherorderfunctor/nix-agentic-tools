@@ -1,9 +1,7 @@
 ## Kiro feature availability and client settings
 
-> **Last verified:** 2026-10-13 — rollout options consume the facts aggregate;
-> GA workflows keep the stock package, and friendly switches imply client
-> settings only in their native scope. Friendly-switch rollout and setting
-> dependencies share one table with the owner's consumer expectations.
+> **Last verified:** 2026-10-14 — native engine settings select V3; no
+> compatibility switch remains.
 
 Workflows have been generally available since **Kiro CLI 2.26.0**. Their pinned
 rollout state is 100% for all users with no channel restriction, so enabling
@@ -14,7 +12,6 @@ the global `chat.enableWorkflows` client setting.
 ai.kiro = {
   cli = {
     enable = true;
-    v3 = true;
     workflows.enable = true;
   };
 };
@@ -32,12 +29,12 @@ workflow choice per session.
 
 Every friendly switch requires the effective declared
 `cli.native.settings.chat.agentEngine` to be `"v3"` (the managed default). An
-explicit `"v2"` or null does not satisfy that requirement, even with
-`cli.v3 = true`. The switches share declarations and package selection across
-Home Manager and devenv; client settings are implied only where the pinned
-client honors them. A friendly switch implies its raw feature at default
-priority. Explicitly disabling that raw feature while leaving the friendly
-switch enabled fails an assertion on both backends.
+explicit `"v2"` or null does not satisfy that requirement. The switches share
+declarations and package selection across Home Manager and devenv; client
+settings are implied only where the pinned client honors them. A friendly switch
+implies its raw feature at default priority. Explicitly disabling that raw
+feature while leaving the friendly switch enabled fails an assertion on both
+backends.
 
 | `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                                                                                              |
 | ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
