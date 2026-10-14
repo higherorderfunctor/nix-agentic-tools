@@ -628,20 +628,22 @@ jobs:
       # Customization still produces a separate patched build; this job's
       # Cachix client is read-only. The base package is built and published
       # by the authenticated package matrix above.
-      # Same-repository runs evaluate every output here and leave BUILDING the
-      # checks to the required `checks-matrix` gate below, which evaluates
-      # once and builds each ownership group on its own runner. Fork PRs skip
-      # that gate (read-only Hestia), so they keep the single full check.
-      - name:
-          Evaluate flake outputs (same repository) or run full flake checks
-          (fork)
+      # Same-repository runs leave the checks to the required `checks-matrix`
+      # gate below, which instantiates every check once and builds each
+      # ownership group on its own runner; here only the shape of every flake
+      # output is evaluated. `nix flake check --no-build` is not usable for
+      # that: checks/ai-delivery-layer coerces a fixture path to a store path
+      # and reads it back, and without builds the copy never happens ("path …
+      # is not valid"). Fork PRs skip the matrix (read-only Hestia), so they
+      # keep the single full check.
+      - name: Evaluate flake output shapes or run full flake checks (fork)
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           if [ "$HESTIA_READ_ONLY" = true ]; then
             nix flake check
           else
-            nix flake check --no-build
+            nix flake show > /dev/null
           fi
 
       # ~90-day reminder to re-check that the delegate-routing per-turn reminder
