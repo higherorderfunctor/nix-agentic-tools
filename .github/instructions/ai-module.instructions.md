@@ -7,8 +7,9 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-13 — shared option declarations register fanout
-> surfaces; decomposition shares its unsupported set with delivery diagnostics.
+> **Last verified:** 2026-10-14 — shared option declarations register fanout
+> surfaces; decomposition shares unsupported requests with diagnostics; Kiro
+> selects its engine through native settings.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -129,7 +130,7 @@ folds every inert setting into one warning naming each option; Codex's
 
 Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
 `shell`, `extraPackages`, `native.settings`, `trustedMcpTools`, `tweaks`,
-`features.<name>.enable`, `useFhsSandbox` and `v3`, plus the friendly
+`features.<name>.enable` and `useFhsSandbox`, plus the friendly
 `backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and `workflows` switches.
 Rollout names and typed `native.settings.chat.keybindings` keys come from the
 extracted registry. Friendly workflows select the GA stock package and imply
@@ -1878,9 +1879,9 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-14 — shared option declarations register fanout
-> surfaces and decomposition warns for every unsupported request; Kimchi
-> consumes resolved shell through Pi harness settings, patched to honor it.
+> **Last verified:** 2026-10-14 — decomposition warns for unsupported shared
+> requests; Kimchi consumes resolved shell through Pi harness settings; Kiro
+> defaults to V3 through settings rather than a forced flag.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -2108,7 +2109,8 @@ three runtimes demonstrably do not perform.
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.
 - **`KIRO_CHAT_SHELL` is a dead end.** It exists only in Kiro's Rust binary, is
-  absent from the v3 JS bundle, and the wrapper forces `--v3`.
+  absent from the v3 JS bundle. The module defaults the native engine setting to
+  V3; explicit CLI flags and repository settings can override it.
 
 ### Why Copilot is a gap rather than a TODO someone can just close
 
