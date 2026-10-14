@@ -114,13 +114,17 @@ export async function resolveSnapshot(homeDir, cwd) {
 
 // Internal server sessions already carry a trusted ownerSessionId. Public ACP
 // metadata is never an input to this inheritance path.
-export async function ownerSnapshot(agent, owner) {
+export async function ownerSnapshot(agent, owner, cwd) {
   if (!owner) fail("workflow", "missing owner session id");
   const resident = agent.sessionState(owner);
   if (resident) return resident.nixPromptSnapshot;
   const metadata = await agent.persistence.loadSessionMetadata(owner);
-  if (!metadata) fail("workflow", `owner session ${owner} is unavailable`);
-  return storedSnapshot(metadata);
+  if (metadata) return storedSnapshot(metadata);
+  if (cwd === undefined)
+    fail("workflow", `owner session ${owner} is unavailable`);
+  // Vendor eviction may remove an owner first; resolve from the child's cwd,
+  // matching the cwd reauthorization of its workspace roots.
+  return resolveSnapshot(agent.homeDir, cwd);
 }
 
 export function profile(definition, source, snapshot, original) {

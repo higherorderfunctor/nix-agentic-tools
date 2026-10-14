@@ -289,6 +289,7 @@ try {
   await rm(join(repoA, "identity.txt"));
   await assert.rejects(nixPrompts.resolveSnapshot(home, repoA), /identity/);
   const agent = {
+    homeDir: home,
     sessionState: (id) =>
       id === "resident" ? { nixPromptSnapshot: a } : undefined,
     persistence: {
@@ -303,6 +304,10 @@ try {
   );
   await writeSettings(repoSettings(repoA), { identity: null });
   const reset = await nixPrompts.resolveSnapshot(home, repoA);
+  assert.deepEqual(
+    await nixPrompts.ownerSnapshot(agent, "missing", repoA),
+    reset,
+  );
   assert.equal(
     reset.slots.identity,
     await readFile(

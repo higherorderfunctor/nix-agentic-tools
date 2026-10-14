@@ -383,6 +383,25 @@ try {
     ),
     rootsApi.requestAuthority(childRequest),
   );
+  // The detached registry rebuild has the same fallback: cwd roots and prompt
+  // snapshot resolve, while a saved extra root revoked by settings still fails.
+  const evictedRegistry = vendor.T9r({
+    getLiveSessionRegistry: () => undefined,
+    getLiveSessionModeId: () => undefined,
+    buildRegistryForRoots: vendor.workflowRegistry.bind(evictedOwner),
+  });
+  await assert.rejects(
+    evictedRegistry({ parentSessionId: "parent", workspacePath: a }),
+    (error) => error === registryStop,
+  );
+  await assert.rejects(
+    evictedRegistry({
+      parentSessionId: "parent",
+      workspacePath: a,
+      additionalDirectories: [path.join(tmp, "a-extra")],
+    }),
+    /no longer authorized/,
+  );
   const childWithExtra = {
     ...evictedOwner,
     persistence: {
