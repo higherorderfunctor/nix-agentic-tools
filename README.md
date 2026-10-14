@@ -382,7 +382,7 @@ instruction building.
 | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Copilot + Kiro; Claude has no project LSP route (warns); Codex has no native LSP registry |
 | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
 | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. Copilot is explicitly excluded |
-| Local AI proxy | Run CLIProxyAPI and point each CLI at it | `ai.proxy.instances.*` user services and their registry; `ai.proxy` selection (`instance`, or `url` + `key`) | Selection only, usually in `devenv.local.nix`; otherwise inherits Home Manager's. A runtime without support warns |
+| Local AI proxy | Run CLIProxyAPI and point each CLI at it | `ai.proxy.instances.*` user services and their registry; `ai.proxy` selection (`instance`, or `url` + `key`) (Codex) | Selection only, usually in `devenv.local.nix`; otherwise inherits Home Manager's. A runtime without support warns |
 | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
 ### Kimchi project delivery
@@ -604,6 +604,15 @@ upstream credential, so a `plain` key in the Nix store is acceptable.
 `ai.<runtime>.proxy` replaces the selection for one runtime. A runtime that does
 not consume `ai.proxy` warns: Kimchi and Kiro are not supported yet, and Copilot
 is out of scope.
+
+Codex gets a model provider. Home Manager writes `model_provider = "ai-proxy"`
+and its `[model_providers.ai-proxy]` table into `~/.codex/config.toml`, and
+defaults `features.plugins` and `analytics.enabled` to false so Codex's side
+traffic does not go around the proxy. That file is written at evaluation, so a
+Home Manager `instance` must be one declared in `ai.proxy.instances`. Codex
+ignores providers in project config, so devenv's Codex launcher passes its own
+provider, `ai-proxy-devenv`, as `-c` flags, reading an `instance` from the
+registry at each launch; a missing instance stops the launch.
 
 The registry format is a contract, so a proxy you run yourself can have its
 entry written by hand:

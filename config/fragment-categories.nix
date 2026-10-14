@@ -161,6 +161,9 @@ _: {
       scopes = [
         "checks/ai-proxy/**"
         "lib/ai/proxy/**"
+        "packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix"
+        "packages/chatgpt-codex/checks/proxy-test.py"
+        "packages/chatgpt-codex/lib/proxy.nix"
       ];
       sources = ["ai-proxy"];
     };

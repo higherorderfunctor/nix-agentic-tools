@@ -71,11 +71,6 @@
       ++ proxyLib.toAssertions (proxyLib.keyProblem "${option}.clientKey" inst.clientKey)
     );
 
-  registryEntry = inst: {
-    key = inst.clientKey;
-    url = proxyLib.originFor inst;
-  };
-
   portOwners = lib.groupBy (name: toString instances.${name}.port) names;
   sharedPorts = lib.filterAttrs (_: owners: builtins.length owners > 1) portOwners;
 
@@ -131,7 +126,7 @@ in {
     })
     (lib.optionalAttrs isHomeManager {
       xdg.configFile.${proxyLib.registryPath} = lib.mkIf (instances != {}) {
-        text = builtins.toJSON (lib.mapAttrs (_: registryEntry) instances);
+        text = builtins.toJSON (lib.mapAttrs (_: proxyLib.registryEntry) instances);
       };
       warnings = lib.optional (instances != {} && !isLinux) "ai.proxy.instances (${lib.concatStringsSep ", " names}) defines CLIProxyAPI services, but only Linux systemd user units are implemented; nothing starts them on ${pkgs.stdenv.hostPlatform.system}. The registry still lists them, so run each proxy yourself on its host, port and client key.";
     })

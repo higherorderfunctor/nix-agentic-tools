@@ -1,8 +1,9 @@
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-14 — core only: root and per-runtime selection, the
-> resolved endpoint, Home Manager services and registry, and the run-time
-> lookup. No runtime consumes the pool yet; every enabled runtime warns.
+> **Last verified:** 2026-10-14 — root and per-runtime selection, the resolved
+> endpoint, Home Manager services and registry, the run-time lookup, and the
+> Codex integration (user config.toml provider on Home Manager, launcher session
+> flags on devenv). Kimchi, Kiro and Copilot warn.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -94,6 +95,42 @@ so Darwin warns, emits no units, and still writes the registry.
 - The example keys `your-api-key-{1,2,3}` put CLIProxyAPI in a safe mode that
   turns its API off, so they are rejected.
 
+### Codex (`packages/chatgpt-codex/lib/proxy.nix`)
+
+One provider table per endpoint: `base_url` is the origin plus `/v1`, `name` is
+the provider id (Codex refuses to load a provider without one),
+`wire_api = "responses"` and `requires_openai_auth = false`. `true` would send a
+ChatGPT login's token to the proxy. `plain` becomes `experimental_bearer_token`.
+`file` and `helper` become command-backed `auth` (`cat <path>`, or the helper),
+which Codex re-runs every five minutes and after a 401. Never `env_key`: tool
+subprocesses inherit it, and Home Manager's launcher environment does not reach
+devenv's.
+
+- **Home Manager** writes `model_provider = "ai-proxy"` and
+  `[model_providers.ai-proxy]` into user config.toml, plus the overridable
+  defaults `features.plugins = false` and `analytics.enabled = false`, which
+  stop plugin sync and usage metrics from reaching other hosts. That file is
+  written at evaluation, so an `instance` must be one Home Manager declares in
+  `ai.proxy.instances`. It resolves to the same `registryEntry` the registry
+  gets in the same generation; an undeclared name fails an assertion. A devenv
+  shell inherits the user file with no devenv configuration.
+- **devenv** cannot use project config: Codex strips `model_provider` and
+  `model_providers` from project layers. Its launcher passes
+  `-c model_providers.ai-proxy-devenv={…}` and
+  `-c model_provider=ai-proxy-devenv`, the highest layer. The `url` form is
+  baked in as `--add-flag`s. The `instance` form runs `ai-proxy-render --lines`
+  at each launch, and a failed lookup aborts the launch. The quieting defaults
+  go to the trusted project's config.toml.
+- **A separate id on devenv is load-bearing.** Codex deep-merges layers per key,
+  so session flags reusing `ai-proxy` would add their auth fields to the user
+  table, and `auth` beside `experimental_bearer_token` fails to load.
+- No `[profiles.*]` or `profile`: the pinned Codex rejects both.
+
+`chatgpt-codex-proxy` runs the pinned binary against loopback mock proxies in
+the build sandbox. It covers each Home Manager key form, both devenv forms, Home
+Manager plus devenv with different key forms, and a missing instance aborting
+the launch.
+
 ### Kimchi, Kiro, Copilot
 
 Kimchi and Kiro are deferred. They receive the standard unsupported-surface
@@ -108,4 +145,5 @@ override through a test runtime, units and registry, instance validation,
 Darwin, devenv rejection, the unsupported warnings, an executed start script
 against a stub proxy, and `ai-proxy-render` end to end.
 `checks/ai-factory/factory-eval.nix` carries `proxy` in its every-surface
-request set.
+request set. `packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix` holds the
+Codex checks.

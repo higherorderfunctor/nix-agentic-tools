@@ -184,6 +184,15 @@
     else host
   }:${toString port}";
 
+  # The registry entry for one Home Manager service record. It is also what a
+  # Home Manager integration whose native config can only be written at
+  # evaluation resolves its own declared instance to (Codex's user
+  # config.toml): the same value, from the same generation, as the registry.
+  registryEntry = inst: {
+    key = inst.clientKey;
+    url = originFor inst;
+  };
+
   # An integration's renderer applied to one placeholder endpoint per key
   # form: the input `renderProgram` fills in at run time.
   templates = render:
@@ -340,6 +349,11 @@
         usually in the uncommitted `devenv.local.nix`, only overrides it,
         for example to reach a second instance.
 
+        Codex receives the selection as a model provider: Home Manager
+        writes it into user config.toml, where an `instance` must be one
+        Home Manager declares, and devenv's launcher passes it as session
+        flags, reading an `instance` from the registry at each launch.
+
         A runtime that does not consume this surface warns when a selection
         reaches it: Kimchi and Kiro are not supported yet, and Copilot is
         out of scope.
@@ -357,6 +371,7 @@ in {
     patterns
     placeholders
     problems
+    registryEntry
     registryPath
     renderProgram
     resolve
