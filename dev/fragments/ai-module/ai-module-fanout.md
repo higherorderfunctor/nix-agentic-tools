@@ -6,7 +6,8 @@
 > record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
 > is github.com Copilot with its pools under `ai.copilot.github`; explicit
 > normalized overrides warn for live explicit contributions on unavailable
-> backends, excluding empty or disabled contributions beside inherited folds.
+> backends, excluding empty or disabled contributions beside inherited folds;
+> Kiro selects its engine through native settings.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -137,7 +138,7 @@ folds every inert setting into one warning naming each option; Codex's
 
 Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
 `shell`, `extraPackages`, `native.settings`, `trustedMcpTools`, `tweaks`,
-`features.<name>.enable`, `useFhsSandbox` and `v3`, plus the friendly
+`features.<name>.enable` and `useFhsSandbox`, plus the friendly
 `backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and `workflows` switches.
 Rollout names and typed `native.settings.chat.keybindings` keys come from the
 extracted registry. Friendly workflows select the GA stock package and imply

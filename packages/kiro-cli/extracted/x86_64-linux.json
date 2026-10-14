@@ -161,7 +161,6 @@
     "trust.classifier.shadowLogPath",
     "voice.serverUrl"
   ],
-  "nativeStartupWorkspaceSettings": ["chat.agentEngine", "chat.ui"],
   "promptCorpusSha256": "1446b0a58ff87dfbf9b93ad7fdd040fefafdcfaeede24e78c58853eb940818ae",
   "promptGroups": [
     "identity",

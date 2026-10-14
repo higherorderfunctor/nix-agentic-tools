@@ -75,19 +75,20 @@
     then pkgs.kiro-cli-unwrapped
     else pkgs.kiro-cli;
 
-  mkKiroCliWithPayload = rawFeatures: bundlePatches: defaultEngine: fhsPayload: let
+  mkKiroCliWithPayload = rawFeatures: bundlePatches: fhsPayload: let
     kas = mkKas bundlePatches;
-    acpDefault = import ../../../lib/acp-default.nix {inherit (pkgs) lib;} defaultEngine;
+    acpDefault = import ../../../lib/acp-default.nix {inherit (pkgs) lib jq;};
     inherit (import ../../../lib/native-argv.nix) chatValueFlags launcherValueFlags;
-    engineFlags = valueFlags:
-      pkgs.lib.optionalString (defaultEngine != null)
-      ("--run " + pkgs.lib.escapeShellArg (acpDefault valueFlags));
-    managedKas = (bundlePatches.replace or []) != [];
-    kasFlags = "${
-      if managedKas
-      then "--set"
-      else "--set-default"
-    } KIRO_KAS_SERVER_PATH ${kas}/node_modules/@kiro/agent/dist/server/acp-server.js --set-default KIRO_KAS_NODE_PATH ${pkgs.nodejs}/bin/node";
+    engineFlags = valueFlags: "--run " + pkgs.lib.escapeShellArg (acpDefault valueFlags);
+    kasServer = "${kas}/node_modules/@kiro/agent/dist/server/acp-server.js";
+    kasWarning = pkgs.lib.escapeShellArg ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      if [ "''${KIRO_KAS_SERVER_PATH+x}" = x ] && [ "$KIRO_KAS_SERVER_PATH" != ${pkgs.lib.escapeShellArg kasServer} ]; then
+        printf '%s\n' ${pkgs.lib.escapeShellArg "kiro-cli: inherited KIRO_KAS_SERVER_PATH detected and ignored; using ${kasServer}"} >&2
+      fi
+    '';
+    kasFlags = "--run ${kasWarning} --set KIRO_KAS_SERVER_PATH ${kasServer} --set-default KIRO_KAS_NODE_PATH ${pkgs.nodejs}/bin/node";
     rolloutFeatures = canonFeatures rawFeatures;
 
     # Name infix that makes a PATCHED build self-identifying. Both variants
@@ -119,11 +120,17 @@
         # path and therefore every output built from it. That churn is paid
         # ONCE, and the next version bump would have rebuilt them anyway.
         src = releaseSource;
+        # versionCheckHook reads this optional argument without a nounset guard.
+        versionCheckProgramArg = attrs.versionCheckProgramArg or "";
 
         nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [makeWrapper];
 
         postFixup =
-          (attrs.postFixup or "")
+          ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+          ''
+          + (attrs.postFixup or "")
           # Darwin's NSBundle dispatch must stay in this package's .app. Passing
           # only an app-shaped argv0 while exec'ing wrapProgram's hidden bin
           # symlink fell back to HOME/.local/bin on 2.29.1 in native CI. Point
@@ -194,8 +201,8 @@
             );
 
             inherit kas;
-            withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches defaultEngine null;
-            withRolloutFeatures = features: mkKiroCliWithPayload features bundlePatches defaultEngine null;
+            withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches null;
+            withRolloutFeatures = features: mkKiroCliWithPayload features bundlePatches null;
 
             # Re-compose the public Linux FHS package around a configured
             # payload without reimplementing nixpkgs' buildFHSEnv expression.
@@ -203,8 +210,7 @@
             # the synthesized root, where launcher dispatch can actually reach
             # it. Like withRolloutFeatures, the result is unguarded but can only
             # be reached through the guarded public package.
-            withAcpDefault = engine: mkKiroCliWithPayload rawFeatures bundlePatches engine null;
-            withFhsPayload = mkKiroCliWithPayload rawFeatures bundlePatches defaultEngine;
+            withFhsPayload = mkKiroCliWithPayload rawFeatures bundlePatches;
           };
       }
       # `optionalAttrs`, NOT an `optionalString` inside an always-present attr.
@@ -316,6 +322,6 @@
           };
       });
 
-  mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures {} null null;
+  mkKiroCli = rawFeatures: mkKiroCliWithPayload rawFeatures {} null;
 in
   mkKiroCli []

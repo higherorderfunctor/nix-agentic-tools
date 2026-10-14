@@ -12,13 +12,12 @@
         inherit (pkgs) lib;
         inherit pkgs;
       }).wrapPackage;
-    selectedKiroPackage = ((kiroPackage.withAcpDefault "v3").withBundlePatches {
+    selectedKiroPackage = (kiroPackage.withBundlePatches {
       replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
     }).withRolloutFeatures ["background_execution"];
     trustedKiroPackage = wrapKiroPackage {
       package = selectedKiroPackage;
       trustedMcpTools = ["fs_read"];
-      defaultEngine = "v3";
     };
   in
     pkgs.runCommandLocal "kiro-fhs-contract-check" {} ''
@@ -167,7 +166,7 @@
           nat_trusted_chat="$(${pkgs.coreutils}/bin/readlink -f "$nat_trusted_rootfs/usr/bin/kiro-cli-chat")"
           [ -f "$nat_trusted_chat" ] \
             || nat_fail "configured FHS root no longer supplies kiro-cli-chat"
-          ${pkgs.gnugrep}/bin/grep -qF -- '--trust-tools=fs_read' "$nat_trusted_chat" \
+          ${pkgs.gnugrep}/bin/grep -qF -- 'NAT_KIRO_TRUST_TOOLS=fs_read' "$nat_trusted_chat" \
             || nat_fail "trustedMcpTools wrapper is not inside the FHS command path"
           ${pkgs.gnugrep}/bin/grep -qF -- '${selectedKiroPackage.unwrapped}/bin/kiro-cli-chat' "$nat_trusted_chat" \
             || nat_fail "FHS trust wrapper lost the selected rollout/prompt payload"

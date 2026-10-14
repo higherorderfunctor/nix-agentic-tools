@@ -364,34 +364,11 @@
       && lib.hasInfix "claude-opus-*" claude
       && lib.hasInfix "gpt-*-sol" claude
     );
-    # Kiro now defaults to V3 independently of routing. Disabling or not reaching
-    # routing leaves that settings default intact; explicit opt-out still wins.
-    "module-delegate-routing-${name}-kiro-v3" = mkTest "delegate-routing-${name}-kiro-v3" (
-      result.config.ai.kiro.cli.v3
-      && !(builtins.any (lib.hasInfix "ai.kiro.cli.v3") result.config.warnings)
-      && (change {ai.programs.delegate-routing.enable = false;}).config.ai.kiro.cli.v3
-      && (change {ai.programs.delegate-routing.runtimes.kiro.enable = false;}).config.ai.kiro.cli.v3
-      && (change {
-        ai.programs.delegate-routing.runtimes = {
-          kiro.enable = false;
-          claude.manualExternalDelegates = ["kimchi"];
-        };
-      }).config.ai.kiro.cli.v3
-      && (let
-        unmanaged = change {ai.kiro.cli.package = null;};
-      in
-        unmanaged.config.ai.kiro.cli.v3
-        && !(builtins.any (lib.hasInfix "ai.kiro.cli.package is null") unmanaged.config.warnings))
-      && (let
-        optedOut = change {ai.kiro.cli.v3 = false;};
-      in
-        !optedOut.config.ai.kiro.cli.v3 && builtins.any (lib.hasInfix "effective native chat.agentEngine is not v3") optedOut.config.warnings)
-    );
     "module-delegate-routing-${name}-kiro-effective-engine" = mkTest "delegate-routing-${name}-kiro-effective-engine" (
       lib.all (case: let
         evaluated = change {ai.kiro.cli = {workflows.enable = true;} // case.cli;};
         advertised = lib.hasInfix "`run_workflow`" (readSkill evaluated "kiro");
-        warned = builtins.any (lib.hasInfix "effective native chat.agentEngine is not v3") evaluated.config.warnings;
+        warned = builtins.any (lib.hasInfix "Every Kiro feature in this module is built and tested against the v3 engine only") evaluated.config.warnings;
         delivered =
           if !(evaluated.config.ai.kiro.files ? ".kiro/settings/cli.json")
           then {}
@@ -405,17 +382,6 @@
         && effectiveEngine evaluated.config.ai.kiro.cli.native.settings == effectiveEngine delivered) ([
           {
             cli = {};
-            v3 = true;
-          }
-          {
-            cli.v3 = false;
-            v3 = false;
-          }
-          {
-            cli = {
-              v3 = false;
-              native.settings.chat.agentEngine = "v3";
-            };
             v3 = true;
           }
           {
@@ -483,7 +449,7 @@
       && !(lib.hasInfix "`run_workflow`" kiro)
       && !(lib.hasInfix "`run_workflow`" (readSkill (change {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = true;}) "kiro"))
       && techniqueCells enabledSkill "run_workflow" == ["`run_workflow`" "workflow" "true" "true" "interactive+headless+acp"]
-      && hidden {ai.kiro.cli.v3 = false;}
+      && hidden {ai.kiro.cli.native.settings.chat.agentEngine = null;}
       && hidden {ai.kiro.cli.native.settings.chat.enableWorkflows = false;}
       && hidden {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = false;}
       && !(lib.hasInfix "`run_workflow`" (readSkill enabled "claude"))

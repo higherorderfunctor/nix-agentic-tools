@@ -83,13 +83,11 @@ inconclusive.
 
 The probes pin the **v3 engine** with `--v3`, because the findings describe the
 v3 agent's steering loader and another engine may load steering differently. The
-flag is safe with a wrapper that injects `--v3` too: the wrapper skips its own
-copy when the token is already present. Whether `--trust-all-tools` conflicts
-under v3 is release-specific; the table under "The v3 + `acp` conflict" in
-`packages/kiro-cli/docs/launcher-argv.md` is authoritative. If it conflicts,
-keep `--v3` and pre-approve the probes' tools with `--trust-tools=<list>`
-instead (the table records whether that is accepted on `chat`); a run on another
-engine answers a different question.
+module's settings default does not add another terminal flag. ACP V3 rejects
+`--trust-tools`, while terminal `chat` accepts it; see the trust section in
+`packages/kiro-cli/docs/launcher-argv.md`. Older conflict measurements remain at
+`git show 8be06935:packages/kiro-cli/docs/launcher-argv.md`. Keep `--v3` when
+re-measuring: a run on another engine answers a different question.
 
 ```bash
 # P1 — what is auto-injected. Expect: ALWAYS yes; every fm-* sentinel NO.

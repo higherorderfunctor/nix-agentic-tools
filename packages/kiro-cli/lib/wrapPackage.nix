@@ -25,15 +25,6 @@
   lib,
   pkgs,
 }: let
-  inherit
-    (import ../../../lib/idempotentFlags.nix {inherit lib;})
-    gateOnSubcommand
-    optionValueBlock
-    ;
-
-  # Chat globals whose values must not be mistaken for a subcommand.
-  inherit (import ./native-argv.nix) chatValueFlags;
-
   wrapperReasons = {
     environmentVariables ? {},
     environmentVariablesName ? "ai.environmentVariables / ai.kiro.cli.environmentVariables",
@@ -64,7 +55,6 @@
   # upstream FHS package or on its unwrapped payload.
   wrapDirect = {
     package,
-    defaultEngine ? null,
     trustedMcpTools,
     environmentVariables ? {},
     extraPackages ? [],
@@ -140,30 +130,13 @@
       export PATH=${lib.escapeShellArg (lib.makeBinPath extraPackages)}''${PATH:+:"$PATH"}
     '';
 
-    # ACP v3 rejects --trust-tools; chat still accepts it. An explicit engine
-    # wins over the declared package ACP default, which is injected later by
-    # the build launcher. This wrapper never reads persisted settings.
-    trustAppend = "set -- \"$@\" ${lib.escapeShellArg "--trust-tools=${trustToolsCsv}"}";
-    trustInjection = lib.optionalString hasTrust (
-      lib.concatStringsSep "\n" [
-        (optionValueBlock {
-          flag = "--agent-engine";
-          var = "nat_engine";
-        })
-        (gateOnSubcommand {
-            subcommands = ["acp" "chat"];
-            valueFlags = chatValueFlags;
-          } (lib.concatStringsSep "\n" [
-            "if [ \"$nat_sub\" != acp ] || [ \"\${nat_engine:-${
-              if defaultEngine == null
-              then "unspecified"
-              else defaultEngine
-            }}\" != v3 ]; then"
-            "  ${trustAppend}"
-            "fi"
-          ]))
-      ]
-    );
+    # The payload resolves ACP engine settings before applying this grant.
+    # Passing it only on the chat entry point preserves launcher dispatch and
+    # avoids reading settings in a second wrapper. The payload unsets it before
+    # exec so child processes cannot accidentally inherit the grant.
+    trustInjection = lib.optionalString hasTrust ''
+      export NAT_KIRO_TRUST_TOOLS=${lib.escapeShellArg trustToolsCsv}
+    '';
 
     # A strict-mode wrapper: bake env, run `injection`, exec the real bin
     # preserving argv0. The `exec` line's shape is load-bearing beyond this
@@ -211,7 +184,6 @@ in {
 
   wrapPackage = {
     package,
-    defaultEngine ? null,
     trustedMcpTools,
     environmentVariables ? {},
     extraPackages ? [],
@@ -234,7 +206,6 @@ in {
     innerTrustPackage =
       (wrapDirect {
         package = package.unwrapped;
-        inherit defaultEngine;
         inherit trustedMcpTools;
       }).overrideAttrs (_: {
         # nixpkgs' FHS expression inherits these from its payload. Ordinary
@@ -251,7 +222,7 @@ in {
   in
     wrapDirect {
       package = selectedPackage;
-      inherit environmentVariables extraPackages secretEnv secretOptionPaths defaultEngine;
+      inherit environmentVariables extraPackages secretEnv secretOptionPaths;
       trustedMcpTools =
         if placeTrustInsideFhs
         then []

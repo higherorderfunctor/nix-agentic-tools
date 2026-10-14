@@ -1,10 +1,10 @@
 # Delegate routing package
 
 > **Last verified:** 2026-10-14 — workflow defaults cover the two KAS tweaks;
-> Kiro routing visibility and mismatch warnings use the same declared
-> native-engine resolver as the Kiro factory; backend modules pass their scope
-> to the shared skill-package factory, which gates package rules by delivery
-> capability; the per-turn reminder derives its hook runtimes from that scope.
+> Kiro owns engine defaults and warnings, and routing only resolves workflow
+> visibility; backend modules pass their scope to the shared skill-package
+> factory, which gates package rules by delivery capability; the per-turn
+> reminder derives its hook runtimes from that scope.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -133,20 +133,16 @@ a model turn. Shared table rendering escapes cells once.
 
 ## Delivery and previews
 
-When an enabled runtime reaches Kiro, as the session runtime or through
-`extraRuntimes` or `manualExternalDelegates`, the program retains its
-`ai.kiro.cli.v3` default for managed packages. Kiro independently defaults its
-native engine setting to V3. The skill's Kiro evidence covers V3 only, so the
-mismatch warning and workflow visibility use Kiro's shared declared-engine
-resolver, not the compatibility boolean. Flat `chat.agentEngine` overrides the
-nested setting, including explicit null; tests compare the result with emitted
-settings on both backends. An explicit V3 setting remains V3 with
-`cli.v3 = false`; false without an explicit engine leaves the engine unknown and
-warns. A consumer without the Kiro module is untouched. Terminal defaults are
-settings; the managed package supplies the ACP default. No routing wrapper reads
-config.
+Kiro independently defaults its native engine setting to V3 and warns for every
+other value, including null. Routing uses the shared declared-engine resolver
+for workflow visibility and adds no engine default or duplicate warning. Flat
+`chat.agentEngine` overrides the nested setting, including explicit null; tests
+compare the result with emitted settings on both backends. A consumer without
+the Kiro module is untouched. The package's existing launchers read the
+persisted settings for ACP; no routing wrapper reads config.
 
-The same reach test defaults `cli.tweaks.relativeFileCheckPaths` and
+When an enabled runtime reaches Kiro directly or through external delegation,
+the program defaults `cli.tweaks.relativeFileCheckPaths` and
 `cli.tweaks.stripVendorWorktreeSteering` to true only when
 `cli.workflows.enable` is true and the CLI package is managed. Explicit false
 wins.

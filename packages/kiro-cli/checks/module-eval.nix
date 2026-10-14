@@ -11,7 +11,7 @@
     extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
   in
     extracted.get (extracted.load {dir = ../extracted;}).aggregate;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroPackageDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
   # The settings writer of one backend as a runnable script: Home Manager
   # replays its prune entry and then its write entry (activation text needs
   # home-manager's `run` helper in scope); devenv runs its task, whose `.exec`
@@ -49,7 +49,6 @@ in {
         in
           (flat {})."chat.agentEngine"
           == "v3"
-          && !(flat {v3 = false;} ? "chat.agentEngine")
           && !(flat {native.settings.chat.agentEngine = null;} ? "chat.agentEngine")
           && (flat {native.settings.chat.agentEngine = "v2";})."chat.agentEngine" == "v2"
           && (flat {native.settings."chat.agentEngine" = "v2";})."chat.agentEngine" == "v2"
@@ -59,7 +58,6 @@ in {
             workflows.enable = true;
           }
           && (flat {
-            v3 = false;
             native.settings.chat.agentEngine = "v3";
           })."chat.agentEngine"
           == "v3"
@@ -74,7 +72,6 @@ in {
             workflows.enable = true;
           }
           && !rejected {
-            v3 = false;
             native.settings.chat.agentEngine = "v3";
             workflows.enable = true;
           }
@@ -90,27 +87,53 @@ in {
       ]
     );
 
-    module-kiro-native-setting-types-parity = mkTest "kiro-native-setting-types-parity" (let
-      runtime = import ../lib/mkKiro.nix {
-        lib = lib // {ai = import ../../../lib/ai {inherit lib;};};
-        inherit pkgs;
-      };
-      settingsOptions = [
-        runtime.options.cli.native.settings
-        (evalHm {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
-        (evalDevenv {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
-      ];
-    in
-      lib.all (
-        settings: let
-          chat = (settings.type.getSubOptions []).chat.type.getSubOptions [];
+    module-kiro-native-engine-warnings = mkTest "kiro-native-engine-warnings" (
+      lib.all (evaluate:
+        lib.all (engine: let
+          result = evaluate {
+            ai.kiro.cli = {
+              enable = true;
+              native.settings."chat.agentEngine" = engine;
+            };
+          };
+          state =
+            if engine == null
+            then "native.settings.chat.agentEngine is unset (null), so Kiro auto-selects its engine"
+            else "native.settings.chat.agentEngine is ${builtins.toJSON engine}";
+          expected = "ai.kiro.cli: ${state}. Every Kiro feature in this module is built and tested against the v3 engine only; anything other than v3 is unsupported.";
         in
-          lib.all chat.agentEngine.type.check [null "v1" "v2" "v3"]
-          && !chat.agentEngine.type.check "unknown"
-          && lib.all chat.ui.type.check [null "legacy" "tui"]
-          && !chat.ui.type.check "unknown"
-      )
-      settingsOptions);
+          result.config.warnings == lib.optional (engine != "v3") expected)
+        [null "v1" "v2" "v3"])
+      [evalHm evalDevenv]
+    );
+
+    module-kiro-engine-settings-preserve-payload = mkTest "kiro-engine-settings-preserve-payload" (
+      lib.all (runner:
+        lib.all (settings: let
+          result = runner.eval {
+            ai.gitSshConfigWorkaround = false;
+            ai.kiro.cli = {
+              enable = true;
+              native.settings = settings;
+            };
+          };
+          packages = runner.packages result;
+        in
+          builtins.length packages
+          == 1
+          && (builtins.head packages).unwrapped.drvPath == pkgs.ai.kiro-cli.unwrapped.drvPath)
+        [{} {chat.agentEngine = null;} {chat.agentEngine = "v2";} {chat.agentEngine = "v3";}])
+      [
+        {
+          eval = evalHm;
+          packages = result: result.config.home.packages;
+        }
+        {
+          eval = evalDevenv;
+          packages = result: result.config.packages;
+        }
+      ]
+    );
 
     module-kiro-native-flat-types = mkTest "kiro-native-flat-types" (
       lib.all (
@@ -319,7 +342,6 @@ in {
         ["trustedMcpTools"]
         ["tweaks"]
         ["useFhsSandbox"]
-        ["v3"]
         ["workflows"]
       ];
       check = evaluate: let
@@ -414,7 +436,6 @@ in {
       check = backend: runner: name: case: let
         base.ai.kiro = {
           cli.enable = true;
-          cli.v3 = true;
         };
         selected = runner.evaluate (lib.recursiveUpdate base {ai.kiro.cli.${name}.enable = true;});
         raw = runner.evaluate (lib.recursiveUpdate base {
@@ -434,7 +455,7 @@ in {
         requiresV3 = runner.evaluate (lib.recursiveUpdate base {
           ai.kiro.cli = {
             ${name}.enable = true;
-            v3 = false;
+            native.settings.chat.agentEngine = null;
           };
         });
         rawDisabled = runner.evaluate (lib.recursiveUpdate base {
@@ -444,11 +465,11 @@ in {
           };
         });
       in
-        soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages raw))
+        soleSame (kiroPackageDrvs (runner.packages selected)) (kiroPackageDrvs (runner.packages raw))
         && (
           if !(import ../extract/rollout-coverage.nix).needsPatch (kiroFact "rolloutStates.${case.feature}")
-          then soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
-          else selected.config.ai.kiro.cli.features.${case.feature}.enable && soleFork (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
+          then soleSame (kiroPackageDrvs (runner.packages selected)) (kiroPackageDrvs (runner.packages plain))
+          else selected.config.ai.kiro.cli.features.${case.feature}.enable && soleFork (kiroPackageDrvs (runner.packages selected)) (kiroPackageDrvs (runner.packages plain))
         )
         && (
           if case.setting == null
@@ -587,21 +608,20 @@ in {
         && lib.hasInfix "PACKAGE-NULL-CONTEXT" (kiroSteeringContent hm)."AGENTS.md".text
     );
 
-    module-kiro-package-null-v3-warns = mkTest "kiro-package-null-v3-warns" (
-      let
-        evaluated = evalDevenv {
-          ai.kiro = {
-            cli = {
+    module-kiro-package-null-engine-warning = mkTest "kiro-package-null-engine-warning" (
+      lib.all (evaluate:
+        lib.all (settings: let
+          result = evaluate {
+            ai.kiro.cli = {
               enable = true;
               package = null;
-              v3 = true;
+              native.settings = settings;
             };
           };
-        };
-      in
-        builtins.all (entry: entry.assertion) evaluated.config.assertions
-        && evaluated.config.warnings
-        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.native.settings.chat.agentEngine (ACP default). Unset them or set ai.kiro.cli.package."]
+        in
+          result.config.warnings == ["ai.kiro.cli.package is null: the native engine setting is still delivered. ACP honors it through this flake's packaged launchers, which package = null does not install."])
+        [{chat.agentEngine = "v3";} {"chat.agentEngine" = "v3";}])
+      [evalHm evalDevenv]
     );
 
     # Defaults (including the default-on `ai.gitSshConfigWorkaround`) stay
@@ -1005,7 +1025,7 @@ in {
         cfg = servers: {
           ai.kiro = {
             cli.enable = true;
-            cli.v3 = false;
+            cli.native.settings.chat.agentEngine = null;
             mcpServers = servers;
           };
         };
@@ -1060,7 +1080,7 @@ in {
       cfg = servers: {
         ai.kiro = {
           cli.enable = true;
-          cli.v3 = false;
+          cli.native.settings.chat.agentEngine = null;
           mcpServers = servers;
         };
       };
@@ -1300,7 +1320,7 @@ in {
       let
         evaluated = evalHm {
           ai.kiro.cli.enable = true;
-          ai.kiro.cli.v3 = false;
+          ai.kiro.cli.native.settings.chat.agentEngine = null;
         };
         target = hmMcpDirTarget evaluated;
       in
@@ -1404,13 +1424,12 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = true;
             };
           };
         };
         packages = result.config.home.packages;
       in
-        lib.any (p: p.drvPath == (pkgs.ai.kiro-cli.withAcpDefault "v3").drvPath) packages
+        lib.any (p: p.drvPath == pkgs.ai.kiro-cli.drvPath) packages
     );
 
     # The `tui` option is GONE. It injected `--tui` and implied `--v3`; `--tui`
@@ -1437,12 +1456,11 @@ in {
     module-kiro-hm-rollout-unlock-forks-package = mkTest "kiro-hm-rollout-unlock-forks-package" (
       let
         a =
-          kiroWrappedDrvs
+          kiroPackageDrvs
           (evalHm {
             ai.kiro = {
               cli = {
                 enable = true;
-                v3 = true;
               };
             };
           })
@@ -1451,12 +1469,12 @@ in {
       .packages or [
           ];
         b =
-          kiroWrappedDrvs
+          kiroPackageDrvs
           (evalHm {
             ai.kiro = {
               cli = {
                 enable = true;
-                v3 = true;
+
                 features.background_execution.enable = true;
               };
             };
@@ -1473,12 +1491,11 @@ in {
     module-kiro-devenv-rollout-unlock-forks-package = mkTest "kiro-devenv-rollout-unlock-forks-package" (
       let
         a =
-          kiroWrappedDrvs
+          kiroPackageDrvs
           (evalDevenv {
             ai.kiro = {
               cli = {
                 enable = true;
-                v3 = true;
               };
             };
           })
@@ -1486,12 +1503,12 @@ in {
       .packages or [
           ];
         b =
-          kiroWrappedDrvs
+          kiroPackageDrvs
           (evalDevenv {
             ai.kiro = {
               cli = {
                 enable = true;
-                v3 = true;
+
                 features.background_execution.enable = true;
               };
             };
@@ -1511,7 +1528,7 @@ in {
         packages =
           (evalHm {
             ai.kiro.cli.enable = true;
-            ai.kiro.cli.v3 = false;
+            ai.kiro.cli.native.settings.chat.agentEngine = null;
           }).config.home.packages;
       in
         lib.any (p: (p.drvPath or null) == pkgs.ai.kiro-cli.drvPath) packages
@@ -1521,9 +1538,8 @@ in {
       check = evaluate: packages: let
         base.ai.kiro = {
           cli.enable = true;
-          cli.v3 = true;
         };
-        drvOf = cli: kiroWrappedDrvs (packages (evaluate (lib.recursiveUpdate base {ai.kiro.cli = cli;})));
+        drvOf = cli: kiroPackageDrvs (packages (evaluate (lib.recursiveUpdate base {ai.kiro.cli = cli;})));
       in
         soleSame (drvOf {features.background_execution.enable = true;}) (drvOf {
           backgroundExecution.enable = true;
@@ -1592,7 +1608,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = false;
+              native.settings.chat.agentEngine = null;
               useFhsSandbox = false;
             };
           };
@@ -1612,7 +1628,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = false;
+              native.settings.chat.agentEngine = null;
               useFhsSandbox = false;
             };
           };
@@ -1636,14 +1652,14 @@ in {
           };
         };
       };
-      selected = pkgs.ai.kiro-cli.withAcpDefault "v3";
+      selected = pkgs.ai.kiro-cli;
     in
       mkWrapperGrepTest {
         name = "kiro-devenv-fhs-opt-out-wrapper-targets-unwrapped";
         package = builtins.head result.config.packages;
         bin = "kiro-cli";
         needles = ["${selected.unwrapped}/bin/kiro-cli"];
-        absentNeedles = ["${selected}/bin/kiro-cli" "${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli"];
+        absentNeedles = ["${selected}/bin/kiro-cli"];
       };
 
     # #956's exact backend: with no unrelated wrapper reason, trustedMcpTools
@@ -1788,7 +1804,6 @@ in {
               package = customFhsPackage;
               trustedMcpTools = ["fs_read"];
               features.background_execution.enable = true;
-              v3 = true;
             };
           };
         };
@@ -1809,7 +1824,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = false;
+              native.settings.chat.agentEngine = null;
               features.background_execution.enable = true;
             };
           };
@@ -1829,7 +1844,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = true;
+
               features.background_execution.enable = true;
             };
           };
@@ -1853,7 +1868,6 @@ in {
             ai.kiro.cli = {
               enable = true;
               inherit features;
-              v3 = true;
             };
           };
         refused = evaluateFeatures {${unpatchable}.enable = true;};
@@ -1896,7 +1910,6 @@ in {
                 c2s.enable = true;
                 workflows.enable = true;
               };
-              v3 = true;
             };
           };
         };
@@ -1915,7 +1928,6 @@ in {
             cli = {
               backgroundExecution.enable = true;
               package = null;
-              v3 = true;
             };
           };
         };
@@ -2000,7 +2012,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = true;
+
               native.settings.chat.enableWorkflows = true;
             };
           };
@@ -2020,7 +2032,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = true;
+
               native.settings.chat.enableTangentMode = true;
             };
           };
@@ -2041,7 +2053,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = true;
+
               native.settings.chat.enableWorkflows = true;
             };
           };
@@ -2089,7 +2101,6 @@ in {
             ai.kiro = {
               cli = {
                 enable = true;
-                v3 = true;
               };
             };
           };
@@ -2098,12 +2109,11 @@ in {
               cli = {
                 enable = true;
                 tweaks.${name} = true;
-                v3 = true;
               };
             };
           };
         in
-          !a.config.ai.kiro.cli.tweaks.${name} && soleFork (kiroWrappedDrvs (select a)) (kiroWrappedDrvs (select b));
+          !a.config.ai.kiro.cli.tweaks.${name} && soleFork (kiroPackageDrvs (select a)) (kiroPackageDrvs (select b));
         names = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
       in
         builtins.all (forks evalHm (v: v.config.home.packages)) names
@@ -2118,13 +2128,12 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = true;
             };
           };
         };
         packages = result.config.packages;
       in
-        lib.any (p: p.drvPath == (pkgs.ai.kiro-cli.withAcpDefault "v3").drvPath) packages
+        lib.any (p: p.drvPath == pkgs.ai.kiro-cli.drvPath) packages
     );
 
     # devenv parity for the removal: the option must be absent on both backends.
@@ -2152,7 +2161,7 @@ in {
             gitSshConfigWorkaround = false;
             kiro.cli = {
               enable = true;
-              v3 = false;
+              native.settings.chat.agentEngine = null;
             };
           };
         };
@@ -2213,7 +2222,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = true;
+
               trustedMcpTools = ["@openmemory" "@git-intel-mcp/hotspots" "subagent" "use_aws"];
             };
           };
@@ -2230,7 +2239,7 @@ in {
           ai.kiro = {
             cli = {
               enable = true;
-              v3 = false;
+              native.settings.chat.agentEngine = null;
               trustedMcpTools = ["@openmemory"];
             };
           };
@@ -2492,7 +2501,7 @@ in {
       let
         result = evalHm {
           ai.kiro.cli.enable = true;
-          ai.kiro.cli.v3 = false;
+          ai.kiro.cli.native.settings.chat.agentEngine = null;
         };
         packages = result.config.home.packages;
         first = builtins.head packages;
@@ -3629,7 +3638,7 @@ in {
         && !(result.config.files ? ".kiro/settings/cli.json")
         && !((dvMcpDirTarget (evalDevenv {
           ai.kiro.cli.enable = true;
-          ai.kiro.cli.v3 = false;
+          ai.kiro.cli.native.settings.chat.agentEngine = null;
         })).units ? "cli.json")
     );
 

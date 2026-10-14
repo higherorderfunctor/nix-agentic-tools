@@ -225,8 +225,6 @@ in {
       cli = {
         inherit shell;
         enable = true;
-        # Select v3 so this configuration's hooks and slash commands load.
-        v3 = true;
         # Workflows are GA; devenv still needs the global chat.enableWorkflows
         # setting. See packages/kiro-cli/docs/workflow-gating.md.
         workflows.enable = true;
