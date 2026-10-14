@@ -7,8 +7,8 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
-> runtime cannot consume them; keyed tombstones still withdraw entries.
+> **Last verified:** 2026-10-13 — the factory and portable-event diagnostics
+> share the native lifecycle event list; unsupported requests warn.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -517,9 +517,11 @@ Claude Code hook adapter (`extensions.claude-code-hook-adapter`,
 `~/.claude/settings.json`
 (`src/extensions/claude-code-hook-adapter/definition.ts:25-28`), which Claude's
 own delivery already writes. The policy row is `absent` with that reason.
-Non-empty shared hook requests warn for unsupported events or backends, naming
-the option, Kimchi and the reason. Non-empty `ai.kimchi.hooks` requests warn on
-Home Manager too. Locked by `module-kimchi-hooks`.
+`lib/hook-events.nix` supplies the native event list to both the factory and
+portable-event diagnostics, which subtract it from the portable list. Non-empty
+shared hook requests warn for unsupported events or backends, naming the option,
+Kimchi and the reason. Non-empty `ai.kimchi.hooks` requests warn on Home Manager
+too. Locked by `module-kimchi-hooks`.
 
 The bash-hook directory (`harness/hooks/bash`, `.kimchi/hooks/bash`) is
 deliberately not a sink: those scripts filter or rewrite the bash tool only, a
