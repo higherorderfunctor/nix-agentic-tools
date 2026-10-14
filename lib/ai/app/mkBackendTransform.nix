@@ -148,12 +148,11 @@
     }
     else {};
 
-  resolvedWorktrees = {
-    enable = aiCommon.resolveOverride {
-      topValue = config.ai.worktrees.enable;
-      cliValue = cfg.worktrees.enable;
-    };
-  };
+  resolvedWorktrees = lib.genAttrs ["enable" "location"] (field:
+    aiCommon.resolveOverride {
+      topValue = config.ai.worktrees.${field};
+      cliValue = cfg.worktrees.${field};
+    });
 
   # Module-contributed process env, delivered on the internal channel rather
   # than through `ai.<cli>.environmentVariables` — see the note on
@@ -289,7 +288,7 @@
     };
     worktrees = {
       default = resolvedWorktrees;
-      type = aiCommon.worktreesType;
+      type = aiCommon.worktreesType null;
     };
   };
   checkRecord = import ./checkRecord.nix {inherit lib;};
@@ -698,9 +697,9 @@ in {
     }
     // lib.optionalAttrs (supportsPool "worktrees") {
       worktrees = lib.mkOption {
-        type = aiCommon.worktreesType;
+        type = aiCommon.worktreesType null;
         default = {};
-        description = "Runtime worktree policy. Null enable inherits ai.worktrees.enable; false withdraws an inherited policy. Lowered at default priority so native settings can override it.";
+        description = "Runtime worktree policy. Null fields inherit ai.worktrees; false enable withdraws an inherited policy. Lowered at default priority so native settings can override it.";
       };
     }
     // lib.optionalAttrs (supportsPool "context") {

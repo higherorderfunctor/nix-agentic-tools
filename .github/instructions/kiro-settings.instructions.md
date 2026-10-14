@@ -15,7 +15,9 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 > relative permission rules, but their `.kiro/settings/mcp.json` is ignored;
 > evicted workflow owners use fresh cwd authorization for their children and
 > detached run rebuilds. Nullable shared worktree policy preserves unspecified
-> and explicit false through native lowering.
+> and explicit false through native lowering; its location template renders per
+> session, its root alone is writable, and non-derivable Git layouts degrade
+> instead of failing.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -81,6 +83,8 @@ guard; that engine does not run this KAS extension.
 
 ```nix
 ai.worktrees.enable = true;
+# Optional; this is the default:
+ai.worktrees.location = "../{{repo}}-worktrees";
 # Optional withdrawal for Kiro:
 ai.kiro.worktrees.enable = false;
 ```
@@ -92,12 +96,22 @@ do not overwrite a user-global enabled policy. The runtime default is off only
 when neither settings layer specifies it. An explicit root or runtime false
 emits `{ "enable": false }` and can disable a global policy.
 
+`location` is a template with two fixed variables: `{{repo}}`, the primary
+checkout's directory name, and `{{primary}}`, its absolute path. A relative
+result resolves against `{{primary}}`, so the default is the sibling
+`<primary-checkout>-worktrees`. There is no scripting. A runtime null location
+inherits the root value.
+
 Kiro lowers the normalized policy at default priority to
 `cli.native.settings.chat.worktrees`. Direct native settings win, including
 nested or flat `{ enable = false; }` and null (omit this layer). A non-null
-native object must contain exactly one boolean `enable`. Enabled policy requires
-V3; explicit package-null use warns through the existing grouped package
-warning. Manual native settings combined with runtime V2 still bypass KAS.
+native object needs a boolean `enable` and may add a nonempty string `location`;
+other keys are refused. Each settings layer's object replaces lower layers
+whole. A static template with any other variable is an eval error naming it; KAS
+refuses the same in hand-written JSON when a session starts. Enabled policy
+requires V3; explicit package-null use warns through the existing grouped
+package warning. Manual native settings combined with runtime V2 still bypass
+KAS.
 
 | Runtime | Shared worktrees policy                                 |
 | ------- | ------------------------------------------------------- |
@@ -107,21 +121,32 @@ warning. Manual native settings combined with runtime V2 still bypass KAS.
 | Kimchi  | Excluded; root value ignored, per-runtime option absent |
 | Kiro    | Same library, Home Manager and devenv lowering          |
 
-At admission, the packaged KAS derives `<primary-checkout>-worktrees` from Git's
-common directory for ordinary and linked checkouts. It adds that sibling root to
-the admitted roots without creating it. Membership enables default reads;
-default writes still prompt. Non-Git sessions gain no root; unsupported bare or
-separate-Git-directory layouts fail visibly. Admission rejects an existing
-symlink at the automatic sibling destination, including a dangling one; explicit
-additional-directory aliases retain their separate behavior. This is an
-admission-time check, not a guarantee against a later filesystem change. New and
-cold-resumed sessions recompute roots; resident sessions retain their admitted
-roots.
+At admission, the packaged KAS finds the primary checkout from Git's common
+directory for ordinary and linked checkouts and renders the location there. It
+adds that root to the admitted roots without creating it. Membership enables
+default reads, and the server patch also grants `fs_write` inside that root
+only, through a session-scoped workspace rule: generic
+`chat.additionalDirectories` roots and the session cwd keep the vendor default,
+where writes prompt. Explicit permission denies still win over the grant, and
+tool policy still refuses symlink escapes. Each session policy (new, loaded or
+rebuilt for a detached workflow) re-derives the root from its own cwd and grants
+it only while it is one of that session's admitted roots.
+
+Non-Git sessions gain no root and keep the vendor guidance. Layouts without a
+derivable primary checkout (submodules, worktrees of a bare clone, separate Git
+directories and bare repositories) admit no root and log a `chat.worktrees`
+warning, but still select the PR guidance, with a `<path>` placeholder instead
+of a destination. Only a malformed `chat.worktrees` value fails the session.
+Admission rejects an existing symlink at the rendered destination, including a
+dangling one; explicit additional-directory aliases retain their separate
+behavior. This is an admission-time check, not a guarantee against a later
+filesystem change. New and cold-resumed sessions recompute roots; resident
+sessions retain their admitted roots.
 
 For new conversations, the selected default worktree guidance keeps workflow
-ownership of creation and names the admitted sibling destination. It replaces
-automatic rebase/fast-forward cleanup with PR creation and user-controlled
-merging followed by cleanup. The resolved text remains part of the fixed prompt
+ownership of creation and names the admitted destination. It replaces automatic
+rebase/fast-forward cleanup with PR creation and user-controlled merging
+followed by cleanup. The resolved text remains part of the fixed prompt
 snapshot: cold resume can revoke a root while retaining the conversation's
 original prose. An explicit `worktreeGuidance` file wins without being
 rewritten; root admission remains active. Null selects the policy-aware packaged

@@ -698,7 +698,11 @@
       }
       {
         assertion = !worktreePolicyEnabled cfg || effectiveEngine cfg == "v3";
-        message = "ai.kiro.cli.native.settings.chat.worktrees.enable requires the v3 engine; worktree policy is implemented by the packaged KAS.";
+        message = "chat.worktrees.enable (from ai.worktrees.enable / ai.kiro.worktrees.enable or native settings) requires the v3 engine; worktree policy is implemented by the packaged KAS.";
+      }
+      {
+        assertion = unknownWorktreeVariables cfg == [];
+        message = "chat.worktrees.location (from ai.worktrees.location / ai.kiro.worktrees.location or native settings) uses unknown template variables: ${lib.concatMapStringsSep ", " (name: "{{${name}}}") (unknownWorktreeVariables cfg)}; only {{primary}} and {{repo}} are available.";
       }
       {
         assertion = ((nativeSettings cfg)."chat.promptFiles" or {}) == {} || effectiveEngine cfg == "v3";
@@ -926,9 +930,17 @@
     (lib.types.listOf additionalDirectoryType)
     (value: lib.all additionalDirectoryType.check value));
   worktreePolicyType = lib.types.nullOr (lib.types.addCheck
-    (lib.types.attrsOf lib.types.bool)
-    (value: builtins.attrNames value == ["enable"] && builtins.isBool value.enable));
+    (lib.types.attrsOf (lib.types.either lib.types.bool lib.types.nonEmptyStr))
+    (value:
+      lib.subtractLists ["enable" "location"] (builtins.attrNames value)
+      == []
+      && builtins.isBool (value.enable or null)
+      && builtins.isString (value.location or "")));
   worktreePolicyEnabled = cfg: ((nativeSettings cfg)."chat.worktrees" or {}).enable or false;
+  # Static templates fail at eval; KAS applies the same rule to hand-written JSON.
+  unknownWorktreeVariables = cfg:
+    lib.subtractLists ["primary" "repo"] (map builtins.head (builtins.filter builtins.isList
+        (builtins.split "[{][{]([^{}]*)[}][}]" (((nativeSettings cfg)."chat.worktrees" or {}).location or ""))));
   nativeSettingTypes = {
     "chat.additionalDirectories" = additionalDirectoriesType;
     "chat.agentEngine" = lib.types.nullOr (lib.types.enum ["v1" "v2" "v3"]);
@@ -1385,7 +1397,7 @@ in
                     worktrees = lib.mkOption {
                       type = worktreePolicyType;
                       default = null;
-                      description = "Packaged KAS sibling-worktree policy: exactly { enable = boolean; }. Null omits this setting. Overrides shared worktrees policy. Enabled policy requires V3. Admitted roots enable the vendor default fs_read ./** allow rule; default writes still prompt.";
+                      description = "Packaged KAS worktree policy: { enable = boolean; location = template (optional); }, where location renders {{repo}} and {{primary}} per session and defaults to ../{{repo}}-worktrees. Null omits this setting. Overrides shared worktrees policy. Enabled policy requires V3. The admitted policy root gets the vendor default fs_read ./** allow rule plus an fs_write allow for that root only; explicit permission denies still win.";
                     };
                   };
                 };
@@ -1760,7 +1772,10 @@ in
     in
       lib.mkMerge ([
           (lib.mkIf (normalized.worktrees.enable != null) {
-            ai.kiro.cli.native.settings.chat.worktrees = lib.mkDefault {inherit (normalized.worktrees) enable;};
+            ai.kiro.cli.native.settings.chat.worktrees = lib.mkDefault (
+              {inherit (normalized.worktrees) enable;}
+              // lib.optionalAttrs (normalized.worktrees.location != null) {inherit (normalized.worktrees) location;}
+            );
           })
           (featureImplications backend cfg)
           (lib.optionalAttrs (!isHm && options ? enterShell) {

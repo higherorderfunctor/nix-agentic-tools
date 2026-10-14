@@ -363,7 +363,8 @@ KAS reads the flat `chat.promptFiles` object from global and repository
 selected packaged texts, overlays global slots, then repository slots. Existing
 identity selection determines that slot's default, preserving its on/off
 behavior. Enabled worktree policy customizes the selected worktree guidance with
-the admitted sibling root while preserving workflow-owned creation and requiring
+the admitted location root (a `<path>` placeholder when Git layout prevents
+deriving one) while preserving workflow-owned creation and requiring
 user-controlled PR merging. The blanket steering-strip tweak is retired. The
 file-check slot retains the vendor absolute-path text; sibling roots use
 `chat.additionalDirectories` rather than the retired relative-path workaround. A

@@ -117,6 +117,12 @@ in {
           };
           succeeds = setting: (builtins.tryEval (builtins.deepSeq (delivered (native setting)) true)).success;
           active = {ai.worktrees.enable = true;};
+          sibling = "../{{repo}}-worktrees";
+          lowered = enable: {
+            inherit enable;
+            location = sibling;
+          };
+          rejectedWith = needle: extra: lib.any (a: !a.assertion && lib.hasInfix needle a.message) (evaluate extra).config.assertions;
           engineRejected = engine:
             lib.any (a: !a.assertion)
             (evaluate {
@@ -126,24 +132,69 @@ in {
         in
           value {}
           == null
-          && value active == {enable = true;}
-          && value {ai.worktrees.enable = false;} == {enable = false;}
-          && value {ai.kiro.worktrees.enable = false;} == {enable = false;}
+          && value active == lowered true
+          && value {ai.worktrees.enable = false;} == lowered false
+          && value {ai.kiro.worktrees.enable = false;} == lowered false
           && value {
             ai.worktrees.enable = true;
             ai.kiro.worktrees.enable = false;
           }
-          == {enable = false;}
+          == lowered false
           && value {
             ai.worktrees.enable = true;
             ai.kiro.worktrees.enable = null;
           }
-          == {enable = true;}
+          == lowered true
           && value {
             ai.worktrees.enable = false;
             ai.kiro.worktrees.enable = true;
           }
-          == {enable = true;}
+          == lowered true
+          # Location is a template rendered by KAS; runtime null inherits it.
+          && value {
+            ai.worktrees = {
+              enable = true;
+              location = "/srv/{{repo}}";
+            };
+          }
+          == {
+            enable = true;
+            location = "/srv/{{repo}}";
+          }
+          && value {
+            ai.worktrees = {
+              enable = true;
+              location = "/srv/{{repo}}";
+            };
+            ai.kiro.worktrees.location = "{{primary}}.trees";
+          }
+          == {
+            enable = true;
+            location = "{{primary}}.trees";
+          }
+          && value (native {
+            chat.worktrees = {
+              enable = true;
+              location = "trees";
+            };
+          })
+          == {
+            enable = true;
+            location = "trees";
+          }
+          && rejectedWith "unknown template variables: {{branch}}" {
+            ai.worktrees = {
+              enable = true;
+              location = "../{{repo}}-{{branch}}";
+            };
+          }
+          && rejectedWith "unknown template variables: {{home}}" (native {
+            chat.worktrees = {
+              enable = true;
+              location = "{{home}}";
+            };
+          })
+          && !rejectedWith "unknown template variable" active
           && lib.all (setting: value (native setting) == {enable = false;}) [
             {chat.worktrees.enable = false;}
             {"chat.worktrees".enable = false;}
@@ -160,6 +211,15 @@ in {
               enable = true;
               extra = false;
             }
+            {
+              enable = true;
+              location = "";
+            }
+            {
+              enable = true;
+              location = false;
+            }
+            {location = "trees";}
             true
           ]
           && !engineRejected "v3"
@@ -174,7 +234,11 @@ in {
             ai.worktrees.enable = true;
             ai.kiro.cli.package = null;
           }).config.warnings
-          && lib.all (retired: lib.any (a: !a.assertion && lib.hasInfix "stripVendorWorktreeSteering has been removed" a.message) (evaluate {ai.kiro.cli.tweaks.stripVendorWorktreeSteering = retired;}).config.assertions) [true false]
+          && rejectedWith "chat.worktrees.enable (from ai.worktrees.enable / ai.kiro.worktrees.enable or native settings) requires the v3 engine" {
+            ai.worktrees.enable = true;
+            ai.kiro.cli.native.settings.chat.agentEngine = "v2";
+          }
+          && lib.all (retired: rejectedWith "stripVendorWorktreeSteering has been removed" {ai.kiro.cli.tweaks.stripVendorWorktreeSteering = retired;}) [true false]
           && lib.all (runtime: !(builtins.hasAttr "worktrees" (evaluate active).options.ai.${runtime})) ["claude" "codex" "copilot" "kimchi"]
       ) [
         {
@@ -321,6 +385,10 @@ in {
           && !chat.additionalDirectories.type.check [42]
           && chat.worktrees.type.check {enable = true;}
           && chat.worktrees.type.check {enable = false;}
+          && chat.worktrees.type.check {
+            enable = true;
+            location = "../{{repo}}-worktrees";
+          }
           && chat.worktrees.type.check null
           && !chat.worktrees.type.check {}
           && !chat.worktrees.type.check {enable = 1;}

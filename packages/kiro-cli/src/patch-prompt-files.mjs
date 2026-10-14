@@ -288,7 +288,7 @@ method("createNewSessionState", (text) => {
   text = replace(
     text,
     "{ let p =",
-    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId, t.cwd) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd, nixWorktrees.requestRoot(t)); let p =",
+    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId, t.cwd) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd, nixWorktrees.requestPolicy(t)); let p =",
   );
   text = replace(
     text,
@@ -306,16 +306,49 @@ method("hydrateSessionForLoad", (text) =>
   replace(
     text,
     "lBr(w); let v =",
-    "lBr(w); m.nixWorkspaceRoots = nixRoots.requestAuthority(r) ?? { version: 1, protocol: Uke(r, d) }; m.nixPromptSnapshot = n ? nixPrompts.storedSnapshot(n.metadata) : await nixPrompts.resolveSnapshot(this.homeDir, d ? undefined : r.cwd, nixWorktrees.requestRoot(r)); let v =",
+    "lBr(w); m.nixWorkspaceRoots = nixRoots.requestAuthority(r) ?? { version: 1, protocol: Uke(r, d) }; m.nixPromptSnapshot = n ? nixPrompts.storedSnapshot(n.metadata) : await nixPrompts.resolveSnapshot(this.homeDir, d ? undefined : r.cwd, nixWorktrees.requestPolicy(r)); let v =",
   ),
 );
-method("createSessionState", (text) =>
-  replace(
+method("createSessionState", (text) => {
+  text = replace(
+    text,
+    "let Z = this.createSessionPolicy(t, r, n, T, f);",
+    "let Z = this.createSessionPolicy(t, r, n, T, f, await nixRoots.writableRoot(this.homeDir, r));",
+  );
+  return replace(
     text,
     "gt = { sessionId: t,",
     "gt = { nixWorkspaceRoots: c.nixWorkspaceRoots, nixPromptSnapshot: c.nixPromptSnapshot, sessionId: t,",
+  );
+});
+method("rebuildSessionPolicy", (text) =>
+  replace(
+    text,
+    "c = this.createSessionPolicy(t, n.workspacePaths, a, s, r),",
+    "c = this.createSessionPolicy(t, n.workspacePaths, a, s, r, await nixRoots.writableRoot(this.homeDir, n.workspacePaths)),",
   ),
 );
+// The worktree policy root is writable through the vendor's own session-scoped
+// workspace rule shape, under a source that is never persisted as a user answer.
+const workspaceRule = unique(
+  (n) =>
+    ts.isFunctionDeclaration(n) &&
+    n.name?.text === "ODt" &&
+    n.parameters.length === 3,
+  "workspace rule scoping",
+);
+method("createSessionPolicy", (text) => {
+  text = replace(
+    text,
+    "createSessionPolicy(t, r, n, i, o) {",
+    "createSessionPolicy(t, r, n, i, o, nixWritable) {",
+  );
+  return replace(
+    text,
+    "initialSessionRules: o?.length ? rxo(o) : void 0,",
+    `initialSessionRules: [...(o?.length ? rxo(o) : []), ...(nixWritable ? ${workspaceRule.name.text}({ scope: "session", source: "nix:chat.worktrees", rule: { capability: "fs_write", match: ["./**"], effect: "allow" } }, nixWritable, this.homeDir).rules : [])],`,
+  );
+});
 method("buildInitialSessionMetadata", (text) =>
   replace(
     text,
