@@ -33,9 +33,7 @@ in {
     #
     # This scalar uses null-as-inherit, unlike keyed pools where null is a
     # tombstone. The precedence cases below are the contract, not incidental
-    # coverage. Three
-    # runtimes consume it through three different mechanisms; two are
-    # excluded outright. See dev/fragments/ai-module/shell-option.md.
+    # coverage. Four runtimes consume it; Copilot remains excluded. See dev/fragments/ai-module/shell-option.md.
 
     # Default null must touch nothing — the whole opt-in premise.
     module-ai-shell-default-null-is-inert = let
@@ -228,21 +226,6 @@ in {
           builtins.tryEval
           (evalHm {
             ai.copilot = {
-              enable = true;
-              shell = pkgs.bash;
-            };
-          })
-      .config.home.packages;
-      in
-        !probe.success
-    );
-
-    module-ai-shell-excluded-for-kimchi = mkTest "ai-shell-excluded-for-kimchi" (
-      let
-        probe =
-          builtins.tryEval
-          (evalHm {
-            ai.kimchi = {
               enable = true;
               shell = pkgs.bash;
             };

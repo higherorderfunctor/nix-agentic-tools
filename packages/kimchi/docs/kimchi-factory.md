@@ -1,7 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-13 — the factory and portable-event diagnostics
-> share the native lifecycle event list; unsupported requests warn.
+> **Last verified:** 2026-10-14 — the factory and portable-event diagnostics
+> share the native lifecycle event list; unsupported requests warn; shell uses
+> Pi harness settings on both backends through the patched bash tool.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -525,12 +526,25 @@ Claude Code hook adapter, a shared hook that also reaches
 ## Normalized pool capability boundary
 
 The app record's `supportedPools` is exactly `agents`, `context`,
-`environmentVariables`, `hooks`, `mcpServers`, `rules`, `settings`, and
+`environmentVariables`, `hooks`, `mcpServers`, `rules`, `settings`, `shell`, and
 `skills`. Kimchi has no native path-scoped rule loader, so rules use the same
-flat AGENTS.md handling as Codex. LSP and shell-selection landing keys remain
-absent; shared requests remain valid and warn because Kimchi cannot consume
-them. `settings` is the uniform closed normalized namespace; its current field
-lowers to `defaultThinkingLevel` in the mutable harness settings document.
+flat AGENTS.md handling as Codex. LSP remains excluded; a shared LSP request
+warns because Kimchi cannot consume it. The shared `resolveOverride` result for
+`ai.shell` / `ai.kimchi.shell` lowers to `native.harnessSettings.shellPath` at
+default priority, so an explicit native value wins. Both backends use the
+existing harness settings writer; devenv retains project trust and exact-cwd
+requirements.
+
+Kimchi 1.9.2's replacement bash tool omits Pi's `shellPath` option upstream. The
+package's `command-shell.patch` passes `getSettingsManager()?.getShellPath()`
+into that tool at session start, after the existing trust-sync extension. Short
+and background commands then use the same configured local operations. Patch
+context drift fails the build with zero fuzz; `kimchi-command-shell` executes
+the patched registration and both branches with offline collaborators. No new
+environment variable is introduced.
+
+`settings` is the uniform closed normalized namespace; its current field lowers
+to `defaultThinkingLevel` in the mutable harness settings document.
 
 The four keyed pools Kimchi consumes (`environmentVariables`, `mcpServers`,
 `rules`, and `skills`) follow the shared atomic replacement rule. A

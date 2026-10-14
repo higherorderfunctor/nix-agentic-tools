@@ -475,3 +475,4 @@ zdiff
 zebrafish
 zereight
 zstd
+gnupatch

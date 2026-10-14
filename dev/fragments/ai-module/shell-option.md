@@ -1,7 +1,8 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-13 — shared option declarations register fanout
-> surfaces; decomposition warns automatically for every unsupported request.
+> **Last verified:** 2026-10-14 — shared option declarations register fanout
+> surfaces and decomposition warns for every unsupported request; Kimchi
+> consumes resolved shell through Pi harness settings, patched to honor it.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -19,9 +20,8 @@ places:
 An unsupported per-runtime write is therefore an "option does not exist" eval
 error. An unsupported ROOT value is different: root `ai.*` is the portable
 surface, so a non-empty request warns and lowers to the pool's neutral value for
-that enabled runtime. For example, Kimchi exposes `rules` but not `shell`:
-`ai.kimchi.rules` exists, while `ai.kimchi.shell` does not and root `ai.shell`
-does not reach Kimchi.
+that enabled runtime. For example, Copilot excludes `shell`: `ai.copilot.shell`
+does not exist, and root `ai.shell` warns for Copilot instead of reaching it.
 
 The root declarations in `sharedOptions.nix`'s `sharedSurfaceOptions` also
 register the shared fanout names. `app/decompose.nix` compares those names with
@@ -82,13 +82,13 @@ feature default without replacing unrelated leaves.
 elsewhere) and computes `resolvedShell` only when `shell` appears in the app
 record's `supportedPools`. There is no sibling shell-specific capability flag.
 
-| runtime | knob                       | delivery                                |
-| ------- | -------------------------- | --------------------------------------- |
-| Claude  | `CLAUDE_CODE_SHELL`        | `native.settings.env` → `settings.json` |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                |
-| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`               |
-| Copilot | **unknown — verified gap** | excluded                                |
-| Kimchi  | unassessed                 | excluded                                |
+| runtime | knob                       | delivery                                           |
+| ------- | -------------------------- | -------------------------------------------------- |
+| Claude  | `CLAUDE_CODE_SHELL`        | `native.settings.env` → `settings.json`            |
+| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                           |
+| Copilot | **unknown — verified gap** | excluded                                           |
+| Kimchi  | Pi `shellPath`             | `native.harnessSettings` → harness `settings.json` |
+| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`                          |
 
 The launcher runtimes do not merge `SHELL` themselves. The builder hands every
 `installPackage` and `config` callback one `launcherEnvironment`: module
@@ -96,14 +96,24 @@ defaults, then `SHELL` from the resolved shell, then the consumer's
 `environmentVariables` LAST, so an explicit `environmentVariables.SHELL` wins
 everywhere. Codex once applied the typed shell last instead; that was defensible
 in isolation and wrong in aggregate, because the same two-key config then
-resolved differently per runtime. Copilot and Kimchi do not support `shell`, so
-for them it is module defaults under the consumer pool. The
-`module-ai-shell-root-excluded-from-copilot-{hm,devenv}-wrapper` checks inspect
-a live launcher with an explicit environment marker and require `SHELL` to be
-absent when root `ai.shell` is set.
+resolved differently per runtime. Copilot does not support `shell`, so its
+launcher receives only module defaults under the consumer pool. Kimchi also
+receives the launcher environment, but selects the command executable from
+`shellPath`, not `SHELL`; an explicit native setting wins over the normalized
+default. The `module-ai-shell-root-excluded-from-copilot-{hm,devenv}-wrapper`
+checks inspect a live launcher with an explicit environment marker and require
+`SHELL` to be absent when root `ai.shell` is set.
 
-Four runtimes were asked for; five go through `mkRuntime`. Kimchi is easy to
-miss because the issue that requested this never mentioned it.
+Kimchi 1.9.2 replaces Pi's configured bash tool with its background-capable
+tool. `command-shell.patch` passes the existing shared settings reader's
+`getShellPath()` into that replacement at session start. The trust-sync
+extension runs first, so trusted project settings and user settings keep Pi's
+scope precedence. Short and background execution share the resulting local
+operations. The patch adds no environment knob. `kimchi-command-shell` applies
+the production patch and executes both branches without credentials;
+`module-kimchi-shell` checks root, runtime, null and native precedence on both
+backends. Devenv settings require a trusted project and the existing exact-cwd
+launcher guard.
 
 ### Kiro's FHS root does not change the shell default
 
@@ -147,9 +157,7 @@ run.
 
 ### The fallback behavior is asymmetric, and that is the whole safety argument
 
-Every runtime here falls back when the configured shell is unusable, but they do
-not fall back to the same place — and neither one warns in a way a consumer will
-see:
+Unusable configured shells behave differently across runtimes:
 
 - **Claude silently ignores an unusable `CLAUDE_CODE_SHELL`.** No warning,
   exit 0. Measured twice on 2.1.222 with a nonexistent path. It does **not**
@@ -164,6 +172,11 @@ see:
 - **Kiro uses `process.env.SHELL || "/bin/sh"`.** `||` is an unset-or-empty
   fallback, so an invalid path should fail loudly at spawn instead. Derived from
   the operator semantics, not yet measured.
+
+- **Kimchi rejects a nonexistent explicit `shellPath`.** Pi validates the
+  configured path before spawning the command; an unset path selects
+  `/bin/bash`, then PATH bash, then sh on Unix. `SHELL` does not select this
+  tool.
 
 **This is why the option takes a package, not a path.** A package is guaranteed
 to exist in the store at activation and is GC-rooted by the generation that

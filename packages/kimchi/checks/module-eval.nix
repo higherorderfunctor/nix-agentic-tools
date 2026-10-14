@@ -12,7 +12,7 @@
   workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
   workflowsHarness = ".config/kimchi/harness";
   # Reuse these module evaluations for the structural check and runtime smoke.
-  workflowsBackends = map (backend:
+  backends = map (backend:
     backend
     // {
       one = backend.evaluate {
@@ -325,7 +325,7 @@ in {
           inherit settings;
           extension = files."${workflowsHarness}/extensions/workflows".source;
         })
-        workflowsBackends;
+        backends;
     in
       pkgs.runCommand "kimchi-workflows-smoke" {} ''
         set -euETo pipefail
@@ -380,12 +380,37 @@ in {
           && lib.sort builtins.lessThan (settings two).packages == ["/consumer/package" "extensions/another" "extensions/workflows"]
           && !rejected.success;
       in
-        lib.all checkBackend workflowsBackends
+        lib.all checkBackend backends
     );
 
-    # `supportedPools` now owns every normalized per-runtime option gate, not
-    # shell alone. Each failure has an identical supported-runtime control so an
-    # unrelated eval failure cannot make the exclusion look correct.
+    module-kimchi-shell = mkTest "kimchi-shell" (
+      lib.all (backend: let
+        check = config: expected: let
+          evaluated = backend.evaluate (lib.mkMerge [{ai.kimchi.enable = true;} config]);
+          settings = backend.settings evaluated;
+        in
+          lib.all (assertion: assertion.assertion) evaluated.config.assertions
+          && (settings.shellPath or null) == expected
+          && !(lib.any (lib.hasInfix "ai.shell") evaluated.config.warnings);
+      in
+        check {} null
+        && check {ai.kimchi.shell = pkgs.bash;} (lib.getExe pkgs.bash)
+        && check {ai.shell = pkgs.bash;} (lib.getExe pkgs.bash)
+        && check {
+          ai.shell = pkgs.bash;
+          ai.kimchi.shell = null;
+        } (lib.getExe pkgs.bash)
+        && check {
+          ai.shell = pkgs.bash;
+          ai.kimchi.shell = pkgs.bashNonInteractive;
+        } (lib.getExe pkgs.bashNonInteractive)
+        && check {
+          ai.shell = pkgs.bash;
+          ai.kimchi.native.harnessSettings.shellPath = lib.getExe pkgs.bashNonInteractive;
+        } (lib.getExe pkgs.bashNonInteractive))
+      backends
+    );
+
     module-kimchi-context-composes-root-first = mkTest "kimchi-context-composes-root-first" (
       let
         config.ai = {

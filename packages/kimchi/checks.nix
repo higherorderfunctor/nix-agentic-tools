@@ -1,5 +1,6 @@
 {pkgs, ...}: {
   imports = [
+    ./checks/command-shell.nix
     ./checks/docs-skill.nix
     ./checks/kimchi-extracted.nix
     ./checks/module-eval.nix

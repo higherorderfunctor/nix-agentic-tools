@@ -385,6 +385,7 @@
     mergedServers,
     mergedSkills,
     resolvedSettings,
+    resolvedShell,
     topHooks,
     ...
   }: let
@@ -612,6 +613,10 @@
         ai.kimchi.native.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
       })
 
+      (lib.mkIf (resolvedShell != null) {
+        ai.kimchi.native.harnessSettings.shellPath = lib.mkDefault (lib.getExe resolvedShell);
+      })
+
       # Immutable JSON files remain read-only copies. Kimchi's
       # writers either rename a temporary over the path (MCP edits, the setup
       # wizard, `writeConfigSetting`: src/config/json.ts:154-160), which would
@@ -763,6 +768,7 @@ in
       "mcpServers"
       "rules"
       "settings"
+      "shell"
       "skills"
     ];
     defaults = {

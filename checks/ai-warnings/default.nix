@@ -301,7 +301,7 @@
         path = ["ai" "shell"];
         reason = "${runtime}'s supportedPools excludes shell; its runtime record does not consume this shared surface.";
         value = pkgs.bash;
-      }) ["copilot" "kimchi"]
+      }) ["copilot"]
       ++ [
         {
           inherit mode;
@@ -366,6 +366,11 @@
       {
         path = ["ai" "shell"];
         runtime = "codex";
+        value = pkgs.bash;
+      }
+      {
+        path = ["ai" "shell"];
+        runtime = "kimchi";
         value = pkgs.bash;
       }
     ]) ["devenv" "hm"];
