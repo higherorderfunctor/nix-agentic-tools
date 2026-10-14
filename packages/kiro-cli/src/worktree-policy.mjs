@@ -8,6 +8,7 @@ import {
   join,
   relative,
   resolve,
+  sep,
 } from "node:path";
 import { promisify } from "node:util";
 
@@ -125,7 +126,7 @@ export async function discover(cwd, location) {
   );
   // A root at or above the checkout would make the checkout itself writable.
   const inside = relative(destination, primary);
-  if (!inside.startsWith("..") && !isAbsolute(inside))
+  if (inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside))
     fail(`location must not cover the primary checkout: ${destination}`);
   try {
     if ((await lstat(destination)).isSymbolicLink())
