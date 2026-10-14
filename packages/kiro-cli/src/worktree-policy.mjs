@@ -80,7 +80,10 @@ export async function discover(cwd, location) {
   } catch (error) {
     if (error.code === 128 && error.stderr?.includes("not a git repository"))
       return undefined;
-    fail(`cannot discover repository: ${error.message}`);
+    return noRoot(
+      cwd,
+      `cannot discover repository: ${error.stderr?.trim().split("\n")[0] || error.message}`,
+    );
   }
   const [common, bare, ...extra] = discovered.split("\n");
   if (extra.length)
@@ -89,20 +92,26 @@ export async function discover(cwd, location) {
     return noRoot(cwd, "not a normal primary checkout or linked worktree");
   const commonPath = await realpath(common);
   const primary = dirname(commonPath);
+  // Follow-up probes fail inside bare and dubious repositories; degrade, never abort.
+  const probe = (...args) => git(...args).catch(() => undefined);
   const locations = (
-    await git(cwd, "--absolute-git-dir", "--show-toplevel")
-  ).split("\n");
+    await probe(cwd, "--absolute-git-dir", "--show-toplevel")
+  )?.split("\n");
+  if (locations === undefined)
+    return noRoot(cwd, "cannot locate the Git directory and checkout");
   if (locations.length !== 2)
     return noRoot(cwd, "repository paths containing newlines are unsupported");
   const [gitDir, topLevel] = await Promise.all(
     locations.map((path) => realpath(path)),
   );
+  const primaryTop = await probe(primary, "--show-toplevel");
   if (
     !(await stat(join(primary, ".git"))).isDirectory() ||
     (gitDir === commonPath
       ? topLevel !== primary
       : dirname(gitDir) !== join(commonPath, "worktrees")) ||
-    (await realpath(await git(primary, "--show-toplevel"))) !== primary
+    primaryTop === undefined ||
+    (await realpath(primaryTop)) !== primary
   )
     return noRoot(
       cwd,
