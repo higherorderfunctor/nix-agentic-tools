@@ -7,26 +7,15 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-14 — option declarations supply policy surfaces and
-> keyed withdrawal; runtime declarations supply normalized policy gaps and the
-> warning suite generates coverage for every runtime, surface and backend.
+> **Last verified:** 2026-10-14 — shared option declarations register fanout
+> surfaces; decomposition shares unsupported requests with diagnostics; Kiro
+> selects its engine through native settings.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
 > wrongly. Full lineage:
 > `git show d1c28a21:dev/fragments/ai-module/ai-module-fanout.md`.
 >
-> - **There is no shared `ai.lspServers` pool — don't restore it.** It fanned
->   one typed record out to Claude, Copilot and Kiro until the operator removed
->   it on 2026-10-14 (#2526) because nobody set it; a normalized surface returns
->   only when two harnesses share a lossless shape. Native settings options stay
->   and no new native LSP option replaces it. Two measurements that would
->   otherwise be re-derived: under Home Manager, Copilot's LSP toggle renames a
->   temporary over `lsp-config.json`, so a symlinked file there is replaced and
->   a consumer must deliver a real copy; Kiro reads `settings/lsp.json` relative
->   to the workspace, so a copy under `$HOME/.kiro` is live only when the
->   workspace is `$HOME`. Last version:
->   `git show 0964eec2:lib/ai/sharedOptions.nix`.
 > - **Root silence for unsupported runtimes is rejected.** It was the design,
 >   rejected by the operator on 2026-10-13; repeated activation warnings,
 >   including Copilot's, are accepted. Prior design:
@@ -141,7 +130,7 @@ folds every inert setting into one warning naming each option; Codex's
 
 Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
 `shell`, `extraPackages`, `native.settings`, `trustedMcpTools`, `tweaks`,
-`features.<name>.enable`, `useFhsSandbox` and `v3`, plus the friendly
+`features.<name>.enable` and `useFhsSandbox`, plus the friendly
 `backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and `workflows` switches.
 Rollout names and typed `native.settings.chat.keybindings` keys come from the
 extracted registry. Friendly workflows select the GA stock package and imply
@@ -150,7 +139,7 @@ global setting there. Devenv warns when either requested global setting is
 missing, and refuses explicit project-only writes of global keys. The
 environment and shell folds live at `cli.normalized.environmentVariables` and
 `cli.normalized.shell`. All other normalized pools, native agents, permissions,
-hooks, MCP, files and activation remain shared under `ai.kiro`. There are no
+hooks, MCP/LSP, files and activation remain shared under `ai.kiro`. There are no
 old-path aliases. `ai.kiro.cli.enable = true; ai.kiro.cli.package = null;` keeps
 shared files without installing a CLI.
 
@@ -390,12 +379,12 @@ enabled ecosystem whose native model preserves the option's semantics):
   `effortLevel` and harness `defaultThinkingLevel`, respectively. Kiro has no
   lossless target, so it declares no pool and warns when shared reasoning effort
   is requested. Copilot's devenv lowering is the one partial delivery: the
-  repository `effortLevel` reaches only its interactive session, so its
-  `surfaceSupport.settings` declaration warns there until the native value is
-  withheld with null. Values that only one runtime persists remain under that
-  runtime's native settings. An explicit native effort key still has normal
-  option priority over the derived normalized default, and a native null
-  excludes that runtime from emission.
+  repository `effortLevel` reaches only its interactive session, so
+  `lib/ai/delivery-warnings.nix` warns there until the native value is withheld
+  with null. Values that only one runtime persists remain under that runtime's
+  native settings. An explicit native effort key still has normal option
+  priority over the derived normalized default, and a native null excludes that
+  runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
@@ -436,8 +425,8 @@ enabled ecosystem whose native model preserves the option's semantics):
   the complete file; `parseCompare` compares parsed frontmatter values. `tools`
   uses Claude and Copilot's tool names and renders a non-empty value as their
   frontmatter allowlist; `null` and `[]` both omit it. Codex, Kimchi and Kiro
-  drop it, and the record's `surfaceSupport.agents` gap warns at the path that
-  set it, naming the native remedy (Kimchi Markdown;
+  drop it, and `lib/ai/delivery-warnings.nix` warns at the path that set it,
+  naming the native remedy (Kimchi Markdown;
   `ai.kiro.native.agents.<name>.tools` and `permissions`); a native `tools` on
   the same agent silences it. Claude writes `.claude/agents/<name>.md` on both
   backends through `agent.renderFile`. A path-like raw entry — a Nix path, a
@@ -578,6 +567,20 @@ there is no file scope or a non-empty list for `fileMatch` content.
   directly. The MCP server key is also the managed-unit identity, so reused
   proxy-owner keys fail and direct owners must choose different keys. A
   top-level proxy inherited by no enabled capable runtime creates no unit.
+- `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
+  Kiro native config. Claude receives them on Home Manager only, in its personal
+  plugin's `.lsp.json`; devenv has no Claude LSP route and warns. Codex is
+  deliberately excluded: its current public config reference and pinned CLI
+  expose no LSP-server registration surface, so pretending to fan out this pool
+  would silently discard the declaration. The Copilot and Kiro producers
+  (`mkCopilotLspFile`, `mkKiroLspFile`) emit the WHOLE file, envelope included
+  (`lspServers` / `languages`): both CLIs reject a bare per-server map, which is
+  what shipped until 2026-09-23 while substring checks stayed green. Both route
+  files to servers by extension alone, so a server they receive with empty
+  `extensions` throws at eval rather than render an entry that never starts;
+  drop it for that runtime with `ai.<runtime>.lspServers.<name> = null`. Copilot
+  also keys `lspServers` by the attribute name and rejects the whole file for a
+  name outside `[A-Za-z0-9_-]+`, so such a name throws for Copilot too.
 - `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
   of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
@@ -602,57 +605,34 @@ documented composition semantics.
 
 ### Per-pool capability gate
 
-Every app record carries one `surfaceSupport` declaration. The shared
-transformer uses it for the per-runtime option schema, keyed-pool merge,
-delivery callback, and shell resolution. A per-runtime pool write that the
-runtime cannot consume is therefore an unknown-option error. A ROOT pool value
-stays portable and degrades to the neutral value for an incapable runtime.
+Every app record carries one `supportedPools` list. The shared transformer uses
+it for the per-runtime option schema, keyed-pool merge, delivery callback, and
+shell resolution. A per-runtime pool write that the runtime cannot consume is
+therefore an unknown-option error. A ROOT pool value stays portable and degrades
+to the neutral value for an incapable runtime.
 
 Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
 `mcpServers`, `rules`, `settings`, and `skills`. Its rules share Codex's flat
 AGENTS.md handling: Home Manager writes the user harness file, while devenv
 contributes keyed units to the single repository aggregate.
 
-`sharedSurfaceOptions` in `sharedOptions.nix` is the registration of shared
-fanout surfaces. Its keys declare root options and populate the read-only
-internal `sharedSurfaces` list. A keyed root option uses `keyedOption` metadata
-so delivery policy derives its keyed withdrawal list from the same declarations.
-Every runtime's `surfaceSupport` maps a surface name to
-`{backends?; reason?; gaps?;}`. Presence defaults to both backends;
-`backends = []` consumes nothing and declares no normalized runtime option. A
-non-empty backend list keeps both backend option trees, even where delivery is
-unavailable. Omitted surfaces warn with the generic reason.
-
-`app/decompose.nix` derives unavailable-backend, whole-surface, nested and
-conditional warnings from those declarations, including for third-party
-`mkRuntime` records. A gap names a relative `path`, a reason and optional
-backend restriction or `when` predicate; `each` checks keyed entries,
-`effective` checks the winning scalar input, and `rootOnly` restricts a gap to
-the portable root. Predicates and dynamic reasons receive the backend, config,
-runtime cfg, field value, whole entry value, path and entry name. Keyed runtime
-replacements and tombstones withdraw inherited entries before warnings.
-
-`checks/ai-warnings` generates populated, empty and disabled probes from the
-real runtime records, the evaluated shared-surface registry and both backends.
-It covers every unavailable surface, declared-but-unavailable runtime option,
-and static record gap; every supported cell gets a control against the
-whole-surface unsupported warning. Samples must exist for each shared surface
-and static gap path. Conditional, keyed-entry and effective-value gaps retain
-explicit runtime/path cases, whose exhaustiveness assertion names any uncovered
-record gap. Expected normalized reasons come from the records, including dynamic
-reasons.
-
-Policy rows derive normalized absence and static gaps from the records alongside
-physical delivery and native diagnostics; they no longer choose normalized
-delivery warnings or override their reasons. Package rule contributors consult
-the record's backend reach before writing. Native diagnostics belong to runtime
-factories. Transport-dependent MCP field warnings and final-file replacement
-warnings remain generic in the shared reader.
-
-Diagnostic units currently enumerate per-runtime pools at the runtime root. A
-future gap on launcher-prefixed `shell` or `environmentVariables` needs that
-enumeration to follow `launcherOptionsPath`; no current declaration has such a
-gap. This limitation does not change lowering or existing warning coverage.
+`sharedSurfaceOptions` in `sharedOptions.nix` is the single registration of
+shared fanout surfaces: its keys declare root options and populate the read-only
+internal `sharedSurfaces` list. `app/decompose.nix` compares that registration
+with each runtime record's `supportedPools` and warns for every non-empty
+unhandled request, including public third-party `mkRuntime` records. A new
+shared declaration needs no per-gap policy row to be diagnosed. Policy rows
+remain for better reasons, backend-specific gaps and partial field delivery;
+they can improve a structural warning's reason but cannot suppress it. Every
+warning names the option, runtime and reason, even when it repeats on activation
+and has no per-runtime remedy. Keyed runtime replacements and tombstones still
+withdraw inherited entries before warnings are computed. Per-runtime requests
+that a backend cannot deliver warn too. Package rule contributors gate their
+writes by backend delivery capability; `mkSkillPackageModule` applies that gate
+before writing a per-runtime rules pool. Two residual silent cases remain: a
+runtime lists a surface in `supportedPools` but does not lower it on one
+backend, or a future root fanout option is declared outside
+`sharedSurfaceOptions`.
 
 A context or rule unit that resolves for a runtime but lands in a file whose
 final entry has `content.enable = false` warns too, root or per-runtime: the
@@ -817,10 +797,10 @@ nothing and only drains the steering copies an older ledger records.
 Do not describe every top-level pool as mechanically reaching all five runtimes.
 The shared option descriptions and generated README capability matrix must name
 each registered runtime as a consumer or an intentional exclusion. In
-particular, Codex's `shell_environment_policy` filters child-command inheritance
-rather than setting the Codex process environment; a raw Codex agent is TOML,
-never Markdown; and only the Claude/Codex lifecycle intersection belongs in
-portable hooks.
+particular, Codex has no native LSP registry; its `shell_environment_policy`
+filters child-command inheritance rather than setting the Codex process
+environment; a raw Codex agent is TOML, never Markdown; and only the
+Claude/Codex lifecycle intersection belongs in portable hooks.
 
 `lib/options-doc.nix` evaluates both complete published module trees and
 produces their CommonMark/JSON references. The old mdbook/NuschtOS site is gone,
@@ -853,9 +833,9 @@ If the list stays empty despite `ai.claude.enable = true`, the fanout is broken
 ### Shared-pool is per-evaluation, NOT cross-backend
 
 `lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`, `ai.rules`,
-`ai.mcpServers`, `ai.environmentVariables`, `ai.agents`, `ai.hooks`,
-`ai.context`). Both backend module trees import it, and `lib/ai/app/default.nix`
-selects the one shared transform body per backend.
+`ai.mcpServers`, `ai.lspServers`, `ai.environmentVariables`, `ai.agents`,
+`ai.hooks`, `ai.context`). Both backend module trees import it, and
+`lib/ai/app/default.nix` selects the one shared transform body per backend.
 
 **The option declarations are shared. The values are NOT.**
 
@@ -1009,8 +989,8 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics; five keyed pools.
+> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
+> runtime cannot consume them; keyed tombstones still withdraw entries.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -1049,15 +1029,16 @@ That does not change the nullable-scalar inheritance contract in B4 or B5.
 
 ### Keyed-pool rule
 
-The five normalized keyed pools are:
+The six normalized keyed pools are:
 
 - `agents`
 - `environmentVariables`
+- `lspServers`
 - `mcpServers`
 - `rules`
 - `skills`
 
-Four pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
+Five pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
 whose entries default `enable = true`. For a capable runtime, nullable-pool
 composition is:
 
@@ -1089,7 +1070,7 @@ longer a collision.
 
 Unsupported per-runtime options remain absent. Root fanout to an unsupported
 runtime warns for a non-empty request and lowers to `{}` before merging, based
-on the app record's `surfaceSupport` declaration.
+on the app record's `supportedPools` list.
 
 ### Managed-proxy ownership exception
 
@@ -1286,7 +1267,7 @@ inline or store-backed alike; nothing is measured at eval, so a store-backed
 1. Declare root and per-runtime values as `attrsOf (nullOr <valueType>)`, or use
    a non-null submodule with an entry-local suppression flag when leaf merging
    is part of the pool's explicit contract.
-2. Add the capability to each consuming app record's `surfaceSupport`.
+2. Add the capability to each consuming app record's `supportedPools`.
 3. Route root and runtime values through `mergePool` before any translation or
    emission.
 4. Add the pool to `normalizedPoolNames` in
@@ -1437,9 +1418,8 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-14 — delivery policy derives shared surfaces, keyed
-> withdrawal and normalized gaps from option and runtime declarations;
-> `poolOptions` covers `agentsDir` and `environmentVariables` only.
+> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> surfaces; decomposition warns automatically for every unsupported request.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1544,27 +1524,27 @@ constructor and transform both validate it.
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
 - **Structured documents contribute ordinary leaves.** Codex settings and
-  Copilot MCP use `content.value` at ordinary priority. Adding one leaf keeps
-  generated siblings; defaulting the whole content would silently drop them.
-  Text and source content retain their whole-content defaults.
+  Copilot MCP/LSP use `content.value` at ordinary priority. Adding one leaf
+  keeps generated siblings; defaulting the whole content would silently drop
+  them. Text and source content retain their whole-content defaults.
 - **Claude delivers its own files.** Agents, commands, output styles, hook
-  scripts, skills, plugins, `.claude/settings.json` and the MCP files are
+  scripts, skills, plugins, `.claude/settings.json` and the MCP/LSP files are
   ordinary `ai.claude.files` entries, like every other runtime's. All of them
-  reach both backends except consumer plugins and the MCP personal plugin (its
-  manifest and `.mcp.json`), which are Home Manager only because a plugin is
-  user-scope; devenv writes MCP servers to the project `.mcp.json` instead.
-  Nothing is handed to an upstream Home Manager or devenv Claude module.
-  Settings and MCP servers are configuration, so `.claude/settings.json` and the
-  devenv `.mcp.json` are Nix-owned read-only links rather than reconciled
-  documents, and an in-app change such as `/tui` does not persist. Every
-  settings contribution goes through `ai.claude.native.settings`, so one entry
-  carries the whole document. Claude's user-global `.claude.json` is the
-  exception: it holds OAuth tokens and runtime state, so it claims the existing
-  JSON ledger under `claudeUnpinLaunchEffort`; its writer survives empty
-  declarations and remains Home Manager only. That writer keeps whatever mode it
-  finds, whether or not it rewrites the file, so an ungated `claudeConfigMode`
-  command writer is the only thing that narrows the token-bearing file to
-  owner-only, on every activation.
+  reach both backends except consumer plugins and the MCP/LSP personal plugin
+  (its manifest, `.mcp.json` and `.lsp.json`), which are Home Manager only
+  because a plugin is user-scope; devenv writes MCP servers to the project
+  `.mcp.json` instead. Nothing is handed to an upstream Home Manager or devenv
+  Claude module. Settings and MCP servers are configuration, so
+  `.claude/settings.json` and the devenv `.mcp.json` are Nix-owned read-only
+  links rather than reconciled documents, and an in-app change such as `/tui`
+  does not persist. Every settings contribution goes through
+  `ai.claude.native.settings`, so one entry carries the whole document. Claude's
+  user-global `.claude.json` is the exception: it holds OAuth tokens and runtime
+  state, so it claims the existing JSON ledger under `claudeUnpinLaunchEffort`;
+  its writer survives empty declarations and remains Home Manager only. That
+  writer keeps whatever mode it finds, whether or not it rewrites the file, so
+  an ungated `claudeConfigMode` command writer is the only thing that narrows
+  the token-bearing file to owner-only, on every activation.
 - **The CLI's write primitive picks the method.** Codex's `config.toml` is a
   store symlink on both backends: every Codex config writer writes a temporary
   beside the link's target, so an in-app save fails and the link survives
@@ -1700,12 +1680,11 @@ constructor and transform both validate it.
   them at one priority, which the record rejects, and computing that priority
   reads the source — a build during evaluation for a derivation.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
-  whose `surfaceSupport.settings` declares a non-empty backend list receives the
-  same closed `settings` submodule; Kiro does not, because it persists effort
-  only per model. Each field resolves root versus per-runtime with
-  `resolveOverride`; native lowering remains per-runtime and may support only a
-  subset of fields. Runtime-shaped passthrough is separate under
-  `native.settings` and is not a normalized pool.
+  whose `supportedPools` lists `settings` declares the same closed `settings`
+  submodule; Kiro does not, because it persists effort only per model. Each
+  field resolves root versus per-runtime with `resolveOverride`; native lowering
+  remains per-runtime and may support only a subset of fields. Runtime-shaped
+  passthrough is separate under `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -1735,34 +1714,12 @@ them or retroactively establish the order of historical matrix derivation.
 
 ### Generated delivery matrix
 
-`config/ai-delivery.nix` remains a pure `{lib}` import.
-`config/ai-delivery-schema.nix` reads `sharedSurfaceOptions` through its
-internal `sharedSurfaces` option default; keyed withdrawal is metadata on those
-same root declarations. Neither import evaluates a module or needs a package
-set. Permissions is the sole policy-only surface because it inventories native
-policy vocabularies, with no normalized root translation. Shell participates:
-Claude and Kimchi use their settings writers, Codex and Kiro their launchers,
-and Copilot has a derived absence.
-
-Physical writer records come from committed `config/ai-delivery-generated.nix`.
-Runtime `surfaceSupport` generates whole-surface/backend absences and their
-reasons. A native writer can exist alongside an unavailable normalized pool
-(Kiro hooks and settings); that cell retains its physical primary writer and
-gains a derived diagnostic child. Static record gaps project into diagnostic
-children too. Gaps requiring keyed entries, effective scalar selection,
-predicates or dynamic reasons remain record-only diagnostics: a static matrix
-input path cannot preserve those semantics. Hand rows add launcher ownership or
-native-only permission evidence; contradictory normalized hand absences and
-launcher claims fail naming the hand cell and runtime declaration. Input
-associations and behavioral probes remain independent consumer facts. Claude's
-`unpinLaunchEffort` remains a native-only supplement because normalized record
-gaps cannot address that separate option or its explicit-priority gate.
-
-The partition requires every cell exactly once across physical, support-derived
-and hand-authored primary rows. Adding a shared surface or dropping runtime
-support creates absence cells without policy edits. A runtime that claims
-support still needs a physical or launcher writer: no absence is invented to
-conceal missing implementation.
+`config/ai-delivery.nix` remains a pure `{lib}` import. Its schema and consumer
+facts are hand-authored; physical writer records come from the committed
+`config/ai-delivery-generated.nix`. The partition requires every matrix cell
+exactly once across derived and hand-authored rows. Absence reasons, package
+wrappers, input associations and behavioral probes remain independent of the
+observed delivery implementation.
 
 `checks/ai-delivery/generate.nix` evaluates populated specimens at default
 config directories. It reads typed files and activation ledgers, resolves
@@ -1774,17 +1731,16 @@ portable surface, so the specimen maps it to no cell. Codex's
 `app-server-daemon/settings.json` holds daemon configuration
 (`native.daemonSettings`), not a portable surface, and maps to no cell either.
 
-The production gate compares live file absence against primary policy rows in
-both directions; launchers have no file entry and are exempt from that
-correspondence. Its three body arms stay; derived names make the first arm's
-name agreement a tautology, not a stronger check. Empty-declaration survival and
-body variation still discriminate.
+The production gate compares live absence against hand-authored gaps in both
+directions. Its three body arms stay; derived names make the first arm's name
+agreement a tautology, not a stronger check. Empty-declaration survival and body
+variation still discriminate.
 
-Regeneration evaluates the check set, which asserts the committed matrix. Adding
-an unsupported cell now derives its absence without bootstrapping. Adding a
-supported physical cell can still fail the partition before the observer runs.
-Seed that cell from the already observed writer it shares, regenerate, then
-require observer byte identity; the seed is not evidence on its own.
+Regeneration evaluates the check set, and the check set asserts the committed
+matrix, so a change that moves a cell (a runtime joining the layer, say) cannot
+regenerate through the check attribute alone: bypass the `ai-delivery` and
+`ai-delivery-fixtures` asserts and the partition assertion in a scratch tree,
+build the observer, and restore them before committing.
 
 Regenerate the data with
 `nix build .#checks.x86_64-linux.ai-delivery-generated.generated --no-link --print-out-paths`,
@@ -1810,18 +1766,18 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   (default `.md`). It also includes `native.agents`, declared for a record that
   supplies `agentNativeType` and `agentTransformer` and joined to the record's
   own `native.*` options. `poolOptions.<pool>` is merged over the builder's
-  declaration of `agentsDir` or `environmentVariables`, so a runtime states only
-  its own description. The `agents` description takes no override: the record's
-  `agentsDescriptionSuffix` is the only per-runtime hook for it, appended to the
-  builder's text so the shared sentences stay in one place. The builder reads
-  `poolOptions` by pool name, so `lib/ai/app/checkRecord.nix` rejects any other
-  key, in `mkRuntime` and again in the transform: `agents`, a pool other than
-  `environmentVariables`, one the record's `surfaceSupport` omits, or
-  `agentsDir` without `agents`. It also rejects `agentNativeType` without
-  `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
-  `agentsDescriptionSuffix` without the agents pool, and an empty or non-string
-  `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
-  null counts as set.
+  declaration of `agentsDir`, `environmentVariables` or `lspServers`, so a
+  runtime states only its own description. The `agents` description takes no
+  override: the record's `agentsDescriptionSuffix` is the only per-runtime hook
+  for it, appended to the builder's text so the shared sentences stay in one
+  place. The builder reads `poolOptions` by pool name, so
+  `lib/ai/app/checkRecord.nix` rejects any other key, in `mkRuntime` and again
+  in the transform: `agents`, a pool outside `environmentVariables` and
+  `lspServers`, one the record's `supportedPools` omits, or `agentsDir` without
+  `agents`. It also rejects `agentNativeType` without `agentTransformer` or the
+  reverse, either one, `agentsDirSuffixes` or `agentsDescriptionSuffix` without
+  the agents pool, and an empty or non-string `agentsDirSuffixes`. The native
+  pair is tested for presence, so an explicit null counts as set.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
@@ -1873,13 +1829,12 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 1. Add L2 option `ai.<X>` to `sharedSurfaceOptions` in
    `lib/ai/sharedOptions.nix`. This is also the shared fanout registration:
    decomposition automatically warns for every enabled runtime whose
-   `surfaceSupport` does not consume `X`; no per-gap policy row is needed.
-   Declare backend-specific gaps and partially delivered fields on the runtime
-   record.
+   `supportedPools` omits `X`; no per-gap policy row is needed. Add policy only
+   for a better reason, a backend-specific gap or a partially delivered field.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline, gated on the
    pool, with a `poolOptions` override slot for per-runtime descriptions or
    types. Declare it in each per-CLI factory only when the shape itself differs.
-3. Declare `surfaceSupport.X` only on app records whose delivery `config`
+3. Add `X` to `supportedPools` only on app records whose delivery `config`
    consumes it. The normalized `settings` pool follows the same rule: a runtime
    with no lossless target for any field (Kiro) leaves it out, and one that
    lowers only some fields keeps it and warns for the rest.
@@ -1924,21 +1879,22 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-14 — shell participates in delivery policy through
-> settings writers, launcher ownership and record-derived Copilot absences.
+> **Last verified:** 2026-10-14 — decomposition warns for unsupported shared
+> requests; Kimchi consumes resolved shell through Pi harness settings; Kiro
+> defaults to V3 through settings rather than a forced flag.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
 ### One record is the capability source
 
 Every `mkRuntime` record declares the normalized pools its runtime exposes in
-`surfaceSupport`. `mkBackendTransform.nix` reads that build-time declaration in
-four places:
+`supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
+places:
 
 - only supported per-runtime pool options are declared;
 - only supported pools participate in shared/per-runtime merging;
 - only supported root pools reach the delivery callback; and
-- `shell` resolution runs only when its declared backend list is non-empty.
+- `shell` resolution runs only when `shell` is in the list.
 
 An unsupported per-runtime write is therefore an "option does not exist" eval
 error. An unsupported ROOT value is different: root `ai.*` is the portable
@@ -1948,21 +1904,20 @@ does not exist, and root `ai.shell` warns for Copilot instead of reaching it.
 
 The root declarations in `sharedOptions.nix`'s `sharedSurfaceOptions` also
 register the shared fanout names. `app/decompose.nix` compares those names with
-`surfaceSupport` and generates unsupported-root warnings automatically, even for
-third-party runtime records. The declaration also holds backend-specific reach,
-conditional support and nested field/event gaps; policy does not drive these
-normalized diagnostics.
+`supportedPools` and generates unsupported-root warnings automatically, even for
+third-party runtime records; policy can improve a reason but is never a coverage
+gate. Backend-specific and field-level drops still need their own diagnostics.
 
-The declaration is read off the RECORD, keeping it a build-time parameter in the
-same category as `backend`. It forces neither `config` nor the factory's `pkgs`,
-so it cannot reintroduce the `_module.args` recursion documented against
+The list is read off the RECORD, keeping it a build-time parameter in the same
+category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
+it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
 A same-named native option does not imply normalized-pool support.
 Runtime-shaped passthrough now lives under `native.settings`, independently of
-the capability declaration. Normalized `settings` is the deliberate uniform
-exception: Claude, Codex, Copilot and Kimchi consume it; Kiro declares no
-backend because effort is persisted per model.
+the capability list. Normalized `settings` is the deliberate uniform exception:
+Claude, Codex, Copilot and Kimchi list it; Kiro excludes it because effort is
+persisted per model.
 
 ### `ai.shell` deliberately uses null-as-inherit
 
@@ -2003,9 +1958,8 @@ feature default without replacing unrelated leaves.
 
 `mkBackendTransform.nix` declares `shell` below the record's
 `launcherOptionsPath` (`ai.kiro.cli.shell` for Kiro, `ai.<name>.shell`
-elsewhere) and computes `resolvedShell` only when the app record's
-`surfaceSupport.shell.backends` is non-empty. There is no sibling shell-specific
-capability flag.
+elsewhere) and computes `resolvedShell` only when `shell` appears in the app
+record's `supportedPools`. There is no sibling shell-specific capability flag.
 
 | runtime | knob                       | delivery                                           |
 | ------- | -------------------------- | -------------------------------------------------- |
@@ -2039,11 +1993,6 @@ the production patch and executes both branches without credentials;
 `module-kimchi-shell` checks root, runtime, null and native precedence on both
 backends. Devenv settings require a trusted project and the existing exact-cwd
 launcher guard.
-
-Delivery policy includes shell from the same shared option registration. Its
-physical rows associate Claude and Kimchi with their settings files, and Codex
-and Kiro with their process launchers; Copilot absence and its reason derive
-from the runtime record. Shell stays scalar and is not a keyed withdrawal pool.
 
 ### Kiro's FHS root does not change the shell default
 
@@ -2160,7 +2109,8 @@ three runtimes demonstrably do not perform.
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.
 - **`KIRO_CHAT_SHELL` is a dead end.** It exists only in Kiro's Rust binary, is
-  absent from the v3 JS bundle, and the wrapper forces `--v3`.
+  absent from the v3 JS bundle. The module defaults the native engine setting to
+  V3; explicit CLI flags and repository settings can override it.
 
 ### Why Copilot is a gap rather than a TODO someone can just close
 
