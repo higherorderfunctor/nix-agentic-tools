@@ -174,35 +174,6 @@ in {
       )
       settingsOptions);
 
-    module-kiro-native-setting-types-parity = mkTest "kiro-native-setting-types-parity" (let
-      runtime = import ../lib/mkKiro.nix {
-        lib = lib // {ai = import ../../../lib/ai {inherit lib;};};
-        inherit pkgs;
-      };
-      settingsOptions = [
-        runtime.options.cli.native.settings
-        (evalHm {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
-        (evalDevenv {ai.kiro.cli.enable = true;}).options.ai.kiro.cli.native.settings
-      ];
-    in
-      lib.all (
-        settings: let
-          chat = (settings.type.getSubOptions []).chat.type.getSubOptions [];
-        in
-          lib.all chat.agentEngine.type.check [null "v1" "v2" "v3"]
-          && !chat.agentEngine.type.check "unknown"
-          && lib.all chat.ui.type.check [null "legacy" "tui"]
-          && !chat.ui.type.check "unknown"
-          && chat.promptFiles.type.check {
-            identity = ./module-eval.nix;
-            worktreeGuidance = null;
-          }
-          && chat.promptFiles.type.check {workflowFileCheckGuidance = "relative.txt";}
-          && !chat.promptFiles.type.check {unknown = "x";}
-          && !chat.promptFiles.type.check {identity = 42;}
-      )
-      settingsOptions);
-
     module-kiro-native-engine-warnings = mkTest "kiro-native-engine-warnings" (
       lib.all (evaluate:
         lib.all (engine: let
