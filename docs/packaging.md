@@ -29,13 +29,13 @@ composed registry and ninja DAG:
   nix-update to refresh both hashes. `agnix` and `git-absorb` use
   `buildRustPackage`'s equivalent `cargoHash` shorthand; git-branchless instead
   imports the lock from its flake input.
-- **Go packages with a sidecar `vendorHash`** (`beads`, `cliproxyapi`, `dolt`
-  (paired with `beads`), `gh`, `gluetun`, `iron-proxy`, `kimchi`, `oh-my-posh`,
-  `otel-tui`, `pipelock` — kimchi records the hash for its nested
-  `proxy-helper`, not for a top-level Go build): the custom archive update
-  script needs an explicit dependency-hash repair, so `vendorHash` goes in the
-  sidecar. `mkUpdateScript` rebuilds the sidecar from scratch, destroying any
-  key it does not write itself, so each package passes
+- **Go packages with a sidecar `vendorHash`** (`beads`, `cliproxyapi`,
+  `cpa-manager-plus`, `dolt` (paired with `beads`), `gh`, `gluetun`,
+  `iron-proxy`, `kimchi`, `oh-my-posh`, `otel-tui`, `pipelock` — kimchi records
+  the hash for its nested `proxy-helper`, not for a top-level Go build): the
+  custom archive update script needs an explicit dependency-hash repair, so
+  `vendorHash` goes in the sidecar. `mkUpdateScript` rebuilds the sidecar from
+  scratch, destroying any key it does not write itself, so each package passes
   `extraExtract = "${goUpdate.extract}"` from `vu.mkGoUpdateExtract`, which
   restores `goFloor` before repairing `vendorHash`, and reads
   `sources.vendorHash or lib.fakeHash` to cover the window between the two
@@ -54,8 +54,11 @@ composed registry and ninja DAG:
   these standard scripts: each independently checks its upstream, while one
   public update script keeps Beads and its exact Dolt runtime on the same update
   branch and PR.
-- **npm packages with a sidecar `npmDepsHash`** (`bruno`): override the BUILDER
-  (`pkg.override { buildNpmPackage = …; }`), never `overrideAttrs`.
+- **npm packages with a sidecar `npmDepsHash`** (`bruno`, `cpa-manager-plus`):
+  `cpa-manager-plus` uses a standalone `buildNpmPackage` sub-derivation
+  (`passthru.frontend`), repaired with
+  `mkNpmDepsFix { attr = "<pkg>.frontend"; }`; bruno instead overrides the
+  BUILDER (`pkg.override { buildNpmPackage = …; }`), never `overrideAttrs`.
   `buildNpmPackage` is a `lib.extendMkDerivation` whose `extendDrvArgs` computes
   `npmDeps = fetchNpmDeps { hash = npmDepsHash; src; postPatch; }` from the
   INCOMING args, so an `npmDepsHash` set through `overrideAttrs` composes on top
@@ -271,6 +274,7 @@ Fetching itself is nixpkgs' to test.
 | bun                 | generic    | GitHub releases             | pre-built binary          | `bun`                 | —             | —                   |
 | catppuccin-btop     | generic    | GitHub archive              | files only                | —                     | —             | —                   |
 | cliproxyapi         | generic    | GitHub archive              | go (nixpkgs override)     | `cliproxyapi`         | go test       | --version           |
+| cpa-manager-plus    | generic    | GitHub archive              | npm + go (source)         | —                     | go test (cmd) | --version           |
 | dns-root-hints      | generic    | InterNIC (no version)       | files only                | —                     | —             | —                   |
 | fblog               | generic    | GitHub archive              | cargo (nixpkgs override)  | `fblog`               | —             | --version           |
 | gluetun             | generic    | GitHub archive              | go (linux only)           | —                     | — (subPkg)    | starts + exits      |
