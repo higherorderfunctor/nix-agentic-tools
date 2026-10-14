@@ -69,38 +69,54 @@
       )
       != {}
     else if surface == "context"
-    then value != null && ((value.source or null) != null || (value.text or "") != null && (value.text or "") != "")
+    then aiCommon.hasContent value
     else nonEmpty value;
   message = path: reason: "${lib.showOption path} is set but ${backend} does not deliver it to ${runtime} (reason: ${reason})";
-  rowWarnings = lib.concatMap (row:
-    lib.optionals (row.ecosystem
-      == runtime
-      && row.mode == backend
-      && (row.primitive == "notApplicable" || row ? deliveryGap))
-    (map (path: message path (row.deliveryGap or row.reason))
-      (builtins.filter (path:
-        present path
-        && (!(row.warnOnlyExplicit or false)
-          || (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500)) (row.inputOptions or []))))
+  gapRows = builtins.filter (row:
+    row.ecosystem
+    == runtime
+    && row.mode == backend
+    && (row.primitive == "notApplicable" || row ? deliveryGap))
   (lib.concatMap policy.writersOf policy.rows);
+  unsupportedRoot = path:
+    builtins.length path
+    == 2
+    && builtins.elem (lib.last path) config.ai.internal.sharedSurfaces
+    && !(supports (lib.last path));
+  sharedWarnings = import ./app/decompose.nix {inherit lib;} {
+    inherit appRecord message present;
+    sharedSurfaces = config.ai.internal.sharedSurfaces;
+    reasonFor = path: let
+      row = lib.findFirst (row: builtins.elem path (row.inputOptions or [])) null gapRows;
+    in
+      if row == null
+      then null
+      else row.deliveryGap or row.reason;
+  };
+  rowWarnings = lib.concatMap (row:
+    map (path: message path (row.deliveryGap or row.reason))
+    (builtins.filter (path:
+      !(unsupportedRoot path)
+      && present path
+      && (!(row.warnOnlyExplicit or false)
+        || (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500)) (row.inputOptions or [])))
+  gapRows;
   effortPath =
     if (cfg.settings.reasoningEffort or null) != null
     then ["ai" runtime "settings" "reasoningEffort"]
     else ["ai" "settings" "reasoningEffort"];
   entries = pool:
-    (lib.mapAttrsToList (name: value: {
-      inherit name value;
-      path = ["ai" pool name];
-    }) (rootRemaining pool))
-    ++ (lib.mapAttrsToList (name: value: {
+    lib.optionals (supports pool) (
+      (lib.mapAttrsToList (name: value: {
         inherit name value;
-        path = ["ai" runtime pool name];
-      })
-      (
-        if supports pool
-        then live pool (cfg.${pool} or {})
-        else {}
-      ));
+        path = ["ai" pool name];
+      }) (rootRemaining pool))
+      ++ (lib.mapAttrsToList (name: value: {
+          inherit name value;
+          path = ["ai" runtime pool name];
+        })
+        (live pool (cfg.${pool} or {})))
+    );
   fieldWarning = entry: field: reason:
     lib.optional (
       if builtins.elem field ["env" "headers"]
@@ -267,4 +283,4 @@ in
   then []
   else
     lib.unique
-    (rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings ++ contextWarnings ++ offRuleWarnings)
+    (sharedWarnings ++ rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings ++ contextWarnings ++ offRuleWarnings)

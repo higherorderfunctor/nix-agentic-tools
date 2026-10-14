@@ -299,7 +299,7 @@
       map (runtime: {
         inherit mode runtime;
         path = ["ai" "shell"];
-        reason = "${runtime}'s supportedPools excludes shell; its launcher does not consume the shared shell selection (${policy.definitions.environmentVariables.${runtime}.${mode}.evidence}).";
+        reason = "${runtime}'s supportedPools excludes shell; its runtime record does not consume this shared surface.";
         value = pkgs.bash;
       }) ["copilot" "kimchi"]
       ++ [
@@ -312,10 +312,10 @@
         }
         {
           inherit mode;
-          path = ["ai" "settings" "reasoningEffort"];
-          reason = "Kiro persists effort only in per-model chat.modelDefaults records; shared reasoningEffort has no lossless target (packages/kiro-cli/lib/mkKiro.nix).";
+          path = ["ai" "settings"];
+          reason = "kiro's supportedPools excludes settings; its runtime record does not consume this shared surface.";
           runtime = "kiro";
-          value = "high";
+          value.reasoningEffort = "high";
         }
       ]) ["devenv" "hm"]
     ++ [
@@ -523,17 +523,6 @@
         )
         config
         ;
-    };
-  # A hand-built config, not a harness eval: every policy path goes through
-  # lib.attrByPath, which answers `null` for a shared pool a minimal
-  # composition never declared, and the real module trees always declare them
-  # all. Each branch of `present` has to read that null as "nothing requested"
-  # instead of crashing the whole evaluation.
-  undeclaredSharedPools = backend:
-    import ../../lib/ai/delivery-warnings.nix {inherit lib;} {
-      appRecord = records.copilot;
-      inherit backend;
-      config.ai.copilot.enable = true;
     };
 in {
   imports = [./runtime.nix];
@@ -824,8 +813,6 @@ in {
         ai.lspServers = sample.lspServers;
       }
       == []
-      && undeclaredSharedPools "hm" == []
-      && undeclaredSharedPools "devenv" == []
     );
   };
 }

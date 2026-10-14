@@ -215,10 +215,6 @@
   # Diagnostic-only writers name inputs the primary writer cannot consume;
   # they do not alter lowering or the physical delivery matrix.
   supplements = {
-    "environmentVariables/copilot/devenv" = [(shellGap "copilot")];
-    "environmentVariables/copilot/hm" = [(shellGap "copilot")];
-    "environmentVariables/kimchi/devenv" = [(shellGap "kimchi")];
-    "environmentVariables/kimchi/hm" = [(shellGap "kimchi")];
     "hooks/kimchi/devenv" = [
       ((absent "Kimchi's lifecycle event list has no PermissionRequest event; projectHooksFor filters it out (packages/kimchi/lib/mkKimchi.nix).")
         // {inputOptions = [["ai" "hooks" "PermissionRequest"]];})
@@ -232,18 +228,10 @@
           warnOnlyExplicit = true;
         })
     ];
-    "settings/kiro/devenv" = [kiroEffortGap];
-    "settings/kiro/hm" = [kiroEffortGap];
   };
-  kiroEffortGap =
-    (absent "Kiro persists effort only in per-model chat.modelDefaults records; shared reasoningEffort has no lossless target (packages/kiro-cli/lib/mkKiro.nix).")
-    // {inputOptions = [["ai" "settings" "reasoningEffort"]];};
   kiroPortableHooksGap =
     (absent "Kiro's v3 trigger schema has no lossless mapping from portable command hooks; its native hooks are a separate surface (packages/kiro-cli/lib/mkKiro.nix).")
     // {inputOptions = [["ai" "hooks"]];};
-  shellGap = runtime:
-    (absent "${runtime}'s supportedPools excludes shell; its launcher does not consume the shared shell selection (${evidence.${runtime}}).")
-    // {inputOptions = [["ai" "shell"]];};
 in {
   inherit annotate hand key metadata supplements;
   pruneTrigger = mode: primitive:

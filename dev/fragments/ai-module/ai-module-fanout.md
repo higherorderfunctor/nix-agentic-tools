@@ -1,7 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
-> runtime cannot consume them; keyed tombstones still withdraw entries.
+> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> surfaces; decomposition warns automatically for every unsupported request.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -604,8 +604,14 @@ Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
 AGENTS.md handling: Home Manager writes the user harness file, while devenv
 contributes keyed units to the single repository aggregate.
 
-A non-empty shared request warns when an enabled runtime cannot consume it,
-including excluded pools, non-keyed pools and backend-specific gaps. Every
+`sharedSurfaceOptions` in `sharedOptions.nix` is the single registration of
+shared fanout surfaces: its keys declare root options and populate the read-only
+internal `sharedSurfaces` list. `app/decompose.nix` compares that registration
+with each runtime record's `supportedPools` and warns for every non-empty
+unhandled request, including public third-party `mkRuntime` records. A new
+shared declaration needs no per-gap policy row to be diagnosed. Policy rows
+remain for better reasons, backend-specific gaps and partial field delivery;
+they can improve a structural warning's reason but cannot suppress it. Every
 warning names the option, runtime and reason, even when it repeats on activation
 and has no per-runtime remedy. Keyed runtime replacements and tombstones still
 withdraw inherited entries before warnings are computed. Per-runtime requests

@@ -1,7 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
-> runtime cannot consume them; keyed tombstones still withdraw entries.
+> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> surfaces; decomposition warns automatically for every unsupported request.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -408,7 +408,11 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 
 ### Adding a new concern X
 
-1. Add L2 option `ai.<X>` in `lib/ai/sharedOptions.nix`.
+1. Add L2 option `ai.<X>` to `sharedSurfaceOptions` in
+   `lib/ai/sharedOptions.nix`. This is also the shared fanout registration:
+   decomposition automatically warns for every enabled runtime whose
+   `supportedPools` omits `X`; no per-gap policy row is needed. Add policy only
+   for a better reason, a backend-specific gap or a partially delivered field.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline, gated on the
    pool, with a `poolOptions` override slot for per-runtime descriptions or
    types. Declare it in each per-CLI factory only when the shape itself differs.

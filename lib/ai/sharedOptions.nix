@@ -160,44 +160,48 @@
       then "${path}/**"
       else path)
     (lib.filterAttrs (_path: runtimeFiles.isLive) files);
-in {
-  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
-
-  options.ai = {
-    deliveredPaths = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      readOnly = true;
-      description = ''
-        Target-relative paths delivered by every enabled runtime, with
-        recursive directory entries represented as `<directory>/**`. Devenv
-        adds these paths to its repository treefmt excludes automatically;
-        other module consumers can reference this read-only list from their
-        own formatter configuration.
-      '';
-    };
-
-    formatter = lib.mkOption {
-      type = lib.types.deferredModule;
+  # One registration declares every shared fanout surface and supplies the
+  # decompose step with its names. Adding a declaration here automatically
+  # warns for every enabled runtime whose supportedPools omits it.
+  sharedSurfaceOptions = {
+    agents = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.nullOr agent.semanticAgentType);
       default = {};
       description = ''
-        treefmt-nix module layered on this flake's exported
-        `treefmtModules.default` to format composed generated files. One
-        treefmt invocation formats every composed file, including Markdown headers.
-        `parseCompare` compares parsed frontmatter values. Each formatted path must end
-        in the conventional extension for its declared format (`.json`, `.md`,
-        `.toml`, `.yaml`, or `.yml`). An unmatched composed file fails the
-        build and names its target-relative path. Raw files and recursive
-        directory sources are copied byte-identically and never reach treefmt.
+        Normalized agent records (`{ description, instructions, tools? }`)
+        fanned out to every enabled runtime that supports agents. Only this
+        record is accepted here; a runtime's own file format goes on that
+        runtime, as a raw text or path entry of `ai.<runtime>.agents` or a
+        file in `ai.<runtime>.agentsDir`.
+
+        Agents are layered. Each root record reaches `ai.<runtime>.agents`
+        at the same key, where a per-runtime entry replaces it and null
+        withdraws it. A runtime with a typed native agent record then lowers
+        each normalized record into `ai.<runtime>.native.agents.<name>` at
+        `mkDefault`, field by field, so native fields a consumer sets there
+        win and runtime-only fields (Kiro `permissions`, capability-tag
+        `tools`) are added there. Kiro and Codex have that layer today; the
+        other runtimes render the normalized record directly.
+
+        `tools` names Claude/Copilot tools. Claude and Copilot render it;
+        Codex, Kimchi and Kiro drop it with a warning, because they have no
+        matching field or use a different tool vocabulary. Codex has no tool
+        allowlist; for Kimchi and Kiro, set the native guardrail instead
+        (`ai.kiro.native.agents.<name>.tools` and `permissions`, or native
+        Kimchi Markdown at `ai.kimchi.agents.<name>`). Each agent becomes a
+        file:
+        - Claude  → ~/.claude/agents/<name>.md (HM) or
+                    .claude/agents/<name>.md (devenv)
+        - Copilot → .github/agents/<name>.agent.md (devenv) or
+                    ~/.copilot/agents/<name>.md (HM)
+        - Codex   → ~/.codex/agents/<name>.toml (HM) or
+                    .codex/agents/<name>.toml (devenv)
+        - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or
+                    .kimchi/agents/<name>.md (devenv), as a read-only copy
+        - Kiro    → ~/.kiro/agents/<name>.json (HM) or
+                    .kiro/agents/<name>.json (devenv)
       '';
     };
-
-    guards = lib.mapAttrs (_name: guard:
-      lib.mkOption {
-        type = lib.types.bool;
-        inherit (guard) default defaultText description;
-      })
-    guardTable;
-
     context = lib.mkOption {
       # An empty record is the unset value; explicit content auto-enables it.
       type = aiCommon.optionalContentModule;
@@ -216,35 +220,73 @@ in {
       '';
       example = lib.literalExpression ''{ source = ./ai-context.md; }'';
     };
+    environmentVariables = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+      default = {};
+      description = ''
+        Environment variables fanned out to every enabled AI app with a
+        launcher wrapper: Codex, Copilot, Kimchi and Kiro. Per-app entries
+        replace root entries at the same key; null suppresses an inherited
+        variable for that runtime.
 
-    checks =
-      {
-        all = lib.mkOption {
-          type = lib.types.lines;
-          default = "";
-          description = ''
-            Default shell snippet for every generated-file surface. Runtime
-            and surface checks inherit this value unless replaced at a lower
-            tier. The snippet runs in the built runtime tree with
-            `AI_RUNTIME` set and the surface's target-relative paths in
-            `"$@"`.
-          '';
-        };
-      }
-      // lib.genAttrs deliveryOptions.surfaces (surface:
-        lib.mkOption {
-          type = lib.types.lines;
-          default = config.ai.checks.all;
-          defaultText = "config.ai.checks.all";
-          description = ''
-            Default shell snippet for generated ${surface} files in every
-            runtime. It replaces `ai.checks.all` when defined; splice
-            `''${config.ai.checks.all}` into this value to compose them.
-            Runtime leaves inherit this value unless replaced.
-            Shared internal documents run this root surface tier with `AI_RUNTIME=internal`.
-          '';
-        });
+        Delivered by baking them into each app's wrapper, so they scope to
+        that process and the commands it spawns. They are NOT written into
+        the Home Manager session or the devenv project shell — this module
+        does not touch the shell environment, because a variable exported
+        there also reaches the developer's own session and every other
+        process in it. Codex's `shell_environment_policy` is a different
+        thing again: it filters what SPAWNED commands inherit, not what
+        Codex itself runs with.
 
+        Claude does NOT consume this pool — it has no wrapper here, and
+        `ai.claude.native.settings.env` is its native equivalent (written into
+        `.claude/settings.json`).
+      '';
+    };
+    hooks = lib.mkOption {
+      type = hooks.hooksType;
+      default = {};
+      apply = lib.filterAttrs (_event: blocks: blocks != []);
+      description = ''
+        Portable command hooks fanned out to Claude and Codex, and to Kimchi on
+        devenv. The event set is Claude and Codex's exact lifecycle
+        intersection: ${lib.concatStringsSep ", " hooks.portableEvents}.
+        Matcher strings pass through unchanged, so use regex syntax supported
+        by every runtime. Per-runtime hook maps append after these shared
+        matcher groups. Kimchi reads the same shape from a trusted project's
+        `.kimchi/hooks.json` and has no PermissionRequest event, so that event
+        is left out for it. Kimchi has no user-scope lifecycle file Home
+        Manager can own, so Home Manager delivers nothing to it; its opt-in
+        Claude Code hook adapter reads `~/.claude/settings.json` instead. Both
+        exclusions warn with the shared option, runtime and reason. Kiro is
+        excluded because its
+        v3 trigger schema is not semantically interchangeable.
+      '';
+    };
+    lspServers = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
+      default = {};
+      description = ''
+        Typed LSP server declarations fanned out to enabled Claude, Copilot,
+        and Kiro. Each per-ecosystem translator renders the runtime's whole
+        native file on emission: Kiro gets `{ languages.<name> = { … }; }`
+        with snake_case fields (`name`, `command`, `args`, `file_extensions`,
+        `initialization_options`, `project_patterns`, `exclude_patterns`);
+        Copilot gets `{ lspServers.<name> = { … }; }` with `command`, `args`,
+        `fileExtensions` and any `initializationOptions`; Claude gets one
+        entry per server, with an `extensionToLanguage` map when `extensions`
+        is set. Claude receives them on Home Manager only, in its personal
+        plugin's `.lsp.json`; devenv has no Claude LSP route and warns.
+        Copilot and Kiro route files to servers by extension alone,
+        so every server they receive must set `extensions`, and Copilot
+        additionally requires the server name to be non-empty ASCII letters,
+        digits, `_` and `-`; evaluation throws otherwise, rather than render a
+        file the runtime rejects or a server that never starts. Codex is
+        intentionally excluded because its public configuration has no native
+        LSP-server surface. Per-app entries replace root entries at the same
+        key; null suppresses an inherited server for that runtime.
+      '';
+    };
     mcpServers = lib.mkOption {
       type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
         modules = [(import ./mcpServer/commonSchema.nix)];
@@ -260,7 +302,6 @@ in {
         managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
-
     rules = lib.mkOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
@@ -312,32 +353,6 @@ in {
         }
       '';
     };
-
-    rulesDir = lib.mkOption {
-      type = lib.types.nullOr aiCommon.dirOptionType;
-      default = null;
-      description = ''
-        Directory of `.md` rule files fanned out to Claude, Codex, Copilot,
-        Kimchi, and Kiro. Each file becomes one entry in `ai.rules` keyed by the
-        basename minus `.md`. Explicit `ai.rules.<name>` values arbitrate with
-        these generated defaults; per-runtime entries then replace or suppress
-        the resulting root entry. Accepts either a Nix path literal or `{ path,
-        filter? }` where
-        `filter : name → bool` (default: keep `.md` files). The source
-        directory is NOT taken over wholesale — other derivations can
-        still contribute to the same ecosystem rules dir via
-        `home.file.*` / `files.*` without conflict.
-      '';
-      example = lib.literalExpression ''
-        ./rules                                  # keep defaults
-        # or
-        {
-          path = ./rules;
-          filter = name: !(lib.hasSuffix ".bk" name);
-        }
-      '';
-    };
-
     settings = lib.mkOption {
       type = aiCommon.normalizedSettingsType;
       default = {};
@@ -364,199 +379,6 @@ in {
         excluded.
       '';
     };
-
-    lspServers = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
-      default = {};
-      description = ''
-        Typed LSP server declarations fanned out to enabled Claude, Copilot,
-        and Kiro. Each per-ecosystem translator renders the runtime's whole
-        native file on emission: Kiro gets `{ languages.<name> = { … }; }`
-        with snake_case fields (`name`, `command`, `args`, `file_extensions`,
-        `initialization_options`, `project_patterns`, `exclude_patterns`);
-        Copilot gets `{ lspServers.<name> = { … }; }` with `command`, `args`,
-        `fileExtensions` and any `initializationOptions`; Claude gets one
-        entry per server, with an `extensionToLanguage` map when `extensions`
-        is set. Claude receives them on Home Manager only, in its personal
-        plugin's `.lsp.json`; devenv has no Claude LSP route and warns.
-        Copilot and Kiro route files to servers by extension alone,
-        so every server they receive must set `extensions`, and Copilot
-        additionally requires the server name to be non-empty ASCII letters,
-        digits, `_` and `-`; evaluation throws otherwise, rather than render a
-        file the runtime rejects or a server that never starts. Codex is
-        intentionally excluded because its public configuration has no native
-        LSP-server surface. Per-app entries replace root entries at the same
-        key; null suppresses an inherited server for that runtime.
-      '';
-    };
-
-    agents = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.nullOr agent.semanticAgentType);
-      default = {};
-      description = ''
-        Normalized agent records (`{ description, instructions, tools? }`)
-        fanned out to every enabled runtime that supports agents. Only this
-        record is accepted here; a runtime's own file format goes on that
-        runtime, as a raw text or path entry of `ai.<runtime>.agents` or a
-        file in `ai.<runtime>.agentsDir`.
-
-        Agents are layered. Each root record reaches `ai.<runtime>.agents`
-        at the same key, where a per-runtime entry replaces it and null
-        withdraws it. A runtime with a typed native agent record then lowers
-        each normalized record into `ai.<runtime>.native.agents.<name>` at
-        `mkDefault`, field by field, so native fields a consumer sets there
-        win and runtime-only fields (Kiro `permissions`, capability-tag
-        `tools`) are added there. Kiro and Codex have that layer today; the
-        other runtimes render the normalized record directly.
-
-        `tools` names Claude/Copilot tools. Claude and Copilot render it;
-        Codex, Kimchi and Kiro drop it with a warning, because they have no
-        matching field or use a different tool vocabulary. Codex has no tool
-        allowlist; for Kimchi and Kiro, set the native guardrail instead
-        (`ai.kiro.native.agents.<name>.tools` and `permissions`, or native
-        Kimchi Markdown at `ai.kimchi.agents.<name>`). Each agent becomes a
-        file:
-        - Claude  → ~/.claude/agents/<name>.md (HM) or
-                    .claude/agents/<name>.md (devenv)
-        - Copilot → .github/agents/<name>.agent.md (devenv) or
-                    ~/.copilot/agents/<name>.md (HM)
-        - Codex   → ~/.codex/agents/<name>.toml (HM) or
-                    .codex/agents/<name>.toml (devenv)
-        - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or
-                    .kimchi/agents/<name>.md (devenv), as a read-only copy
-        - Kiro    → ~/.kiro/agents/<name>.json (HM) or
-                    .kiro/agents/<name>.json (devenv)
-      '';
-    };
-
-    hooks = lib.mkOption {
-      type = hooks.hooksType;
-      default = {};
-      apply = lib.filterAttrs (_event: blocks: blocks != []);
-      description = ''
-        Portable command hooks fanned out to Claude and Codex, and to Kimchi on
-        devenv. The event set is Claude and Codex's exact lifecycle
-        intersection: ${lib.concatStringsSep ", " hooks.portableEvents}.
-        Matcher strings pass through unchanged, so use regex syntax supported
-        by every runtime. Per-runtime hook maps append after these shared
-        matcher groups. Kimchi reads the same shape from a trusted project's
-        `.kimchi/hooks.json` and has no PermissionRequest event, so that event
-        is left out for it. Kimchi has no user-scope lifecycle file Home
-        Manager can own, so Home Manager delivers nothing to it; its opt-in
-        Claude Code hook adapter reads `~/.claude/settings.json` instead. Both
-        exclusions warn with the shared option, runtime and reason. Kiro is
-        excluded because its
-        v3 trigger schema is not semantically interchangeable.
-      '';
-    };
-
-    gitSshConfigWorkaround = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = ''
-        Install a sandbox-safe Git SSH default whenever any supported AI
-        harness is enabled. The wrapper behaves like ordinary OpenSSH unless
-        `~/.ssh/config` resolves into the immutable Nix store; only then does
-        it pass that same file through explicit `-F`, avoiding user-namespace
-        owner remapping without discarding host/key routing. OpenSSH batch mode
-        makes missing credentials fail instead of opening a password dialog.
-
-        Home Manager contributes `programs.git.settings.core.sshCommand` at
-        `mkDefault` priority. Devenv contributes `GIT_SSH_COMMAND` to the shell
-        environment at `mkDefault` priority so its Git and every harness it
-        launches receive the same behavior. Set this false to manage Git SSH
-        delivery independently.
-      '';
-    };
-
-    environmentVariables = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-      default = {};
-      description = ''
-        Environment variables fanned out to every enabled AI app with a
-        launcher wrapper: Codex, Copilot, Kimchi and Kiro. Per-app entries
-        replace root entries at the same key; null suppresses an inherited
-        variable for that runtime.
-
-        Delivered by baking them into each app's wrapper, so they scope to
-        that process and the commands it spawns. They are NOT written into
-        the Home Manager session or the devenv project shell — this module
-        does not touch the shell environment, because a variable exported
-        there also reaches the developer's own session and every other
-        process in it. Codex's `shell_environment_policy` is a different
-        thing again: it filters what SPAWNED commands inherit, not what
-        Codex itself runs with.
-
-        Claude does NOT consume this pool — it has no wrapper here, and
-        `ai.claude.native.settings.env` is its native equivalent (written into
-        `.claude/settings.json`).
-      '';
-    };
-
-    # Internal module-to-module channel. NOT a consumer surface: it exists so
-    # `gitSshConfigWorkaround` can reach each harness's launcher wrapper
-    # without writing into the consumer-facing
-    # `ai.<cli>.environmentVariables` override pool. Read by the per-package
-    # factories; `internal` keeps it out of the
-    # generated options documentation.
-    _sandboxSafeSshCommand = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      internal = true;
-      visible = false;
-      description = "Resolved sandbox-safe Git SSH command, delivered to harness wrappers. Set by `gitSshConfigWorkaround`; not for direct use.";
-    };
-
-    internal = {
-      formatter = lib.mkOption {
-        type = lib.types.raw;
-        default = formatter;
-        internal = true;
-        readOnly = true;
-        visible = false;
-        description = "Evaluated generated-file treefmt configuration.";
-      };
-      mkSandbox = lib.mkOption {
-        default = throw "ai.internal.mkSandbox: compose this flake's homeManagerModules.default or devenvModules.nix-agentic-tools";
-        internal = true;
-        type = lib.types.functionTo (lib.types.functionTo lib.types.package);
-        visible = false;
-        description = "Sandbox factory bound to this flake's pinned microvm source.";
-      };
-      # The `ai` root, which most module package defaults read.
-      packages = lib.mkOption {
-        type = lib.types.raw;
-        default = config.ai.internal.roots.ai;
-        internal = true;
-        readOnly = true;
-        visible = false;
-        description = "This flake's package tree (`ai.*`) for the module's pkgs: `ai.internal.roots.ai`.";
-      };
-      # Every root a module site reads (`ai`, `docs`, `*-content`).
-      roots = lib.mkOption {
-        type = lib.types.raw;
-        default = config.ai.internal.rootsFor pkgs;
-        internal = true;
-        readOnly = true;
-        visible = false;
-        description = "Every package root this flake claims, for the module's pkgs: the consumer's root when this flake's overlay is applied, else this flake's own build.";
-      };
-      rootsFor = lib.mkOption {
-        type = lib.types.raw;
-        default = throw "ai.internal.rootsFor: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those";
-        internal = true;
-        visible = false;
-        description = "Function from pkgs to this flake's package roots, supplied by the flake-level module wrappers.";
-      };
-      treefmtNix = lib.mkOption {
-        type = lib.types.raw;
-        default = throw "ai.internal.treefmtNix: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those, or set it to inputs.treefmt-nix";
-        internal = true;
-        visible = false;
-        description = "treefmt-nix flake input supplied by the flake-level module wrappers.";
-      };
-    };
-
     shell = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
       default = null;
@@ -592,33 +414,216 @@ in {
         check none of these runtimes performs.
       '';
     };
-
     skills = lib.mkOption {
       type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
       default = {};
       description = "Cross-app skills fanned out to every enabled AI app: Claude, Codex, Copilot, Kimchi, and Kiro. Per-app entries replace root entries at the same key; null suppresses an inherited skill for that runtime.";
     };
-
-    skillsDir = lib.mkOption {
-      type = lib.types.nullOr aiCommon.dirOptionType;
-      default = null;
-      description = ''
-        Directory-of-directories fanned out to Claude, Codex, Copilot, Kimchi,
-        and Kiro; each immediate subdirectory becomes one entry in `ai.skills`
-        keyed by the subdir name. Explicit `ai.skills.<name>` values arbitrate
-        with these generated defaults; per-runtime entries then replace or
-        suppress the resulting root entry. The default filter accepts every
-        subdirectory; supply a
-        `{ path, filter? }` submodule with `filter : name → bool` to
-        exclude specific subdirs.
-      '';
-      example = lib.literalExpression ''
-        ./skills
-        # or
-        { path = ./skills; filter = name: name != "draft"; }
-      '';
-    };
   };
+in {
+  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
+
+  options.ai =
+    sharedSurfaceOptions
+    // {
+      deliveredPaths = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        readOnly = true;
+        description = ''
+          Target-relative paths delivered by every enabled runtime, with
+          recursive directory entries represented as `<directory>/**`. Devenv
+          adds these paths to its repository treefmt excludes automatically;
+          other module consumers can reference this read-only list from their
+          own formatter configuration.
+        '';
+      };
+
+      formatter = lib.mkOption {
+        type = lib.types.deferredModule;
+        default = {};
+        description = ''
+          treefmt-nix module layered on this flake's exported
+          `treefmtModules.default` to format composed generated files. One
+          treefmt invocation formats every composed file, including Markdown headers.
+          `parseCompare` compares parsed frontmatter values. Each formatted path must end
+          in the conventional extension for its declared format (`.json`, `.md`,
+          `.toml`, `.yaml`, or `.yml`). An unmatched composed file fails the
+          build and names its target-relative path. Raw files and recursive
+          directory sources are copied byte-identically and never reach treefmt.
+        '';
+      };
+
+      guards = lib.mapAttrs (_name: guard:
+        lib.mkOption {
+          type = lib.types.bool;
+          inherit (guard) default defaultText description;
+        })
+      guardTable;
+
+      checks =
+        {
+          all = lib.mkOption {
+            type = lib.types.lines;
+            default = "";
+            description = ''
+              Default shell snippet for every generated-file surface. Runtime
+              and surface checks inherit this value unless replaced at a lower
+              tier. The snippet runs in the built runtime tree with
+              `AI_RUNTIME` set and the surface's target-relative paths in
+              `"$@"`.
+            '';
+          };
+        }
+        // lib.genAttrs deliveryOptions.surfaces (surface:
+          lib.mkOption {
+            type = lib.types.lines;
+            default = config.ai.checks.all;
+            defaultText = "config.ai.checks.all";
+            description = ''
+              Default shell snippet for generated ${surface} files in every
+              runtime. It replaces `ai.checks.all` when defined; splice
+              `''${config.ai.checks.all}` into this value to compose them.
+              Runtime leaves inherit this value unless replaced.
+              Shared internal documents run this root surface tier with `AI_RUNTIME=internal`.
+            '';
+          });
+
+      rulesDir = lib.mkOption {
+        type = lib.types.nullOr aiCommon.dirOptionType;
+        default = null;
+        description = ''
+          Directory of `.md` rule files fanned out to Claude, Codex, Copilot,
+          Kimchi, and Kiro. Each file becomes one entry in `ai.rules` keyed by the
+          basename minus `.md`. Explicit `ai.rules.<name>` values arbitrate with
+          these generated defaults; per-runtime entries then replace or suppress
+          the resulting root entry. Accepts either a Nix path literal or `{ path,
+          filter? }` where
+          `filter : name → bool` (default: keep `.md` files). The source
+          directory is NOT taken over wholesale — other derivations can
+          still contribute to the same ecosystem rules dir via
+          `home.file.*` / `files.*` without conflict.
+        '';
+        example = lib.literalExpression ''
+          ./rules                                  # keep defaults
+          # or
+          {
+            path = ./rules;
+            filter = name: !(lib.hasSuffix ".bk" name);
+          }
+        '';
+      };
+
+      gitSshConfigWorkaround = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Install a sandbox-safe Git SSH default whenever any supported AI
+          harness is enabled. The wrapper behaves like ordinary OpenSSH unless
+          `~/.ssh/config` resolves into the immutable Nix store; only then does
+          it pass that same file through explicit `-F`, avoiding user-namespace
+          owner remapping without discarding host/key routing. OpenSSH batch mode
+          makes missing credentials fail instead of opening a password dialog.
+
+          Home Manager contributes `programs.git.settings.core.sshCommand` at
+          `mkDefault` priority. Devenv contributes `GIT_SSH_COMMAND` to the shell
+          environment at `mkDefault` priority so its Git and every harness it
+          launches receive the same behavior. Set this false to manage Git SSH
+          delivery independently.
+        '';
+      };
+
+      # Internal module-to-module channel. NOT a consumer surface: it exists so
+      # `gitSshConfigWorkaround` can reach each harness's launcher wrapper
+      # without writing into the consumer-facing
+      # `ai.<cli>.environmentVariables` override pool. Read by the per-package
+      # factories; `internal` keeps it out of the
+      # generated options documentation.
+      _sandboxSafeSshCommand = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        internal = true;
+        visible = false;
+        description = "Resolved sandbox-safe Git SSH command, delivered to harness wrappers. Set by `gitSshConfigWorkaround`; not for direct use.";
+      };
+
+      internal = {
+        formatter = lib.mkOption {
+          type = lib.types.raw;
+          default = formatter;
+          internal = true;
+          readOnly = true;
+          visible = false;
+          description = "Evaluated generated-file treefmt configuration.";
+        };
+        mkSandbox = lib.mkOption {
+          default = throw "ai.internal.mkSandbox: compose this flake's homeManagerModules.default or devenvModules.nix-agentic-tools";
+          internal = true;
+          type = lib.types.functionTo (lib.types.functionTo lib.types.package);
+          visible = false;
+          description = "Sandbox factory bound to this flake's pinned microvm source.";
+        };
+        # The `ai` root, which most module package defaults read.
+        packages = lib.mkOption {
+          type = lib.types.raw;
+          default = config.ai.internal.roots.ai;
+          internal = true;
+          readOnly = true;
+          visible = false;
+          description = "This flake's package tree (`ai.*`) for the module's pkgs: `ai.internal.roots.ai`.";
+        };
+        # Every root a module site reads (`ai`, `docs`, `*-content`).
+        roots = lib.mkOption {
+          type = lib.types.raw;
+          default = config.ai.internal.rootsFor pkgs;
+          internal = true;
+          readOnly = true;
+          visible = false;
+          description = "Every package root this flake claims, for the module's pkgs: the consumer's root when this flake's overlay is applied, else this flake's own build.";
+        };
+        rootsFor = lib.mkOption {
+          type = lib.types.raw;
+          default = throw "ai.internal.rootsFor: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those";
+          internal = true;
+          visible = false;
+          description = "Function from pkgs to this flake's package roots, supplied by the flake-level module wrappers.";
+        };
+        sharedSurfaces = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = builtins.attrNames sharedSurfaceOptions;
+          internal = true;
+          readOnly = true;
+          visible = false;
+          description = "Shared fanout surfaces, derived from their root option declarations.";
+        };
+        treefmtNix = lib.mkOption {
+          type = lib.types.raw;
+          default = throw "ai.internal.treefmtNix: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those, or set it to inputs.treefmt-nix";
+          internal = true;
+          visible = false;
+          description = "treefmt-nix flake input supplied by the flake-level module wrappers.";
+        };
+      };
+
+      skillsDir = lib.mkOption {
+        type = lib.types.nullOr aiCommon.dirOptionType;
+        default = null;
+        description = ''
+          Directory-of-directories fanned out to Claude, Codex, Copilot, Kimchi,
+          and Kiro; each immediate subdirectory becomes one entry in `ai.skills`
+          keyed by the subdir name. Explicit `ai.skills.<name>` values arbitrate
+          with these generated defaults; per-runtime entries then replace or
+          suppress the resulting root entry. The default filter accepts every
+          subdirectory; supply a
+          `{ path, filter? }` submodule with `filter : name → bool` to
+          exclude specific subdirs.
+        '';
+        example = lib.literalExpression ''
+          ./skills
+          # or
+          { path = ./skills; filter = name: name != "draft"; }
+        '';
+      };
+    };
 
   # L1 → L2 fanout: expand Dir options into per-file entries on
   # the matching L2 pools. mkDefault priority lets explicit

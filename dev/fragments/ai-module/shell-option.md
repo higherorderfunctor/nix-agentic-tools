@@ -1,7 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-13 — non-empty shared requests warn when an enabled
-> runtime cannot consume them; keyed tombstones still withdraw entries.
+> **Last verified:** 2026-10-13 — shared option declarations register fanout
+> surfaces; decomposition warns automatically for every unsupported request.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -22,6 +22,12 @@ surface, so a non-empty request warns and lowers to the pool's neutral value for
 that enabled runtime. For example, Kimchi exposes `rules` but not `shell`:
 `ai.kimchi.rules` exists, while `ai.kimchi.shell` does not and root `ai.shell`
 does not reach Kimchi.
+
+The root declarations in `sharedOptions.nix`'s `sharedSurfaceOptions` also
+register the shared fanout names. `app/decompose.nix` compares those names with
+`supportedPools` and generates unsupported-root warnings automatically, even for
+third-party runtime records; policy can improve a reason but is never a coverage
+gate. Backend-specific and field-level drops still need their own diagnostics.
 
 The list is read off the RECORD, keeping it a build-time parameter in the same
 category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
