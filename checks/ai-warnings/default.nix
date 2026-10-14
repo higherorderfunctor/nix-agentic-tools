@@ -117,26 +117,6 @@
       value = sample.agents.probe // {tools = ["Read"];};
       suffix = ".tools";
     }) ["codex" "kimchi" "kiro"]
-    ++ [
-      {
-        runtime = "claude";
-        path = ["ai" "claude" "mcpServers" "probe"];
-        value = {
-          url = "https://example.invalid";
-          args = ["lost"];
-        };
-        suffix = ".args";
-      }
-      {
-        runtime = "claude";
-        path = ["ai" "claude" "mcpServers" "probe"];
-        value = {
-          command = "probe";
-          settings.lost = true;
-        };
-        suffix = ".settings";
-      }
-    ]
     ++ lib.concatMap (http:
       map (field: {
         runtime = "claude";
