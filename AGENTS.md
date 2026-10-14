@@ -357,6 +357,7 @@ for it. When several entries match, their guidance composes.
   - Match:
     - `.github/actions/check-cache/**`
     - `.github/actions/warm-ifd/**`
+    - `.github/repo-settings.yml`
     - `.github/workflows/ci.yml`
     - `.github/workflows/hestia-gc.yml`
     - `.github/workflows/update.yml`
@@ -378,6 +379,7 @@ for it. When several entries match, their guidance composes.
     - `lib/generated.nix`
     - `lib/update.nix`
     - `packages/*/registry.nix`
+    - `renovate.json5`
   - Read:
     - [`dev/fragments/pipeline/ci-update-workflow.md`](dev/fragments/pipeline/ci-update-workflow.md)
     - [`dev/fragments/pipeline/fragment-pipeline.md`](dev/fragments/pipeline/fragment-pipeline.md)

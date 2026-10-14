@@ -1,9 +1,9 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-14 — Linux test installs Hestia before IFD warming
-> and explicitly retains its original patched evaluation input; a non-required
-> eval-once check matrix runs beside it; native Kiro coverage and the test
-> execution entrypoint remain unchanged.
+> **Last verified:** 2026-10-14 — Renovate owns GitHub Actions pins
+> (`renovate.json5`), the sweep keeps every Nix input; Linux test installs
+> Hestia before IFD warming and a non-required eval-once check matrix runs
+> beside it.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -205,6 +205,27 @@ preserved branch in the log, lets cleanup examine the remaining candidates, and
 leaves the workflow red after the sweep. Bot login forms differ between App and
 User API surfaces; keep both forms in the allowlist. Human engagement and commit
 protection are separate checks.
+
+### Renovate owns Actions pins
+
+`renovate.json5` hands GitHub Actions `uses:` refs to the Mend-hosted Renovate
+app and nothing else: `enabledManagers` is the github-actions manager plus one
+regex manager, so `flake.lock`, `devenv.lock` and `sources.json` stay with this
+sweep. Every ref is pinned to a full SHA with a semver comment; the regex
+manager owns the Hestia step whose `with: version:` picks the downloaded binary,
+so its SHA, comment and binary version move from one lookup. Updates wait 3 days
+(`minimumReleaseAge`), land as one `renovate/github-actions` PR per run in the
+02:00-05:59 UTC window between sweeps, and merge through GitHub auto-merge under
+the same required checks and thread rule as `update/*`. The cleanup above only
+matches `update/*`, so the two never touch each other's branches. Runner images
+(`runs-on`) are excluded.
+
+Enabling `sha_pinning_required` is ordered: install the Mend Renovate app, widen
+the Hestia allowlist entries to `@*` (`.github/repo-settings.yml`; an exact-SHA
+entry makes every bump PR a `startup_failure`), merge Renovate's first pinning
+PR, then set `sha_pinning_required`. Dependabot's own update jobs bypass Actions
+policy per GitHub's docs; whether CodeQL default setup or Copilot's agent jobs
+are exempt is unverified.
 
 ### Native package build shards
 
