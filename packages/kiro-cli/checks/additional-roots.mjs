@@ -352,6 +352,14 @@ try {
     discover(dotted, "{{primary}}/.."),
     /location must not cover the primary checkout/,
   );
+  // The cover test is canonical: a symlink back to an ancestor cannot hide
+  // the checkout behind a lexically inner destination.
+  await fs.symlink("..", path.join(repoC, "up"));
+  await assert.rejects(
+    discover(linked, "{{primary}}/up/{{repo}}"),
+    /location must not cover the primary checkout/,
+  );
+  await fs.unlink(path.join(repoC, "up"));
   assert.equal(process.cwd(), cwdBefore);
   for (const suffix of ["\t", "\ninvalid"]) {
     const special = path.join(tmp, `policy-special${suffix}`);

@@ -1,6 +1,6 @@
 // Admission-only discovery; workflow steps own creation and user-owned policy.
 import { execFile } from "node:child_process";
-import { lstat, realpath, stat } from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import {
   basename,
   dirname,
@@ -17,6 +17,18 @@ const policyKey = Symbol("resolved worktree policy");
 
 function fail(message) {
   throw new Error(`chat.worktrees: ${message}`);
+}
+
+// Worktrees may not exist yet. Resolve existing ancestors without creating them.
+export async function canonical(path) {
+  try {
+    return await realpath(path);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    const parent = dirname(path);
+    if (parent === path) throw error;
+    return join(await canonical(parent), basename(path));
+  }
 }
 
 export function policy(layers) {
@@ -107,7 +119,6 @@ export async function discover(cwd, location) {
   );
   const primaryTop = await probe(primary, "--show-toplevel");
   if (
-    !(await stat(join(primary, ".git"))).isDirectory() ||
     (gitDir === commonPath
       ? topLevel !== primary
       : dirname(gitDir) !== join(commonPath, "worktrees")) ||
@@ -124,16 +135,17 @@ export async function discover(cwd, location) {
       name === "repo" ? basename(primary) : primary,
     ),
   );
-  // A root at or above the checkout would make the checkout itself writable.
-  const inside = relative(destination, primary);
-  if (inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside))
-    fail(`location must not cover the primary checkout: ${destination}`);
   try {
     if ((await lstat(destination)).isSymbolicLink())
       fail(`derived destination must not be a symlink: ${destination}`);
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
+  // A root at or above the checkout would make the checkout itself writable;
+  // compare canonically so a symlinked ancestor cannot hide the cover.
+  const inside = relative(await canonical(destination), primary);
+  if (inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside))
+    fail(`location must not cover the primary checkout: ${destination}`);
   return { root: destination };
 }
 

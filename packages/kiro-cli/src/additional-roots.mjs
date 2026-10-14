@@ -1,15 +1,6 @@
 // Relative permission rules apply in every admitted root; built-in modes and
 // bundled profiles thereby get the vendor default fs_read ./** allow there.
-import { realpath } from "node:fs/promises";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-  sep,
-} from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { settingsLayers } from "./session-settings.mjs";
 import * as worktrees from "./worktree-policy.mjs";
 
@@ -18,18 +9,6 @@ const metadataKey = "nixWorkspaceRoots";
 
 function fail(message) {
   throw new Error(`chat.additionalDirectories: ${message}`);
-}
-
-// Worktrees may not exist yet. Resolve existing ancestors without creating them.
-async function canonical(path) {
-  try {
-    return await realpath(path);
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-    const parent = dirname(path);
-    if (parent === path) throw error;
-    return join(await canonical(parent), basename(path));
-  }
 }
 
 export async function resolveRequest(homeDir, request, roots) {
@@ -57,7 +36,7 @@ export async function resolveRequest(homeDir, request, roots) {
   const seen = new Set(),
     unique = [];
   for (const root of candidates) {
-    const key = await canonical(root);
+    const key = await worktrees.canonical(root);
     if (!seen.has(key)) {
       seen.add(key);
       unique.push(root);
@@ -84,17 +63,17 @@ export async function writableRoot(homeDir, roots) {
     await worktrees.admit(await settingsLayers(homeDir, roots[0]), roots[0])
   )?.root;
   if (!root) return undefined;
-  const key = await canonical(root);
+  const key = await worktrees.canonical(root);
   for (const candidate of roots)
-    if ((await canonical(candidate)) === key) return candidate;
+    if ((await worktrees.canonical(candidate)) === key) return candidate;
 }
 
 export async function residentRequest(request, resident) {
   // A join must use the same identity as the already-constructed tools/policy.
   if (
     resident.workspacePaths.length &&
-    (await canonical(request.cwd)) !==
-      (await canonical(resident.workspacePaths[0]))
+    (await worktrees.canonical(request.cwd)) !==
+      (await worktrees.canonical(resident.workspacePaths[0]))
   )
     fail("resident session has a different working directory");
   return {
@@ -196,9 +175,9 @@ export async function ownerRoots(
 }
 
 async function validateSubset(allowedRoots, roots) {
-  const allowed = await Promise.all(allowedRoots.map(canonical));
+  const allowed = await Promise.all(allowedRoots.map(worktrees.canonical));
   for (const root of roots) {
-    const candidate = await canonical(root);
+    const candidate = await worktrees.canonical(root);
     if (
       !allowed.some((base) => {
         const suffix = relative(base, candidate);
