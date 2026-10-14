@@ -5,13 +5,10 @@
   src,
   sourceRoot,
   version,
-}: {
-  identity ? null,
-  replace ? [],
-}: let
+}: {identity ? null}: let
   inherit (pkgs) lib;
   vu = import ./packaging.nix;
-  selected = identity != null || replace != [];
+  selected = identity != null;
 in
   pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
     pname = "kiro-cli-kas" + lib.optionalString selected "-patched";
@@ -39,8 +36,7 @@ in
       defaults="$(dirname "$server")/prompt-defaults"
       python3 ${./kiro-bundle-patch.py} "$server" "$corpus" "$server" \
         --prompt-defaults "$defaults" \
-        ${lib.optionalString (identity != null) "--identity-file ${lib.escapeShellArg (pkgs.writeText "kiro-cli-identity.txt" identity)}"} \
-        ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
+        ${lib.optionalString (identity != null) "--identity-file ${lib.escapeShellArg (pkgs.writeText "kiro-cli-identity.txt" identity)}"}
       ${vu.kiroPromptsExtractScript pkgs} "$server" > selected-corpus.json
       node ${../src/patch-prompt-files.mjs} "$server" "$defaults" ${pkgs.typescript_5}/lib/node_modules/typescript selected-corpus.json
       cp ${../src/additional-roots.mjs} "$(dirname "$server")/additional-roots.mjs" # bare-commands: ok — stdenv installPhase

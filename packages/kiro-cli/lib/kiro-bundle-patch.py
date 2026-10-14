@@ -10,10 +10,8 @@ IDENTITY_SENTENCE = 'You are Kiro CLI, an agentic AI software engineer that runs
 WORKTREE_PARAGRAPH = "When a task should run in a worktree, the **workflow owns the worktree setup** — do NOT create the worktree yourself. Say in the `workflowPrompt` brief that a worktree is needed and let the generated workflow's first step create it (`git worktree add .worktrees/<name> -b <branch> <base>`, where `<base>` is the branch checked out in the user's repo, which is not necessarily the default branch; name it in the brief) and run all later steps targeting that worktree. Derive a descriptive `<name>`/`<branch>` from the task. The workflow's final step rebases the branch onto `<base>` and fast-forwards `<base>` from the user's checkout (`git -C <repo> merge --ff-only <branch>`), because git will not move a branch that is checked out in another worktree; you remove the worktree and branch after the run completes (an in-worktree step can't safely delete the directory it is running in).\n\n"
 FILE_CHECK_PARAGRAPH = '13. **Every path in a prompt or stop condition is absolute.** Step agents\' cwd is the parent session\'s workspace, not a worktree or subdirectory, so a relative path in a prompt silently resolves to the wrong place. Interpolate an input (e.g. `{{worktree_path}}/src/file.ts`) for every file a step reads, writes, or commits, and tell worktree steps to use `git -C <absolute worktree>` rather than describing the worktree as their "working directory". The same applies to `fileCheck.path` in a `stopCondition` or `completion`: relative paths resolve against the workflow\'s workspace root, and a path that never resolves evaluates false forever — the loop then spins to `maxIterations` instead of stopping.'
 
-FIXED = {}
 
-
-def replacements(identity=None, names=()):
+def replacements(identity=None):
     items = []
     if identity is not None:
         identity = identity.strip()
@@ -22,7 +20,7 @@ def replacements(identity=None, names=()):
         if "`" in identity or "${" in identity:
             raise ValueError("identity: replacement may not contain a backtick or `${`")
         items.append(("identity", IDENTITY_SENTENCE, identity))
-    return items + [(name, *FIXED[name]) for name in names]
+    return items
 
 
 def encode_chunk(raw, text):
@@ -68,7 +66,6 @@ def main():
     parser.add_argument("destination", nargs="?", type=Path)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--identity-file", type=Path)
-    parser.add_argument("--replace", action="append", choices=FIXED, default=[])
     parser.add_argument("--prompt-defaults", type=Path)
     args = parser.parse_args()
     if not args.check and args.destination is None:
@@ -76,7 +73,7 @@ def main():
     try:
         identity = (IDENTITY_SENTENCE if args.check else
                     args.identity_file.read_text() if args.identity_file else None)
-        items = replacements(identity, list(FIXED) if args.check else args.replace)
+        items = replacements(identity)
         corpus = json.loads(args.corpus.read_text())
         result, errors = patch(args.source.read_bytes(), corpus, items)
         for error in errors:
