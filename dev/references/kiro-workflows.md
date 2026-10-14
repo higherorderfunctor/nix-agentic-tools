@@ -434,9 +434,11 @@ The current **packaged KAS extension** adds
 Manager and devenv paths. It combines global and repository lists with protocol
 roots at session admission, including terminal-created sessions. Relative global
 entries resolve beside the global settings file; repository entries resolve from
-the conversation cwd. Workspace membership does not grant tool permissions:
-configure those separately. This extension changes the packaged server, not the
-historical upstream measurement above. See
+the conversation cwd. Relative permission rules apply in every admitted root;
+for built-in modes and bundled profiles that includes the vendor default
+`fs_read ./**` allow, and custom agents use their own rules. Default writes
+still prompt. Added roots' `.kiro/settings/mcp.json` is ignored. This extension
+changes the packaged server, not the historical upstream measurement above. See
 [the settings contract](../../packages/kiro-cli/docs/settings-shape.md#additional-workspace-roots)
 for resume behavior, migration and the explicit runtime V2 boundary.
 
