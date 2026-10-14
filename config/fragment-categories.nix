@@ -154,6 +154,16 @@ _: {
         "shell-option"
       ];
     };
+    # ai-proxy: the local CLIProxyAPI surface — selection, the resolved
+    # endpoint, Home Manager services and registry, and the run-time lookup
+    # every integration shares.
+    ai-proxy = {
+      scopes = [
+        "checks/ai-proxy/**"
+        "lib/ai/proxy/**"
+      ];
+      sources = ["ai-proxy"];
+    };
     # ai-skills: uniform skill layout through the shared `mkSkillFiles` helper.
     # Scoped to the runtime implementations, package factory modules, and skill
     # helper.

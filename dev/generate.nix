@@ -561,6 +561,7 @@
     | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Copilot + Kiro; Claude has no project LSP route (warns); Codex has no native LSP registry |
     | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. Copilot is explicitly excluded |
+    | Local AI proxy | Run CLIProxyAPI and point each CLI at it | `ai.proxy.instances.*` user services and their registry; `ai.proxy` selection (`instance`, or `url` + `key`) | Selection only, usually in `devenv.local.nix`; otherwise inherits Home Manager's. A runtime without support warns |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
     ### Kimchi project delivery
@@ -734,6 +735,92 @@
     > generation first, then change the directory; the legacy manifest records
     > owned filenames and hashes, but not an invertible target path, so a later
     > generation cannot safely infer the old custom directory.
+
+    </details>
+
+    <details>
+    <summary><strong>Local AI proxy (ai.proxy)</strong></summary>
+
+    `ai.proxy` points AI harnesses at a locally hosted
+    [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), so a harness
+    holds only the proxy's client key and never an upstream credential. The
+    proxy holds the logins.
+
+    Home Manager can run the proxy. Each `ai.proxy.instances.<name>` is a
+    systemd user service, `ai-proxy-<name>` (Linux only for now; Darwin warns),
+    listening on `127.0.0.1` unless `host` names another single address. Its
+    config is rendered at every start into `~/.local/state/ai-proxy/<name>/`,
+    where a `file` or `helper` client key is read. Home Manager also writes the
+    registry `~/.config/ai-proxy/instances.json`, which maps each instance name
+    to its origin and client key:
+
+    ```nix
+    ai.proxy = {
+      instances.main = {
+        port = 8317;
+        clientKey.file = "/run/secrets/ai-proxy-client-key";
+        # CLIProxyAPI's own v8 configuration, passed through.
+        settings.routing.strategy = "fill-first";
+      };
+      instance = "main";
+    };
+    ```
+
+    Log the proxy in to an upstream account once the unit is running:
+
+    ```bash
+    cliproxyapi --config ~/.local/state/ai-proxy/main/config.yaml -claude-login
+    ```
+
+    A harness selects the proxy in one of two forms; setting both fails
+    evaluation:
+
+    - `instance = "<name>"` reads the registry when the shell starts or the
+      harness launches, never at evaluation.
+    - `url` with `key` names a proxy configured by hand. The url is the origin
+      only, such as `http://127.0.0.1:8317`.
+
+    The key is `plain`, `file` (a sops-nix `/run/secrets/...` path, for
+    example) or `helper` (a command that prints it). It is the proxy's client
+    key, not an upstream credential, so a `plain` key in the Nix store is
+    acceptable. `ai.<runtime>.proxy` replaces the selection for one runtime. A
+    runtime that does not consume `ai.proxy` warns: Kimchi and Kiro are not
+    supported yet, and Copilot is out of scope.
+
+    The registry format is a contract, so a proxy you run yourself can have its
+    entry written by hand:
+
+    ```json
+    {
+      "main": {
+        "url": "http://127.0.0.1:8317",
+        "key": { "file": "/run/secrets/ai-proxy-client-key" }
+      }
+    }
+    ```
+
+    `key` holds exactly one of `plain`, `file` or `helper`. Url and key values
+    are limited to letters, digits and `._+/=:@-`, and a path starts with `/`,
+    because they are substituted unescaped into each runtime's configuration.
+
+    Services are Home Manager only: devenv rejects `ai.proxy.instances`. Home
+    Manager's selection is user-global, so a devenv shell inherits it with no
+    devenv configuration. To override it for one repository, for example to use
+    a second instance for work, put the selection in your personal, uncommitted
+    `devenv.local.nix`, which devenv merges into `devenv.nix`:
+
+    ```nix
+    # devenv.local.nix
+    {
+      ai.proxy.instance = "work";
+      # or a proxy you run yourself:
+      # ai.proxy.url = "http://127.0.0.1:8318";
+      # ai.proxy.key.file = "/run/secrets/ai-proxy-work-key";
+    }
+    ```
+
+    `ai.mcpServers.<name>.proxy` is unrelated: it is the credential-injecting
+    proxy for remote MCP servers.
 
     </details>
 

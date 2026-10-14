@@ -1,4 +1,4 @@
-# Declares cross-app options (ai.context, ai.mcpServers,
+# Declares cross-app options (ai.context, ai.mcpServers, ai.proxy,
 # ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and formatting and guards: how
 # every runtime's generated files are formatted and checked.
 #
@@ -38,6 +38,7 @@
     (pkgs // {ai = config.ai.internal.packages;})
     formatter.programs.prettier.enable;
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
+  proxyLib = import ./proxy {inherit lib;};
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
@@ -302,6 +303,12 @@
         managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
+    # Configuration lives in ./proxy/module.nix.
+    proxy = proxyLib.rootOption {
+      inherit pkgs;
+      package = config.ai.internal.packages.generic.cliproxyapi;
+      packageText = import ./nat-package-text.nix {inherit lib;} "generic.cliproxyapi";
+    };
     rules = lib.mkOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
@@ -422,7 +429,7 @@
     };
   };
 in {
-  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
+  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix ./proxy/module.nix];
 
   options.ai =
     sharedSurfaceOptions

@@ -7,8 +7,10 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-13 — shared option declarations register fanout
-> surfaces; decomposition shares its unsupported set with delivery diagnostics.
+> **Last verified:** 2026-10-14 — shared option declarations register fanout
+> surfaces, `proxy` included; decomposition shares its unsupported set with
+> delivery diagnostics; `ai.proxy.instances` is the Home Manager-only parity
+> exception.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -596,6 +598,13 @@ there is no file scope or a non-empty list for `fileMatch` content.
   `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
   NEVER write the shell environment.
 
+- `ai.proxy` — a client selection (`instance`, or `url` + `key`) pointing
+  harnesses at a local CLIProxyAPI. A per-runtime `ai.<runtime>.proxy` that
+  selects anything replaces the root selection whole, and runtimes consume the
+  resolved `normalized.proxy`. Only a selection counts as a request for
+  unsupported-runtime warnings; Home Manager `instances` are services. See the
+  `ai-proxy` fragment.
+
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools
 then apply per-runtime replacement across scopes; nullable pools use null
@@ -671,7 +680,10 @@ example, Codex's `hooks.json` versus inline-hook ownership check.
 ### Config parity
 
 Every option on the HM ai module must have a matching option on the devenv ai
-module with the same semantics. If you add an option to one, add it to the other
+module with the same semantics. `ai.proxy.instances` is the approved exception
+(operator, 2026-10-14). It is declared on both backends, but devenv rejects a
+non-empty value, because devenv has no user-service lifecycle and inherits Home
+Manager's user-global registry. If you add an option to one, add it to the other
 in the same commit. Codex's exact generated option-name set is compared across
 both backends by `checks/modules/options-doc.nix`. Runtime scope differences
 belong in backend lowering, not divergent declarations. Two Codex options are

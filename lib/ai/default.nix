@@ -27,6 +27,9 @@ in {
   # the generated-bash materializer that used to sit beside it here.
   own = import ./own.nix {inherit lib;};
   program = import ./program.nix {inherit lib;};
+  # `ai.proxy`: option declarations, the resolved-endpoint fold, and the
+  # run-time registry lookup integrations call (lib/ai/proxy).
+  proxy = import ./proxy {inherit lib;};
   # Module function — imported unevaluated so consumers can pass it directly
   # to `lib.evalModules { modules = [ lib.ai.sharedOptions ... ]; }`.
   sharedOptions = import ./sharedOptions.nix;
