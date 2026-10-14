@@ -7,19 +7,8 @@ applyTo: "packages/copilot-cli/checks/copilot-wrapper-argv.nix,packages/chatgpt-
 
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-09-28 — settings files are read-only copies of one
-> writer, `materialize-copilot-config`: Home Manager always owns the user
-> `settings.json`, `mcp-config.json` and `lsp-config.json`; devenv owns the
-> fixed repository file `.github/copilot/settings.json` only when something is
-> declared, and writes LSP config to `<projectDir>/lsp.json` (both measured at
-> copilot-cli 1.0.88), so `configDir` holds only the wrapper-aimed
-> `mcp-config.json`. Folder trust is `ai.copilot.trustedFolders`, one Home
-> Manager-owned leaf of Copilot's state file `config.json`; devenv rejects it.
-> The repository context and instruction files are read-only copies, never store
-> symlinks. The repository file is read from the git root, and its `effortLevel`
-> by the interactive session only; devenv warns on both. Keys and value kinds
-> outside the repository schema, and LSP server names Copilot rejects, throw at
-> eval.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.
@@ -360,7 +349,7 @@ Each names a fixable entry (set `extensions` or rename the server, or
 - Upstream moves folder trust out of `config.json` → `ai.copilot.trustedFolders`
   follows it, and the shared document goes.
 - Prompt mode or ACP starts reading the repository `effortLevel` → drop the
-  devenv effort warning in `lib/ai/delivery-warnings.nix`.
+  devenv effort gap from `mkCopilot.nix`'s `surfaceSupport.settings`.
 - Upstream splits auth/session out of `COPILOT_HOME` → the env-var route becomes
   viable and would remove the wrapper.
 - Copilot stops accepting `@`-prefixed paths → the whole delivery mechanism

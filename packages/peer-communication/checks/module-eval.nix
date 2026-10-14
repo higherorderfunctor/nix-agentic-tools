@@ -14,8 +14,8 @@
     devenv = config: evalDevenvModules [{inherit config;}];
     hm = config: evalHmModules [{inherit config;}];
   };
-  # Runtimes whose rules a backend does not deliver by policy get no router:
-  # the same predicate the module applies (config/ai-delivery.nix).
+  # The retained delivery policy is this test's expectation oracle for which
+  # runtimes get a router; production uses the runtime support declaration.
   policy = import ../../../config/ai-delivery.nix {inherit lib;};
   inertRules = backend:
     builtins.filter

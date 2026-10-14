@@ -1,8 +1,7 @@
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-13 — unsupported root reasoning effort warns and
-> names the native per-model settings remedy; the extracted registry and
-> workspace allowlist still define the settings boundary.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -81,13 +80,13 @@ boundary.
 This per-model object is also why `ai.kiro.settings.reasoningEffort` does not
 exist. Kiro has no global persisted effort key: lowering one portable scalar
 would mean choosing a model, or writing it into every model's record. Both
-change what the user asked for. So the factory leaves `settings` out of its
-`supportedPools`, and an unsupported pool declares no per-runtime option. The
-root `ai.settings.reasoningEffort` warns for Kiro because its persisted effort
-is per-model, with no lossless target for a shared scalar. Use
-`ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort` for the native
-per-model value, or Kiro's session-only `--effort` flag when persistence is not
-wanted.
+change what the user asked for. So the factory declares
+`surfaceSupport.settings.backends = []`, and an unsupported pool declares no
+per-runtime option. The root `ai.settings.reasoningEffort` warns for Kiro
+because its persisted effort is per-model, with no lossless target for a shared
+scalar. Use `ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort` for
+the native per-model value, or Kiro's session-only `--effort` flag when
+persistence is not wanted.
 
 ### What this does and does not fix
 

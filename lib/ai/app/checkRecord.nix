@@ -30,6 +30,27 @@
   # `poolOption`, and so the only ones `poolOptions` can override.
   poolOptionPools = ["environmentVariables" "lspServers"];
   sharedAgentsMdKeys = ["hasOnDemandIndex" "index" "key" "maxBytes" "rules"];
+  supportKeys = ["backends" "gaps" "reason"];
+  gapKeys = ["backends" "each" "effective" "path" "reason" "rootOnly" "when"];
+  validBackends = backends: builtins.isList backends && lib.all (backend: builtins.elem backend ["devenv" "hm"]) backends;
+  validReason = reason: builtins.isString reason || builtins.isFunction reason;
+  validGap = gap:
+    unknownIn gapKeys gap
+    == []
+    && gap ? reason
+    && validReason gap.reason
+    && validBackends (gap.backends or ["devenv" "hm"])
+    && builtins.isList (gap.path or [])
+    && lib.all (part: builtins.isString part && part != "") (gap.path or [])
+    && lib.all (key: builtins.isBool (gap.${key} or false)) ["each" "effective" "rootOnly"]
+    && (!(gap ? when) || builtins.isFunction gap.when);
+  validSupport = support:
+    unknownIn supportKeys support
+    == []
+    && validBackends support.backends
+    && (!(support ? reason) || builtins.isString support.reason)
+    && builtins.isList (support.gaps or [])
+    && lib.all validGap (support.gaps or []);
   contentTargetsKeys = ["context" "rules"];
   unknownIn = allowed: attrs: lib.subtractLists allowed (builtins.attrNames attrs);
   listed = lib.concatStringsSep ", ";
@@ -41,7 +62,7 @@ in {
     devenv ? {},
     launcherOptionsPath ? [],
     poolOptions ? {},
-    supportedPools ? [],
+    surfaceSupport ? {},
     ...
   }: let
     checkBackend = backend: spec: let
@@ -49,27 +70,30 @@ in {
     in
       lib.assertMsg (unknown == [])
       "ai runtime ${name}: ${backend} spec carries ${listed unknown}; a backend spec takes only ${listed backendKeys}. Describe delivery once in the record-level `config`, which receives `backend`.";
+    supportedSurfaces = builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) surfaceSupport);
     unknownDefaults = unknownIn defaultsKeys defaults;
     poolOptionKeys =
-      lib.intersectLists poolOptionPools supportedPools
-      ++ lib.optional (lib.elem "agents" supportedPools) "agentsDir";
+      lib.intersectLists poolOptionPools supportedSurfaces
+      ++ lib.optional (lib.elem "agents" supportedSurfaces) "agentsDir";
     unknownPoolOptions = unknownIn poolOptionKeys poolOptions;
   in
-    checkBackend "hm" hm
+    lib.assertMsg (lib.all validSupport (builtins.attrValues surfaceSupport))
+    "ai runtime ${name}: surfaceSupport entries take backends (hm/devenv), reason and gaps; each gap takes a relative path, backend reach, boolean scope selectors, reason and a when predicate."
+    && checkBackend "hm" hm
     && checkBackend "devenv" devenv
     && lib.assertMsg (builtins.isList launcherOptionsPath && lib.all (part: builtins.isString part && part != "") launcherOptionsPath)
     "ai runtime ${name}: launcherOptionsPath must be a list of nonempty strings (an empty list keeps launcher options at the runtime root)."
     && lib.assertMsg (unknownDefaults == [])
     "ai runtime ${name}: defaults carries ${listed unknownDefaults}; it takes only ${listed defaultsKeys}."
     && lib.assertMsg (unknownPoolOptions == [])
-    "ai runtime ${name}: poolOptions carries ${listed unknownPoolOptions}; it takes only a pool the builder declares (${listed poolOptionPools}) that supportedPools names, plus agentsDir when that includes agents."
+    "ai runtime ${name}: poolOptions carries ${listed unknownPoolOptions}; it takes only a pool the builder declares (${listed poolOptionPools}) that surfaceSupport consumes, plus agentsDir when that includes agents."
     # Presence only: evaluating a native type can force the factory's `pkgs`.
     && lib.assertMsg (record ? agentNativeType == record ? agentTransformer)
     "ai runtime ${name}: agentNativeType and agentTransformer describe one native agent layer; set both or neither."
-    && lib.assertMsg (!(record ? agentNativeType) || lib.elem "agents" supportedPools)
-    "ai runtime ${name}: agentNativeType needs the agents pool in supportedPools."
-    && lib.assertMsg (!(record ? agentsDirSuffixes || record ? agentsDescriptionSuffix) || lib.elem "agents" supportedPools)
-    "ai runtime ${name}: agentsDirSuffixes and agentsDescriptionSuffix need the agents pool in supportedPools."
+    && lib.assertMsg (!(record ? agentNativeType) || lib.elem "agents" supportedSurfaces)
+    "ai runtime ${name}: agentNativeType needs the agents pool in surfaceSupport."
+    && lib.assertMsg (!(record ? agentsDirSuffixes || record ? agentsDescriptionSuffix) || lib.elem "agents" supportedSurfaces)
+    "ai runtime ${name}: agentsDirSuffixes and agentsDescriptionSuffix need the agents pool in surfaceSupport."
     && lib.assertMsg (!(record ? agentsDirSuffixes) || (record.agentsDirSuffixes != [] && lib.all lib.isString record.agentsDirSuffixes))
     "ai runtime ${name}: agentsDirSuffixes must be a non-empty list of strings.";
 

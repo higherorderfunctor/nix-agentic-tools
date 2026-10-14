@@ -1093,17 +1093,35 @@ in
     inherit pkgs;
     name = "codex";
     contextFilename = "AGENTS.md";
-    supportedPools = [
-      "agents"
-      "context"
-      "environmentVariables"
-      "hooks"
-      "mcpServers"
-      "rules"
-      "settings"
-      "shell"
-      "skills"
-    ];
+    surfaceSupport = {
+      agents = {
+        gaps = [
+          {
+            each = true;
+            path = ["tools"];
+            when = {
+              cfg,
+              name,
+              ...
+            }:
+              (cfg.native.agents.${name}.tools or null) == null;
+            reason = "Codex agents have no equivalent tool allowlist field.";
+          }
+        ];
+      };
+      context = {};
+      environmentVariables = {};
+      hooks = {};
+      lspServers = {
+        backends = [];
+        reason = "Codex excludes the lspServers pool.";
+      };
+      mcpServers = {};
+      rules = {};
+      settings = {};
+      shell = {};
+      skills = {};
+    };
     defaults = {
       package = pkgs.ai.chatgpt-codex;
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "chatgpt-codex";

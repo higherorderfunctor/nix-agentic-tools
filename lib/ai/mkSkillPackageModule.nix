@@ -93,7 +93,7 @@ spec: {
   pkgs,
   ...
 }: let
-  delivery = import ../../config/ai-delivery.nix {inherit lib;};
+  inherit (import ./option-paths.nix {inherit lib;}) records;
   moduleArgs = {inherit config lib pkgs;};
   programFactory = import ./program.nix {inherit lib;};
   program = programFactory.mkProgram {
@@ -124,7 +124,7 @@ spec: {
     lib.filter
     (runtime:
       lib.hasAttrByPath ["ai" runtime "rules"] options
-      && delivery.definitions.rules.${runtime}.${spec.backend}.primitive != "notApplicable")
+      && builtins.elem spec.backend (records.${runtime}.surfaceSupport.rules.backends or []))
     program.supportedRuntimes
   );
 in {

@@ -77,7 +77,7 @@
   mkProxyTestRecord = name:
     ai.app.mkRuntime {
       inherit name pkgs;
-      supportedPools = ["mcpServers"];
+      surfaceSupport = lib.genAttrs ["mcpServers"] (_: {backends = ["devenv" "hm"];});
       defaults.package = pkgs.hello;
       options._observedServers = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
@@ -132,7 +132,7 @@
     mkRecord = name:
       ai.app.mkRuntime {
         inherit name;
-        supportedPools = [poolName];
+        surfaceSupport = lib.genAttrs [poolName] (_: {backends = ["devenv" "hm"];});
         defaults.package = pkgs.hello;
         options =
           {

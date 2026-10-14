@@ -1,8 +1,7 @@
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-10-09 — package rules are gated by backend delivery
-> capability; Codex skill discovery was re-probed on 0.161.0 on 2026-10-08 with
-> the same directory-link result.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -130,10 +129,10 @@ The factory passes `config`, `lib`, `pkgs` and `runtime` to both `skills` and
 `rules` callbacks. Import it once with the full supported runtime set; render
 per-runtime content inside the callbacks. A spec with `rules` must also name its
 `backend` (`"hm"` or `"devenv"`); the shared factory contributes rules only
-where that backend delivers them, using the delivery policy. Copilot on Home
-Manager therefore receives package skills without an undeliverable router rule
-or a warning about a pool the consumer never set. Explicit consumer rules still
-warn.
+where that backend delivers them, using the runtime record's declared backend
+reach. Copilot on Home Manager therefore receives package skills without an
+undeliverable router rule or a warning about a pool the consumer never set.
+Explicit consumer rules still warn.
 
 This controls whether the package writes its existing
 `ai.<runtime>.{skills,rules}` entries; it does not move those entries to the

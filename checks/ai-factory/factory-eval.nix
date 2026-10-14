@@ -30,9 +30,28 @@
     shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
   };
-  decomposeCase = backend: supportedPools: let
+  evaluateSupport = backend: record: requests: enabled:
+    lib.evalModules {
+      modules = [
+        ai.sharedOptions
+        (
+          if backend == "hm"
+          then hmStubs
+          else devenvStubs
+        )
+        {
+          options.warnings = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+          };
+        }
+        (ai.app.${backend + "Transform"} record)
+        {config.ai = lib.recursiveUpdate requests (lib.setAttrByPath [record.name "enable"] enabled);}
+      ];
+    };
+  decomposeCase = backend: surfaceSupport: let
     record = ai.app.mkRuntime {
-      inherit pkgs supportedPools;
+      inherit pkgs surfaceSupport;
       name = "testapp";
       # A same-named native option does not elect to handle shared hooks.
       options.hooks = lib.mkOption {
@@ -40,28 +59,11 @@
         default = [];
       };
     };
-    evaluate = requests: enabled:
-      lib.evalModules {
-        modules = [
-          ai.sharedOptions
-          (
-            if backend == "hm"
-            then hmStubs
-            else devenvStubs
-          )
-          {
-            options.warnings = lib.mkOption {
-              type = lib.types.listOf lib.types.str;
-              default = [];
-            };
-          }
-          (ai.app.${backend + "Transform"} record)
-          {config.ai = requests // {testapp.enable = enabled;};}
-        ];
-      };
+    evaluate = evaluateSupport backend record;
     evaluated = evaluate sharedRequests true;
     warnings = evaluated.config.warnings;
-    unsupported = lib.subtractLists supportedPools evaluated.config.ai.internal.sharedSurfaces;
+    supportedSurfaces = builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) record.surfaceSupport);
+    unsupported = lib.subtractLists supportedSurfaces evaluated.config.ai.internal.sharedSurfaces;
   in
     # Every registered surface is exercised, and each unsupported surface
     # gets exactly one diagnostic through the public factory on both backends.
@@ -74,17 +76,109 @@
         warnings)
       == 1)
     unsupported
-    && lib.all (surface: !(lib.any (lib.hasPrefix "ai.${surface} is set but ") warnings)) supportedPools
+    && lib.all (surface: !(lib.any (lib.hasPrefix "ai.${surface} is set but ") warnings)) supportedSurfaces
     && (evaluate {} true).config.warnings == []
     && (evaluate sharedRequests false).config.warnings == []
-    && (supportedPools == [] || evaluated.config.ai.testapp.normalized.skills == sharedRequests.skills);
+    && (!(builtins.elem "skills" supportedSurfaces) || evaluated.config.ai.testapp.normalized.skills == sharedRequests.skills);
 in {
   checks = {
     factory-mkRuntime-decompose-no-surfaces = mkTest "mkRuntime-decompose-no-surfaces" (
-      lib.all (backend: decomposeCase backend []) ["devenv" "hm"]
+      lib.all (backend: decomposeCase backend {} && decomposeCase backend {skills.backends = [];}) ["devenv" "hm"]
     );
     factory-mkRuntime-decompose-one-surface = mkTest "mkRuntime-decompose-one-surface" (
-      lib.all (backend: decomposeCase backend ["skills"]) ["devenv" "hm"]
+      lib.all (backend: decomposeCase backend {skills.backends = ["devenv" "hm"];}) ["devenv" "hm"]
+    );
+    factory-mkRuntime-declared-backend-support = mkTest "mkRuntime-declared-backend-support" (
+      let
+        reason = "Only Home Manager delivers this surface.";
+        record = ai.app.mkRuntime {
+          inherit pkgs;
+          name = "testapp";
+          surfaceSupport.lspServers = {
+            backends = ["hm"];
+            inherit reason;
+          };
+        };
+        request = {inherit (sharedRequests) lspServers;};
+        warning = backend: path: "${path} is set but ${backend} does not deliver it to testapp (reason: ${reason})";
+      in
+        lib.all (
+          backend: let
+            evaluate = requests: enabled: (evaluateSupport backend record requests enabled).config;
+            expected = path: lib.optional (backend == "devenv") (warning backend path);
+          in
+            (evaluate request true).warnings
+            == expected "ai.lspServers"
+            && (evaluate {testapp.lspServers = request.lspServers;} true).warnings == expected "ai.testapp.lspServers"
+            && (evaluate (request // {testapp.lspServers.probe = null;}) true).warnings == []
+            && (evaluate {} true).warnings == []
+            && (evaluate request false).warnings == []
+            && (evaluate request true).ai.testapp.normalized.lspServers.probe.command == "probe"
+            && (evaluate request true).ai.testapp.normalized.lspServers.probe.extensions == ["nix"]
+        ) ["devenv" "hm"]
+    );
+    factory-mkRuntime-declared-conditional-gap = mkTest "mkRuntime-declared-conditional-gap" (
+      let
+        reason = "High effort is unavailable on this runtime.";
+        record = ai.app.mkRuntime {
+          inherit pkgs;
+          name = "testapp";
+          surfaceSupport.settings.gaps = [
+            {
+              effective = true;
+              path = ["reasoningEffort"];
+              inherit reason;
+              when = {value, ...}: value == "high";
+            }
+          ];
+        };
+        request.settings.reasoningEffort = "high";
+      in
+        lib.all (
+          backend: let
+            warnings = requests: enabled: (evaluateSupport backend record requests enabled).config.warnings;
+            expected = path: ["${path}.reasoningEffort is set but ${backend} does not deliver it to testapp (reason: ${reason})"];
+          in
+            warnings request true
+            == expected "ai.settings"
+            && warnings (request // {testapp.settings.reasoningEffort = "high";}) true == expected "ai.testapp.settings"
+            && warnings (request // {testapp.settings.reasoningEffort = "low";}) true == []
+            && warnings (request // {testapp.settings.reasoningEffort = null;}) true == expected "ai.settings"
+            && warnings {settings.reasoningEffort = "low";} true == []
+            && warnings {} true == []
+            && warnings request false == []
+        ) ["devenv" "hm"]
+    );
+    factory-mkRuntime-declared-nested-gap = mkTest "mkRuntime-declared-nested-gap" (
+      let
+        reason = "This runtime has no portable tool allowlist.";
+        record = ai.app.mkRuntime {
+          inherit pkgs;
+          name = "testapp";
+          surfaceSupport.agents.gaps = [
+            {
+              each = true;
+              path = ["tools"];
+              inherit reason;
+            }
+          ];
+        };
+        request.agents.probe = sharedRequests.agents.probe // {tools = ["Read"];};
+      in
+        lib.all (
+          backend: let
+            warnings = requests: enabled: (evaluateSupport backend record requests enabled).config.warnings;
+            expected = path: ["${path}.tools is set but ${backend} does not deliver it to testapp (reason: ${reason})"];
+          in
+            warnings request true
+            == expected "ai.agents.probe"
+            && warnings {testapp.agents = request.agents;} true == expected "ai.testapp.agents.probe"
+            && warnings (request // {testapp.agents.probe = null;}) true == []
+            && warnings (request // {testapp.agents.probe = sharedRequests.agents.probe;}) true == []
+            && warnings {agents.probe = sharedRequests.agents.probe // {tools = [];};} true == []
+            && warnings {} true == []
+            && warnings request false == []
+        ) ["devenv" "hm"]
     );
     # ── mkRuntime tests ───────────────────────────────────────────────
     # The per-backend seam is retired: delivery is ONE record-level `config`,
@@ -195,7 +289,7 @@ in {
           name = "testapp";
           defaults.package = pkgs.hello;
         };
-        withAgents = base // {supportedPools = ["agents"];};
+        withAgents = base // {surfaceSupport = lib.genAttrs ["agents"] (_: {backends = ["devenv" "hm"];});};
         rejected = record: !(builtins.tryEval (ai.app.mkRuntime record)).success;
         nativeLayer = {
           agentNativeType = lib.types.attrsOf lib.types.anything;
@@ -224,7 +318,7 @@ in {
         base = {
           inherit pkgs;
           name = "testapp";
-          supportedPools = ["agents" "lspServers" "rules"];
+          surfaceSupport = lib.genAttrs ["agents" "lspServers" "rules"] (_: {backends = ["devenv" "hm"];});
           defaults.package = pkgs.hello;
           agentsDescriptionSuffix = "Test agents.";
           poolOptions = {
@@ -272,18 +366,18 @@ in {
         && rejected (base // {agentsDirSuffixes = [1];})
         && rejected ((removeAttrs base ["poolOptions"])
           // {
-            supportedPools = ["lspServers"];
+            surfaceSupport = lib.genAttrs ["lspServers"] (_: {backends = ["devenv" "hm"];});
             agentsDescriptionSuffix = "no agents pool";
           })
         && rejected ((removeAttrs base ["poolOptions" "agentsDescriptionSuffix"])
           // {
-            supportedPools = ["lspServers"];
+            surfaceSupport = lib.genAttrs ["lspServers"] (_: {backends = ["devenv" "hm"];});
             agentsDirSuffixes = [".md"];
           })
-        && rejected (withPoolOptions {hooks.description = "undeclared";} // {supportedPools = base.supportedPools ++ ["hooks"];})
+        && rejected (withPoolOptions {hooks.description = "undeclared";} // {surfaceSupport = base.surfaceSupport // {hooks.backends = ["devenv" "hm"];};})
         && rejected ((removeAttrs base ["agentsDescriptionSuffix"])
           // {
-            supportedPools = ["lspServers"];
+            surfaceSupport = lib.genAttrs ["lspServers"] (_: {backends = ["devenv" "hm"];});
             poolOptions.agentsDir.description = "no agents pool";
           })
         && lib.all (backend:
@@ -321,30 +415,26 @@ in {
       let
         record = ai.app.mkRuntime {
           name = "testapp";
-          supportedPools = [];
+          surfaceSupport = {};
           defaults.package = pkgs.hello;
         };
       in
         record ? name
         && record ? defaults
-        && record.supportedPools == []
+        && record.surfaceSupport == {}
     );
 
-    # A runtime record outside this repository may support the normalized
-    # `settings` pool without lowering reasoning effort. No generic warning
-    # speaks for it any more: the old one fired for every such runtime whether
-    # or not it lowered effort. Disclosure belongs to the runtime's own
-    # delivery `config`, which is merged into module config and can emit
-    # `warnings` for the fields it drops. The repository's delivery rows cannot
-    # do it, because they cover only this repository's runtimes. The control
-    # is that the root value did reach the runtime's normalized settings, so
-    # the silence is not an unread value.
+    # A runtime outside this repository declares normalized settings and any
+    # field it cannot deliver through surfaceSupport.settings.gaps. Supporting
+    # settings alone must not invent a reasoning-effort gap. The root value
+    # reaches the normalized option here, so quiet is declared support rather
+    # than an unread input; no first-party policy row speaks for this runtime.
     factory-mkRuntime-no-generic-effort-warning = mkTest "mkRuntime-no-generic-effort-warning" (
       let
         record = ai.app.mkRuntime {
           inherit pkgs;
           name = "testapp";
-          supportedPools = ["settings"];
+          surfaceSupport = lib.genAttrs ["settings"] (_: {backends = ["devenv" "hm"];});
           defaults.package = pkgs.hello;
         };
         evaluated = lib.evalModules {
@@ -376,7 +466,7 @@ in {
       let
         record = ai.app.mkRuntime {
           name = "testapp";
-          supportedPools = ["mcpServers"];
+          surfaceSupport = lib.genAttrs ["mcpServers"] (_: {backends = ["devenv" "hm"];});
           defaults.package = pkgs.hello;
         };
         module = ai.app.hmTransform record;
@@ -397,7 +487,7 @@ in {
       let
         record = ai.app.mkRuntime {
           name = "testapp";
-          supportedPools = [];
+          surfaceSupport = {};
           defaults = {package = pkgs.hello;};
           options = {
             turboMode = lib.mkOption {
@@ -423,7 +513,7 @@ in {
       let
         record = ai.app.mkRuntime {
           name = "testapp";
-          supportedPools = ["mcpServers"];
+          surfaceSupport = lib.genAttrs ["mcpServers"] (_: {backends = ["devenv" "hm"];});
           defaults = {package = pkgs.hello;};
           options = {
             # Synthetic introspection option — NOT part of the real mkRuntime contract,
@@ -576,14 +666,14 @@ in {
     );
 
     # Same-named native options are independent when a normalized pool is not in
-    # supportedPools. Proxy discovery keys on the internal capability marker, not
+    # surfaceSupport. Proxy discovery keys on the internal capability marker, not
     # the public option name, so an arbitrary native shape remains untouched.
     factory-mkRuntime-unsupported-native-mcp-option-not-registered = mkTest "mkRuntime-unsupported-native-mcp-option-not-registered" (
       let
         record = ai.app.mkRuntime {
           inherit pkgs;
           name = "testapp";
-          supportedPools = [];
+          surfaceSupport = {};
           defaults.package = pkgs.hello;
           options.mcpServers = lib.mkOption {
             type = lib.types.listOf lib.types.str;
@@ -611,7 +701,7 @@ in {
       let
         record = ai.app.mkRuntime {
           name = "testapp";
-          supportedPools = [];
+          surfaceSupport = {};
           defaults.package = pkgs.hello;
         };
         module = ai.app.hmTransform record;
@@ -631,7 +721,7 @@ in {
       let
         record = ai.app.mkRuntime {
           name = "testapp";
-          supportedPools = [];
+          surfaceSupport = {};
           defaults.package = pkgs.hello;
         };
         module = ai.app.devenvTransform record;

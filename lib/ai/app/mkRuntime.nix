@@ -18,19 +18,29 @@
 #     launcherOptionsPath ? [];     # package/env/shell and normalized launcher pools
 #                                    #   live below this relative option path
 #     options ? {};                  # shared option declarations (both backends see these)
-#     supportedPools ? [];           # normalized ai.* pools the runtime consumes.
-#                                    # Unsupported per-runtime pool options are absent;
-#                                    # the shared declaration registry drives decomposition,
-#                                    # so every non-empty unsupported root request warns
-#                                    # without a delivery-policy row.
-#                                    # Same-named native options in `options` are independent.
+#     surfaceSupport ? {};           # {<surface> = {backends?; reason?; gaps?;};}
+#                                    # Presence opts in, with hm/devenv by default.
+#                                    # backends = [] rejects the normalized pool;
+#                                    # a narrower list keeps backend option parity
+#                                    # but warns where delivery is unavailable.
+#                                    # reason explains unavailable delivery. gaps
+#                                    # declare nested or conditional drops:
+#                                    # {path?; each?; effective?; rootOnly?;
+#                                    #  backends?; reason; when?;}.
+#                                    # each inspects keyed entries; effective picks
+#                                    # the winning scalar input; path is relative
+#                                    # to the surface/entry. when receives cfg,
+#                                    # config, backend, value, entryValue and the
+#                                    # entry's path/name; reason may use those too.
+#                                    # Omitted surfaces always warn from the shared
+#                                    # registry. Native options are independent.
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
 #     poolOptions ? {};              # {<pool> = mkOption attrs;} merged over the
 #                                    #   builder's declaration of `agentsDir`,
 #                                    #   `environmentVariables` or `lspServers`.
 #                                    #   Any other key, or a pool not in
-#                                    #   `supportedPools`, is rejected.
+#                                    #   `surfaceSupport`, is rejected.
 #     agentNativeType ? <absent>;    # option type of ONE native agent record.
 #                                    #   With `agentTransformer`, declares
 #                                    #   `ai.<name>.native.agents` and splits
@@ -93,7 +103,7 @@
   defaults ? {},
   launcherOptionsPath ? [],
   options ? {},
-  supportedPools ? [],
+  surfaceSupport ? {},
   contextFilename ? null,
   contextDescription ? null,
   ruleModule ? null,
@@ -132,28 +142,32 @@
   # Optional so a record built without it still evaluates; features that
   # need it must degrade rather than throw.
   pkgs ? null,
-}:
-assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults hm devenv launcherOptionsPath poolOptions supportedPools;}
-  // builtins.intersectAttrs {
-    agentNativeType = null;
-    agentTransformer = null;
-    agentsDirSuffixes = null;
-    agentsDescriptionSuffix = null;
-  }
-  args);
-  {
-    inherit name defaults launcherOptionsPath options poolOptions supportedPools hm devenv pkgs;
-  }
-  // lib.optionalAttrs (config != null) {inherit config;}
-  // lib.optionalAttrs (installPackage != null) {inherit installPackage;}
-  // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
-  // lib.optionalAttrs (sharedAgentsMd != null) {inherit sharedAgentsMd;}
-  // lib.optionalAttrs (contentTargets != null) {inherit contentTargets;}
-  // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
-  // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
-  // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
-  // lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}
-  // lib.optionalAttrs (args ? agentNativeType) {inherit agentNativeType;}
-  // lib.optionalAttrs (args ? agentTransformer) {inherit agentTransformer;}
-  // lib.optionalAttrs (agentsDirSuffixes != null) {inherit agentsDirSuffixes;}
-  // lib.optionalAttrs (agentsDescriptionSuffix != null) {inherit agentsDescriptionSuffix;}
+}: let
+  declaredSupport = lib.mapAttrs (_: support: {backends = ["devenv" "hm"];} // support) surfaceSupport;
+in
+  assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults hm devenv launcherOptionsPath poolOptions;}
+    // {surfaceSupport = declaredSupport;}
+    // builtins.intersectAttrs {
+      agentNativeType = null;
+      agentTransformer = null;
+      agentsDirSuffixes = null;
+      agentsDescriptionSuffix = null;
+    }
+    args);
+    {
+      inherit name defaults launcherOptionsPath options poolOptions hm devenv pkgs;
+      surfaceSupport = declaredSupport;
+    }
+    // lib.optionalAttrs (config != null) {inherit config;}
+    // lib.optionalAttrs (installPackage != null) {inherit installPackage;}
+    // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
+    // lib.optionalAttrs (sharedAgentsMd != null) {inherit sharedAgentsMd;}
+    // lib.optionalAttrs (contentTargets != null) {inherit contentTargets;}
+    // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
+    // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
+    // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
+    // lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}
+    // lib.optionalAttrs (args ? agentNativeType) {inherit agentNativeType;}
+    // lib.optionalAttrs (args ? agentTransformer) {inherit agentTransformer;}
+    // lib.optionalAttrs (agentsDirSuffixes != null) {inherit agentsDirSuffixes;}
+    // lib.optionalAttrs (agentsDescriptionSuffix != null) {inherit agentsDescriptionSuffix;}

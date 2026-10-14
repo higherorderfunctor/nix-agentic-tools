@@ -1,8 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-14 — the factory and portable-event diagnostics
-> share the native lifecycle event list; unsupported requests warn; shell uses
-> Pi harness settings on both backends through the patched bash tool.
+> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> normalized backend reach and nested delivery diagnostics.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -525,7 +524,7 @@ Claude Code hook adapter, a shared hook that also reaches
 
 ## Normalized pool capability boundary
 
-The app record's `supportedPools` is exactly `agents`, `context`,
+The app record's `surfaceSupport` consumes `agents`, `context`,
 `environmentVariables`, `hooks`, `mcpServers`, `rules`, `settings`, `shell`, and
 `skills`. Kimchi has no native path-scoped rule loader, so rules use the same
 flat AGENTS.md handling as Codex. LSP remains excluded; a shared LSP request
