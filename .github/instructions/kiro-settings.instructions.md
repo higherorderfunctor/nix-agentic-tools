@@ -57,16 +57,15 @@ saved roots as protocol roots and cannot reconstruct which were previously
 configured.
 
 Workspace membership enables the vendor default `fs_read ./**` allow rule for
-each root, and writes under write-allowing presets. Default writes still prompt;
-configure permission rules to narrow reads or grant writes. Tool policy still
-checks symlink escapes. The server patch ignores added roots'
-`.kiro/settings/mcp.json`; only global and session-cwd MCP configuration loads,
-with cwd overriding a same-named global server. Workflow writes and
-`fileCheck.path` can use the identical absolute `{{worktree_path}}/.agents/...`
-path inside an admitted root. The old `cli.tweaks.relativeFileCheckPaths` option
-is removed: either boolean value produces a migration error. The
-`workflowFileCheckGuidance` prompt slot remains available; this change does not
-replace the vendor's absolute-path guidance.
+each root. Default writes still prompt; configure permission rules to narrow
+reads or grant writes. Tool policy still checks symlink escapes. The server
+patch ignores added roots' `.kiro/settings/mcp.json`; only global and
+session-cwd MCP configuration loads, with cwd overriding a same-named global
+server. Workflow writes and `fileCheck.path` can use the identical absolute
+`{{worktree_path}}/.agents/...` path inside an admitted root. The old
+`cli.tweaks.relativeFileCheckPaths` option is removed: either boolean value
+produces a migration error. The `workflowFileCheckGuidance` prompt slot remains
+available; this change does not replace the vendor's absolute-path guidance.
 
 The setting requires a declarative v3 engine and the managed package. Explicit
 `package = null` produces the existing grouped inert-settings warning. A manual
