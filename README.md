@@ -57,7 +57,6 @@ ai = {
     enable = true;
     settings.model = "gpt-5.6-sol";
   };
-  copilot.enable = true;
   kiro.cli.enable = true;
   programs.delegate-routing.enable = true;
   programs.stacked-workflows.enable = true;
@@ -365,7 +364,7 @@ instruction building.
 | Peer communication | Copy skills/ | On by default; `ai.programs.peer-communication.enable = false` or `.runtimes.<runtime>.enable = false` turns it off | Same; project-native paths |
 | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
-| Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
+| Unified MCP config | Manual native config | `ai.mcpServers.*` (Claude + Codex + Kimchi + Kiro) | Same; github.com Copilot takes MCP servers from repository settings and warns |
 | Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |
 | MCP credentials | Manual env vars | `plain`, `file`, or `helper` | `plain`, `file`, or `helper` |
 | Semble search integrations | Manual install | `ai.programs.semble` (Claude + Codex + Kiro) | Same; project-native paths |
@@ -375,12 +374,12 @@ instruction building.
 | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
 | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
 | Generated files | N/A | `ai.formatter`, `ai.guards.<name>`, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
-| Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
-| Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
-| Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi + Kiro) | Same; project-native paths |
+| Skills | Copy native directories | `ai.skills.*` (Claude + Codex + Kimchi + Kiro) | Same, plus github.com Copilot's `.github/skills/`; project-native paths |
+| Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Kimchi) | Same; Kimchi's lands in its project harness settings (see below). Kiro has only per-model native effort |
+| Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Kimchi + Kiro) | Same, plus github.com Copilot's `.github/agents/`; project-native paths |
 | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
-| CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
-| Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. Copilot is explicitly excluded |
+| CLI process environment | Shell config | `ai.environmentVariables` (Codex + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
+| Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. github.com Copilot is explicitly excluded |
 | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
 ### Kimchi project delivery
@@ -433,22 +432,27 @@ a devenv project's Kimchi config is read. Without Home Manager, grant trust at
 Kimchi's prompt; `--approve` is a run-scoped CLI/TUI override, while ACP
 resolves trust separately.
 
-### Copilot user-global settings
+### github.com Copilot
 
-Copilot's user-global files live under `~/.copilot`, which devenv never writes.
-Who manages each one depends on whether you use Home Manager:
+`ai.copilot` configures github.com Copilot: the cloud agent and code review read
+a repository's committed tree. Its pools live under `ai.copilot.github`, and
+only devenv writes them. Instructions and agent profiles land as read-only
+copies, since a committed store link dangles on github.com:
 
-| User-global setting                                                            | Home Manager                                                                                                                                                         | devenv only            |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| `settings.json`, `mcp-config.json`                                             | Nix, as read-only copies (empty when nothing is declared); in-app changes such as `/model` or `copilot mcp add` are reset at the next activation                     | Copilot                |
-| Trusted folders (`trustedFolders` in `config.json`)                            | Nix (`ai.copilot.trustedFolders`, absolute paths; a folder covers its subfolders); a folder trusted at Copilot's prompt stays trusted only until the next activation | Copilot's trust prompt |
-| Sign-in, tokens, session and acknowledgement state (the rest of `config.json`) | Copilot                                                                                                                                                              | Copilot                |
+| Pool    | devenv delivery                                                                 |
+| ------- | ------------------------------------------------------------------------------- |
+| Context | root `AGENTS.md`, shared with Codex and Kiro                                    |
+| Rules   | `.github/instructions/<name>.instructions.md`, `applyTo` from the rule's scopes |
+| Agents  | `.github/agents/<name>.md` with `name`, `description` and `tools`               |
+| Skills  | `.github/skills/<name>/SKILL.md`                                                |
 
-devenv writes the repository `.github/copilot/settings.json` as a read-only copy
-only when `ai.copilot.native.settings` declares something, and rejects
-`ai.copilot.trustedFolders`. Copilot reads that repository file only in a
-trusted folder: with Home Manager, add the clone (or a parent folder) to
-`ai.copilot.trustedFolders`; without it, trust the project at Copilot's prompt.
+Home Manager has no repository, so a value set there warns. Environment
+variables, hooks, MCP servers, settings and the shell warn on both backends,
+each with the reason and a link to GitHub's documentation: github.com reads none
+of them from a file this module writes, and its MCP servers are a repository
+setting on github.com. `ai.copilot.cli` is reserved for the Copilot CLI
+launcher, which this module does not ship; the `copilot-cli` package is still
+built.
 
 ## Configuration
 
@@ -610,7 +614,6 @@ whole file.
 | ------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | Claude  | `settings.json` on both backends; devenv `.mcp.json`; Home Manager plugin `.mcp.json` and manifest | `.claude.json` shared mutable state                |
 | Codex   | Agent TOML files, `hooks.json`, both `config.toml` locations, Home Manager daemon settings         | Runtime-rendered files                             |
-| Copilot | `mcp-config.json`; both `settings.json` locations                                                  | Home Manager `config.json` shared trust and state  |
 | Kimchi  | Static config, harness settings, MCP, permissions and devenv hooks                                 | `trust.json` and credential-rendered `config.json` |
 | Kiro    | `cli.json`, Home Manager `permissions.yaml`, agent and hook JSON files                             | Runtime-rendered `mcp.json`                        |
 
@@ -843,7 +846,8 @@ ai.kiro = {
 ```
 
 Semble does not declare `ai.programs.semble.runtimes.copilot`; configure Copilot
-directly through `ai.copilot.*` with the same exported helpers when desired.
+directly through `ai.copilot.github.*` with the same exported helpers when
+desired.
 
 </details>
 

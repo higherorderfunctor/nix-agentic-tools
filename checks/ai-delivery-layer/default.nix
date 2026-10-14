@@ -163,6 +163,7 @@
     skills.probe-file = "${./fixtures/probe-skill}/SKILL.md";
   };
   # Each runtime's native-file options, set to a value no default can produce.
+  # github.com Copilot reads no native file, so it has none.
   # The pools above never reach them, so without this a reader left on a
   # renamed option path would still evaluate — to the default `{}` — and the
   # snapshot would show no change while a consumer's native settings were
@@ -177,7 +178,6 @@
   native = {
     claude.native.settings.model = "SNAPSHOT-NATIVE";
     codex.native.settings.model = "SNAPSHOT-NATIVE";
-    copilot.native.settings.model = "SNAPSHOT-NATIVE";
     kimchi = {
       native.harnessSettings.hideThinkingBlock = true;
       native.settings.llmEndpoint = "SNAPSHOT-NATIVE";
@@ -185,7 +185,7 @@
     kiro.cli.native.settings.chat.defaultModel = "SNAPSHOT-NATIVE";
   };
   snapshotConfig = runtimes: {
-    inherit (lib.foldl' lib.recursiveUpdate {ai = pools;} (map (runtime: setEnable runtime true) runtimes ++ [{ai = lib.genAttrs runtimes (runtime: native.${runtime});}])) ai;
+    inherit (lib.foldl' lib.recursiveUpdate {ai = pools;} (map (runtime: setEnable runtime true) runtimes ++ [{ai = lib.genAttrs runtimes (runtime: native.${runtime} or {});}])) ai;
   };
   renderEntry = label: value: "${label} ${builtins.toJSON value}\n";
   renderSink = backend: evaluated: let
@@ -365,8 +365,12 @@ in {
       lib.all (backend: lib.all (control: control.passed) (builtins.attrValues backend)) (builtins.attrValues ownedControls)
     );
 
+    # Copilot carries the pools it reads under `ai.copilot.github`, which also
+    # proves the normalized options follow a nested pools namespace; Codex
+    # carries the two Copilot does not consume.
     module-delivery-normalized-keyed-pools-extend = mkTest "delivery-normalized-keyed-pools-extend" (
       let
+        optionPaths = import ../../lib/ai/option-paths.nix {inherit lib pkgs;};
         samples = {
           agents = {
             description = "probe";
@@ -377,32 +381,32 @@ in {
           rules.text = "probe";
           skills = ./fixtures/probe-skill;
         };
+        runtimeFor = pool:
+          if builtins.elem pool ["environmentVariables" "mcpServers"]
+          then "codex"
+          else "copilot";
       in
         lib.all (
           evaluate:
             lib.all (
               pool: let
-                base.ai = {
-                  ${pool}.inherited = samples.${pool};
-                  copilot = {
-                    enable = true;
-                    ${pool}.local = samples.${pool};
-                  };
-                };
-                original = (evaluate base).config.ai.copilot.normalized.${pool};
+                runtime = runtimeFor pool;
+                poolPath = optionPaths.pool runtime pool;
+                normalizedPath = lib.init poolPath ++ ["normalized" pool];
+                base = lib.recursiveUpdate (setEnable runtime true) (lib.recursiveUpdate
+                  {ai.${pool}.inherited = samples.${pool};}
+                  (lib.setAttrByPath (poolPath ++ ["local"]) samples.${pool}));
+                original = lib.getAttrFromPath normalizedPath (evaluate base).config;
                 extension.extra = original.inherited;
-                result = value:
-                  (evaluate (lib.recursiveUpdate base {
-                    ai.copilot.normalized.${pool} = value;
-                  })).config;
+                result = value: (evaluate (lib.recursiveUpdate base (lib.setAttrByPath normalizedPath value))).config;
                 extended = result extension;
                 forced = result (lib.mkForce extension);
               in
                 lib.assertMsg (
-                  builtins.attrNames extended.ai.copilot.normalized.${pool}
+                  builtins.attrNames (lib.getAttrFromPath normalizedPath extended)
                   == ["extra" "inherited" "local"]
-                  && extended.ai.copilot.normalized.${pool}.inherited == original.inherited
-                  && builtins.attrNames forced.ai.copilot.normalized.${pool} == ["extra"]
+                  && (lib.getAttrFromPath normalizedPath extended).inherited == original.inherited
+                  && builtins.attrNames (lib.getAttrFromPath normalizedPath forced) == ["extra"]
                   && lib.all (assertion: assertion.assertion) (extended.assertions ++ forced.assertions)
                 ) "normalized ${pool}: ordinary extension must retain inherited keys and mkForce must replace the pool"
             ) (builtins.attrNames samples)
@@ -591,33 +595,6 @@ in {
           }
           touch "$out"
         '';
-
-    # Copilot's MCP file carries its servers under the `mcpServers` envelope
-    # key at the same path on both backends.
-    module-delivery-copilot-mcp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-mcp-content-extension-keeps-generated-leaves" (
-      let
-        path = ".copilot/mcp-config.json";
-        base.ai.copilot = {
-          configDir = ".copilot";
-          enable = true;
-          mcpServers.original.command = "original";
-        };
-        added.mcpServers.added.command = "added";
-      in
-        lib.all (
-          evaluate: let
-            original = (evaluate base).config.ai.copilot.files.${path}.content.value;
-            cfg =
-              (evaluate (lib.recursiveUpdate base {
-                ai.copilot.files.${path}.content.value = added;
-              })).config;
-          in
-            cfg.ai.copilot.files.${path}.content.value
-            == lib.recursiveUpdate original added
-            && fromGeneratedTree path (deliveredFiles cfg).${path}
-            && lib.all (assertion: assertion.assertion) cfg.assertions
-        ) [evalDevenv evalHm]
-    );
 
     module-delivery-method-resolver-is-shared = mkTest "delivery-method-resolver-is-shared" (
       deliveryMethod ? resolve

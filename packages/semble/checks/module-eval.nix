@@ -197,9 +197,8 @@ in {
         && lib.all (runtime: cfg.ai.${runtime}.rules == {}) ["claude" "codex" "kiro"]
         && lib.all (runtime: !(cfg.ai.${runtime}.agents ? semble-search)) ["claude" "codex" "kiro"]
         && !(cfg.ai.kiro.native.agents ? semble-search)
-        && !(cfg.ai.copilot.mcpServers ? semble)
-        && !(cfg.ai.copilot.agents ? semble-search)
-        && cfg.ai.copilot.rules == {}
+        && !(cfg.ai.copilot.github.agents ? semble-search)
+        && cfg.ai.copilot.github.rules == {}
     );
 
     # End-to-end regression guard for the defect that motivated typing this

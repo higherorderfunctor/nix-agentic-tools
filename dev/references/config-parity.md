@@ -30,17 +30,18 @@ are bugs unless marked N/A with rationale.
 
 ### Per-Surface Notes
 
-**Agents** -- `ai.agents` fans to Claude and Copilot, and its portable records
-also reach Codex and Kimchi. Claude agents are `ai.agents` / `ai.claude.agents`,
-each rendered to `.claude/agents/<name>.md`. Kiro is not fanned out: its agents
-are a typed record lowered to its own v3 agent JSON, with a different tool
-vocabulary (capability tags rather than Claude/Copilot tool names), so configure
-them per-CLI.
+**Agents** -- `ai.agents` fans to Claude, and to github.com Copilot's
+`.github/agents/` on devenv only; its portable records also reach Codex and
+Kimchi. Claude agents are `ai.agents` / `ai.claude.agents`, each rendered to
+`.claude/agents/<name>.md`. Kiro is not fanned out: its agents are a typed
+record lowered to its own v3 agent JSON, with a different tool vocabulary
+(capability tags rather than Claude/Copilot tool names), so configure them
+per-CLI.
 
 **Environment vars** -- `ai.environmentVariables` is baked into the launcher
-wrapper of every runtime that has one (Codex, Copilot, Kimchi, Kiro), on both
-backends. It never touches the Home Manager session or the devenv shell. Claude
-has no wrapper and does not consume the pool: its variables are
+wrapper of every runtime that has one (Codex, Kimchi, Kiro), on both backends.
+It never touches the Home Manager session or the devenv shell. Claude has no
+wrapper and does not consume the pool: its variables are
 `ai.claude.native.settings.env`, written into `.claude/settings.json`.
 
 **Hooks** -- `ai.hooks` is the portable pool. It reaches Claude
@@ -51,12 +52,14 @@ native entries after the shared ones: `ai.claude.hooks`, `ai.codex.hooks`, and
 can own, so under Home Manager the shared pool does not reach it and
 `ai.kimchi.hooks` warns. Kiro hooks are not fanned out: `ai.kiro.hooks` (plus
 `hooksDir` / `hooksJson`) are typed v3 records written to
-`.kiro/hooks/<name>.json` on both backends. Copilot CLI has no hooks support.
+`.kiro/hooks/<name>.json` on both backends. github.com Copilot takes no hooks
+from this module and warns.
 
 **MCP servers** -- `ai.mcpServers` fans typed server records out to every
-enabled runtime on both backends, and per-CLI `.mcpServers` adds or overrides
-servers for one runtime. Claude reads them from the Home Manager personal
-plugin's `~/.claude/skills/home-manager/.mcp.json`, or from the project
+enabled runtime on both backends except github.com Copilot, whose MCP servers
+are a repository setting on github.com, and per-CLI `.mcpServers` adds or
+overrides servers for one runtime. Claude reads them from the Home Manager
+personal plugin's `~/.claude/skills/home-manager/.mcp.json`, or from the project
 `.mcp.json` under devenv; both are Nix-owned read-only files.
 
 **Permissions** -- there is no portable pool; each runtime has its own option.
@@ -69,18 +72,18 @@ backends. Kimchi uses `ai.kimchi.permissions`, merged into
 written to `~/.kiro/settings/permissions.yaml` under Home Manager only: Kiro
 reads permissions from `~/.kiro/settings/` or `~/.kiro/workspace-roots/<hash>/`,
 never a project `.kiro/`, so a devenv-written file would never be read.
-Agent-local permission records stay part of each Kiro agent. Copilot has no
-permissions option.
+Agent-local permission records stay part of each Kiro agent. github.com Copilot
+reads no permissions file; a custom agent's `tools` list is its only file-borne
+tool restriction.
 
 ### Settings Type Coverage
 
 Typed options with `freeformType` fallback for unknown keys:
 
-| CLI     | HM typed keys                                                   | devenv typed keys                                               |
-| ------- | --------------------------------------------------------------- | --------------------------------------------------------------- |
-| Claude  | `ai.claude.native.settings.*` (generated from the binary)       | `ai.claude.native.settings.*` (generated from the binary)       |
-| Copilot | `model`, `theme`                                                | `model`, `theme`                                                |
-| Kiro    | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` |
+| CLI    | HM typed keys                                                   | devenv typed keys                                               |
+| ------ | --------------------------------------------------------------- | --------------------------------------------------------------- |
+| Claude | `ai.claude.native.settings.*` (generated from the binary)       | `ai.claude.native.settings.*` (generated from the binary)       |
+| Kiro   | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` |
 
 ## Audit Checklist (for repo-review)
 

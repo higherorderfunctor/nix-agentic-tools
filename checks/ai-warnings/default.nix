@@ -16,13 +16,11 @@
     )
     .config;
   evaluate = mode: config: (evalConfig mode config).warnings;
-  inherit
-    (import ../../lib/ai/option-paths.nix {
-      lib = harness.hmLib;
-      inherit pkgs;
-    })
-    records
-    ;
+  optionPaths = import ../../lib/ai/option-paths.nix {
+    lib = harness.hmLib;
+    inherit pkgs;
+  };
+  inherit (optionPaths) records;
   declaredPaths = lib.genAttrs policy.modes (mode:
     map (option: option.loc) (lib.optionAttrSetToDocList
       (
@@ -71,9 +69,13 @@
     in
       builtins.elem needle messages
       && !(builtins.elem needle empty);
+    # A runtime without a native settings file is probed at the root.
     path =
       if row.surface == "settings"
-      then ["ai" row.ecosystem "native" "settings"]
+      then
+        if optionPaths.hasNativeSettings row.ecosystem
+        then optionPaths.nativeSettings row.ecosystem
+        else ["ai" "settings"]
       else if row.surface == "permissions"
       then ["ai" row.ecosystem "permissions"]
       else ["ai" row.surface];
@@ -200,21 +202,6 @@
         };
         suffix = ".action.prompt";
       }
-    ]
-    # Copilot's devenv delivery is partial: the repository `effortLevel` it
-    # lowers to reaches only the interactive session, because `-p`, `--acp`
-    # and `--server` read effort from the user settings file. So the request
-    # warns at whichever path supplied it.
-    ++ map (path: {
-      mode = "devenv";
-      runtime = "copilot";
-      surface = "settings";
-      gapPath = ["reasoningEffort"];
-      inherit path;
-      value = "high";
-    }) [
-      ["ai" "settings" "reasoningEffort"]
-      ["ai" "copilot" "settings" "reasoningEffort"]
     ];
   cases = lib.concatMap (case:
     if case ? gapPath && !(case ? mode)
@@ -237,11 +224,7 @@
     support = supportFor runtime surface;
   in
     [["ai" surface]]
-    ++ lib.optional ((support.backends or []) != [])
-    (["ai" runtime]
-      ++ lib.optionals (builtins.elem surface ["environmentVariables" "shell"])
-      records.${runtime}.launcherOptionsPath
-      ++ [surface]);
+    ++ lib.optional ((support.backends or []) != []) (optionPaths.pool runtime surface);
   surfaceCells = lib.concatMap (runtime:
     lib.concatMap (surface:
       map (mode: {
@@ -356,8 +339,7 @@
       (lib.setAttrByPath ["ai" "hooks" "PermissionRequest"] gapSamples.hooks.PermissionRequest))
     == [])
   policy.modes;
-  # Supported effort delivery stays quiet; withholding Copilot's native
-  # repository value also withdraws its partial-delivery warning.
+  # Supported effort delivery stays quiet.
   effortSilent = lib.all ({
     runtime,
     modes,
@@ -372,23 +354,6 @@
         == evaluate mode enabled)
       paths)
     modes) [
-    {
-      runtime = "copilot";
-      modes = ["hm"];
-      paths = [
-        ["ai" "settings" "reasoningEffort"]
-        ["ai" "copilot" "settings" "reasoningEffort"]
-      ];
-    }
-    {
-      runtime = "copilot";
-      modes = ["devenv"];
-      paths = [
-        ["ai" "settings" "reasoningEffort"]
-        ["ai" "copilot" "settings" "reasoningEffort"]
-      ];
-      extra.ai.copilot.native.settings.effortLevel = null;
-    }
     {
       runtime = "kimchi";
       modes = ["devenv" "hm"];
@@ -860,7 +825,7 @@ in {
       evaluate "hm" {
         ai.copilot = {
           enable = true;
-          rules.probe.enable = false;
+          github.rules.probe.enable = false;
         };
         ai.rules.probe.text = "probe";
       }
@@ -873,7 +838,7 @@ in {
       && evaluate "hm" {
         ai.copilot = {
           enable = true;
-          context.text = "";
+          github.context.text = "";
         };
       }
       == []

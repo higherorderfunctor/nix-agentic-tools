@@ -227,10 +227,17 @@ in {
         && (builtins.tryEval (ai.app.mkRuntime (base // {hm.installPackage = _: pkgs.hello;}))).success
     );
 
-    factory-launcher-options-path = mkTest "launcher-options-path" (let
+    # `optionNamespaces` places the builder's option groups. A nested launcher
+    # carries the package and the settable switch, with a read-only root
+    # `enable`; nested pools carry each pool option and its normalized form.
+    # A record without a package has no launcher: its reserved launcher
+    # namespace declares nothing, and its switch stays at the root. Malformed
+    # namespaces fail where the record is built and where it is read.
+    factory-option-namespaces = mkTest "option-namespaces" (let
       base = {
         inherit pkgs;
         name = "testapp";
+        surfaceSupport.rules = {};
         defaults.package = pkgs.hello;
       };
       transformed = backend: record: config:
@@ -246,29 +253,55 @@ in {
             {inherit config;}
           ];
         };
-      invalid = ["cli" [""] [1] null];
+      invalid = ["cli" {launcher = "cli";} {launcher = [""];} {launcher = [1];} {launcher = null;} {other = ["x"];}];
       check = backend: let
-        record = ai.app.mkRuntime (base // {launcherOptionsPath = ["cli"];});
+        record = ai.app.mkRuntime (base
+          // {
+            optionNamespaces = {
+              launcher = ["cli"];
+              pools = ["arm"];
+            };
+          });
         eval = config: transformed backend record config;
         packages = evaluated:
           if backend == "hm"
           then evaluated.config.home.packages
           else evaluated.config.packages;
-        normal = eval {ai.testapp.cli.enable = true;};
+        normal = eval {
+          ai.rules.root.text = "ROOT";
+          ai.testapp = {
+            cli.enable = true;
+            arm.rules.local.text = "LOCAL";
+          };
+        };
         custom = transformed backend (record // {installPackage = _: throw "null package called installPackage";}) {
           ai.testapp.cli = {
             enable = true;
             package = null;
           };
         };
+        withoutLauncher = transformed backend (ai.app.mkRuntime (builtins.removeAttrs base ["defaults"]
+          // {
+            optionNamespaces = {
+              launcher = ["cli"];
+              pools = ["arm"];
+            };
+          })) {ai.testapp.enable = true;};
       in
         packages normal
         == [pkgs.hello]
+        && normal.config.ai.testapp.enable
         && packages custom == []
         && !(normal.options.ai.testapp ? package)
-        && lib.all (path:
-          !(builtins.tryEval (ai.app.mkRuntime (base // {launcherOptionsPath = path;}))).success
-          && !(builtins.tryEval (transformed backend (record // {launcherOptionsPath = path;}) {}).config.ai.testapp.enable).success)
+        && !(normal.options.ai.testapp ? rules)
+        && builtins.attrNames normal.config.ai.testapp.arm.normalized.rules == ["local" "root"]
+        && withoutLauncher.config.ai.testapp.enable
+        && packages withoutLauncher == []
+        && !(withoutLauncher.options.ai.testapp ? cli)
+        && withoutLauncher.options.ai.testapp.arm ? rules
+        && lib.all (namespaces:
+          !(builtins.tryEval (ai.app.mkRuntime (base // {optionNamespaces = namespaces;}))).success
+          && !(builtins.tryEval (transformed backend (record // {optionNamespaces = namespaces;}) {}).config.ai.testapp.enable).success)
         invalid;
     in
       lib.all check ["devenv" "hm"]);

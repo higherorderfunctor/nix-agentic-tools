@@ -100,8 +100,8 @@
       "ai.skillsDir"
     ];
     copilotDescriptionsThatMustDiscussHmWarning = [
-      "ai.copilot.context"
-      "ai.copilot.rules"
+      "ai.copilot.github.context"
+      "ai.copilot.github.rules"
     ];
     # Each rendering with the role its failure message names.
     hmJsonDoc = {
@@ -219,11 +219,11 @@
       ' "${hmJson}" | "$sort" -u > actual-codex-option-roots
       "$diff" -u "${expectedCodexRoots}" actual-codex-option-roots
 
-      # Every runtime owns one native settings file under an ordinary
+      # Every runtime with a settings file owns it under an ordinary
       # namespace (Kiro's is CLI-specific); Kimchi owns a second, harness
       # settings file. The former flat names are a deliberate clean cut rather
       # than a compatibility alias.
-      ${guardEach "require_key" jsonDocs [] (map (runtime: lib.showOption (optionPaths.nativeSettings runtime)) runtimes)}
+      ${guardEach "require_key" jsonDocs [] (map (runtime: lib.showOption (optionPaths.nativeSettings runtime)) (lib.filter optionPaths.hasNativeSettings runtimes))}
       ${guardEach "forbid_key" jsonDocs [] (map (runtime: "ai.${runtime}.nativeSettings") runtimes)}
       ${guard "require_key" jsonDocs ["ai.kimchi.native.harnessSettings"]}
       ${guard "forbid_key" jsonDocs ["ai.kimchi.harnessSettings"]}

@@ -6,7 +6,8 @@
   facts = import ./ai-delivery-facts.nix {inherit lib;};
   generated = import ./ai-delivery-generated.nix;
   inherit (facts) absent key;
-  inherit (import ../lib/ai/option-paths.nix {inherit lib;}) records;
+  optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
+  inherit (optionPaths) records;
   delivered = row: builtins.elem row.mode (records.${row.ecosystem}.surfaceSupport.${row.surface}.backends or []);
   # Native writers may remain when the normalized surface is unsupported
   # (Kiro hooks/settings). Their absence becomes a diagnostic child, while a
@@ -37,11 +38,7 @@
     support = records.${row.ecosystem}.surfaceSupport.${row.surface} or {};
     paths =
       [["ai" row.surface]]
-      ++ lib.optional ((support.backends or []) != [])
-      (["ai" row.ecosystem]
-        ++ lib.optionals (builtins.elem row.surface ["environmentVariables" "shell"])
-        records.${row.ecosystem}.launcherOptionsPath
-        ++ [row.surface]);
+      ++ lib.optional ((support.backends or []) != []) (optionPaths.pool row.ecosystem row.surface);
   in
     lib.optionals (delivered row) (map (gap:
         (absent gap.reason)

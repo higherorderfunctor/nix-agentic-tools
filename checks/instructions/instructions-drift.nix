@@ -2,8 +2,8 @@
 #
 # Two writers, two comparisons:
 #
-#   * The agent instruction files (AGENTS.md, .github/copilot-instructions.md,
-#     .github/instructions/) are `ai.*`'s own read-only copies. The expected
+#   * The agent instruction files (AGENTS.md, .github/instructions/) are
+#     `ai.*`'s own read-only copies. The expected
 #     files are the ones its writers' plans point at for THIS repository's
 #     configuration (dev/ai.nix), evaluated the way devenv evaluates it: the
 #     built files in each runtime's Markdown tree, already formatted by the
@@ -70,7 +70,6 @@
       then throw "instructions-drift: expected one ${runtime} target at ${path}, found ${toString (builtins.length targets)}"
       else lib.mapAttrs (address: unit: unit.store or (pkgs.writeText address unit.text)) (builtins.head targets).units;
     agentsMd = unitsAt "internal" "ai:agents-md:materialize" ".";
-    copilotContext = unitsAt "copilot" "ai:copilot:materialize-instructions" ".github";
     copilotInstructions = pkgs.linkFarm "expected-github-instructions" (unitsAt "copilot" "ai:copilot:materialize-instructions" ".github/instructions");
 
     # Each entry: the tracked path, and the file to compare it against.
@@ -93,12 +92,6 @@
         tracked = ../../README.md;
         generated = "${drv.repo-readme}/README.md";
         regenerate = "generate:repo:readme";
-      }
-      {
-        label = ".github/copilot-instructions.md";
-        tracked = ../../.github/copilot-instructions.md;
-        generated = copilotContext."copilot-instructions.md";
-        regenerate = "generate:all";
       }
     ];
 

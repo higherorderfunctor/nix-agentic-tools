@@ -45,9 +45,9 @@
       if runtime == "codex"
       then ".codex"
       else cfg.configDir or ".${runtime}";
-    projectPrefix = cfg.projectDir or ".github";
+    projectPrefix = cfg.github.projectDir or ".github";
     defaultPrefix = options.ai.${runtime}.configDir.default or ".${runtime}";
-    defaultProjectPrefix = options.ai.${runtime}.projectDir.default or ".github";
+    defaultProjectPrefix = options.ai.${runtime}.github.projectDir.default or ".github";
     rebase = original:
       if lib.hasPrefix "${defaultPrefix}/" original
       then prefix + lib.removePrefix defaultPrefix original

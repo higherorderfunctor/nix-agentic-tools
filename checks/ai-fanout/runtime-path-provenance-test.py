@@ -11,12 +11,12 @@ with tempfile.TemporaryDirectory() as directory:
     profile, global_bin = root / "profile", root / "global/bin"
     (profile / "bin").mkdir(parents=True)
     global_bin.mkdir(parents=True)
-    for name in ("claude", "codex", "copilot", "kimchi", "kiro-cli"):
+    for name in ("claude", "codex", "kimchi", "kiro-cli"):
         for binary in (profile / "bin" / name, global_bin / name):
             binary.write_text("runtime fixture\n")
             binary.chmod(0o755)
 
-    for script, name in zip(sys.argv[1:], ("claude", "codex", "copilot", "kimchi", "kiro-cli"), strict=True):
+    for script, name in zip(sys.argv[1:], ("claude", "codex", "kimchi", "kiro-cli"), strict=True):
         def probe(path, selected_profile, warning=False):
             env = dict(os.environ, PATH=str(path), DEVENV_PROFILE=str(selected_profile))
             result = subprocess.run([script], env=env, capture_output=True, text=True, check=True)

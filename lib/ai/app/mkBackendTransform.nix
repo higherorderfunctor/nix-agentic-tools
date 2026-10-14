@@ -49,11 +49,19 @@
     inherit (appRecord) pkgs;
   };
   cfg = config.ai.${appRecord.name};
-  # Path operations read launcher metadata before backendSpec is forced.
-  launcherOptionsPath = assert checkRecord.record appRecord;
-    appRecord.launcherOptionsPath or [];
-  launcherCfg = lib.attrByPath launcherOptionsPath {} cfg;
-  poolOptionsPath = pool: lib.optionals (builtins.elem pool ["environmentVariables" "shell"]) launcherOptionsPath;
+  # Where the builder's option groups sit below `ai.<name>` (see
+  # optionNamespaces.nix). Path operations read the record's namespaces
+  # before backendSpec is forced, so they check the record themselves.
+  namespaces = import ./optionNamespaces.nix {inherit lib;};
+  checkedRecord = assert checkRecord.record appRecord; appRecord;
+  hasLauncher = namespaces.hasLauncher checkedRecord;
+  launcherPath = namespaces.launcher checkedRecord;
+  poolsPath = namespaces.pools checkedRecord;
+  launcherCfg = lib.attrByPath launcherPath {} cfg;
+  poolCfg = lib.attrByPath poolsPath {} cfg;
+  poolOptionsPath = namespaces.pool checkedRecord;
+  # A pool's option name as a consumer writes it, for option descriptions.
+  poolOptionName = pool: lib.showOption (["ai" appRecord.name] ++ poolOptionsPath pool ++ [pool]);
   normalizedPath = pool: poolOptionsPath pool ++ ["normalized" pool];
   placeNormalized = values:
     lib.foldl' lib.recursiveUpdate {} (lib.mapAttrsToList (pool: value:
@@ -93,22 +101,22 @@
   # (`mergedAgents`), raw files included.
   hasNativeAgents = supportsPool "agents" && appRecord ? agentNativeType;
   agentsDirSuffixes = appRecord.agentsDirSuffixes or [".md"];
-  poolAgents = mergePool "agents" config.ai.agents (cfg.agents or {});
+  poolAgents = mergePool "agents" config.ai.agents (poolCfg.agents or {});
   rawAgents = lib.optionalAttrs hasNativeAgents (lib.filterAttrs (_: value: !(agent.isSemantic value)) poolAgents);
   mergedAgents = removeAttrs poolAgents (builtins.attrNames rawAgents);
   mergedEnvironmentVariables = mergePool "environmentVariables" config.ai.environmentVariables (launcherCfg.environmentVariables or {});
   # Suppression applies after runtime entries replace root entries so a
   # runtime-local `enable = false` can retract an inherited root rule.
-  mergedRules = lib.filterAttrs (_: aiCommon.hasContent) (mergePool "rules" config.ai.rules cfg.rules);
+  mergedRules = lib.filterAttrs (_: aiCommon.hasContent) (mergePool "rules" config.ai.rules poolCfg.rules);
   # Proxy ownership is resolved at the declaration scope BEFORE fanout.
   # Top-level declarations contribute only their lowered credential-free
   # client entries here; sharedOptions.nix emits their one managed unit.
   # Runtime declarations lower independently and own their managed units
   # directly. Null tombstones survive lowering and are filtered by mergePool.
   topServers = mcpProxy.lowerClientEntries config.ai.mcpServers;
-  runtimeServers = mcpProxy.lowerClientEntries cfg.mcpServers;
+  runtimeServers = mcpProxy.lowerClientEntries poolCfg.mcpServers;
   mergedServers = mergePool "mcpServers" topServers runtimeServers;
-  mergedSkills = mergePool "skills" config.ai.skills cfg.skills;
+  mergedSkills = mergePool "skills" config.ai.skills poolCfg.skills;
 
   # One capability source per app record. A normalized pool is declared,
   # merged and fanned out only when the runtime consumes it.
@@ -142,7 +150,7 @@
     then {
       reasoningEffort = aiCommon.resolveOverride {
         topValue = config.ai.settings.reasoningEffort;
-        cliValue = cfg.settings.reasoningEffort;
+        cliValue = poolCfg.settings.reasoningEffort;
       };
     }
     else {};
@@ -176,7 +184,7 @@
         else ["source"]
       )
     );
-  contextValues = [config.ai.context cfg.context];
+  contextValues = [config.ai.context poolCfg.context];
   # Presence must stay structural. `composeContent` reads source-backed bytes
   # when two values compose, so using `mergedContext != null` as a generator
   # gate would force a discarded default before B7 replacement or disable
@@ -213,7 +221,7 @@
   # and keeps the rest; a mkDefault on the whole record would be discarded.
   nativeAgentDefaults = lib.mapAttrs (name: value:
     lib.mapAttrs (_: lib.mkDefault) (appRecord.agentTransformer name (normalizeAgent value)))
-  cfg.normalized.agents;
+  (lib.getAttrFromPath (normalizedPath "agents") cfg);
   # Kiro keeps its established runtime-local scalar `inclusion` override.
   # Root rules and every other runtime expose the portable priority list.
   # After root/runtime replacement has chosen one complete entry, normalize
@@ -278,8 +286,10 @@
   };
   checkRecord = import ./checkRecord.nix {inherit lib;};
   # A nested launcher declares its harness switch beside its own options;
-  # `ai.<name>.enable` is derived from that switch.
-  harnessSwitched = launcherOptionsPath != [];
+  # `ai.<name>.enable` is derived from that switch. A runtime without a
+  # launcher keeps its switch at the root.
+  enablePath = namespaces.enable checkedRecord;
+  harnessSwitched = enablePath != ["enable"];
   runtimeOptions = (appRecord.options or {}) // backendOptions;
   # A runtime's own options may already declare `native.*` (settings), so the
   # native agent option joins that attrset rather than replacing it.
@@ -295,7 +305,7 @@
             description = ''
               Native ${appRecord.name} agent records, one file each. Every
               normalized agent that reaches ${appRecord.name} (root
-              `ai.agents` and `ai.${appRecord.name}.agents`, after
+              `ai.agents` and `${poolOptionName "agents"}`, after
               replacement and null withdrawal) lowers into the entry at its
               key at `mkDefault`, field by field, so a field defined here wins
               and runtime-only fields are added here. Define an entry field by
@@ -304,7 +314,7 @@
               must set each field at `mkDefault` instead. An entry with no
               normalized counterpart is a native-only agent, including one
               whose normalized agent was withdrawn with null. A raw file at
-              `ai.${appRecord.name}.agents.<name>` bypasses this layer and
+              `${poolOptionName "agents"}.<name>` bypasses this layer and
               cannot share its key.
             '';
           };
@@ -343,9 +353,10 @@
           to replace the transformer's input.
         '';
       })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools));
-  launcherOptions = lib.setAttrByPath launcherOptionsPath (
-    {
-      enable = lib.mkEnableOption appRecord.name;
+  # Only a launcher's own options sit at its path, so a reserved namespace
+  # without a launcher declares nothing there.
+  launcherOwnOptions =
+    lib.optionalAttrs hasLauncher {
       package = lib.mkOption ({
           type = lib.types.nullOr lib.types.package;
           default = package;
@@ -368,8 +379,114 @@
           wins over it. With both null the shell is left untouched.
         '';
       };
+    };
+  launcherOptions =
+    lib.recursiveUpdate
+    (lib.setAttrByPath enablePath (lib.mkEnableOption appRecord.name))
+    (lib.optionalAttrs (launcherOwnOptions != {}) (lib.setAttrByPath launcherPath launcherOwnOptions));
+  # Option attrsets merge by key, but an option itself is a leaf: a runtime's
+  # own option at a pool's key replaces the builder's, as `//` would.
+  mergeOptionTrees = lib.recursiveUpdateUntil (_: lhs: rhs: !(builtins.isAttrs lhs && builtins.isAttrs rhs) || lib.isOption lhs || lib.isOption rhs);
+  # The per-runtime pool options, placed at the record's pools namespace.
+  poolDeclarations =
+    lib.optionalAttrs (supportsPool "mcpServers") {
+      mcpServers = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
+          modules = [(import ../mcpServer/commonSchema.nix)];
+        }));
+        default = {};
+        description = "${appRecord.name}-specific MCP servers. Entries replace top-level ai.mcpServers at the same key; null suppresses an inherited server.";
+      };
     }
-  );
+    // poolOption "agents" {
+      type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
+      description =
+        "${appRecord.name}-specific agents: a normalized record or a raw native file. Entries replace top-level ai.agents at the same key; null suppresses an inherited agent."
+        + lib.optionalString hasNativeAgents " Normalized records lower into `ai.${appRecord.name}.native.agents`; raw files bypass that layer. Null withdraws only the normalized record: a `native.agents` entry at the same key still ships as a native-only agent."
+        + lib.optionalString (appRecord ? agentsDescriptionSuffix) " ${appRecord.agentsDescriptionSuffix}";
+    }
+    // lib.optionalAttrs hasAgentsDir {
+      agentsDir = lib.mkOption ({
+          type = lib.types.nullOr aiCommon.dirOptionType;
+          default = null;
+          description = "Directory of native agent files (${lib.concatStringsSep ", " agentsDirSuffixes}), expanded into raw `${poolOptionName "agents"}` entries keyed by basename minus the suffix. Accepts a path, a path-like string or derivation, or `{ path, filter? }`. Only top-level regular files with those suffixes are expanded; subdirectories and other files are not delivered, and two files with one stem fail evaluation. They blend with named entries; a named entry at the same key wins.";
+        }
+        // poolOptions.agentsDir or {});
+    }
+    // lib.optionalAttrs (supportsPool "settings") {
+      settings = lib.mkOption {
+        type = aiCommon.normalizedSettingsType;
+        default = {};
+        description = ''
+          Normalized ${appRecord.name} settings. A non-null field overrides
+          the matching `ai.settings` default for this runtime; null inherits
+          the root value. Supported fields translate into native keys at
+          `mkDefault` priority. Set the corresponding key under
+          `ai.${appRecord.name}.native.settings`, including an explicit null,
+          to arbitrate against the derived value.
+        '';
+      };
+    }
+    // lib.optionalAttrs (supportsPool "context") {
+      context = lib.mkOption {
+        type = aiCommon.runtimeContextModule (appRecord.contextFilename or (throw "${appRecord.name}: supportedSurfaces includes context but the app record has no contextFilename"));
+        default = {};
+        description =
+          appRecord.contextDescription or ''
+            ${appRecord.name}-specific context appended after `ai.context` in
+            the runtime's single always-on `${appRecord.contextFilename}` file.
+            When `text` and `source` are defined at different module priorities,
+            the higher-priority definition supplies the content whichever field
+            it targets; definitions at the same priority conflict. Same-priority
+            `text` definitions concatenate in module order. Enabled context must
+            resolve to non-empty `text` or a `source`. Set `enable = false` to
+            omit this context. `filename` controls the native artifact name.
+          '';
+      };
+    }
+    // lib.optionalAttrs (supportsPool "rules") {
+      rules = lib.mkOption {
+        type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
+        default = {};
+        description =
+          appRecord.rulesDescription or ''
+            ${appRecord.name}-specific rules. Entries replace top-level ai.rules
+            at the same key; set `enable = false` to suppress an inherited rule.
+            Same-priority `text` definitions concatenate in module order.
+            Enabled rules must resolve to non-empty `text` or a `source`.
+          '';
+      };
+      rulesDir = lib.mkOption {
+        type = lib.types.nullOr aiCommon.dirOptionType;
+        default = null;
+        description = ''
+          ${appRecord.name}-specific directory of `.md` rule files. Each
+          file becomes one entry in `${poolOptionName "rules"}` keyed by
+          the basename minus `.md`. Accepts a path literal or
+          `{ path, filter? }` (filter: name → bool, default keeps `.md`).
+          Entries use the same per-runtime replacement semantics as explicit
+          values; other derivations may still contribute to the same on-disk
+          rules directory.
+        '';
+      };
+    }
+    // lib.optionalAttrs (supportsPool "skills") {
+      skills = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
+        default = {};
+        description = "${appRecord.name}-specific skills. Entries replace top-level ai.skills at the same key; null suppresses an inherited skill.";
+      };
+      skillsDir = lib.mkOption {
+        type = lib.types.nullOr aiCommon.dirOptionType;
+        default = null;
+        description = ''
+          ${appRecord.name}-specific directory-of-directories; each
+          immediate subdirectory becomes one entry in
+          `${poolOptionName "skills"}` keyed by the subdir name.
+          Accepts a path literal or `{ path, filter? }`.
+        '';
+      };
+    };
   hasAgentsDir = supportsPool "agents";
   normalizedPool = name: neutral:
     if supportsPool name
@@ -381,9 +498,9 @@
   normalizedHasContext =
     if !supportsPool "context"
     then false
-    else if options.ai.${appRecord.name}.normalized.context.highestPrio == 1500
+    else if (lib.getAttrFromPath (normalizedPath "context") options.ai.${appRecord.name}).highestPrio == 1500
     then hasMergedContext
-    else aiCommon.hasContent cfg.normalized.context;
+    else aiCommon.hasContent (lib.getAttrFromPath (normalizedPath "context") cfg);
 
   # A record can reach this transform without passing mkRuntime (an override
   # of an exported record, or a hand-built one), so its closed fields are
@@ -505,8 +622,12 @@
   # `installPackage` accepts the same callback args as `config`, so a factory
   # that wraps its binary derives the wrapper once and never repeats the
   # lowering.
-  installPackageFn = backendSpec.installPackage or appRecord.installPackage or (_: launcherCfg.package);
-  rawInstalledPackages = lib.optional (launcherCfg.package != null) (installPackageFn callbackArgs);
+  launcherPackage =
+    if hasLauncher
+    then launcherCfg.package
+    else null;
+  installPackageFn = backendSpec.installPackage or appRecord.installPackage or (_: launcherPackage);
+  rawInstalledPackages = lib.optional (launcherPackage != null) (installPackageFn callbackArgs);
   installedPackages =
     if options ? warnings
     then rawInstalledPackages
@@ -520,8 +641,8 @@
     else
       {packages = installedPackages;}
       // lib.optionalAttrs (options ? enterShell) {
-        enterShell = lib.mkIf (launcherCfg.package != null) (let
-          runtime = builtins.baseNameOf (lib.getExe launcherCfg.package);
+        enterShell = lib.mkIf (launcherPackage != null) (let
+          runtime = builtins.baseNameOf (lib.getExe launcherPackage);
         in ''
           ${lib.getExe pathProvenanceNotice} ${lib.escapeShellArg runtime} "$(command -v ${lib.escapeShellArg runtime} || :)" "''${DEVENV_PROFILE:-}"
         '');
@@ -625,117 +746,21 @@ in {
         readOnly = true;
         description = ''
           Whether ${appRecord.name} is managed. Read-only: true when
-          `ai.${appRecord.name}.${lib.concatStringsSep "." launcherOptionsPath}.enable` is set.
+          `${lib.showOption (["ai" appRecord.name] ++ enablePath)}` is set.
         '';
       };
     }
     // lib.optionalAttrs (supportsPool "mcpServers") {
       _normalizedPools.mcpServers = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
+        type = lib.types.listOf lib.types.str;
+        default = ["ai" appRecord.name] ++ poolOptionsPath "mcpServers" ++ ["mcpServers"];
         readOnly = true;
         internal = true;
         visible = false;
-        description = "Internal normalized MCP-pool capability marker used by shared proxy ownership.";
-      };
-      mcpServers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
-          modules = [(import ../mcpServer/commonSchema.nix)];
-        }));
-        default = {};
-        description = "${appRecord.name}-specific MCP servers. Entries replace top-level ai.mcpServers at the same key; null suppresses an inherited server.";
+        description = "Internal normalized MCP-pool capability marker used by shared proxy ownership: the option path of this runtime's MCP pool.";
       };
     }
-    // poolOption "agents" {
-      type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
-      description =
-        "${appRecord.name}-specific agents: a normalized record or a raw native file. Entries replace top-level ai.agents at the same key; null suppresses an inherited agent."
-        + lib.optionalString hasNativeAgents " Normalized records lower into `ai.${appRecord.name}.native.agents`; raw files bypass that layer. Null withdraws only the normalized record: a `native.agents` entry at the same key still ships as a native-only agent."
-        + lib.optionalString (appRecord ? agentsDescriptionSuffix) " ${appRecord.agentsDescriptionSuffix}";
-    }
-    // lib.optionalAttrs hasAgentsDir {
-      agentsDir = lib.mkOption ({
-          type = lib.types.nullOr aiCommon.dirOptionType;
-          default = null;
-          description = "Directory of native agent files (${lib.concatStringsSep ", " agentsDirSuffixes}), expanded into raw `ai.${appRecord.name}.agents` entries keyed by basename minus the suffix. Accepts a path, a path-like string or derivation, or `{ path, filter? }`. Only top-level regular files with those suffixes are expanded; subdirectories and other files are not delivered, and two files with one stem fail evaluation. They blend with named entries; a named entry at the same key wins.";
-        }
-        // poolOptions.agentsDir or {});
-    }
-    // lib.optionalAttrs (supportsPool "settings") {
-      settings = lib.mkOption {
-        type = aiCommon.normalizedSettingsType;
-        default = {};
-        description = ''
-          Normalized ${appRecord.name} settings. A non-null field overrides
-          the matching `ai.settings` default for this runtime; null inherits
-          the root value. Supported fields translate into native keys at
-          `mkDefault` priority. Set the corresponding key under
-          `ai.${appRecord.name}.native.settings`, including an explicit null,
-          to arbitrate against the derived value.
-        '';
-      };
-    }
-    // lib.optionalAttrs (supportsPool "context") {
-      context = lib.mkOption {
-        type = aiCommon.runtimeContextModule (appRecord.contextFilename or (throw "${appRecord.name}: supportedSurfaces includes context but the app record has no contextFilename"));
-        default = {};
-        description =
-          appRecord.contextDescription or ''
-            ${appRecord.name}-specific context appended after `ai.context` in
-            the runtime's single always-on `${appRecord.contextFilename}` file.
-            When `text` and `source` are defined at different module priorities,
-            the higher-priority definition supplies the content whichever field
-            it targets; definitions at the same priority conflict. Same-priority
-            `text` definitions concatenate in module order. Enabled context must
-            resolve to non-empty `text` or a `source`. Set `enable = false` to
-            omit this context. `filename` controls the native artifact name.
-          '';
-      };
-    }
-    // lib.optionalAttrs (supportsPool "rules") {
-      rules = lib.mkOption {
-        type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
-        default = {};
-        description =
-          appRecord.rulesDescription or ''
-            ${appRecord.name}-specific rules. Entries replace top-level ai.rules
-            at the same key; set `enable = false` to suppress an inherited rule.
-            Same-priority `text` definitions concatenate in module order.
-            Enabled rules must resolve to non-empty `text` or a `source`.
-          '';
-      };
-      rulesDir = lib.mkOption {
-        type = lib.types.nullOr aiCommon.dirOptionType;
-        default = null;
-        description = ''
-          ${appRecord.name}-specific directory of `.md` rule files. Each
-          file becomes one entry in `ai.${appRecord.name}.rules` keyed by
-          the basename minus `.md`. Accepts a path literal or
-          `{ path, filter? }` (filter: name → bool, default keeps `.md`).
-          Entries use the same per-runtime replacement semantics as explicit
-          values; other derivations may still contribute to the same on-disk
-          rules directory.
-        '';
-      };
-    }
-    // lib.optionalAttrs (supportsPool "skills") {
-      skills = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
-        default = {};
-        description = "${appRecord.name}-specific skills. Entries replace top-level ai.skills at the same key; null suppresses an inherited skill.";
-      };
-      skillsDir = lib.mkOption {
-        type = lib.types.nullOr aiCommon.dirOptionType;
-        default = null;
-        description = ''
-          ${appRecord.name}-specific directory-of-directories; each
-          immediate subdirectory becomes one entry in
-          `ai.${appRecord.name}.skills` keyed by the subdir name.
-          Accepts a path literal or `{ path, filter? }`.
-        '';
-      };
-    }
-    // nativeOptions
+    // mergeOptionTrees (lib.setAttrByPath poolsPath poolDeclarations) nativeOptions
   ) (lib.recursiveUpdate launcherOptions normalizedOptions);
 
   config = lib.mkMerge [
@@ -760,7 +785,7 @@ in {
       in [
         {
           assertion = !cfg.enable || shared == [];
-          message = "ai.${appRecord.name}.native.agents ${lib.concatStringsSep ", " shared}: ai.${appRecord.name}.agents sets a raw native file at the same key, which bypasses the native layer. Keep one of the two.";
+          message = "ai.${appRecord.name}.native.agents ${lib.concatStringsSep ", " shared}: ${poolOptionName "agents"} sets a raw native file at the same key, which bypasses the native layer. Keep one of the two.";
         }
       ];
     })
@@ -771,20 +796,20 @@ in {
     # unconditionally (no mkIf cfg.enable) so the normalized option value is
     # complete even when the CLI is disabled. Actual on-disk emission remains
     # gated by `cfg.enable` inside the per-CLI factory's customConfig.
-    (lib.optionalAttrs (supportsPool "rules") (lib.mkIf (cfg.rulesDir != null) {
-      ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
-        dirHelpers.rulesFromDir cfg.rulesDir
-      );
+    (lib.optionalAttrs (supportsPool "rules") (lib.mkIf (poolCfg.rulesDir != null) {
+      ai.${appRecord.name} = lib.setAttrByPath (poolsPath ++ ["rules"]) (lib.mapAttrs (_: lib.mkDefault) (
+        dirHelpers.rulesFromDir poolCfg.rulesDir
+      ));
     }))
-    (lib.optionalAttrs hasAgentsDir (lib.mkIf (cfg.agentsDir != null) {
-      ai.${appRecord.name}.agents = lib.mapAttrs (_: lib.mkDefault) (
-        dirHelpers.agentsFromDirWith agentsDirSuffixes cfg.agentsDir
-      );
+    (lib.optionalAttrs hasAgentsDir (lib.mkIf (poolCfg.agentsDir != null) {
+      ai.${appRecord.name} = lib.setAttrByPath (poolsPath ++ ["agents"]) (lib.mapAttrs (_: lib.mkDefault) (
+        dirHelpers.agentsFromDirWith agentsDirSuffixes poolCfg.agentsDir
+      ));
     }))
-    (lib.optionalAttrs (supportsPool "skills") (lib.mkIf (cfg.skillsDir != null) {
-      ai.${appRecord.name}.skills = lib.mapAttrs (_: lib.mkDefault) (
-        dirHelpers.skillsFromDir cfg.skillsDir
-      );
+    (lib.optionalAttrs (supportsPool "skills") (lib.mkIf (poolCfg.skillsDir != null) {
+      ai.${appRecord.name} = lib.setAttrByPath (poolsPath ++ ["skills"]) (lib.mapAttrs (_: lib.mkDefault) (
+        dirHelpers.skillsFromDir poolCfg.skillsDir
+      ));
     }))
     (lib.mkIf cfg.enable (lib.mkMerge [
       packageInstallConfig

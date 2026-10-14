@@ -13,19 +13,24 @@
 }: let
   runtime = appRecord.name;
   cfg = config.ai.${runtime};
+  namespaces = import ./optionNamespaces.nix {inherit lib;};
   declarations = appRecord.surfaceSupport or {};
   supported = surface: (declarations.${surface}.backends or []) != [];
   defaultReason = "${runtime}'s surfaceSupport does not consume this shared surface.";
+  # A runtime unit's path relative to `ai.<runtime>`, inside its namespace.
+  runtimePath = surface: namespaces.pool appRecord surface ++ [surface];
   units = surface:
     [
       {
         path = ["ai" surface];
+        root = true;
         value = config.ai.${surface};
       }
     ]
-    ++ lib.optional (supported surface && cfg ? ${surface}) {
-      path = ["ai" runtime surface];
-      value = cfg.${surface};
+    ++ lib.optional (supported surface && lib.hasAttrByPath (runtimePath surface) cfg) {
+      path = ["ai" runtime] ++ runtimePath surface;
+      root = false;
+      value = lib.getAttrFromPath (runtimePath surface) cfg;
     };
   gapWarnings = surface: gap: let
     candidates =
@@ -45,11 +50,11 @@
       # winning root/runtime input once, rather than both declarations.
       selected =
         !(gap.effective or false)
-        || (builtins.length entry.path == 3)
-        == (lib.attrByPath ([surface] ++ gapPath) null cfg != null);
+        || (!entry.root)
+        == (lib.attrByPath (runtimePath surface ++ gapPath) null cfg != null);
       active =
         builtins.elem backend (gap.backends or ["devenv" "hm"])
-        && (!(gap.rootOnly or false) || builtins.length entry.path == 2)
+        && (!(gap.rootOnly or false) || entry.root)
         && selected
         && (
           if gapPath == []

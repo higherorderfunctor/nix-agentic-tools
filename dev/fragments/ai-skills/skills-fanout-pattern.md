@@ -1,7 +1,8 @@
 ## ai.skills Fanout Pattern
 
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> normalized backend reach and nested delivery diagnostics; package skills and
+> rules follow the record's pool namespace and backend reach.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -18,7 +19,7 @@ discovers Layout A, where the skill directory itself is a symlink.
 | ------- | ------------------------------------ | -------------------------------------------- | ------ |
 | Claude  | `mkSkillFiles`                       | `.claude/skills`                             | B      |
 | Codex   | `mkSkillFiles` (`recursive = false`) | `.agents/skills`                             | A      |
-| Copilot | `mkSkillFiles`                       | `.copilot/skills`                            | B      |
+| Copilot | none (devenv only)                   | devenv `<projectDir>/skills` (`.github`)     | B      |
 | Kimchi  | `mkSkillFiles`                       | HM `harness/skills`; devenv `.kimchi/skills` | B      |
 | Kiro    | `mkSkillFiles`                       | `.kiro/skills`                               | B      |
 
@@ -128,11 +129,14 @@ first one was added). A check of the real default uses `evalHmModules` /
 The factory passes `config`, `lib`, `pkgs` and `runtime` to both `skills` and
 `rules` callbacks. Import it once with the full supported runtime set; render
 per-runtime content inside the callbacks. A spec with `rules` must also name its
-`backend` (`"hm"` or `"devenv"`); the shared factory contributes rules only
-where that backend delivers them, using the runtime record's declared backend
-reach. Copilot on Home Manager therefore receives package skills without an
-undeliverable router rule or a warning about a pool the consumer never set.
-Explicit consumer rules still warn.
+`backend` (`"hm"` or `"devenv"`); with it, the shared factory contributes skills
+and rules only where that backend delivers them, using the runtime record's
+declared backend reach, and writes each at the pool's path from
+`option-paths.nix` (`ai.copilot.github.skills` for Copilot). Copilot on Home
+Manager therefore receives no package skill or router rule, and no warning about
+a pool the consumer never set. A spec without `backend` (kimchi-docs) still
+writes Copilot's Home Manager skills, which then warn. Explicit consumer values
+always warn.
 
 This controls whether the package writes its existing
 `ai.<runtime>.{skills,rules}` entries; it does not move those entries to the

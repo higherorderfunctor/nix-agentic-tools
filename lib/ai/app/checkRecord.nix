@@ -52,6 +52,8 @@
     && builtins.isList (support.gaps or [])
     && lib.all validGap (support.gaps or []);
   contentTargetsKeys = ["context" "rules"];
+  namespaceGroups = (import ./optionNamespaces.nix {inherit lib;}).groups;
+  validPath = path: builtins.isList path && lib.all (part: builtins.isString part && part != "") path;
   unknownIn = allowed: attrs: lib.subtractLists allowed (builtins.attrNames attrs);
   listed = lib.concatStringsSep ", ";
 in {
@@ -60,7 +62,7 @@ in {
     defaults ? {},
     hm ? {},
     devenv ? {},
-    launcherOptionsPath ? [],
+    optionNamespaces ? {},
     poolOptions ? {},
     surfaceSupport ? {},
     ...
@@ -76,13 +78,14 @@ in {
       lib.intersectLists poolOptionPools supportedSurfaces
       ++ lib.optional (lib.elem "agents" supportedSurfaces) "agentsDir";
     unknownPoolOptions = unknownIn poolOptionKeys poolOptions;
+    unknownNamespaces = unknownIn namespaceGroups optionNamespaces;
   in
     lib.assertMsg (lib.all validSupport (builtins.attrValues surfaceSupport))
     "ai runtime ${name}: surfaceSupport entries take backends (hm/devenv), reason and gaps; each gap takes a relative path, backend reach, boolean scope selectors, reason and a when predicate."
     && checkBackend "hm" hm
     && checkBackend "devenv" devenv
-    && lib.assertMsg (builtins.isList launcherOptionsPath && lib.all (part: builtins.isString part && part != "") launcherOptionsPath)
-    "ai runtime ${name}: launcherOptionsPath must be a list of nonempty strings (an empty list keeps launcher options at the runtime root)."
+    && lib.assertMsg (builtins.isAttrs optionNamespaces && unknownNamespaces == [] && lib.all validPath (builtins.attrValues optionNamespaces))
+    "ai runtime ${name}: optionNamespaces maps ${listed namespaceGroups} to a list of nonempty strings (an omitted group keeps its options at the runtime root)."
     && lib.assertMsg (unknownDefaults == [])
     "ai runtime ${name}: defaults carries ${listed unknownDefaults}; it takes only ${listed defaultsKeys}."
     && lib.assertMsg (unknownPoolOptions == [])

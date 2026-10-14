@@ -8,44 +8,50 @@
 }: let
   inherit (harness) aiStubs claudeSettings evalDevenv evalHm harnessNames hmLib markdownInput mkTest setEnable;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDaemonDefault;
+  optionPaths = import ../../lib/ai/option-paths.nix {inherit lib pkgs;};
   # Runtimes whose app record supports the normalized settings pool. Kiro is
   # excluded: it persists effort only per model, so it declares no
   # `ai.kiro.settings` (packages/kiro-cli/checks: kiro-settings-pool-excluded).
   settingsHarnessNames = lib.remove "kiro" harnessNames;
 in {
   checks = {
-    module-package-copilot-rules-backend-gate = let
+    # A skill package writes a pool only where the runtime delivers it on
+    # this backend, so github.com Copilot's Home Manager arm receives nothing
+    # and warns only for what a consumer set.
+    module-package-copilot-backend-gate = let
       declaration = {
         ai.copilot.enable = true;
         ai.programs.stacked-workflows.enable = true;
       };
       hm = evalHm declaration;
       devenv = evalDevenv declaration;
-      ruleWarnings = evaluated: builtins.filter (lib.hasInfix "ai.copilot.rules is set") evaluated.config.warnings;
+      poolWarnings = evaluated: builtins.filter (lib.hasInfix "ai.copilot.github.") evaluated.config.warnings;
       observation = {
-        rules = builtins.attrNames hm.config.ai.copilot.rules;
-        warnings = ruleWarnings hm;
-        definitions = map (definition: definition.file) hm.options.ai.copilot.rules.definitionsWithLocations;
+        rules = builtins.attrNames hm.config.ai.copilot.github.rules;
+        skills = builtins.attrNames hm.config.ai.copilot.github.skills;
+        warnings = poolWarnings hm;
+        definitions = map (definition: definition.file) hm.options.ai.copilot.github.rules.definitionsWithLocations;
       };
-      consumer = evalHm (lib.recursiveUpdate declaration {ai.copilot.rules.consumer.text = "Consumer guidance.";});
+      consumer = evalHm (lib.recursiveUpdate declaration {ai.copilot.github.rules.consumer.text = "Consumer guidance.";});
     in
-      (mkTest "package-copilot-rules-backend-gate" (
+      (mkTest "package-copilot-backend-gate" (
         observation.rules
         == []
+        && observation.skills == []
         && observation.warnings == []
-        && hm.config.ai.copilot.skills ? stack-plan
-        && devenv.config.ai.copilot.rules ? stacked-workflows-router
-        && ruleWarnings devenv == []
-        && consumer.config.ai.copilot.rules ? consumer
-        && ruleWarnings consumer != []
+        && devenv.config.ai.copilot.github.skills ? stack-plan
+        && devenv.config.ai.copilot.github.rules ? stacked-workflows-router
+        && poolWarnings devenv == []
+        && consumer.config.ai.copilot.github.rules ? consumer
+        && poolWarnings consumer != []
       ))
       // {passthru = {inherit observation;};};
 
     module-runtime-path-provenance-notice = let
+      # Every runtime that ships a launcher; github.com Copilot has none.
       binaries = {
         claude = "claude";
         codex = "codex";
-        copilot = "copilot";
         kimchi = "kimchi";
         kiro = "kiro-cli";
       };
@@ -58,10 +64,9 @@ in {
           '').overrideAttrs (_: {
             passthru.kiroFhsSandbox = false;
           });
-        launcherPath = lib.optional (runtime == "kiro") "cli";
-        configFor = package: {
-          ai.${runtime} = lib.setAttrByPath launcherPath ({inherit package;} // lib.optionalAttrs (runtime == "kiro") {useFhsSandbox = false;});
-        };
+        configFor = package:
+          lib.setAttrByPath (lib.init (optionPaths.launcher runtime "package"))
+          ({inherit package;} // lib.optionalAttrs (runtime == "kiro") {useFhsSandbox = false;});
         evaluated = evalDevenv (lib.recursiveUpdate (setEnable runtime true) (configFor package));
         noticeLines = config: lib.filter (lib.hasInfix "/bin/ai-runtime-path-provenance-notice ") (lib.splitString "\n" config.enterShell);
         lines = noticeLines evaluated.config;
@@ -74,7 +79,7 @@ in {
             ${lib.head lines}
           '';
     in
-      assert lib.sort builtins.lessThan (builtins.attrNames binaries) == lib.sort builtins.lessThan harnessNames;
+      assert lib.sort builtins.lessThan (builtins.attrNames binaries) == lib.sort builtins.lessThan (lib.filter optionPaths.hasLauncher harnessNames);
       assert !(lib.hasInfix "/bin/ai-runtime-path-provenance-notice " (evalDevenv {}).config.enterShell);
         pkgs.runCommand "module-test-runtime-path-provenance-notice" {} ''
           set -euETo pipefail
@@ -83,7 +88,7 @@ in {
           echo PASS > "$out"
         '';
 
-    # ── Structural gate: every enabled runtime installs SOMETHING ──
+    # ── Structural gate: every enabled runtime with a launcher installs SOMETHING ──
     #
     # This is the test that would have caught `claude`. Installation used to be
     # a per-factory `home.packages` / `packages` write with no shared
@@ -120,14 +125,12 @@ in {
           devenv = {
             claude = "bare";
             codex = "wrapped";
-            copilot = "wrapped";
             kimchi = "wrapped";
             kiro = "wrapped";
           };
           hm = {
             claude = "bare";
             codex = "wrapped";
-            copilot = "bare";
             kimchi = "wrapped";
             kiro = "bare";
           };
@@ -666,10 +669,8 @@ in {
             rules.removed.enable = false;
             skills.removed = null;
           };
-          copilot = {
+          copilot.github = {
             agents.removed = null;
-            environmentVariables.removed = null;
-            mcpServers.removed = null;
             rules.removed.enable = false;
             skills.removed = null;
           };
@@ -686,13 +687,13 @@ in {
           == null
           && evaluated.config.ai.claude.mcpServers.removed == null
           && evaluated.config.ai.codex.environmentVariables.removed == null
-          && evaluated.config.ai.copilot.mcpServers.removed == null
+          && evaluated.config.ai.copilot.github.skills.removed == null
           && evaluated.config.ai.kimchi.environmentVariables.removed == null
           && evaluated.config.ai.kiro.skills.removed == null
           && !evaluated.config.ai.rules.removed.enable
           && !evaluated.config.ai.claude.rules.removed.enable
           && !evaluated.config.ai.codex.rules.removed.enable
-          && !evaluated.config.ai.copilot.rules.removed.enable
+          && !evaluated.config.ai.copilot.github.rules.removed.enable
           && !evaluated.config.ai.kiro.rules.removed.enable;
       in
         keepsNulls (evalHm config) && keepsNulls (evalDevenv config)

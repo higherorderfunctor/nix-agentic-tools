@@ -26,9 +26,8 @@
 # the same wrapper is invoked twice with different roots and must report a
 # different path each time. A build-time-frozen path cannot pass both.
 #
-# Argv SEMANTICS live here. That the MODULE points the flag at the same
-# relative path it renders mcp-config.json to is a separate, wiring-level
-# question, asserted in packages/copilot-cli/checks/module-eval.nix.
+# The wrapper is the Copilot CLI launcher kept for `ai.copilot.cli`; no module
+# installs it today, so argv semantics are all this checks.
 {
   lib,
   pkgs,
@@ -57,9 +56,9 @@
 
     wrap = args: wrapCopilotPackage ({package = stubPackage;} // args);
 
-    # The two backends' real parameterization. `configDir` values mirror the
-    # module defaults: `.copilot` under HM (copilot's own home dir) and
-    # `.config/github-copilot` under devenv (wrapper-aimed, project-relative).
+    # The two roots a launcher wraps against: `.copilot` under HOME
+    # (copilot's own home dir) and `.config/github-copilot` under the devenv
+    # root (wrapper-aimed, project-relative).
     hmMcp = wrap {
       rootVar = "HOME";
       configDir = ".copilot";
@@ -167,7 +166,7 @@
         "$HA" "$RA" ${hmMcp}/bin/copilot -p 'hi there'
 
       # ── environmentVariables reach the process, not just the Nix string ─────
-      # The HM module's only export mechanism is this wrapper, and until now
+      # A Home Manager launcher's only export mechanism is this wrapper, and until now
       # nothing asserted the `--set` args survived postBuild at all — the same
       # build-time blind spot the two shipped defects lived in.
       got="$(baked "$HA" "$RA" ${hmMcpEnv}/bin/copilot)"

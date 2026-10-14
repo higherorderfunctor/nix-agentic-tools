@@ -7,17 +7,17 @@ applyTo: "dev/ai.nix,devenv.nix,packages/chatgpt-codex/lib/mkCodex.nix,packages/
 
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-09-28 — devenv's Codex launcher runs without the
-> shared app-server daemon, so Codex's tool calls keep the launch environment.
+> **Last verified:** 2026-10-14 — devenv's Codex launcher runs without the
+> shared app-server daemon, so Codex's tool calls keep the launch environment;
+> `ai.copilot` is github.com Copilot and launches nothing locally.
 >
 > States as one cross-runtime rule what previously had to be inferred by reading
 > three factories side by side: no `ai.*` runtime redirects its config root, on
 > either backend, and the reason is identical in every case. Motivation hoisted
-> from the measurement already recorded in
-> `dev/fragments/ai-clis/copilot-config-delivery.md`, which stated it only for
-> Copilot. If you add a runtime, change how one delivers config, or set any
-> `*_HOME` / `*_CONFIG_DIR` variable in a wrapper, update this fragment in the
-> same commit.
+> from the copilot-cli measurement in
+> `git show 6a45d50c:dev/fragments/ai-clis/copilot-config-delivery.md`. If you
+> add a runtime, change how one delivers config, or set any `*_HOME` /
+> `*_CONFIG_DIR` variable in a wrapper, update this fragment in the same commit.
 
 ### The rule
 
@@ -59,8 +59,9 @@ the `$HOME/.copilot/` read. It is refused anyway, for the cost above.
 
 The corollary that is easy to miss: because the constraint is about auth and
 history rather than about config, a runtime that can add config **without**
-moving its root is free to do so. That is the only reason Copilot needs a
-different mechanism from the rest.
+moving its root is free to do so. That is why copilot-cli took an additive
+wrapper flag (`--additional-mcp-config @<path>`) instead; its launcher returns
+under `ai.copilot.cli`.
 
 ### Per-runtime mechanism
 
@@ -68,7 +69,7 @@ different mechanism from the rest.
 | --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `claude`  | `~/.claude/`        | `<repo>/.claude/settings.json`, `.mcp.json`, `CLAUDE.md`                                                               | native project scope — the CLI merges user + project itself |
 | `codex`   | `~/.codex/`         | `<repo>/.codex/config.toml`                                                                                            | native project scope — the CLI merges user + project itself |
-| `copilot` | `~/.copilot/`       | project `mcp-config.json`                                                                                              | additive wrapper flag `--additional-mcp-config @<path>`     |
+| `copilot` | none                | root `AGENTS.md`, `.github/{instructions,agents,skills}/`                                                              | committed copies github.com reads; no local launcher        |
 | `kimchi`  | `~/.config/kimchi/` | root `AGENTS.md`, `.kimchi/config.json`, `.kimchi/mcp.json`, `.kimchi/skills/`, `.config/kimchi/harness/settings.json` | native project scope; see trust boundary below              |
 | `kiro`    | `~/.kiro/`          | `<repo>/.kiro/{steering,hooks,agents,settings}/`                                                                       | native project scope via a repo-relative `configDir`        |
 
@@ -122,7 +123,7 @@ list in place of the user's global one.
 - A runtime splits auth and session state out of its config root → the env-var
   route becomes viable for that runtime and the wrapper can be dropped.
 - A runtime gains an additive config flag → it moves from the materialize shape
-  to the Copilot shape.
+  to the additive-flag shape.
 - The isolated-harness work lands → that harness owns isolation explicitly, and
   this rule then describes the default path rather than the only one.
 

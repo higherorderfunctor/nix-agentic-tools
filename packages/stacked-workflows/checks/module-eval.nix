@@ -6,6 +6,10 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm harnessNames mkTest;
+  optionPaths = import ../../../lib/ai/option-paths.nix {inherit lib;};
+  pool = result: runtime: surface: lib.attrByPath (optionPaths.pool runtime surface) {} result.config;
+  # The runtimes whose record delivers a pool on one backend.
+  delivering = backend: surface: builtins.filter (runtime: builtins.elem backend (optionPaths.records.${runtime}.surfaceSupport.${surface}.backends or [])) harnessNames;
 in {
   checks = {
     # ── Stacked-workflows: skills + router, user-global (HM) + project (devenv) ──
@@ -40,7 +44,7 @@ in {
         result = evalDevenv {ai.programs.stacked-workflows.enable = true;};
         expected = ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"];
         runtimeHasAll = runtime:
-          lib.all (skill: result.config.ai.${runtime}.skills ? ${skill}) expected;
+          lib.all (skill: pool result runtime "skills" ? ${skill}) expected;
       in
         lib.all runtimeHasAll harnessNames
         && !(result.config.ai.skills ? stack-fix)
@@ -51,8 +55,8 @@ in {
     module-sws-devenv-enable-sets-ai-rules = mkTest "sws-devenv-enable-sets-ai-rules" (
       let
         result = evalDevenv {ai.programs.stacked-workflows.enable = true;};
-        ruleRuntimes = builtins.filter (runtime: result.options.ai.${runtime} ? rules) harnessNames;
-        runtimeHasOne = runtime: result.config.ai.${runtime}.rules ? stacked-workflows-router;
+        ruleRuntimes = delivering "devenv" "rules";
+        runtimeHasOne = runtime: pool result runtime "rules" ? stacked-workflows-router;
       in
         lib.all runtimeHasOne ruleRuntimes
         && !(result.config.ai.rules ? stacked-workflows-router)
@@ -66,9 +70,10 @@ in {
         result = evalHm {ai.programs.stacked-workflows.enable = true;};
         expected = ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"];
         runtimeHasAll = runtime:
-          lib.all (skill: result.config.ai.${runtime}.skills ? ${skill}) expected;
+          lib.all (skill: pool result runtime "skills" ? ${skill}) expected;
       in
-        lib.all runtimeHasAll harnessNames
+        lib.all runtimeHasAll (delivering "hm" "skills")
+        && lib.all (runtime: pool result runtime "skills" == {}) (lib.subtractLists (delivering "hm" "skills") harnessNames)
         && !(result.config.ai.skills ? stack-fix)
     );
 
@@ -77,11 +82,11 @@ in {
     module-sws-hm-enable-sets-ai-rules = mkTest "sws-hm-enable-sets-ai-rules" (
       let
         result = evalHm {ai.programs.stacked-workflows.enable = true;};
-        ruleRuntimes = builtins.filter (runtime: runtime != "copilot" && result.options.ai.${runtime} ? rules) harnessNames;
-        runtimeHasOne = runtime: result.config.ai.${runtime}.rules ? stacked-workflows-router;
+        ruleRuntimes = delivering "hm" "rules";
+        runtimeHasOne = runtime: pool result runtime "rules" ? stacked-workflows-router;
       in
         lib.all runtimeHasOne ruleRuntimes
-        && result.config.ai.copilot.rules == {}
+        && lib.all (runtime: pool result runtime "rules" == {}) (lib.subtractLists ruleRuntimes harnessNames)
         && !(result.config.ai.rules ? stacked-workflows-router)
     );
 

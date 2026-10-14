@@ -179,7 +179,7 @@ in {
         && hmConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.claude.files ? ".claude/CLAUDE.md"
         && devenvConfig.ai.claude.files ? ".claude/rules/scoped.md"
-        && devenvConfig.ai.copilot.files ? ".github/copilot-instructions.md"
+        && devenvConfig.ai.internal.agentsMdTargets.copilot == "AGENTS.md"
         && devenvConfig.ai.copilot.files ? ".github/instructions/scoped.instructions.md"
         && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
         && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
@@ -701,16 +701,6 @@ in {
             };
           };
         };
-        devenvCopilot = evalDevenv {
-          ai = {
-            context = {inherit source;};
-            copilot = {
-              context.text = "RUNTIME-CONTEXT";
-              enable = true;
-              files.".github/copilot-instructions.md".content.text = "COPILOT-REPLACEMENT";
-            };
-          };
-        };
         hmKimchi = evalHm {
           ai = {
             context = {inherit source;};
@@ -735,7 +725,6 @@ in {
         markdownOf hmClaude.config ".claude/CLAUDE.md"
         == "CLAUDE-REPLACEMENT"
         && markdownOf devenvClaude.config ".claude/CLAUDE.md" == "CLAUDE-REPLACEMENT"
-        && markdownOf devenvCopilot.config ".github/copilot-instructions.md" == "COPILOT-REPLACEMENT"
         && markdownOf hmKimchi.config ".config/kimchi/harness/AGENTS.md" == "KIMCHI-REPLACEMENT"
         && markdownOf devenvKimchi.config "AGENTS.md" == "KIMCHI-REPLACEMENT"
     );

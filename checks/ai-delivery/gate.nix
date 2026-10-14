@@ -9,7 +9,7 @@
   inspect = writer: let
     evaluate = declaration:
       evaluators.${writer.mode} (lib.mkMerge [
-        (lib.setAttrByPath (optionPaths.launcher writer.ecosystem "enable") true)
+        (lib.setAttrByPath (optionPaths.enable writer.ecosystem) true)
         writer.probe.base
         declaration
       ]);

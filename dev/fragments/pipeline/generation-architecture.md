@@ -1,6 +1,6 @@
 ## Generation Architecture
 
-> **Last verified:** 2026-10-08 — repo documents and agent files are built by
+> **Last verified:** 2026-10-14 — repo documents and agent files are built by
 > `mkTree` with the evaluated `ai.formatter` treefmt config and the named
 > guards; scoped rules rely on the normalized matcher-derived `fileMatch`
 > trigger default. `generate:all` writes instruction and repo-document
@@ -26,11 +26,10 @@ Two kinds of generated content, two owners:
   documents as `references`, and the matcher-derived default `fileMatch`
   trigger). `dev/ai.nix` sets them as `ai.context` and `ai.rules` in this
   repository's own devenv, and `ai.*` renders and writes each runtime's files
-  exactly as it would for any consumer: AGENTS.md (Codex, Kiro, Kimchi, with a
-  path-scoped index of the rules), `.claude/CLAUDE.md` and `.claude/rules/`,
-  `.github/copilot-instructions.md` and `.github/instructions/`, and
-  `.kiro/steering/`. The committed ones (AGENTS.md and `.github/`) are read-only
-  copies.
+  exactly as it would for any consumer: AGENTS.md (Codex, Copilot, Kiro, Kimchi,
+  with a path-scoped index of the rules), `.claude/CLAUDE.md` and
+  `.claude/rules/`, `.github/instructions/`, and `.kiro/steering/`. The
+  committed ones (AGENTS.md and `.github/`) are read-only copies.
 - **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
   `dev/repo-docs.nix` renders them from `dev/generate.nix` and builds each with
   the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the
@@ -71,13 +70,12 @@ prunes files in its own ledger, so those legacy files can be deleted by hand.
 `checks/instructions/instructions-drift.nix` evaluates `dev/ai.nix` through the
 module harness with `isCI = false` (Semble, and so its AGENTS.md rule, is gated
 on it, and committed bytes must not depend on who evaluates them) and compares
-the tracked AGENTS.md, `.github/copilot-instructions.md` and
-`.github/instructions/` tree with the built files the `ai.*` writers' plans
-point at: each is a file in its runtime's generated-file store tree, already
-formatted and checked. README.md and CONTRIBUTING.md compare against the
-`repo-*` packages. `treefmt.nix` excludes none of the committed instruction
-files: they come out of the tree in the house format, and `checks.formatting`
-reads them like any tracked file.
+the tracked AGENTS.md and `.github/instructions/` tree with the built files the
+`ai.*` writers' plans point at: each is a file in its runtime's generated-file
+store tree, already formatted and checked. README.md and CONTRIBUTING.md compare
+against the `repo-*` packages. `treefmt.nix` excludes none of the committed
+instruction files: they come out of the tree in the house format, and
+`checks.formatting` reads them like any tracked file.
 
 ### Running Generation
 

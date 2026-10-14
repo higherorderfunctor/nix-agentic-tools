@@ -93,7 +93,8 @@ spec: {
   pkgs,
   ...
 }: let
-  inherit (import ./option-paths.nix {inherit lib;}) records;
+  optionPaths = import ./option-paths.nix {inherit lib;};
+  inherit (optionPaths) records;
   moduleArgs = {inherit config lib pkgs;};
   programFactory = import ./program.nix {inherit lib;};
   program = programFactory.mkProgram {
@@ -116,28 +117,28 @@ spec: {
   # the per-runtime `skills` / `rules` options come from the shared
   # baseline in `lib/ai/app/mkBackendTransform.nix`, which derives its option
   # surface from the app RECORD at build time and never reads `config`.
-  presentSkillRuntimes =
+  #
+  # A runtime whose record delivers a pool on other backends only still
+  # declares it here, so the write is also gated on delivery when the backend
+  # is known; otherwise every contribution would warn as undelivered.
+  delivers = pool: runtime: !(spec ? backend) || builtins.elem spec.backend (records.${runtime}.surfaceSupport.${pool}.backends or []);
+  presentRuntimes = pool:
     lib.filter
-    (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options)
+    (runtime: lib.hasAttrByPath (optionPaths.pool runtime pool) options && delivers pool runtime)
     program.supportedRuntimes;
-  presentRuleRuntimes = lib.optionals (spec ? rules) (
-    lib.filter
-    (runtime:
-      lib.hasAttrByPath ["ai" runtime "rules"] options
-      && builtins.elem spec.backend (records.${runtime}.surfaceSupport.rules.backends or []))
-    program.supportedRuntimes
-  );
+  presentSkillRuntimes = presentRuntimes "skills";
+  presentRuleRuntimes = lib.optionals (spec ? rules) (presentRuntimes "rules");
+  # One pool write per present runtime, at the pool's option path.
+  contribute = pool: entries: runtimes:
+    lib.mkMerge (map (runtime:
+      lib.setAttrByPath (lib.tail (optionPaths.pool runtime pool))
+      (lib.mkIf (program.resolve config runtime).enable (entries runtime)))
+    runtimes);
 in {
   imports = [program.module];
 
   config.ai = lib.mkMerge [
-    (lib.genAttrs presentSkillRuntimes (runtime:
-      lib.mkIf (program.resolve config runtime).enable {
-        skills = skillEntries runtime;
-      }))
-    (lib.genAttrs presentRuleRuntimes (runtime:
-      lib.mkIf (program.resolve config runtime).enable {
-        rules = ruleEntries runtime;
-      }))
+    (contribute "skills" skillEntries presentSkillRuntimes)
+    (contribute "rules" ruleEntries presentRuleRuntimes)
   ];
 }

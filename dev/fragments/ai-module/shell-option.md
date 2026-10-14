@@ -1,7 +1,8 @@
 ## Per-runtime pool capability and nullable overrides
 
 > **Last verified:** 2026-10-14 — shell participates in delivery policy through
-> settings writers, launcher ownership and record-derived Copilot absences.
+> settings writers, launcher ownership and record-derived Copilot absences;
+> `optionNamespaces.launcher` places `shell`; Copilot is github.com Copilot.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -37,8 +38,8 @@ so it cannot reintroduce the `_module.args` recursion documented against
 A same-named native option does not imply normalized-pool support.
 Runtime-shaped passthrough now lives under `native.settings`, independently of
 the capability declaration. Normalized `settings` is the deliberate uniform
-exception: Claude, Codex, Copilot and Kimchi consume it; Kiro declares no
-backend because effort is persisted per model.
+exception: Claude, Codex and Kimchi consume it; Kiro declares no backend because
+effort is persisted per model, and github.com Copilot reads no settings file.
 
 ### `ai.shell` deliberately uses null-as-inherit
 
@@ -78,18 +79,18 @@ feature default without replacing unrelated leaves.
 ### Shell is one capability entry
 
 `mkBackendTransform.nix` declares `shell` below the record's
-`launcherOptionsPath` (`ai.kiro.cli.shell` for Kiro, `ai.<name>.shell`
+`optionNamespaces.launcher` (`ai.kiro.cli.shell` for Kiro, `ai.<name>.shell`
 elsewhere) and computes `resolvedShell` only when the app record's
 `surfaceSupport.shell.backends` is non-empty. There is no sibling shell-specific
 capability flag.
 
-| runtime | knob                       | delivery                                           |
-| ------- | -------------------------- | -------------------------------------------------- |
-| Claude  | `CLAUDE_CODE_SHELL`        | `native.settings.env` → `settings.json`            |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                           |
-| Copilot | **unknown — verified gap** | excluded                                           |
-| Kimchi  | Pi `shellPath`             | `native.harnessSettings` → harness `settings.json` |
-| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`                          |
+| runtime | knob                      | delivery                                           |
+| ------- | ------------------------- | -------------------------------------------------- |
+| Claude  | `CLAUDE_CODE_SHELL`       | `native.settings.env` → `settings.json`            |
+| Codex   | `SHELL` (own process env) | launcher wrapper `--set`                           |
+| Copilot | none: GitHub's cloud      | excluded                                           |
+| Kimchi  | Pi `shellPath`            | `native.harnessSettings` → harness `settings.json` |
+| Kiro    | `SHELL` (own process env) | launcher wrapper `export`                          |
 
 The launcher runtimes do not merge `SHELL` themselves. The builder hands every
 `installPackage` and `config` callback one `launcherEnvironment`: module
@@ -97,13 +98,9 @@ defaults, then `SHELL` from the resolved shell, then the consumer's
 `environmentVariables` LAST, so an explicit `environmentVariables.SHELL` wins
 everywhere. Codex once applied the typed shell last instead; that was defensible
 in isolation and wrong in aggregate, because the same two-key config then
-resolved differently per runtime. Copilot does not support `shell`, so its
-launcher receives only module defaults under the consumer pool. Kimchi also
-receives the launcher environment, but selects the command executable from
-`shellPath`, not `SHELL`; an explicit native setting wins over the normalized
-default. The `module-ai-shell-root-excluded-from-copilot-{hm,devenv}-wrapper`
-checks inspect a live launcher with an explicit environment marker and require
-`SHELL` to be absent when root `ai.shell` is set.
+resolved differently per runtime. Kimchi also receives the launcher environment,
+but selects the command executable from `shellPath`, not `SHELL`; an explicit
+native setting wins over the normalized default.
 
 Kimchi 1.9.2 replaces Pi's configured bash tool with its background-capable
 tool. `command-shell.patch` passes the existing shared settings reader's
@@ -207,15 +204,14 @@ three runtimes demonstrably do not perform.
   then execs the original package binary. Its `launcherPackage` passthru
   flattens a selected launcher, so a devenv package wrapping a Home Manager
   launcher runs the check only once. The preflight reads local files without
-  starting a Codex session. Copilot still gets the bare package when it has no
-  environment or flags to inject.
+  starting a Codex session.
 - **Devenv additionally passes `--no-daemon`.**
   `packages/chatgpt-codex/docs/codex-daemon.md` says why. Home Manager's
   launcher carries the same document check without that flag.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
-  fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
-  has no wrapper here and `native.settings.env` is its native equivalent.
+  fans out to Codex, Kimchi and Kiro. Claude is still outside it — it has no
+  wrapper here and `native.settings.env` is its native equivalent.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more
@@ -238,42 +234,20 @@ three runtimes demonstrably do not perform.
 - **`KIRO_CHAT_SHELL` is a dead end.** It exists only in Kiro's Rust binary, is
   absent from the v3 JS bundle, and the wrapper forces `--v3`.
 
-### Why Copilot is a gap rather than a TODO someone can just close
+### Why Copilot is excluded
 
-Copilot ships as a **Node SEA** whose application code is a compressed blob, so
-plaintext scanning of the 177 MB executable cannot answer the question. A scan
-returns a couple of `SHELL` hits, but a **positive control fails** —
-`githubcopilot`, `tool_use` and `gpt-` all return zero — which proves the app
-code is not searchable and makes any negative result meaningless rather than
-informative. The only readable hits are vendored Node internals
-(`normalizeSpawnArguments`, `os.userInfo`), and Node's `shell: true` hardcodes
-`/bin/sh` regardless of `$SHELL`.
-
-Run a positive control before trusting ANY negative result against these
-single-executable CLIs. Codex, by contrast, is a Rust binary whose string table
-IS readable (`codex` = 1030 hits), which is why its mechanism could be settled
-the same way.
-
-To close the gap, read the app code — do not re-run a plaintext scan of the SEA.
-**The cheapest route is that the SEA self-extracts its payload on first run**,
-to `~/.cache/copilot/pkg/<platform>/<version>/`; `app.js` there is ~9 MB of
-minified but fully searchable JS, alongside the Rust core `runtime.node` where
-discovery actually lives. Measured 2026-08-14 against 1.0.80, with
-`copilot-instructions.md`, `no-custom-instructions` and
-`No authentication information found` as positive controls — all three hit,
-where the same scan of the SEA itself returns zero for every one of them.
-
-Do not reach for the plain `@github/copilot` npm tarball for this: at 1.0.80 it
-is a 24K loader shim. The readable JS is in the per-platform optional dep
-(`@github/copilot-linux-x64`), and its `app.js` is sha256-identical to the
-self-extracted copy — so the self-extract route buys the same bytes with no
-download.
+`ai.copilot` is github.com Copilot, which runs in GitHub's cloud environment,
+set up by `.github/workflows/copilot-setup-steps.yml`; no repository file this
+module writes selects its shell. The record declares `shell` with
+`backends = []` and that reason. The Copilot CLI's shell mechanism was never
+established either: it is a Node SEA whose app code only becomes searchable
+after it self-extracts. That measurement, for when the CLI returns under
+`ai.copilot.cli`: `git show 6a45d50c:dev/fragments/ai-module/shell-option.md`.
 
 ### Verifying a change here
 
 `checks/ai-shell/module-eval.nix` covers Claude settings, Codex and Kiro
-launcher contents, and unsupported per-runtime shell writes. The Copilot
-root-shell wrapper exclusion checks complete that coverage. The repository's
+launcher contents, and unsupported per-runtime shell writes. The repository's
 `verify-ai-shell` executable and `ai:shell:verify` task are retired; these
 contracts run in automatic flake CI instead of only in `devenv test`.
 

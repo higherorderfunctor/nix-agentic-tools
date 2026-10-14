@@ -191,8 +191,8 @@
       harnessNames;
     claimsFor = scope: pool: let
       optionPath =
-        if scope ? runtime && pool == "environmentVariables"
-        then optionPaths.launcher scope.runtime pool
+        if scope ? runtime
+        then optionPaths.pool scope.runtime pool
         else scope.path ++ [pool];
       opt = lib.attrByPath optionPath null evaluated.options;
       declaredIn = map toString (opt.declarations or []);

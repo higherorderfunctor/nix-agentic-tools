@@ -15,8 +15,10 @@
 #     defaults ? {};                 # {package?, packageText?} — shared across
 #                                    #   backends; packageText is the package
 #                                    #   option's defaultText
-#     launcherOptionsPath ? [];     # package/env/shell and normalized launcher pools
-#                                    #   live below this relative option path
+#     optionNamespaces ? {};        # {launcher?; pools?;}: relative option paths
+#                                    #   for the builder's launcher options and
+#                                    #   per-runtime pools; omitted = runtime root.
+#                                    #   See optionNamespaces.nix.
 #     options ? {};                  # shared option declarations (both backends see these)
 #     surfaceSupport ? {};           # {<surface> = {backends?; reason?; gaps?;};}
 #                                    # Presence opts in, with hm/devenv by default.
@@ -63,7 +65,7 @@
 #     installPackage ? <selected launcher package>;
 #                                    # callback (same args as `config`) returning the
 #                                    #   derivation to install. OMIT to install the plain
-#                                    #   package at launcherOptionsPath. The transform owns the
+#                                    #   launcher package. The transform owns the
 #                                    #   `home.packages` / `packages` lowering, so a
 #                                    #   factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
@@ -101,7 +103,7 @@
 {lib}: args @ {
   name,
   defaults ? {},
-  launcherOptionsPath ? [],
+  optionNamespaces ? {},
   options ? {},
   surfaceSupport ? {},
   contextFilename ? null,
@@ -145,7 +147,7 @@
 }: let
   declaredSupport = lib.mapAttrs (_: support: {backends = ["devenv" "hm"];} // support) surfaceSupport;
 in
-  assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults hm devenv launcherOptionsPath poolOptions;}
+  assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults hm devenv optionNamespaces poolOptions;}
     // {surfaceSupport = declaredSupport;}
     // builtins.intersectAttrs {
       agentNativeType = null;
@@ -155,7 +157,7 @@ in
     }
     args);
     {
-      inherit name defaults launcherOptionsPath options poolOptions hm devenv pkgs;
+      inherit name defaults optionNamespaces options poolOptions hm devenv pkgs;
       surfaceSupport = declaredSupport;
     }
     // lib.optionalAttrs (config != null) {inherit config;}

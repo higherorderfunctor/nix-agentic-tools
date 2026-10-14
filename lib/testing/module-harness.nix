@@ -20,7 +20,7 @@
   # list would keep passing while silently not covering the newcomer.
   harnessNames = import ../ai/runtimes.nix;
   optionPaths = import ../ai/option-paths.nix {inherit lib pkgs;};
-  setEnable = runtime: lib.setAttrByPath (optionPaths.launcher runtime "enable");
+  setEnable = runtime: lib.setAttrByPath (optionPaths.enable runtime);
   tomlFormat = pkgs.formats.toml {};
   hmLib =
     lib

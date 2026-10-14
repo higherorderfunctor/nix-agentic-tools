@@ -8,7 +8,8 @@ applyTo: "packages/*/modules/homeManager/**"
 ## HM Module Conventions
 
 > **Last verified:** 2026-10-14 — Kiro is gated by `ai.kiro.cli.enable`;
-> factories read the derived, read-only `ai.kiro.enable`.
+> factories read the derived, read-only `ai.kiro.enable`; `ai.copilot` is
+> github.com Copilot, with pools under `ai.copilot.github` and no launcher.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -29,9 +30,9 @@ declare the real type: `types.submodule`, `types.nullOr`, `types.attrsOf`,
 `types.submodule` containers. Kiro keeps shared file options and the derived,
 read-only `enable` at `ai.kiro`; its launcher options (`enable`, `package`,
 `environmentVariables`, `shell`, `native.settings`, and other CLI controls) live
-under `ai.kiro.cli`. Other runtimes keep launcher options at their runtime root.
-The submodule is the logical grouping — do not flatten per-ecosystem options
-into the top level.
+under `ai.kiro.cli`. Copilot keeps its pools under `ai.copilot.github`. Other
+runtimes keep launcher and pool options at their runtime root. The submodule is
+the logical grouping — do not flatten per-ecosystem options into the top level.
 
 **Flat at top level for cross-ecosystem.** `ai.context`, `ai.rules`,
 `ai.skills`, and `ai.environmentVariables` are NOT nested inside a per-ecosystem
@@ -105,10 +106,11 @@ config = mkMerge [
 
 ### Package override pattern
 
-**Every runtime exposes a launcher `package` option.** Kiro uses
-`ai.kiro.cli.package`; other runtimes use `ai.<runtime>.package`. Consumers can
-swap out the package entirely. In this example, `cfg` denotes that launcher
-subtree (copilot-cli, kiro-cli; Claude has no wrapper):
+**Every runtime with a launcher exposes a `package` option.** Kiro uses
+`ai.kiro.cli.package`; other runtimes use `ai.<runtime>.package`; github.com
+Copilot has no launcher and no package. Consumers can swap out the package
+entirely. In this example, `cfg` denotes that launcher subtree (kiro-cli; Claude
+has no wrapper):
 
 ```nix
 pkgs.symlinkJoin {
@@ -216,40 +218,40 @@ fi
 Reserve `exit 1` for cases where you actually want to abort the whole activation
 on an error. Never `exit 0` for a cache-hit fast path.
 
-**Owned leaves for state documents:** Claude's `~/.claude.json` and Copilot's HM
-`config.json` keep harness-written state beside Nix-owned leaves. A factory
-states `facts.harnessWrites` on the file and names the writer whose JSON ledger
-claims it. The delivery router builds one `lib/ai/own.nix` bundle: declared
-leaves are asserted, retired leaves are retracted, and unowned state survives.
-Kimchi's user `config.json` and `harness/settings.json` are documents too, since
-`/login` and `/model` write into them (settled 2026-09-30 after a read-only copy
-locked `/login` out); its `mcp.json`, `permissions.json` and `trust.json` stay
+**Owned leaves for state documents:** Claude's `~/.claude.json` keeps
+harness-written state beside Nix-owned leaves. A factory states
+`facts.harnessWrites` on the file and names the writer whose JSON ledger claims
+it. The delivery router builds one `lib/ai/own.nix` bundle: declared leaves are
+asserted, retired leaves are retracted, and unowned state survives. Kimchi's
+user `config.json` and `harness/settings.json` are documents too, since `/login`
+and `/model` write into them (settled 2026-09-30 after a read-only copy locked
+`/login` out); its `mcp.json`, `permissions.json` and `trust.json` stay
 read-only copies. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has
 no way to tell a native key from a Nix key that was deleted. Only a STATE file
 the harness must keep writing is a document; a file whose every key is
 configuration is a read-only copy.
 
 The JSON codec reads past leading full-line `//` comments and writes them back
-verbatim: Copilot heads its state file `config.json`, whose `trustedFolders`
-leaf HM owns, with two. A `//` further down is inside the object and left to
-`json.loads`. Locked by `ai-own-runtime` (`commented_json`) and the Copilot case
-of `module-json-settings-reconciliation`.
+verbatim, as copilot-cli heads its state file `config.json`. A `//` further down
+is inside the object and left to `json.loads`. Locked by `ai-own-runtime`
+(`commented_json`) and the generic document case of
+`module-json-settings-reconciliation`.
 
 A target that stops declaring anything deletes its document when the retraction
 leaves an empty object: every byte was ours. A symlink is never touched. Locked
 by `ai-own-runtime` (`two_phase`).
 
-A runtime that shares a state document (Claude Code's `.claude.json`, Copilot's
-`config.json`) can rename its own write over the path between `own.py`'s read
-and its rename, which the flock cannot see. So a document is published by
-compare-and-swap: `own.py` records the SHA-256 of the bytes it parsed, and
-immediately before the rename re-reads the path. If it moved, the run re-parses
-the runtime's bytes, replays its own sets and deletes onto them, and tries
-again, up to three attempts. Content rather than mtime, because a sibling rename
-can leave the same size and mtime behind. Exhaustion fails the run loudly with
-the runtime's write intact and the ledger unwritten; it never overwrites. This
-narrows the window to the check-to-rename gap and cannot close it. Locked by
-`ai-activation-settings-mode` (the race cases).
+A runtime that shares a state document (Claude Code's `.claude.json`) can rename
+its own write over the path between `own.py`'s read and its rename, which the
+flock cannot see. So a document is published by compare-and-swap: `own.py`
+records the SHA-256 of the bytes it parsed, and immediately before the rename
+re-reads the path. If it moved, the run re-parses the runtime's bytes, replays
+its own sets and deletes onto them, and tries again, up to three attempts.
+Content rather than mtime, because a sibling rename can leave the same size and
+mtime behind. Exhaustion fails the run loudly with the runtime's write intact
+and the ledger unwritten; it never overwrites. This narrows the window to the
+check-to-rename gap and cannot close it. Locked by `ai-activation-settings-mode`
+(the race cases).
 
 Modes on a document are the reconciler's, not the caller's: a NEW file is
 created 0600, and an existing regular file keeps the mode it has. Document
@@ -296,9 +298,8 @@ layer as the worked example: that option and its devenv `CODEX_HOME`
 materializer were removed 2026-09-19 as unreachable dead code (see the Settled
 bullet in `dev/fragments/ai-module/ai-module-fanout.md`).
 
-**Every HM settings writer is unconditional.** Copilot's
-`materialize-copilot-config` and `copilotTrustedFolders`, kiro's `kiroMcpJson`,
-kimchi's `kimchiFiles`, codex's `materialize-codex-daemon-settings` and claude's
+**Every HM settings writer is unconditional.** Kiro's `kiroMcpJson`, kimchi's
+`kimchiFiles`, codex's `materialize-codex-daemon-settings` and claude's
 `claudeUnpinLaunchEffort` are all emitted while the ecosystem is enabled,
 whatever the declaration says. An empty declaration is not "nothing to do", it
 is the RETRACTION path: empty settings plus no prior ledger is a strict no-op,
@@ -312,11 +313,11 @@ Devenv-side writes are otherwise unconditional (always write the file when
 `enable = true`): devenv files are project-local symlinks, not home-dir writes.
 Claude is the exception. Its devenv `.claude/settings.json` and `.mcp.json` are
 emitted only when non-empty, because either one would shadow a project's own
-committed file, so an empty declaration writes nothing there. Kiro, Kimchi and
-Copilot are the other exceptions: Kiro's project `settings/cli.json` and
-`settings/mcp.json`, Kimchi's project settings copies, and Copilot's
-`.github/copilot/settings.json` are claimed only when something is declared, so
-enabling the runtime does not take over and back up those files.
+committed file, so an empty declaration writes nothing there. Kiro and Kimchi
+are the other exceptions: Kiro's project `settings/cli.json` and
+`settings/mcp.json` and Kimchi's project settings copies are claimed only when
+something is declared, so enabling the runtime does not take over and back up
+those files.
 
 **Secrets at activation time, not eval time.** Sops-nix paths
 (`cfg.userId.file`) are read by the activation script at run time via
@@ -438,9 +439,10 @@ that do not use either module's activation guard.
   enabling it: repository shells may consume global keyring state, while login,
   Secret Service, and graphical-session lifecycle belong to Home Manager
 - Scope-only behavior remains declared in both trees and fails explicitly where
-  unsupported. For example, `ai.copilot.projectDir` has one shared declaration;
-  devenv consumes it, while Home Manager rejects non-default overrides because
-  it has no project root. Do not encode that boundary by deleting the HM option.
+  unsupported. For example, `ai.copilot.github.projectDir` has one shared
+  declaration; devenv consumes it, while Home Manager rejects non-default
+  overrides because it has no project root. Do not encode that boundary by
+  deleting the HM option.
 
 If you touch one and the other is "intentionally different," say so in the
 commit message. If the mismatch is accidental, it's a bug.
