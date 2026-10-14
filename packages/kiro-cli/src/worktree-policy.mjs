@@ -1,7 +1,14 @@
 // Admission-only discovery; workflow steps own creation and user-owned policy.
 import { execFile } from "node:child_process";
 import { lstat, realpath, stat } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -107,6 +114,10 @@ export async function discover(cwd, location) {
       name === "repo" ? basename(primary) : primary,
     ),
   );
+  // A root at or above the checkout would make the checkout itself writable.
+  const inside = relative(destination, primary);
+  if (!inside.startsWith("..") && !isAbsolute(inside))
+    fail(`location must not cover the primary checkout: ${destination}`);
   try {
     if ((await lstat(destination)).isSymbolicLink())
       fail(`derived destination must not be a symlink: ${destination}`);
@@ -114,6 +125,12 @@ export async function discover(cwd, location) {
     if (error.code !== "ENOENT") throw error;
   }
   return { root: destination };
+}
+
+// One derivation for admission, the write grant and owner-less snapshots.
+export async function admit(layers, cwd) {
+  const enabled = policy(layers);
+  return enabled ? discover(cwd, enabled.location) : undefined;
 }
 
 export function carry(request, worktree) {
