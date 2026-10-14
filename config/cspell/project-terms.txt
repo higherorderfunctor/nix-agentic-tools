@@ -78,6 +78,7 @@ cctools
 checkin
 clearenv
 clicolor
+cliproxyapi
 clis
 cliutil
 cmdbuilder

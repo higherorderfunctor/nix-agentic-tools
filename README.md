@@ -306,6 +306,7 @@ Temporarily unclassified supporting packages live in the split-ready
 | `btop` | Resource monitor for processes, CPU, memory, disks and network |
 | `bun` | JavaScript runtime, bundler, transpiler and package manager |
 | `catppuccin-btop` | Catppuccin theme files for btop |
+| `cliproxyapi` | OpenAI-compatible proxy for AI CLI subscriptions and APIs |
 | `dns-root-hints` | IANA DNS root name server hints (named.root) |
 | `fblog` | Command-line JSON log viewer |
 | `gluetun` | VPN client for multiple providers (Linux only) |
