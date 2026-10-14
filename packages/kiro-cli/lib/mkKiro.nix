@@ -1399,7 +1399,14 @@ in
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
         # off, and with none enabled the managed install launches the stock
         # bundle from the pinned release, without changing its prompt bytes.
-        tweaks = {
+        tweaks = let
+          tweakPatchNote = ''
+            Uses the shared build-time KAS patch selection on Home Manager and
+            devenv. Missing or duplicate selected source text fails the build.
+            Enabling any tweak overrides an inherited `KIRO_KAS_SERVER_PATH`;
+            with every tweak off, an explicit `KIRO_KAS_SERVER_PATH` is kept.
+          '';
+        in {
           relativeFileCheckPaths = lib.mkOption {
             type = lib.types.bool;
             default = false;
@@ -1408,8 +1415,7 @@ in
               paths: the step writes the stop-condition file, and `fileCheck.path`
               checks it, at the same plain workspace-relative path, without
               templates. Absolute worktree paths can be rejected for sibling worktrees.
-              Uses the shared build-time KAS patch selection on Home Manager and
-              devenv. Missing or duplicate selected source text fails the build.
+              ${tweakPatchNote}
             '';
           };
           stripVendorWorktreeSteering = lib.mkOption {
@@ -1419,9 +1425,7 @@ in
               Remove the vendor workflow worktree paragraph (worktrees under
               `.worktrees/`, rebased onto and fast-forwarding the checked-out base
               branch), for repositories whose own instructions supply the git
-              workflow. Uses the shared build-time KAS patch selection on
-              Home Manager and devenv. Missing or duplicate
-              selected source text fails the build.
+              workflow. ${tweakPatchNote}
             '';
           };
         };
