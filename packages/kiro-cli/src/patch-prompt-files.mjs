@@ -288,7 +288,7 @@ method("createNewSessionState", (text) => {
   text = replace(
     text,
     "{ let p =",
-    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd); let p =",
+    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId, t.cwd) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd); let p =",
   );
   text = replace(
     text,
@@ -374,7 +374,7 @@ edit(rebuild, (text) => {
   return replace(
     text,
     "let p = new wae,",
-    "await nixRoots.validateWorkflowRoots(this, owner, d); let p = Object.assign(new wae, { nixPromptSnapshot: await nixPrompts.ownerSnapshot(this, owner) }),",
+    "await nixRoots.validateWorkflowRoots(this, owner, d); let p = Object.assign(new wae, { nixPromptSnapshot: await nixPrompts.ownerSnapshot(this, owner, d[0]) }),",
   );
 });
 

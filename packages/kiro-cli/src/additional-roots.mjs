@@ -1,4 +1,5 @@
-// Root membership enables the vendor default fs_read ./** allow rule for that root.
+// Relative permission rules apply in every admitted root; built-in modes and
+// bundled profiles thereby get the vendor default fs_read ./** allow there.
 import { realpath } from "node:fs/promises";
 import {
   basename,
@@ -196,7 +197,7 @@ async function validateSubset(allowedRoots, roots) {
 }
 
 export async function validateWorkflowRoots(agent, owner, roots) {
-  await validateSubset(await ownerRoots(agent, owner), roots);
+  await validateSubset(await ownerRoots(agent, owner, new Set(), roots), roots);
 }
 
 // Only internal callers set this option. Saved effective roots are never fresh
