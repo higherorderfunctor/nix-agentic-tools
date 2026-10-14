@@ -163,8 +163,10 @@
   # One registration declares every shared fanout surface and supplies the
   # decompose step with its names. Adding a declaration here automatically
   # warns for every enabled runtime whose surfaceSupport omits it.
+  # Keyed withdrawal is option metadata, shared by policy and diagnostics.
+  keyedOption = declaration: lib.mkOption declaration // {keyedSurface = true;};
   sharedSurfaceOptions = {
-    agents = lib.mkOption {
+    agents = keyedOption {
       type = lib.types.attrsOf (lib.types.nullOr agent.semanticAgentType);
       default = {};
       description = ''
@@ -220,7 +222,7 @@
       '';
       example = lib.literalExpression ''{ source = ./ai-context.md; }'';
     };
-    environmentVariables = lib.mkOption {
+    environmentVariables = keyedOption {
       type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
       default = {};
       description = ''
@@ -263,7 +265,7 @@
         v3 trigger schema is not semantically interchangeable.
       '';
     };
-    lspServers = lib.mkOption {
+    lspServers = keyedOption {
       type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
       default = {};
       description = ''
@@ -287,7 +289,7 @@
         key; null suppresses an inherited server for that runtime.
       '';
     };
-    mcpServers = lib.mkOption {
+    mcpServers = keyedOption {
       type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
         modules = [(import ./mcpServer/commonSchema.nix)];
       }));
@@ -302,7 +304,7 @@
         managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
-    rules = lib.mkOption {
+    rules = keyedOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
       description = ''
@@ -415,7 +417,7 @@
         check. Kimchi rejects a nonexistent explicit shell path.
       '';
     };
-    skills = lib.mkOption {
+    skills = keyedOption {
       type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
       default = {};
       description = "Cross-app skills fanned out to every enabled AI app: Claude, Codex, Copilot, Kimchi, and Kiro. Per-app entries replace root entries at the same key; null suppresses an inherited skill for that runtime.";

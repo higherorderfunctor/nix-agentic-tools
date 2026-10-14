@@ -59,6 +59,7 @@
     ];
     rules.probe.text = "probe";
     settings.model = "probe";
+    shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
   };
   # Every absent or inert primary row gets a populated request and an empty

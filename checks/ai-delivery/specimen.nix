@@ -89,7 +89,7 @@ in {
     else if path == ".claude.json"
     then ["settings"]
     else if path == ".claude/settings.json"
-    then ["hooks" "permissions" "settings"]
+    then ["hooks" "permissions" "settings" "shell"]
     # A personal plugin's manifest exists to load its MCP and LSP files.
     else if lib.hasSuffix "/.claude-plugin/plugin.json" path
     then ["lspServers" "mcpServers"]
@@ -113,6 +113,8 @@ in {
     then ["rules"]
     else if lib.hasSuffix "/permissions.yaml" path || lib.hasSuffix "/permissions.json" path
     then ["permissions"]
+    else if runtime == "kimchi" && lib.hasSuffix "/harness/settings.json" path
+    then ["settings" "shell"]
     else if lib.hasSuffix "/settings.json" path || lib.hasSuffix "/config.json" path || lib.hasSuffix "/cli.json" path
     then ["settings"]
     else throw "ai-delivery: unmapped delivery entry ${runtime}/${path}";

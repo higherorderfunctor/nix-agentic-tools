@@ -284,6 +284,20 @@
           handKeys = [(policy.key first)];
         };
       };
+      contradictory-absence = {
+        passed =
+          builtins.deepSeq (policySchema.validateSupport {
+            kiro.surfaceSupport.mcpServers.backends = ["hm"];
+          } [absentRow])
+          true;
+      };
+      contradictory-wrapper = {
+        passed =
+          builtins.deepSeq (policySchema.validateSupport {
+            kiro.surfaceSupport.mcpServers.backends = [];
+          } [writer])
+          true;
+      };
       assertion = rejectedAssertion;
       inherit constant;
       exempted-absent = exemptedAbsent;

@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> **Last verified:** 2026-10-14 — option declarations supply policy surfaces and
+> keyed withdrawal; runtime declarations supply normalized policy gaps.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -617,8 +617,10 @@ contributes keyed units to the single repository aggregate.
 
 `sharedSurfaceOptions` in `sharedOptions.nix` is the registration of shared
 fanout surfaces. Its keys declare root options and populate the read-only
-internal `sharedSurfaces` list. Every runtime's `surfaceSupport` maps a surface
-name to `{backends?; reason?; gaps?;}`. Presence defaults to both backends;
+internal `sharedSurfaces` list. A keyed root option uses `keyedOption` metadata
+so delivery policy derives its keyed withdrawal list from the same declarations.
+Every runtime's `surfaceSupport` maps a surface name to
+`{backends?; reason?; gaps?;}`. Presence defaults to both backends;
 `backends = []` consumes nothing and declares no normalized runtime option. A
 non-empty backend list keeps both backend option trees, even where delivery is
 unavailable. Omitted surfaces warn with the generic reason.
@@ -632,14 +634,15 @@ the portable root. Predicates and dynamic reasons receive the backend, config,
 runtime cfg, field value, whole entry value, path and entry name. Keyed runtime
 replacements and tombstones withdraw inherited entries before warnings.
 
-Policy rows continue describing physical delivery and native diagnostics; they
-no longer choose normalized delivery warnings or override their reasons. Package
-rule contributors consult the record's backend reach before writing. Native
-diagnostics belong to runtime factories. Transport-dependent MCP field warnings
-and final-file replacement warnings remain generic in the shared reader. Kiro
-Home Manager LSP delivery is conditional on launching with $HOME as the
-workspace; Home Manager has no launch workspace value, so a populated LSP
-declaration always explains that condition. Devenv LSP stays quiet.
+Policy rows derive normalized absence and static gaps from the records alongside
+physical delivery and native diagnostics; they no longer choose normalized
+delivery warnings or override their reasons. Package rule contributors consult
+the record's backend reach before writing. Native diagnostics belong to runtime
+factories. Transport-dependent MCP field warnings and final-file replacement
+warnings remain generic in the shared reader. Kiro Home Manager LSP delivery is
+conditional on launching with $HOME as the workspace; Home Manager has no launch
+workspace value, so a populated LSP declaration always explains that condition.
+Devenv LSP stays quiet.
 
 Diagnostic units currently enumerate per-runtime pools at the runtime root. A
 future gap on launcher-prefixed `shell` or `environmentVariables` needs that
@@ -1430,8 +1433,8 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> **Last verified:** 2026-10-14 — delivery policy derives shared surfaces, keyed
+> withdrawal and normalized gaps from option and runtime declarations.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1727,12 +1730,34 @@ them or retroactively establish the order of historical matrix derivation.
 
 ### Generated delivery matrix
 
-`config/ai-delivery.nix` remains a pure `{lib}` import. Its schema and consumer
-facts are hand-authored; physical writer records come from the committed
-`config/ai-delivery-generated.nix`. The partition requires every matrix cell
-exactly once across derived and hand-authored rows. Absence reasons, package
-wrappers, input associations and behavioral probes remain independent of the
-observed delivery implementation.
+`config/ai-delivery.nix` remains a pure `{lib}` import.
+`config/ai-delivery-schema.nix` reads `sharedSurfaceOptions` through its
+internal `sharedSurfaces` option default; keyed withdrawal is metadata on those
+same root declarations. Neither import evaluates a module or needs a package
+set. Permissions is the sole policy-only surface because it inventories native
+policy vocabularies, with no normalized root translation. Shell participates:
+Claude and Kimchi use their settings writers, Codex and Kiro their launchers,
+and Copilot has a derived absence.
+
+Physical writer records come from committed `config/ai-delivery-generated.nix`.
+Runtime `surfaceSupport` generates whole-surface/backend absences and their
+reasons. A native writer can exist alongside an unavailable normalized pool
+(Kiro hooks and settings); that cell retains its physical primary writer and
+gains a derived diagnostic child. Static record gaps project into diagnostic
+children too. Gaps requiring keyed entries, effective scalar selection,
+predicates or dynamic reasons remain record-only diagnostics: a static matrix
+input path cannot preserve those semantics. Hand rows add launcher ownership or
+native-only permission evidence; contradictory normalized hand absences and
+launcher claims fail naming the hand cell and runtime declaration. Input
+associations and behavioral probes remain independent consumer facts. Claude's
+`unpinLaunchEffort` remains a native-only supplement because normalized record
+gaps cannot address that separate option or its explicit-priority gate.
+
+The partition requires every cell exactly once across physical, support-derived
+and hand-authored primary rows. Adding a shared surface or dropping runtime
+support creates absence cells without policy edits. A runtime that claims
+support still needs a physical or launcher writer: no absence is invented to
+conceal missing implementation.
 
 `checks/ai-delivery/generate.nix` evaluates populated specimens at default
 config directories. It reads typed files and activation ledgers, resolves
@@ -1744,16 +1769,17 @@ portable surface, so the specimen maps it to no cell. Codex's
 `app-server-daemon/settings.json` holds daemon configuration
 (`native.daemonSettings`), not a portable surface, and maps to no cell either.
 
-The production gate compares live absence against hand-authored gaps in both
-directions. Its three body arms stay; derived names make the first arm's name
-agreement a tautology, not a stronger check. Empty-declaration survival and body
-variation still discriminate.
+The production gate compares live file absence against primary policy rows in
+both directions; launchers have no file entry and are exempt from that
+correspondence. Its three body arms stay; derived names make the first arm's
+name agreement a tautology, not a stronger check. Empty-declaration survival and
+body variation still discriminate.
 
-Regeneration evaluates the check set, and the check set asserts the committed
-matrix, so a change that moves a cell (a runtime joining the layer, say) cannot
-regenerate through the check attribute alone: bypass the `ai-delivery` and
-`ai-delivery-fixtures` asserts and the partition assertion in a scratch tree,
-build the observer, and restore them before committing.
+Regeneration evaluates the check set, which asserts the committed matrix. Adding
+an unsupported cell now derives its absence without bootstrapping. Adding a
+supported physical cell can still fail the partition before the observer runs.
+Seed that cell from the already observed writer it shares, regenerate, then
+require observer byte identity; the seed is not evidence on its own.
 
 Regenerate the data with
 `nix build .#checks.x86_64-linux.ai-delivery-generated.generated --no-link --print-out-paths`,
@@ -1893,8 +1919,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> **Last verified:** 2026-10-14 — shell participates in delivery policy through
+> settings writers, launcher ownership and record-derived Copilot absences.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -2008,6 +2034,11 @@ the production patch and executes both branches without credentials;
 `module-kimchi-shell` checks root, runtime, null and native precedence on both
 backends. Devenv settings require a trusted project and the existing exact-cwd
 launcher guard.
+
+Delivery policy includes shell from the same shared option registration. Its
+physical rows associate Claude and Kimchi with their settings files, and Codex
+and Kiro with their process launchers; Copilot absence and its reason derive
+from the runtime record. Shell stays scalar and is not a keyed withdrawal pool.
 
 ### Kiro's FHS root does not change the shell default
 

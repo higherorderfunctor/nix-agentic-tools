@@ -28,7 +28,7 @@
       if mode == "hm"
       then harness.evalHm
       else harness.evalDevenv
-    ) (specimen.config mode runtime);
+    ) (lib.recursiveUpdate (specimen.config mode runtime) {ai.shell = pkgs.bash;});
     inherit (evaluated) config;
     cfg = config.ai.${runtime};
     # The shared AGENTS.md owner holds these typed entries on devenv. It is
@@ -218,6 +218,8 @@
     + "\n"
   );
   generated = pkgs.runCommandLocal "ai-delivery-generated.nix" {nativeBuildInputs = [pkgs.alejandra];} ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
     # Writable: alejandra rewrites in place whenever it changes anything.
     install -m 644 ${raw} "$out"
     alejandra --quiet "$out"
