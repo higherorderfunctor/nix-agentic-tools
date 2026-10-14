@@ -102,13 +102,14 @@ warning. Manual native settings combined with runtime V2 still bypass KAS.
 
 At admission, the packaged KAS derives `<primary-checkout>-worktrees` from Git's
 common directory for ordinary and linked checkouts. It adds that sibling root to
-the admitted roots without creating it or granting filesystem permission.
-Non-Git sessions gain no root; unsupported bare or separate-Git-directory
-layouts fail visibly. Admission rejects an existing symlink at the automatic
-sibling destination, including a dangling one; explicit additional-directory
-aliases retain their separate behavior. This is an admission-time check, not a
-guarantee against a later filesystem change. New and cold-resumed sessions
-recompute roots; resident sessions retain their admitted roots.
+the admitted roots without creating it. Membership enables default reads;
+default writes still prompt. Non-Git sessions gain no root; unsupported bare or
+separate-Git-directory layouts fail visibly. Admission rejects an existing
+symlink at the automatic sibling destination, including a dangling one; explicit
+additional-directory aliases retain their separate behavior. This is an
+admission-time check, not a guarantee against a later filesystem change. New and
+cold-resumed sessions recompute roots; resident sessions retain their admitted
+roots.
 
 For new conversations, the selected default worktree guidance keeps workflow
 ownership of creation and names the admitted sibling destination. It replaces
