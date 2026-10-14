@@ -42,7 +42,10 @@ for name, variant in variants.items():
                     args = [variant["package"] + "/bin/" + command, mode]
                     settings = home / ".kiro/settings/cli.json"
                     settings.parent.mkdir(parents=True, exist_ok=True)
-                    settings.write_text(json.dumps({"chat.agentEngine": "v3"}))
+                    settings.write_text(json.dumps({"chat.agentEngine": "v2"}))
+                    repo_settings = work / ".kiro/settings/cli.json"
+                    repo_settings.parent.mkdir(parents=True)
+                    repo_settings.write_text(json.dumps({"chat.agentEngine": "v3"}))
                     if mode == "chat":
                         args += ["--no-interactive", "--model", "nix-no-such-model", "offline dispatch fixture"]
                     result = subprocess.run(args, env=env, cwd=work, input="", capture_output=True, text=True, timeout=30)
@@ -50,7 +53,7 @@ for name, variant in variants.items():
                     argv = json.loads(capture.read_text())
                     assert variant["server"] in argv, (name, stale, args, argv)
                     assert list(home.glob("**/kas/*/node_modules/@kiro/agent/dist/server/acp-server.js")) == ([old] if stale else []), "unexpected cache extraction"
-    # Explicit inherited override remains available only in the stock variant.
+    # Every payload selects its packaged server and warns once about overrides.
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         capture, node = capture_node(root)
@@ -59,10 +62,22 @@ for name, variant in variants.items():
         env = {"PATH": variant["package"] + "/bin:" + os.environ["PATH"], "HOME": tmp,
                "CFFIXED_USER_HOME": tmp, "KIRO_KAS_NODE_PATH": str(node),
                "KIRO_KAS_SERVER_PATH": str(override), "KIRO_API_KEY": "offline-dispatch-fixture"}
-        subprocess.run([variant["package"] + "/bin/kiro-cli", "acp"], env=env, cwd=tmp,
-                       input="", capture_output=True, text=True, timeout=30)
-        expected = variant["server"] if variant["managed"] else str(override)
-        assert expected in json.loads(capture.read_text()), (name, "override precedence")
+        settings = root / ".kiro/settings/cli.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(json.dumps({"chat.agentEngine": "v3"}))
+        warning = "kiro-cli: inherited KIRO_KAS_SERVER_PATH detected and ignored; using " + variant["server"]
+        for inherited in (None, variant["server"], "", str(override)):
+            if inherited is None:
+                env.pop("KIRO_KAS_SERVER_PATH", None)
+            else:
+                env["KIRO_KAS_SERVER_PATH"] = inherited
+            for command in ("kiro-cli", "kiro-cli-chat"):
+                capture.unlink(missing_ok=True)
+                result = subprocess.run([variant["package"] + "/bin/" + command, "acp"], env=env, cwd=tmp,
+                                        input="", capture_output=True, text=True, timeout=30)
+                assert variant["server"] in json.loads(capture.read_text()), (name, command, "override precedence")
+                expected_warnings = int(inherited is not None and inherited != variant["server"])
+                assert result.stderr.splitlines().count(warning) == expected_warnings, result.stderr
         # An explicit v2 choice beats the package ACP default. Its own
         # validation error is before auth/network and before any KAS process.
         capture.unlink()

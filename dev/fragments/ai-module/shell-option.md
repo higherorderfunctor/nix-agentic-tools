@@ -1,7 +1,8 @@
 ## Per-runtime pool capability and nullable overrides
 
 > **Last verified:** 2026-10-14 — shell participates in delivery policy through
-> settings writers, launcher ownership and record-derived Copilot absences.
+> settings writers, launcher ownership and record-derived Copilot absences; Kiro
+> defaults to V3 through settings rather than a forced flag.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -236,7 +237,8 @@ three runtimes demonstrably do not perform.
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.
 - **`KIRO_CHAT_SHELL` is a dead end.** It exists only in Kiro's Rust binary, is
-  absent from the v3 JS bundle, and the wrapper forces `--v3`.
+  absent from the v3 JS bundle. The module defaults the native engine setting to
+  V3; explicit CLI flags and repository settings can override it.
 
 ### Why Copilot is a gap rather than a TODO someone can just close
 

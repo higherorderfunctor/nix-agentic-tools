@@ -698,7 +698,6 @@
     ai.kiro = {
       cli = {
         enable = true;
-        v3 = true;
         workflows.enable = true;
       };
       # cli.package = null; # keep shared files without installing the CLI

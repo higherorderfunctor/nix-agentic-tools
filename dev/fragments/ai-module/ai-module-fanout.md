@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-14 — option declarations supply policy surfaces and
 > keyed withdrawal; runtime declarations supply normalized policy gaps and the
-> warning suite generates coverage for every runtime, surface and backend.
+> warning suite generates coverage for every runtime, surface and backend; Kiro
+> selects its engine through native settings.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -134,7 +135,7 @@ folds every inert setting into one warning naming each option; Codex's
 
 Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
 `shell`, `extraPackages`, `native.settings`, `trustedMcpTools`, `tweaks`,
-`features.<name>.enable`, `useFhsSandbox` and `v3`, plus the friendly
+`features.<name>.enable` and `useFhsSandbox`, plus the friendly
 `backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and `workflows` switches.
 Rollout names and typed `native.settings.chat.keybindings` keys come from the
 extracted registry. Friendly workflows select the GA stock package and imply

@@ -59,8 +59,7 @@
     sourceEnabled runtime
     && builtins.elem "kiro" ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates))
   supportedRuntimes;
-  kiroEngine = import ../../kiro-cli/lib/effective-engine.nix (config.ai.kiro.cli.native.settings or {});
-  kiroV3Declared = lib.hasAttrByPath ["ai" "kiro" "cli" "v3"] options;
+  kiroDeclared = lib.hasAttrByPath ["ai" "kiro" "cli" "native"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
   techniques = familyFunctions.effectiveTechniques config;
   flattenedFamilies = familyFunctions.flatten portable.families;
@@ -203,14 +202,13 @@ in {
         });
       }
       # Guarded on the declaration: a consumer without the Kiro module has no
-      # ai.kiro.cli.v3 to set.
-      (lib.optionalAttrs kiroV3Declared {
+      # ai.kiro.cli settings to set.
+      (lib.optionalAttrs kiroDeclared {
         kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null) {
           tweaks = lib.mkIf config.ai.kiro.cli.workflows.enable {
             relativeFileCheckPaths = lib.mkDefault true;
             stripVendorWorktreeSteering = lib.mkDefault true;
           };
-          v3 = lib.mkDefault true;
         };
       })
       (lib.genAttrs reminderRuntimes (runtime:
@@ -219,12 +217,7 @@ in {
     ];
     warnings =
       map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}. Disable that runtime reminder or use devenv.")
-      (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes)
-      ++ lib.optional (kiroV3Declared && reachesKiro && kiroEngine != "v3") ''
-        ai.programs.delegate-routing reaches Kiro, but effective native chat.agentEngine is not v3. The
-        skill's Kiro behavior is verified on the v3 engine only; sessions on
-        another engine may not delegate as the skill describes.
-      '';
+      (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes);
     assertions =
       [
         {

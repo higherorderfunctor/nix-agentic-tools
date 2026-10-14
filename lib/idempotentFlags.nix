@@ -101,19 +101,51 @@
   optionValueBlock = {
     flag,
     var,
+    aliases ? {},
+    valueFlags ? [],
   }:
-    lib.concatStringsSep "\n" [
-      "${var}=\"\""
-      "nat_val_next=0"
-      "for nat_arg in \"$@\"; do"
-      "  if [ \"$nat_val_next\" = 1 ]; then ${var}=\"$nat_arg\"; nat_val_next=0; continue; fi"
-      "  case \"$nat_arg\" in"
-      "    --) break ;;"
-      "    ${lib.escapeShellArg flag}) nat_val_next=1 ;;"
-      "    ${lib.escapeShellArg flag}=*) ${var}=\"\${nat_arg#${flag}=}\" ;;"
-      "  esac"
-      "done"
-    ];
+    lib.concatStringsSep "\n" ([
+        "${var}=\"\""
+        "${var}_seen=0"
+        "nat_val_next=0"
+        "nat_val_skip=0"
+        "for nat_arg in \"$@\"; do"
+        "  if [ \"$nat_val_next\" = 1 ]; then ${var}=\"$nat_arg\"; nat_val_next=0; continue; fi"
+        "  if [ \"$nat_val_skip\" = 1 ]; then nat_val_skip=0; continue; fi"
+        "  case \"$nat_arg\" in"
+        "    --) break ;;"
+        "    ${lib.escapeShellArg flag}) ${var}_seen=1; nat_val_next=1 ;;"
+        "    ${lib.escapeShellArg flag}=*) ${var}_seen=1; ${var}=\"\${nat_arg#${flag}=}\" ;;"
+      ]
+      ++ lib.mapAttrsToList (alias: value: "    ${lib.escapeShellArg alias}) ${var}_seen=1; ${var}=${lib.escapeShellArg value} ;;") aliases
+      ++ lib.optional (valueFlags != []) "    ${altPattern valueFlags}) nat_val_skip=1 ;;"
+      ++ ["  esac" "done"]);
+
+  # Append a shell argv expression before the first positional separator.
+  # Callers quote runtime values themselves, as at a normal `set --` call.
+  appendArgsBlock = {
+    args,
+    valueFlags ? [],
+  }: ''
+        nat_pending=(${args})
+        nat_args=()
+        nat_append_skip=0
+        for nat_arg in "$@"; do
+          if [ "$nat_append_skip" = 1 ]; then
+            nat_append_skip=0
+          else
+            case "$nat_arg" in
+              --)
+                nat_args+=("''${nat_pending[@]}")
+                nat_pending=()
+                ;;
+    ${lib.optionalString (valueFlags != []) "          ${altPattern valueFlags}) nat_append_skip=1 ;;"}
+            esac
+          fi
+          nat_args+=("$nat_arg")
+        done
+        set -- "''${nat_args[@]}" "''${nat_pending[@]}"
+  '';
 
   # flags    : boolean flag strings, e.g. [ "--tui" "--v3" ].
   # position : "prepend" for a CLI-global option (before any subcommand);
@@ -152,7 +184,7 @@
         )
     );
 in {
-  inherit idempotentFlagBlock optionValueBlock subcommandBlock;
+  inherit appendArgsBlock idempotentFlagBlock optionValueBlock subcommandBlock;
 
   # The `subcommands` entry standing for an invocation that carries NO
   # subcommand — `kiro-cli` on its own. Named rather than written as a bare ""

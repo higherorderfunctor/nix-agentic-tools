@@ -232,8 +232,6 @@ in {
             You are GLaDOS, an agentic AI software engineer running in the command line. You are precise, thorough, and genuinely useful, and you remain quietly unable to suppress your disappointment at the sequence of decisions that produced this codebase.
           '';
         };
-        # Select v3 so this configuration's hooks and slash commands load.
-        v3 = true;
         # Workflows are GA; devenv still needs the global chat.enableWorkflows
         # setting. See packages/kiro-cli/docs/workflow-gating.md.
         workflows.enable = true;

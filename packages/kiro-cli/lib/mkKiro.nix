@@ -685,10 +685,6 @@
   in
     [
       {
-        assertion = cfg.cli.package == null || effectiveEngine cfg == null || cfg.cli.package ? withAcpDefault;
-        message = "ai.kiro.cli.native.settings.chat.agentEngine: the managed ACP default requires a package exposing passthru.withAcpDefault. Use this flake's kiro-cli package or set the native engine to null.";
-      }
-      {
         # No resolved package at all (`package = null`) means no wrapper is
         # built, so this constraint — which is about what the WRAPPER can
         # select from — does not apply; it must not fire on null alone.
@@ -906,14 +902,7 @@
   };
   effectiveEngine = cfg: import ./effective-engine.nix (nativeSettings cfg);
   resolvePackage = cfg: let
-    original = resolveRolloutPackage cfg;
-    engine = effectiveEngine cfg;
-    package =
-      if original == null || engine == null
-      then original
-      else if original ? withAcpDefault
-      then original.withAcpDefault engine
-      else original;
+    package = resolveRolloutPackage cfg;
   in
     if !hasBundlePatches cfg || package == null
     then package
@@ -934,8 +923,9 @@
   enabledBooleanTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) booleanTweaks;
 
   # Native startup and TUI settings have different project-scope consumers.
-  # Only measured startup exceptions extend the TUI allowlist here.
-  workspaceOverridableSettings = lib.unique (kiroFact "workspaceOverridableSettings" ++ kiroFact "nativeStartupWorkspaceSettings");
+  # Native repo-readable exceptions; chat.ui is verified only by settings reads.
+  nativeRepoSettings = ["chat.agentEngine" "chat.ui"];
+  workspaceOverridableSettings = lib.unique (kiroFact "workspaceOverridableSettings" ++ nativeRepoSettings);
 
   # The FLATTEN BOUNDARY: every dotted path kiro's binary names as a complete
   # setting key. Union of native and TUI measured lists, because they cover different
@@ -1158,7 +1148,6 @@
   }:
     wrapKiroPackage {
       inherit (cfg.cli) extraPackages trustedMcpTools useFhsSandbox;
-      defaultEngine = effectiveEngine cfg;
       package = resolvePackage cfg;
       environmentVariables = launcherEnvironment;
       inherit ((import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers) secretEnv;
@@ -1308,8 +1297,8 @@ in
                   options = {
                     agentEngine = lib.mkOption {
                       type = nativeSettingTypes."chat.agentEngine";
-                      default = null;
-                      description = "Native terminal engine. Repository settings override global settings and explicit CLI flags override both. Also supplies the managed ACP launch default, which does not read persisted settings. Null opts out of both defaults.";
+                      default = "v3";
+                      description = "Native engine for terminal and ACP. Repository settings override global settings and explicit CLI flags override both. Null lets Kiro auto-select its engine. Every module feature requires v3.";
                     };
                     defaultModel = lib.mkOption {
                       type =
@@ -1461,8 +1450,8 @@ in
               at build time. Both launcher and direct chat use its fixed store path;
               no user cache participates in selection. Every selected source must
               occur exactly once or the build fails. Unselected text is preserved.
-              Managed patches replace an inherited KIRO_KAS_SERVER_PATH; with all
-              tweaks disabled that explicit override remains available.
+              The packaged KAS replaces an inherited KIRO_KAS_SERVER_PATH even
+              when all tweaks are disabled.
 
               May not contain a backtick or `''${` — the value is spliced into a JS
               template literal.
@@ -1504,16 +1493,6 @@ in
             visibility at the cost of that compatibility guarantee. This has no
             practical effect on Darwin, where nixpkgs already ships the unwrapped
             package.
-          '';
-        };
-        v3 = lib.mkOption {
-          type = lib.types.bool;
-          default = true;
-          description = ''
-            Default native.settings.chat.agentEngine to v3. False withholds the
-            default, preserving native and persisted engine selection. An explicit
-            native engine or null overrides this compatibility switch. V3-only
-            features require the effective declared engine to be v3.
           '';
         };
         workflows.enable = lib.mkEnableOption "Kiro CLI workflows (requires the v3 engine; devenv also needs global chat.enableWorkflows)";
@@ -1652,21 +1631,14 @@ in
             (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
           ignored)
         )) (builtins.attrNames cfg.hooks);
-      # `--trust-tools` reaches the chat binary on BOTH backends, so this is a
-      # withhold test rather than a platform test. Two argv paths drop the flag:
-      # Darwin's launcher resolves the chat binary by app-bundle discovery and never
-      # runs the wrapper that appends it, and the `acp` subcommand rejects it under
-      # the v3 engine (packages/kiro-cli/lib/wrapPackage.nix:194-256). Exactly one
-      # composition recovers the grant declaratively — Home Manager with v3, where
-      # mkPermissionRules also writes it into settings/permissions.yaml
-      # (packages/kiro-cli/lib/mkKiro.nix:707-742) — so that is the only case
-      # suppressed, and the devenv half that the wrapper's own comment says is not
-      # recovered declaratively now reports instead of staying silent.
+      # Darwin bundle discovery bypasses the chat wrapper's grant; ACP V3 rejects
+      # --trust-tools. Only HM with declared V3 recovers it via permissions.yaml.
+      kiroV3 = engine == "v3";
       trustToolsWarnings = lib.optional (cfg.cli.trustedMcpTools
         != []
-        && (pkgs.stdenv.hostPlatform.isDarwin || cfg.cli.v3)
-        && !(cfg.cli.v3 && backend == "hm"))
-      (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
+        && (pkgs.stdenv.hostPlatform.isDarwin || kiroV3)
+        && !(kiroV3 && backend == "hm"))
+      (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with the effective native engine v3 recovers it declaratively through settings/permissions.yaml.");
       nativeAgentPlans = lib.mapAttrs mkNativeAgentPlan nativeAgents;
       settingsDir = "${cfg.configDir}/settings";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
@@ -1703,11 +1675,6 @@ in
       packageDependentReasons =
         wrapperPackageReasons
         ++ [
-          {
-            active = effectiveEngine cfg != null;
-            explicit = explicitAt [["ai" "kiro" "cli" "v3"] ["ai" "kiro" "cli" "native" "settings" "chat" "agentEngine"]];
-            name = "ai.kiro.cli.native.settings.chat.agentEngine (ACP default)";
-          }
           {
             active = moduleEnvironmentVariables != {};
             explicit = explicitAt [["ai" "gitSshConfigWorkaround"]];
@@ -1753,8 +1720,21 @@ in
       inertPackageOptions =
         map (reason: reason.name)
         (lib.filter (reason: reason.active && reason.explicit) packageDependentReasons);
+      engine = effectiveEngine cfg;
+      engineState =
+        if engine == null
+        then "native.settings.chat.agentEngine is unset (null), so Kiro auto-selects its engine"
+        else "native.settings.chat.agentEngine is ${builtins.toJSON engine}";
+      engineWarnings =
+        lib.optional (engine != "v3")
+        "ai.kiro.cli: ${engineState}. Every Kiro feature in this module is built and tested against the v3 engine only; anything other than v3 is unsupported.";
+      explicitEngine =
+        lib.any (value: value ? "chat.agentEngine" || value ? chat.agentEngine)
+        (options.ai.kiro.cli.native.settings.definitions or []);
       packageWarnings =
-        lib.optional (cfg.cli.package == null && inertPackageOptions != [])
+        lib.optional (cfg.cli.package == null && engine != null && explicitEngine)
+        "ai.kiro.cli.package is null: the native engine setting is still delivered. ACP honors it through this flake's packaged launchers, which package = null does not install."
+        ++ lib.optional (cfg.cli.package == null && inertPackageOptions != [])
         "ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ${lib.concatStringsSep ", " inertPackageOptions}. Unset them or set ai.kiro.cli.package.";
       hasUrlSecret = kiroSecrets.urlSecretEnv != {};
       mcpRender = mkMcpJsonScript {
@@ -1773,13 +1753,6 @@ in
       };
     in
       lib.mkMerge ([
-          {
-            ai.kiro.cli.native.settings.chat.agentEngine = lib.mkDefault (
-              if cfg.cli.v3
-              then "v3"
-              else null
-            );
-          }
           (featureImplications backend cfg)
           (lib.optionalAttrs (!isHm && options ? enterShell) {
             enterShell = lib.concatStrings (lib.mapAttrsToList (name: setting:
@@ -1795,7 +1768,7 @@ in
               ++ mkAgentFormatAssertions nativeAgentPlans
               ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);
           }
-          (lib.optionalAttrs (options ? warnings) {warnings = packageWarnings ++ hookWarnings ++ trustToolsWarnings;})
+          (lib.optionalAttrs (options ? warnings) {warnings = engineWarnings ++ packageWarnings ++ hookWarnings ++ trustToolsWarnings;})
           {
             # Writer identities survive empty declarations: N→0 must retract
             # earlier files, including when the final hook disappears.
