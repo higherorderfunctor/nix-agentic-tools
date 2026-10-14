@@ -510,19 +510,7 @@
     if fromGeneratedTree path file
     then (markdownInput evaluated path).text
     else throw "module-test: ${path} is not delivered from its generated tree";
-  # The parsed `<envelope>.<server>` entry of a rendered LSP file, or null.
-  # Null unless `envelope` is the file's ONLY top-level key, so a bare
-  # per-server map (which Copilot and Kiro both reject) never matches.
-  # `fromJSON` refuses a string carrying store-path context, which a
-  # `package`-resolved command adds.
-  lspEntryOf = envelope: file: server: let
-    content = builtins.readFile file.source;
-    json = builtins.fromJSON (builtins.unsafeDiscardStringContext content);
-  in
-    if file != null && lib.attrNames json == [envelope]
-    then json.${envelope}.${server} or null
-    else null;
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
   inherit testing;
 }

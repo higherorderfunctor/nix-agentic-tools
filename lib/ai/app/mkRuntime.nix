@@ -37,8 +37,8 @@
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
 #     poolOptions ? {};              # {<pool> = mkOption attrs;} merged over the
-#                                    #   builder's declaration of `agentsDir`,
-#                                    #   `environmentVariables` or `lspServers`.
+#                                    #   builder's declaration of `agentsDir`
+#                                    #   or `environmentVariables`.
 #                                    #   Any other key, or a pool not in
 #                                    #   `surfaceSupport`, is rejected.
 #     agentNativeType ? <absent>;    # option type of ONE native agent record.

@@ -3,7 +3,6 @@
   pools = [
     "agents"
     "environmentVariables"
-    "lspServers"
     "mcpServers"
     "rules"
     "skills"

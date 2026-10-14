@@ -117,7 +117,7 @@ in {
       jq
       python3
     ]
-    # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging) —
+    # LSP servers (in PATH for editors and MCP bridging) —
     # interactive-only, dropped from the diagnostic closure (~1GB: nixd pulls
     # llvm, marksman pulls dotnet). See the isCI note above.
     ++ lib.optionals (!isCI) [

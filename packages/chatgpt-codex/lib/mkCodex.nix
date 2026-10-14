@@ -1112,10 +1112,6 @@ in
       context = {};
       environmentVariables = {};
       hooks = {};
-      lspServers = {
-        backends = [];
-        reason = "Codex excludes the lspServers pool.";
-      };
       mcpServers = {};
       rules = {};
       settings = {};

@@ -38,13 +38,12 @@
   # Every key Copilot writes into a settings file is configuration, and it
   # writes by renaming a temporary over the path (measured at copilot-cli
   # 1.0.88: `/settings`, `/model` and `--experimental` for settings.json,
-  # `copilot mcp add` for mcp-config.json; its LSP disable toggle writes
-  # lsp-config.json, inferred from the binary). That replaces a store
+  # `copilot mcp add` for mcp-config.json). That replaces a store
   # symlink or a 0444 file alike, so these files are read-only copies: the
   # next activation or shell entry backs the in-app file up and restores the
   # declaration, where a symlink would block Home Manager's link check. One
   # writer owns every copy through one directory ledger: Home Manager's
-  # `configDir` (the user settings.json, mcp-config.json and lsp-config.json),
+  # `configDir` (the user settings.json and mcp-config.json),
   # devenv's `.github/copilot` (the repository settings file). It runs while
   # Copilot is disabled too, so a disable retracts the copies.
   configWriter = "materialize-copilot-config";
@@ -227,7 +226,6 @@ in
         backends = [];
         reason = "Copilot excludes the hooks pool and no native hook writer exists.";
       };
-      lspServers = {};
       mcpServers = {};
       rules = {
         backends = ["devenv"];
@@ -251,12 +249,6 @@ in
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "copilot-cli";
     };
     agentsDescriptionSuffix = "Each lands at `<configDir>/agents/<name>.md` under Home Manager and `<projectDir>/agents/<name>.agent.md` under devenv.";
-    # The builder declares these pool options, `environmentVariables` (baked
-    # into ./wrapPackage.nix on both backends) included, and expands
-    # `agentsDir` into `agents`; Copilot states where each one lands.
-    poolOptions = {
-      lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspFile` into the `lspServers` envelope: `<configDir>/lsp-config.json` under Home Manager, `<projectDir>/lsp.json` under devenv. Every entry must set `extensions`, because Copilot requires `fileExtensions`, and its name must be non-empty ASCII letters, digits, `_` and `-`, because Copilot rejects the whole file otherwise.";
-    };
     options = {
       # Keep the option visible in both backends even though only a project-local
       # devenv has a meaningful project root. Home Manager rejects non-default
@@ -304,7 +296,6 @@ in
       hasMergedContext,
       mergedAgents,
       mergedContext,
-      mergedLspServers,
       mergedRules,
       mergedServers,
       mergedSkills,
@@ -356,31 +347,6 @@ in
               message = "ai.copilot.trustedFolders entries must be absolute paths; Copilot compares trust against the absolute working directory, so ${lib.concatStringsSep ", " relativeTrustedFolders} could never match.";
             }
           ];
-        })
-
-        # LSP servers, in the same `lspServers` envelope at both scopes. The
-        # CLI reads its USER-level file, `~/.copilot/lsp-config.json`;
-        # copilot-cli 1.0.88 also loads the REPOSITORY-level `.github/lsp.json`
-        # from the repository root (upstream README "Repository-level
-        # configuration"), which is why devenv writes under `projectDir`
-        # rather than beside the wrapper-aimed `configDir`.
-        # Home Manager's user file is a read-only copy it always owns (see
-        # `configWriter`); the repository file is a plain generated file.
-        (lib.mkIf (isHm || mergedLspServers != {}) {
-          ai.copilot.files.${
-            if isHm
-            then "${cfg.configDir}/lsp-config.json"
-            else "${cfg.projectDir}/lsp.json"
-          } =
-            {
-              content = {
-                _generated = true;
-                _surface = "settings";
-                value = aiCommon.mkCopilotLspFile mergedLspServers;
-              };
-              format = "json";
-            }
-            // lib.optionalAttrs isHm copyFields;
         })
 
         # One file per agent. The CLI reads `<name>.md`; github.com requires the
@@ -565,7 +531,7 @@ in
       # trace never opened or stat'd
       # `<project>/.config/github-copilot/{mcp,lsp}-config.json` or
       # `settings.json`. What it does read at repository scope sits under
-      # `.github/` (`lsp.json`, `copilot/settings.json`). See
+      # `.github/` (`copilot/settings.json`). See
       # dev/fragments/ai-clis/copilot-config-delivery.md for the measured
       # discovery behavior and the rejected COPILOT_HOME alternative.
       #
@@ -583,9 +549,8 @@ in
       options = {
         # Wrapper-aimed config dir. `mcp-config.json` here is LIVE — the
         # `packages` wrapper points `--additional-mcp-config` at it — and it is
-        # the only file devenv writes here. Project-scope files Copilot reads
-        # live under `.github/` instead: LSP config under `projectDir`, and
-        # repository settings in the fixed `.github/copilot/settings.json`.
+        # the only file devenv writes here. Project-scope settings Copilot
+        # reads live in the fixed `.github/copilot/settings.json` instead.
         configDir = lib.mkOption {
           type = lib.types.str;
           default = ".config/github-copilot";
@@ -595,8 +560,7 @@ in
             `--additional-mcp-config`.
 
             Settings are not written here: devenv writes them to the
-            repository settings file `.github/copilot/settings.json`, and
-            LSP servers to `<projectDir>/lsp.json`.
+            repository settings file `.github/copilot/settings.json`.
 
             This is NOT the directory github.com's Copilot code review reads —
             that consumes committed files under `projectDir` (`.github`), and

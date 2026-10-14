@@ -31,18 +31,6 @@ in {
       checkRoot = value: value == "root";
       checkRuntime = value: value == "runtime";
     });
-    factory-pool-lspServers-negation = mkTest "pool-lspServers-negation" (poolMergeContract {
-      poolName = "lspServers";
-      rootValue = {
-        command = "root-lsp";
-        args = ["--root-only"];
-      };
-      runtimeValue.command = "runtime-lsp";
-      checkRoot = value:
-        value.command == "root-lsp" && value.args == ["--root-only"];
-      checkRuntime = value:
-        value.command == "runtime-lsp" && value.args == ["--stdio"];
-    });
     factory-pool-mcpServers-negation = mkTest "pool-mcpServers-negation" (poolMergeContract {
       poolName = "mcpServers";
       rootValue = {

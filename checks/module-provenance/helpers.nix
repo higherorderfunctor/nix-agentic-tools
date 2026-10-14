@@ -157,7 +157,6 @@
   normalizedPoolNames = [
     "agents"
     "environmentVariables"
-    "lspServers"
     "mcpServers"
     "rules"
     "skills"

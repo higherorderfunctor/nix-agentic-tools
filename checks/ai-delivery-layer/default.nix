@@ -133,45 +133,6 @@
         };
       };
     };
-  # Both files carry their pool under an envelope key of the same name. The
-  # LSP file lives at a different path per backend: the CLI's user-level
-  # `lsp-config.json` on Home Manager, the repository-level
-  # `<projectDir>/lsp.json` on devenv.
-  copilotExtension = pool: paths:
-    lib.all (
-      {
-        evaluate,
-        path,
-      }: let
-        base.ai.copilot = {
-          configDir = ".copilot";
-          enable = true;
-          # Copilot requires `fileExtensions`, so an LSP server needs one.
-          ${pool}.original = {command = "original";} // lib.optionalAttrs (pool == "lspServers") {extensions = ["nix"];};
-        };
-        original = (evaluate base).config.ai.copilot.files.${path}.content.value;
-        added = lib.setAttrByPath [pool "added" "command"] "added";
-        cfg =
-          (evaluate (lib.recursiveUpdate base {
-            ai.copilot.files.${path}.content.value = added;
-          })).config;
-        expected = lib.recursiveUpdate original added;
-      in
-        cfg.ai.copilot.files.${path}.content.value
-        == expected
-        && fromGeneratedTree path (deliveredFiles cfg).${path}
-        && lib.all (assertion: assertion.assertion) cfg.assertions
-    ) [
-      {
-        evaluate = evalHm;
-        path = paths.hm;
-      }
-      {
-        evaluate = evalDevenv;
-        path = paths.devenv;
-      }
-    ];
-
   # ── The delivered-surface snapshot ──────────────────────────────────
   # Everything the delivery layer puts on disk, rendered as sorted text. It is
   # not an assertion: it is the EVIDENCE that a refactor of the layer changed
@@ -191,10 +152,6 @@
     context.text = "SNAPSHOT-CONTEXT";
     environmentVariables.PROBE = "value";
     hooks.PreToolUse = [{hooks = [{command = "true";}];}];
-    lspServers.probe = {
-      command = "probe";
-      extensions = ["nix"];
-    };
     mcpServers.probe.command = "probe";
     rules.probe.text = "SNAPSHOT-RULE";
     settings.reasoningEffort = "high";
@@ -416,10 +373,6 @@ in {
             instructions.text = "probe";
           };
           environmentVariables = "probe";
-          lspServers = {
-            command = "probe";
-            extensions = ["nix"];
-          };
           mcpServers.command = "probe";
           rules.text = "probe";
           skills = ./fixtures/probe-skill;
@@ -639,15 +592,32 @@ in {
           touch "$out"
         '';
 
-    module-delivery-copilot-lsp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-lsp-content-extension-keeps-generated-leaves" (copilotExtension "lspServers" {
-      devenv = ".github/lsp.json";
-      hm = ".copilot/lsp-config.json";
-    });
-
-    module-delivery-copilot-mcp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-mcp-content-extension-keeps-generated-leaves" (copilotExtension "mcpServers" {
-      devenv = ".copilot/mcp-config.json";
-      hm = ".copilot/mcp-config.json";
-    });
+    # Copilot's MCP file carries its servers under the `mcpServers` envelope
+    # key at the same path on both backends.
+    module-delivery-copilot-mcp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-mcp-content-extension-keeps-generated-leaves" (
+      let
+        path = ".copilot/mcp-config.json";
+        base.ai.copilot = {
+          configDir = ".copilot";
+          enable = true;
+          mcpServers.original.command = "original";
+        };
+        added.mcpServers.added.command = "added";
+      in
+        lib.all (
+          evaluate: let
+            original = (evaluate base).config.ai.copilot.files.${path}.content.value;
+            cfg =
+              (evaluate (lib.recursiveUpdate base {
+                ai.copilot.files.${path}.content.value = added;
+              })).config;
+          in
+            cfg.ai.copilot.files.${path}.content.value
+            == lib.recursiveUpdate original added
+            && fromGeneratedTree path (deliveredFiles cfg).${path}
+            && lib.all (assertion: assertion.assertion) cfg.assertions
+        ) [evalDevenv evalHm]
+    );
 
     module-delivery-method-resolver-is-shared = mkTest "delivery-method-resolver-is-shared" (
       deliveryMethod ? resolve
@@ -1218,9 +1188,9 @@ in {
         && ask standard ".kiro/steering/orientation.md"
         == "symlink"
         && ask replaced ".kiro/steering/orientation.md" == "copy-ro"
-        && ask replaced ".kiro/settings/lsp.json" == "symlink"
-        && ask agreeing ".kiro/settings/lsp.json" == "copy-ro"
-        && !(builtins.tryEval (ask disagreeing ".kiro/settings/lsp.json")).success
+        && ask replaced ".kiro/skills/probe/SKILL.md" == "symlink"
+        && ask agreeing ".kiro/skills/probe/SKILL.md" == "copy-ro"
+        && !(builtins.tryEval (ask disagreeing ".kiro/skills/probe/SKILL.md")).success
     );
 
     ai-delivery-snapshot = pkgs.writeText "ai-delivery-snapshot" snapshot;

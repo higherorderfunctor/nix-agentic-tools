@@ -28,7 +28,7 @@
   defaultsKeys = ["package" "packageText"];
   # The pools whose option `mkBackendTransform.nix` declares through
   # `poolOption`, and so the only ones `poolOptions` can override.
-  poolOptionPools = ["environmentVariables" "lspServers"];
+  poolOptionPools = ["environmentVariables"];
   sharedAgentsMdKeys = ["hasOnDemandIndex" "index" "key" "maxBytes" "rules"];
   supportKeys = ["backends" "gaps" "reason"];
   gapKeys = ["backends" "each" "effective" "path" "reason" "rootOnly" "when"];

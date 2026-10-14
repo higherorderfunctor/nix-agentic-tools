@@ -41,7 +41,6 @@ factory. Apply the same shape to:
   per-ecosystem disk paths.
 - **Agents** (`ai.agents` + `ai.<cli>.agents`) — shapes differ per ecosystem;
   may only partially unify. Future work.
-- **LSP servers** (`ai.lspServers` + `ai.<cli>.lspServers`).
 - **Environment variables** (`ai.environmentVariables` +
   `ai.<cli>.environmentVariables`).
 - **Permissions** (`ai.permissions` + `ai.<cli>.permissions`).

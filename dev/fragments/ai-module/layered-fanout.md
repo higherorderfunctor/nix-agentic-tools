@@ -1,7 +1,8 @@
 ## ai.\* Layered Fanout Pattern
 
 > **Last verified:** 2026-10-14 — delivery policy derives shared surfaces, keyed
-> withdrawal and normalized gaps from option and runtime declarations.
+> withdrawal and normalized gaps from option and runtime declarations;
+> `poolOptions` covers `agentsDir` and `environmentVariables` only.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -106,27 +107,27 @@ constructor and transform both validate it.
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
 - **Structured documents contribute ordinary leaves.** Codex settings and
-  Copilot MCP/LSP use `content.value` at ordinary priority. Adding one leaf
-  keeps generated siblings; defaulting the whole content would silently drop
-  them. Text and source content retain their whole-content defaults.
+  Copilot MCP use `content.value` at ordinary priority. Adding one leaf keeps
+  generated siblings; defaulting the whole content would silently drop them.
+  Text and source content retain their whole-content defaults.
 - **Claude delivers its own files.** Agents, commands, output styles, hook
-  scripts, skills, plugins, `.claude/settings.json` and the MCP/LSP files are
+  scripts, skills, plugins, `.claude/settings.json` and the MCP files are
   ordinary `ai.claude.files` entries, like every other runtime's. All of them
-  reach both backends except consumer plugins and the MCP/LSP personal plugin
-  (its manifest, `.mcp.json` and `.lsp.json`), which are Home Manager only
-  because a plugin is user-scope; devenv writes MCP servers to the project
-  `.mcp.json` instead. Nothing is handed to an upstream Home Manager or devenv
-  Claude module. Settings and MCP servers are configuration, so
-  `.claude/settings.json` and the devenv `.mcp.json` are Nix-owned read-only
-  links rather than reconciled documents, and an in-app change such as `/tui`
-  does not persist. Every settings contribution goes through
-  `ai.claude.native.settings`, so one entry carries the whole document. Claude's
-  user-global `.claude.json` is the exception: it holds OAuth tokens and runtime
-  state, so it claims the existing JSON ledger under `claudeUnpinLaunchEffort`;
-  its writer survives empty declarations and remains Home Manager only. That
-  writer keeps whatever mode it finds, whether or not it rewrites the file, so
-  an ungated `claudeConfigMode` command writer is the only thing that narrows
-  the token-bearing file to owner-only, on every activation.
+  reach both backends except consumer plugins and the MCP personal plugin (its
+  manifest and `.mcp.json`), which are Home Manager only because a plugin is
+  user-scope; devenv writes MCP servers to the project `.mcp.json` instead.
+  Nothing is handed to an upstream Home Manager or devenv Claude module.
+  Settings and MCP servers are configuration, so `.claude/settings.json` and the
+  devenv `.mcp.json` are Nix-owned read-only links rather than reconciled
+  documents, and an in-app change such as `/tui` does not persist. Every
+  settings contribution goes through `ai.claude.native.settings`, so one entry
+  carries the whole document. Claude's user-global `.claude.json` is the
+  exception: it holds OAuth tokens and runtime state, so it claims the existing
+  JSON ledger under `claudeUnpinLaunchEffort`; its writer survives empty
+  declarations and remains Home Manager only. That writer keeps whatever mode it
+  finds, whether or not it rewrites the file, so an ungated `claudeConfigMode`
+  command writer is the only thing that narrows the token-bearing file to
+  owner-only, on every activation.
 - **The CLI's write primitive picks the method.** Codex's `config.toml` is a
   store symlink on both backends: every Codex config writer writes a temporary
   beside the link's target, so an in-app save fails and the link survives
@@ -372,18 +373,18 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   (default `.md`). It also includes `native.agents`, declared for a record that
   supplies `agentNativeType` and `agentTransformer` and joined to the record's
   own `native.*` options. `poolOptions.<pool>` is merged over the builder's
-  declaration of `agentsDir`, `environmentVariables` or `lspServers`, so a
-  runtime states only its own description. The `agents` description takes no
-  override: the record's `agentsDescriptionSuffix` is the only per-runtime hook
-  for it, appended to the builder's text so the shared sentences stay in one
-  place. The builder reads `poolOptions` by pool name, so
-  `lib/ai/app/checkRecord.nix` rejects any other key, in `mkRuntime` and again
-  in the transform: `agents`, a pool outside `environmentVariables` and
-  `lspServers`, one the record's `surfaceSupport` omits, or `agentsDir` without
-  `agents`. It also rejects `agentNativeType` without `agentTransformer` or the
-  reverse, either one, `agentsDirSuffixes` or `agentsDescriptionSuffix` without
-  the agents pool, and an empty or non-string `agentsDirSuffixes`. The native
-  pair is tested for presence, so an explicit null counts as set.
+  declaration of `agentsDir` or `environmentVariables`, so a runtime states only
+  its own description. The `agents` description takes no override: the record's
+  `agentsDescriptionSuffix` is the only per-runtime hook for it, appended to the
+  builder's text so the shared sentences stay in one place. The builder reads
+  `poolOptions` by pool name, so `lib/ai/app/checkRecord.nix` rejects any other
+  key, in `mkRuntime` and again in the transform: `agents`, a pool other than
+  `environmentVariables`, one the record's `surfaceSupport` omits, or
+  `agentsDir` without `agents`. It also rejects `agentNativeType` without
+  `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
+  `agentsDescriptionSuffix` without the agents pool, and an empty or non-string
+  `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
+  null counts as set.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus

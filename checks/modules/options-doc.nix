@@ -80,7 +80,6 @@
       "ai.context"
       "ai.environmentVariables"
       "ai.hooks"
-      "ai.lspServers"
       "ai.mcpServers"
       "ai.rules"
       "ai.rulesDir"

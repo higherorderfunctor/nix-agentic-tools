@@ -46,10 +46,6 @@
     context.text = "probe";
     environmentVariables.PROBE = "value";
     hooks.PreToolUse = [{hooks = [{command = "true";}];}];
-    lspServers.probe = {
-      command = "probe";
-      extensions = ["nix"];
-    };
     mcpServers.probe.command = "probe";
     permissions = [
       {
@@ -402,30 +398,6 @@
       ];
     }
   ];
-  # Copilot and Kiro both render an LSP server's `extensions` (Copilot as
-  # `fileExtensions`, Kiro as `file_extensions`), on both backends and at both
-  # the root and the per-runtime path, so no warning may name that field: it
-  # would claim a gap the factory closes.
-  #
-  # Kiro's Home Manager LSP file is workspace-relative, so both declaration
-  # scopes diagnose its conditional reach rather than claiming global support.
-  deliveredLspSilent = lib.all (mode:
-    lib.all (runtime: let
-      recordedGap = lib.any (row: row.surface == "lspServers" && row.ecosystem == runtime && row.mode == mode) gaps;
-    in
-      lib.all (path: let
-        messages = evaluate mode (lib.recursiveUpdate (harness.setEnable runtime true) (lib.setAttrByPath path {
-          command = "probe";
-          extensions = ["nix"];
-        }));
-      in
-        !contains (lib.showOption (path ++ ["extensions"])) messages
-        && (recordedGap || (mode == "hm" && runtime == "kiro") || messages == []))
-      [
-        ["ai" "lspServers" "probe"]
-        ["ai" runtime "lspServers" "probe"]
-      ])
-    ["copilot" "kiro"]) ["devenv" "hm"];
   caseMode = case: case.mode or "devenv";
   # Memoize identical enabled-empty controls across both case collections.
   emptyCaseWarnings = lib.mapAttrs (mode: modeCases:
@@ -666,7 +638,6 @@ in {
       && lib.assertMsg mcpFieldCasesPass "Claude MCP field warnings match their paths, backend, runtime, count, and disabled/absent controls"
       && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
       && lib.assertMsg effortSilent "delivered or withheld reasoning effort must not warn"
-      && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
       && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
     );
     ai-warnings-delivery-input-options = harness.mkTest "ai-warnings-delivery-input-options" inputsDeclared;
@@ -904,14 +875,6 @@ in {
           enable = true;
           context.text = "";
         };
-      }
-      == []
-      && evaluate "devenv" {
-        ai.claude = {
-          enable = true;
-          lspServers.probe = null;
-        };
-        ai.lspServers = sample.lspServers;
       }
       == []
     );

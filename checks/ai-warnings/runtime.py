@@ -155,7 +155,7 @@ def current(script):
 
 def wiring(script):
     desired = manifest(script)
-    assert "ai.kiro.lspServers" in desired[".custom-kiro/settings/lsp.json"]["option"]
+    assert "ai.kiro.agents" in desired[".custom-kiro/agents/probe.json"]["option"]
     assert "ai.codex.native.settings" in desired[".codex/config.toml"]["option"]
     assert 'ai.codex.files."probe"' in desired["probe"]["option"]
     # A shared AGENTS.md key is an owned COPY: never a symlink the report

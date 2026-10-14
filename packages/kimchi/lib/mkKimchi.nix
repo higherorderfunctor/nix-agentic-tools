@@ -783,10 +783,6 @@ in
           })
           (lib.subtractLists (import ./hook-events.nix) sharedHooks.portableEvents);
       };
-      lspServers = {
-        backends = [];
-        reason = "Kimchi excludes the lspServers pool.";
-      };
       mcpServers = {};
       rules = {};
       settings = {};

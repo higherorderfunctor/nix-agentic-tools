@@ -201,10 +201,10 @@
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   pluginLib = import ./plugin.nix {inherit lib pkgs;};
 
-  # The Home Manager personal plugin that carries MCP and LSP servers — the
-  # only route Claude has for user-scope LSP. Its directory name is ours; the
-  # manifest name `hm` is the MCP tool namespace (`mcp__plugin_hm_<server>`),
-  # kept short for token cost and stable for consumers that pin tool names.
+  # The Home Manager personal plugin that carries MCP servers. Its directory
+  # name is ours; the manifest name `hm` is the MCP tool namespace
+  # (`mcp__plugin_hm_<server>`), kept short for token cost and stable for
+  # consumers that pin tool names.
   personalPlugin = "home-manager";
   personalPluginManifest = "hm";
 
@@ -245,10 +245,6 @@ in
         reason = "Claude excludes the environmentVariables pool; native.settings.env is delivered through settings instead.";
       };
       hooks = {};
-      lspServers = {
-        backends = ["hm"];
-        reason = "Parity gap: Claude devenv exists but never consumes mergedLspServers or writes LSP configuration.";
-      };
       mcpServers = {};
       rules = {};
       settings = {};
@@ -260,19 +256,6 @@ in
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "claude-code";
     };
     agentsDescriptionSuffix = "Each lands at `.claude/agents/<name>.md` under the backend root (`~` for Home Manager, the project for devenv).";
-    # The builder declares these pool options; Claude states its delivery.
-    poolOptions = {
-      lspServers.description = ''
-        Typed Claude-specific LSP server declarations. Entries replace
-        top-level `ai.lspServers` at the same key; null suppresses an
-        inherited server. Translated via `mkClaudeLspConfig` into the Home
-        Manager personal plugin's
-        `~/.claude/skills/home-manager/.lsp.json`, since a plugin is
-        Claude's only LSP route. Extensions list becomes
-        `extensionToLanguage` mapping. devenv has no LSP delivery and warns
-        when this option is non-empty.
-      '';
-    };
     # Shared options (present in both backends)
     options = {
       plugins = lib.mkOption {
@@ -599,7 +582,6 @@ in
       hasMergedContext,
       mergedAgents,
       mergedContext,
-      mergedLspServers,
       mergedRules,
       mergedServers,
       mergedSkills,
@@ -630,7 +612,6 @@ in
       renderedServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
       personalPluginFiles = lib.filterAttrs (_: value: value != {}) {
         ".mcp.json" = lib.optionalAttrs (mergedServers != {}) {mcpServers = renderedServers;};
-        ".lsp.json" = lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers;
       };
       # Its manifest only when it carries something to load.
       personalPluginEntries = lib.optionalAttrs (personalPluginFiles != {}) (
@@ -814,11 +795,6 @@ in
               })
             cfg.plugins;
           }
-          # The flag gates Claude's LSP tool, which reads the personal
-          # plugin's `.lsp.json`, so it follows the LSP servers, not MCP ones.
-          (lib.mkIf (mergedLspServers != {}) {
-            ai.claude.native.settings.env.ENABLE_LSP_TOOL = lib.mkDefault "1";
-          })
           # Claude writes native state (including OAuth tokens) here. Own
           # only the unpin leaves. This user-global operation never runs from
           # a project shell.

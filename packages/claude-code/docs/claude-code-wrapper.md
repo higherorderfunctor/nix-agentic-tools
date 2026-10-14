@@ -1,12 +1,12 @@
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-11 — settings are generated from the committed
-> facts in packages/claude-code/extracted/, measured once on Linux; Darwin
-> validates its own extraction against that raw. The schema check gates stale
-> and shadowed rows, missing paths and wildcard grammar. Catalog, retirement and
-> launch-pin facts are content-located AST reads of the unpacked graph;
-> unsupported catalog properties, retirement rows and launch-pin shapes fail
-> with PROBE.
+> **Last verified:** 2026-10-14 — the personal plugin carries MCP servers only;
+> settings are generated from the committed facts in
+> packages/claude-code/extracted/, measured once on Linux; Darwin validates its
+> own extraction against that raw. The schema check gates stale and shadowed
+> rows, missing paths and wildcard grammar. Catalog, retirement and launch-pin
+> facts are content-located AST reads of the unpacked graph; unsupported catalog
+> properties, retirement rows and launch-pin shapes fail with PROBE.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -34,12 +34,11 @@ configuration that never imported the upstream module still evaluates.
 Two kinds of plugin land there, both Home Manager only (personal plugins are
 user-scope):
 
-- **The MCP/LSP personal plugin** at `~/.claude/skills/home-manager/`: a real
-  directory of per-file links to `.claude-plugin/plugin.json`, `.mcp.json` and
-  `.lsp.json`, emitted only when MCP or LSP servers exist. A plugin is Claude's
-  only user-scope LSP route. The manifest name is `hm`, which is the MCP tool
-  namespace (`mcp__plugin_hm_<server>__<tool>`), so the directory name can
-  change without renaming any tool.
+- **The MCP personal plugin** at `~/.claude/skills/home-manager/`: a real
+  directory of per-file links to `.claude-plugin/plugin.json` and `.mcp.json`,
+  emitted only when MCP servers exist. The manifest name is `hm`, which is the
+  MCP tool namespace (`mcp__plugin_hm_<server>__<tool>`), so the directory name
+  can change without renaming any tool.
 - **Consumer plugins** (`ai.claude.plugins`) via `mkPluginEntry` in
   `packages/claude-code/lib/plugin.nix`, each ONE directory link. Only
   whole-directory links work for these: recursive linking materializes a real

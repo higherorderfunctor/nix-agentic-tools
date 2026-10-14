@@ -15,10 +15,6 @@
     context.text = "probe";
     environmentVariables.PROBE = "value";
     hooks.PreToolUse = [{hooks = [{command = "true";}];}];
-    lspServers.probe = {
-      command = "probe";
-      extensions = ["nix"];
-    };
     # A wholly unsupported MCP surface gets one surface diagnostic, even
     # when its transport would also drop fields on a capable runtime.
     mcpServers.probe = {
@@ -94,12 +90,12 @@ in {
         record = ai.app.mkRuntime {
           inherit pkgs;
           name = "testapp";
-          surfaceSupport.lspServers = {
+          surfaceSupport.agents = {
             backends = ["hm"];
             inherit reason;
           };
         };
-        request = {inherit (sharedRequests) lspServers;};
+        request = {inherit (sharedRequests) agents;};
         warning = backend: path: "${path} is set but ${backend} does not deliver it to testapp (reason: ${reason})";
       in
         lib.all (
@@ -108,13 +104,12 @@ in {
             expected = path: lib.optional (backend == "devenv") (warning backend path);
           in
             (evaluate request true).warnings
-            == expected "ai.lspServers"
-            && (evaluate {testapp.lspServers = request.lspServers;} true).warnings == expected "ai.testapp.lspServers"
-            && (evaluate (request // {testapp.lspServers.probe = null;}) true).warnings == []
+            == expected "ai.agents"
+            && (evaluate {testapp.agents = request.agents;} true).warnings == expected "ai.testapp.agents"
+            && (evaluate (request // {testapp.agents.probe = null;}) true).warnings == []
             && (evaluate {} true).warnings == []
             && (evaluate request false).warnings == []
-            && (evaluate request true).ai.testapp.normalized.lspServers.probe.command == "probe"
-            && (evaluate request true).ai.testapp.normalized.lspServers.probe.extensions == ["nix"]
+            && (evaluate request true).ai.testapp.normalized.agents.probe.description == "probe"
         ) ["devenv" "hm"]
     );
     factory-mkRuntime-declared-conditional-gap = mkTest "mkRuntime-declared-conditional-gap" (
@@ -318,12 +313,12 @@ in {
         base = {
           inherit pkgs;
           name = "testapp";
-          surfaceSupport = lib.genAttrs ["agents" "lspServers" "rules"] (_: {backends = ["devenv" "hm"];});
+          surfaceSupport = lib.genAttrs ["agents" "environmentVariables" "rules"] (_: {backends = ["devenv" "hm"];});
           defaults.package = pkgs.hello;
           agentsDescriptionSuffix = "Test agents.";
           poolOptions = {
             agentsDir.description = "Test agents directory.";
-            lspServers.description = "Test LSP servers.";
+            environmentVariables.description = "Test environment variables.";
           };
         };
         built = ai.app.mkRuntime base;
@@ -361,23 +356,23 @@ in {
       in
         rejected (withPoolOptions {agnets.description = "misspelt";})
         && rejected (withPoolOptions {agents.description = "shadows the builder";})
-        && rejected (withPoolOptions {environmentVariables.description = "unsupported";})
+        && rejected (base // {surfaceSupport = removeAttrs base.surfaceSupport ["environmentVariables"];})
         && rejected (base // {agentsDirSuffixes = [];})
         && rejected (base // {agentsDirSuffixes = [1];})
         && rejected ((removeAttrs base ["poolOptions"])
           // {
-            surfaceSupport = lib.genAttrs ["lspServers"] (_: {backends = ["devenv" "hm"];});
+            surfaceSupport = lib.genAttrs ["rules"] (_: {backends = ["devenv" "hm"];});
             agentsDescriptionSuffix = "no agents pool";
           })
         && rejected ((removeAttrs base ["poolOptions" "agentsDescriptionSuffix"])
           // {
-            surfaceSupport = lib.genAttrs ["lspServers"] (_: {backends = ["devenv" "hm"];});
+            surfaceSupport = lib.genAttrs ["rules"] (_: {backends = ["devenv" "hm"];});
             agentsDirSuffixes = [".md"];
           })
         && rejected (withPoolOptions {hooks.description = "undeclared";} // {surfaceSupport = base.surfaceSupport // {hooks.backends = ["devenv" "hm"];};})
         && rejected ((removeAttrs base ["agentsDescriptionSuffix"])
           // {
-            surfaceSupport = lib.genAttrs ["lspServers"] (_: {backends = ["devenv" "hm"];});
+            surfaceSupport = lib.genAttrs ["rules"] (_: {backends = ["devenv" "hm"];});
             poolOptions.agentsDir.description = "no agents pool";
           })
         && lib.all (backend:
