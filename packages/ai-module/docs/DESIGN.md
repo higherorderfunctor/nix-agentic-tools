@@ -112,24 +112,32 @@ uses `$DEVENV_STATE/nix-agentic-tools/files2/ai.json`. Roots are `$HOME` and
 per-file options. The same root must not be activated concurrently through two
 independent backend states.
 
-Layer 2 always generates `files2-prune` and `files2-apply` internally, including
-with an empty map. Backend lowering validates and lowers their union with the
-caller's `ai.activation2` graph; the generated entries are not option
-definitions that a whole-option priority override can remove. A caller key
-colliding with either reserved name fails evaluation. Both have
-`runWhenDisabled = true`. Prune has `after = []; before = ["linkCheck"];`; apply
-has `after = ["files"]` plus `"secrets"` when any enabled entry uses
-`content.run`. Apply also depends directly on prune and the devenv native guard.
-The internal `materialized` point depends on apply. These reserved entries and
-their names cannot be overridden by callers. Content renderers execute only in
-apply.
+Layer 2 generates `files2-prune` internally on every activation, including with
+an empty map, so removing the last file still drains it. For an empty map only,
+its command exits before Python starts when the engine state file is absent,
+which the engine guarantees whenever nothing is owned, so a consumer that
+declares no files pays one shell test per activation. A nonempty map always
+starts the engine in prune, whose parent check refuses a symlinked parent before
+HM's native linking. `files2-apply` is generated only for a nonempty plan.
+Backend lowering validates and lowers their union with the caller's
+`ai.activation2` graph; the generated entries are not option definitions that a
+whole-option priority override can remove. A caller key colliding with a
+reserved name fails evaluation, whether or not that entry is emitted. Generated
+entries have `runWhenDisabled = true`. Prune has
+`after = []; before = ["linkCheck"];`; apply has `after = ["files"]` plus
+`"secrets"` when any enabled entry uses `content.run`. Apply also depends
+directly on prune and, when emitted, the devenv native guard; devenv refuses a
+dependency on an absent task. The internal `materialized` point depends on
+apply. These reserved entries and their names cannot be overridden by callers.
+Content renderers execute only in apply.
 
 The devenv guard is a third ordinary generated activation entry, between
-`linkCheck` and `files`. It checks the desired native links after cleanup and
-pre-link commands: accept the desired store link, remove a stale store link,
-refuse regular files, special files and non-store links, and refuse symlinked
-parents. Only desired native destinations are examined; there is no native-link
-state in the engine. Native backends retract their own removed links.
+`linkCheck` and `files`, emitted only when the plan has native links. It checks
+the desired native links after cleanup and pre-link commands: accept the desired
+store link, remove a stale store link, refuse regular files, special files and
+non-store links, and refuse symlinked parents. Only desired native destinations
+are examined; there is no native-link state in the engine. Native backends
+retract their own removed links.
 
 ### Layer 3: generic activation
 
@@ -199,13 +207,15 @@ devenv:files:cleanup → ai2:link-check → ai2:files2-guard
 ```
 
 With no native file task, replace `guard → devenv:files → files-linked` with
-`guard → files-linked`. Always retain direct `prune → apply` and `guard → apply`
-edges, and `provider → apply` edges for run content. Prune and every command
-with `before = ["linkCheck"]` precede `ai2:link-check`, so guard runs after all
-such commands. They also follow `devenv:files:cleanup` unless explicitly
-positioned before cleanup with a native edge. Cleanup exists even at zero files;
-never manufacture a missing `devenv:files` task. A declaration requiring before
-link-check must clear `after = ["files"]`; contradictory ordering is an error.
+`guard → files-linked`. Without a guard, `link-check` precedes the next node of
+the chain directly. Retain direct `prune → apply` and `guard → apply` edges
+whenever both ends are emitted, and `provider → apply` edges for run content.
+Prune and every command with `before = ["linkCheck"]` precede `ai2:link-check`,
+so guard runs after all such commands. They also follow `devenv:files:cleanup`
+unless explicitly positioned before cleanup with a native edge. Cleanup exists
+even at zero files; never manufacture a missing `devenv:files` task. A
+declaration requiring before link-check must clear `after = ["files"]`;
+contradictory ordering is an error.
 
 The same HM chain is prune/pre-link commands → `checkLinkTargets` →
 `linkGeneration` → apply → `ai2-files-ready` → `ai2-ready`. Secret providers

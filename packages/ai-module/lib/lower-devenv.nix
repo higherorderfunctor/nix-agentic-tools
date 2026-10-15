@@ -38,6 +38,8 @@ in
             (
               if nativeFiles
               then "devenv:files"
+              else if builtins.hasAttr "files2-guard" entries
+              then "ai2:files2-guard"
               else "ai2:link-check"
             )
           ];
@@ -53,7 +55,9 @@ in
           after = ["devenv:files:cleanup"];
           before = [
             (
-              if nativeFiles
+              if builtins.hasAttr "files2-guard" entries
+              then "ai2:files2-guard"
+              else if nativeFiles
               then "devenv:files"
               else "ai2:files-linked"
             )

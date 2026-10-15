@@ -9,7 +9,7 @@
   linkedTree = ./fixtures;
   file = ./fixtures/a/b/c.md;
   text = {content.text = "hello";};
-  evaluate = definitions: (lib.evalModules {modules = [files2.module {files2 = definitions;}];}).config.files2;
+  evaluate = definitions: (lib.evalModules {modules = [../modules/common.nix {ai.files2 = definitions;}];}).config.ai.files2;
   plan = backend: files:
     files2.normalize {
       inherit backend files;
@@ -146,10 +146,10 @@
     lib.optional (result != builtins.elemAt collisionExpected index || (builtins.tryEval (plan "hm" files)).success) "collision")
   collisionFiles;
   priority = default: explicit: expected: let
-    files = (lib.evalModules {modules = [files2.module {files2.choice.content = lib.mkDefault default;} {files2.choice.content = explicit;}];}).config.files2;
+    files = (lib.evalModules {modules = [../modules/common.nix {ai.files2.choice.content = lib.mkDefault default;} {ai.files2.choice.content = explicit;}];}).config.ai.files2;
   in
     builtins.elem expected (builtins.attrNames (builtins.head (plan "hm" files)).content);
-  merged = (lib.evalModules {modules = [files2.module {files2.value.content.value.a.x = 1;} {files2.value.content.value.a.y = 2;}];}).config.files2;
+  merged = (lib.evalModules {modules = [../modules/common.nix {ai.files2.value.content.value.a.x = 1;} {ai.files2.value.content.value.a.y = 2;}];}).config.ai.files2;
   tie = inspect (single "tie" {
     content = {
       source = file;

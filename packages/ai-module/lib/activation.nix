@@ -83,6 +83,7 @@
     secretNodes,
   }: let
     keys = builtins.attrNames entries;
+    hasGuard = builtins.hasAttr "files2-guard" entries;
     names = map (key: nativeName backend key entries.${key}) keys;
     reserved =
       if backend == "hm"
@@ -111,7 +112,9 @@
           (edge "devenv:files:cleanup" "ai2:link-check")
         ]
         ++ (
-          if nativeFiles
+          if hasGuard
+          then [(edge "ai2:link-check" "ai2:files2-guard")]
+          else if nativeFiles
           then [
             (edge "ai2:link-check" "devenv:files")
           ]

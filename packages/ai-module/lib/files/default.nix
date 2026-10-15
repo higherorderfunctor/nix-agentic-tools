@@ -267,59 +267,6 @@
     if issue != null
     then throw issue
     else builtins.sort (a: b: a.path < b.path) entries;
-  module.options.files2 = mkOption {
-    type = types.attrsOf entryType;
-    default = {};
-  };
-  lowerHm = {
-    hmLib,
-    namespace,
-    plan,
-  }: let
-    python = pkgs.python3.withPackages (ps: [ps.pyyaml ps.tomlkit]);
-    sourceOf = item: item.content.source or (item.content.rendered or (pkgs.writeText "files2-link" item.content.text));
-    links = builtins.filter (item: item.method == "symlink") plan;
-    planFile = pkgs.writeText "files2-${namespace}-plan.json" (builtins.toJSON plan);
-    activation = phase: ''
-      (
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      export FILES2_BASH=${pkgs.bash}/bin/bash
-      run ${python}/bin/python3 -I ${./.}/engine.py \
-        --plan ${planFile} --root "$HOME" \
-        --state "''${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/files2/${namespace}.json" \
-        --phase ${phase}
-      )
-    '';
-  in {
-    home.file = builtins.listToAttrs (map (item: {
-        name = item.path;
-        value =
-          {source = sourceOf item;}
-          // lib.optionalAttrs (item.executable != null) {inherit (item) executable;};
-      })
-      links);
-    home.activation = {
-      "files2-${namespace}-prune" = hmLib.hm.dag.entryBefore ["checkLinkTargets"] (activation "prune");
-      "files2-${namespace}-write" = hmLib.hm.dag.entryAfter (["linkGeneration"] ++ lib.optionals (builtins.any (item: item.content ? run) plan) ["sops-nix"]) (activation "apply");
-    };
-  };
-  hmModule = namespace: {
-    config,
-    lib,
-    ...
-  }: {
-    imports = [module];
-    config = lowerHm {
-      hmLib = lib;
-      inherit namespace;
-      plan = normalize {
-        backend = "hm";
-        files = config.files2;
-        inherit namespace;
-      };
-    };
-  };
 in {
-  inherit hmModule lowerHm module normalize validate;
+  inherit entryType normalize validate;
 }

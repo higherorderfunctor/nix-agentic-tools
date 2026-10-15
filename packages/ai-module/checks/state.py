@@ -22,11 +22,12 @@ with tempfile.TemporaryDirectory() as temporary:
     state = Path(temporary) / "state" / "runtime.json"
     owned = root / "owned"
     engine.reconcile([], root, state, "apply")
-    assert json.loads(state.read_text()) == {"files": {}, "version": 1}
-    print("PASS: missing state starts at v1")
-
+    assert not state.exists()
     engine.reconcile(plan("old"), root, state, "apply")
     original = json.loads(state.read_text())
+    assert original["version"] == 1
+    print("PASS: missing state starts at v1; nothing owned leaves no state file")
+
     state.write_text(json.dumps({**original, "version": 0}))
     bad_source = plan("old") + [{**plan("new")[0], "path": "other", "content": {"source": "/missing"}}]
     try:
