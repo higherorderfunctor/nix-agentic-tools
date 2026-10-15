@@ -259,7 +259,9 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 ## Kiro launch defaults and argument composition
 
 > **Last verified:** 2026-10-14 — ACP reads engine settings in the payload
-> launchers; the packaged KAS wins over inherited overrides.
+> launchers; the packaged KAS wins over inherited overrides. KAS patch selection
+> takes only the two fixed-text workflow prompt tweaks, and selected
+> replacements fail closed at build time.
 >
 > Full historical measurements:
 > `git show 8be06935:packages/kiro-cli/docs/launcher-argv.md`.

@@ -7,8 +7,11 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-14 — Kiro owns engine defaults and warnings;
-> routing only resolves workflow visibility.
+> **Last verified:** 2026-10-14 — workflow defaults cover the two KAS tweaks;
+> Kiro owns engine defaults and warnings, and routing only resolves workflow
+> visibility; backend modules pass their scope to the shared skill-package
+> factory, which gates package rules by delivery capability; the per-turn
+> reminder derives its hook runtimes from that scope.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -149,7 +152,7 @@ When an enabled runtime reaches Kiro directly or through external delegation,
 the program defaults `cli.tweaks.relativeFileCheckPaths` and
 `cli.tweaks.stripVendorWorktreeSteering` to true only when
 `cli.workflows.enable` is true and the CLI package is managed. Explicit false
-wins; identity is not enabled.
+wins.
 
 Kiro's `run_workflow` appears only with `cli.workflows.enable`, effective V3,
 and no explicit false for `cli.native.settings.chat.enableWorkflows`. Devenv's
