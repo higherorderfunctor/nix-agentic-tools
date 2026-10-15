@@ -56,8 +56,15 @@ in {
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        python3 ${../lib/kiro-bundle-patch.py} ${server package.kas} ${package.kas.promptCorpus} --check
-        python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} ${server package.kas} ${server patched.kas} ${package.kas.promptCorpus} ${(import ../lib/packaging.nix).kiroPromptsExtractScript pkgs}
+        chat=$(python3 ${(import ../lib/packaging.nix).kiroLocateChatScript pkgs} ${package.unwrapped})
+        python3 ${../extract/embedded-kas.py} "$chat" vendor \
+          --architecture ${pkgs.lib.escapeShellArg pkgs.stdenv.hostPlatform.parsed.cpu.name} \
+          --zstd-library ${pkgs.lib.getLib pkgs.zstd}/lib/libzstd${pkgs.stdenv.hostPlatform.extensions.sharedLibrary} \
+          --zstd ${pkgs.zstd}/bin/zstd
+        vendor_server="$PWD/vendor/node_modules/@kiro/agent/dist/server/acp-server.js"
+        python3 ${../lib/kiro-bundle-patch.py} "$vendor_server" ${package.kas.promptCorpus} --check
+        python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} "$vendor_server" ${server patched.kas} ${package.kas.promptCorpus} ${(import ../lib/packaging.nix).kiroPromptsExtractScript pkgs} ${../src/patch-prompt-files.mjs} ${pkgs.typescript_5}/lib/node_modules/typescript
+        node ${./prompt-files.mjs} ${server patched.kas} ${pkgs.typescript_5}/lib/node_modules/typescript
         python3 ${./kas-smoke.py} ${pkgs.nodejs}/bin/node ${server patched.kas}
         touch "$out"
       '';

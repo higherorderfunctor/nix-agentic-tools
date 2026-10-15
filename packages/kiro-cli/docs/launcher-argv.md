@@ -4,7 +4,9 @@
 > launchers; the packaged KAS wins over inherited overrides.
 >
 > Full historical measurements:
-> `git show 8be06935:packages/kiro-cli/docs/launcher-argv.md`.
+> `git show 8be06935:packages/kiro-cli/docs/launcher-argv.md`. KAS file-backed
+> prompts persist per conversation and inherit through workflow children and
+> forks.
 
 ### Terminal and ACP have different consumers
 
@@ -95,13 +97,65 @@ The module wrapper still ends in `exec -a "$0" <realBin> "$@"`; the behavioral
 check reads that shape. This contract is separate from the Darwin build shim's
 app-path argv0 requirement.
 
+### File-backed prompts and conversation snapshots
+
+KAS reads the flat `chat.promptFiles` object from global and repository
+`settings/cli.json` at conversation creation. The semantic slots are `identity`,
+`workflowFileCheckGuidance` and `worktreeGuidance`. It starts with the three
+selected packaged texts, overlays global slots, then repository slots. Existing
+identity, relative-file-check and stripped-worktree tweak choices determine
+those defaults, preserving their on/off behavior. A null slot restores the
+packaged selection. The global root is `KIRO_HOME` when set, otherwise the
+session home plus `.kiro`; relative global paths use the settings file
+directory, while repository paths use the session working directory. Regular
+UTF-8 files up to 1 MiB are accepted, including empty text. Malformed settings,
+files or persisted snapshots fail visibly.
+
+The session owns a frozen resolved snapshot. Initial metadata persistence must
+succeed before creation returns; `_meta.kiro.nixPromptSnapshot` is reserved and
+client metadata cannot supply or replace it. Resident and cold resumes retain
+the original slots even after files change or disappear. The per-session
+registry applies the workflow creator slot when bundled profiles register or
+refresh. Existing custom-agent precedence and permission objects are preserved.
+Internal workflow children inherit through the trusted owner-session carrier,
+including persisted owners. Forks copy the validated snapshot with their
+selected metadata. No process-global current prompt exists.
+
+Identity remains inside the vendor renderers and retains their template
+semantics. Worktree guidance is appended directly to the workflow instructions;
+the bundled workflow creator has no template pass. File text is not a new
+plain-text rendering language: `{{worktree_path}}` resolves only at the existing
+workflow input boundary. JavaScript-looking text is data, not executable code.
+Dynamic environment, workspace, date, steering and tool context still come from
+the vendor constructors.
+
+Legacy saved conversations lack historical auxiliary slots. They keep their
+persisted initial message and use the packaged auxiliary defaults rather than
+reading current override files; historical auxiliary text cannot be recovered.
+Explicit V2 dispatch bypasses KAS entirely, so manually written prompt-file
+settings cannot enforce a runtime V2 conflict error. This feature adds no
+configuration-reading wrapper or native-binary patch.
+
+`checks/prompt-files.mjs` extracts actual patched constructors, lifecycle and
+registry methods into an isolated VM with inert host services. It captures the
+Vibe/custom initial messages and both request representations (`systemPrompt`
+and first message), plus concurrent session creation, strict save failure,
+resident/cold resume, owner inheritance and registry refresh. It does not invoke
+a model or authenticate. The transport adapter stops before vendor history
+conversion and network I/O; separate package dispatch smoke covers startup.
+
 ### Prompt corpus and the static/runtime boundary
 
 Build `ciPackages.<system>.kiro-cli.kas.promptCorpus` explicitly to inspect the
-packaged server. This lazy, proprietary JSON output is outside the CLI runtime
-closure and keeps the `kiro-cli` cache exclusion prefix. Selected KAS builds
-instead extract a temporary corpus from their own freshly unpacked server before
-patching; they never depend on an installed stock KAS.
+original release server. This is the `corpus` output of the same selected KAS
+derivation, generated before any text changes or hooks. Its ranges and source
+hash describe those original bytes, not the installed patched server. The
+runtime `out` does not reference it, and both proprietary outputs retain the
+`kiro-cli` cache exclusion prefix. After selected text changes, a temporary
+second extraction supplies matching ranges and a checked hash to the lifecycle
+patcher. Core slot placement follows those semantic corpus entries; lifecycle
+methods use unique AST shapes and refuse changed anchors. There is no installed
+stock KAS dependency or evaluation-time extraction.
 
 `extract/prompts.mjs` uses the existing TypeScript parser. It reads every string
 literal and every template's static chunks, including short strings, with UTF-8
@@ -117,11 +171,11 @@ bundled string is a prompt**.
 Five inspected entry points are named separately: identity, system features,
 Vibe, workflow creator and workflow orchestration. Each points to its decoded
 chunk and containing callable's range when one exists. Select their source
-ranges in the same packaged server to inspect callers and branches; minified
-names are not stable identifiers. The corpus also contains the workspace, shell,
-steering, tool-description, spec, agent-profile and memory guidance those entry
-points alone do not enumerate. No keyword or length filter excludes newly
-shipped strings.
+ranges in the matching original release source to inspect callers and branches;
+minified names are not stable identifiers. The corpus also contains the
+workspace, shell, steering, tool-description, spec, agent-profile and memory
+guidance those entry points alone do not enumerate. No keyword or length filter
+excludes newly shipped strings.
 
 Each JavaScript template records an ordered sequence of chunk references and
 exact interpolation expressions with source ranges, with tagged chunks subject
