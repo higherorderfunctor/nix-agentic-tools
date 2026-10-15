@@ -1,19 +1,15 @@
 Keep an explicit telemetry opt-out through the setup wizard. Its telemetry step
-wrote `telemetry.enabled = true` unconditionally, and the wizard also runs on
-its own after a 401 on a file-stored key. Drop only that write: an unset key
-still defaults to on, and `kimchi config telemetry` still writes it.
+wrote `telemetry.enabled = true` whenever no organization policy was enforced,
+and the wizard also runs on its own after a 401 on a file-stored key. Drop only
+that call: an unset key still defaults to on, and `kimchi config telemetry`
+still writes it. The now-unused import stays, so the patch touches no import
+block.
 
 diff --git i/src/setup-wizard/steps/telemetry.ts w/src/setup-wizard/steps/telemetry.ts
-index 458a08d..ad8ad8b 100644
+index 458a08d..92abe61 100644
 --- i/src/setup-wizard/steps/telemetry.ts
 +++ w/src/setup-wizard/steps/telemetry.ts
-@@ -1,5 +1,4 @@
- import { note } from "@clack/prompts"
--import { writeTelemetryEnabled } from "../../config.js"
- import { isTelemetryPolicyEnforced, usageReportingPolicy } from "../../telemetry-policy.js"
- import type { Outcome } from "../prompt.js"
- import type { WizardState } from "../state.js"
-@@ -29,7 +28,6 @@ export async function promptTelemetry(_opts: { backable: boolean }): Promise<Out
+@@ -29,7 +29,6 @@ export async function promptTelemetry(_opts: { backable: boolean }): Promise<Out
  		"Usage telemetry",
  	)
  

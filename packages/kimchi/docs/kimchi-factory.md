@@ -1,7 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-15 — harness helper read guards supply accepted
-> types for their keys; parser-driven additions retain their deep shapes.
+> **Last verified:** 2026-10-15 — source patches edit code paths only and leave
+> upstream's user-facing text alone.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -661,15 +661,18 @@ materializes `node_modules` and before Bun compiles the module graph. `fd` and
 `CI=1` does not meet the script's `CI === "true"` plus `KIMCHI_SKIP_TYPECHECK=1`
 skip condition.
 
-`disable-self-update.patch` makes both update gates unconditional. The launch
+`disable-self-update.patch` makes every update gate unconditional. The launch
 auto-update path returns before probing, and `isUpdateCheckDisabled()` always
 disables the shared manual workflow used by the startup nag, `/update`, and
 `kimchi update`. Self-updates are managed by Nix rather than a launcher option.
-The `/update` menu and the auto-update tip read the same function, so `/update`
-reports that updates are managed by Nix, no tip suggests enabling auto-update,
-and `kimchi --help` no longer lists the variable. The extractor still reads the
-unpatched source and records upstream's `KIMCHI_NO_UPDATE_CHECK` environment
-variable.
+`kimchi update` reaches `applyUpdate` only through that workflow's `hasUpdate`,
+so it reports no update available. `/update` stops before its menu, so it offers
+no toggle and no "enable auto-update" tip, and the tip rotation drops the
+auto-update tip. Every gate is a one-line condition: the patch leaves import
+blocks and user-facing text alone. So `--help` still lists
+`KIMCHI_NO_UPDATE_CHECK`, now inert, and `/update` prints upstream's notice that
+names that variable. The extractor still reads the unpatched source and records
+upstream's `KIMCHI_NO_UPDATE_CHECK` environment variable.
 
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.
