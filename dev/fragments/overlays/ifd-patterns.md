@@ -1,8 +1,8 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-13 — Kiro KAS extraction is static from the fetched
-> native release; TUI remains a sandboxed host-run extraction. The Linux test
-> job explicitly retains the patched devenv nixpkgs evaluation-only source.
+> **Last verified:** 2026-10-15 — Kiro's rollout manifest is JSON-decoded and
+> its closed-formals reader replaces the entry floor; KAS extraction stays
+> static and TUI a sandboxed host-run extraction.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -358,6 +358,11 @@ at least 100 public keys, because a schema builder that runs and returns almost
 nothing is the same defect as a dead anchor. Codex requires its recursive tree
 to retain the root and at least 20 commands, asserts the exact sandbox enum and
 the exact approval enum, and rejects empty feature/model results.
+
+A JSON-decoded extract needs no floor when its hand-written reader takes closed
+formals and runs over every entry in CI: the reader is the shape check. Kiro's
+rollout manifest works this way (`extract/rollout-coverage.nix`), per
+`extracted/extraction-method.md`.
 
 #### Kiro settings must come from the shipped TUI source
 

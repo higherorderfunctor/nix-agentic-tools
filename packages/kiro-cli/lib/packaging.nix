@@ -180,47 +180,34 @@ rec {
   # extracted, never curated: the
   # names ARE the enum a consumer may unlock, so a hand-copied list would drift
   # silently the first time upstream adds a flag.
-  #
-  # The shape assertion is the load-bearing half. A dead anchor still matches
-  # SOMETHING — that is exactly how the claude model-catalog grep rotted (see
-  # overlays.md § IFD Patterns) — so this demands the two entries stable across
-  # the 2.x line AND a floor on the entry count, rather than merely checking
-  # that the result is non-empty.
   kiroRolloutExtractScript = pkgs:
     pkgs.writeText "kiro-rollout-extract.py" ''
       ${kiroRolloutEntryPy}
       import json, mmap, sys
 
-      # mmap for the same reason the patcher uses it: the input is a ~556 MB
-      # ELF and read() would peak that much RSS on a builder to scan for a few
-      # hundred bytes of manifest. `re` scans the mapping through the buffer
-      # protocol, so nothing is materialized.
-      ent = re.compile(
-          rb'\n  "([a-z0-9_]+)": (\{\n    "description": "(?:[^"\\]|\\.)*",\n'
-          rb'    "treatment_percent": \d+'
-          rb'(?:,\n    "(?:segment|channel)": (?:null|"[^"\\]*"))*\n  \})'
-      )
-      manifest = re.compile(rb'\{\n  "[a-z0-9_]+": \{\n    "description": .*?\n\}', re.DOTALL)
-      entries = re.compile(rb'\n  "([a-z0-9_]+)": \{\n.*?\n  \}', re.DOTALL)
-      states = {}
+      # The anchor bounds the block at both ends: it finds the pretty-printed
+      # root's start, and the root's closing brace is the first "\n}" after it
+      # (JSON escapes newlines inside strings). The parser decodes the slice.
+      manifest = re.compile(rb'\{\n  "[a-z0-9_]+": \{\n    "description":')
+      states = None
       with open(sys.argv[1], "rb") as fh:
           with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
               for region in manifest.finditer(mm):
-                  data = region[0]
-                  matches = list(ent.finditer(data))
-                  sites = len(re.findall(rb'"treatment_percent":', data))
-                  if sites != len(matches):
-                      matched = {match[1] for match in matches}
-                      unmatched = sorted(match[1].decode() for match in entries.finditer(data) if match[1] not in matched)
-                      sys.exit("kiro-extract: rollout manifest has %d treatment sites but %d extracted entries; unmatched entries: %s" % (sites, len(matches), ", ".join(unmatched)))
-                  for match in matches:
-                      name = match[1].decode()
-                      entry = json.loads(match[2])
-                      # Absent fields stay absent; null is a different vendor state.
-                      state = {key: entry[key] for key in ("channel", "segment", "treatment_percent") if key in entry}
-                      if name in states and states[name] != state:
-                          sys.exit("kiro-extract: conflicting rollout copies for " + name)
-                      states[name] = state
+                  end = mm.find(b"\n}", region.start())
+                  if end < 0:
+                      sys.exit("kiro-extract: rollout manifest end not found at offset %d" % region.start())
+                  end += 2
+                  current, _ = json.JSONDecoder().raw_decode(mm[region.start():end].decode())
+                  if states is not None and states != current:
+                      sys.exit("kiro-extract: conflicting rollout copies")
+                  states = current
+              if states is None:
+                  sys.exit("kiro-extract: no rollout manifest found")
+              # Drop the vendor prose so the state readers (needsPatch's closed
+              # formals, the option docs that embed each whole state) never
+              # carry it; every other field is copied.
+              states = {name: {key: value for key, value in entry.items() if key != "description"}
+                        for name, entry in states.items()}
               patchability = {}
               for name in sorted(states):
                   hits, unmatched = rollout_sites(mm, name)
@@ -229,16 +216,6 @@ rec {
                       "unmatchedSites": unmatched,
                   }
       names = sorted(states)
-
-      required = {"tangent", "workflows"}
-      missing = sorted(required - set(names))
-      if missing or len(names) < 6:
-          sys.stderr.write(
-              "kiro-extract: rollout manifest shape changed - found %d entries, "
-              "missing %s. Re-derive the regex against the binary before "
-              "trusting any unlock.\n" % (len(names), missing)
-          )
-          sys.exit(1)
 
       json.dump({"rolloutFeatures": names, "rolloutPatchability": patchability, "rolloutStates": states}, sys.stdout)
     '';

@@ -1,11 +1,8 @@
 ## Kiro feature availability and client settings
 
-> **Last verified:** 2026-10-14 — rollout options consume the facts aggregate;
-> GA workflows keep the stock package, and friendly switches imply client
-> settings only in their native scope. Friendly-switch rollout and setting
-> dependencies share one table with the owner's consumer expectations.
-> Unrecognized setting keys warn and pass through on Home Manager; the workspace
-> assertion refuses every key outside the measured allowlist on devenv.
+> **Last verified:** 2026-10-15 — rollout state retains every manifest field
+> except description; coverage rejects unknown fields and requires both public
+> and internal treatment to be 100% before preserving the stock package.
 
 Workflows have been generally available since **Kiro CLI 2.26.0**. Their pinned
 rollout state is 100% for all users with no channel restriction, so enabling
@@ -58,17 +55,19 @@ availability only; they do not imply client settings. For example,
 the caller, while `features.workflows.enable` preserves the stock package and
 leaves `chat.enableWorkflows` to the caller.
 
-The aggregate `rolloutStates.<name>` facts record the manifest's treatment
-percentage, segment and channel. `rolloutPatchability.<name>.patchable` records
-whether every feature site matches the shared entry matcher. Enabling a feature
-that needs a patch but is measured unpatchable fails at evaluation, naming that
-fact. The unmatched-site count remains per platform and is not read by modules.
-The owner drift check compares fresh measurements with the committed facts;
-there is no hand-copied state table because it adds no human judgment. A single
-predicate in `extract/rollout-coverage.nix` derives whether a patch is needed:
-100% treatment for all users on the stable channel preserves the stock
-derivation; absent or null segment and channel fields mean all and stable.
-Restricted features require v3 and a package exposing
+The aggregate `rolloutStates.<name>` facts retain every manifest field except
+description, including internal treatment percentage.
+`rolloutPatchability.<name>.patchable` records whether every feature site
+matches the shared entry matcher. Enabling a feature that needs a patch but is
+measured unpatchable fails at evaluation, naming that fact. The unmatched-site
+count remains per platform and is not read by modules. The owner drift check
+compares fresh measurements with the committed facts; there is no hand-copied
+state table because it adds no human judgment. A single predicate in
+`extract/rollout-coverage.nix` derives whether a patch is needed: 100% public
+and internal treatment for all users on the stable channel preserves the stock
+derivation; omitted internal treatment follows public treatment, and absent or
+null segment and channel fields mean all and stable. Unknown state fields fail
+evaluation at this reader. Restricted features require v3 and a package exposing
 `passthru.withRolloutFeatures`. The CI rollout canary patches every measured
 patchable feature that still needs a patch to prove byte feasibility, matching
 consumer package selection. The package constructor sorts and deduplicates

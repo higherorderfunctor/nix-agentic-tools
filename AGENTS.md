@@ -143,6 +143,7 @@ for it. When several entries match, their guidance composes.
     - `packages/kiro-cli/lib/**`
     - `packages/semble/lib/**`
   - Read:
+    - [`dev/fragments/extracted/extraction-method.md`](dev/fragments/extracted/extraction-method.md)
     - [`dev/fragments/extracted/facts-architecture.md`](dev/fragments/extracted/facts-architecture.md)
     - [`dev/fragments/extracted/facts-contract.md`](dev/fragments/extracted/facts-contract.md)
 - **`facets`**
@@ -352,8 +353,10 @@ for it. When several entries match, their guidance composes.
     - `packages/*/lib/packaging.nix`
     - `packages/*/packages/**/*.nix`
     - `packages/*/packages/**`
+    - `packages/*/patches/**`
   - Read:
     - [`dev/fragments/overlays/overlay-pattern.md`](dev/fragments/overlays/overlay-pattern.md)
+    - [`dev/fragments/overlays/source-patches.md`](dev/fragments/overlays/source-patches.md)
 - **`packaging`**
   - Match:
     - `config/update-targets.nix`

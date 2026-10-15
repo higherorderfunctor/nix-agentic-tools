@@ -200,7 +200,7 @@ _: {
         "packages/kiro-cli/lib/**"
         "packages/semble/lib/**"
       ];
-      sources = ["facts-architecture" "facts-contract"];
+      sources = ["extraction-method" "facts-architecture" "facts-contract"];
     };
     facets = {
       scopes = [
@@ -442,9 +442,11 @@ _: {
         "packages/*/lib/packaging.nix"
         "packages/*/packages/**/*.nix"
         "packages/*/packages/**"
+        "packages/*/patches/**"
       ];
       sources = [
         "overlay-pattern"
+        "source-patches"
       ];
     };
     # packaging: naming conventions + platform handling for overlay
