@@ -40,11 +40,13 @@
   # config and session flags, and devenv never writes the user's config.
   launcherFlags = import ./launcher-flags.nix;
   codexPackage = cfg: cfg.package.launcherPackage or cfg.package;
+  codexProxy = import ./proxy.nix {inherit inlineToml lib pkgs;};
   inlineToml = import ./inlineToml.nix {inherit lib;};
   codexInstallPackage = {
     backend,
     cfg,
     launcherEnvironment,
+    resolvedProxy,
     ...
   } @ args: let
     hookTrust = hookTrustFor args;
@@ -62,6 +64,9 @@
           lib.concatMap (flag: ["--add-flag" flag]) launcherFlags.hookTrust
           ++ ["--add-flag" (lib.escapeShellArg (hookTrustOverride hookTrust))]
         )
+        # devenv's ai.proxy selection: project config cannot carry a
+        # provider, so it travels as session flags (./proxy.nix).
+        ++ codexProxy.launcherFlags resolvedProxy
       );
       name = "chatgpt-codex-wrapped";
       inherit package;
@@ -1057,6 +1062,7 @@ in
       environmentVariables = {};
       hooks = {};
       mcpServers = {};
+      proxy = {};
       rules = {};
       settings = {};
       shell = {};
@@ -1286,6 +1292,7 @@ in
       nativeAgents,
       options,
       rawAgents,
+      resolvedProxy,
       resolvedSettings,
       topHooks,
       ...
@@ -1382,6 +1389,11 @@ in
             (lib.mkIf (cfg.projectDocMaxBytes != codexProjectDocMaxBytes) {
               project_doc_max_bytes = lib.mkDefault cfg.projectDocMaxBytes;
             })
+            # ai.proxy (./proxy.nix): Home Manager selects the provider in
+            # user config.toml; devenv's launcher selects its own, and the
+            # quieting defaults land in the trusted project's config.toml.
+            (lib.mkIf (isHm && resolvedProxy ? endpoint) (codexProxy.hmSettings resolvedProxy.endpoint))
+            (lib.mkIf (!isHm && resolvedProxy != null) codexProxy.quietSettings)
           ];
           # `pinDaemonToPackage` is Home Manager-only (see its option), so this
           # must not force `options.ai.codex.pinDaemonToPackage` under devenv,

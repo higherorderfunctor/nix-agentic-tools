@@ -108,6 +108,10 @@
       Claude Code reads the selection from its settings files: the
       settings.json each backend writes.
 
+      Codex receives the selection as a model provider: Home Manager
+      writes it into user config.toml, and devenv's launcher passes it as
+      session flags.
+
       A runtime that does not consume this surface warns when a selection
       reaches it.
     '';

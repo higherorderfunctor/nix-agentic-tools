@@ -76,6 +76,7 @@
         "ai.codex.package"
         "ai.codex.pinDaemonToPackage"
         "ai.codex.projectDocMaxBytes"
+        "ai.codex.proxy"
         "ai.codex.rules"
         "ai.codex.rulesDir"
         "ai.codex.services"
@@ -92,6 +93,7 @@
       "ai.environmentVariables"
       "ai.hooks"
       "ai.mcpServers"
+      "ai.proxy"
       "ai.rules"
       "ai.rulesDir"
       # Its whole contract is which runtimes it reaches, and Codex is the one
