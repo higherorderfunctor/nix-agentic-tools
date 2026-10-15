@@ -15,9 +15,12 @@ order and it has been restated many times. Do not make them restate it.
    has everything it needs, not a 10% slice. This only breaks when the file or
    the anchor (a variable name, a key) goes away.
 2. **AST.** When eval is not feasible: ast-grep, tree-sitter, Python `ast`. It
-   survives code moving around as long as the shape matches. Walk the typed
-   nodes for the VALUES too. Locating with AST and then running a regex over the
-   matched text is the regex tier, not the AST tier.
+   survives code moving around as long as the shape matches. A pattern may
+   wildcard what we don't care about (a string literal's wording, an argument we
+   ignore); that is still the AST tier. Walk the typed nodes for the VALUES we
+   do care about. Locating with AST and then running a regex over the matched
+   code text to pull values out is the regex tier, not the AST tier. A regex
+   over an already-decoded string value is fine.
 3. **Regex.** Last resort, for prose or an already-decoded string that no parser
    can read. Each use carries a comment saying why tiers 1 and 2 cannot supply
    it, and a fixture a naive pattern gets wrong.
@@ -34,6 +37,10 @@ start; the parser reads the value.
   the shape changes, the hand-written reader that consumes the fact fails, and
   that failure is the design: fix the reader.
 - **Fail when it cannot extract.** Never default, skip or count around a miss.
+- **No layer between the extraction and its readers.** Readers are hand-written
+  and read the copied value directly. Do not build a normalized meta format or
+  automation that carries upstream changes up to them; when a reader breaks, an
+  LLM or a person fixes the reader, and that is cheaper than the machinery.
 
 Extractors write through the facts contract in `lib/extracted/` (see
 `facts-contract.md`); do not add a per-owner loader.

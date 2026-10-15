@@ -445,6 +445,7 @@ _: {
       ];
       sources = [
         "overlay-pattern"
+        "source-patches"
       ];
     };
     # packaging: naming conventions + platform handling for overlay
