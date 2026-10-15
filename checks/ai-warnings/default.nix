@@ -51,6 +51,12 @@
         effect = "allow";
       }
     ];
+    # The url form: an `instance` selection on Home Manager must name a
+    # declared instance, and devenv rejects instances.
+    proxy = {
+      key.plain = "probe";
+      url = "http://127.0.0.1:8317";
+    };
     rules.probe.text = "probe";
     settings.reasoningEffort = "high";
     shell = pkgs.bash;

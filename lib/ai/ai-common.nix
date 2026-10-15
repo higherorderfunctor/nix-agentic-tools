@@ -309,30 +309,9 @@ in {
         // fields))
     rules;
 
-  # ── Activation flag scoping ────────────────────────────────────────
-  # Wrap a home.activation body in a subshell so its `set`/`shopt` flags
-  # cannot outlive it.
-  #
-  # home-manager concatenates every DAG entry into ONE script that it opens
-  # with `set -eu` + `set -o pipefail`. Flags an entry turns on stay on for
-  # every LATER entry — including home-manager's own checkLinkTargets,
-  # writeBoundary and linkGeneration. `inherit_errexit` is the one that bites:
-  # it changes whether a failing `$( )` aborts, so leaking it silently
-  # re-specifies the failure semantics of code we do not own.
-  #
-  # Scoping rather than dropping the flags keeps our own bodies fully strict
-  # while making the leak structurally impossible. Safe only for bodies with no
-  # parent-shell effects (no export, no cd, no trap) — check before wrapping.
-  #
-  # Failure still propagates: a body ending in `false` makes the subshell exit
-  # non-zero, which the caller's `set -e` sees exactly as before. Use `false`,
-  # never `exit` — `exit` would truncate the whole concatenated activation
-  # script rather than failing one entry.
-  scopedActivation = body: ''
-    (
-    ${body}
-    )
-  '';
+  # Defined in the general reconciler library, which every activation and
+  # task body it renders goes through; re-exported for ai.* callers.
+  inherit (import ../own {inherit lib;}) scopedActivation;
 
   # ── Rule submodule types ───────────────────────────────────────────
   # The portable record carries the priority-ordered inclusion list. Kiro's

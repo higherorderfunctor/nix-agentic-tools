@@ -96,8 +96,9 @@
 # `callbackArgs` in `mkBackendTransform.nix` — and read it rather than
 # trusting a list here. It carries `backend`, `cfg`, `config`, `normalized`,
 # every `merged*` pool, `rawAgents` and `nativeAgents` (a native-agent
-# runtime's raw files and native records), `resolvedSettings`,
-# `resolvedShell`, `mergedContext`, `launcherEnvironment` and `topHooks`;
+# runtime's raw files and native records), `resolvedProxy`,
+# `resolvedSettings`, `resolvedShell`, `mergedContext`,
+# `launcherEnvironment` and `topHooks`;
 # every callback takes `...`, so a
 # stale list here would mislead without ever breaking a build.
 {lib}: args @ {

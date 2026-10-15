@@ -1,4 +1,4 @@
-"""Drive lib/ai/own.py directly: hand-written plans, observable filesystem.
+"""Drive lib/own/own.py directly: hand-written plans, observable filesystem.
 
 Every case asserts on what is on disk afterwards — bytes, mode, inode identity,
 which ledgers exist — rather than on anything the program reports about itself.
@@ -864,7 +864,7 @@ def rejections(fixture):
 
 
 def dry_run(fixture):
-    """The real HM activation entry, not own.py in isolation: `own.nix` routes
+    """The real HM activation entry, not own.py in isolation: `lib/own` routes
     it through home-manager's `run` helper so `DRY_RUN` echoes the mutating
     command instead of executing it. Against a virgin HOME, a DRY_RUN run must
     write nothing at all -- no target file, no state directory -- and the same

@@ -80,6 +80,18 @@
     names = ["chat.modelDefaults"];
     paths = [];
   };
+  ownerReasons = {identity = "the caller owns identity.";};
+  refusedType = keys.refuse {
+    type = lib.types.attrsOf lib.types.anything;
+    reasons = ownerReasons;
+  };
+  merge = value:
+    refusedType.merge ["settings"] [
+      {
+        inherit value;
+        file = "fixture";
+      }
+    ];
   controls = {
     allowlist = allowed.warnings == [] && allowed.value."future.key" == 42;
     anyof = branches.warnings == [];
@@ -161,6 +173,31 @@
         value.services."user.with.dots"."future.key" = true;
       }
     ];
+    refusal = let
+      owner = keys.check {
+        name = "identity";
+        optionPath = ["settings"];
+        reasons = ownerReasons;
+      };
+      ownerToken = keys.check {
+        name = "myAPIToken";
+        reasons.myAPIToken = "the owner supplies the token reason";
+      };
+      attempt = value: builtins.tryEval (builtins.deepSeq (merge value) true);
+      # Credential names are refused at every depth, through maps and lists;
+      # owner reasons name top-level fields only.
+      nestedOwner = {future.identity = true;};
+    in
+      !owner.assertion
+      && ownerToken.reason == "the owner supplies the token reason"
+      && owner.reason == ownerReasons.identity
+      && owner.message == "settings.identity cannot be set: the caller owns identity."
+      && !(attempt {identity = {nested = true;};}).success
+      && !(attempt {myAPIToken = null;}).success
+      && !(attempt {future.metadata.access_token = "x";}).success
+      && !(attempt {future = [{nested.myAPIToken = "x";}];}).success
+      && merge nestedOwner == nestedOwner
+      && merge ordinaryValue == ordinaryValue;
     stale =
       length stale.warnings
       == 5

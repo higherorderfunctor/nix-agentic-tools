@@ -3,7 +3,10 @@
 > **Last verified:** 2026-10-14 — delivery policy derives shared surfaces, keyed
 > withdrawal and normalized gaps from option and runtime declarations;
 > `poolOptions` covers `agentsDir` and `environmentVariables` only;
-> `optionNamespaces` places launcher and pool options.
+> `optionNamespaces` places launcher and pool options; the delivery observer
+> names the surface of every unclaimed ledger and classifies paths per backend;
+> owned files and documents reconcile through the general `lib/own` library,
+> whose `mkCommand` also runs a plan written at run time.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -174,6 +177,14 @@ rather than a second path field: a runtime names exactly the groups it moves.
   contract. Kimchi's `config.json` is fully Nix-owned and lands in the same
   directory copy writer as its other settings. A replaced copy is restored at
   switch.
+- **The reconciler is a general library, `lib/own`, not an `ai.*` one.**
+  `mkPlan` validates targets into a store plan; `mkCommand` is the one command
+  line that runs `own.py` against a root and a state directory, passed through
+  `env` so neither outlives it, which lets a service start script call it too.
+  Its `planFile` runs a plan written at run time from a validated one, for
+  targets that depend on which files exist (`ai.proxy` account fields);
+  `mkBundle` lowers a plan into Home Manager or devenv entries. `lib/ai/own.nix`
+  (and `lib.ai.own`) is an alias for `mkBundle`.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON ledger, even without a claimant.
@@ -343,6 +354,14 @@ typed `ai.internal.files` owner. Package wrappers have no file entry. Kimchi's
 portable surface, so the specimen maps it to no cell. Codex's
 `app-server-daemon/settings.json` holds daemon configuration
 (`native.daemonSettings`), not a portable surface, and maps to no cell either.
+An activation ledger no live file claims needs its surface named in the
+observer, or evaluation throws. Kiro's steering and Kimchi's old config
+directory are retirements. Claude's devenv proxy ledger
+(`.claude/settings.local.json`) is not: the specimen selects no `ai.proxy`
+instance, so that writer appears as a `proxy` writer that is probed through
+`ai.proxy.instance`. `specimen.surfacesFor` takes the backend because one path
+can carry a surface on one backend only: Codex's `config.toml` carries `proxy`
+on Home Manager, while devenv's provider is a launcher session flag.
 
 The production gate compares live file absence against primary policy rows in
 both directions; launchers have no file entry and are exempt from that

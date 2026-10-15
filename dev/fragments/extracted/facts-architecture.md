@@ -1,8 +1,9 @@
 # Extracted facts: the architecture
 
-> **Last verified:** 2026-10-15 — every extractor owner is on the contract;
-> Darwin CI selects host-run owners from declarations through the shared Nix
-> owner map. Probes are not on the contract yet.
+> **Last verified:** 2026-10-15 — every extractor owner is on the contract,
+> CLIProxyAPI included (#2513); a hand field may be a list; a row may be a `*`
+> pattern; Darwin CI selects host-run owners from declarations through the
+> shared Nix owner map. Probes are not on the contract yet.
 
 The contract (`facts-contract.md`, same category) is the spec: file shapes,
 functions, failure kinds. This file is the why and the rules that keep the
@@ -25,9 +26,14 @@ Five stages. Two of them take human input, and they are different inputs.
 two platforms disagree, which answer wins", and the drift check prints the exact
 row to paste when that happens. The hand-tuned layer is `annotations.json`,
 reconciled against the measurement by the owner's `rules.nix` so a stale hand
-row fails the build. Owners without hand prose (Claude, Codex, glab, semble)
-have no annotations file; owners measured on one platform (every owner except
-Kiro and Codex) have no decisions file.
+row fails the build. A hand field is prose or a non-empty list of prose (an
+enum's values, as in CLIProxyAPI's rows). An owner may pass `reconcile` some
+rows as `patterns`: a `*` in the name stands for one key of letters, digits, `_`
+and `-`, so one row covers a field every key family repeats (CLIProxyAPI's
+`api-keys.*[].proxy-url`). A pattern that matches nothing is stale, and a name
+two rows claim is a bad row. Owners without hand prose (Claude, Codex, glab,
+semble) have no annotations file; owners measured on one platform (every owner
+except Kiro and Codex) have no decisions file.
 
 Consumers read the aggregate with `get` and `children`, at the place the value
 is used. Nothing else reads a raw: the guard (`checks.extracted-contract-guard`)
@@ -107,6 +113,8 @@ never as a fact source for Nix. The probe work owns the rewrite of this section.
 - `facts-contract.md`: the spec (same category, loads with this file).
 - `dev/fragments/git-tool-settings/git-tool-settings.md`: annotations and the
   option generator for git-absorb, git-branchless, git-revise.
+- `packages/cliproxyapi/docs/cliproxyapi-extraction.md`: CLIProxyAPI's Go
+  extraction, its hand rows and the option reader.
 - `packages/kimchi/docs/kimchi-factory.md`: Kimchi's hand tables and reconcile.
 - `private/harness-facts-consolidation/HANDOFF.md`: the consolidation history,
   batch by batch, with what was dismissed and why.

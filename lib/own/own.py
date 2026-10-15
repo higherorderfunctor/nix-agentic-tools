@@ -284,7 +284,7 @@ def sweep(directory: Path) -> None:
 
     The INFIX, not the name shape, is the safety proof: a bare `.<name>.*`
     pattern would eat user dotfiles (a vim `.foo.md.swp`, a `.a.md.notes`),
-    whereas no declarable unit address carries `.nat-tmp.` (own.nix bars a
+    whereas no declarable unit address carries `.nat-tmp.` (default.nix bars a
     dot-prefixed address) and essentially no user file does either.
     `tempfile` plus `finally` already covers every normal and exceptional
     exit, so this only collects what SIGKILL leaked -- and in `.kiro/hooks/` a
@@ -611,7 +611,7 @@ def read_dir_ledger(path: Path) -> dict[str, str] | None:
         if not name:
             continue
         # The bash reader REFUSED such an entry too rather than deleting it
-        # (7b9adc2d:lib/ai/materialize.nix:312-317), which is why own.nix bars a
+        # (7b9adc2d:lib/ai/materialize.nix:312-317), which is why default.nix bars a
         # traversing or dot-prefixed unit address: one this reader skips could
         # be written and never retracted.
         if "/" in name or name.startswith("."):
@@ -702,7 +702,7 @@ def check_relative(label: str, value: str) -> None:
 
 def load_plan(path: Path) -> Mapping[str, Any]:
     """Load and validate the plan. Every rejection here is also an eval error
-    in own.nix; this is the backstop for a hand-written or stale plan."""
+    in default.nix; this is the backstop for a hand-written or stale plan."""
     plan = json.loads(path.read_text(encoding="utf-8"))
     targets = plan.get("targets")
     if not isinstance(targets, list):

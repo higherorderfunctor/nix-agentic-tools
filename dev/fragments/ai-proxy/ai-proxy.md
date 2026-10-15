@@ -1,0 +1,102 @@
+## ai.proxy: local CLIProxyAPI for AI harnesses
+
+> **Last verified:** 2026-10-14 — root and per-runtime selection, Home Manager
+> resolving `instance` at evaluation, the registry, and devenv's run-time
+> lookup. Claude and Codex declare `proxy` in `surfaceSupport`; Kimchi, Kiro and
+> Copilot omit it, so delivery policy and the generated warning cases derive
+> their absence. The services are in `ai-proxy-service.md`, the runtime
+> integrations in `ai-proxy-runtimes.md`.
+>
+> **Settled — do not relitigate.** Rendering a Home Manager `instance` at
+> activation (Claude's settings.json as a `copy-ro` copy) was built and replaced
+> on 2026-10-14 by evaluation-time resolution, so Claude and Codex share one
+> shape and the user files stay store links.
+
+`ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
+only the proxy's client key, never an upstream credential. The proxy holds the
+logins. `ai.mcpServers.<name>.proxy` (lib/ai/mcpProxy.nix) is an unrelated MCP
+credential proxy.
+
+### Shape
+
+- Library: `lib/ai/proxy/default.nix` (exported as `lib.ai.proxy`). Options,
+  validation, `resolve`, the registry contract, `templates` and the run-time
+  lookup `renderProgram` all live there. `render.jq` is the run-time half.
+- Configuration: `lib/ai/proxy/module.nix`, imported by `sharedOptions.nix`. It
+  holds root assertions, Home Manager units, the registry file and the Darwin
+  warning.
+- `proxy` is a key of `sharedSurfaceOptions`, so it is a delivery-policy surface
+  and every enabled runtime whose `surfaceSupport` omits `proxy` gets the
+  standard decomposition warning. `delivery-warnings.nix` counts only a client
+  SELECTION as a request: `instances` alone defines services that no runtime
+  consumes. Physical rows: Claude's `settings.json` on both backends (plus the
+  devenv `settings.local.json` writer), Codex's user `config.toml` on Home
+  Manager and its launcher on devenv (a hand wrapper row).
+- `mkBackendTransform.nix`, for a record whose `surfaceSupport` declares
+  `proxy`, declares `ai.<runtime>.proxy` (same selection options as the root)
+  and `ai.<runtime>.normalized.proxy`. The callbacks get it as
+  `normalized.proxy` and `resolvedProxy`.
+
+### Selection and the resolved endpoint
+
+A selection is `instance`, or `url` + `key`. Both at once, a url without a key,
+or a key without a url fail as assertions at either scope, outside the runtime
+enable gate. A url without a key is rejected because the harness would send its
+own login token, if any, to the proxy.
+
+A per-runtime selection that selects anything replaces the root selection WHOLE.
+Fields never mix across levels. The resolved value is null,
+`{instance = "<name>";}`, or `{endpoint = {url; key};}`. The endpoint has the
+same shape as a registry entry. `url` is the origin only: Claude uses it as is
+and Codex appends `/v1`, so a path would be doubled for one of them.
+
+Home Manager resolves an `instance` at evaluation: `resolve` gets Home Manager's
+own `ai.proxy.instances` and turns a declared name into its `registryEntry`, the
+value the registry gets in the same generation, so every runtime's user files
+stay ordinary evaluated files. A name Home Manager does not declare stays
+`{instance}` and fails `hmInstanceAssertions` (mkBackendTransform.nix, enabled
+runtimes only). Only devenv sees `{instance}` in a working configuration.
+
+### One renderer per integration
+
+On devenv the `instance` form is looked up at RUN time (shell entry or launch),
+never at evaluation: the registry may be hand-written, and a devenv evaluation
+cannot see Home Manager's. An integration writes ONE function,
+`endpoint -> native config`, and uses it twice:
+
+- at evaluation, on `resolvedProxy.endpoint`;
+- through `lib.ai.proxy.templatesFile pkgs "<name>" render`, which applies it to
+  one placeholder endpoint per key form (`@AI_PROXY_URL@`, `@AI_PROXY_KEY@`).
+
+At run time, `ai-proxy-render [--lines] INSTANCE TEMPLATES` reads the registry,
+validates the entry, picks the template for its key form, substitutes the
+placeholders, and prints compact JSON. With `--lines` it prints one argv element
+per line. A shell-entry hook captures the output with `out="$(…)"`. A launcher
+does the same, then `mapfile -t args <<<"$out"`.
+
+Placeholders are substituted with no escaping into whatever the integration
+rendered: a JSON string, a TOML string or a shell word. That is safe only
+because `patterns` holds every url and key value to a charset with no quote,
+space, `$`, backslash or newline. Both forms are validated against the same
+table, at evaluation and in `render.jq`. Do not widen a pattern without adding
+escaping to every placeholder context.
+
+### Registry contract
+
+The registry is `${XDG_CONFIG_HOME:-~/.config}/ai-proxy/instances.json`. It is
+one object mapping instance name → `{url, key}`, where `key` is exactly one of
+`plain`, `file` or `helper`. Home Manager writes it declaratively
+(`xdg.configFile`, no activation script) from `ai.proxy.instances`. Its format
+is the public contract, because a hand-run proxy writes its own entry. devenv
+and hand-run proxies read it at run time; Home Manager never does.
+
+### Checks
+
+`checks/ai-proxy/module-eval.nix` covers selection validation, the per-runtime
+override through a test runtime, Home Manager `instance` resolution, services
+alone not counting as a request, and `ai-proxy-render` end to end; its service
+checks are listed in `ai-proxy-service.md`. The unsupported-runtime warnings and
+supported-runtime silence are `ai-warnings-delivery`'s generated cases, driven
+by its `proxy` sample (the url form: devenv rejects instances).
+`checks/ai-factory/factory-eval.nix` carries `proxy` in its every-surface
+request set.

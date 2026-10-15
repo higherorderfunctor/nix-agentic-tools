@@ -1,0 +1,12 @@
+{
+  "accounts": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "config": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  }
+}

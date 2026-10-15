@@ -38,6 +38,7 @@
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
   hooks = import ../hooks.nix {inherit lib;};
   pathProvenanceNotice = import ../runtime-path-provenance-notice.nix appRecord.pkgs;
+  proxyLib = import ../proxy {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
@@ -155,6 +156,21 @@
     }
     else {};
 
+  # The proxy selection is one unit: a runtime selection replaces the root one
+  # whole (`proxyLib.resolve`). Null when nothing is selected or the runtime
+  # does not consume the pool. Only Home Manager resolves an `instance` at
+  # evaluation, against its own declared instances.
+  proxyInstances = lib.optionalAttrs (backend == "hm") config.ai.proxy.instances;
+  resolvedProxy =
+    if supportsPool "proxy"
+    then
+      proxyLib.resolve {
+        instances = proxyInstances;
+        root = config.ai.proxy;
+        runtime = poolCfg.proxy;
+      }
+    else null;
+
   # Module-contributed process env, delivered on the internal channel rather
   # than through `ai.<cli>.environmentVariables` — see the note on
   # `_sandboxSafeSshCommand` in sharedOptions.nix for why internal contributions
@@ -268,6 +284,10 @@
     # again would add defaults to the credential-free client record.
     mcpServers = {
       type = lib.types.attrsOf lib.types.raw;
+    };
+    proxy = {
+      default = resolvedProxy;
+      type = proxyLib.resolvedType;
     };
     rules = {
       type = lib.types.attrsOf aiCommon.ruleModule;
@@ -413,6 +433,18 @@
         }
         // poolOptions.agentsDir or {});
     }
+    // lib.optionalAttrs (supportsPool "proxy") {
+      proxy = lib.mkOption {
+        type = lib.types.submodule {options = proxyLib.selectionOptions;};
+        default = {};
+        description = ''
+          ${appRecord.name}'s proxy selection. When it selects anything
+          (`instance` or `url`), it replaces `ai.proxy`'s selection as a
+          whole for this runtime; otherwise the root selection applies. The
+          resolved endpoint is `${lib.showOption (["ai" appRecord.name] ++ normalizedPath "proxy")}`.
+        '';
+      };
+    }
     // lib.optionalAttrs (supportsPool "settings") {
       settings = lib.mkOption {
         type = aiCommon.normalizedSettingsType;
@@ -552,6 +584,7 @@
     mergedRules = normalizedPool "rules" {};
     mergedServers = normalizedPool "mcpServers" {};
     mergedSkills = normalizedPool "skills" {};
+    resolvedProxy = normalizedPool "proxy" null;
     resolvedSettings = normalizedPool "settings" {};
     resolvedShell = normalizedPool "shell" null;
     topHooks = normalizedPool "hooks" {};
@@ -783,6 +816,17 @@ in {
     }
     (lib.optionalAttrs hasNativeAgents {
       ai.${appRecord.name}.native.agents = nativeAgentDefaults;
+    })
+    # Outside the enable gate, like every fanout validation: an invalid
+    # selection must not hide behind a disabled runtime.
+    (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
+      assertions =
+        proxyLib.assertionsFor (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy
+        ++ lib.optionals (backend == "hm" && cfg.enable) (proxyLib.hmInstanceAssertions {
+          instances = proxyInstances;
+          resolved = resolvedProxy;
+          runtime = appRecord.name;
+        });
     })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let

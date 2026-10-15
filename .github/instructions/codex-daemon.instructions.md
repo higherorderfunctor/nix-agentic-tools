@@ -7,9 +7,10 @@ applyTo: "packages/chatgpt-codex/**"
 
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-09 — devenv can opt into runtime project trust;
-> launcher flags are checked as root-command `uses`; Home Manager owns daemon
-> selection and settings; both backends run the offline project-document and
+> **Last verified:** 2026-10-14 — devenv can opt into runtime project trust;
+> devenv's launcher carries an `ai.proxy` selection as session flags; launcher
+> flags are checked as root-command `uses`; Home Manager owns daemon selection
+> and settings; both backends run the offline project-document and
 > project-config preflight before it execs the original binary, isolated by the
 > shared `lib/ai/launcher-preflight.nix`.
 
@@ -92,7 +93,9 @@ sandbox will own that home.
 
 Home Manager and devenv always install a launcher. It sets the configured
 process environment, runs `lib/projectDocPreflight.nix`, then execs the original
-package binary. `lib.ai.mkLauncher` preserves that binary's package as
+package binary. devenv's launcher also passes an `ai.proxy` selection as `-c`
+session flags, because project config cannot carry a provider; the `ai-proxy`
+fragment has the shape. `lib.ai.mkLauncher` preserves that binary's package as
 `launcherPackage`; selecting an existing launcher flattens it rather than
 nesting wrappers and running the preflight twice.
 

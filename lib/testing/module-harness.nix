@@ -93,11 +93,16 @@
       };
       # Home-manager provides these XDG paths in a real eval. Semble uses
       # cacheHome for its Codex sandbox grant, while glab uses stateHome for its
-      # keyring synchronization marker.
+      # keyring synchronization marker. `ai.proxy` writes its registry through
+      # configFile.
       xdg = {
         cacheHome = lib.mkOption {
           type = lib.types.str;
           default = "/home/test/.cache";
+        };
+        configFile = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
         };
         configHome = lib.mkOption {
           type = lib.types.str;
@@ -511,6 +516,6 @@
     then (markdownInput evaluated path).text
     else throw "module-test: ${path} is not delivered from its generated tree";
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmModulesWithSpecialArgs evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
   inherit testing;
 }

@@ -1,6 +1,6 @@
 # The activation merge must not widen a credential file.
 #
-# The shared-document writer (`lib/ai/own.py`, reached through the delivery
+# The shared-document writer (`lib/own/own.py`, reached through the delivery
 # router) reconciles Nix-declared leaves into files the runtime itself writes
 # secrets into — `.claude.json` carries account tokens. Its predecessor ended with a hardcoded
 # `chmod 644`, which was the ONLY thing making those files group- and
@@ -69,7 +69,7 @@
   tools = {
     bash = "${pkgs.bash}/bin/bash";
     gates = lib.mapAttrs gate gates;
-    own = "${../../lib/ai/own.py}";
+    own = "${../../lib/own/own.py}";
     python = "${pkgs.python3}/bin/python3";
   };
 in {

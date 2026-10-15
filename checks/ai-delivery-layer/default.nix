@@ -1790,7 +1790,7 @@ in {
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
     # It cannot see a bundle a helper returns: `helpers.mkOwnBundle` writes
-    # `home.activation`, `tasks` and `enterTest` from inside `lib/ai/own.nix`,
+    # `home.activation`, `tasks` and `enterTest` from inside `lib/own/default.nix`,
     # where no pattern over a factory's text matches. No factory calls it;
     # the router does, and `ai.<runtime>._ownPlans` is where a check reads
     # what owned writers do.

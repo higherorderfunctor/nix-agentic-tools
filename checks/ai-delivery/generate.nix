@@ -130,7 +130,7 @@
               );
           }
         )
-        destinations) (specimen.surfacesFor runtime path);
+        destinations) (specimen.surfacesFor mode runtime path);
   in {
     inherit cfg config files names;
     records = lib.concatLists (lib.mapAttrsToList observe files);
@@ -168,8 +168,13 @@
           # mode, writes the shared one.
           else if runtime == "kimchi" && declaration.path == ".config/kimchi"
           then "settings"
+          # Not retired: Claude's devenv proxy writer owns its leaves only
+          # while an ai.proxy instance is selected, which the specimen does
+          # not do, and stays declared so it retracts them once it is not.
+          else if runtime == "claude" && declaration.path == ".claude/settings.local.json"
+          then "proxy"
           else throw "ai-delivery: an unclaimed ledger needs a surface association: ${mode}/${runtime}/${ledger} -> ${declaration.path}";
-        target = prefix mode + declaration.path + "/<legacy-owned-file>";
+        target = prefix mode + declaration.path + lib.optionalString (declaration.codec == "dir") "/<legacy-owned-file>";
         writerAttr = writerPath mode named.name;
         pruneTrigger = facts.pruneTrigger mode primitive;
         order =
