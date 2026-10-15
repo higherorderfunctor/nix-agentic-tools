@@ -2269,7 +2269,8 @@
         "optional": true,
         "project": false,
         "source": "kimchi",
-        "type": null
+        "type": "boolean",
+        "typeExpression": "boolean"
       }
     }
   },

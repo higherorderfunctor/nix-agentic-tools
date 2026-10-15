@@ -98,6 +98,14 @@
             'readConfigSetting("multiModel"' 'readConfigSetting(String(Date.now())'
           mutant "$kimchi" helper-unknown-key src/extensions/tags.ts \
             'readConfigSetting("hidePhaseChanges"' 'readConfigSetting("hidePhaseChangesProbe"'
+          mutant "$kimchi" helper-unresolved-guard src/extensions/tags.ts \
+            'readConfigSetting("hidePhaseChanges", (value) => typeof value === "boolean", false)' \
+            'readConfigSetting("hidePhaseChangesProbe", (value) => Boolean(value), false)'
+          mutant "$kimchi" helper-named-guard src/extensions/ferment-v2/settings.ts \
+            'readConfigSetting("fermentV2", isPlainObject)' 'readConfigSetting("fermentV2Probe", isPlainObject)'
+          mutant "$kimchi" helper-guard-conflict src/extensions/multi-model.ts \
+            'readConfigSetting("multiModel", (value) => typeof value === "boolean")' \
+            'readConfigSetting("hidePhaseChanges", (value) => typeof value === "string")'
           # The pi snapshot's own pi-tui entry: the only one followed by
           # photon-node. Read from the lockfile rather than spelled out, so a new
           # Kimchi patch hash on pi-tui cannot break the fixture; exactly one match
@@ -187,6 +195,8 @@
             'readSurveyConfig no longer guards surveys.*.seenAt as a string' >> "$TMPDIR/proof"
           expect_rejection helper-computed-key "$TMPDIR/helper-computed-key-source" \
             'passes a non-constant key to readConfigSetting' >> "$TMPDIR/proof"
+          expect_rejection helper-guard-conflict "$TMPDIR/helper-guard-conflict-source" \
+            'harness setting hidePhaseChanges has incompatible read guards:' >> "$TMPDIR/proof"
           expect_rejection lockfile-drift "$TMPDIR/lockfile-drift-source" \
             "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"$drifted_version\"" >> "$TMPDIR/proof"
           expect_rejection pi-scope-unread "$kimchi" \
@@ -217,9 +227,9 @@
             ${pkgs.jq}/bin/jq -e --arg name "$name" '.environment.variables | has($name)' "$TMPDIR/$label.json" > /dev/null
             echo "$label (exit 0): discovered $name" >> "$TMPDIR/proof"
           done
-          # A harness read that is neither a pi Setting nor a typed addition is
-          # emitted untyped; extract/rules.nix fails it as needs-human.
-          for fixture in config-parse-attribution:surveys helper-unknown-key:hidePhaseChangesProbe; do
+          # Reads without a type predicate remain visible as unknown; a typed
+          # guard yields its accepted type even for a newly named key.
+          for fixture in config-parse-attribution:surveys helper-unresolved-guard:hidePhaseChangesProbe; do
             IFS=: read -r label name <<< "$fixture"
             ${runExtractor ''"$TMPDIR/$label-source"'' ''"$TMPDIR/$label.json"'' ''"$pi"''}
             if ${pkgs.jq}/bin/jq -e --arg name "$name" \
@@ -231,6 +241,14 @@
               ${pkgs.jq}/bin/jq --arg name "$name" '.harness.keys[$name]' "$TMPDIR/$label.json" >&2
               exit 1
             fi
+          done
+          for fixture in helper-unknown-key:hidePhaseChangesProbe:boolean helper-named-guard:fermentV2Probe:object; do
+            IFS=: read -r label name type <<< "$fixture"
+            ${runExtractor ''"$TMPDIR/$label-source"'' ''"$TMPDIR/$label.json"'' ''"$pi"''}
+            ${pkgs.jq}/bin/jq -e --arg name "$name" --arg type "$type" \
+              '.harness.keys[$name] | .type == $type and .optional == true and .project == false' \
+              "$TMPDIR/$label.json" > /dev/null
+            echo "$label (exit 0): derived $name as $type" >> "$TMPDIR/proof"
           done
           # The overwrite flag is derived from entry.ts, so an assignment before
           # any read flips a variable to fixed and a read before it flips back.
