@@ -48,7 +48,6 @@ for it. When several entries match, their guidance composes.
     - `lib/ai/launcher.nix`
     - `lib/ai/mkSkillPackageModule.nix`
     - `lib/ai/own.nix`
-    - `lib/ai/own.py`
     - `lib/ai/program.nix`
     - `lib/ai/runtime-files.nix`
     - `lib/ai/runtimes.nix`
@@ -56,6 +55,7 @@ for it. When several entries match, their guidance composes.
     - `lib/generated.nix`
     - `lib/generated-guard.py`
     - `lib/markdown/**`
+    - `lib/own/**`
     - `lib/testing/module-harness.nix`
     - `packages/*/checks/module-eval.nix`
     - `packages/chatgpt-codex/lib/mkCodex.nix`
@@ -75,6 +75,31 @@ for it. When several entries match, their guidance composes.
     - [`dev/fragments/ai-module/dir-helpers.md`](dev/fragments/ai-module/dir-helpers.md)
     - [`dev/fragments/ai-module/layered-fanout.md`](dev/fragments/ai-module/layered-fanout.md)
     - [`dev/fragments/ai-module/shell-option.md`](dev/fragments/ai-module/shell-option.md)
+- **`ai-proxy`**
+  - Match:
+    - `checks/ai-proxy/**`
+    - `lib/ai/proxy/**`
+    - `packages/chatgpt-codex/lib/proxy.nix`
+    - `packages/claude-code/lib/proxy.nix`
+  - Read:
+    - [`dev/fragments/ai-proxy/ai-proxy.md`](dev/fragments/ai-proxy/ai-proxy.md)
+- **`ai-proxy-runtimes`**
+  - Match:
+    - `packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix`
+    - `packages/chatgpt-codex/checks/proxy-test.py`
+    - `packages/chatgpt-codex/lib/proxy.nix`
+    - `packages/claude-code/checks/claude-proxy.nix`
+    - `packages/claude-code/lib/proxy.nix`
+  - Read:
+    - [`dev/fragments/ai-proxy/ai-proxy-runtimes.md`](dev/fragments/ai-proxy/ai-proxy-runtimes.md)
+- **`ai-proxy-service`**
+  - Match:
+    - `checks/ai-proxy/**`
+    - `lib/ai/proxy/default.nix`
+    - `lib/ai/proxy/module.nix`
+    - `packages/cliproxyapi/lib/**`
+  - Read:
+    - [`dev/fragments/ai-proxy/ai-proxy-service.md`](dev/fragments/ai-proxy/ai-proxy-service.md)
 - **`ai-skills`**
   - Match:
     - `lib/ai/hm-helpers.nix`
@@ -106,6 +131,11 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`packages/claude-code/docs/claude-code-wrapper.md`](packages/claude-code/docs/claude-code-wrapper.md)
     - [`packages/claude-code/docs/heron-brook-clamp.md`](packages/claude-code/docs/heron-brook-clamp.md)
+- **`cliproxyapi`**
+  - Match:
+    - `packages/cliproxyapi/**`
+  - Read:
+    - [`packages/cliproxyapi/docs/cliproxyapi-extraction.md`](packages/cliproxyapi/docs/cliproxyapi-extraction.md)
 - **`codex-daemon`**
   - Match:
     - `packages/chatgpt-codex/**`
@@ -134,6 +164,7 @@ for it. When several entries match, their guidance composes.
     - `packages/*/extracted/**`
     - `packages/chatgpt-codex/lib/**`
     - `packages/claude-code/lib/**`
+    - `packages/cliproxyapi/lib/**`
     - `packages/delegate-routing/probes/**`
     - `packages/git-absorb/lib/**`
     - `packages/git-branchless/lib/**`

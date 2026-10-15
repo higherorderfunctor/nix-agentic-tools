@@ -55,7 +55,7 @@
       ecosystem = "copilot";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "agents";
       target = "$DEVENV_ROOT/.github/agents/<name>.md";
       writerAttr = [
@@ -67,7 +67,7 @@
       ecosystem = "kimchi";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "agents";
       target = "$DEVENV_ROOT/.kimchi/agents/<name>.md";
       writerAttr = [
@@ -79,7 +79,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.config/kimchi/harness/agents/<name>.md";
           writerAttr = [
             "home"
@@ -91,7 +91,7 @@
       ecosystem = "kimchi";
       mode = "hm";
       primitive = "ownPathManaged";
-      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "agents";
       target = "$HOME/.config/kimchi/harness/agents/<name>.md";
       writerAttr = [
@@ -154,7 +154,7 @@
       ecosystem = "codex";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "context";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
@@ -179,7 +179,7 @@
       ecosystem = "copilot";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "context";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
@@ -191,7 +191,7 @@
       ecosystem = "kimchi";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "context";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
@@ -216,7 +216,7 @@
       ecosystem = "kiro";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "context";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
@@ -228,7 +228,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.kiro/steering/<legacy-owned-file>";
           writerAttr = [
             "home"
@@ -238,7 +238,7 @@
         }
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.kiro/steering/<legacy-owned-file>";
           writerAttr = [
             "home"
@@ -348,7 +348,7 @@
       ecosystem = "kiro";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "hooks";
       target = "$DEVENV_ROOT/.kiro/hooks/<name>.json";
       writerAttr = [
@@ -360,7 +360,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.kiro/hooks/<name>.json";
           writerAttr = [
             "home"
@@ -372,7 +372,7 @@
       ecosystem = "kiro";
       mode = "hm";
       primitive = "ownPathManaged";
-      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "hooks";
       target = "$HOME/.kiro/hooks/<name>.json";
       writerAttr = [
@@ -447,7 +447,7 @@
       ecosystem = "kimchi";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "mcpServers";
       target = "$DEVENV_ROOT/.kimchi/mcp.json";
       writerAttr = [
@@ -459,7 +459,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.config/kimchi/harness/mcp.json";
           writerAttr = [
             "home"
@@ -471,7 +471,7 @@
       ecosystem = "kimchi";
       mode = "hm";
       primitive = "ownPathManaged";
-      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "mcpServers";
       target = "$HOME/.config/kimchi/harness/mcp.json";
       writerAttr = [
@@ -484,7 +484,7 @@
       ecosystem = "kiro";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "mcpServers";
       target = "$DEVENV_ROOT/.kiro/settings/mcp.json";
       writerAttr = [
@@ -496,7 +496,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.kiro/settings/mcp.json";
           writerAttr = [
             "home"
@@ -508,7 +508,7 @@
       ecosystem = "kiro";
       mode = "hm";
       primitive = "ownPathManaged";
-      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "mcpServers";
       target = "$HOME/.kiro/settings/mcp.json";
       writerAttr = [
@@ -571,7 +571,7 @@
       ecosystem = "kimchi";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "permissions";
       target = "$DEVENV_ROOT/.kimchi/permissions.json";
       writerAttr = [
@@ -583,7 +583,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.config/kimchi/harness/permissions.json";
           writerAttr = [
             "home"
@@ -595,7 +595,7 @@
       ecosystem = "kimchi";
       mode = "hm";
       primitive = "ownPathManaged";
-      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "permissions";
       target = "$HOME/.config/kimchi/harness/permissions.json";
       writerAttr = [
@@ -618,10 +618,59 @@
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownLeaves";
+          pruneTrigger = "On shell entry, lib/own/default.nix's write entry runs lib/own/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          target = "$DEVENV_ROOT/.claude/settings.local.json";
+          writerAttr = [
+            "tasks"
+            "ai:claude:proxy-settings"
+          ];
+        }
+      ];
+      ecosystem = "claude";
+      mode = "devenv";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      surface = "proxy";
+      target = "$DEVENV_ROOT/.claude/settings.json";
+      writerAttr = [
+        "files"
+        ".claude/settings.json"
+      ];
+    }
+    {
+      ecosystem = "claude";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "proxy";
+      target = "$HOME/.claude/settings.json";
+      writerAttr = [
+        "home"
+        "file"
+        ".claude/settings.json"
+      ];
+    }
+    {
+      ecosystem = "codex";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "proxy";
+      target = "$HOME/.codex/config.toml";
+      writerAttr = [
+        "home"
+        "file"
+        ".codex/config.toml"
+      ];
+    }
+    {
       ecosystem = "claude";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "rules";
       target = "$DEVENV_ROOT/.claude/rules/<name>.md";
       writerAttr = [
@@ -646,7 +695,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$DEVENV_ROOT/.codex/rules/<name>.rules";
           writerAttr = [
             "tasks"
@@ -657,7 +706,7 @@
       ecosystem = "codex";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "rules";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
@@ -669,7 +718,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.codex/rules/<name>.rules";
           writerAttr = [
             "home"
@@ -679,7 +728,7 @@
         }
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.codex/rules/<name>.rules";
           writerAttr = [
             "home"
@@ -704,7 +753,7 @@
       ecosystem = "copilot";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "rules";
       target = "$DEVENV_ROOT/.github/instructions/<name>.instructions.md";
       writerAttr = [
@@ -716,7 +765,7 @@
       ecosystem = "kimchi";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "rules";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
@@ -741,7 +790,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$DEVENV_ROOT/.kiro/steering/<name>.md";
           writerAttr = [
             "tasks"
@@ -752,7 +801,7 @@
       ecosystem = "kiro";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "rules";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
@@ -789,7 +838,7 @@
       additionalWriters = [
         {
           primitive = "ownLeaves";
-          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          pruneTrigger = "On activation, lib/own/default.nix's write entry runs lib/own/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
           target = "$HOME/.claude.json";
           writerAttr = [
             "home"
@@ -839,7 +888,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$DEVENV_ROOT/.config/kimchi/harness/settings.json";
           writerAttr = [
             "tasks"
@@ -850,7 +899,7 @@
       ecosystem = "kimchi";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$DEVENV_ROOT/.kimchi/config.json";
       writerAttr = [
@@ -862,7 +911,7 @@
       additionalWriters = [
         {
           primitive = "ownLeaves";
-          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          pruneTrigger = "On activation, lib/own/default.nix's write entry runs lib/own/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
           target = "$HOME/.config/kimchi/harness/settings.json";
           writerAttr = [
             "home"
@@ -872,7 +921,7 @@
         }
         {
           primitive = "ownLeaves";
-          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          pruneTrigger = "On activation, lib/own/default.nix's write entry runs lib/own/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
           target = "$HOME/.config/kimchi/config.json";
           writerAttr = [
             "home"
@@ -882,7 +931,7 @@
         }
         {
           primitive = "ownLeaves";
-          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          pruneTrigger = "On activation, lib/own/default.nix's write entry runs lib/own/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
           target = "$HOME/.config/kimchi/harness/settings.json";
           writerAttr = [
             "home"
@@ -892,7 +941,7 @@
         }
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.config/kimchi/<legacy-owned-file>";
           writerAttr = [
             "home"
@@ -902,7 +951,7 @@
         }
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.config/kimchi/<legacy-owned-file>";
           writerAttr = [
             "home"
@@ -914,7 +963,7 @@
       ecosystem = "kimchi";
       mode = "hm";
       primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      pruneTrigger = "On activation, lib/own/default.nix's write entry runs lib/own/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
       surface = "settings";
       target = "$HOME/.config/kimchi/config.json";
       writerAttr = [
@@ -927,7 +976,7 @@
       ecosystem = "kiro";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$DEVENV_ROOT/.kiro/settings/cli.json";
       writerAttr = [
@@ -939,7 +988,7 @@
       additionalWriters = [
         {
           primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.kiro/settings/cli.json";
           writerAttr = [
             "home"
@@ -951,7 +1000,7 @@
       ecosystem = "kiro";
       mode = "hm";
       primitive = "ownPathManaged";
-      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On activation, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$HOME/.kiro/settings/cli.json";
       writerAttr = [
@@ -989,7 +1038,7 @@
       ecosystem = "kimchi";
       mode = "devenv";
       primitive = "ownPathManaged";
-      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      pruneTrigger = "On shell entry, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "shell";
       target = "$DEVENV_ROOT/.config/kimchi/harness/settings.json";
       writerAttr = [
@@ -1001,7 +1050,7 @@
       additionalWriters = [
         {
           primitive = "ownLeaves";
-          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          pruneTrigger = "On activation, lib/own/default.nix's write entry runs lib/own/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
           target = "$HOME/.config/kimchi/harness/settings.json";
           writerAttr = [
             "home"
@@ -1013,7 +1062,7 @@
       ecosystem = "kimchi";
       mode = "hm";
       primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      pruneTrigger = "On activation, lib/own/default.nix's write entry runs lib/own/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
       surface = "shell";
       target = "$HOME/.config/kimchi/harness/settings.json";
       writerAttr = [

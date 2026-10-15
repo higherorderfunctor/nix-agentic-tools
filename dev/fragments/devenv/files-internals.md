@@ -236,7 +236,7 @@ the user-space walker is a viable fix while waiting for upstream.
 This repository's instruction files are written by `ai.*` (configured in
 `dev/ai.nix`) like any consumer's. On devenv the committed ones (AGENTS.md,
 `.github/instructions/*`) and Claude's and Kiro's project rule files are
-read-only COPIES written by `lib/ai/own.py` through a directory ledger each, on
+read-only COPIES written by `lib/own/own.py` through a directory ledger each, on
 every `devenv shell`, `direnv reload`, `devenv up`, `devenv reload` and manual
 `devenv test`, after `devenv:files:cleanup` and before `devenv:enterShell`.
 Claude's `.claude/CLAUDE.md` stays a store link (its project context loader

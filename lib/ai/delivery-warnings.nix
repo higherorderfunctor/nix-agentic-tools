@@ -19,6 +19,7 @@
   hasContext ? false,
 }: let
   aiCommon = import ./ai-common.nix {inherit lib;};
+  proxyLib = import ./proxy {inherit lib;};
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
   policy = import ../../config/ai-delivery.nix {inherit lib;};
   runtime = appRecord.name;
@@ -73,6 +74,10 @@
       != {}
     else if surface == "context"
     then aiCommon.hasContent value
+    # A request is a client selection; `instances` alone defines services,
+    # which no runtime consumes.
+    else if surface == "proxy"
+    then proxyLib.isSelected value
     else nonEmpty value;
   message = path: reason: "${lib.showOption path} is set but ${backend} does not deliver it to ${runtime} (reason: ${reason})";
   gapRows = builtins.filter (row:

@@ -1,4 +1,5 @@
 {
+  extractedLib,
   pkgs,
   packageLib,
   repoPath,
@@ -9,8 +10,11 @@
   pname = "cliproxyapi";
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
   sourcesFile = repoPath ../../../../sources.json;
+  # The extraction compiles CPA's Go against the vendor tree, so its
+  # regeneration follows the floor and vendor fixes.
   goUpdate = vu.mkGoUpdateExtract {
     attr = pname;
+    extraAfter = (extractedLib {inherit pkgs;}).regenCommand {name = pname;};
     inherit pkgs pname sourcesFile;
   };
   inherit (goUpdate) fixGoFloor fixVendorHash;
@@ -21,13 +25,14 @@ in
       inherit pkgs pname;
     }).overridePackage
     pkgs.cliproxyapi)
-  .overrideAttrs (prev: {
+  .overrideAttrs (finalAttrs: prev: {
     inherit (sources) version;
     src = fetchzip {inherit (sources.src) url hash;};
     vendorHash = sources.vendorHash or lib.fakeHash;
     passthru =
       (prev.passthru or {})
       // {
+        inherit (import ../../../../extract {inherit pkgs;} finalAttrs.finalPackage) extracted;
         inherit fixGoFloor fixVendorHash goFloor;
         goUpdateExtract = goUpdate.extract;
         updateScript = vu.ghArchiveUpdateScript {

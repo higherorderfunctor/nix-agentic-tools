@@ -248,7 +248,7 @@
   # inferred from the files that happen to exist this generation. That is
   # what makes taking a surface from N entries to zero correct by
   # construction: the writer, its ledgers and an EMPTY target all survive, and
-  # an empty target is how `lib/ai/own.nix` releases a path. A writer
+  # an empty target is how `lib/own/default.nix` releases a path. A writer
   # inferred from live files emits nothing at zero files, which is the prune
   # leak the reconciler exists to have fixed.
   writer = lib.types.submodule ({name, ...}: {
@@ -311,7 +311,7 @@
           options = {
             codec = lib.mkOption {
               type = lib.types.enum ["dir" "json"];
-              description = "Which container `lib/ai/own.py` owns units inside: whole files in a directory, or leaves of a JSON document.";
+              description = "Which container `lib/own/own.py` owns units inside: whole files in a directory, or leaves of a JSON document.";
             };
             path = lib.mkOption {
               type = lib.types.str;

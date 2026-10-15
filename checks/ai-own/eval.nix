@@ -1,4 +1,4 @@
-# `own.nix`'s own validation check: what the plan assembler accepts, what it
+# `lib/own`'s own validation check: what the plan assembler accepts, what it
 # refuses, and the shape of the entries each backend gets. It stands in for the
 # generated-entry-shape check the bash materializer needed, and it reads the
 # emitted body directly rather than extracting a heredoc from it.

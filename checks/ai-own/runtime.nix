@@ -52,7 +52,7 @@
     # would assert that own.py agrees with biome rather than with the program
     # whose ledgers are on consumers' disks.
     legacyDocLedger = "${./fixtures/legacy-json-v1-ledger.frozen}";
-    own = "${../../lib/ai/own.py}";
+    own = "${../../lib/own/own.py}";
     python = "${pkgs.python3}/bin/python3";
   };
 in {

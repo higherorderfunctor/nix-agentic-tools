@@ -1,3 +1,4 @@
+AUTOUPDATER
 AWSLAMBDA
 Boehm
 CFFIXED
@@ -152,6 +153,7 @@ frontmatter
 getconf
 getdents
 getkimchi
+getpath
 getpid
 gitbook
 gitdir
@@ -381,6 +383,7 @@ sequentialthinking
 sess
 sesscap
 setext
+setpath
 shellharden
 shortrev
 sigmask

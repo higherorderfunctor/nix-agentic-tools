@@ -1,0 +1,76 @@
+{
+  "accounts": {
+    "email": {
+      "ignored": "Identity: the login writes it, and the file name is derived from it."
+    },
+    "excluded_models": {
+      "type": "[]string"
+    },
+    "headers": {
+      "secret": "Headers sent upstream with the login's requests, which can carry a credential.",
+      "type": "map[string]string"
+    },
+    "id_token": {
+      "ignored": "A token: the login writes it and CPA refreshes it."
+    },
+    "model_aliases": {
+      "type": "[]any"
+    },
+    "plan_type": {
+      "ignored": "Identity: the plan the login reports, part of a Codex file name."
+    },
+    "priority": {
+      "type": "int"
+    },
+    "proxy_url": {
+      "secret": "The login's outbound proxy URL, which can carry a user and password."
+    },
+    "type": {
+      "ignored": "Identity: the provider the login belongs to, written by the login."
+    },
+    "weight": {
+      "type": "int"
+    }
+  },
+  "config": {
+    "access.api-keys[]": {
+      "secret": "A client key the proxy accepts; it grants use of every login behind the proxy."
+    },
+    "api-keys.*[].headers.<name>": {
+      "secret": "An upstream request header, which can carry a credential (an Authorization value): it reaches the store unless given as a file or helper."
+    },
+    "api-keys.*[].keys[].api-key": {
+      "secret": "An upstream credential: it reaches the store unless given as a file or helper."
+    },
+    "api-keys.*[].keys[].headers.<name>": {
+      "secret": "An upstream request header, which can carry a credential (an Authorization value): it reaches the store unless given as a file or helper."
+    },
+    "api-keys.*[].keys[].proxy-url": {
+      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port): it reaches the store unless given as a file or helper."
+    },
+    "api-keys.*[].proxy-url": {
+      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port): it reaches the store unless given as a file or helper."
+    },
+    "api-keys.claude[].keys[].cloak.mode": {
+      "enum": ["always", "auto", "never"]
+    },
+    "management.secret-key": {
+      "secret": "The management API key; CPA hashes a plaintext value into its own config at start."
+    },
+    "oauth.providers.codex.live-media-relay.ice-servers[].credential": {
+      "secret": "A TURN server credential."
+    },
+    "requests.proxy-url": {
+      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port): it reaches the store unless given as a file or helper."
+    },
+    "routing.session-affinity-rebind-on": {
+      "enum": ["any", "quota"]
+    },
+    "routing.strategy": {
+      "enum": ["fill-first", "round-robin", "weighted-round-robin"]
+    },
+    "server.github-token": {
+      "secret": "A GitHub token CPA sends with its release and asset downloads."
+    }
+  }
+}

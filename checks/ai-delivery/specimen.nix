@@ -69,7 +69,7 @@ in {
     };
   # A file may carry several input surfaces. This is consumer knowledge;
   # methods and writer names must never enter this classification table.
-  surfacesFor = runtime: path:
+  surfacesFor = mode: runtime: path:
   # ai.kimchi.projectTrust is a Kimchi-only, user-scope trust store, not one
   # of the portable surfaces; the matrix has no cell for it by design.
     if runtime == "kimchi" && lib.hasSuffix "/harness/trust.json" path
@@ -81,12 +81,14 @@ in {
     else if path == ".claude.json"
     then ["settings"]
     else if path == ".claude/settings.json"
-    then ["hooks" "permissions" "settings" "shell"]
+    then ["hooks" "permissions" "proxy" "settings" "shell"]
     # A personal plugin's manifest exists to load its MCP file.
     else if lib.hasSuffix "/.claude-plugin/plugin.json" path
     then ["mcpServers"]
+    # Codex strips a project layer's provider, so devenv's ai.proxy travels as
+    # launcher session flags instead (packages/chatgpt-codex/lib/proxy.nix).
     else if path == ".codex/config.toml"
-    then ["mcpServers" "permissions" "settings"]
+    then ["mcpServers" "permissions"] ++ lib.optional (mode == "hm") "proxy" ++ ["settings"]
     else if path == ".mcp.json" || lib.hasSuffix "/.mcp.json" path || lib.hasSuffix "/mcp-config.json" path || lib.hasSuffix "/mcp.json" path
     then ["mcpServers"]
     else if lib.hasInfix "/agents/" path || lib.hasSuffix "/agents" path

@@ -103,10 +103,8 @@ _: {
         # so it is exactly where collision-semantics' "where a MODULE may
         # contribute" rule has to be read before editing. Previously unscoped.
         "lib/ai/mkSkillPackageModule.nix"
-        # The reconciler behind the ledger-guarded, enable-independent
-        # migration exception documented by the fanout fragments.
+        # The alias for the reconciler below, until its callers import it.
         "lib/ai/own.nix"
-        "lib/ai/own.py"
         # Portable program option-tree factory. Like `mkRuntime`, it declares
         # capability-gated runtime paths and resolves root/runtime values.
         "lib/ai/program.nix"
@@ -119,6 +117,9 @@ _: {
         "lib/generated.nix"
         "lib/generated-guard.py"
         "lib/markdown/**"
+        # The reconciler behind the ledger-guarded, enable-independent
+        # migration exception documented by the fanout fragments.
+        "lib/own/**"
         "lib/testing/module-harness.nix"
         "packages/*/checks/module-eval.nix"
         # The five AI CLI factories, listed explicitly. `packages/*/lib/mk*.nix`
@@ -146,6 +147,49 @@ _: {
         "dir-helpers"
         "layered-fanout"
         "shell-option"
+      ];
+    };
+    # ai-proxy: the local CLIProxyAPI surface — selection, the resolved
+    # endpoint, the registry, and the run-time lookup every integration shares.
+    ai-proxy = {
+      scopes = [
+        "checks/ai-proxy/**"
+        "lib/ai/proxy/**"
+        "packages/chatgpt-codex/lib/proxy.nix"
+        "packages/claude-code/lib/proxy.nix"
+      ];
+      sources = ["ai-proxy"];
+    };
+    # ai-proxy-runtimes: how Claude and Codex render the resolved endpoint.
+    ai-proxy-runtimes = {
+      scopes = [
+        "packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix"
+        "packages/chatgpt-codex/checks/proxy-test.py"
+        "packages/chatgpt-codex/lib/proxy.nix"
+        "packages/claude-code/checks/claude-proxy.nix"
+        "packages/claude-code/lib/proxy.nix"
+      ];
+      sources = [
+        {
+          dir = "ai-proxy";
+          name = "ai-proxy-runtimes";
+        }
+      ];
+    };
+    # ai-proxy-service: the Home Manager CLIProxyAPI units — the rendered
+    # config, typed settings and secrets, account reconcile, logins.
+    ai-proxy-service = {
+      scopes = [
+        "checks/ai-proxy/**"
+        "lib/ai/proxy/default.nix"
+        "lib/ai/proxy/module.nix"
+        "packages/cliproxyapi/lib/**"
+      ];
+      sources = [
+        {
+          dir = "ai-proxy";
+          name = "ai-proxy-service";
+        }
       ];
     };
     # ai-skills: uniform skill layout through the shared `mkSkillFiles` helper.
@@ -191,6 +235,7 @@ _: {
         "packages/*/extracted/**"
         "packages/chatgpt-codex/lib/**"
         "packages/claude-code/lib/**"
+        "packages/cliproxyapi/lib/**"
         "packages/delegate-routing/probes/**"
         "packages/git-absorb/lib/**"
         "packages/git-branchless/lib/**"

@@ -67,12 +67,25 @@
       description = "hand prose";
       kinds = [];
     };
+    blank-list = {
+      input.rows.value.description = [];
+      kinds = ["bad-row"];
+    };
+    blank-list-item = {
+      input.rows.value.description = ["kept" " "];
+      kinds = ["bad-row"];
+    };
     ignored = {
       input = {
         facts.value.type = null;
         rows.value.ignored = "owned by the host";
       };
       entries = [];
+      kinds = [];
+    };
+    list-fill = {
+      input.rows.value.description = ["fill-first" "round-robin"];
+      description = ["fill-first" "round-robin"];
       kinds = [];
     };
     needs-human = {
@@ -103,6 +116,41 @@
         rows = {};
         uses.value = "launcher flag";
       };
+      kinds = ["removed"];
+    };
+    # A pattern row fills every fact it matches, a credential included.
+    pattern = {
+      input = {
+        facts = {
+          "keys.a[].token".type = "string";
+          "keys.b-c[].token".type = "string";
+        };
+        patterns."keys.*[].token".excluded = "runtime file delivery";
+        rows = {};
+      };
+      kinds = [];
+      check = result: lib.all (entry: entry.excluded == "runtime file delivery") (builtins.attrValues result.entries);
+    };
+    # A `*` matches one key, never a path.
+    pattern-one-key = {
+      input = {
+        facts."keys.a.b.leaf".type = "string";
+        patterns."keys.*.leaf".description = "hand prose";
+        rows = {};
+      };
+      kinds = ["removed"];
+      check = result: !(result.entries."keys.a.b.leaf" ? description);
+    };
+    pattern-overlap = {
+      input = {
+        facts."keys.a.leaf".type = "string";
+        patterns."keys.*.leaf".description = "hand prose";
+        rows."keys.a.leaf".description = "other prose";
+      };
+      kinds = ["bad-row"];
+    };
+    pattern-stale = {
+      input.patterns."keys.*.leaf".description = "hand prose";
       kinds = ["removed"];
     };
     replace = {
@@ -209,7 +257,8 @@
     == case.kinds
     && builtins.attrNames result.entries == (case.entries or (builtins.attrNames surface.facts))
     && (!(case ? description) || result.entries.value.description == case.description)
-    && (!(case ? type) || result.entries.value.type == case.type);
+    && (!(case ? type) || result.entries.value.type == case.type)
+    && (!(case ? check) || case.check result);
   failures = builtins.attrNames (lib.filterAttrs (_: case: !(run case)) cases);
 in {
   checks.extracted-reconcile = harness.mkTest "extracted-reconcile" (

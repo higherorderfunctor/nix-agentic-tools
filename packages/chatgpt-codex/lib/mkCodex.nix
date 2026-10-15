@@ -39,10 +39,13 @@
   # (`hookTrustFor`), as a session flag: Codex reads hook trust only from user
   # config and session flags, and devenv never writes the user's config.
   launcherFlags = import ./launcher-flags.nix;
+  codexProxy = import ./proxy.nix {inherit inlineToml lib pkgs;};
+  inlineToml = import ./inlineToml.nix {inherit lib;};
   codexInstallPackage = {
     backend,
     cfg,
     launcherEnvironment,
+    resolvedProxy,
     ...
   } @ args: let
     hookTrust = hookTrustFor args;
@@ -60,6 +63,9 @@
           lib.concatMap (flag: ["--add-flag" flag]) launcherFlags.hookTrust
           ++ ["--add-flag" (lib.escapeShellArg (hookTrustOverride hookTrust))]
         )
+        # devenv's ai.proxy selection: project config cannot carry a
+        # provider, so it travels as session flags (./proxy.nix).
+        ++ codexProxy.launcherFlags resolvedProxy
       );
       name = "chatgpt-codex-wrapped";
       inherit package;
@@ -1077,13 +1083,10 @@
       then config.home.homeDirectory
       else config.devenv.root
     }/${nativeDirFor backend cfg}/hooks.json" (effectiveHooksOf cfg topHooks);
-  # One `-c` value for the whole table: Codex splits an override's key path at
-  # every dot, so the state keys, which are paths, travel quoted inside an
-  # inline TOML table (JSON string escapes are valid TOML basic strings).
+  # One `-c` value for the whole table: the state keys are paths, so they
+  # travel quoted inside one inline table (./inlineToml.nix).
   hookTrustOverride = state:
-    "hooks.state={"
-    + lib.concatStringsSep ", " (lib.mapAttrsToList (key: value: "${builtins.toJSON key} = {trusted_hash = ${builtins.toJSON value.trusted_hash}}") state)
-    + "}";
+    "hooks.state=" + inlineToml (lib.mapAttrs (_: value: {inherit (value) trusted_hash;}) state);
 
   mkAgentsMd = {
     mergedContext,
@@ -1119,6 +1122,7 @@ in
       environmentVariables = {};
       hooks = {};
       mcpServers = {};
+      proxy = {};
       rules = {};
       settings = {};
       shell = {};
@@ -1325,6 +1329,7 @@ in
       nativeAgents,
       options,
       rawAgents,
+      resolvedProxy,
       resolvedSettings,
       topHooks,
       ...
@@ -1421,6 +1426,11 @@ in
             (lib.mkIf (cfg.projectDocMaxBytes != codexProjectDocMaxBytes) {
               project_doc_max_bytes = lib.mkDefault cfg.projectDocMaxBytes;
             })
+            # ai.proxy (./proxy.nix): Home Manager selects the provider in
+            # user config.toml; devenv's launcher selects its own, and the
+            # quieting defaults land in the trusted project's config.toml.
+            (lib.mkIf (isHm && resolvedProxy ? endpoint) (codexProxy.hmSettings resolvedProxy.endpoint))
+            (lib.mkIf (!isHm && resolvedProxy != null) codexProxy.quietSettings)
           ];
           # `pinDaemonToPackage` is Home Manager-only (see its option), so this
           # must not force `options.ai.codex.pinDaemonToPackage` under devenv,

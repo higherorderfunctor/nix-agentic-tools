@@ -27,12 +27,12 @@
   mcpProbe = ecosystem: probe (optionPaths.pool ecosystem "mcpServers") {probe.command = "true";} {};
   settingsProbe = ecosystem: probe (optionPaths.nativeSettings ecosystem) {model = "probe";} {};
   hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
-  ownRetraction = mode: "On ${retractionMoment mode}, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+  ownRetraction = mode: "On ${retractionMoment mode}, lib/own/default.nix's write entry runs lib/own/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
   # The same program with the other container, for a target whose units are
   # whole files. The ledger records one sha256 per file it wrote, so a file the
   # declaration dropped is removed, a file edited since it was written is
   # backed up first, and a path this generation never wrote is never touched.
-  ownFiles = at: "On ${at}, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+  ownFiles = at: "On ${at}, lib/own/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
   # HM reconciles on activation, devenv on shell entry. Both retraction
   # mechanisms name the moment, and nothing else in a row varies with it.
   retractionMoment = mode:
@@ -76,6 +76,9 @@
       copilot = both (absent "github.com Copilot reads no permissions file; a custom agent profile's `tools` list, which ai.copilot.github.agents writes, is the only tool restriction a repository file carries. See https://docs.github.com/en/copilot/reference/custom-agents-configuration.");
       kiro = {devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";};
     };
+    # Home Manager's provider lands in user config.toml; devenv's travels as
+    # launcher session flags (packages/chatgpt-codex/lib/proxy.nix).
+    proxy.codex.devenv = wrapper "devenv" "codex";
     shell = {
       codex = lib.genAttrs modes (mode: wrapper mode "codex");
       kiro = lib.genAttrs modes (mode: wrapper mode "kiro-cli");
@@ -151,6 +154,9 @@
           {text = "probe";}
           // lib.optionalAttrs (!lib.hasSuffix "AGENTS.md" row.target) {matcher = ["probe/**"];};
       } {}
+    # Claude's devenv proxy writer owns leaves only for an instance selection.
+    else if row.surface == "proxy"
+    then probe ["ai" "proxy" "instance"] "probe" null
     else if row.ecosystem == "claude"
     then probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {}
     else if row.ecosystem == "kimchi"

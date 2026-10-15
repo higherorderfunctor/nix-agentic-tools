@@ -558,6 +558,7 @@
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
     | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. github.com Copilot is explicitly excluded |
+    | Local AI proxy | Run CLIProxyAPI and point each CLI at it | `ai.proxy.instances.*` user services and their registry; `ai.proxy` selection (`instance`, or `url` + `key`), delivered to Claude and Codex | Selection only, usually in `devenv.local.nix`; otherwise inherits Home Manager's. A runtime without support warns |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
     ### Kimchi project delivery
@@ -732,6 +733,178 @@
     > generation first, then change the directory; the legacy manifest records
     > owned filenames and hashes, but not an invertible target path, so a later
     > generation cannot safely infer the old custom directory.
+
+    </details>
+
+    <details>
+    <summary><strong>Local AI proxy (ai.proxy)</strong></summary>
+
+    `ai.proxy` points AI harnesses at a locally hosted
+    [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), so a harness
+    holds only the proxy's client key and never an upstream credential. The
+    proxy holds the logins.
+
+    Home Manager can run the proxy. Each `ai.proxy.instances.<name>` is a
+    systemd user service, `ai-proxy-<name>` (Linux only for now; Darwin warns),
+    listening on `127.0.0.1` unless `host` names another single address. Its
+    config is rendered at every start into `~/.local/state/ai-proxy/<name>/`,
+    where a `file` or `helper` client key is read. Home Manager also writes the
+    registry `~/.config/ai-proxy/instances.json`, which maps each instance name
+    to its origin and client key:
+
+    ```nix
+    ai.proxy = {
+      instances.main = {
+        port = 8317;
+        clientKey.file = "/run/secrets/ai-proxy-client-key";
+        # CLIProxyAPI's own v8 configuration, typed from the pinned
+        # release. A credential in it, and a proxy URL or upstream
+        # header, takes `plain`, `file` or `helper`; a file or helper is
+        # read when the service starts.
+        settings = {
+          routing.strategy = "fill-first";
+          api-keys.claude = [
+            {keys = [{api-key.file = "/run/secrets/anthropic-key";}];}
+          ];
+        };
+        # Per-login settings, written into the login's auth file at start.
+        accounts."claude-1a2b3c4d-you@example.com".priority = 10;
+      };
+      instance = "main";
+    };
+    ```
+
+    Logins are the one thing Nix does not configure: they are OAuth tokens
+    that CLIProxyAPI obtains and refreshes itself. Log an instance in with
+    CLIProxyAPI's own login, pointed at the config the unit renders (it exists
+    once the unit has started), so the login lands in the instance's auth dir:
+
+    ```bash
+    config=~/.local/state/ai-proxy/main/config.yaml
+    cliproxyapi --config "$config" -claude-login        # browser; callback on localhost:54545
+    cliproxyapi --config "$config" -codex-login         # browser; callback on localhost:1455
+    cliproxyapi --config "$config" -codex-device-login  # device code; no callback
+    ```
+
+    The browser logins wait for the provider to redirect to the callback port
+    on the machine running the command. On a remote host, add `-no-browser`,
+    open the printed URL locally, and forward the port first, for example
+    `ssh -L 54545:localhost:54545 host`. The running service watches its auth
+    dir, so it uses a new login without a restart. The login's declared
+    `accounts` fields are written at the next start, so restart the service
+    to apply them: `systemctl --user restart ai-proxy-<name>`.
+
+    To be reminded of an instance with no login, print a warning when a shell
+    starts. This is a snippet for your Home Manager configuration, not a
+    module option:
+
+    ```nix
+    { config, lib, ... }: let
+      warnLogin = lib.concatMapStrings (name: let
+        dir = "''${config.xdg.stateHome}/ai-proxy/''${name}";
+      in '''
+        if [ -z "$(find "''${dir}/auth" -maxdepth 1 -name '*.json' -print -quit 2>/dev/null)" ]; then
+          echo "ai-proxy ''${name}: no login; run cliproxyapi --config ''${dir}/config.yaml -claude-login (or -codex-login)" >&2
+        fi
+      ''') (builtins.attrNames config.ai.proxy.instances);
+    in {
+      programs.bash.initExtra = warnLogin;
+      programs.zsh.initContent = warnLogin;
+    }
+    ```
+
+    It assumes the default auth dir; adjust `dir` for an instance that sets
+    `settings.oauth.auth-dir`.
+
+    Each login is a file in the auth dir, `claude-<hash>-<email>.json` or
+    `codex-<hash>-<email>-<plan>.json`. `accounts.<file name without .json>`
+    sets any typed auth-file field of that login (see the option docs), such
+    as `priority`, `weight`, `prefix`, `proxy_url`, `headers`,
+    `excluded_models` or `disabled`, plus any untyped key CLIProxyAPI reads
+    elsewhere, such as `request_retry` or `websockets`, written as given. A
+    `proxy_url` or `headers` value takes `plain`, `file` or `helper`, like a
+    credential in `settings`. A key naming the login's identity or a token
+    (`type`, `email`, `id_token`, `plan_type`, or a credential-shaped name
+    such as `access_token`) fails evaluation. The fields are written into the
+    file at every start without touching its tokens. Nix wins over an edit made
+    in CLIProxyAPI's management panel:
+
+    ```nix
+    ai.proxy.instances.main.accounts."claude-1a2b3c4d-you@example.com".priority = 10;
+    ```
+
+    A harness selects the proxy in one of two forms; setting both fails
+    evaluation:
+
+    - `instance = "<name>"` names an instance. Home Manager resolves it at
+      evaluation against its own `ai.proxy.instances`, so it must be declared
+      there. devenv reads it from the registry when the shell starts or the
+      harness launches, never at evaluation.
+    - `url` with `key` names a proxy configured by hand. The url is the origin
+      only, such as `http://127.0.0.1:8317`.
+
+    The key is `plain`, `file` (a sops-nix `/run/secrets/...` path, for
+    example) or `helper` (a command that prints it). It is the proxy's client
+    key, not an upstream credential, so a `plain` key in the Nix store is
+    acceptable. `ai.<runtime>.proxy` replaces the selection for one runtime. A
+    runtime that does not consume `ai.proxy` warns: Kimchi and Kiro are not
+    supported yet, and Copilot is out of scope.
+
+    Claude Code gets the proxy through its settings files, never its process
+    environment: the origin, the key as `ANTHROPIC_AUTH_TOKEN` (`plain`) or
+    `apiKeyHelper` (`file`, `helper`) with the other method blanked,
+    `ANTHROPIC_API_KEY` blanked so an inherited upstream key is not sent to the
+    proxy, and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
+    `DISABLE_AUTOUPDATER` as defaults. Home Manager writes
+    `~/.claude/settings.json`. devenv writes the
+    `url` form into the project's `.claude/settings.json`, and renders
+    `instance` at shell entry into `.claude/settings.local.json`, owning only
+    those keys and leaving the permissions Claude saves there alone. Add `.claude/settings.local.json` to
+    the repository's `.gitignore` if it is not there yet.
+
+    Codex gets a model provider. Home Manager writes
+    `model_provider = "ai-proxy"` and its `[model_providers.ai-proxy]` table
+    into `~/.codex/config.toml`, and defaults `features.plugins` and
+    `analytics.enabled` to false so Codex's side traffic does not go around the
+    proxy. Codex ignores providers in project config, so devenv's Codex
+    launcher passes its own provider, `ai-proxy-devenv`, as `-c` flags, reading
+    an `instance` from the registry at each launch; a missing instance stops
+    the launch.
+
+    devenv reads the registry at run time, so a proxy you run yourself can have
+    its entry written by hand. The format is a contract:
+
+    ```json
+    {
+      "main": {
+        "url": "http://127.0.0.1:8317",
+        "key": { "file": "/run/secrets/ai-proxy-client-key" }
+      }
+    }
+    ```
+
+    `key` holds exactly one of `plain`, `file` or `helper`. Url and key values
+    are limited to letters, digits and `._+/=:@-`, and a path starts with `/`,
+    because they are substituted unescaped into each runtime's configuration.
+
+    Services are Home Manager only: devenv rejects `ai.proxy.instances`. Home
+    Manager's selection is user-global, so a devenv shell inherits it with no
+    devenv configuration. To override it for one repository, for example to use
+    a second instance for work, put the selection in your personal, uncommitted
+    `devenv.local.nix`, which devenv merges into `devenv.nix`:
+
+    ```nix
+    # devenv.local.nix
+    {
+      ai.proxy.instance = "work";
+      # or a proxy you run yourself:
+      # ai.proxy.url = "http://127.0.0.1:8318";
+      # ai.proxy.key.file = "/run/secrets/ai-proxy-work-key";
+    }
+    ```
+
+    `ai.mcpServers.<name>.proxy` is unrelated: it is the credential-injecting
+    proxy for remote MCP servers.
 
     </details>
 

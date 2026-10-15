@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-14 — Kiro is gated by `ai.kiro.cli.enable`;
 > factories read the derived, read-only `ai.kiro.enable`; `ai.copilot` is
-> github.com Copilot, with pools under `ai.copilot.github` and no launcher.
+> github.com Copilot, with pools under `ai.copilot.github` and no launcher;
+> owned files and documents reconcile through `lib/own`.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -179,8 +180,8 @@ directory. `entryAfter ["writeBoundary"]` is NOT sufficient for that:
 `writeBoundary` is a sibling of `linkGeneration` (order between siblings comes
 from `lib.toposort`), so a writeBoundary-ordered script can run before
 `home.file` entries exist on disk. The `entryBefore` users all come from one
-function: `lib/ai/own.nix` gives every bundle holding a `dir` target a prune
-entry at `entryBefore ["checkLinkTargets"]` (kiro's hooks, its `settings`
+function: `lib/own/default.nix` gives every bundle holding a `dir` target a
+prune entry at `entryBefore ["checkLinkTargets"]` (kiro's hooks, its `settings`
 directory and the legacy steering retirement), which must clear a real file
 flipping to a symlink before HM checks link targets. A document-only bundle has
 no prune entry, because a document's retraction and its assertion are one
@@ -214,8 +215,8 @@ on an error. Never `exit 0` for a cache-hit fast path.
 **Owned leaves for state documents:** Claude's `~/.claude.json` keeps
 harness-written state beside Nix-owned leaves. A factory states
 `facts.harnessWrites` on the file and names the writer whose JSON ledger claims
-it. The delivery router builds one `lib/ai/own.nix` bundle: declared leaves are
-asserted, retired leaves are retracted, and unowned state survives. Kimchi's
+it. The delivery router builds one `lib/own/default.nix` bundle: declared leaves
+are asserted, retired leaves are retracted, and unowned state survives. Kimchi's
 user `config.json` and `harness/settings.json` are documents too, since `/login`
 and `/model` write into them (settled 2026-09-30 after a read-only copy locked
 `/login` out); its `mcp.json`, `permissions.json` and `trust.json` stay
