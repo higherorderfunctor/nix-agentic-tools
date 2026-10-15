@@ -1,44 +1,9 @@
 Compile out Kimchi's self-update: Nix owns the binary, and the store copy is
-read-only. Both update gates are hardwired off, `/update` and the auto-update
-tip read the same gate so they say updates are managed by Nix, and `--help`
-stops listing the now-inert `KIMCHI_NO_UPDATE_CHECK`. The `opts.signal!`
+read-only. Both update gates are hardwired off, so `/update` and `kimchi
+update` find no update, and the auto-update tip reads the same gate and stays
+hidden. User-facing text is left as upstream wrote it. The `opts.signal!`
 assertion keeps TypeScript's narrowing in the now-unreachable launch path.
 
-diff --git i/src/commands/help.ts w/src/commands/help.ts
-index 2ba41e7..5875aba 100644
---- i/src/commands/help.ts
-+++ w/src/commands/help.ts
-@@ -40,7 +40,6 @@ const KIMCHI_ENV: FlagDoc[] = [
- 			"Override telemetry (1/true to enable, 0/false to disable). On by default; an organization policy can enforce the effective state.",
- 	},
- 	{ name: "KIMCHI_TAGS", description: "Comma-separated `key:value` tags applied to every LLM request" },
--	{ name: "KIMCHI_NO_UPDATE_CHECK", description: "Disable the background self-update probe" },
- ]
- 
- function printSection(rows: FlagDoc[], pad: number): void {
-diff --git i/src/extensions/auto-update-settings.ts w/src/extensions/auto-update-settings.ts
-index 8e7c888..df1b1c8 100644
---- i/src/extensions/auto-update-settings.ts
-+++ w/src/extensions/auto-update-settings.ts
-@@ -13,6 +13,7 @@
- 
- import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent"
- import { isHomebrewInstall } from "../update/paths.js"
-+import { isUpdateCheckDisabled } from "../update/state.js"
- import { loadAutoUpdateSetting, saveAutoUpdateSetting } from "../update/settings.js"
- import { applyUpdate, checkForUpdate, parseCanarySha7 } from "../update/workflow.js"
- import { getVersion } from "../utils.js"
-@@ -136,8 +137,8 @@ export default function autoUpdateSettingsExtension(pi: ExtensionAPI) {
- 			// `kimchi update` as their escape hatch.
- 			if (ctx.mode !== "tui") return
- 
--			if (process.env.KIMCHI_NO_UPDATE_CHECK) {
--				ctx.ui.notify("Updates are disabled by the KIMCHI_NO_UPDATE_CHECK environment variable.", "info")
-+			if (isUpdateCheckDisabled()) {
-+				ctx.ui.notify("Updates are managed by Nix.", "info")
- 				return
- 			}
- 
 diff --git i/src/extensions/auto-update/tips.ts w/src/extensions/auto-update/tips.ts
 index 1410bba..9f6ac0c 100644
 --- i/src/extensions/auto-update/tips.ts
