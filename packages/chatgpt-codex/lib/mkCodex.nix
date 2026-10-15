@@ -9,6 +9,7 @@
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
+  openKeys = import ../../../lib/open-keys {inherit lib;};
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   inherit (import ../../../lib/extracted/facts.nix {inherit lib;}) get load;
   codexFacts = load {dir = ../extracted;};
@@ -878,69 +879,71 @@
   # through the store (the read-only config.toml on both backends, and the
   # agent layers), so each is refused rather than warned about.
   #
-  # `tables` maps the option path of one server table to `{ agentScoped, table }`,
-  # where `agentScoped` marks a table declared under
-  # `ai.codex.native.agents.<name>.mcp_servers`.
+  # Paths stay segmented so a user-chosen server name containing dots is
+  # quoted as one option segment in the diagnostic.
   mkOAuthClientSecretAssertions = tables:
-    lib.mapAttrsToList (optionPath: {
+    lib.concatMap ({
       agentScoped,
+      optionPath,
       table,
-    }: {
-      assertion = !(lib.hasAttrByPath ["oauth" "client_secret"] table);
-      message =
-        ''
-          ${optionPath}.oauth.client_secret would copy an OAuth client secret
-          into the world-readable Nix store: Codex reads it only as a literal in
-          its config and has no environment-variable or file reference for it.
-        ''
-        + (
-          if agentScoped
-          then ''
-            Remove it. Codex role layers ignore mcp_servers, so this server never
-            takes effect from an agent either way: declare it at top level
-            (ai.mcpServers or ai.codex.mcpServers) without a client secret.
-          ''
-          else ''
-            Remove it. Codex takes this secret only as a literal in config.toml,
-            so a confidential OAuth client can't be declared through Nix. For a
-            server that accepts a static credential, set proxy.enable with the
-            credential under proxy.headers (Home Manager's local credential proxy,
-            so Codex sees only a loopback URL), or name an environment variable
-            with codex.bearerTokenEnvVar or codex.envHttpHeaders.
-          ''
-        );
-    })
+    }:
+      lib.optional (lib.hasAttrByPath ["oauth" "client_secret"] table) (let
+        refused = openKeys.check {
+          name = "client_secret";
+          optionPath = optionPath ++ ["oauth"];
+          excluded.client_secret =
+            ''
+              an OAuth client secret would enter the world-readable Nix store:
+              Codex reads it only as a literal in its config and has no
+              environment-variable or file reference for it.
+            ''
+            + (
+              if agentScoped
+              then ''
+                Remove it. Codex role layers ignore mcp_servers, so this server never
+                takes effect from an agent either way: declare it at top level
+                (ai.mcpServers or ai.codex.mcpServers) without a client secret
+              ''
+              else ''
+                Remove it. A confidential OAuth client can't be declared through Nix.
+                For a server that accepts a static credential, set proxy.enable with
+                the credential under proxy.headers (Home Manager's local credential
+                proxy, so Codex sees only a loopback URL), or name an environment
+                variable with codex.bearerTokenEnvVar or codex.envHttpHeaders
+              ''
+            );
+        };
+      in {inherit (refused) assertion message;}))
     tables;
 
-  # Server tables that lower into `[mcp_servers.<name>]`, keyed by the option
-  # path that declares each one. A per-runtime entry replaces a root entry at
-  # the same key, so its path names the declaration that actually renders.
-  # Agent layers are included although rust-v0.158.0 discards `mcp_servers`
-  # from a role file (codex-rs/core/src/agent/role_tests.rs,
-  # apply_role_cannot_expand_parent_authority): the file is in the store all
-  # the same.
+  # The runtime entry replaces a same-name root entry. Include role layers even
+  # though Codex ignores their mcp_servers: their TOML still enters the store.
   oauthSecretTables = {
     cfg,
     mergedServers,
   }: let
     owner = pool: name:
       if (cfg.${pool}.${name} or null) != null
-      then "ai.codex.${pool}"
-      else "ai.${pool}";
+      then ["ai" "codex" pool]
+      else ["ai" pool];
     serverTables = agentScoped: prefix: servers:
-      lib.optionalAttrs (builtins.isAttrs servers)
-      (lib.mapAttrs' (name: table: lib.nameValuePair "${prefix}.${name}" {inherit agentScoped table;}) servers);
+      lib.optionals (builtins.isAttrs servers)
+      (lib.mapAttrsToList (name: table: {
+          inherit agentScoped table;
+          optionPath = prefix ++ [name];
+        })
+        servers);
   in
-    lib.mapAttrs' (name: server:
-      lib.nameValuePair "${owner "mcpServers" name}.${name}.codex" {
-        agentScoped = false;
-        table = server.codex or {};
-      })
+    lib.mapAttrsToList (name: server: {
+      agentScoped = false;
+      optionPath = owner "mcpServers" name ++ [name "codex"];
+      table = server.codex or {};
+    })
     mergedServers
-    // serverTables false "ai.codex.native.settings.mcp_servers" (cfg.native.settings.mcp_servers or {})
-    // lib.concatMapAttrs (name: value:
-      serverTables true "ai.codex.native.agents.${name}.mcp_servers" (value.mcp_servers or {}))
-    cfg.native.agents;
+    ++ serverTables false ["ai" "codex" "native" "settings" "mcp_servers"] (cfg.native.settings.mcp_servers or {})
+    ++ lib.concatLists (lib.mapAttrsToList (name: value:
+      serverTables true ["ai" "codex" "native" "agents" name "mcp_servers"] (value.mcp_servers or {}))
+    cfg.native.agents);
 
   # A native record renders to TOML; a raw entry is a TOML file already.
   # TOML has no null, so an unset required field is dropped rather than

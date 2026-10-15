@@ -4,6 +4,8 @@
 > GA workflows keep the stock package, and friendly switches imply client
 > settings only in their native scope. Friendly-switch rollout and setting
 > dependencies share one table with the owner's consumer expectations.
+> Unrecognized setting keys warn and pass through; the workspace assertion still
+> refuses known global-only keys.
 
 Workflows have been generally available since **Kiro CLI 2.26.0**. Their pinned
 rollout state is 100% for all users with no channel restriction, so enabling
@@ -77,8 +79,12 @@ every extracted `chat.keybindings.*` setting key. Known keys reject non-string
 values; unknown keys remain available through the native JSON freeform tail. Key
 bindings use Kiro's own syntax, such as `"ctrl+x"`. Null preserves the vendor
 binding. The workspace allowlist decides which settings devenv can deliver,
-including key bindings: a global-only key is refused at evaluation instead of
-written into a file Kiro ignores.
+including key bindings: a known global-only key is refused at evaluation instead
+of written into a file Kiro ignores. An unrecognized complete file key passes
+through with a spelling warning on both backends, preserving forward
+compatibility. This uses the registry and workspace facts plus the existing
+`telemetry.enabled` typed option; it does not infer a nested schema for
+object-valued settings.
 
 ### The scope boundary comes from the pinned client
 

@@ -1,7 +1,9 @@
 ## Kiro settings: a flat format with object values, and where the key stops
 
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> normalized backend reach and nested delivery diagnostics. Unknown complete
+> settings keys warn and pass through on both backends; the workspace guard
+> refuses only known global-only keys.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -87,6 +89,24 @@ because its persisted effort is per-model, with no lossless target for a shared
 scalar. Use `ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort` for
 the native per-model value, or Kiro's session-only `--effort` flag when
 persistence is not wanted.
+
+### Unknown complete keys warn
+
+The generic `lib/open-keys` inspector checks the flattened file as one struct
+level. Every dotted key stays one literal name, and each known value is opaque:
+`chat.modelDefaults` accepts arbitrary model names and fields without treating
+them as setting keys. The known names come from `kiroSettingKeys`, plus the
+existing typed `telemetry.enabled` option that neither extracted list names.
+These facts are not a complete nested schema.
+
+An unknown key such as `chat.defautModel` is written unchanged and warns with a
+suggestion for `chat.defaultModel` on Home Manager and devenv. The warning is
+computed at config level and emitted only when the backend declares `warnings`.
+The devenv workspace guard separately refuses a known key outside its measured
+allowlist; it does not turn an unrecognized name into a hard failure. This keeps
+new upstream keys usable before the facts catch up.
+
+<!-- cspell:ignore defaut -->
 
 ### What this does and does not fix
 

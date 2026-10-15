@@ -1,15 +1,6 @@
 {lib, ...}: let
-  # ── The unrecognized-key guard on the freeform native.settings tail ────
-  #
-  # These four cases exist because the guard is built ONCE
-  # (`nativeFileAssertions` in mkClaude.nix) and consumed once by the shared
-  # config callback, which serves both backends. Nothing else in this file forces
-  # `config.assertions` for claude, so without them the check would ship to CI
-  # never having been evaluated on either backend.
-  #
-  # Each case runs on HM and devenv and requires the SAME verdict from both:
-  # the two backends write the same settings tree, so a divergence is a
-  # config-parity bug by definition.
+  # Both backends inspect the same filtered settings tree. Keep module
+  # assertions separate: spelling diagnostics must never become refusals.
   claudeAssertions = ev:
     lib.filter (a: lib.hasPrefix "ai.claude." a.message) ev.config.assertions;
 
@@ -24,6 +15,12 @@
     builtins.any
     (a: !a.assertion && lib.hasInfix infix a.message)
     (claudeAssertions ev);
+
+  claudeSettingsWarnings = ev:
+    lib.filter (warning:
+      lib.hasPrefix "ai.claude.native.settings" warning
+      || lib.hasPrefix "ai.claude.allowUnrecognizedSettings" warning)
+    ev.config.warnings;
 
   # Keys the binary declares, INCLUDING the three container shapes the check
   # has to stay permissive about: a freeform record (`env.<VAR>`), a
@@ -42,7 +39,7 @@
   };
 
   # A typo three levels inside `permissions`. Upstream tolerates extra keys
-  # there and silently ignores them, which is exactly why this module does not.
+  # there and silently ignores them, so the module warns while preserving them.
   claudeNestedTypoCfg = {
     ai.claude = {
       enable = true;
@@ -58,5 +55,5 @@
   hasGuardHook = blocks:
     builtins.any (lib.hasInfix "claude-memory-collision-guard") (handlerCommands blocks);
 in {
-  inherit claudeAssertionFails claudeAssertions claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasGuardHook;
+  inherit claudeAssertionFails claudeAssertions claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg claudeSettingsWarnings handlerCommands hasGuardHook;
 }

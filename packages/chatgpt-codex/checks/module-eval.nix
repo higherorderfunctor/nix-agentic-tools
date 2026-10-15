@@ -1727,7 +1727,7 @@ in {
               reviewer = agentServers;
             };
             mcpServers = {
-              local = remote {codex.oauth = oauth;};
+              "local.dotted" = remote {codex.oauth = oauth;};
               replaced = remote {codex.oauth.client_id = "public-client";};
             };
           };
@@ -1743,7 +1743,7 @@ in {
         secretFailures = result:
           builtins.filter (assertion:
             !assertion.assertion
-            && lib.hasInfix ".oauth.client_secret would copy" assertion.message)
+            && lib.hasInfix ".oauth.client_secret cannot be set:" assertion.message)
           result.config.assertions;
         # Agent tables get the role-layer remedy, server tables the Nix-managed
         # credential routes; never the other's, and neither points at a runtime
@@ -1755,7 +1755,9 @@ in {
           == builtins.length (builtins.attrNames paths)
           && lib.all lib.id (lib.mapAttrsToList (path: remedy:
             builtins.any (assertion:
-              lib.hasPrefix "${path}.oauth.client_secret would copy" assertion.message
+              lib.hasPrefix "${path}.oauth.client_secret cannot be set:" assertion.message
+              && lib.hasInfix "world-readable Nix store" assertion.message
+              && lib.hasInfix "environment-variable or file reference" assertion.message
               && lib.hasInfix remedy assertion.message
               && !(lib.hasInfix (
                   if remedy == agentRemedy
@@ -1767,11 +1769,11 @@ in {
             failures)
           paths);
         agentRemedy = "Codex role layers ignore mcp_servers";
-        serverRemedy = "set proxy.enable with the";
+        serverRemedy = "set proxy.enable with";
         pooledPaths = {
           "ai.codex.native.agents.auditor.mcp_servers.tracker" = agentRemedy;
           "ai.codex.native.agents.reviewer.mcp_servers.tracker" = agentRemedy;
-          "ai.codex.mcpServers.local.codex" = serverRemedy;
+          "ai.codex.mcpServers.\"local.dotted\".codex" = serverRemedy;
           "ai.mcpServers.shared.codex" = serverRemedy;
         };
         nativePaths."ai.codex.native.settings.mcp_servers.direct" = serverRemedy;
