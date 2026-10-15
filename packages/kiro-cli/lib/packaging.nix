@@ -263,7 +263,7 @@ rec {
     jq="${pkgs.jq}/bin/jq"
     python3="${pkgs.python3}/bin/python3"
 
-    mkdir release
+    ${pkgs.coreutils}/bin/mkdir release
     ${
       if pkgs.lib.hasSuffix ".dmg" release.name
       then "(cd release && ${pkgs.undmg}/bin/undmg ${release})"
