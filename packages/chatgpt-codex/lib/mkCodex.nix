@@ -40,6 +40,7 @@
   # config and session flags, and devenv never writes the user's config.
   launcherFlags = import ./launcher-flags.nix;
   codexPackage = cfg: cfg.package.launcherPackage or cfg.package;
+  inlineToml = import ./inlineToml.nix {inherit lib;};
   codexInstallPackage = {
     backend,
     cfg,
@@ -1017,13 +1018,10 @@
       then config.home.homeDirectory
       else config.devenv.root
     }/${nativeDirFor backend cfg}/hooks.json" (effectiveHooksOf cfg topHooks);
-  # One `-c` value for the whole table: Codex splits an override's key path at
-  # every dot, so the state keys, which are paths, travel quoted inside an
-  # inline TOML table (JSON string escapes are valid TOML basic strings).
+  # One `-c` value for the whole table: the state keys are paths, so they
+  # travel quoted inside one inline table (./inlineToml.nix).
   hookTrustOverride = state:
-    "hooks.state={"
-    + lib.concatStringsSep ", " (lib.mapAttrsToList (key: value: "${builtins.toJSON key} = {trusted_hash = ${builtins.toJSON value.trusted_hash}}") state)
-    + "}";
+    "hooks.state=" + inlineToml (lib.mapAttrs (_: value: {inherit (value) trusted_hash;}) state);
 
   mkAgentsMd = {
     mergedContext,
