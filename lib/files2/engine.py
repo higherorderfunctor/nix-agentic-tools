@@ -85,8 +85,10 @@ def validate_state(state):
         if not valid_path(path):
             raise ValueError(f"invalid state path: {path}")
     for path, item in state["files"].items():
-        if item.get("method") != "ro":
+        if item.get("method") not in ("ro", "rw"):
             raise ValueError(f"invalid state method: {path}")
+        if item["method"] == "rw" and (item.get("format") not in codecs.FORMATS or not isinstance(item.get("keys"), dict)):
+            raise ValueError(f"invalid rw state: {path}")
 
 
 def entry(data, mode):
@@ -96,6 +98,7 @@ def entry(data, mode):
         "digest": digest(data["bytes"]),
         "mode": mode,
         "created": data["created"],
+        "keys": {},
     }
 
 
@@ -205,11 +208,167 @@ def retire(root, state_path, state, relative):
         current = image(destination)
         if current["type"] not in ("file", "absent"):
             raise ValueError(f"owned copy changed type: {relative}")
+    else:
+        retire_rw(root, state_path, state, relative, None)
+        return
     mutate(root, state_path, state, relative, {"type": "absent"})
+
+
+def pointer(address):
+    return "/" + "/".join(part.replace("~", "~0").replace("/", "~1") for part in address)
+
+
+def pointer_parts(address):
+    return tuple(part.replace("~1", "/").replace("~0", "~") for part in address[1:].split("/"))
+
+
+def key_digest(value):
+    plain = codecs.plain(value)
+    return digest(json.dumps([type(plain).__name__, plain], sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+                             default=lambda item: {"type": type(item).__name__, "value": str(item)}).encode())
+
+
+def lookup(document, address):
+    node = document
+    for part in address:
+        if not hasattr(node, "items") or part not in node:
+            return False, None
+        node = node[part]
+    return True, node
+
+
+def remove_key(document, address):
+    parents = []
+    node = document
+    for part in address[:-1]:
+        if not hasattr(node, "items") or part not in node:
+            return
+        parents.append((node, part))
+        node = node[part]
+    if hasattr(node, "items"):
+        node.pop(address[-1], None)
+    for parent_node, part in reversed(parents):
+        if parent_node[part]:
+            break
+        del parent_node[part]
+
+
+def set_key(document, address, value, relative):
+    node = document
+    for part in address[:-1]:
+        if part not in node:
+            node[part] = {}
+        if not hasattr(node[part], "items"):
+            raise ValueError(f"map-to-scalar conflict: {relative} {pointer(address)}")
+        node = node[part]
+    old = node.get(address[-1])
+    if hasattr(old, "items"):
+        raise ValueError(f"map-to-scalar conflict: {relative} {pointer(address)}")
+    node[address[-1]] = value
+
+
+def read_document(destination, format_name, relative):
+    current = image(destination)
+    if current["type"] == "absent":
+        return {}, "", False, current
+    if current["type"] != "file":
+        raise ValueError(f"non-regular destination refused: {relative}")
+    data = destination.read_bytes()
+    if digest(data) != current["digest"]:
+        raise ValueError(f"concurrent destination change: {relative}")
+    try:
+        document, prefix, comments = codecs.parse(format_name, data)
+    except Exception as error:
+        raise ValueError(f"malformed {format_name} document: {relative}: {error}") from error
+    return document, prefix, comments, current
+
+
+def retire_rw(root, state_path, state, relative, replacement):
+    previous = state["files"][relative]
+    destination = parent(root, relative)
+    document, prefix, comments, current = read_document(destination, previous["format"], relative)
+    if current["type"] == "absent":
+        state["files"].pop(relative)
+        save(state_path, state)
+        return
+    changed = False
+    for address in sorted(previous["keys"], key=lambda key: (-key.count("/"), key)):
+        found, value = lookup(document, pointer_parts(address))
+        if found:
+            if hasattr(value, "items"):
+                if value:
+                    raise ValueError(f"native descendants prevent retirement: {relative} {address}")
+                continue
+            changed = True
+            remove_key(document, pointer_parts(address))
+    remaining = bool(document)
+    if replacement and (remaining or comments or not previous["created"]):
+        raise ValueError(f"native keys or preserved comments prevent takeover: {relative}")
+    delete = previous["created"] and not remaining and not comments
+    after_payload = codecs.serialize(previous["format"], document, prefix) if changed else destination.read_bytes()
+    after = {"type": "absent"} if delete else {"type": "file", "digest": digest(after_payload), "mode": current["mode"]}
+    mutate(root, state_path, state, relative, after, payload=None if delete else after_payload, observed=current)
+
+
+def rw_candidate(root, state, relative, item):
+    previous = state["files"].get(relative)
+    if previous and previous["method"] not in ("ro", "rw"):
+        raise ValueError(f"prior method requires prune: {relative}")
+    desired_bytes, declared_mode = desired_data(item)
+    try:
+        declared, _, _ = codecs.parse(item["format"], desired_bytes)
+    except Exception as error:
+        raise ValueError(f"malformed {item['format']} declaration: {relative}: {error}") from error
+    wanted = {pointer(address): value for address, value in codecs.leaves(declared)}
+    destination = parent(root, relative, create=True)
+    old_format = previous["format"] if previous and previous["format"] in codecs.FORMATS else item["format"]
+    document, prefix, comments, current = read_document(destination, old_format, relative)
+    old_keys = previous["keys"] if previous and previous["method"] == "rw" else {}
+    changed = False
+    for address in sorted(old_keys.keys() - wanted.keys(), key=lambda key: (-key.count("/"), key)):
+        found, value = lookup(document, pointer_parts(address))
+        if found:
+            if hasattr(value, "items"):
+                if value:
+                    raise ValueError(f"native descendants prevent retirement: {relative} {address}")
+                continue
+            changed = True
+            remove_key(document, pointer_parts(address))
+    for address, value in wanted.items():
+        found, existing = lookup(document, pointer_parts(address))
+        if not found or key_digest(existing) != key_digest(value):
+            set_key(document, pointer_parts(address), value, relative)
+            changed = True
+    if old_format != item["format"] and comments:
+        raise ValueError(f"comment-preserving format switch refused: {relative}")
+    if old_format != item["format"]:
+        document, prefix, comments = codecs.plain(document), "", False
+    payload = (destination.read_bytes() if current["type"] == "file" and not changed and old_format == item["format"]
+               else codecs.serialize(item["format"], document, prefix))
+    if item["mode"] is not None:
+        mode = int(item["mode"], 8)
+    elif item["executable"] is not None:
+        mode = 0o700 if item["executable"] else 0o600
+    elif previous and previous["method"] == "ro":
+        mode = 0o600 | (current.get("mode", previous["mode"]) & 0o111)
+    else:
+        mode = current.get("mode", 0o600 | (declared_mode & 0o111))
+    next_entry = {"method": "rw", "format": item["format"], "digest": digest(payload), "mode": mode,
+                  "created": previous["created"] if previous else current["type"] == "absent",
+                  "keys": {address: key_digest(value) for address, value in wanted.items()}}
+    return payload, next_entry, current
+
+
+def reconcile_rw(root, state_path, state, relative, item):
+    payload, next_entry, current = rw_candidate(root, state, relative, item)
+    after = {"type": "file", "digest": next_entry["digest"], "mode": next_entry["mode"]}
+    mutate(root, state_path, state, relative, after, next_entry, payload, observed=current)
 
 
 def reconcile_ro(root, state_path, state, relative, item):
     previous = state["files"].get(relative)
+    if previous and previous["method"] != "ro":
+        raise ValueError(f"prior method requires prune: {relative}")
     payload, mode = desired_data(item)
     destination = parent(root, relative, create=True)
     current = image(destination)
@@ -227,7 +386,7 @@ def reconcile(plan, root, state_path, phase):
     seen = set()
     for item in plan:
         relative = item["path"]
-        if not valid_path(relative) or relative in seen or item["method"] not in ("ro", "symlink"):
+        if not valid_path(relative) or relative in seen or item["method"] not in ("ro", "rw", "symlink"):
             raise ValueError(f"invalid plan entry: {relative}")
         seen.add(relative)
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -247,14 +406,19 @@ def reconcile(plan, root, state_path, phase):
                 new = desired.get(relative)
                 if old["method"] == "ro" and (new is None or new["method"] == "symlink"):
                     retire(root, state_path, state, relative)
+                elif old["method"] == "rw" and (new is None or new["method"] != "rw"):
+                    retire_rw(root, state_path, state, relative, new)
         else:
             for relative in sorted(list(state["files"])):
-                if relative not in desired and state["files"][relative]["method"] == "ro":
+                if relative not in desired and state["files"][relative]["method"] in ("ro", "rw"):
                     retire(root, state_path, state, relative)
         for relative in sorted(desired):
             parent(root, relative)
         if phase == "apply":
             for relative, item in sorted(desired.items()):
+                if item["method"] == "rw":
+                    reconcile_rw(root, state_path, state, relative, item)
+                    continue
                 if item["method"] == "ro":
                     reconcile_ro(root, state_path, state, relative, item)
         save(state_path, state)
