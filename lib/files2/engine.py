@@ -1,0 +1,274 @@
+"""Reconcile owned files against a normalized files2 plan."""
+
+import argparse
+import fcntl
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import stat
+import subprocess
+import tempfile
+
+codec_spec = importlib.util.spec_from_file_location("files2_codecs", Path(__file__).with_name("files2_codecs.py"))
+codecs = importlib.util.module_from_spec(codec_spec)
+codec_spec.loader.exec_module(codecs)
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def valid_path(path):
+    return isinstance(path, str) and bool(path) and not path.startswith("/") and all(
+        part not in ("", ".", "..") for part in path.split("/")
+    )
+
+
+def image(path):
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return {"type": "absent"}
+    if stat.S_ISREG(info.st_mode):
+        return {"type": "file", "digest": digest(path.read_bytes()), "mode": stat.S_IMODE(info.st_mode)}
+    if stat.S_ISLNK(info.st_mode):
+        return {"type": "symlink", "target": os.readlink(path)}
+    raise ValueError(f"special file refused: {path}")
+
+
+def atomic_json(path, value):
+    data = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    atomic_bytes(path, data, 0o600)
+
+
+def atomic_bytes(path, data, mode, guard=None):
+    fd, temporary = tempfile.mkstemp(prefix=".files2-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+            os.fchmod(stream.fileno(), mode)
+        if guard is not None and not guard():
+            return False
+        os.replace(temporary, path)
+        return True
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def parent(root, relative, create=False):
+    current = root
+    for segment in relative.split("/")[:-1]:
+        current = current / segment
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            if not create:
+                continue
+            current.mkdir()
+            info = current.lstat()
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError(f"symlinked or non-directory parent refused: {current}")
+    return root / relative
+
+
+def validate_state(state):
+    if not isinstance(state, dict) or state.get("version") != 1 or set(state) != {"version", "files"}:
+        raise ValueError("invalid files2 state schema")
+    if not isinstance(state.get("files"), dict):
+        raise ValueError("invalid files2 state files")
+    for path in state["files"]:
+        if not valid_path(path):
+            raise ValueError(f"invalid state path: {path}")
+    for path, item in state["files"].items():
+        if item.get("method") != "ro":
+            raise ValueError(f"invalid state method: {path}")
+
+
+def entry(data, mode):
+    return {
+        "method": "ro",
+        "format": data["format"],
+        "digest": digest(data["bytes"]),
+        "mode": mode,
+        "created": data["created"],
+    }
+
+
+def desired_data(item):
+    content = item["content"]
+    if "text" in content:
+        payload = content["text"].encode()
+        source_mode = 0o444
+    elif "source" in content:
+        source = Path(content["source"])
+        if not source.is_file():
+            raise ValueError(f"source must be a file: {source}")
+        payload = source.read_bytes()
+        source_mode = stat.S_IMODE(source.stat().st_mode)
+    elif "value" in content and item["format"] in codecs.FORMATS:
+        payload = Path(content["rendered"]).read_bytes()
+        source_mode = 0o444
+    elif "run" in content:
+        script = "set -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + content["run"]
+        payload = subprocess.run([os.environ["FILES2_BASH"], "-c", script], check=True, capture_output=True).stdout
+        source_mode = 0o444
+    else:
+        raise ValueError(f"unsupported ro content at {item['path']}")
+    if item["mode"] is not None:
+        mode = int(item["mode"], 8)
+    elif item["executable"] is True:
+        mode = 0o555
+    elif item["executable"] is False:
+        mode = 0o444
+    else:
+        mode = 0o444 | (source_mode & 0o111)
+    return payload, mode
+
+
+def backup_path(state_path, relative, before):
+    identity = json.dumps([relative, before["digest"], before["mode"]], separators=(",", ":")).encode()
+    return state_path.parent / f"{state_path.stem[:32]}-{digest(identity)[:32]}.bak"
+
+
+def backup_old(destination, backup, before):
+    if backup is None:
+        return
+    if backup.exists():
+        if image(backup) != before:
+            raise ValueError(f"reserved backup differs: {backup}")
+        return
+    if image(destination) != before:
+        raise ValueError(f"destination changed before backup: {destination}")
+    atomic_bytes(backup, destination.read_bytes(), before["mode"])
+
+
+def save(state_path, state):
+    atomic_json(state_path, state)
+
+
+def finish(state_path, state, relative, next_entry):
+    if next_entry is None:
+        state["files"].pop(relative, None)
+    else:
+        state["files"][relative] = next_entry
+    save(state_path, state)
+
+
+def installed_image(previous):
+    if previous is None:
+        return {"type": "absent"}
+    return {"type": "file", "digest": previous["digest"], "mode": previous["mode"]}
+
+
+def mutate(root, state_path, state, relative, after, next_entry=None, payload=None, observed=None):
+    destination = parent(root, relative, create=after["type"] == "file")
+    current = image(destination)
+    if observed is not None and current != observed:
+        raise ValueError(f"concurrent destination change: {relative}")
+    installed = installed_image(state["files"].get(relative))
+    if current["type"] not in ("file", "absent") and current != installed:
+        raise ValueError(f"owned destination changed type: {relative}")
+    if current == after:
+        finish(state_path, state, relative, next_entry)
+        return True
+    backup = backup_path(state_path, relative, current) if current["type"] == "file" and current != installed else None
+    if after["type"] == "file":
+        if payload is None or digest(payload) != after["digest"]:
+            raise ValueError(f"replacement payload unavailable or changed: {relative}")
+        destination = parent(root, relative, create=True)
+        backup_old(destination, backup, current)
+        def unchanged():
+            return image(destination) == current
+        if not atomic_bytes(destination, payload, after["mode"], guard=unchanged):
+            raise ValueError(f"concurrent destination change: {relative}")
+    elif after["type"] == "absent":
+        backup_old(destination, backup, current)
+        if image(destination) != current:
+            raise ValueError(f"concurrent destination change: {relative}")
+        if current != {"type": "absent"}:
+            destination.unlink()
+    else:
+        raise ValueError(f"unsupported replacement image: {relative}")
+    finish(state_path, state, relative, next_entry)
+    return True
+
+
+def retire(root, state_path, state, relative):
+    previous = state["files"][relative]
+    destination = parent(root, relative)
+    if previous["method"] == "ro":
+        current = image(destination)
+        if current["type"] not in ("file", "absent"):
+            raise ValueError(f"owned copy changed type: {relative}")
+    mutate(root, state_path, state, relative, {"type": "absent"})
+
+
+def reconcile_ro(root, state_path, state, relative, item):
+    previous = state["files"].get(relative)
+    payload, mode = desired_data(item)
+    destination = parent(root, relative, create=True)
+    current = image(destination)
+    if current["type"] not in ("file", "absent"):
+        raise ValueError(f"non-regular destination refused: {relative}")
+    data = {**item, "bytes": payload, "created": previous["created"] if previous else current["type"] == "absent"}
+    next_entry = entry(data, mode)
+    after = {"type": "file", "digest": next_entry["digest"], "mode": mode}
+    mutate(root, state_path, state, relative, after, next_entry, payload, observed=current)
+
+
+def reconcile(plan, root, state_path, phase):
+    if not root.is_dir() or root.is_symlink():
+        raise ValueError(f"root must be a real directory: {root}")
+    seen = set()
+    for item in plan:
+        relative = item["path"]
+        if not valid_path(relative) or relative in seen or item["method"] not in ("ro", "symlink"):
+            raise ValueError(f"invalid plan entry: {relative}")
+        seen.add(relative)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    if state_path.is_symlink():
+        raise ValueError(f"state symlink refused: {state_path}")
+    lock = state_path.with_suffix(state_path.suffix + ".lock")
+    if lock.is_symlink():
+        raise ValueError(f"state lock symlink refused: {lock}")
+    with lock.open("a+b") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        state = json.loads(state_path.read_text()) if state_path.exists() else {"version": 1, "files": {}}
+        validate_state(state)
+        desired = {item["path"]: item for item in plan}
+        if phase == "prune":
+            for relative in sorted(list(state["files"])):
+                old = state["files"][relative]
+                new = desired.get(relative)
+                if old["method"] == "ro" and (new is None or new["method"] == "symlink"):
+                    retire(root, state_path, state, relative)
+        else:
+            for relative in sorted(list(state["files"])):
+                if relative not in desired and state["files"][relative]["method"] == "ro":
+                    retire(root, state_path, state, relative)
+        for relative in sorted(desired):
+            parent(root, relative)
+        if phase == "apply":
+            for relative, item in sorted(desired.items()):
+                if item["method"] == "ro":
+                    reconcile_ro(root, state_path, state, relative, item)
+        save(state_path, state)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--plan", type=Path, required=True)
+    parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--state", type=Path, required=True)
+    parser.add_argument("--phase", choices=("prune", "apply"), required=True)
+    args = parser.parse_args()
+    reconcile(json.loads(args.plan.read_text()), args.root, args.state, args.phase)
+
+
+if __name__ == "__main__":
+    main()

@@ -3,6 +3,9 @@
 import json
 
 
+FORMATS = ("json", "toml", "yaml")
+
+
 def serialize(format_name, document):
     if format_name == "json":
         return (json.dumps(document, sort_keys=True, ensure_ascii=False) + "\n").encode()
