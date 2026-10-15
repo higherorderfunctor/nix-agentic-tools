@@ -187,5 +187,5 @@ for backend, plans in sorted(fixtures.items()):
             else:
                 raise AssertionError("special file accepted")
             assert stat.S_ISFIFO(fifo.lstat().st_mode)
-            assert not refused_state.exists()
+            assert json.loads(refused_state.read_text())["files"] == {}
         print(f"PASS: {backend} ro runtime, adoption, drain, modes, refusals")

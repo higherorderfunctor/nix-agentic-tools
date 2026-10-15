@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import tempfile
@@ -76,19 +77,63 @@ def parent(root, relative, create=False):
     return root / relative
 
 
-def validate_state(state):
-    if not isinstance(state, dict) or state.get("version") != 1 or set(state) != {"version", "files"}:
+def validate_state(state, version):
+    if not isinstance(state, dict) or type(state.get("version")) is not int or state["version"] != version or set(state) != {"version", "files"}:
         raise ValueError("invalid files2 state schema")
     if not isinstance(state.get("files"), dict):
         raise ValueError("invalid files2 state files")
-    for path in state["files"]:
+    for path, item in state["files"].items():
         if not valid_path(path):
             raise ValueError(f"invalid state path: {path}")
-    for path, item in state["files"].items():
-        if item.get("method") not in ("ro", "rw"):
-            raise ValueError(f"invalid state method: {path}")
-        if item["method"] == "rw" and (item.get("format") not in codecs.FORMATS or not isinstance(item.get("keys"), dict)):
+        if not isinstance(item, dict) or set(item) != {"created", "digest", "format", "keys", "method", "mode"}:
+            raise ValueError(f"invalid state entry: {path}")
+        if (type(item["created"]) is not bool or not isinstance(item["digest"], str)
+                or re.fullmatch(r"[0-9a-f]{64}", item["digest"]) is None
+                or item["format"] not in ("json", "markdown", "raw", "toml", "yaml")
+                or item["method"] not in ("ro", "rw")
+                or type(item["mode"]) is not int or not 0 <= item["mode"] <= 0o7777
+                or not isinstance(item["keys"], dict)):
+            raise ValueError(f"invalid state entry: {path}")
+        if item["method"] == "rw" and item["format"] not in codecs.FORMATS:
             raise ValueError(f"invalid rw state: {path}")
+        if item["method"] == "ro" and item["keys"]:
+            raise ValueError(f"invalid ro state keys: {path}")
+        for address, value in item["keys"].items():
+            if (not isinstance(address, str) or not address.startswith("/")
+                    or re.search(r"~(?![01])", address) or pointer(pointer_parts(address)) != address
+                    or not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None):
+                raise ValueError(f"invalid state key: {path}")
+
+
+def migrate_v0(state):
+    return {**state, "version": 1}
+
+
+MIGRATIONS = {0: migrate_v0}
+CURRENT_VERSION = 1
+
+
+def load_state(state_path):
+    if not state_path.exists():
+        state = {"files": {}, "version": CURRENT_VERSION}
+        save(state_path, state)
+        return state
+    state = json.loads(state_path.read_text())
+    version = state.get("version") if isinstance(state, dict) else None
+    if type(version) is not int or version < 0 or version > CURRENT_VERSION:
+        raise ValueError(f"unsupported files2 state version: {state_path}")
+    validate_state(state, version)
+    migrated = version < CURRENT_VERSION
+    while version < CURRENT_VERSION:
+        migration = MIGRATIONS.get(version)
+        if migration is None:
+            raise ValueError(f"missing files2 state migration from version {version}: {state_path}")
+        state = migration(state)
+        version += 1
+        validate_state(state, version)
+    if migrated:
+        save(state_path, state)
+    return state
 
 
 def entry(data, mode):
@@ -397,8 +442,7 @@ def reconcile(plan, root, state_path, phase):
         raise ValueError(f"state lock symlink refused: {lock}")
     with lock.open("a+b") as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
-        state = json.loads(state_path.read_text()) if state_path.exists() else {"version": 1, "files": {}}
-        validate_state(state)
+        state = load_state(state_path)
         desired = {item["path"]: item for item in plan}
         if phase == "prune":
             for relative in sorted(list(state["files"])):

@@ -4,7 +4,7 @@
   pkgs,
   ...
 }: let
-  files2 = import ../default.nix {inherit lib pkgs;};
+  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
   dagLib =
     lib
     // {
