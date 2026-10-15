@@ -882,19 +882,19 @@
   resolvePackage = cfg: let
     package = resolveRolloutPackage cfg;
   in
-    if enabledBooleanTweaks cfg == [] || package == null
+    if enabledTweaks cfg == [] || package == null
     then package
     else if !(package ? withBundlePatches)
     then throw "ai.kiro.cli.tweaks requires a package exposing passthru.withBundlePatches (use this flake's kiro-cli package)."
     else
       package.withBundlePatches {
-        replace = enabledBooleanTweaks cfg;
+        replace = enabledTweaks cfg;
       };
 
-  # Boolean `ai.kiro.cli.tweaks` that each select one fixed-text bundle
-  # replacement; the names are the patcher's `FIXED` keys.
-  booleanTweaks = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
-  enabledBooleanTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) booleanTweaks;
+  # `ai.kiro.cli.tweaks` each select one fixed-text bundle replacement; the
+  # names are the patcher's FIXED keys.
+  tweakNames = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+  enabledTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) tweakNames;
 
   # Kiro honors a PROJECT-LOCAL `.kiro/settings/cli.json` only for the keys on
   # the allowlist its TUI carries; everything else in that file is read and
@@ -1666,7 +1666,7 @@ in
           explicit = explicitAt [["ai" "kiro" "cli" "tweaks" name]];
           name = "ai.kiro.cli.tweaks.${name}";
         })
-        booleanTweaks
+        tweakNames
         ++ [
           {
             active = resolvedShell != null;

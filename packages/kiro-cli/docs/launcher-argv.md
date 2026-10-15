@@ -1,10 +1,10 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-14 — only the two workflow prompt tweaks remain;
-> the native package binds one KAS extracted from its release input; selected
-> prompt replacements fail closed at build time. Darwin packaging points both
-> the executable filename and argv0 at the app binary; native CI verifies
-> fresh-home dispatch.
+> **Last verified:** 2026-10-14 — KAS patch selection takes only the two
+> fixed-text workflow prompt tweaks; the native package binds one KAS extracted
+> from its release input; selected prompt replacements fail closed at build
+> time. Darwin packaging points both the executable filename and argv0 at the
+> app binary; native CI verifies fresh-home dispatch.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.

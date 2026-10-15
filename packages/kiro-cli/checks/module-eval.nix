@@ -1860,8 +1860,8 @@ in {
     # defect to route around.
     module-kiro-workspace-allowlist-from-sidecar = mkTest "kiro-workspace-allowlist-from-sidecar" (!(lib.elem "chat.enableWorkflows" (kiroFact "workspaceOverridableSettings")));
 
-    # Both boolean tweaks default off and select package-bound patches on either backend.
-    module-kiro-boolean-tweaks-default-off-and-parity = mkTest "kiro-boolean-tweaks-default-off-and-parity" (
+    # Both tweaks default off and select package-bound patches on either backend.
+    module-kiro-tweaks-default-off-and-parity = mkTest "kiro-tweaks-default-off-and-parity" (
       let
         forks = eval: select: name: let
           a = eval {
