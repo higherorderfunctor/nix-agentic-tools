@@ -1,25 +1,35 @@
 Compile out Kimchi's self-update: Nix owns the binary, and the store copy is
-read-only. Both update gates are hardwired off, so `/update` and `kimchi
-update` find no update, and the auto-update tip reads the same gate and stays
-hidden. User-facing text is left as upstream wrote it. The `opts.signal!`
-assertion keeps TypeScript's narrowing in the now-unreachable launch path.
+read-only. Every update gate is hardwired off: the launch path returns before
+probing, the shared workflow finds no update for `kimchi update`, `/update`
+stops before its menu (so no toggle and no "enable auto-update" tip), and the
+tip rotation drops the auto-update tip. Each gate is a one-line condition, so
+the patch touches no import block or help text; `/update` keeps upstream's
+notice wording. The `opts.signal!` assertion keeps TypeScript's narrowing in
+the now-unreachable launch path.
 
+diff --git i/src/extensions/auto-update-settings.ts w/src/extensions/auto-update-settings.ts
+index 8e7c888..b0966a4 100644
+--- i/src/extensions/auto-update-settings.ts
++++ w/src/extensions/auto-update-settings.ts
+@@ -136,7 +136,7 @@ export default function autoUpdateSettingsExtension(pi: ExtensionAPI) {
+ 			// `kimchi update` as their escape hatch.
+ 			if (ctx.mode !== "tui") return
+ 
+-			if (process.env.KIMCHI_NO_UPDATE_CHECK) {
++			if (true) {
+ 				ctx.ui.notify("Updates are disabled by the KIMCHI_NO_UPDATE_CHECK environment variable.", "info")
+ 				return
+ 			}
 diff --git i/src/extensions/auto-update/tips.ts w/src/extensions/auto-update/tips.ts
-index 1410bba..9f6ac0c 100644
+index 1410bba..0c07be0 100644
 --- i/src/extensions/auto-update/tips.ts
 +++ w/src/extensions/auto-update/tips.ts
-@@ -1,4 +1,5 @@
- import { isHomebrewInstall } from "../../update/paths.js"
-+import { isUpdateCheckDisabled } from "../../update/state.js"
- import { loadAutoUpdateSetting } from "../../update/settings.js"
- import type { Tip, TipProvider } from "../tips/types.js"
- 
-@@ -17,7 +18,7 @@ export function createAutoUpdateTipProvider(): TipProvider {
+@@ -17,7 +17,7 @@ export function createAutoUpdateTipProvider(): TipProvider {
  	return {
  		source: "kimchi.auto-update",
  		getTips: () => {
 -			if (process.env.KIMCHI_NO_UPDATE_CHECK) return []
-+			if (isUpdateCheckDisabled()) return []
++			if (true) return []
  			if (isHomebrewInstall()) return []
  			if (loadAutoUpdateSetting()) return []
  			return [AUTO_UPDATE_TIP]

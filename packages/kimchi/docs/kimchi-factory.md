@@ -661,17 +661,18 @@ materializes `node_modules` and before Bun compiles the module graph. `fd` and
 `CI=1` does not meet the script's `CI === "true"` plus `KIMCHI_SKIP_TYPECHECK=1`
 skip condition.
 
-`disable-self-update.patch` makes both update gates unconditional. The launch
+`disable-self-update.patch` makes every update gate unconditional. The launch
 auto-update path returns before probing, and `isUpdateCheckDisabled()` always
 disables the shared manual workflow used by the startup nag, `/update`, and
 `kimchi update`. Self-updates are managed by Nix rather than a launcher option.
-Both `/update` and `kimchi update` reach `applyUpdate` only through that
-workflow's `hasUpdate`, so they report no update available. The auto-update tip
-reads the same function and stays hidden. The patch edits code paths only and
-leaves upstream's user-facing text alone, so `--help` still lists
-`KIMCHI_NO_UPDATE_CHECK`, now inert, and the env-var notice in `/update` is
-unreachable unless the variable is set. The extractor still reads the unpatched
-source and records upstream's `KIMCHI_NO_UPDATE_CHECK` environment variable.
+`kimchi update` reaches `applyUpdate` only through that workflow's `hasUpdate`,
+so it reports no update available. `/update` stops before its menu, so it offers
+no toggle and no "enable auto-update" tip, and the tip rotation drops the
+auto-update tip. Every gate is a one-line condition: the patch leaves import
+blocks and user-facing text alone. So `--help` still lists
+`KIMCHI_NO_UPDATE_CHECK`, now inert, and `/update` prints upstream's notice that
+names that variable. The extractor still reads the unpatched source and records
+upstream's `KIMCHI_NO_UPDATE_CHECK` environment variable.
 
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.
