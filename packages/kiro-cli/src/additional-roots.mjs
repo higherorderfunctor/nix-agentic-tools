@@ -11,11 +11,16 @@ function fail(message) {
   throw new Error(`chat.additionalDirectories: ${message}`);
 }
 
-export async function resolveRequest(homeDir, request, roots) {
+export async function resolveRequest(
+  homeDir,
+  request,
+  roots,
+  workspaceTrusted,
+) {
   // roots comes from the vendor validator, retaining protocol failures.
   const candidates = [...roots];
   const layers = await settingsLayers(homeDir, request.cwd);
-  const worktree = await worktrees.admit(layers, request.cwd);
+  const worktree = await worktrees.admit(layers, request.cwd, workspaceTrusted);
   for (const { path, base, value } of layers) {
     const entries = value["chat.additionalDirectories"];
     if (entries === undefined) continue;
@@ -57,10 +62,14 @@ export async function resolveRequest(homeDir, request, roots) {
 
 // Membership alone leaves writes prompting. Only the admitted policy root is
 // writable; generic configured roots keep the vendor default.
-export async function writableRoot(homeDir, roots) {
+export async function writableRoot(homeDir, roots, workspaceTrusted) {
   if (!roots.length) return undefined;
   const root = (
-    await worktrees.admit(await settingsLayers(homeDir, roots[0]), roots[0])
+    await worktrees.admit(
+      await settingsLayers(homeDir, roots[0]),
+      roots[0],
+      workspaceTrusted,
+    )
   )?.root;
   if (!root) return undefined;
   const key = await worktrees.canonical(root);
@@ -154,6 +163,7 @@ export async function ownerRoots(
       agent.homeDir,
       { cwd: childRoots[0] },
       [childRoots[0]],
+      agent.workspaceTrusted,
     );
     return [request.cwd, ...request.additionalDirectories];
   }
@@ -170,6 +180,7 @@ export async function ownerRoots(
     agent.homeDir,
     { cwd: protocol[0] },
     protocol,
+    agent.workspaceTrusted,
   );
   return [request.cwd, ...request.additionalDirectories];
 }
@@ -230,6 +241,7 @@ export async function restoreRequest(agent, request) {
     agent.homeDir,
     { ...request, cwd: protocol[0], additionalDirectories: protocol.slice(1) },
     protocol,
+    agent.workspaceTrusted,
   );
 }
 

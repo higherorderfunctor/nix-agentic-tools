@@ -9,8 +9,10 @@
 > evicted workflow owners use fresh cwd authorization for their children and
 > detached run rebuilds. Nullable shared worktree policy preserves unspecified
 > and explicit false through native lowering; its location template renders per
-> session and may not cover the checkout, its root alone is writable, and
-> non-derivable Git layouts and failing Git probes degrade instead of failing.
+> session and may not cover the checkout or enter its common Git directory;
+> repository policy requires workspace trust, dangling ancestor symlinks are
+> refused, its root alone is writable, and non-derivable Git layouts and failing
+> Git probes degrade instead of failing.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -95,7 +97,10 @@ result resolves against `{{primary}}`, so the default is the sibling
 `<primary-checkout>-worktrees`. There is no scripting. A runtime null location
 inherits the root value. A rendering equal to the primary checkout or one of its
 ancestors fails the session, because the grant below would make the checkout
-writable; a location inside the checkout is allowed.
+writable. A destination equal to or inside the common Git directory (`.git`) is
+also refused. The repository settings layer contributes `chat.worktrees` only
+when the workspace is trusted; user-global policy still applies in an untrusted
+workspace.
 
 Kiro lowers the normalized policy at default priority to
 `cli.native.settings.chat.worktrees`. Direct native settings win, including
@@ -136,11 +141,12 @@ warning, but still select the PR guidance, with a `<path>` placeholder instead
 of a destination. A failing Git probe other than "not a git repository" (a bare
 clone at `<dir>/.git`, or Git refusing a repository it does not trust) degrades
 the same way. Only a malformed `chat.worktrees` value, a location covering the
-primary checkout, or a symlink at the rendered destination fails the session.
-Admission rejects an existing symlink at the rendered destination, including a
-dangling one; explicit additional-directory aliases retain their separate
-behavior. This is an admission-time check, not a guarantee against a later
-filesystem change. New and cold-resumed sessions recompute roots; resident
+primary checkout or entering its common Git directory, or a symlink at the
+rendered destination fails the session. Admission rejects an existing symlink at
+the rendered destination, including a dangling one, and refuses dangling
+symlinks in its ancestors; explicit additional-directory aliases retain their
+separate behavior. This is an admission-time check, not a guarantee against a
+later filesystem change. New and cold-resumed sessions recompute roots; resident
 sessions retain their admitted roots.
 
 For new conversations, the selected default worktree guidance keeps workflow

@@ -620,6 +620,7 @@ try {
   const outbound = { extNotification: silent };
   const host = {
     homeDir: home,
+    workspaceTrusted: true,
     agentContext: { client: "kiro-cli" },
     sessions: states,
     hydrateInflight: new Map(),
@@ -751,6 +752,7 @@ try {
               },
             },
             [cwd],
+            host.workspaceTrusted,
           ),
           {},
           {},
