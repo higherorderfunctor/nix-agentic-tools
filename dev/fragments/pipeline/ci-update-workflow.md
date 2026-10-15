@@ -251,17 +251,17 @@ publication; every Cachix step holding the token, package matrix and update
 workers alike, carries `pushFilter: kiro-cli`.
 
 Codex and Kiro facts are host-run, so Linux updates can regenerate only their
-Linux raws. The Linux `plan-extracted-facts` job evaluates
-`checks/extracted/ci-plan.nix` at HEAD and base. It uses the shared logical
-owner map and `lib.extracted.hostRunOn` to select every owner declared host-run
-on Darwin, then returns each owner's Darwin `passthru.extracted.drvPath` from
-`ciPackages`. It does not evaluate Darwin checks on Linux. A shared
-`lib/extracted/` change or unavailable comparison schedules every selected
-owner; if derivation evaluation itself fails, the same Nix planner is retried
-for names only. `workflow_dispatch` runs all selected owners. An empty matrix
-skips the Darwin producer; both required build contexts accept that only when
-planning passed. The producer still regenerates and checks each selected owner's
-facts. The Kiro patch Scope gate does not gate it.
+Linux raws. The Linux `plan-extracted-facts` job evaluates the pure
+`ciExtractedFacts` flake output at HEAD and at the immutable base revision. Each
+revision uses its own logical owner map, `lib.extracted.hostRunOn` predicate and
+Darwin `ciPackages` to return `{ <owner> = { drvPath = ...; }; }` for owners
+declared host-run on Darwin. It does not evaluate Darwin checks on Linux. A
+shared `lib/extracted/` change or unavailable base comparison schedules every
+HEAD owner; if HEAD derivation evaluation fails, the same output is retried for
+names only. `workflow_dispatch` runs all selected owners. An empty matrix skips
+the Darwin producer; both required build contexts accept that only when planning
+passed. The producer still regenerates and checks each selected owner's facts.
+The Kiro patch Scope gate does not gate it.
 
 On a same-repository `update/*` branch, changed raws are committed with bot
 author and committer identities and pushed with the App token, preserving

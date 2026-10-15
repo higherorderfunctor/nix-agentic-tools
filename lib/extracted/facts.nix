@@ -295,16 +295,19 @@ in rec {
     read = file: builtins.fromJSON (builtins.readFile (dir + "/${file}"));
     present = file: builtins.pathExists (dir + "/${file}");
     configured = import ../../config/systems.nix;
+    declared = declarations dir;
     systems = builtins.filter (system: present "${system}.json") configured;
   in
-    merge {
-      inherit secretHints;
-      declarations = declarations dir;
-      decisions = lib.optionalAttrs (present "decisions.json") (read "decisions.json");
-      raws = lib.genAttrs systems (system: read "${system}.json");
-      systems = configured;
-    }
-    // {inherit systems;};
+    builtins.seq declared (
+      merge {
+        inherit secretHints;
+        declarations = declared;
+        decisions = lib.optionalAttrs (present "decisions.json") (read "decisions.json");
+        raws = lib.genAttrs systems (system: read "${system}.json");
+        systems = configured;
+      }
+      // {inherit systems;}
+    );
 
   expect = {
     aggregate,

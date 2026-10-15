@@ -1,8 +1,8 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-15 — owner checks use `mkOwnerCheck`; the Darwin CI
-> planner reads the same declarations through `hostRunOn` and shares the logical
-> owner map with `checks.extracted-index`.
+> **Last verified:** 2026-10-15 — owner checks use `mkOwnerCheck`; the pure
+> `ciExtractedFacts` output reads the same declarations through `hostRunOn` and
+> shares the logical owner map with `checks.extracted-index`.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -123,14 +123,15 @@ load {
 → merge result // { systems = [ "<system>" ]; }
 ```
 
-The only way to read raws. Reads `facts.json` (required: its absence throws,
-naming the path), `decisions.json` (optional, `{}` when absent) and
-`<system>.json` for every system in `config/systems.nix` present under `dir`,
-then calls `merge` against every system in `config/systems.nix`. A configured
-system without a raw therefore fails as `missing-system` for every key its
-declaration requires; a declaration's own `systems` still narrows that. A file
-for a system outside `config/systems.nix` is never read. `systems` lists the
-raws found, for information.
+The only way to read raws. Reads `facts.json` (required: its absence throws when
+`load` is forced to weak head normal form, naming the path), `decisions.json`
+(optional, `{}` when absent) and `<system>.json` for every system in
+`config/systems.nix` present under `dir`, then calls `merge` against every
+system in `config/systems.nix`. A configured system without a raw therefore
+fails as `missing-system` for every key its declaration requires; a
+declaration's own `systems` still narrows that. A file for a system outside
+`config/systems.nix` is never read. `systems` lists the raws found, for
+information.
 
 ### `merge`
 

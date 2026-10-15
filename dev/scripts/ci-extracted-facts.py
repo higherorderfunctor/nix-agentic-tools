@@ -5,24 +5,15 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
 
 
-PLAN = Path(__file__).resolve().parents[2] / "checks/extracted/ci-plan.nix"
-
-
-def derivations(root, include_derivations=True):
-    expression = (
-        "let root = builtins.toPath "
-        + json.dumps(str(root))
-        + "; flake = builtins.getFlake (toString root); in import (builtins.toPath "
-        + json.dumps(str(PLAN))
-        + ") { inherit flake root; derivations = "
-        + ("true" if include_derivations else "false")
-        + "; }"
-    )
+def derivations(root, base=None, names_only=False):
+    flake = f"git+{root.as_uri()}?rev={base}" if base else "."
+    command = ["timeout", "300", "nix", "eval", "--json"]
+    if names_only:
+        command.extend(["--apply", "builtins.attrNames"])
     result = subprocess.run(
-        ["timeout", "300", "nix", "eval", "--json", "--impure", "--expr", expression],
+        [*command, f"{flake}#ciExtractedFacts"],
         cwd=root,
         capture_output=True,
         check=True,
@@ -48,27 +39,11 @@ def plan(root, event, base):
         current = list(head)
         if event == "workflow_dispatch" or not base or set(base) == {"0"}:
             return current
-        with tempfile.TemporaryDirectory() as temporary:
-            base_root = Path(temporary) / "base"
-            subprocess.run(
-                ["git", "worktree", "add", "--detach", str(base_root), base],
-                cwd=root,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            try:
-                old = derivations(base_root)
-                wrapper_changed = subprocess.run(
-                    ["git", "diff", "--quiet", base, "HEAD", "--", "lib/extracted"],
-                    cwd=root,
-                ).returncode
-            finally:
-                subprocess.run(
-                    ["git", "worktree", "remove", "--force", str(base_root)],
-                    cwd=root,
-                    check=True,
-                )
+        old = derivations(root, base=base)
+        wrapper_changed = subprocess.run(
+            ["git", "diff", "--quiet", base, "HEAD", "--", "lib/extracted"],
+            cwd=root,
+        ).returncode
         if wrapper_changed not in (0, 1):
             raise RuntimeError("cannot compare lib/extracted with base")
         return [
@@ -79,7 +54,7 @@ def plan(root, event, base):
         if head is not None:
             return list(head)
         # A derivation evaluation can fail while declarations remain readable.
-        return list(derivations(root, include_derivations=False))
+        return derivations(root, names_only=True)
 
 
 if __name__ == "__main__":
