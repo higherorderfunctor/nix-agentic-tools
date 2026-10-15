@@ -122,7 +122,7 @@ in {
             };
             claude.rules.disabled.enable = false;
             codex.rules.disabled.enable = false;
-            copilot.rules.disabled.enable = false;
+            copilot.github.rules.disabled.enable = false;
             kimchi.rules.disabled.enable = false;
             kiro.rules.disabled.enable = false;
           };
@@ -154,13 +154,13 @@ in {
       let
         empty = evalDevenv {
           ai.copilot = {
-            context.enable = false;
+            github.context.enable = false;
             enable = true;
           };
         };
         withContent = evalDevenv {
           ai.copilot = {
-            context = {
+            github.context = {
               enable = false;
               text = "Disabled content remains inspectable.";
             };
@@ -168,11 +168,11 @@ in {
           };
         };
       in
-        empty.config.ai.copilot.context.text
+        empty.config.ai.copilot.github.context.text
         == ""
-        && !((deliveredFiles empty.config) ? ".github/copilot-instructions.md")
-        && withContent.config.ai.copilot.context.text == "Disabled content remains inspectable."
-        && !((deliveredFiles withContent.config) ? ".github/copilot-instructions.md")
+        && !((deliveredFiles empty.config) ? "AGENTS.md")
+        && withContent.config.ai.copilot.github.context.text == "Disabled content remains inspectable."
+        && !((deliveredFiles withContent.config) ? "AGENTS.md")
     );
 
     module-text-source-force-empty-disables = mkTest "text-source-force-empty-disables" (
@@ -263,17 +263,17 @@ in {
           exit 1
         '';
         result = evalDevenv {
-          ai.copilot = {
+          ai.claude = {
             context = {inherit source;};
             enable = true;
           };
         };
-        entry = (deliveredFiles result.config).".github/copilot-instructions.md";
-        input = markdownInput result ".github/copilot-instructions.md";
+        entry = (deliveredFiles result.config).".claude/CLAUDE.md";
+        input = markdownInput result ".claude/CLAUDE.md";
       in
         # Delivered from the Markdown tree, which takes the source as it is:
         # the tree's derivation names it, and nothing reads its bytes.
-        fromGeneratedTree ".github/copilot-instructions.md" entry
+        fromGeneratedTree ".claude/CLAUDE.md" entry
         && !(entry ? text)
         && toString input.source == toString source
         && !(input ? text)

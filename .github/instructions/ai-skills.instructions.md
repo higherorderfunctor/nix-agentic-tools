@@ -8,26 +8,27 @@ applyTo: "lib/ai/hm-helpers.nix,lib/ai/mkSkillPackageModule.nix,packages/chatgpt
 ## ai.skills Fanout Pattern
 
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> normalized backend reach and nested delivery diagnostics; package skills and
+> rules require the backend and follow its reach; Copilot declares a skill gap.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
 
 Every runtime's factory writes its skills through the shared helper
 `helpers.mkSkillFiles`, never through a native `programs.<cli>.skills` option.
-Claude, Copilot, Kimchi, and Kiro preserve Layout B: a real skill directory
-containing per-file store symlinks. Codex is the measured exception: its scanner
+Claude, Kimchi, and Kiro preserve Layout B: a real skill directory containing
+per-file store symlinks. Copilot declares skills unsupported: committed store
+links dangle and directory ledgers cannot copy recursive trees. Codex's scanner
 discovers Layout A, where the skill directory itself is a symlink.
 
 ### Backend pattern
 
-| Branch  | HM route                             | Native directories                           | Layout |
-| ------- | ------------------------------------ | -------------------------------------------- | ------ |
-| Claude  | `mkSkillFiles`                       | `.claude/skills`                             | B      |
-| Codex   | `mkSkillFiles` (`recursive = false`) | `.agents/skills`                             | A      |
-| Copilot | `mkSkillFiles`                       | `.copilot/skills`                            | B      |
-| Kimchi  | `mkSkillFiles`                       | HM `harness/skills`; devenv `.kimchi/skills` | B      |
-| Kiro    | `mkSkillFiles`                       | `.kiro/skills`                               | B      |
+| Branch | HM route                             | Native directories                           | Layout |
+| ------ | ------------------------------------ | -------------------------------------------- | ------ |
+| Claude | `mkSkillFiles`                       | `.claude/skills`                             | B      |
+| Codex  | `mkSkillFiles` (`recursive = false`) | `.agents/skills`                             | A      |
+| Kimchi | `mkSkillFiles`                       | HM `harness/skills`; devenv `.kimchi/skills` | B      |
+| Kiro   | `mkSkillFiles`                       | `.kiro/skills`                               | B      |
 
 Codex 0.161.0 was re-probed on 2026-10-08 with both shapes: a whole-directory
 symlink appeared in `skills/list`, while a real directory whose `SKILL.md` was a
@@ -40,10 +41,10 @@ emit one `.agents/skills/<name>` link.
 
 Root and per-runtime skill pools still compose through one backend writer before
 materialization. A second writer for the same native path would collide at
-module evaluation. Claude, Copilot, Kimchi and Kiro use the shared helper's
-recursive form. Codex uses its whole-directory form because scanner
-compatibility outweighs the ability for another module to contribute files
-inside one already-owned skill.
+module evaluation. Claude, Kimchi and Kiro use the shared helper's recursive
+form. Codex uses its whole-directory form because scanner compatibility
+outweighs the ability for another module to contribute files inside one
+already-owned skill.
 
 Consumers migrating from the former direct Claude `home.file` writer can have a
 real `.claude/skills/<name>/` directory left on disk. If activation reports that
@@ -134,12 +135,13 @@ first one was added). A check of the real default uses `evalHmModules` /
 
 The factory passes `config`, `lib`, `pkgs` and `runtime` to both `skills` and
 `rules` callbacks. Import it once with the full supported runtime set; render
-per-runtime content inside the callbacks. A spec with `rules` must also name its
-`backend` (`"hm"` or `"devenv"`); the shared factory contributes rules only
+per-runtime content inside the callbacks. Every spec must name its `backend`
+(`"hm"` or `"devenv"`); the shared factory contributes skills and rules only
 where that backend delivers them, using the runtime record's declared backend
-reach. Copilot on Home Manager therefore receives package skills without an
-undeliverable router rule or a warning about a pool the consumer never set.
-Explicit consumer rules still warn.
+reach, and writes each at the pool's path from `option-paths.nix` (under
+`ai.copilot.github` for Copilot rules). Copilot on Home Manager therefore
+receives no package skill or router rule, and no warning about a pool the
+consumer never set. Explicit consumer values always warn.
 
 This controls whether the package writes its existing
 `ai.<runtime>.{skills,rules}` entries; it does not move those entries to the
@@ -150,6 +152,3 @@ because the two backend evaluations do not share pool values.
 
 - `dev/fragments/devenv/files-internals.md` — devenv constraints
   - walker workaround
-- `memory/project_ai_skills_layout.md` — original design decision and context
-- `memory/project_ai_claude_passthrough.md` — Tasks 2/2b in the passthrough plan
-  that operationalize this

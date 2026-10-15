@@ -1,14 +1,15 @@
 # Unified Instructions Surface — Research, Design & Status
 
 > **Status:** typed context ships across Claude / Codex / Copilot / Kimchi /
-> Kiro with Home Manager and devenv option parity; Copilot Home Manager is a
-> deliberate no-op. Keyed rules ship for Claude / Codex / Copilot / Kiro; Kimchi
-> has no rules pool. Codex lowers flat AGENTS.md content with explicit scope
-> degradation and a byte-size guard. Research captured 2026-04-17; original
-> implementation commits 8f0c16b, 7dad0b8, 419010a (2026-04-21); Codex
-> implementation landed in PRs #657, #658, and #668 (2026-08-01). The
-> typed-content/keyed-rule redesign landed in 2026-08: the list-shaped
-> `instructions` surface is retired rather than aliased.
+> Kiro with Home Manager and devenv option parity; Copilot is github.com Copilot
+> since 2026-10-14, writes on devenv only and warns on Home Manager. Keyed rules
+> ship for Claude / Codex / Copilot / Kiro; Kimchi has no rules pool. Codex
+> lowers flat AGENTS.md content with explicit scope degradation and a byte-size
+> guard. Research captured 2026-04-17; original implementation commits 8f0c16b,
+> 7dad0b8, 419010a (2026-04-21); Codex implementation landed in PRs #657, #658,
+> and #668 (2026-08-01). The typed-content/keyed-rule redesign landed in
+> 2026-08: the list-shaped `instructions` surface is retired rather than
+> aliased.
 >
 > **Goal:** provide a unified `ai.<cli>.{context,rules}` surface that fans out
 > personal/global guidance to every capable enabled ecosystem, respecting each
@@ -276,12 +277,12 @@ ai.kiro.context.filename = "AGENTS.md";
 
 ## Fanout semantics per ecosystem
 
-|             | `context` →                                                               | `rules.<name>` →                                                                 |
-| ----------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Claude**  | `~/.claude/CLAUDE.md`                                                     | `~/.claude/rules/<name>.md` with `paths:` frontmatter when matched               |
-| **Kiro**    | HM `~/.kiro/steering/AGENTS.md`; devenv repo-root `AGENTS.md`             | `~/.kiro/steering/<name>.md` with `inclusion:` + `fileMatchPattern:` frontmatter |
-| **Copilot** | devenv `.github/copilot-instructions.md`; Home Manager deliberately no-op | devenv `.github/instructions/<name>.instructions.md`; Home Manager no-op         |
-| **Codex**   | HM `~/.codex/AGENTS.md`; devenv repo-root `AGENTS.md`                     | **concat** into the same AGENTS.md after context                                 |
+|             | `context` →                                                   | `rules.<name>` →                                                                 |
+| ----------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Claude**  | `~/.claude/CLAUDE.md`                                         | `~/.claude/rules/<name>.md` with `paths:` frontmatter when matched               |
+| **Kiro**    | HM `~/.kiro/steering/AGENTS.md`; devenv repo-root `AGENTS.md` | `~/.kiro/steering/<name>.md` with `inclusion:` + `fileMatchPattern:` frontmatter |
+| **Copilot** | devenv repo-root `AGENTS.md`; Home Manager warns              | devenv `.github/instructions/<name>.instructions.md`; Home Manager warns         |
+| **Codex**   | HM `~/.codex/AGENTS.md`; devenv repo-root `AGENTS.md`         | **concat** into the same AGENTS.md after context                                 |
 
 ### Concat format (Codex and shared repo-root AGENTS.md)
 

@@ -15,7 +15,6 @@
     "*.png",
     ".direnv",
     ".git",
-    ".github/copilot-instructions.md",
     ".github/instructions/**",
     "/AGENTS.md",
     "/CONTRIBUTING.md",

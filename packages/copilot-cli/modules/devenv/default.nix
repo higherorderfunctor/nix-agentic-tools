@@ -1,4 +1,4 @@
-# Applies the devenv transform to the copilot-cli app record.
+# Applies the devenv transform to the Copilot (github.com) app record.
 {
   config,
   lib,

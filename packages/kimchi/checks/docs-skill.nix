@@ -131,6 +131,19 @@ in {
       echo PASS > "$out"
     '';
 
+    # A package enable must not claim an undelivered consumer pool on HM.
+    module-kimchi-docs-skill-backend-gate = mkTest "kimchi-docs-skill-backend-gate" (
+      let
+        result = evalHm {
+          ai.copilot.enable = true;
+          ai.programs.kimchi-docs.enable = true;
+        };
+      in
+        lib.attrByPath ["ai" "copilot" "github" "skills" "kimchi-docs"] null result.config
+        == null
+        && result.config.warnings == []
+    );
+
     # Asserts: nothing is delivered until the portable enable is set.
     module-kimchi-docs-skill-opt-in = mkTest "kimchi-docs-skill-opt-in" (
       !(hmOff.config.ai.kimchi.skills ? kimchi-docs)

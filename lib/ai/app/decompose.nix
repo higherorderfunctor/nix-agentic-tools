@@ -8,24 +8,50 @@
   entries,
   message,
   nonEmpty,
+  options,
   present,
   sharedSurfaces,
 }: let
   runtime = appRecord.name;
   cfg = config.ai.${runtime};
+  namespaces = import ./optionNamespaces.nix {inherit lib;};
   declarations = appRecord.surfaceSupport or {};
   supported = surface: (declarations.${surface}.backends or []) != [];
   defaultReason = "${runtime}'s surfaceSupport does not consume this shared surface.";
+  # A runtime unit's path relative to `ai.<runtime>`, inside its namespace.
+  runtimePath = surface: namespaces.pool appRecord surface ++ [surface];
+  # Generated keyed folds have their own provenance; only consumer overrides
+  # of an undelivered normalized pool need a second diagnostic unit.
+  normalizedUnits = surface: let
+    path = ["ai" runtime] ++ namespaces.pool appRecord surface ++ ["normalized" surface];
+    option = lib.attrByPath path null options;
+    # Only explicit definitions name the keys a consumer asked for; measuring
+    # those keys on the REAL merged pool keeps per-key priority arbitration
+    # (merging the explicit list again would revive per-key values the
+    # generated fold's mkDefault defeated, forcing content the pool discarded).
+    definitions = lib.filter (definition: definition.file != toString ./mkBackendTransform.nix) option.definitionsWithLocations;
+    merged = lib.getAttrFromPath path config;
+    requested = lib.unique (lib.concatMap (definition: builtins.attrNames definition.value) definitions);
+  in
+    lib.optional (option
+      != null
+      && option.highestPrio < 1500
+      && definitions != []) {
+      inherit path;
+      value = lib.getAttrs (lib.filter (key: merged ? ${key}) requested) merged;
+    };
   units = surface:
     [
       {
         path = ["ai" surface];
+        root = true;
         value = config.ai.${surface};
       }
     ]
-    ++ lib.optional (supported surface && cfg ? ${surface}) {
-      path = ["ai" runtime surface];
-      value = cfg.${surface};
+    ++ lib.optional (supported surface && lib.hasAttrByPath (runtimePath surface) cfg) {
+      path = ["ai" runtime] ++ runtimePath surface;
+      root = false;
+      value = lib.getAttrFromPath (runtimePath surface) cfg;
     };
   gapWarnings = surface: gap: let
     candidates =
@@ -45,15 +71,15 @@
       # winning root/runtime input once, rather than both declarations.
       selected =
         !(gap.effective or false)
-        || (builtins.length entry.path == 3)
-        == (lib.attrByPath ([surface] ++ gapPath) null cfg != null);
+        || (!entry.root)
+        == (lib.attrByPath (runtimePath surface ++ gapPath) null cfg != null);
       active =
         builtins.elem backend (gap.backends or ["devenv" "hm"])
-        && (!(gap.rootOnly or false) || builtins.length entry.path == 2)
+        && (!(gap.rootOnly or false) || entry.root)
         && selected
         && (
           if gapPath == []
-          then present entry.path
+          then present entry.path entry.value
           else nonEmpty value
         )
         && (gap.when or (_: true)) args;
@@ -72,8 +98,8 @@
     if !delivered
     then
       lib.concatMap (unit:
-        lib.optional (present unit.path)
-        (message unit.path (declaration.reason or defaultReason))) (units surface)
+        lib.optional (present unit.path unit.value)
+        (message unit.path (declaration.reason or defaultReason))) (units surface ++ normalizedUnits surface)
     else lib.concatMap (gapWarnings surface) (declaration.gaps or []);
 in {
   warnings = lib.concatMap surfaceWarnings sharedSurfaces;

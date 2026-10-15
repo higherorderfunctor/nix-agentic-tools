@@ -43,10 +43,10 @@ report "Claude" \
   "${claude_always[@]}"
 
 report "Copilot" \
-  .github/copilot-instructions.md \
+  AGENTS.md \
   .github/instructions/stacked-workflows-router.instructions.md
 
-report "AGENTS.md (Codex, Kiro, Kimchi)" \
+report "AGENTS.md (Codex, Copilot, Kiro, Kimchi)" \
   AGENTS.md
 
 echo "=== Source monorepo fragments (composed into the orientation) ==="

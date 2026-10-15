@@ -18,7 +18,7 @@
   });
 in {
   imports = [
-    ../common.nix
+    (import ../common.nix {backend = "hm";})
     (extLib.ai.app.hmTransform (import ../../lib/mkKimchi.nix {
       lib = extLib;
       # This flake's build unless the overlay is applied (ai.internal.packages).

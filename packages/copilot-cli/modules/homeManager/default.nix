@@ -1,4 +1,4 @@
-# Applies the HM transform to the copilot-cli app record.
+# Applies the HM transform to the Copilot (github.com) app record.
 # The result is a home-manager module function the factory barrel
 # (homeManagerModules.default) imports via native owner discovery.
 #

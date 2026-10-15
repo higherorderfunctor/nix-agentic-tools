@@ -248,7 +248,7 @@ in {
         lib.concatMap (list:
           map (target: {
             assertion = !(sourceEnabled runtime) || runtimeEnabled target;
-            message = "${path}.${list} includes `${target}`, but ai.${target}.enable is false. Enable it with ${lib.concatStringsSep "." (optionPaths.launcher target "enable")} = true.";
+            message = "${path}.${list} includes `${target}`, but ai.${target}.enable is false. Enable it with ${lib.concatStringsSep "." (optionPaths.enable target)} = true.";
           })
           portable.runtimes.${runtime}.${list}) ["extraRuntimes" "manualExternalDelegates"]
         ++ map (target: {

@@ -2,20 +2,20 @@
 
 > **Last verified:** 2026-10-14 — delivery policy derives shared surfaces, keyed
 > withdrawal and normalized gaps from option and runtime declarations;
-> `poolOptions` covers `agentsDir` and `environmentVariables` only.
+> `poolOptions` covers `agentsDir` and `environmentVariables` only;
+> `optionNamespaces` places launcher and pool options.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
 **Settled — do not relitigate.** User-local settings are asserted at switch.
 Choose a store symlink when an in-app write fails cleanly (Codex `config.toml`),
-a read-only copy when the CLI renames over its file (Copilot, Kiro, Kimchi's
+a read-only copy when the CLI renames over its file (Kiro, Kimchi's
 `mcp.json`/`permissions.json`/`trust.json` and Codex daemon settings), and a
 switch-time overlay only for a mixed state file (Claude `~/.claude.json`,
-Copilot `~/.copilot/config.json`, Kimchi's user `config.json` and
-`harness/settings.json`, which carry `/login` and `/model` state). The overlay
-repairs Nix-owned leaves while preserving harness state. Kimchi's two were
-read-only copies from 2026-09-29 to 2026-09-30, which locked `/login` out; do
-not move them back.
+Kimchi's user `config.json` and `harness/settings.json`, which carry `/login`
+and `/model` state). The overlay repairs Nix-owned leaves while preserving
+harness state. Kimchi's two were read-only copies from 2026-09-29 to 2026-09-30,
+which locked `/login` out; do not move them back.
 
 | Mechanism                     | Portability and effect                                                                              | Decision               |
 | ----------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
@@ -77,14 +77,21 @@ not move them back.
 └────────────────────────────────────────────────────────────┘
 ```
 
-The runtime record has one data-only placement field, `launcherOptionsPath`,
-default `[]`. Kiro sets `["cli"]`: enable, package, environment, shell and the
-corresponding normalized inputs move there. The root `ai.kiro.enable` is
-read-only and derived from `ai.kiro.cli.enable`. Declarations, per-key fold
-defaults and callback reads share that path. Callbacks still receive the shared
-`cfg` and one complete `normalized` view. Native agents and every file/ledger
-remain at the runtime root. The field must be a list of nonempty strings;
-constructor and transform both validate it.
+The runtime record has one data-only placement field, `optionNamespaces`,
+default `{}`: it maps the builder's two option groups to relative paths, and an
+omitted group stays at the runtime root. `launcher` holds package, environment,
+shell and their normalized inputs, plus the switch when nested; `pools` holds
+every other pool option and its normalized form. Kiro sets `launcher = ["cli"]`,
+so the root `ai.kiro.enable` is read-only and derived from `ai.kiro.cli.enable`.
+Copilot sets `pools = ["github"]` and reserves `launcher = ["cli"]`; a record
+without `defaults.package` has no launcher, so nothing is declared there and its
+root `enable` stays the switch. Declarations, per-key fold defaults, callback
+reads, diagnostics, policy input paths and package contributors all go through
+`lib/ai/app/optionNamespaces.nix`. Callbacks still receive the shared `cfg` and
+one complete `normalized` view. Native agents and every file/ledger remain at
+the runtime root. Each value must be a list of nonempty strings and only the two
+groups are accepted; constructor and transform both validate it. One attrset
+rather than a second path field: a runtime names exactly the groups it moves.
 
 ### Rules
 
@@ -106,10 +113,10 @@ constructor and transform both validate it.
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
-- **Structured documents contribute ordinary leaves.** Codex settings and
-  Copilot MCP use `content.value` at ordinary priority. Adding one leaf keeps
-  generated siblings; defaulting the whole content would silently drop them.
-  Text and source content retain their whole-content defaults.
+- **Structured documents contribute ordinary leaves.** Codex settings use
+  `content.value` at ordinary priority. Adding one leaf keeps generated
+  siblings; defaulting the whole content would silently drop them. Text and
+  source content retain their whole-content defaults.
 - **Claude delivers its own files.** Agents, commands, output styles, hook
   scripts, skills, plugins, `.claude/settings.json` and the MCP files are
   ordinary `ai.claude.files` entries, like every other runtime's. All of them
@@ -135,8 +142,8 @@ constructor and transform both validate it.
   case: Codex renames a temporary over it, which would swap a link for a real
   file and fail the next switch's link check, so it is a read-only copy of
   `materialize-codex-daemon-settings`, claimed file by file in the
-  `app-server-daemon` directory. Copilot, Kiro and Kimchi rename too, so their
-  settings are copies as well.
+  `app-server-daemon` directory. Kiro and Kimchi rename too, so their settings
+  are copies as well.
 - **Writers belong beside the file map.** Codex's skill-link migrator owns no
   ledger and uses `activation.<name>.command`: HM needs `after = []` and
   `before = ["linkCheck"]`, while devenv uses the default file/shell edges.
@@ -160,13 +167,13 @@ constructor and transform both validate it.
   `devenv:enterShell` `DependencyFailed`: shell entry continues with a warning,
   but no `files.*` entry from any runtime or the user is created or updated, and
   `devenv test` fails.
-- **Shared documents reconcile harness state.** Claude's `.claude.json` and
-  Copilot's HM `config.json` are writable state files with Nix-owned leaves. The
-  adapter runs their JSON bundles on activation and retains unowned state.
-  `helpers.mkReconciledDocument` emits each writer and file entry together; its
-  ledger name remains a literal upgrade contract. Kimchi's `config.json` is
-  fully Nix-owned and lands in the same directory copy writer as its other
-  settings. A replaced copy is restored at switch.
+- **Shared documents reconcile harness state.** Claude's `.claude.json` is a
+  writable state file with Nix-owned leaves. The adapter runs its JSON bundle on
+  activation and retains unowned state. `helpers.mkReconciledDocument` emits
+  each writer and file entry together; its ledger name remains a literal upgrade
+  contract. Kimchi's `config.json` is fully Nix-owned and lands in the same
+  directory copy writer as its other settings. A replaced copy is restored at
+  switch.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON ledger, even without a claimant.

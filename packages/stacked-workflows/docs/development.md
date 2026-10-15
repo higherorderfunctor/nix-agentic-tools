@@ -1,8 +1,8 @@
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-10-09 — the shared factory gates package rules by
-> backend delivery capability; Home Manager Copilot receives skills without an
-> undeliverable router rule.
+> **Last verified:** 2026-10-14 — the shared factory gates package skills and
+> rules by backend delivery capability and writes them at each runtime's pool
+> path; Home Manager Copilot receives neither.
 >
 > Full lineage:
 > `git show 89dce4c4:packages/stacked-workflows/docs/development.md`.
@@ -72,12 +72,12 @@ is shared as well: it reads the merged `git.settings`, which on Home Manager is
 ### Skills + Skill-Routing Rule
 
 `ai.programs.stacked-workflows.enable = true` fans the (unprefixed) `stack-*`
-skills into the PER-RUNTIME `ai.<runtime>.skills` pool of every supported
-runtime present in the evaluation. The `stacked-workflows-router` rule also fans
-into each runtime's `ai.<runtime>.rules` pool where its backend delivers rules,
-including Kimchi's AGENTS.md aggregate. Home Manager Copilot receives the skills
-without a router rule; devenv Copilot receives both. Each enabled AI CLI
-installs its contribution at its native path.
+skills into the PER-RUNTIME skills pool of every supported runtime present in
+the evaluation whose backend delivers skills (`ai.copilot.github.skills` for
+Copilot). The `stacked-workflows-router` rule also fans into each runtime's
+rules pool where its backend delivers rules, including Kimchi's AGENTS.md
+aggregate. devenv Copilot receives both; Home Manager Copilot receives neither.
+Each enabled AI CLI installs its contribution at its native path.
 `ai.programs.stacked-workflows.runtimes.<runtime>.enable = false` disables that
 runtime's contribution only. Both backend modules delegate to the shared
 `lib/ai/mkSkillPackageModule` factory; those pools are per-`evalModules`, so the

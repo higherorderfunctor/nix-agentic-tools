@@ -776,45 +776,50 @@ in {
           scripts = map (settings: harness.hmRunShim + render settings) [first second {}];
         };
         cases = [
-          (mkCase "document" ".settings with spaces/config.json" {
-              array = [{enabled = true;}];
-              "dot.key" = true;
-              nested.managed = true;
-              nullable = null;
-              retained = 1;
-              shape = "scalar";
-            } {
-              retained = 2;
-              shape.child = true;
-            } {
-              nested.native = "survives";
-              oauthAccount.token = "native-test-token";
-            } (settings:
-              # The codec, not a caller: a space in the path, a dotted key, a
-              # null leaf, an array and a scalar/table transition, none of which
-              # any real caller declares all at once. `runtime` only decides
-              # where the eval-visible record lands, and this case reads the
-              # writer alone.
-                (helpers.mkOwnBundle {
-                  backend = "hm";
-                  declared.".settings with spaces/config.json" = settings;
-                  entryNames.write = "documentCodecTest";
-                  python = pkgs.python3;
-                  runtime = "claude";
-                  targets = [
-                    {
-                      codec = "json";
-                      ledger = "json-settings/document-codec-test.json";
-                      path = ".settings with spaces/config.json";
-                      units.text = builtins.toJSON settings;
-                    }
-                  ];
-                  inherit pkgs;
-                })
+          ((mkCase "document" ".settings with spaces/config.json" {
+                array = [{enabled = true;}];
+                "dot.key" = true;
+                nested.managed = true;
+                nullable = null;
+                retained = 1;
+                shape = "scalar";
+              } {
+                retained = 2;
+                shape.child = true;
+              } {
+                nested.native = "survives";
+                oauthAccount.token = "native-test-token";
+              } (settings:
+                # The codec, not a caller: a space in the path, a dotted key, a
+                # null leaf, an array and a scalar/table transition, none of which
+                # any real caller declares all at once. `runtime` only decides
+                # where the eval-visible record lands, and this case reads the
+                # writer alone.
+                  (helpers.mkOwnBundle {
+                    backend = "hm";
+                    declared.".settings with spaces/config.json" = settings;
+                    entryNames.write = "documentCodecTest";
+                    python = pkgs.python3;
+                    runtime = "claude";
+                    targets = [
+                      {
+                        codec = "json";
+                        ledger = "json-settings/document-codec-test.json";
+                        path = ".settings with spaces/config.json";
+                        units.text = builtins.toJSON settings;
+                      }
+                    ];
+                    inherit pkgs;
+                  })
             .home
             .activation
             .documentCodecTest
             .text))
+            # An application may head its JSON with `//` comment lines, which
+            # the reconciler must read past and keep.
+            // {
+              header = "// User settings belong in settings.json.\n// This file is managed automatically.\n";
+            })
           (mkCase "claude" ".claude.json" {
               unpinFirstLaunchEffort = true;
               unpinSecondLaunchEffort = true;
@@ -830,27 +835,6 @@ in {
                   unpinLaunchEffort = lib.mkForce settings;
                 };
               }).config.home.activation.claudeUnpinLaunchEffort.text))
-          # Copilot's state file, whose one Nix-owned leaf is folder trust.
-          # Copilot heads the file with `//` comment lines on its own writes,
-          # which the reconciler must read past and keep. The empty generation
-          # is Copilot disabled: the module declares the leaf, `[]` included,
-          # whenever Copilot is enabled, and its writer survives a disable.
-          ((mkCase "copilot" ".copilot/config.json" {
-                trustedFolders = ["/src/a" "/src/b"];
-              } {
-                trustedFolders = ["/src/c"];
-              } {
-                firstLaunchAt = "2026-09-28T00:00:00.000Z";
-                recentModelIds = ["native-model"];
-              } (settings:
-                (evalHm {
-                  ai.copilot =
-                    {enable = settings != {};}
-                    // lib.optionalAttrs (settings ? trustedFolders) {inherit (settings) trustedFolders;};
-                }).config.home.activation.copilotTrustedFolders.text))
-            // {
-              header = "// User settings belong in settings.json.\n// This file is managed automatically.\n";
-            })
         ];
       in
         pkgs.runCommand "module-test-json-settings-reconciliation" {} ''

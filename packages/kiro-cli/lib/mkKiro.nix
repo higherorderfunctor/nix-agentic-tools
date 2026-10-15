@@ -1164,7 +1164,7 @@ in
     # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kiro";
-    launcherOptionsPath = ["cli"];
+    optionNamespaces.launcher = ["cli"];
     # The native agent layer (see mkRuntime.nix): each normalized agent
     # lowers into `ai.kiro.native.agents.<name>`, a typed agent record.
     # `tools` is not lowered — Kiro takes capability tags, not the

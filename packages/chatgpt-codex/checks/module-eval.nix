@@ -1524,9 +1524,9 @@ in {
         devenvAgent = devenv.config.ai.codex.files.".codex/agents/reviewer.toml".content.source.value;
         claudeAgent = (markdownInput hm ".claude/agents/reviewer.md").text;
         emptyClaudeAgent = (markdownInput hm ".claude/agents/emptyTools.md").text;
-        emptyCopilotAgent = (markdownInput devenv ".github/agents/emptyTools.agent.md").text;
+        emptyCopilotAgent = (markdownInput devenv ".github/agents/emptyTools.md").text;
         unrestrictedClaudeAgent = (markdownInput hm ".claude/agents/unrestricted.md").text;
-        copilotAgent = (markdownInput devenv ".github/agents/reviewer.agent.md").text;
+        copilotAgent = (markdownInput devenv ".github/agents/reviewer.md").text;
       in
         fromGeneratedTree ".codex/agents/reviewer.toml" hm.config.home.file.".codex/agents/reviewer.toml"
         && fromGeneratedTree ".codex/agents/reviewer.toml" devenv.config.files.".codex/agents/reviewer.toml"
@@ -1545,7 +1545,7 @@ in {
         && !(lib.hasInfix "tools:" unrestrictedClaudeAgent)
         && lib.hasInfix "Read first, then report concrete findings." copilotAgent
         && lib.hasInfix ''tools: "Bash, Read"'' copilotAgent
-        && !(lib.hasInfix "name:" copilotAgent)
+        && lib.hasInfix ''name: "reviewer"'' copilotAgent
     );
 
     module-codex-agent-toml-syntax = let

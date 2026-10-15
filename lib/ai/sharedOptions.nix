@@ -53,12 +53,14 @@
   # the first-party registry. mkRuntime is public, and every transformed record
   # declares an internal per-runtime capability marker with its normalized MCP
   # option. The marker distinguishes that pool from an independent same-named
-  # native option and avoids introducing a package-written root option.
+  # native option, avoids introducing a package-written root option, and holds
+  # the pool's option path, which a record's pools namespace may nest.
   mcpRuntimeNames =
     builtins.filter
     (name: lib.hasAttrByPath ["ai" name "_normalizedPools" "mcpServers"] options)
     (builtins.attrNames options.ai);
-  runtimeMcpServers = name: lib.attrByPath ["ai" name "mcpServers"] {} config;
+  runtimeMcpPath = name: config.ai.${name}._normalizedPools.mcpServers;
+  runtimeMcpServers = name: lib.attrByPath (runtimeMcpPath name) {} config;
   topLevelProxiedServers = mcpProxy.proxiedServers config.ai.mcpServers;
   topLevelProxyIsUsed = key:
     lib.any
@@ -80,7 +82,7 @@
     lib.concatMap
     (name:
       lib.mapAttrsToList
-      (mkProxyDeclaration "ai.${name}.mcpServers")
+      (mkProxyDeclaration (lib.showOption (runtimeMcpPath name)))
       (mcpProxy.proxiedServers (runtimeMcpServers name)))
     mcpRuntimeNames;
 
@@ -194,8 +196,8 @@
         file:
         - Claude  → ~/.claude/agents/<name>.md (HM) or
                     .claude/agents/<name>.md (devenv)
-        - Copilot → .github/agents/<name>.agent.md (devenv) or
-                    ~/.copilot/agents/<name>.md (HM)
+        - Copilot → .github/agents/<name>.md (devenv only; Home Manager
+                    warns, since github.com reads the repository)
         - Codex   → ~/.codex/agents/<name>.toml (HM) or
                     .codex/agents/<name>.toml (devenv)
         - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or
@@ -209,8 +211,9 @@
       type = aiCommon.optionalContentModule;
       default = {};
       description = ''
-        Cross-app context fanned out to Claude, Codex, Kiro, Kimchi, and the
-        Copilot devenv backend; Copilot Home Manager intentionally degrades.
+        Cross-app context fanned out to Claude, Codex, Kiro, Kimchi, and
+        Copilot on devenv, where it joins the shared repository AGENTS.md;
+        Copilot's Home Manager module warns instead.
         When `text` and `source` are defined at different module priorities,
         the higher-priority definition supplies the content whichever field it
         targets; definitions at the same priority conflict. Runtime-specific
@@ -227,7 +230,7 @@
       default = {};
       description = ''
         Environment variables fanned out to every enabled AI app with a
-        launcher wrapper: Codex, Copilot, Kimchi and Kiro. Per-app entries
+        launcher wrapper: Codex, Kimchi and Kiro. Per-app entries
         replace root entries at the same key; null suppresses an inherited
         variable for that runtime.
 
@@ -271,8 +274,9 @@
       }));
       default = {};
       description = ''
-        MCP servers fanned out to every enabled AI app: Claude, Codex, Copilot,
-        Kimchi, and Kiro. Per-app entries replace root entries at the same key;
+        MCP servers fanned out to every enabled AI app: Claude, Codex, Kimchi,
+        and Kiro. github.com Copilot takes MCP servers from repository settings
+        on github.com, so it warns. Per-app entries replace root entries at the same key;
         null suppresses an inherited server for that runtime. A used top-level
         proxied server owns one shared managed proxy and fans out only its
         credential-free client entry. Runtime-scoped proxied servers own their
@@ -288,9 +292,9 @@
         Each attribute becomes one file in the ecosystem's native rules
         directory (Claude: `.claude/rules/<name>.md`, Kiro:
         `.kiro/steering/<name>.md`, Copilot devenv:
-        `instructions/<name>.instructions.md` under `ai.copilot.projectDir`;
-        Copilot Home Manager deliberately emits no normalized rules because
-        github.com's reviewer consumes only the committed project tree). Codex
+        `instructions/<name>.instructions.md` under
+        `ai.copilot.github.projectDir`; Copilot's Home Manager module warns
+        instead, because github.com reads only the committed project tree). Codex
         and Kimchi instead append rules in key order to their single AGENTS.md
         or point to their `references` from an index. On devenv they contribute
         to the same shared repository aggregate, which deduplicates identical
@@ -340,13 +344,10 @@
         default when non-null; Kiro declares none, because it persists effort
         only per model; a shared request warns because Kiro cannot consume it.
         The current `reasoningEffort` field lowers to
-        Claude `effortLevel`, Codex `model_reasoning_effort`, Copilot
-        `effortLevel` and Kimchi `defaultThinkingLevel`; the enum is their
-        exact persisted semantic intersection. On devenv, Copilot's value
-        lands in the repository `.github/copilot/settings.json`, which
-        Copilot reads from the git root, only in a trusted folder, and whose
-        `effortLevel` reaches interactive sessions but not `copilot -p`,
-        `--acp` or `--server`; the module warns there. Kimchi's lands in the project
+        Claude `effortLevel`, Codex `model_reasoning_effort` and Kimchi
+        `defaultThinkingLevel`; the enum is their exact persisted semantic
+        intersection. github.com Copilot reads no settings file, so a request
+        warns there. Kimchi's lands in the project
         `.config/kimchi/harness/settings.json`, so setting it here makes Kimchi
         project-trust-gated for that setting and makes the devenv wrapper
         refuse launches below the devenv root, exactly as any declared
@@ -377,9 +378,9 @@
         `native.harnessSettings.shellPath` through its generated settings;
         an explicit native value wins. The packaged Kimchi patch makes both
         short and background bash commands honor that existing Pi setting.
-        Copilot is excluded because its shell selection has not been
-        established; a shared request warns with the option, runtime and
-        reason, and `ai.copilot.shell` does not exist.
+        github.com Copilot is excluded because it runs in GitHub's cloud
+        environment; a shared request warns with the option, runtime and
+        reason, and Copilot declares no shell option.
 
         Takes a **package, not a path**, and that is load-bearing. Some
         runtimes fall back when the configured shell is unusable, including
@@ -396,7 +397,7 @@
     skills = keyedOption {
       type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
       default = {};
-      description = "Cross-app skills fanned out to every enabled AI app: Claude, Codex, Copilot, Kimchi, and Kiro. Per-app entries replace root entries at the same key; null suppresses an inherited skill for that runtime.";
+      description = "Cross-app skills fanned out to every enabled AI app: Claude, Codex, Copilot (devenv only), Kimchi, and Kiro. Per-app entries replace root entries at the same key; null suppresses an inherited skill for that runtime.";
     };
   };
 in {

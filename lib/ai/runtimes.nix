@@ -45,11 +45,11 @@
 #   packages/semble/modules/options.nix:5, :34  — ["claude" "codex" "kiro"]
 #   packages/semble/modules/common.nix:22       — ["claude" "codex" "kiro"]
 #
-# Widening those to five would newly fan semble into ai.copilot.* and
+# Widening those to five would newly fan semble into ai.copilot.github.* and
 # ai.kimchi.*. The `semble-umbrella-fanout` test in `packages/semble/checks/module-eval.nix`
-# asserts directly against the COPILOT half (`!(cfg.ai.copilot.mcpServers ?
-# semble)` and the matching `agents` assertion), so that arm fails loudly; the
-# kimchi arm has no such assertion and would simply start emitting. Ask if a list
+# asserts directly against the COPILOT half (`!(cfg.ai.copilot.github.agents ?
+# semble-search)` and the matching `rules` assertion), so that arm fails loudly;
+# the kimchi arm has no such assertion and would simply start emitting. Ask if a list
 # means "every runtime" or "the runtimes this feature supports" before pointing
 # it here.
 #

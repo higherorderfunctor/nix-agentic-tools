@@ -23,7 +23,11 @@
   policy = import ../../config/ai-delivery.nix {inherit lib;};
   runtime = appRecord.name;
   cfg = config.ai.${runtime};
+  namespaces = import ./app/optionNamespaces.nix {inherit lib;};
   supports = pool: (appRecord.surfaceSupport.${pool}.backends or []) != [];
+  # A per-runtime pool's option path, inside the record's namespace, and its value.
+  poolPath = pool: ["ai" runtime] ++ namespaces.pool appRecord pool ++ [pool];
+  poolValue = pool: lib.attrByPath (namespaces.pool appRecord pool ++ [pool]) null cfg;
   get = path: lib.attrByPath path null config;
   live = surface: pool:
     lib.filterAttrs
@@ -46,12 +50,11 @@
     builtins.removeAttrs (live surface (config.ai.${surface} or {}))
     (
       if supports surface
-      then builtins.attrNames (cfg.${surface} or {})
+      then builtins.attrNames (lib.defaultTo {} (poolValue surface))
       else []
     );
-  present = path: let
+  present = path: value: let
     surface = lib.last path;
-    value = get path;
   in
     # Root requests warn even when the runtime cannot withdraw them. Keyed
     # pools still subtract per-runtime replacements and tombstones by name.
@@ -81,20 +84,17 @@
   normalizedPath = path:
     builtins.length path
     >= 2
-    && (builtins.elem (builtins.elemAt path 1) config.ai.internal.sharedSurfaces
-      || (builtins.length path
-        >= 3
-        && builtins.elemAt path 1 == runtime
-        && supports (builtins.elemAt path 2)));
+    && builtins.elem (builtins.elemAt path 1) config.ai.internal.sharedSurfaces
+    || lib.any (pool: supports pool && lib.lists.hasPrefix (poolPath pool) path) config.ai.internal.sharedSurfaces;
   decomposition = import ./app/decompose.nix {inherit lib;} {
-    inherit appRecord backend config entries message nonEmpty present;
+    inherit appRecord backend config entries message nonEmpty options present;
     sharedSurfaces = config.ai.internal.sharedSurfaces;
   };
   rowWarnings = lib.concatMap (row:
     map (path: message path (row.deliveryGap or row.reason))
     (builtins.filter (path:
       !(normalizedPath path)
-      && present path
+      && present path (get path)
       && (!(row.warnOnlyExplicit or false)
         || (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500)) (row.inputOptions or [])))
   gapRows;
@@ -103,12 +103,14 @@
       (lib.mapAttrsToList (name: value: {
         inherit name value;
         path = ["ai" pool name];
+        root = true;
       }) (rootRemaining pool))
       ++ (lib.mapAttrsToList (name: value: {
           inherit name value;
-          path = ["ai" runtime pool name];
+          path = poolPath pool ++ [name];
+          root = false;
         })
-        (live pool (cfg.${pool} or {})))
+        (live pool (lib.defaultTo {} (poolValue pool))))
     );
   fieldWarning = entry: field: reason:
     lib.optional (
@@ -181,21 +183,21 @@
     + ". Remove that override, or withhold it from ${runtime} with ${remedy}.";
   contextUnits = lib.optionals hasContext (
     lib.optional (aiCommon.hasContent (config.ai.context or null)) ["ai" "context"]
-    ++ lib.optional (aiCommon.hasContent (cfg.context or null)) ["ai" runtime "context"]
+    ++ lib.optional (aiCommon.hasContent (poolValue "context")) (poolPath "context")
   );
   contextWarnings = let
     path = contentTargets.context or null;
   in
     lib.optionals (path != null && dropReason path != null)
-    (map (unit: offMessage unit path "${lib.showOption ["ai" runtime "normalized" "context"]} = lib.mkForce null") contextUnits);
+    (map (unit: offMessage unit path "${lib.showOption (["ai" runtime] ++ namespaces.pool appRecord "context" ++ ["normalized" "context"])} = lib.mkForce null") contextUnits);
   offRuleWarnings = lib.concatLists (lib.mapAttrsToList (name: path: let
     unit =
-      if (cfg.rules or {}) ? ${name}
-      then ["ai" runtime "rules" name]
+      if lib.defaultTo {} (poolValue "rules") ? ${name}
+      then poolPath "rules" ++ [name]
       else ["ai" "rules" name];
   in
     lib.optional (dropReason path != null)
-    (offMessage unit path "${lib.showOption ["ai" runtime "rules" name "enable"]} = false"))
+    (offMessage unit path "${lib.showOption (poolPath "rules" ++ [name "enable"])} = false"))
   (contentTargets.rules or {}));
 in
   if !cfg.enable

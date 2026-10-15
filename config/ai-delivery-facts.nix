@@ -24,7 +24,7 @@
       else ["packages"];
     pruneTrigger = "none; switching the profile/shell selects a new store launcher with the current environment.";
   };
-  mcpProbe = ecosystem: probe ["ai" ecosystem "mcpServers"] {probe.command = "true";} {};
+  mcpProbe = ecosystem: probe (optionPaths.pool ecosystem "mcpServers") {probe.command = "true";} {};
   settingsProbe = ecosystem: probe (optionPaths.nativeSettings ecosystem) {model = "probe";} {};
   hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
   ownRetraction = mode: "On ${retractionMoment mode}, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
@@ -47,7 +47,7 @@
       else if builtins.elem ecosystem ["claude" "codex"]
       then [["ai" ecosystem "native" "settings" "permissions"]]
       else []
-    else if surface == "settings"
+    else if surface == "settings" && optionPaths.hasNativeSettings ecosystem
     then [(optionPaths.nativeSettings ecosystem)] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "native" "harnessSettings"]
     # Every agents runtime has `agentsDir`; Codex and Kiro also take native
     # records, which alone can produce a file (a native-only agent). The
@@ -55,17 +55,13 @@
     # `agentNativeType`.
     else if surface == "agents"
     then
-      [["ai" "agents"] ["ai" ecosystem "agents"] ["ai" ecosystem "agentsDir"]]
+      [["ai" "agents"] (optionPaths.pool ecosystem "agents") (optionPaths.pool ecosystem "agentsDir")]
       ++ lib.optional (builtins.elem ecosystem ["codex" "kiro"]) ["ai" ecosystem "native" "agents"]
     else if ecosystem == "kiro" && surface == "hooks"
     then [["ai" "kiro" "hooks"] ["ai" "kiro" "hooksDir"] ["ai" "kiro" "hooksJson"]]
     else
       [["ai" surface]]
-      ++ lib.optional (builtins.elem surface (builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) optionPaths.records.${ecosystem}.surfaceSupport))) (
-        if builtins.elem surface ["environmentVariables" "shell"]
-        then optionPaths.launcher ecosystem surface
-        else ["ai" ecosystem surface]
-      );
+      ++ lib.optional (builtins.elem surface (builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) optionPaths.records.${ecosystem}.surfaceSupport))) (optionPaths.pool ecosystem surface);
   both = value: {
     devenv = value;
     hm = value;
@@ -73,12 +69,11 @@
   handDefinitions = {
     environmentVariables = {
       codex = lib.genAttrs modes (mode: wrapper mode "codex");
-      copilot = lib.genAttrs modes (mode: wrapper mode "copilot");
       kimchi = lib.genAttrs modes (mode: wrapper mode "kimchi");
       kiro = lib.genAttrs modes (mode: wrapper mode "kiro-cli");
     };
     permissions = {
-      copilot = both (absent "No permissions option or translation exists; arbitrary native.settings keys do not establish a permissions contract.");
+      copilot = both (absent "github.com Copilot reads no permissions file; a custom agent profile's `tools` list, which ai.copilot.github.agents writes, is the only tool restriction a repository file carries. See https://docs.github.com/en/copilot/reference/custom-agents-configuration.");
       kiro = {devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";};
     };
     shell = {
@@ -104,9 +99,6 @@
       evidence = evidence.${row.ecosystem};
       inputOptions = inputOptions row.surface row.ecosystem;
     }
-    // lib.optionalAttrs (key row == "settings/copilot/devenv") {
-      deliveryConstraint = "Keys outside Copilot's repository settings schema, and values of the wrong kind, fail module assertions. Copilot reads the file from the git root of a trusted folder, and reads its effortLevel in interactive sessions only.";
-    }
     // lib.optionalAttrs (key row == "settings/kimchi/devenv") {
       deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys land as a read-only copy at the fixed project harness path.";
     }
@@ -117,19 +109,20 @@
       condition = "Always-on unscoped rules join sharedAgentsMd; scoped/manual rules stay in steering.";
     };
   probeFor = row:
-    if row.surface == "agents" && row.ecosystem == "kimchi"
+  # Agent profiles that land as copies: a probe agent must change the body.
+    if row.surface == "agents" && builtins.elem row.ecosystem ["copilot" "kimchi"]
     then
-      probe ["ai" "kimchi" "agents"] {
+      probe (optionPaths.pool row.ecosystem "agents") {
         probe = {
           description = "probe";
           instructions.text = "probe";
         };
       } {}
-    # The row's OWN runtime's context: the shared AGENTS.md and Copilot's
-    # repository context are copies whose writer must see it change. For the
-    # Kiro retirement row this is the probe it always had.
+    # The row's OWN runtime's context: the shared AGENTS.md is a copy whose
+    # writer must see it change. For the Kiro retirement row this is the
+    # probe it always had.
     else if row.surface == "context"
-    then probe ["ai" row.ecosystem "context"] {text = "probe";} {}
+    then probe (optionPaths.pool row.ecosystem "context") {text = "probe";} {}
     else if row.surface == "shell"
     then
       if row.ecosystem == "claude"
@@ -193,8 +186,8 @@
     // lib.optionalAttrs imperative {probe = declaration;}
     // lib.optionalAttrs (imperative && row.surface == "settings") {inputOptions = [declaration.option];}
     # Only a retirement row is declaration-independent. An owned COPY of a
-    # context file (the shared AGENTS.md, Copilot's repository context) is an
-    # ordinary writer whose body follows the declaration.
+    # context file (the shared AGENTS.md) is an ordinary writer whose body
+    # follows the declaration.
     // lib.optionalAttrs (imperative && row.surface == "context" && lib.hasSuffix "/<legacy-owned-file>" row.target) {
       declarationIndependent = "This writer removes what a PRIOR generation's ledger recorded. Its `own` target declares NO units, so its plan — and therefore the whole body, which is one command over two store paths — is the same under every declaration by construction.";
     }

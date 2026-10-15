@@ -8,7 +8,8 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 ## SOPS-Injectable Remote HTTP MCP Servers
 
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> normalized backend reach and nested delivery diagnostics; the MCP capability
+> marker holds the pool's option path.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -72,18 +73,19 @@ top-level owner is lazy because it exists solely to serve its enabled fanout
 consumers. `sharedOptions.nix` discovers every runtime option subtree carrying
 the internal `_normalizedPools.mcpServers` capability marker;
 `mkBackendTransform.nix` declares it exactly when the app record's
-`surfaceSupport.mcpServers` declares a non-empty backend list. The explicit
-marker is load-bearing: public records may have an unrelated same-named native
-`mcpServers` option when they do not support the normalized pool. Discovery must
-remain dynamic because a hard-coded first-party runtime list would let custom
-runtimes receive lowered loopback entries without an owner or evade
-duplicate-key diagnostics.
+`surfaceSupport.mcpServers` declares a non-empty backend list, with the pool's
+option path as its value, since a record's `optionNamespaces.pools` may nest the
+pool. The explicit marker is load-bearing: public records may have an unrelated
+same-named native `mcpServers` option when they do not support the normalized
+pool. Discovery must remain dynamic because a hard-coded first-party runtime
+list would let custom runtimes receive lowered loopback entries without an owner
+or evade duplicate-key diagnostics.
 
 This is not merely a nicer delivery mechanism — it dissolves the scope mismatch
 documented below, because **there is no client-side credential left to get
 wrong.** It also stops being Kiro-only: `renderServer` throws when a credential
-reaches Claude/Copilot/the shared pool, and the proxied entry contains none, so
-those ecosystems can consume it.
+reaches Claude/the shared pool, and the proxied entry contains none, so those
+ecosystems can consume it.
 
 **Where the secret is, and is not** — the measurement that decides the design:
 
@@ -402,8 +404,8 @@ secrets in the project so its own wrapper carries them.
 ### Delivery is Kiro-only; other ecosystems throw
 
 `renderServer` throws on a raw credential header/url reaching a non-Kiro path
-(Claude/Copilot/Kimchi/shared pool). The Kiro preprocessor resolves credentials
-to placeholder strings BEFORE `renderServer`; anything else that sees the raw
+(Claude/Kimchi/shared pool). The Kiro preprocessor resolves credentials to
+placeholder strings BEFORE `renderServer`; anything else that sees the raw
 attrset fails loud rather than serializing the secret's file path. Every
 ecosystem renders via `renderServer`; there is no second MCP transform.
 

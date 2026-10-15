@@ -28,7 +28,7 @@ in {
     # enables. A shallow merge here silently makes runtime-gated callbacks
     # unreachable and turns the guard into a false negative.
     module-ai-root-pool-probe-retains-runtime-enables = mkTest "ai-root-pool-probe-retains-runtime-enables" (
-      lib.all (runtime: lib.getAttrFromPath (optionPaths.launcher runtime "enable") rootPoolProbeConfig) harnessNames
+      lib.all (runtime: lib.getAttrFromPath (optionPaths.enable runtime) rootPoolProbeConfig) harnessNames
       && lib.all
       (program: rootPoolProbeConfig.ai.programs.${program}.enable)
       ["delegate-routing" "peer-communication" "semble" "stacked-workflows"]

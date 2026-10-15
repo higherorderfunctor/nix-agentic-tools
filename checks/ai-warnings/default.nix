@@ -16,13 +16,11 @@
     )
     .config;
   evaluate = mode: config: (evalConfig mode config).warnings;
-  inherit
-    (import ../../lib/ai/option-paths.nix {
-      lib = harness.hmLib;
-      inherit pkgs;
-    })
-    records
-    ;
+  optionPaths = import ../../lib/ai/option-paths.nix {
+    lib = harness.hmLib;
+    inherit pkgs;
+  };
+  inherit (optionPaths) records;
   declaredPaths = lib.genAttrs policy.modes (mode:
     map (option: option.loc) (lib.optionAttrSetToDocList
       (
@@ -71,9 +69,13 @@
     in
       builtins.elem needle messages
       && !(builtins.elem needle empty);
+    # A runtime without a native settings file is probed at the root.
     path =
       if row.surface == "settings"
-      then ["ai" row.ecosystem "native" "settings"]
+      then
+        if optionPaths.hasNativeSettings row.ecosystem
+        then optionPaths.nativeSettings row.ecosystem
+        else ["ai" "settings"]
       else if row.surface == "permissions"
       then ["ai" row.ecosystem "permissions"]
       else ["ai" row.surface];
@@ -200,21 +202,6 @@
         };
         suffix = ".action.prompt";
       }
-    ]
-    # Copilot's devenv delivery is partial: the repository `effortLevel` it
-    # lowers to reaches only the interactive session, because `-p`, `--acp`
-    # and `--server` read effort from the user settings file. So the request
-    # warns at whichever path supplied it.
-    ++ map (path: {
-      mode = "devenv";
-      runtime = "copilot";
-      surface = "settings";
-      gapPath = ["reasoningEffort"];
-      inherit path;
-      value = "high";
-    }) [
-      ["ai" "settings" "reasoningEffort"]
-      ["ai" "copilot" "settings" "reasoningEffort"]
     ];
   cases = lib.concatMap (case:
     if case ? gapPath && !(case ? mode)
@@ -237,11 +224,7 @@
     support = supportFor runtime surface;
   in
     [["ai" surface]]
-    ++ lib.optional ((support.backends or []) != [])
-    (["ai" runtime]
-      ++ lib.optionals (builtins.elem surface ["environmentVariables" "shell"])
-      records.${runtime}.launcherOptionsPath
-      ++ [surface]);
+    ++ lib.optional ((support.backends or []) != []) (optionPaths.pool runtime surface);
   surfaceCells = lib.concatMap (runtime:
     lib.concatMap (surface:
       map (mode: {
@@ -274,13 +257,41 @@
       if builtins.length absent == 1
       then (builtins.head absent).deliveryGap or (builtins.head absent).reason
       else throw "expected one policy absence writer for ${case.runtime}/${case.mode}/${case.surface}");
-  missingCases = map (case:
-    case
-    // {
-      reason = absenceReason case;
-      count = 1;
-    })
-  (lib.filter (case: !(delivered case)) surfaceCases);
+  unavailableCases = lib.filter (case: !(delivered case)) surfaceCases;
+  missingCases = let
+    normalizedCases = map (case:
+      case // {path = lib.init case.path ++ ["normalized" case.surface];})
+    (lib.filter (case: builtins.length case.path > 2) unavailableCases);
+    # Empty/disabled explicit rules must not diagnose live inherited keys twice.
+    mixedCases = lib.concatMap (case:
+      map (value:
+        case
+        // {
+          extra = lib.setAttrByPath case.path value;
+          path = ["ai" case.surface];
+        }) [{} {inactive.enable = false;}])
+    (lib.filter (case: case.surface == "rules") normalizedCases);
+    # A per-key fallback the inherited key defeats is diagnosed from the real
+    # merged pool, so its discarded value is never forced: a throwing fallback
+    # still evaluates. It names the key, so the normalized unit warns too.
+    shadowedCases = map (case:
+      case
+      // {
+        extra = lib.setAttrByPath case.path {
+          probe = lib.mkOptionDefault {text = throw "a discarded per-key fallback must not be forced";};
+        };
+        path = ["ai" case.surface];
+        count = 2;
+      })
+    (lib.filter (case: case.surface == "rules") normalizedCases);
+  in
+    map (case:
+      {
+        reason = absenceReason case;
+        count = 1;
+      }
+      // case)
+    (unavailableCases ++ normalizedCases ++ mixedCases ++ shadowedCases);
   conditional = gap: gap ? when || (gap.each or false) || (gap.effective or false);
   staticCases = lib.concatMap (cell:
     lib.concatMap (gap:
@@ -356,8 +367,7 @@
       (lib.setAttrByPath ["ai" "hooks" "PermissionRequest"] gapSamples.hooks.PermissionRequest))
     == [])
   policy.modes;
-  # Supported effort delivery stays quiet; withholding Copilot's native
-  # repository value also withdraws its partial-delivery warning.
+  # Supported effort delivery stays quiet.
   effortSilent = lib.all ({
     runtime,
     modes,
@@ -372,23 +382,6 @@
         == evaluate mode enabled)
       paths)
     modes) [
-    {
-      runtime = "copilot";
-      modes = ["hm"];
-      paths = [
-        ["ai" "settings" "reasoningEffort"]
-        ["ai" "copilot" "settings" "reasoningEffort"]
-      ];
-    }
-    {
-      runtime = "copilot";
-      modes = ["devenv"];
-      paths = [
-        ["ai" "settings" "reasoningEffort"]
-        ["ai" "copilot" "settings" "reasoningEffort"]
-      ];
-      extra.ai.copilot.native.settings.effortLevel = null;
-    }
     {
       runtime = "kimchi";
       modes = ["devenv" "hm"];
@@ -406,7 +399,7 @@
   (lib.groupBy caseMode (cases ++ gapCases));
   casePass = case: let
     mode = caseMode case;
-    input = lib.setAttrByPath case.path case.value;
+    input = lib.recursiveUpdate (case.extra or {}) (lib.setAttrByPath case.path case.value);
     recorded = lib.filter (matchesGap case) conditionalGaps;
     gap =
       if case ? gapPath
@@ -860,7 +853,7 @@ in {
       evaluate "hm" {
         ai.copilot = {
           enable = true;
-          rules.probe.enable = false;
+          github.rules.probe.enable = false;
         };
         ai.rules.probe.text = "probe";
       }
@@ -873,7 +866,7 @@ in {
       && evaluate "hm" {
         ai.copilot = {
           enable = true;
-          context.text = "";
+          github.context.text = "";
         };
       }
       == []

@@ -3,7 +3,7 @@
   optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
 in {
   config = mode: runtime:
-    lib.recursiveUpdate (lib.setAttrByPath (optionPaths.launcher runtime "enable") true) {
+    lib.recursiveUpdate (lib.setAttrByPath (optionPaths.enable runtime) true) {
       ai =
         {
           agents.probe = {
@@ -33,7 +33,7 @@ in {
                 native.settings.model = "probe";
                 execpolicyRules.probe = "prefix_rule(pattern = [\"probe\"], decision = \"allow\")";
               };
-              copilot.native.settings.model = "probe";
+              copilot = {};
               kimchi = {
                 native.settings = {
                   llmEndpoint = "https://example.invalid";
@@ -74,10 +74,6 @@ in {
   # of the portable surfaces; the matrix has no cell for it by design.
     if runtime == "kimchi" && lib.hasSuffix "/harness/trust.json" path
     then []
-    # So is ai.copilot.trustedFolders, the one leaf Nix owns in Copilot's
-    # state file config.json.
-    else if runtime == "copilot" && lib.hasSuffix "/config.json" path
-    then []
     # The Codex daemon's settings.json carries daemon policy (its updater),
     # not one of the portable surfaces; the matrix has no cell for it either.
     else if runtime == "codex" && path == ".codex/app-server-daemon/settings.json"
@@ -99,9 +95,13 @@ in {
     then ["hooks"]
     else if lib.hasInfix "/skills/" path || lib.hasSuffix "/skills" path
     then ["skills"]
+    # github.com Copilot's rules stay in .github/instructions; only its
+    # context joins the shared AGENTS.md.
+    else if runtime == "copilot" && path == "AGENTS.md"
+    then ["context"]
     else if path == "AGENTS.md" || path == ".codex/AGENTS.md"
     then ["context" "rules"]
-    else if lib.hasSuffix "/AGENTS.md" path || lib.hasSuffix "/CLAUDE.md" path || lib.hasSuffix "/copilot-instructions.md" path
+    else if lib.hasSuffix "/AGENTS.md" path || lib.hasSuffix "/CLAUDE.md" path
     then ["context"] ++ lib.optional (runtime == "kimchi") "rules"
     else if lib.hasInfix "/rules/" path || lib.hasInfix "/instructions/" path || lib.hasInfix "/steering/" path
     then ["rules"]

@@ -19,14 +19,17 @@
   # zsh has OOM'd this machine on `/nix/store/*/bin`; bash is ~185x cheaper.
   # A package keeps the shell available, avoiding the runtimes' silent fallbacks.
   shell = pkgs.bash;
+  optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
   # A per-runtime or stacked-workflows rule at a fragment category's key would
   # silently hide that fragment, so fail on any overlap.
   shadowed =
     map (key: "the stacked-workflows rule `${key}`")
     (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames swsRouter))
-    ++ lib.concatMap (runtime:
-      map (key: "ai.${runtime}.rules.${key}")
-      (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames config.ai.${runtime}.rules)))
+    ++ lib.concatMap (runtime: let
+      path = optionPaths.pool runtime "rules";
+    in
+      map (key: lib.showOption (path ++ [key]))
+      (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames (lib.getAttrFromPath path config))))
     (lib.filter (runtime: config.ai.${runtime}.enable) ["claude" "codex" "copilot" "kiro"]);
 in {
   assertions = [
@@ -209,10 +212,7 @@ in {
       # AGENTS.md exceeds Codex's 32 KiB default; raise its read limit to keep the tail.
       projectDocMaxBytes = 131072;
     };
-    copilot = {
-      enable = true;
-      mcpServers.agnix = agnixMcp;
-    };
+    copilot.enable = true;
     kimchi = {
       enable = true;
       extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;

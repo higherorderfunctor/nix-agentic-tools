@@ -153,10 +153,10 @@
   # `contains` (the value carries its out path: an installed list, a script).
   # A site that reads a root other than `ai`, or builds a new derivation from
   # one, is a source row instead (sourceRows below).
+  # Every runtime that ships a launcher package; github.com Copilot has none.
   runtimes = {
     claude = "claude-code";
     codex = "chatgpt-codex";
-    copilot = "copilot-cli";
     kimchi = "kimchi";
     kiro = "kiro-cli";
   };
