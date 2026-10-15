@@ -891,29 +891,32 @@
         refused = openKeys.check {
           name = "client_secret";
           optionPath = optionPath ++ ["oauth"];
-          excluded.client_secret =
-            ''
-              an OAuth client secret would enter the world-readable Nix store:
-              Codex reads it only as a literal in its config and has no
-              environment-variable or file reference for it.
-            ''
-            + (
-              if agentScoped
-              then ''
-                Remove it. Codex role layers ignore mcp_servers, so this server never
-                takes effect from an agent either way: declare it at top level
-                (ai.mcpServers or ai.codex.mcpServers) without a client secret
-              ''
-              else ''
-                Remove it. A confidential OAuth client can't be declared through Nix.
-                For a server that accepts a static credential, set proxy.enable with
-                the credential under proxy.headers (Home Manager's local credential
-                proxy, so Codex sees only a loopback URL), or name an environment
-                variable with codex.bearerTokenEnvVar or codex.envHttpHeaders
-              ''
-            );
         };
-      in {inherit (refused) assertion message;}))
+        remedy =
+          ''
+            An OAuth client secret would enter the world-readable Nix store:
+            Codex reads it only as a literal in its config and has no
+            environment-variable or file reference for it.
+          ''
+          + (
+            if agentScoped
+            then ''
+              Remove it. Codex role layers ignore mcp_servers, so this server never
+              takes effect from an agent either way: declare it at top level
+              (ai.mcpServers or ai.codex.mcpServers) without a client secret
+            ''
+            else ''
+              Remove it. A confidential OAuth client can't be declared through Nix.
+              For a server that accepts a static credential, set proxy.enable with
+              the credential under proxy.headers (Home Manager's local credential
+              proxy, so Codex sees only a loopback URL), or name an environment
+              variable with codex.bearerTokenEnvVar or codex.envHttpHeaders
+            ''
+          );
+      in {
+        inherit (refused) assertion;
+        message = refused.message + "\n" + remedy;
+      }))
     tables;
 
   # The runtime entry replaces a same-name root entry. Include role layers even

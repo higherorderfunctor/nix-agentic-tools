@@ -13,20 +13,34 @@
     parts = lib.splitString "|" path;
   in
     lib.concatStrings ([(head parts)] ++ map dropDigits (tail parts));
-  splitPath = {
-    mapToken ? "*",
-    listToken ? "[]",
-  }: path: let
+  # Quoted JSON segments preserve literal dots; unquoted [] markers may be
+  # glued to a name. This is also the syntax printed in suppression remedies.
+  splitPath = path: let
     expand = segment:
-      if segment == listToken
+      if segment == "[]"
       then ["[]"]
-      else if lib.hasSuffix listToken segment
-      then expand (lib.removeSuffix listToken segment) ++ ["[]"]
-      else if segment == mapToken
-      then ["*"]
+      else if lib.hasSuffix "[]" segment
+      then expand (lib.removeSuffix "[]" segment) ++ ["[]"]
       else [segment];
   in
-    lib.concatMap expand (lib.splitString "." (stripBranches path));
+    lib.concatMap (part:
+      if isList part
+      then [(builtins.fromJSON (head part))]
+      else lib.concatMap expand (builtins.filter (segment: segment != "") (lib.splitString "." part)))
+    (builtins.split ''("(\\.|[^"\\])*")'' path);
+  renderPath = lib.foldl' (acc: segment:
+    if segment == "[]"
+    then acc + "[]"
+    else
+      acc
+      + lib.optionalString (acc != "") "."
+      + (
+        if segment == "*"
+        then "*"
+        else if builtins.match "[A-Za-z_][A-Za-z0-9_'-]*" segment != null
+        then segment
+        else builtins.toJSON segment
+      )) "";
   insert = node: segments:
     if segments == []
     then node
@@ -44,10 +58,8 @@
   fromPaths = {
     paths,
     names ? [],
-    mapToken ? "*",
-    listToken ? "[]",
   }:
-    normalizeTree (lib.foldl' (node: path: insert node (splitPath {inherit mapToken listToken;} path))
+    normalizeTree (lib.foldl' (node: path: insert node (splitPath (stripBranches path)))
       (lib.genAttrs names (_: {}))
       (
         if isAttrs paths
@@ -126,12 +138,25 @@
       else if (known.struct or {}) ? ${key}
       then entryStatus known.struct.${key} rest
       else if known ? map
-      then entryStatus known.map rest
+      then let
+        status = entryStatus known.map rest;
+      in
+        if status == "declared"
+        then "map"
+        else status
       else if known.open or false
       then "freeform"
       else null;
 in {
   inherit fromPaths;
+  # Shared by Claude and Kiro's allowUnrecognizedSettings option descriptions.
+  allowlistSyntax = ''
+    Entries are dotted paths relative to the settings document. Use `*` for
+    user-named map entries (`"services.*.newField"`) and glued `[]` for list
+    elements (`"entries[].newField"`). Quote a literal segment containing dots
+    inside the string (`"\"chat.futureSetting\""`). Warnings print the exact
+    entry to add.
+  '';
   inspect = {
     known,
     value,
@@ -140,14 +165,7 @@ in {
     allowOptionPath ? [],
     notes ? {},
   }: let
-    entries =
-      map (entry: {
-        path =
-          if isList entry
-          then entry
-          else splitPath {} entry;
-      })
-      allowed;
+    entries = map (entry: {path = splitPath entry;}) allowed;
     findings =
       builtins.filter (finding:
         !(lib.any (entry: entry.path == finding.path || entry.path == finding.patternPath) entries)) (find known value);
@@ -160,7 +178,9 @@ in {
     in
       "${lib.showOption (optionPath ++ finding.path)}: unrecognized key"
       + lib.optionalString (suggestion != null) "; did you mean `${lib.showOption (optionPath ++ lib.init finding.path ++ [suggestion])}`?"
-      + lib.optionalString (note != null) " ${note}";
+      + lib.optionalString (allowOptionPath != [])
+      "\nTo suppress this warning, add ${lib.generators.toPretty {multiline = false;} [(renderPath finding.patternPath)]} to ${lib.showOption allowOptionPath}."
+      + lib.optionalString (note != null) "\n${note}";
   in {
     inherit value;
     warnings =
@@ -170,6 +190,8 @@ in {
         + (
           if entry.status == "declared"
           then "is already declared"
+          else if entry.status == "map"
+          then "is accepted under a user-named map"
           else "is under an unchecked freeform container"
         )
         + "; remove it.")

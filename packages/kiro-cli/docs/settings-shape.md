@@ -2,8 +2,8 @@
 
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
 > normalized backend reach and nested delivery diagnostics. Unknown complete
-> settings keys warn and pass through on both backends; the workspace guard
-> refuses only known global-only keys.
+> settings keys warn; Home Manager permits them, while devenv refuses every key
+> outside the workspace allowlist. Both backends expose the spelling allowlist.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -99,12 +99,19 @@ them as setting keys. The known names come from `kiroSettingKeys`, plus the
 existing typed `telemetry.enabled` option that neither extracted list names.
 These facts are not a complete nested schema.
 
-An unknown key such as `chat.defautModel` is written unchanged and warns with a
-suggestion for `chat.defaultModel` on Home Manager and devenv. The warning is
-computed at config level and emitted only when the backend declares `warnings`.
-The devenv workspace guard separately refuses a known key outside its measured
-allowlist; it does not turn an unrecognized name into a hard failure. This keeps
-new upstream keys usable before the facts catch up.
+An unknown key such as `chat.defautModel` warns with a suggestion for
+`chat.defaultModel` on Home Manager and devenv. Home Manager writes it
+unchanged, keeping new upstream keys usable before the facts catch up. The
+warning is computed at config level and emitted only when the backend declares
+`warnings`. Devenv refuses every key outside its measured workspace allowlist,
+including unrecognized names, because Kiro silently discards them at that scope.
+
+`ai.kiro.cli.allowUnrecognizedSettings` suppresses spelling warnings for
+intentional unknown keys on both backends; it never bypasses devenv's workspace
+guard. Entries are paths: dots separate fields, `*` selects a map member and
+`[]` selects a list element. Quote a literal dotted name, for example
+`[''"chat.futureSetting"'']`, since Kiro's flattened settings keys are literal
+names. An entry that becomes known warns as stale and should be removed.
 
 <!-- cspell:ignore defaut -->
 

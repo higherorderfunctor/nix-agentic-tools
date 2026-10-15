@@ -30,8 +30,7 @@
   lists = inspect {entries = [{name = "ok";} {nme = "typo";}];};
   branches = keys.inspect {
     known = keys.fromPaths {
-      mapToken = "<name>";
-      paths = ["entries[].source|0.url" "entries[].source|1.path" "services.<name>.source|0.url" "services.<name>.source|1.path"];
+      paths = ["entries[].source|0.url" "entries[].source|1.path" "services.*.source|0.url" "services.*.source|1.path"];
     };
     value = {
       entries = [
@@ -50,7 +49,7 @@
   };
   allowed = keys.inspect {
     inherit known;
-    allowed = ["services.*.ul" ["future.key"]];
+    allowed = ["services.*.ul" ''"future.key"''];
     value = {
       "future.key" = 42;
       services.custom.ul = "ok";
@@ -59,7 +58,7 @@
   stale = keys.inspect {
     inherit known;
     allowOptionPath = ["allowed"];
-    allowed = ["opaque.anything" "permissions.allow"];
+    allowed = ["opaque.anything" "permissions.allow" "services.*.url"];
     value = {};
   };
   credential = keys.check {
@@ -68,11 +67,11 @@
   };
   owner = keys.check {
     name = "identity";
-    ignored.identity = "the login owns this identity";
+    reasons.identity = "the login owns this identity";
   };
-  excluded = keys.check {
+  overridden = keys.check {
     name = "client_secret";
-    excluded.client_secret = "use a credential reader";
+    reasons.client_secret = "use a credential reader\n";
   };
   ordinaryValue = {
     future = {key = [1 {nested = true;}];};
@@ -88,12 +87,8 @@
     anyof = branches.warnings == [];
     credential =
       !credential.assertion
-      && credential.reason == keys.patterns.token
-      && lib.hasInfix keys.patterns.token credential.message
-      && !(builtins.tryEval (keys.refuse {
-        name = "api-key";
-        value = "redacted";
-      })).success;
+      && credential.reason == "token fields carry authentication material"
+      && lib.hasInfix credential.reason credential.message;
     duplicate-list-paths = length (inspect {entries = [{nme = "a";} {nme = "b";}];}).warnings == 1;
     lists = length lists.warnings == 1 && lib.hasPrefix ''settings.entries."[]".nme:'' (builtins.head lists.warnings);
     literal-names =
@@ -115,29 +110,71 @@
       && length mixed.warnings == 2
       && lib.hasPrefix "services.custom.ul:" (builtins.head mixed.warnings)
       && lib.hasPrefix "services.defaults.timeot:" (builtins.elemAt mixed.warnings 1);
+    note-newline = let
+      warning =
+        builtins.head
+        (keys.inspect {
+          inherit known;
+          value.future = true;
+          notes.future = "the owner note";
+        }).warnings;
+    in
+      lib.hasSuffix "\nthe owner note" warning;
     owner =
       !owner.assertion
       && lib.hasInfix "the login owns this identity" owner.message
-      && excluded.reason == "use a credential reader"
-      && !(builtins.tryEval (keys.refuse {
-        name = "identity";
-        ignored.identity = "the login owns this identity";
-        value = "redacted";
-      })).success;
-    passthrough =
-      ordinary.value
-      == ordinaryValue
-      && length ordinary.warnings == 1
-      && keys.refuse {
-        name = "future";
-        value = ordinaryValue;
+      && !overridden.assertion
+      && overridden.reason == "use a credential reader\n"
+      && overridden.message == "client_secret cannot be set: use a credential reader.";
+    passthrough = ordinary.value == ordinaryValue && length ordinary.warnings == 1;
+    printed-allowlist = lib.all ({
+      entry,
+      value,
+    }: let
+      warning = builtins.head (inspect value).warnings;
+      remedy = builtins.elemAt (lib.splitString "\n" warning) 1;
+      # Read the exact Nix list in the diagnostic, as a consumer would paste it.
+      rendered = lib.removeSuffix " to allowed." (lib.removePrefix "To suppress this warning, add " remedy);
+      entries = import (builtins.toFile "open-keys-printed-allowlist.nix" rendered);
+    in
+      entries
+      == [entry]
+      && (keys.inspect {
+        inherit known value;
+        allowed = entries;
+      }).warnings
+      == []) [
+      {
+        entry = "entries[].nme";
+        value.entries = [{nme = "typo";}];
       }
-      == ordinaryValue;
+      {
+        entry = "services.*.ul";
+        value.services."user.with.dots".ul = "typo";
+      }
+      {
+        entry = ''"future.key"'';
+        value."future.key" = true;
+      }
+      {
+        entry = ''"future.\"quoted\""'';
+        value."future.\"quoted\"" = true;
+      }
+      {
+        entry = ''"future.''${name}"'';
+        value."future.\${name}" = true;
+      }
+      {
+        entry = ''services.*."future.key"'';
+        value.services."user.with.dots"."future.key" = true;
+      }
+    ];
     stale =
       length stale.warnings
-      == 2
+      == 3
       && lib.hasInfix "is under an unchecked freeform container" (builtins.head stale.warnings)
-      && lib.hasInfix "is already declared" (builtins.elemAt stale.warnings 1);
+      && lib.hasInfix "is already declared" (builtins.elemAt stale.warnings 1)
+      && lib.hasInfix "is accepted under a user-named map" (builtins.elemAt stale.warnings 2);
     typo = length typo.warnings == 1 && lib.hasInfix "did you mean `settings.permissions`?" (builtins.head typo.warnings);
   };
   inherit (builtins) length;

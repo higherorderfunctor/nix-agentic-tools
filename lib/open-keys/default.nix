@@ -23,29 +23,22 @@
     then null
     else patterns.${builtins.head matches};
   check = {
-    excluded ? {},
-    ignored ? {},
     name,
     optionPath ? [],
+    reasons ? {},
   }: let
-    reason = excluded.${name} or (ignored.${name} or (credentialReason name));
+    reason = reasons.${name} or (credentialReason name);
   in {
     inherit reason;
     assertion = reason == null;
     message = "${lib.showOption (optionPath ++ [name])} cannot be set: ${
       if reason == null
       then "no refusal applies"
-      else reason
+      else lib.removeSuffix "\n" reason
     }.";
   };
 in
   warnings
   // {
-    inherit check credentialReason patterns;
-    refuse = {value, ...} @ args: let
-      result = check (builtins.removeAttrs args ["value"]);
-    in
-      if result.assertion
-      then value
-      else throw result.message;
+    inherit check credentialReason;
   }

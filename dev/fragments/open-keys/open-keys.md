@@ -1,8 +1,9 @@
 ## Open keys: advisory inspection and explicit refusal
 
 > **Last verified:** 2026-10-14 — shared pure key inspection replaces the
-> owner-local spelling walker; credential classification and refusal share one
-> reason table.
+> owner-local spelling walker; printed string suppressions round-trip quoted
+> segments, maps and lists; owner reasons override the shared credential policy.
+> Kiro retains its separate complete workspace delivery allowlist.
 
 `lib/open-keys` is a pure `{lib}` import. It has no module, package, file
 writer, or runtime dependency. Owners supply schema data and choose the policy:
@@ -16,21 +17,26 @@ node, and `open`. Struct children take precedence over a map fallback. An open
 node accepts unknown children; map entry names are unrestricted while their
 values are inspected. Lists descend only through an explicit element node.
 
-`fromPaths {paths; names?; mapToken?; listToken?;}` adapts dotted paths. It
-understands glued list markers and branch markers from flattened union schemas.
-Childless leaves are open because path-only data cannot describe arbitrary
-payloads below them. `names` declares literal top-level names, including names
-that themselves contain dots. A caller with complete flat file keys must keep
-those keys literal and leave their values open, rather than splitting them into
-a fabricated nested schema.
+`fromPaths {paths; names?;}` adapts dotted paths with `*` maps and `[]` lists.
+It understands glued list markers and branch markers from flattened union
+schemas. Childless leaves are open because path-only data cannot describe
+arbitrary payloads below them. `names` declares literal top-level names,
+including names that themselves contain dots. A caller with complete flat file
+keys must keep those keys literal and leave their values open, rather than
+splitting them into a fabricated nested schema.
 
 ### Emit warnings from module config
 
 `inspect {known; value; optionPath?; allowed?; allowOptionPath?; notes?;}`
 returns the unchanged `value` and warning strings. Unknown struct children get
-spelling suggestions from their declared siblings. Allowlist entries accept
-dotted paths or segment lists; wildcard entries match user-named map keys.
-Redundant suppressions warn and never fail.
+spelling suggestions from their declared siblings. Allowlist entries are
+strings: `services.*.newField` matches user-named maps, `entries[].newField`
+matches list elements, and JSON-quoted segments preserve literal dots
+(`"chat.futureKey"`). The diagnostic prints a Nix list containing the exact
+entry to add, and names `allowOptionPath` when supplied. Owner notes start on a
+new line. `allowlistSyntax` supplies the entry prose shared by Claude's and
+Kiro's option descriptions. Redundant suppressions warn, distinguishing declared
+keys, names accepted under maps, and unchecked freeform containers.
 
 Compute inspection from the same filtered value the writer receives, so null
 option defaults cannot become false diagnostics. Pass option paths as segment
@@ -45,15 +51,23 @@ hyphens before matching credential suffixes in `patterns.nix`. Runtime-value
 classification delegates this same name test, while retaining its own type and
 hint checks. Keep that table as the single name-policy definition.
 
-`check {name; optionPath?; excluded?; ignored?;}` returns `assertion`, `message`
-and `reason`. An owner's `excluded` reason takes precedence over `ignored`,
-which takes precedence over the generic credential reason. Identity refusals
-therefore stay owner data instead of expanding the credential patterns. Modules
-must select only `assertion` and `message` when appending an assertion; the
-extra diagnostic `reason` is not a module assertion field.
+`check {name; optionPath?; reasons?;}` returns `assertion`, `message` and
+`reason`. An owner's `reasons` entry takes precedence over the generic
+credential reason. Identity refusals therefore stay owner data instead of
+expanding the credential patterns. Modules must select only `assertion` and
+`message` when appending an assertion; the extra diagnostic `reason` is not a
+module assertion field.
 
-`refuse` takes those same arguments plus `value`, returning the value unchanged
-or throwing the check's message. Select refusal only at a surface whose owner
-already forbids that field. Unknown settings do not become credential refusals
-merely because they use the inspector. Diagnostics contain names and reasons,
-never the refused value.
+Codex's OAuth client-secret assertion takes the shared credential decision and
+appends its own delivery remedy. Reasons lose a trailing newline before the
+message's final period. Select refusal only at a surface whose owner already
+forbids that field. Unknown settings do not become credential refusals merely
+because they use the inspector. Diagnostics contain names and reasons, never the
+refused value.
+
+Kiro's unknown-key inspection runs on both backends, with
+`ai.kiro.cli.allowUnrecognizedSettings` suppressing spelling warnings. Its
+separate devenv assertion rejects **every** written key outside the measured
+`workspaceOverridableSettings`: the pinned binary discards those keys at project
+scope. A spelling suppression cannot grant project-scope delivery. Home Manager
+keeps unknown settings available before the extracted registry catches up.

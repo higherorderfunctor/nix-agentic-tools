@@ -324,10 +324,7 @@ in
           ai.claude.allowUnrecognizedSettings = ["someBrandNewKey"];
           ```
 
-          An entry is a full dotted path, so a nested key works too
-          (`"permissions.somethingNew"`). A `*` segment stands in for a key you
-          chose yourself, so one entry covers every instance
-          (`"modelPricing.overrides.*.newField"`).
+          ${openKeys.allowlistSyntax}
 
           This is a per-key opt-out that lasts until you delete it, not a home
           for the key. Once the sidecar catches up and the binary declares it,
