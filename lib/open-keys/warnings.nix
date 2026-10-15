@@ -141,7 +141,7 @@
       then let
         status = entryStatus known.map rest;
       in
-        if status == "declared"
+        if key != "*" && status == "declared"
         then "map"
         else status
       else if known.open or false
@@ -165,13 +165,20 @@ in {
     allowOptionPath ? [],
     notes ? {},
   }: let
-    entries = map (entry: {path = splitPath entry;}) allowed;
-    findings =
-      builtins.filter (finding:
-        !(lib.any (entry: entry.path == finding.path || entry.path == finding.patternPath) entries)) (find known value);
-    stale = builtins.filter (entry: entry.status != null) (map (entry:
-      entry // {status = entryStatus known entry.path;})
-    entries);
+    entries =
+      map (raw: {
+        inherit raw;
+        path = splitPath raw;
+      })
+      allowed;
+    allFindings = find known value;
+    matches = entry: finding: entry.path == finding.path || entry.path == finding.patternPath;
+    findings = builtins.filter (finding:
+      !(lib.any (entry: matches entry finding) entries))
+    allFindings;
+    statuses = map (entry: entry // {status = entryStatus known entry.path;}) entries;
+    stale = builtins.filter (entry: entry.status != null) statuses;
+    unused = builtins.filter (entry: entry.status == null && !(lib.any (matches entry) allFindings)) statuses;
     describe = finding: let
       suggestion = suggest finding.key finding.siblings;
       note = notes.${head finding.path} or null;
@@ -186,7 +193,7 @@ in {
     warnings =
       map describe findings
       ++ map (entry:
-        "${lib.showOption allowOptionPath}: stale allowlist entry `${lib.showOption entry.path}` "
+        "${lib.showOption allowOptionPath}: stale allowlist entry `${entry.raw}` "
         + (
           if entry.status == "declared"
           then "is already declared"
@@ -195,6 +202,8 @@ in {
           else "is under an unchecked freeform container"
         )
         + "; remove it.")
-      stale;
+      stale
+      ++ map (entry: "${lib.showOption allowOptionPath}: allowlist entry `${entry.raw}` matches no unrecognized setting; remove it or quote dotted segments.")
+      unused;
   };
 }

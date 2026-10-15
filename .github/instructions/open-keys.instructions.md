@@ -9,13 +9,13 @@ applyTo: "checks/open-keys/**,lib/open-keys/**,lib/runtime-values/classify.nix,p
 
 > **Last verified:** 2026-10-14 — shared pure key inspection replaces the
 > owner-local spelling walker; printed string suppressions round-trip quoted
-> segments, maps and lists; owner reasons override the shared credential policy.
+> segments, maps and lists; unused suppressions warn and retain their raw text.
 > Kiro retains its separate complete workspace delivery allowlist.
 
 `lib/open-keys` is a pure `{lib}` import. It has no module, package, file
 writer, or runtime dependency. Owners supply schema data and choose the policy:
-unknown names warn; an explicitly selected credential or identity refusal fails.
-Inspection returns the original value unchanged.
+unknown names warn; an explicitly selected credential refusal fails. Inspection
+returns the original value unchanged.
 
 ### Normalize a known surface once
 
@@ -43,7 +43,11 @@ matches list elements, and JSON-quoted segments preserve literal dots
 entry to add, and names `allowOptionPath` when supplied. Owner notes start on a
 new line. `allowlistSyntax` supplies the entry prose shared by Claude's and
 Kiro's option descriptions. Redundant suppressions warn, distinguishing declared
-keys, names accepted under maps, and unchecked freeform containers.
+keys, literal names accepted under maps, and unchecked freeform containers.
+Wildcard map paths retain the child status. An entry with no schema status and
+no matching unfiltered finding warns that it suppresses nothing; this also
+catches unquoted dotted entries aimed at literal names. Stale and unused
+diagnostics retain the exact raw entry, including quotes and list markers.
 
 Compute inspection from the same filtered value the writer receives, so null
 option defaults cannot become false diagnostics. Pass option paths as segment
@@ -58,19 +62,17 @@ hyphens before matching credential suffixes in `patterns.nix`. Runtime-value
 classification delegates this same name test, while retaining its own type and
 hint checks. Keep that table as the single name-policy definition.
 
-`check {name; optionPath?; reasons?;}` returns `assertion`, `message` and
-`reason`. An owner's `reasons` entry takes precedence over the generic
-credential reason. Identity refusals therefore stay owner data instead of
-expanding the credential patterns. Modules must select only `assertion` and
+`check {name; optionPath?;}` returns `assertion`, `message` and `reason`, using
+`credentialReason name` as its policy. Modules must select only `assertion` and
 `message` when appending an assertion; the extra diagnostic `reason` is not a
 module assertion field.
 
 Codex's OAuth client-secret assertion takes the shared credential decision and
-appends its own delivery remedy. Reasons lose a trailing newline before the
-message's final period. Select refusal only at a surface whose owner already
-forbids that field. Unknown settings do not become credential refusals merely
-because they use the inspector. Diagnostics contain names and reasons, never the
-refused value.
+appends its own delivery remedy. The composed message ends with a period and no
+trailing newline. Select refusal only at a surface whose owner already forbids
+that field. Unknown settings do not become credential refusals merely because
+they use the inspector. Diagnostics contain names and reasons, never the refused
+value.
 
 Kiro's unknown-key inspection runs on both backends, with
 `ai.kiro.cli.allowUnrecognizedSettings` suppressing spelling warnings. Its

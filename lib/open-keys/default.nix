@@ -25,16 +25,15 @@
   check = {
     name,
     optionPath ? [],
-    reasons ? {},
   }: let
-    reason = reasons.${name} or (credentialReason name);
+    reason = credentialReason name;
   in {
     inherit reason;
     assertion = reason == null;
     message = "${lib.showOption (optionPath ++ [name])} cannot be set: ${
       if reason == null
       then "no refusal applies"
-      else lib.removeSuffix "\n" reason
+      else reason
     }.";
   };
 in

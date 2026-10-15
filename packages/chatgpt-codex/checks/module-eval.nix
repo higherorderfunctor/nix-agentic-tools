@@ -1758,6 +1758,7 @@ in {
           && lib.all lib.id (lib.mapAttrsToList (path: remedy:
             builtins.any (assertion:
               lib.hasPrefix "${path}.oauth.client_secret cannot be set: secret fields carry confidential authentication material." assertion.message
+              && lib.hasSuffix "." assertion.message
               && lib.hasInfix "world-readable Nix store" assertion.message
               && lib.hasInfix "environment-variable or file reference" assertion.message
               && lib.hasInfix remedy assertion.message

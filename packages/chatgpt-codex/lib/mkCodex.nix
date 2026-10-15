@@ -903,19 +903,19 @@
             then ''
               Remove it. Codex role layers ignore mcp_servers, so this server never
               takes effect from an agent either way: declare it at top level
-              (ai.mcpServers or ai.codex.mcpServers) without a client secret
+              (ai.mcpServers or ai.codex.mcpServers) without a client secret.
             ''
             else ''
               Remove it. A confidential OAuth client can't be declared through Nix.
               For a server that accepts a static credential, set proxy.enable with
               the credential under proxy.headers (Home Manager's local credential
               proxy, so Codex sees only a loopback URL), or name an environment
-              variable with codex.bearerTokenEnvVar or codex.envHttpHeaders
+              variable with codex.bearerTokenEnvVar or codex.envHttpHeaders.
             ''
           );
       in {
         inherit (refused) assertion;
-        message = refused.message + "\n" + remedy;
+        message = lib.removeSuffix "\n" (refused.message + "\n" + remedy);
       }))
     tables;
 

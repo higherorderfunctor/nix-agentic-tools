@@ -58,20 +58,18 @@
   stale = keys.inspect {
     inherit known;
     allowOptionPath = ["allowed"];
-    allowed = ["opaque.anything" "permissions.allow" "services.*.url"];
+    allowed = ["entries[].name" "opaque.anything" "permissions.allow" "services.*.url" "services.custom.url"];
     value = {};
+  };
+  unused = keys.inspect {
+    known = literalNames;
+    allowOptionPath = ["allowed"];
+    allowed = ["chat.futureSetting"];
+    value."chat.futureSetting" = true;
   };
   credential = keys.check {
     name = "myAPIToken";
     optionPath = ["settings"];
-  };
-  owner = keys.check {
-    name = "identity";
-    reasons.identity = "the login owns this identity";
-  };
-  overridden = keys.check {
-    name = "client_secret";
-    reasons.client_secret = "use a credential reader\n";
   };
   ordinaryValue = {
     future = {key = [1 {nested = true;}];};
@@ -120,12 +118,6 @@
         }).warnings;
     in
       lib.hasSuffix "\nthe owner note" warning;
-    owner =
-      !owner.assertion
-      && lib.hasInfix "the login owns this identity" owner.message
-      && !overridden.assertion
-      && overridden.reason == "use a credential reader\n"
-      && overridden.message == "client_secret cannot be set: use a credential reader.";
     passthrough = ordinary.value == ordinaryValue && length ordinary.warnings == 1;
     printed-allowlist = lib.all ({
       entry,
@@ -171,10 +163,18 @@
     ];
     stale =
       length stale.warnings
-      == 3
-      && lib.hasInfix "is under an unchecked freeform container" (builtins.head stale.warnings)
-      && lib.hasInfix "is already declared" (builtins.elemAt stale.warnings 1)
-      && lib.hasInfix "is accepted under a user-named map" (builtins.elemAt stale.warnings 2);
+      == 5
+      && lib.hasInfix "`entries[].name` is already declared" (builtins.head stale.warnings)
+      && lib.hasInfix "is under an unchecked freeform container" (builtins.elemAt stale.warnings 1)
+      && lib.hasInfix "is already declared" (builtins.elemAt stale.warnings 2)
+      && lib.hasInfix "`services.*.url` is already declared" (builtins.elemAt stale.warnings 3)
+      && lib.hasInfix "`services.custom.url` is accepted under a user-named map" (builtins.elemAt stale.warnings 4);
+    unused =
+      length unused.warnings
+      == 2
+      && lib.hasInfix "unrecognized key" (builtins.head unused.warnings)
+      && builtins.elemAt unused.warnings 1 == "allowed: allowlist entry `chat.futureSetting` matches no unrecognized setting; remove it or quote dotted segments."
+      && allowed.warnings == [];
     typo = length typo.warnings == 1 && lib.hasInfix "did you mean `settings.permissions`?" (builtins.head typo.warnings);
   };
   inherit (builtins) length;
