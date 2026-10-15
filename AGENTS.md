@@ -353,6 +353,7 @@ for it. When several entries match, their guidance composes.
     - `packages/*/lib/packaging.nix`
     - `packages/*/packages/**/*.nix`
     - `packages/*/packages/**`
+    - `packages/*/patches/**`
   - Read:
     - [`dev/fragments/overlays/overlay-pattern.md`](dev/fragments/overlays/overlay-pattern.md)
     - [`dev/fragments/overlays/source-patches.md`](dev/fragments/overlays/source-patches.md)

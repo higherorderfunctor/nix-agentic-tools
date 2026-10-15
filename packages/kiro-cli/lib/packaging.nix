@@ -185,21 +185,27 @@ rec {
       ${kiroRolloutEntryPy}
       import json, mmap, sys
 
-      # Locate only the root; JSON owns entry fields. Decode just the located
-      # slice of the mapping, ending at the pretty-printed root's closing brace.
+      # The anchor bounds the block at both ends: it finds the pretty-printed
+      # root's start, and the root's closing brace is the first "\n}" after it
+      # (JSON escapes newlines inside strings). The parser decodes the slice.
       manifest = re.compile(rb'\{\n  "[a-z0-9_]+": \{\n    "description":')
       states = None
       with open(sys.argv[1], "rb") as fh:
           with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
               for region in manifest.finditer(mm):
-                  end = mm.find(b"\n}", region.start()) + 2
+                  end = mm.find(b"\n}", region.start())
+                  if end < 0:
+                      sys.exit("kiro-extract: rollout manifest end not found at offset %d" % region.start())
+                  end += 2
                   current, _ = json.JSONDecoder().raw_decode(mm[region.start():end].decode())
                   if states is not None and states != current:
                       sys.exit("kiro-extract: conflicting rollout copies")
                   states = current
               if states is None:
                   sys.exit("kiro-extract: no rollout manifest found")
-              # Description is padding for the patcher; no state reader uses it.
+              # Drop the vendor prose so the state readers (needsPatch's closed
+              # formals, the option docs that embed each whole state) never
+              # carry it; every other field is copied.
               states = {name: {key: value for key, value in entry.items() if key != "description"}
                         for name, entry in states.items()}
               patchability = {}

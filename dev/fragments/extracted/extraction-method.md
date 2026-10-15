@@ -4,16 +4,15 @@
 > regex refused a new field in 2.30.0.
 
 Every extractor picks the least brittle method its source allows. The method
-follows the SOURCE, not the author's habit. This is the operator's standing
-order and it has been restated many times. Do not make them restate it.
+follows the SOURCE, not the author's habit.
 
 1. **Eval or copy.** Ask the program for its own answer: run it, call tsserver
    or the TypeScript compiler API, import the module and print the computed
    object. When the source is JSON (a file, or a JSON block embedded in a
    binary), parse it with a JSON parser and copy it. A transform is fine when it
-   serves the reader: take a subtree, or normalize. Copy enough that the reader
-   has everything it needs, not a 10% slice. This only breaks when the file or
-   the anchor (a variable name, a key) goes away.
+   serves the reader: take a subtree, or normalize. Copy the whole value; take a
+   subtree or normalize only for a named reader, never a 10% slice. This only
+   breaks when the file or the anchor (a variable name, a key) goes away.
 2. **AST.** When eval is not feasible: ast-grep, tree-sitter, Python `ast`. It
    survives code moving around as long as the shape matches. A pattern may
    wildcard what we don't care about (a string literal's wording, an argument we
@@ -23,13 +22,15 @@ order and it has been restated many times. Do not make them restate it.
    over an already-decoded string value is fine.
 3. **Regex.** Last resort, for prose or an already-decoded string that no parser
    can read. Each use carries a comment saying why tiers 1 and 2 cannot supply
-   it, and a fixture a naive pattern gets wrong.
+   it, and a fixture a naive pattern gets wrong. A fact that measures a byte
+   patcher's own matcher (Kiro's `rolloutPatchability`) is exempt: the matcher
+   is the thing measured.
 
 Locating a JSON block inside a binary with a short anchor pattern, then decoding
-it with `json.JSONDecoder().raw_decode`, is tier 1. The pattern only finds the
-start; the parser reads the value.
+it with `json.JSONDecoder().raw_decode`, is tier 1. The anchor bounds the block,
+the parser reads the value, and a missing bound fails with its own message.
 
-## What the extractor does NOT do
+## Rules
 
 - **Support only the pinned version.** No legacy shapes, no fixtures for
   releases we no longer pin.

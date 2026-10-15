@@ -116,8 +116,9 @@ If a JS MCP server fails with `Cannot find module 'X'`:
 
 ## MCP Server Packages
 
-> **Last verified:** 2026-10-07 — Semble is a first-party Python build with a
-> secondary MCP role and a grouped update target.
+> **Last verified:** 2026-10-15 — source patching defers to the overlays
+> `source-patches` rule: a no-fuzz `.patch`, or `--replace-fail` for churning
+> text.
 >
 > Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.
 
@@ -245,10 +246,12 @@ WRONG shape for it:
 - Source anchors track upstream's own code, which moves far less often than a
   rebuilt `dist/`. The aihubmix failure mode — a rebuild with no source change
   invalidating every hunk — cannot occur.
-- Express it as `substituteInPlace … --replace-fail` in `postPatch`, not as a
-  `.patch` file. `--replace-fail` is positional-anchor-free and turns drift into
-  a loud build failure; a `.patch` can apply with FUZZ and silently land in the
-  wrong place.
+- Express it as `source-patches.md` (overlays category) says: a `.patch` with
+  `patchFlags = ["-p1" "--fuzz=0"]`, or `substituteInPlace … --replace-fail` in
+  `postPatch` when the target is text that churns. Both turn drift into a loud
+  build failure. A `.patch` under stdenv's default flags applies with fuzz and
+  can land in the wrong place silently; that, not the `.patch` format, is what
+  to avoid.
 - So keep the `config.update.targets` row. A sweep that goes red here is the
   SIGNAL, not a channel-occupying nuisance: it means upstream touched the exact
   lines being patched, which is precisely when a human must look.

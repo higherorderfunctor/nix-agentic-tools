@@ -1745,8 +1745,9 @@ in {
             channel = "stable";
             segment = "all";
           })
+        (ga // {internal_treatment_percent = 100;})
       ]
-      && lib.all needsPatch [(ga // {treatment_percent = 99;}) (ga // {channel = "nightly";}) (ga // {segment = "internal";})]);
+      && lib.all needsPatch [(ga // {treatment_percent = 99;}) (ga // {channel = "nightly";}) (ga // {segment = "internal";}) (ga // {internal_treatment_percent = 50;})]);
 
     module-kiro-raw-features-imply-no-settings = mkTest "kiro-raw-features-imply-no-settings" (let
       check = evaluate: let

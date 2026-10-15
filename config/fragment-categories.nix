@@ -442,6 +442,7 @@ _: {
         "packages/*/lib/packaging.nix"
         "packages/*/packages/**/*.nix"
         "packages/*/packages/**"
+        "packages/*/patches/**"
       ];
       sources = [
         "overlay-pattern"

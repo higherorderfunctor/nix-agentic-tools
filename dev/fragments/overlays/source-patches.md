@@ -11,8 +11,11 @@ loudly when its target is gone. Best tool for the job, not one tool for all.
   leave upstream's help text, messages and import blocks alone. An unused import
   or an unreachable message costs nothing; a hunk anchored on prose breaks on
   the next rewording. Accept stale upstream wording and document it.
-- **A git patch by default.** `patch -p1 --fuzz=0` survives lines moving and
-  refuses changed context, which is the loud failure we want.
+- **A git patch by default, applied with no fuzz.** Set
+  `patchFlags = ["-p1" "--fuzz=0"]`: stdenv's default `-p1` lets GNU patch apply
+  with fuzz 2, which can land a hunk in the wrong place silently. With no fuzz
+  the patch survives lines moving and refuses changed context, which is the loud
+  failure we want.
 - **A pattern replace when the target is text that churns.** When a patch must
   remove or rewrite something that changes with the slightest rewording or
   reformat, a match-and-replace in the build (`substituteInPlace --replace-fail`
