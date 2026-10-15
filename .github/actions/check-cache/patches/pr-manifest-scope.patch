@@ -2,7 +2,6 @@ Patch for Mic92/hestia v3.1.0 (dfed9ced335d28978ba74e513939a10db1f71025).
 
 The default family remains m3; other refs explicitly use m3pr with m3 as
 read-only base. Reservations and visibility barriers use only the own index.
-GC fails closed when a listed manifest cannot be read, including PR manifests.
 
 --- a/src/cli.rs
 +++ b/src/cli.rs
@@ -154,12 +153,12 @@ GC fails closed when a listed manifest cannot be read, including PR manifests.
 
              let base = newest.as_ref().map(|entry| entry.index).unwrap_or(0);
              let index = base.max(skip_through) + 1;
-@@ -241,6 +272,45 @@
+@@ -241,6 +272,58 @@
      }
  }
 
-+/// Union both families with the normal manifest merge rules. The returned
-+/// index belongs only to the own family, including zero on a fresh PR.
++/// Base entries replace stale own entries; roots keep the upstream merge rule.
++/// The returned index belongs only to the own family, including zero on a fresh PR.
 +fn merge_fork_entries(
 +    own: Option<MutableEntry>,
 +    default: Option<MutableEntry>,
@@ -177,7 +176,20 @@ GC fails closed when a listed manifest cannot be read, including PR manifests.
 +        .as_ref()
 +        .map(|entry| decode_manifest_or_empty(&entry.data))
 +        .unwrap_or_default();
-+    let manifest: Manifest = own_manifest.merge(default_manifest);
++    let Manifest {
++        paths,
++        chunks,
++        packs,
++        roots,
++    } = default_manifest;
++    let mut manifest = own_manifest;
++    manifest.paths.extend(paths);
++    manifest.chunks.extend(chunks);
++    manifest.packs.extend(packs);
++    let manifest = manifest.merge(Manifest {
++        roots,
++        ..Manifest::new()
++    });
 +    let data = manifest
 +        .encode()
 +        .map(Bytes::from)
@@ -376,7 +388,7 @@ GC fails closed when a listed manifest cannot be read, including PR manifests.
 
 --- /dev/null
 +++ b/tests/pr_manifest_scope.rs
-@@ -0,0 +1,160 @@
+@@ -0,0 +1,157 @@
 +//! Manifest families are selected by key, independent of GitHub ref precedence.
 +#[path = "support/fake_gha.rs"]
 +mod fake_gha;
@@ -384,7 +396,6 @@ GC fails closed when a listed manifest cannot be read, including PR manifests.
 +use std::time::Duration;
 +
 +use bytes::Bytes;
-+use hestia::gc::{GcContext, GcPolicy};
 +use hestia::gha::{savemutable::SaveMutable, twirp::Reservation};
 +use hestia::manifest::{ChunkHash, ChunkLocation, Manifest, PackHash, PackInfo, Root};
 +use fake_gha::FakeGha;
@@ -461,7 +472,7 @@ GC fails closed when a listed manifest cannot be read, including PR manifests.
 +        assert_eq!(loaded.roots.contains_key("own"), !fresh);
 +        assert_eq!(
 +            loaded.chunks[&ChunkHash::digest(b"shared")].pack,
-+            PackHash::digest(if fresh { "main" } else { "own" })
++            PackHash::digest("main")
 +        );
 +        if !fresh {
 +            assert!(loaded.chunks.contains_key(&ChunkHash::digest("own")));
@@ -486,6 +497,35 @@ GC fails closed when a listed manifest cannot be read, including PR manifests.
 +}
 +
 +#[tokio::test]
++async fn healed_base_location_overrides_stale_own_on_load_and_drain() {
++    let fake = FakeGha::start().await;
++    let http = reqwest::Client::new();
++    let twirp = fake.twirp(&http);
++    let save = SaveMutable::new(&twirp, &http, "m3pr").with_base_family(Some("m3"));
++    // The PR imported P/5 before main removed the missing pack and uploaded Q/0.
++    seed(&fake, "m3pr#1", &manifest("P", 5)).await;
++    seed(&fake, "m3#2", &manifest("Q", 0)).await;
++    let current = Manifest::decode(&save.load().await.unwrap().unwrap().data).unwrap();
++    let shared = ChunkHash::digest(b"shared");
++    assert_eq!(current.chunks[&shared].pack, PackHash::digest("Q"));
++    assert_eq!(current.chunks[&shared].repacks_survived, 0);
++    assert!(current.chunks.contains_key(&ChunkHash::digest("P")));
++    let index = save
++        .save(|existing| {
++            let base = existing
++                .map(|entry| Manifest::decode(&entry.data).unwrap())
++                .unwrap_or_default();
++            Ok(base.merge(current.clone()).encode().unwrap())
++        })
++        .await
++        .unwrap();
++    assert_eq!(index, 2);
++    let committed = Manifest::decode(&save.load().await.unwrap().unwrap().data).unwrap();
++    assert_eq!(committed.chunks[&shared].pack, PackHash::digest("Q"));
++    assert_eq!(committed.chunks[&shared].repacks_survived, 0);
++}
++
++#[tokio::test]
 +async fn default_family_does_not_import_pr_state() {
 +    let fake = FakeGha::start().await;
 +    let http = reqwest::Client::new();
@@ -506,37 +546,6 @@ GC fails closed when a listed manifest cannot be read, including PR manifests.
 +    assert!(!loaded.roots.contains_key("own"));
 +}
 +
-+#[tokio::test]
-+async fn gc_protects_pr_packs_and_stops_when_their_manifest_is_inaccessible() {
-+    let fake = FakeGha::start().await;
-+    let http = reqwest::Client::new();
-+    seed(&fake, "m3pr#2", &manifest("own", 5)).await;
-+    let context = GcContext {
-+        twirp: fake.twirp(&http),
-+        rest: fake.rest(&http),
-+        http: http.clone(),
-+        manifest_prefix: "m3".into(),
-+        policy: GcPolicy::default(),
-+    };
-+    assert!(
-+        context
-+            .protected_packs()
-+            .await
-+            .unwrap()
-+            .contains(&PackHash::digest("own"))
-+    );
-+    assert_eq!(context.cleanup_manifests(u64::MAX).await.unwrap(), 0);
-+    assert_eq!(
-+        fake.rest(&http).list_caches("m3pr#").await.unwrap().len(),
-+        1
-+    );
-+    fake.set_stale_lookups(&http, true).await;
-+    let error = context.plan(100).await.unwrap_err().to_string();
-+    assert!(
-+        error.contains("m3pr#2") && error.contains("refusing GC"),
-+        "{error}"
-+    );
-+}
 --- a/tests/support/common.rs
 +++ b/tests/support/common.rs
 @@ -50,6 +50,7 @@

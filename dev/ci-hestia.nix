@@ -39,7 +39,9 @@ in
         (_: "sha256-SKjUIxSvmEFYW+sMkFkyNVo4U5cOGwqZ48DTl0h8gDk=");
     };
     doCheck = true;
+    # Nounset must not leak into stdenv's strip.sh during fixupPhase.
     checkPhase = ''
+      (
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       export NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
@@ -48,6 +50,7 @@ in
       cargo test --offline --workspace --lib
       cargo test --offline --test pr_manifest_scope
       runHook postCheck
+      )
     '';
     passthru.updateScript = pkgs.writeShellScript "update-ci-hestia" ''
       set -euETo pipefail
