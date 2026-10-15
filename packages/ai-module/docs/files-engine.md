@@ -2,11 +2,10 @@
 
 ## Boundary and caller schema
 
-Nothing in the repository imports `files2`. An integrator installs one module
-per backend under a stable namespace (for example `codex`); that module is
-present even when the consumer is disabled. The only per-file input is
-`files2."<relative path>"`. The library owns normalization, state, activation,
-and backend output. No code in `files2` imports `lib/ai/`.
+The file schema and engine rules below remain the contract for the moved
+implementation. [The ai-module design](DESIGN.md) defines its owner, generic
+options and backend lowering. The existing standalone module remains only until
+later PR 2 chunks replace its lowering; no production consumer imports it.
 
 | Option           | Nix type                                                                                   | Default     | Meaning                                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -113,43 +112,22 @@ itself is private mode `0600`, written with atomic replacement under a namespace
 lock immediately after each successful file mutation. An invalid version, path,
 or state symlink fails closed. Only the engine writes this state.
 
+State version 0 has the same `files` payload as version 1. Under the lock, the
+engine validates version 0, changes only its version to 1, validates again, and
+atomically saves it before reconciling destinations. Missing state begins at
+version 1. A second load of version 1 does not rewrite the state. Missing or
+unsupported versions and malformed payloads are refused before destination
+mutation; future migrations append to the ordered chain.
+
 ## Backend lowering and order
 
-One `normalize` result feeds `lowerHm` and `lowerDevenv`; each backend has one
-lowering function, with no per-method work in the caller. Native symlinks are
-emitted through `home.file` or devenv `files`; recursive symlinks are emitted as
-individual native leaf links on both backends. Non-recursive directory links
-stay one native entry. The plan and engine invocation exist even when the map is
-empty.
-
-| Backend | Before native links                                                                                                                                                                         | Native links                                                                      | After native links / before use                                                                                                                                                                                                                                                                              |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| HM      | `home.activation.files2-<namespace>-prune = entryBefore ["checkLinkTargets"]`: engine `--phase prune` retires owned copies removed or switched to `symlink`, retaining `ro → rw` for apply. | `home.file` manages symlinks across generations at `linkGeneration`.              | `home.activation.files2-<namespace>-write = entryAfter (["linkGeneration"] ++ provider activation names when `run` is used)`: engine `--phase apply` writes `ro`/`rw` and records their state. The provider list includes `sops-nix` when configured. Both entries use HM's `run` helper for dry-run safety. |
-| devenv  | One guard task after `devenv:files:cleanup`, before conditional `devenv:files`, runs engine `--phase prune` with the same copy transition rule.                                             | `files` manages symlinks and retracts old links using its own `files.json` state. | One materialize task depends unconditionally on the guard and runs before `devenv:enterShell`; it also depends on `devenv:files` only when that task exists. It runs engine `--phase apply` for copies.                                                                                                      |
-
-The engine never records, validates, or retires native symlinks. A backend must
-remove its old native link before apply writes a `ro` or `rw` copy; apply
-refuses any link still at that path without following it. Prune retires an owned
-`ro` or `rw` copy before the backend links the same path. Native collision
-handling belongs to the backend. For `ro` and `rw`, an existing unmanaged
-regular file may be adopted only under the policies below.
-
-The generated shell is a scoped subshell with `set -euETo pipefail` and
-`shopt -s inherit_errexit 2>/dev/null || :`; emitted command references use
-absolute store paths. The plan is a `pkgs.writeText` JSON file with store
-references retained, and the Python interpreter is
-`pkgs.python3.withPackages (ps: [ps.pyyaml ps.tomlkit])` by absolute store path.
-The body of `content.run` remains in the plan and is executed through strict
-Bash in apply; `FILES2_BASH` supplies the absolute Bash store path. The body may
-reference secrets, but no secret bytes are serialized into the plan. The backend
-constructor accepts provider adapters, each exposing its existing preparation
-task and the runtime environment or files read by `run`; the integration
-registers these adapters once, outside the per-file map. When any enabled file
-uses `run`, HM apply depends on each configured provider activation (including
-`sops-nix` when configured), and devenv apply depends directly on each
-configured preparation task, independently of `devenv:files`. A custom provider
-is integrated by registering its adapter once, never by putting task names on
-file declarations. A `run` with no provider needs no provider edge.
+[The ai-module design](DESIGN.md#backend-graph-and-execution) defines the
+backend graph and delivery phases. The relocated standalone lowering function
+remains for existing checks until later PR 2 chunks replace it. The engine never
+records, validates or retires native symlinks. A backend removes its old native
+link before apply writes a `ro` or `rw` copy; apply refuses any link still at
+that path. Prune retires an owned copy before native linking. Native collision
+handling belongs to the backend.
 
 ## Runtime engine and codecs
 
@@ -309,50 +287,6 @@ historical layouts it never owned.
 
 ## Tests and chunk sequence
 
-`lib/files2/checks/{default,eval,runtime}.nix` live beside the library.
-Workspace `checks/files2/default.nix` imports that check module:
-`lib/testing/discover.nix:1-10` discovers root check directories with
-`default.nix`, `flake.nix:109-114` passes them into the repository check world,
-and `flake.nix:194` exposes them under `checks.<system>`. CI's checks matrix
-builds those flake checks. A public `lib.files2` export is deferred until the
-library itself is complete; no existing runtime is rewired.
-
-Generate fixture cells with `lib.cartesianProductOfSets` from backend
-`["devenv" "hm"]`, content shape
-`["executable" "recursive nested tree" "run" "source" "text" "value"]`, format
-`["json" "markdown" "raw" "toml" "yaml"]`, and method `["ro" "rw" "symlink"]`.
-Valid cells assert normalized plan, native sink, ordering and state identity.
-Impossible cells assert the **named** error above (`rw` keyless, value keyless,
-run symlink, recursive non-source/directory or rw); a valid source fixture is a
-file, and the recursive fixture contains `a/b/c` plus an executable. Test a
-directory source with `recursive = false` as the native directory-link case
-separately. Add option-priority fixtures for default text replaced by explicit
-source, default source replaced by explicit text, and equal-priority
-alternatives asserting the tie error. A list-generated transition matrix changes
-only `method` among all three values, plus format-only switches. Eval checks
-read the plan value, never grep shell text. Devenv eval asserts the direct guard
-→ apply edge when `devenv:files` is absent, and a provider → apply edge for a
-secret-dependent `run` with no native files.
-
-Runtime checks execute the pinned engine in temporary HM and devenv roots, then
-inspect disk and state: create/change/remove/disable and method switches; nested
-recursive ownership; N→0; backup on edited copy, `rw` key retirement, and format
-conversion; identical adoption; `ro → rw` ownership and writable mode; unmanaged
-siblings and native keys; secret-dependent `run`; executable bits and modes;
-malformed documents; comments; traversal, symlinked-parent, foreign-link and
-special-file refusal. They assert exit status, bytes, link targets, modes,
-backups, and state. Publication has one guarded replace; concurrent changes
-during that guard fail the run. The eval check covers the backend wiring and the
-runtime check invokes the actual program.
-
-| Chunk (<~400 changed lines each) | Deliverable and its own check                                                                                                                                           |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1                                | Schema, validation, recursive normalization, eval fixture generator; `checks/files2-eval` covers all named errors and collisions.                                       |
-| 2                                | Python state/path/backup engine for `ro` plus runtime fixtures; `checks/files2-ro-runtime` covers N→0, drain, nested tree, adoption, backups and refusal.               |
-| 3                                | JSON/TOML/YAML codecs and one `rw` merge engine; `checks/files2-rw-runtime` covers key ownership, native preservation, retired keys, parse failure and format switches. |
-| 4                                | HM lowering and native symlink transitions; `checks/files2-hm` covers DAG edges and executed switch fixtures.                                                           |
-| 5                                | Devenv lowering and stale/foreign guard; `checks/files2-devenv` covers conditional task edges and executed switch fixtures.                                             |
-| 6                                | Full generated matrix, export and integration documentation; `checks/files2-matrix` covers every method/format/shape/backend cell and all switch directions.            |
-
-Each chunk updates this design if implementation evidence changes a contract. No
-chunk migrates an existing consumer.
+[The ai-module design](DESIGN.md#pr-2-chunks-and-proof) defines the current
+check ownership, generated fixture matrix and remaining PR 2 chunks. Existing
+checks move beside the owner without changing their names or assertions.

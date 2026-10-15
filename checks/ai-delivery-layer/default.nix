@@ -1819,7 +1819,10 @@ in {
         # block itself is a forbidden direct sink owner.
         nested='^[[:space:]]*home[[:space:]]*=[[:space:]]*\{'
 
-        find packages -mindepth 3 -path 'packages/*/lib/*' -type f -name '*.nix' -print0 \
+        # packages/ai-module IS the delivery layer this gate routes factories
+        # through (the role lib/ai/ has, which sits outside this corpus), so it
+        # is outside the scanned factory set rather than exempted line by line.
+        find packages -mindepth 3 -path 'packages/*/lib/*' -not -path 'packages/ai-module/*' -type f -name '*.nix' -print0 \
           | sort -z > "$work/corpus"
         # A scan of nothing exits 0 and is indistinguishable from a pass.
         test -s "$work/corpus"

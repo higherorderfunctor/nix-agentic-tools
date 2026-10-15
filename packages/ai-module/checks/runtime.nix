@@ -3,7 +3,7 @@
   pkgs,
   ...
 }: let
-  files2 = import ../default.nix {inherit lib pkgs;};
+  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
   copy = value: {
     "nested/file.txt" = {
       content.text = value;
@@ -78,7 +78,7 @@ in {
   checks.files2-ro-runtime = pkgs.runCommandLocal "files2-ro-runtime" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    FILES2_BASH=${pkgs.bash}/bin/bash ${pkgs.python3}/bin/python3 -I ${./runtime.py} ${../.}/engine.py ${plan}
+    FILES2_BASH=${pkgs.bash}/bin/bash ${pkgs.python3}/bin/python3 -I ${./runtime.py} ${../lib/files}/engine.py ${plan}
     printf 'PASS: files2 ro runtime\n' > "$out"
   '';
 }

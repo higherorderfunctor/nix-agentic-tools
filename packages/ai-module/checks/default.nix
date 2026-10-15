@@ -4,5 +4,6 @@
     ./hm.nix
     ./runtime.nix
     ./rw.nix
+    ./state.nix
   ];
 }
