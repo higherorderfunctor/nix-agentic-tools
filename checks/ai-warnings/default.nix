@@ -258,17 +258,27 @@
       then (builtins.head absent).deliveryGap or (builtins.head absent).reason
       else throw "expected one policy absence writer for ${case.runtime}/${case.mode}/${case.surface}");
   unavailableCases = lib.filter (case: !(delivered case)) surfaceCases;
-  missingCases =
+  missingCases = let
+    normalizedCases = map (case:
+      case // {path = lib.init case.path ++ ["normalized" case.surface];})
+    (lib.filter (case: builtins.length case.path > 2) unavailableCases);
+    # Empty/disabled explicit rules must not diagnose live inherited keys twice.
+    mixedCases = lib.concatMap (case:
+      map (value:
+        case
+        // {
+          extra = lib.setAttrByPath case.path value;
+          path = ["ai" case.surface];
+        }) [{} {inactive.enable = false;}])
+    (lib.filter (case: case.surface == "rules") normalizedCases);
+  in
     map (case:
       case
       // {
         reason = absenceReason case;
         count = 1;
       })
-    (unavailableCases
-      ++ map (case:
-        case // {path = lib.init case.path ++ ["normalized" case.surface];})
-      (lib.filter (case: builtins.length case.path > 2) unavailableCases));
+    (unavailableCases ++ normalizedCases ++ mixedCases);
   conditional = gap: gap ? when || (gap.each or false) || (gap.effective or false);
   staticCases = lib.concatMap (cell:
     lib.concatMap (gap:
@@ -376,7 +386,7 @@
   (lib.groupBy caseMode (cases ++ gapCases));
   casePass = case: let
     mode = caseMode case;
-    input = lib.setAttrByPath case.path case.value;
+    input = lib.recursiveUpdate (case.extra or {}) (lib.setAttrByPath case.path case.value);
     recorded = lib.filter (matchesGap case) conditionalGaps;
     gap =
       if case ? gapPath

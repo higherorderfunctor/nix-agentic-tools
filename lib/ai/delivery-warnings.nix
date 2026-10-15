@@ -53,9 +53,8 @@
       then builtins.attrNames (lib.defaultTo {} (poolValue surface))
       else []
     );
-  present = path: let
+  present = path: value: let
     surface = lib.last path;
-    value = get path;
   in
     # Root requests warn even when the runtime cannot withdraw them. Keyed
     # pools still subtract per-runtime replacements and tombstones by name.
@@ -95,7 +94,7 @@
     map (path: message path (row.deliveryGap or row.reason))
     (builtins.filter (path:
       !(normalizedPath path)
-      && present path
+      && present path (get path)
       && (!(row.warnOnlyExplicit or false)
         || (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500)) (row.inputOptions or [])))
   gapRows;

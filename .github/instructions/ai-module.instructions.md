@@ -12,8 +12,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > warning suite generates coverage for every runtime, surface and backend; a
 > record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
 > is github.com Copilot with its pools under `ai.copilot.github`; explicit
-> normalized overrides warn on unavailable backends without diagnosing folds
-> twice.
+> normalized overrides warn for live explicit contributions on unavailable
+> backends, excluding empty or disabled contributions beside inherited folds.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -634,8 +634,9 @@ runtime cfg, field value, whole entry value, path and entry name. Keyed runtime
 replacements and tombstones withdraw inherited entries before warnings. Explicit
 normalized-pool overrides also warn when the backend delivers no pool. Option
 priority excludes bare defaults; generated keyed folds carry their source file
-through `mkDefinition` so diagnostics do not mistake derived entries for
-consumer requests or report the raw request twice.
+through `mkDefinition`. Diagnostics merge only non-generated definitions with
+the option's own type before checking presence, so empty or disabled explicit
+contributions beside live inherited entries do not report the raw request twice.
 
 `checks/ai-warnings` generates populated, empty and disabled probes from the
 real runtime records, the evaluated shared-surface registry and both backends.

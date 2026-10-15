@@ -25,11 +25,16 @@
   normalizedUnits = surface: let
     path = ["ai" runtime] ++ namespaces.pool appRecord surface ++ ["normalized" surface];
     option = lib.attrByPath path null options;
+    # Merging only explicit definitions prevents empty overrides diagnosing folds.
+    definitions = lib.filter (definition: definition.file != toString ./mkBackendTransform.nix) option.definitionsWithLocations;
   in
     lib.optional (option
       != null
       && option.highestPrio < 1500
-      && lib.any (definition: definition.file != toString ./mkBackendTransform.nix) option.definitionsWithLocations) {inherit path;};
+      && definitions != []) {
+      inherit path;
+      value = option.type.merge path definitions;
+    };
   units = surface:
     [
       {
@@ -69,7 +74,7 @@
         && selected
         && (
           if gapPath == []
-          then present entry.path
+          then present entry.path entry.value
           else nonEmpty value
         )
         && (gap.when or (_: true)) args;
@@ -88,7 +93,7 @@
     if !delivered
     then
       lib.concatMap (unit:
-        lib.optional (present unit.path)
+        lib.optional (present unit.path unit.value)
         (message unit.path (declaration.reason or defaultReason))) (units surface ++ normalizedUnits surface)
     else lib.concatMap (gapWarnings surface) (declaration.gaps or []);
 in {

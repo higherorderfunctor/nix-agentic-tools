@@ -37,8 +37,8 @@ in {
     # They iterate `harnessNames` (the shared registry) rather than sampling one
     # runtime, so a sixth runtime is covered the day it is added.
 
-    # Devenv scope: enable -> every runtime's pool gets the unprefixed stack-*
-    # skills, and the root pool gets none of them.
+    # Devenv scope: enable -> every supporting runtime's pool gets the
+    # unprefixed stack-* skills, and the root pool gets none of them.
     module-sws-devenv-enable-sets-ai-skills = mkTest "sws-devenv-enable-sets-ai-skills" (
       let
         result = evalDevenv {ai.programs.stacked-workflows.enable = true;};
@@ -46,7 +46,7 @@ in {
         runtimeHasAll = runtime:
           lib.all (skill: pool result runtime "skills" ? ${skill}) expected;
       in
-        lib.all runtimeHasAll harnessNames
+        lib.all runtimeHasAll (delivering "devenv" "skills")
         && !(result.config.ai.skills ? stack-fix)
     );
 
