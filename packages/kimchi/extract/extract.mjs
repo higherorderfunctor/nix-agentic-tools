@@ -1226,6 +1226,16 @@ const SETTINGS_HELPERS = [
   "writeConfigSettingAsync",
 ];
 
+function jsonKinds(descriptor) {
+  if (descriptor.type === "enum")
+    return [...new Set(descriptor.enum.map((value) => typeof value))];
+  return ["array", "boolean", "number", "object", "string"].includes(
+    descriptor.type,
+  )
+    ? [descriptor.type]
+    : [];
+}
+
 function settingsHelperKeys(settingsSource, kimchiSources, context) {
   const { checker, ts } = context;
   const helpers = new Set(
@@ -1294,9 +1304,14 @@ function settingsHelperKeys(settingsSource, kimchiSources, context) {
           keys.set(key, {
             descriptor:
               previous?.descriptor ??
-              (accepted && descriptorForType(accepted, guard, checker, ts)),
+              (accepted &&
+                descriptorForType(accepted, guard, checker, ts, {
+                  deep: true,
+                })),
             type: previous?.type ?? accepted,
-            unresolved: previous?.unresolved || (reads && !accepted),
+            unresolvedAt:
+              previous?.unresolvedAt ??
+              (reads && !accepted ? where : undefined),
             where: previous?.type ? previous.where : where,
           });
         }
@@ -1470,12 +1485,28 @@ function extractHarness(
     analysisContext,
   );
   for (const [name, read] of helperKeys) {
-    if (keys[name]) continue;
+    if (keys[name]) {
+      if (read.unresolvedAt)
+        console.warn(
+          `kimchi-extract: ${read.unresolvedAt} has an unresolved read guard for known harness setting ${name}`,
+        );
+      const retained = jsonKinds(keys[name]);
+      const accepted = read.descriptor && jsonKinds(read.descriptor);
+      if (
+        accepted?.length &&
+        retained.length &&
+        accepted.every((kind) => !retained.includes(kind))
+      )
+        fail(
+          `harness setting ${name} has incompatible retained ${keys[name].typeExpression} and read guard ${read.descriptor.typeExpression} at ${read.where}`,
+        );
+      continue;
+    }
     keys[name] = {
       source: "kimchi",
       optional: true,
       project: false,
-      ...(read.descriptor && !read.unresolved
+      ...(read.descriptor && !read.unresolvedAt
         ? read.descriptor
         : { type: null }),
     };
