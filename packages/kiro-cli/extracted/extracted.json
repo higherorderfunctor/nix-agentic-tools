@@ -38,6 +38,7 @@
     "kvim",
     "lite",
     "local_sandbox",
+    "managed_settings",
     "memory",
     "memory_controls",
     "remote_changelog",
@@ -62,6 +63,12 @@
     "kvim": { "patchable": true, "unmatchedSites": 0 },
     "lite": { "patchable": true, "unmatchedSites": 0 },
     "local_sandbox": { "patchable": true, "unmatchedSites": 0 },
+    "managed_settings": {
+      "patchable": false,
+      "unmatchedSites": {
+        "__platforms": { "aarch64-darwin": 4, "x86_64-linux": 2 }
+      }
+    },
     "memory": { "patchable": true, "unmatchedSites": 0 },
     "memory_controls": { "patchable": true, "unmatchedSites": 0 },
     "remote_changelog": { "patchable": true, "unmatchedSites": 0 },
@@ -82,7 +89,7 @@
     "v3_prompt": {
       "patchable": false,
       "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
+        "__platforms": { "aarch64-darwin": 6, "x86_64-linux": 3 }
       }
     },
     "voice": { "patchable": true, "unmatchedSites": 0 },
@@ -103,10 +110,11 @@
     "infra_safety": { "segment": "internal", "treatment_percent": 100 },
     "kvim": { "segment": "internal", "treatment_percent": 100 },
     "lite": { "segment": "internal", "treatment_percent": 100 },
-    "local_sandbox": {
+    "local_sandbox": { "segment": "all", "treatment_percent": 100 },
+    "managed_settings": {
       "channel": "nightly",
       "segment": "internal",
-      "treatment_percent": 100
+      "treatment_percent": 0
     },
     "memory": { "segment": "all", "treatment_percent": 100 },
     "memory_controls": { "segment": "all", "treatment_percent": 100 },
@@ -128,7 +136,11 @@
       "treatment_percent": 100
     },
     "tui": { "segment": "internal", "treatment_percent": 50 },
-    "v3_prompt": { "segment": "internal", "treatment_percent": 35 },
+    "v3_prompt": {
+      "internal_treatment_percent": 50,
+      "segment": "all",
+      "treatment_percent": 10
+    },
     "voice": { "segment": "all", "treatment_percent": 100 },
     "workflows": { "segment": "all", "treatment_percent": 100 }
   },
@@ -162,6 +174,7 @@
     "chat.notificationMethod",
     "chat.outputStyle",
     "chat.preserveScrollback",
+    "chat.screenReader",
     "chat.sessionDashboard.groupBy",
     "chat.sessionDashboard.indexResponses",
     "chat.sessionDashboard.scope",
