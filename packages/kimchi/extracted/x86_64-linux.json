@@ -238,6 +238,11 @@
         "optional": true,
         "project": false,
         "properties": {
+          "consentVersion": {
+            "optional": true,
+            "type": "string",
+            "typeExpression": "string"
+          },
           "enabled": {
             "optional": true,
             "type": "boolean",
@@ -648,6 +653,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "GLAB_CONFIG_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "GLAB_TOKEN": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -799,6 +809,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_DEBUG_TOOL_SURFACE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_DISABLE_BUILTIN_PROVIDERS": {
         "consumerOverridable": false,
         "readBy": ["pi"],
@@ -835,12 +850,22 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_IDLE_GC": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_INFRA_BREAKER_THRESHOLD": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
       },
       "KIMCHI_LSP_BINARIES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_LSP_IDLE_EVICT_MS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -902,6 +927,11 @@
         "type": "string"
       },
       "KIMCHI_PROXY_HELPER": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_PR_COST_REPORTING": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -981,6 +1011,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_TOOL_OUTPUT_STORE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_TUI_E2E_CLIPBOARD_IMAGE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -1029,6 +1064,11 @@
       "LLAMA_BASE_URL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
+        "type": "string"
+      },
+      "LOCALAPPDATA": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
         "type": "string"
       },
       "MCP_OAUTH_DIR": {
@@ -2090,6 +2130,30 @@
             "type": "string",
             "typeExpression": "string"
           },
+          "hidden": {
+            "items": {
+              "enum": [
+                "permissions",
+                "model",
+                "thinking",
+                "ferment",
+                "agents",
+                "context",
+                "usage",
+                "phase",
+                "tags",
+                "team",
+                "credits",
+                "budget",
+                "lsp",
+                "dap"
+              ],
+              "type": "enum",
+              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\" | \"lsp\" | \"dap\""
+            },
+            "type": "array",
+            "typeExpression": "StatusLineElementId[]"
+          },
           "pinned": {
             "items": {
               "enum": [
@@ -2104,10 +2168,12 @@
                 "tags",
                 "team",
                 "credits",
-                "budget"
+                "budget",
+                "lsp",
+                "dap"
               ],
               "type": "enum",
-              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\""
+              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\" | \"lsp\" | \"dap\""
             },
             "optional": true,
             "type": "array",
@@ -2116,7 +2182,7 @@
         },
         "source": "kimchi",
         "type": "object",
-        "typeExpression": "{ pinned: StatusLineElementId[]; }"
+        "typeExpression": "{ pinned: StatusLineElementId[]; hidden: StatusLineElementId[]; }"
       },
       "steeringMode": {
         "enum": ["all", "one-at-a-time"],
@@ -2198,6 +2264,12 @@
         "source": "pi",
         "type": "number",
         "typeExpression": "number"
+      },
+      "workSemanticMatching": {
+        "optional": true,
+        "project": false,
+        "source": "kimchi",
+        "type": null
       }
     }
   },
