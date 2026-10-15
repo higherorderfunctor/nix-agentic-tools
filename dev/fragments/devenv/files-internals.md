@@ -5,10 +5,11 @@
 > instruction files are `ai.*`'s own read-only copies (`own`), never `files.*`
 > symlinks; the generator's materializer and the AGENTS.md seed are gone. Kiro
 > and Kimchi settings and Codex daemon settings are owned copies; Copilot writes
-> repository instructions and agent profiles only. Recursive leaf links target
-> one source-tree store root while retaining per-file input contexts. The
-> symlink guard uses devenv's final file target, follows its own runtime's
-> writers before file creation, and reports every conflict before failing.
+> repository instructions and agent profiles only; skills declare a copy gap.
+> Recursive leaf links target one source-tree store root while retaining
+> per-file input contexts. The symlink guard uses devenv's final file target,
+> follows its own runtime's writers before file creation, and reports every
+> conflict before failing.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -153,7 +154,7 @@ Look for `Conflicting file <path>` or `Conflicting non-file <path>` lines.
 devenv tracks managed files in `${config.devenv.state}/files.json`. On every
 run, the cleanup task reads previous state, compares to current config, and
 removes orphaned symlinks pointing into `/nix/store/*`. The repository needs no
-extra top-level skill-link prune: Claude, Copilot and Kiro skills are real
+extra top-level skill-link prune: Claude, Kimchi and Kiro skills are real
 directories with per-file links. Cleanup handles removed entries, and the
 delivery guard handles changed store-link targets. It **only removes symlinks**
 — never real files or directories. This is another reason Layout A → B

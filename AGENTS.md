@@ -5,7 +5,6 @@ for it. When several entries match, their guidance composes.
 
 - **`ai-clis`**
   - Match:
-    - `packages/copilot-cli/checks/copilot-wrapper-argv.nix`
     - `packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`
     - `packages/claude-code/packages/ai/claude-code/package.nix`
     - `packages/copilot-cli/packages/ai/copilot-cli/package.nix`
@@ -27,7 +26,6 @@ for it. When several entries match, their guidance composes.
     - `packages/copilot-cli/lib/mkCopilot.nix`
     - `packages/kimchi/lib/mkKimchi.nix`
     - `packages/kiro-cli/lib/mkKiro.nix`
-    - `packages/*/lib/wrapPackage.nix`
     - `packages/*/modules/devenv/**`
   - Read:
     - [`dev/fragments/ai-config-scope/host-config-merge.md`](dev/fragments/ai-config-scope/host-config-merge.md)

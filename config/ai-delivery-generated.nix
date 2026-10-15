@@ -1073,18 +1073,6 @@
       ];
     }
     {
-      ecosystem = "copilot";
-      mode = "devenv";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
-      surface = "skills";
-      target = "$DEVENV_ROOT/.github/skills/<name>/<leaf>";
-      writerAttr = [
-        "files"
-        ".github/skills/probe/SKILL.md"
-      ];
-    }
-    {
       ecosystem = "kimchi";
       mode = "devenv";
       primitive = "ownPathDeclarative";

@@ -22,8 +22,7 @@
 #     module on top.
 #
 # spec:
-#   backend           : "hm" or "devenv", supplied by the backend module
-#                       when it provides rules. Skill-only packages need none.
+#   backend           : "hm" or "devenv", required from the backend module.
 #   name              : program key; declares `ai.programs.<name>.enable`
 #                       plus per-runtime overrides (string).
 #   enableDescription : mkEnableOption description (string).
@@ -86,7 +85,7 @@
 #    but a consumer importing modules individually may have fewer. Writing
 #    an undeclared option is an eval error, so the fanout is filtered by what
 #    is actually declared.
-spec: {
+{backend, ...} @ spec: {
   config,
   lib,
   options,
@@ -119,9 +118,9 @@ spec: {
   # surface from the app RECORD at build time and never reads `config`.
   #
   # A runtime whose record delivers a pool on other backends only still
-  # declares it here, so the write is also gated on delivery when the backend
-  # is known; otherwise every contribution would warn as undelivered.
-  delivers = pool: runtime: !(spec ? backend) || builtins.elem spec.backend (records.${runtime}.surfaceSupport.${pool}.backends or []);
+  # declares it here, so the write is also gated on backend delivery;
+  # otherwise every contribution would warn as undelivered.
+  delivers = pool: runtime: builtins.elem backend (records.${runtime}.surfaceSupport.${pool}.backends or []);
   presentRuntimes = pool:
     lib.filter
     (runtime: lib.hasAttrByPath (optionPaths.pool runtime pool) options && delivers pool runtime)

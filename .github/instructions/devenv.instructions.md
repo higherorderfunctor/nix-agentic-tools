@@ -7,13 +7,15 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-08 — the CI build matrix reads `ciPackages`; the
-> repo shell applies `buildOverlay`. Kimchi source builds require fresh closure
-> measurements; old binary-release figures are not current estimates. The
-> instruction copier check is gone with the generator's materializer. The Codex
-> permission-mix assertions and runtime PATH provenance are consumer-wide
-> shell-entry warnings, not repository enterTest loops. The repository shell
-> sets no harness permissions; contributors choose them in their user config.
+> **Last verified:** 2026-10-14 — only runtimes with launcher packages enter the
+> wrapper closure; github.com Copilot has none. The CI matrix reads
+> `ciPackages`; the repo shell applies `buildOverlay`. Kimchi source builds
+> require fresh closure measurements; old binary-release figures are not current
+> estimates. The instruction copier check is gone with the generator's
+> materializer. The Codex permission-mix assertions and runtime PATH provenance
+> are consumer-wide shell-entry warnings, not repository enterTest loops. The
+> repository shell sets no harness permissions; contributors choose them in
+> their user config.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 
@@ -67,7 +69,7 @@ could make ordinary shell entry scan the full corpus.
 | Diagnostic dependencies  | generation pipeline, coreutils-class tools, validators | yes                                    | narrow flake checks realize only their declared tools |
 | Interactive-only dev UX  | LSPs (`nixd`→llvm, `marksman`→dotnet, `taplo`), Semble | no — `lib.optionals (!isCI)`           | not invoked                                           |
 | Validation hooks         | prek plus declared hook tools                          | yes — policy is unconditional          | validator-only projection; commit lifecycle excluded  |
-| Factory CLI wrappers     | all five `ai.*` runtimes (see note)                    | yes — enterTest exercises files fanout | package/build checks remain separate                  |
+| Factory CLI wrappers     | launcher-bearing `ai.*` runtimes (see note)            | yes — enterTest exercises files fanout | package/build checks remain separate                  |
 | Consumer overlay exports | `pkgs.ai.devTools.*`, MCP server packages              | never unless explicitly selected       | CI build matrix over `ciPackages`                     |
 
 ## The decision rule
@@ -77,14 +79,13 @@ it. If not, put interactive-only tooling in the `!isCI` list. Do not use that
 branch for validation policy: automatic guards belong in flake checks with their
 own narrow closures.
 
-### Every enabled `ai.*` runtime is in the wrapper bucket, unconditionally
+### Enabled runtimes with launcher packages enter the wrapper bucket
 
-The `Examples` column above used to name two wrappers and read as if the bucket
-were selective. It is not: `lib/ai/app/mkBackendTransform.nix` installs a
-package for every enabled runtime, so all five ride the closure whenever they
-are enabled — codex, copilot and kiro always did, `claude` was supposed to and
-did not (it installed on neither backend), and `kimchi` was enabled here on
-2026-09-02.
+`lib/ai/app/mkBackendTransform.nix` installs each enabled runtime's non-null
+launcher package: Claude, Codex, Kimchi and Kiro. github.com Copilot has no
+launcher, so enabling it adds no runtime package to the closure. A consumer may
+also set a launcher's package to null to keep configuration without installing
+its binary.
 
 Measure the MARGINAL runtime cost: the store paths Kimchi adds to the existing
 shell, excluding dependencies already present. Neither the executable's size
@@ -193,10 +194,11 @@ this paragraph would rot the next time one is added.)
 > instruction files are `ai.*`'s own read-only copies (`own`), never `files.*`
 > symlinks; the generator's materializer and the AGENTS.md seed are gone. Kiro
 > and Kimchi settings and Codex daemon settings are owned copies; Copilot writes
-> repository instructions and agent profiles only. Recursive leaf links target
-> one source-tree store root while retaining per-file input contexts. The
-> symlink guard uses devenv's final file target, follows its own runtime's
-> writers before file creation, and reports every conflict before failing.
+> repository instructions and agent profiles only; skills declare a copy gap.
+> Recursive leaf links target one source-tree store root while retaining
+> per-file input contexts. The symlink guard uses devenv's final file target,
+> follows its own runtime's writers before file creation, and reports every
+> conflict before failing.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -341,7 +343,7 @@ Look for `Conflicting file <path>` or `Conflicting non-file <path>` lines.
 devenv tracks managed files in `${config.devenv.state}/files.json`. On every
 run, the cleanup task reads previous state, compares to current config, and
 removes orphaned symlinks pointing into `/nix/store/*`. The repository needs no
-extra top-level skill-link prune: Claude, Copilot and Kiro skills are real
+extra top-level skill-link prune: Claude, Kimchi and Kiro skills are real
 directories with per-file links. Cleanup handles removed entries, and the
 delivery guard handles changed store-link targets. It **only removes symlinks**
 — never real files or directories. This is another reason Layout A → B

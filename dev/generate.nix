@@ -552,7 +552,7 @@
     | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
     | Generated files | N/A | `ai.formatter`, `ai.guards.<name>`, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
-    | Skills | Copy native directories | `ai.skills.*` (Claude + Codex + Kimchi + Kiro) | Same, plus github.com Copilot's `.github/skills/`; project-native paths |
+    | Skills | Copy native directories | `ai.skills.*` (Claude + Codex + Kimchi + Kiro) | Same; github.com Copilot warns because committed store links dangle |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Kimchi) | Same; Kimchi's lands in its project harness settings (see below). Kiro has only per-model native effort |
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Kimchi + Kiro) | Same, plus github.com Copilot's `.github/agents/`; project-native paths |
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
@@ -623,8 +623,9 @@
     | Context | root `AGENTS.md`, shared with Codex and Kiro |
     | Rules | `.github/instructions/<name>.instructions.md`, `applyTo` from the rule's scopes |
     | Agents | `.github/agents/<name>.md` with `name`, `description` and `tools` |
-    | Skills | `.github/skills/<name>/SKILL.md` |
 
+    Skills warn on both backends: committed store links dangle and the copy
+    ledger cannot copy recursive trees. Commit real files under `.github/skills`.
     Home Manager has no repository, so a value set there warns. Environment
     variables, hooks, MCP servers, settings and the shell warn on both
     backends, each with the reason and a link to GitHub's documentation:

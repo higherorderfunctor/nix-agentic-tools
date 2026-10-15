@@ -365,9 +365,10 @@ in {
       lib.all (backend: lib.all (control: control.passed) (builtins.attrValues backend)) (builtins.attrValues ownedControls)
     );
 
-    # Copilot carries the pools it reads under `ai.copilot.github`, which also
-    # proves the normalized options follow a nested pools namespace; Codex
-    # carries the two Copilot does not consume.
+    # Copilot carries every pool its github.com record supports under
+    # `ai.copilot.github`, which also proves the normalized options follow a
+    # nested pools namespace; Codex carries the pools Copilot declares no
+    # backend for.
     module-delivery-normalized-keyed-pools-extend = mkTest "delivery-normalized-keyed-pools-extend" (
       let
         optionPaths = import ../../lib/ai/option-paths.nix {inherit lib pkgs;};
@@ -382,9 +383,9 @@ in {
           skills = ./fixtures/probe-skill;
         };
         runtimeFor = pool:
-          if builtins.elem pool ["environmentVariables" "mcpServers"]
-          then "codex"
-          else "copilot";
+          if (optionPaths.records.copilot.surfaceSupport.${pool}.backends or []) != []
+          then "copilot"
+          else "codex";
       in
         lib.all (
           evaluate:

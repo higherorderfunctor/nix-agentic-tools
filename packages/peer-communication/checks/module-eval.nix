@@ -38,7 +38,7 @@
         inherit evaluate;
         ruleRuntimes = present "rules";
         skillRuntimes = present "skills";
-        inert = inert "rules" backend ++ inert "skills" backend;
+        inert = surface: inert surface backend;
       })))
     backends;
 in {
@@ -60,7 +60,8 @@ in {
       && ruleRuntimes result != []
       && lib.hasInfix "load the peer-communication skill before your first reply" result.config.ai.claude.rules.peer-communication-router.text
       && lib.hasInfix "## Findings: surface, summarize, or defer" (skillText result "claude")
-      && !(lib.any (runtime: hasRule result runtime || hasSkill result runtime) inert)
+      && !(lib.any (hasRule result) (inert "rules"))
+      && !(lib.any (hasSkill result) (inert "skills"))
       && !(result.config.ai.skills ? peer-communication)
       && !(result.config.ai.rules ? peer-communication-router))
     # A per-runtime disable removes both contributions there and nowhere else.

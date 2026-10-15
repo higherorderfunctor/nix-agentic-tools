@@ -60,6 +60,17 @@
         ++ (harness.ownPlan "copilot" "ai:copilot:materialize-instructions" evaluated).targets
       );
     failedAssertions = map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) repo.config.assertions);
+    # Dev skills stay in the root pool until their program migration. Pin the
+    # declared gaps they request rather than suppressing those real warnings.
+    inherit (import ../../lib/ai/option-paths.nix {inherit lib;}) records;
+    expectedWarnings = lib.concatMap (runtime: let
+      support = records.${runtime}.surfaceSupport.skills;
+    in
+      lib.optional (repo.config.ai.${runtime}.enable
+        && repo.config.ai.skills != {}
+        && !(builtins.elem "devenv" support.backends))
+      "ai.skills is set but devenv does not deliver it to ${runtime} (reason: ${support.reason})")
+    (builtins.attrNames records);
 
     # Each unit one writer's directory target will write, as the file it
     # copies: the built file a Markdown unit points at, or its inline text.
@@ -133,10 +144,9 @@
     "instructions-drift: dev/ai.nix fails its own module assertions:\n${lib.concatStringsSep "\n" failedAssertions}";
     assert lib.assertMsg (!(lib.hasInfix "/bin/ai-markdown-window-notice" repo.config.enterShell))
     "instructions-drift: Codex's launcher owns the document warning; shell entry must not duplicate it.";
-    # The repository's own configuration evaluates without a warning: no
-    # context or rule it asks for lands in a file it has switched off, or
-    # anywhere `ai.*` cannot deliver it.
-    assert lib.assertMsg (repo.config.warnings == [])
+    # No instruction or other request may be dropped beyond the declared
+    # root-skill gaps above; the warning matrix separately verifies their cause.
+    assert lib.assertMsg (lib.sort lib.lessThan repo.config.warnings == lib.sort lib.lessThan expectedWarnings)
     "instructions-drift: dev/ai.nix warns:\n${lib.concatStringsSep "\n" repo.config.warnings}";
       pkgs.runCommand "instructions-drift" {} ''
         set -euETo pipefail

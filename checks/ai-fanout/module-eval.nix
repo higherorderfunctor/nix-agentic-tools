@@ -26,7 +26,7 @@ in {
       poolWarnings = evaluated: builtins.filter (lib.hasInfix "ai.copilot.github.") evaluated.config.warnings;
       observation = {
         rules = builtins.attrNames hm.config.ai.copilot.github.rules;
-        skills = builtins.attrNames hm.config.ai.copilot.github.skills;
+        skills = hm.config.ai.copilot.github ? skills;
         warnings = poolWarnings hm;
         definitions = map (definition: definition.file) hm.options.ai.copilot.github.rules.definitionsWithLocations;
       };
@@ -35,9 +35,9 @@ in {
       (mkTest "package-copilot-backend-gate" (
         observation.rules
         == []
-        && observation.skills == []
+        && !observation.skills
         && observation.warnings == []
-        && devenv.config.ai.copilot.github.skills ? stack-plan
+        && !(devenv.config.ai.copilot.github ? skills)
         && devenv.config.ai.copilot.github.rules ? stacked-workflows-router
         && poolWarnings devenv == []
         && consumer.config.ai.copilot.github.rules ? consumer
@@ -670,7 +670,6 @@ in {
           copilot.github = {
             agents.removed = null;
             rules.removed.enable = false;
-            skills.removed = null;
           };
           kimchi.environmentVariables.removed = null;
           kiro = {
@@ -685,7 +684,7 @@ in {
           == null
           && evaluated.config.ai.claude.mcpServers.removed == null
           && evaluated.config.ai.codex.environmentVariables.removed == null
-          && evaluated.config.ai.copilot.github.skills.removed == null
+          && evaluated.config.ai.copilot.github.agents.removed == null
           && evaluated.config.ai.kimchi.environmentVariables.removed == null
           && evaluated.config.ai.kiro.skills.removed == null
           && !evaluated.config.ai.rules.removed.enable

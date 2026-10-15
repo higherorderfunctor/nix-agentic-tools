@@ -28,11 +28,6 @@ _: {
     # Shared packaging guidance covers the AI CLI owners and their recipes.
     ai-clis = {
       scopes = [
-        # The behavioral wrapper check belongs here for the same reason
-        # `packages/kiro-cli/checks/kiro-wrapper-argv.nix` sits in `kiro-wrapper`: editing it
-        # means reasoning about how Copilot discovers config, which is exactly
-        # what `copilot-config-delivery` documents.
-        "packages/copilot-cli/checks/copilot-wrapper-argv.nix"
         "packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix"
         "packages/claude-code/packages/ai/claude-code/package.nix"
         "packages/copilot-cli/packages/ai/copilot-cli/package.nix"
@@ -65,7 +60,6 @@ _: {
         "packages/copilot-cli/lib/mkCopilot.nix"
         "packages/kimchi/lib/mkKimchi.nix"
         "packages/kiro-cli/lib/mkKiro.nix"
-        "packages/*/lib/wrapPackage.nix"
         "packages/*/modules/devenv/**"
       ];
       sources = ["host-config-merge"];

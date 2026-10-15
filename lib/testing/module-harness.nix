@@ -291,9 +291,9 @@
   # This is the WIRING level: it proves the module fed the right value into the
   # wrapper. Argv SEMANTICS — that the `@` prefix is present, that a root var
   # still expands at launch rather than at build, that a value survives as a
-  # single argv token — are owned by the two run-the-wrapper checks
-  # (packages/copilot-cli/checks/copilot-wrapper-argv.nix, packages/kiro-cli/checks/kiro-wrapper-argv.nix), which
-  # EXECUTE the wrapper against an argv-printing stub. A grep cannot prove any
+  # single argv token — are owned by
+  # packages/kiro-cli/checks/kiro-wrapper-argv.nix, which executes the wrapper
+  # against an argv-printing stub. A grep cannot prove any
   # of those three: a builder-frozen `/homeless-shelter/...` and a live
   # `''${HOME}/...` are equally "present". Do not re-assert them here.
   #

@@ -27,9 +27,9 @@
             matcher = ["**/*.ts"];
             text = "SECURITY-RULE";
           };
-          skills.example = skillFixture;
         };
       };
+      skills.example = skillFixture;
     };
   };
   writerTargets = evaluated: let
@@ -69,9 +69,9 @@ in {
       let
         options = (evalDevenv {}).options.ai.copilot;
       in
-        lib.all (pool: options.github ? ${pool} && !(options ? ${pool})) ["agents" "agentsDir" "context" "rules" "rulesDir" "skills" "skillsDir"]
+        lib.all (pool: options.github ? ${pool} && !(options ? ${pool})) ["agents" "agentsDir" "context" "rules" "rulesDir"]
         && options.github.normalized ? context
-        && lib.all (pool: !(options.github ? ${pool})) ["environmentVariables" "mcpServers" "settings" "shell"]
+        && lib.all (pool: !(options.github ? ${pool})) ["environmentVariables" "mcpServers" "settings" "shell" "skills" "skillsDir"]
     );
 
     # Home Manager has no repository: it writes nothing and warns for every
@@ -84,7 +84,7 @@ in {
       in
         lib.all (path: !(lib.hasPrefix ".copilot" path) && !(lib.hasPrefix ".github" path)) (builtins.attrNames result.config.home.file)
         && result.config.ai.copilot.files == {}
-        && lib.all warns ["ai.context" "ai.copilot.github.agents" "ai.copilot.github.context" "ai.copilot.github.rules" "ai.copilot.github.skills"]
+        && lib.all warns ["ai.context" "ai.copilot.github.agents" "ai.copilot.github.context" "ai.copilot.github.rules" "ai.skills"]
     );
 
     # `projectDir` keeps one type and default in both trees, but only devenv
@@ -105,7 +105,6 @@ in {
         && lib.all (path: fromGeneratedTree path files.${path}) [
           ".custom-github/agents/reviewer.md"
           ".custom-github/instructions/security.instructions.md"
-          ".custom-github/skills/example/SKILL.md"
         ]
         && files ? "AGENTS.md"
         && !(files ? ".github/instructions/security.instructions.md")
@@ -187,20 +186,12 @@ in {
       in
         !(enabled.config.files ? ".github/instructions/security.instructions.md")
         && !(enabled.config.files ? ".github/agents/reviewer.md")
-        && targets.".github/instructions".ledger == "materialize/copilot-github-instructions.manifest"
+        && targets.".github/instructions".ledger == "materialize/copilot-instructions.manifest"
         && targets.".github/instructions".units ? "security.instructions.md"
         && targets.".github/agents".ledger == "materialize/copilot-github-agents.manifest"
         && targets.".github/agents".units ? "reviewer.md"
         && lib.all (target: target.units == {}) (builtins.attrValues (writerTargets disabled))
         && lib.all (target: target.units == {}) (builtins.attrValues (writerTargets empty))
-    );
-
-    module-copilot-devenv-skills = mkTest "copilot-devenv-skills" (
-      let
-        result = evalDevenv populated;
-      in
-        fromGeneratedTree ".github/skills/example/SKILL.md" (deliveredFiles result.config).".github/skills/example/SKILL.md"
-        && (markdownInput result ".github/skills/example").source == skillFixture
     );
   };
 }

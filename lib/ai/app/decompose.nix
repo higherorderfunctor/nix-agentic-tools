@@ -8,6 +8,7 @@
   entries,
   message,
   nonEmpty,
+  options,
   present,
   sharedSurfaces,
 }: let
@@ -19,6 +20,16 @@
   defaultReason = "${runtime}'s surfaceSupport does not consume this shared surface.";
   # A runtime unit's path relative to `ai.<runtime>`, inside its namespace.
   runtimePath = surface: namespaces.pool appRecord surface ++ [surface];
+  # Generated keyed folds have their own provenance; only consumer overrides
+  # of an undelivered normalized pool need a second diagnostic unit.
+  normalizedUnits = surface: let
+    path = ["ai" runtime] ++ namespaces.pool appRecord surface ++ ["normalized" surface];
+    option = lib.attrByPath path null options;
+  in
+    lib.optional (option
+      != null
+      && option.highestPrio < 1500
+      && lib.any (definition: definition.file != toString ./mkBackendTransform.nix) option.definitionsWithLocations) {inherit path;};
   units = surface:
     [
       {
@@ -78,7 +89,7 @@
     then
       lib.concatMap (unit:
         lib.optional (present unit.path)
-        (message unit.path (declaration.reason or defaultReason))) (units surface)
+        (message unit.path (declaration.reason or defaultReason))) (units surface ++ normalizedUnits surface)
     else lib.concatMap (gapWarnings surface) (declaration.gaps or []);
 in {
   warnings = lib.concatMap surfaceWarnings sharedSurfaces;

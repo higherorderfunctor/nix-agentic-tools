@@ -11,7 +11,9 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > keyed withdrawal; runtime declarations supply normalized policy gaps and the
 > warning suite generates coverage for every runtime, surface and backend; a
 > record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
-> is github.com Copilot with its pools under `ai.copilot.github`.
+> is github.com Copilot with its pools under `ai.copilot.github`; explicit
+> normalized overrides warn on unavailable backends without diagnosing folds
+> twice.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -122,8 +124,8 @@ upstream modules write the same files: `ai.claude.enable` beside Home Manager's
 `programs.claude-code.enable` or devenv's `claude.code.enable` fails evaluation.
 
 **Package installation is NOT per-factory work.**
-`lib/ai/app/mkBackendTransform.nix` installs a package by default for every
-enabled runtime, lowering it to `home.packages` on Home Manager and `packages`
+`lib/ai/app/mkBackendTransform.nix` installs each enabled runtime's non-null
+launcher package, lowering it to `home.packages` on Home Manager and `packages`
 on devenv — the two option names being the whole reason it cannot live in a
 factory without being written twice per runtime. A backend spec that says
 nothing installs the selected launcher package; one that wraps its binary
@@ -162,8 +164,8 @@ per-factory `home.packages` / `packages` write with no shared requirement, and
 user-globally. Silence now means "install the plain package", so the same
 omission is inert rather than invisible. `checks/ai-fanout/module-eval.nix`'s
 `every-runtime-installs-package` asserts a non-empty package list for every
-runtime on both backends under the unchanged defaults. Explicit null is the
-consumer opt-out; it does not weaken the default-install invariant.
+runtime with a launcher on both backends under the unchanged defaults. Explicit
+null is the consumer opt-out; it does not weaken the default-install invariant.
 
 On devenv, the installation block also emits one PATH-provenance notice for each
 enabled runtime with a non-null package. It derives the executable name from the
@@ -397,8 +399,8 @@ enabled ecosystem whose native model preserves the option's semantics):
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Kimchi, and Kiro use
-  their established native directories, and github.com Copilot uses
-  `.github/skills` on devenv only.
+  their established native directories. github.com Copilot warns: committed
+  store links dangle, and directory ledgers cannot copy recursive skill trees.
 - `ai.agents` — only the normalized
   `{ description, instructions = { text | source; }; tools?; }` record; a string
   or path is a type error there (a path is coerced to a thrown message, because
@@ -629,7 +631,11 @@ backend restriction or `when` predicate; `each` checks keyed entries,
 `effective` checks the winning scalar input, and `rootOnly` restricts a gap to
 the portable root. Predicates and dynamic reasons receive the backend, config,
 runtime cfg, field value, whole entry value, path and entry name. Keyed runtime
-replacements and tombstones withdraw inherited entries before warnings.
+replacements and tombstones withdraw inherited entries before warnings. Explicit
+normalized-pool overrides also warn when the backend delivers no pool. Option
+priority excludes bare defaults; generated keyed folds carry their source file
+through `mkDefinition` so diagnostics do not mistake derived entries for
+consumer requests or report the raw request twice.
 
 `checks/ai-warnings` generates populated, empty and disabled probes from the
 real runtime records, the evaluated shared-surface registry and both backends.

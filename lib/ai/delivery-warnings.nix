@@ -88,7 +88,7 @@
     && builtins.elem (builtins.elemAt path 1) config.ai.internal.sharedSurfaces
     || lib.any (pool: supports pool && lib.lists.hasPrefix (poolPath pool) path) config.ai.internal.sharedSurfaces;
   decomposition = import ./app/decompose.nix {inherit lib;} {
-    inherit appRecord backend config entries message nonEmpty present;
+    inherit appRecord backend config entries message nonEmpty options present;
     sharedSurfaces = config.ai.internal.sharedSurfaces;
   };
   rowWarnings = lib.concatMap (row:

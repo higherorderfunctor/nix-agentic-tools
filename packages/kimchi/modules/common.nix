@@ -17,7 +17,7 @@
 # any agent working on a kimchi integration, whichever harness it runs in, so the
 # `presentSkillRuntimes` filter inside the factory gives the right set on its own
 # and no list is hardcoded here.
-{
+{backend}: {
   config,
   lib,
   pkgs,
@@ -58,6 +58,7 @@
 in {
   imports = [
     (import ../../../lib/ai/mkSkillPackageModule.nix {
+      inherit backend;
       name = "kimchi-docs";
       enableDescription = "the pinned Kimchi documentation snapshot as a searchable skill";
       skills = {runtime, ...}: {
