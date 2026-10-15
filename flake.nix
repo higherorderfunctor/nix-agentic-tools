@@ -212,6 +212,19 @@
         })
       checkWorlds.${system}.checks);
 
+    # Each revision supplies its own owner map, declarations, and packages to
+    # the native extraction planner. Attribute names stay lazy if a drv fails.
+    ciExtractedFacts = let
+      system = "aarch64-darwin";
+      facts = import ./lib/extracted/facts.nix {inherit lib;};
+      owners = import ./checks/extracted/owners.nix;
+      selected = lib.filterAttrs (_: dir: facts.hostRunOn system dir) owners;
+    in
+      lib.mapAttrs (name: _: {
+        drvPath = self.ciPackages.${system}.${name}.passthru.extracted.drvPath;
+      })
+      selected;
+
     ciCheckEvaluator =
       forAllSystems (system:
         import ./dev/ci-check-evaluator.nix {pkgs = pkgsFor system;});

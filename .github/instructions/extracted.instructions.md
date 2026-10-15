@@ -7,10 +7,9 @@ applyTo: "checks/extracted/**,lib/extracted/**,lib/git-tool-settings/**,packages
 
 # Extracted facts: the architecture
 
-> **Last verified:** 2026-10-11 — every extractor owner is on the contract
-> (#2420 through #2444); the pre-contract machinery is deleted; probes are not
-> on the contract yet. The probe work rewrites the "Probes" section when it
-> lands.
+> **Last verified:** 2026-10-15 — every extractor owner is on the contract;
+> Darwin CI selects host-run owners from declarations through the shared Nix
+> owner map. Probes are not on the contract yet.
 
 The contract (`facts-contract.md`, same category) is the spec: file shapes,
 functions, failure kinds. This file is the why and the rules that keep the
@@ -123,9 +122,9 @@ never as a fact source for Nix. The probe work owns the rewrite of this section.
 
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-11 — owner checks use `mkOwnerCheck`; their
-> `passthru.regenerate` rewrites and formats measured raws, and update scripts
-> invoke it with `regenCommand`.
+> **Last verified:** 2026-10-15 — owner checks use `mkOwnerCheck`; the pure
+> `ciExtractedFacts` output reads the same declarations through `hostRunOn` and
+> shares the logical owner map with `checks.extracted-index`.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -230,6 +229,12 @@ differing count or string is a decision, and the failure prints the row.
 Needs only `lib`, like `reconcile`, so an option module can call it before
 `pkgs` exists.
 
+`declarations dir` reads the owner's required `facts.json` once for both `load`
+and `hostRunOn system dir`. The latter selects owners with a `host-run` row
+requiring that system, using the configured systems as the default for an
+omitted `systems` field. The Darwin CI planner uses it without evaluating Darwin
+checks on Linux.
+
 ### `load`
 
 ```nix
@@ -240,14 +245,15 @@ load {
 → merge result // { systems = [ "<system>" ]; }
 ```
 
-The only way to read raws. Reads `facts.json` (required: its absence throws,
-naming the path), `decisions.json` (optional, `{}` when absent) and
-`<system>.json` for every system in `config/systems.nix` present under `dir`,
-then calls `merge` against every system in `config/systems.nix`. A configured
-system without a raw therefore fails as `missing-system` for every key its
-declaration requires; a declaration's own `systems` still narrows that. A file
-for a system outside `config/systems.nix` is never read. `systems` lists the
-raws found, for information.
+The only way to read raws. Reads `facts.json` (required: its absence throws when
+`load` is forced to weak head normal form, naming the path), `decisions.json`
+(optional, `{}` when absent) and `<system>.json` for every system in
+`config/systems.nix` present under `dir`, then calls `merge` against every
+system in `config/systems.nix`. A configured system without a raw therefore
+fails as `missing-system` for every key its declaration requires; a
+declaration's own `systems` still narrows that. A file for a system outside
+`config/systems.nix` is never read. `systems` lists the raws found, for
+information.
 
 ### `merge`
 
@@ -352,10 +358,10 @@ owner plus `index.json` across owners, each key carrying `value`, `bySystem`,
 `type`, `source`, `combine`. External readers (skills, CI scripts) read these
 files; Nix consumers read the aggregate directly.
 
-`checks.extracted-index` loads the explicit logical-name-to-directory map in
-`checks/extracted/index.nix`. These names identify its JSON files and index keys
-independently of owner directory names. External readers build that attribute
-and read its files.
+`checks.extracted-index` and the Darwin CI planner load the explicit
+logical-name-to-directory map in `checks/extracted/owners.nix`. These names
+identify its JSON files and index keys independently of owner directory names.
+External readers build that attribute and read its files.
 
 ## Drift
 

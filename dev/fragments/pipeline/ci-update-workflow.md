@@ -1,9 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-14 — Renovate owns GitHub Actions pins
-> (`renovate.json5`), the sweep keeps every Nix input; Linux test installs
-> Hestia before IFD warming and a non-required eval-once check matrix runs
-> beside it.
+> **Last verified:** 2026-10-15 — native extracted-facts CI evaluates one Nix
+> planner for logical owners, Darwin declarations, and extraction derivations.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -253,12 +251,17 @@ publication; every Cachix step holding the token, package matrix and update
 workers alike, carries `pushFilter: kiro-cli`.
 
 Codex and Kiro facts are host-run, so Linux updates can regenerate only their
-Linux raws. The darwin `extracted-facts` job runs on every PR with the sorted
-owner matrix `chatgpt-codex`, `kiro-cli`; it runs each owner's drift check's
-`passthru.regenerate`, then checks the facts. Both required build contexts also
-require this job's success. The Kiro patch Scope gate no longer gates the
-producer; extracted-directory changes alone no longer select patched Kiro
-validation.
+Linux raws. The Linux `plan-extracted-facts` job evaluates the pure
+`ciExtractedFacts` flake output at HEAD and at the immutable base revision. Each
+revision uses its own logical owner map, `lib.extracted.hostRunOn` predicate and
+Darwin `ciPackages` to return `{ <owner> = { drvPath = ...; }; }` for owners
+declared host-run on Darwin. It does not evaluate Darwin checks on Linux. A
+shared `lib/extracted/` change or unavailable base comparison schedules every
+HEAD owner; if HEAD derivation evaluation fails, the same output is retried for
+names only. `workflow_dispatch` runs all selected owners. An empty matrix skips
+the Darwin producer; both required build contexts accept that only when planning
+passed. The producer still regenerates and checks each selected owner's facts.
+The Kiro patch Scope gate does not gate it.
 
 On a same-repository `update/*` branch, changed raws are committed with bot
 author and committer identities and pushed with the App token, preserving

@@ -1,9 +1,8 @@
 # Extracted facts: the architecture
 
-> **Last verified:** 2026-10-11 — every extractor owner is on the contract
-> (#2420 through #2444); the pre-contract machinery is deleted; probes are not
-> on the contract yet. The probe work rewrites the "Probes" section when it
-> lands.
+> **Last verified:** 2026-10-15 — every extractor owner is on the contract;
+> Darwin CI selects host-run owners from declarations through the shared Nix
+> owner map. Probes are not on the contract yet.
 
 The contract (`facts-contract.md`, same category) is the spec: file shapes,
 functions, failure kinds. This file is the why and the rules that keep the
