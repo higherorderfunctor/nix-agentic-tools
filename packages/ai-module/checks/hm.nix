@@ -68,6 +68,14 @@
       recursive = true;
     };
   };
+  # The directory symlink `link` is delivered as one link, not walked into.
+  linkedStore = "${./fixtures}";
+  linked = evaluate {
+    linked = {
+      content.source = linkedStore;
+      recursive = true;
+    };
+  };
   directory = evaluate {directory.content.source = ./fixtures/a;};
   executable = evaluate {
     script = {
@@ -89,6 +97,7 @@
     ++ lib.optional (map (item: builtins.attrNames item.home.file) evaluated != [["settings.json"] [] [] ["settings.json"] ["settings.json"] []]) "method sink"
     ++ lib.optional (builtins.attrNames tree.home.file != ["tree/b/c.md"]) "recursive leaves"
     ++ lib.optional (builtins.attrNames directory.home.file != ["directory"]) "directory link"
+    ++ lib.optional (lib.mapAttrs (_: item: "${item.source}") (lib.filterAttrs (name: _: lib.hasPrefix "linked/link" name) linked.home.file) != {"linked/link" = "${linkedStore}/link";} || !linked.home.file ? "linked/a/b/c.md") "directory symlink leaf"
     ++ lib.optional (executable.home.file.script.executable != true) "executable link"
     ++ lib.optional (builtins.attrNames graph != ["ai2-files-ready" "ai2-files2-prune" "ai2-ready"]) "empty plan emits only prune"
     ++ lib.optional (builtins.attrNames forcedEmpty.home.activation != builtins.attrNames graph) "forced empty drain"

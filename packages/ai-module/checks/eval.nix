@@ -54,8 +54,9 @@
         }) "mode and executable cannot both be set")
       (bad "linked" {
         content.source = linkedTree;
+        method = "ro";
         recursive = true;
-      } ''recursive source contains a directory symlink at "linked/link"'')
+      } ''recursive ro source contains a directory symlink at "linked/link"'')
       (bad "bad-value" {
         content.value.a = _: 1;
         format = "json";
@@ -171,6 +172,13 @@
     content.source = storeTree;
     recursive = true;
   });
+  # A symlinked directory is one link leaf, never walked into.
+  linkedStore = "${linkedTree}";
+  linkLeaves = backend:
+    builtins.filter (leaf: lib.hasPrefix "linked/link" leaf.path) (plan backend (single "linked" {
+      content.source = linkedStore;
+      recursive = true;
+    }));
   failures =
     lib.concatLists (errors ++ collisionErrors ++ typeErrors)
     ++ derivationSource
@@ -186,6 +194,7 @@
     ++ lib.optional (map (leaf: leaf.path) leaves != ["tree/b/c.md"] || builtins.toJSON (builtins.head leaves).content.source != builtins.toJSON file || builtins.attrNames (builtins.getContext (builtins.toJSON leaves)) == []) "recursive path leaves"
     ++ lib.optional ((builtins.head stringLeaves).content.source != "${storeTree}/b/c.md" || builtins.attrNames (builtins.getContext (builtins.toJSON stringLeaves)) == []) "recursive string leaves"
     ++ lib.optional ((builtins.head (plan "hm" (single "directory" {content.source = tree;}))).path != "directory") "directory link"
+    ++ lib.concatMap (backend: lib.optional (map (leaf: [leaf.path leaf.content.source]) (linkLeaves backend) != [["linked/link" "${linkedStore}/link"]]) "${backend} directory symlink leaf") ["devenv" "hm"]
     ++ lib.optional (plan "hm" (single "off" {enable = false;}) != []) "disabled";
 in {
   checks.files2-eval = assert lib.assertMsg (failures == []) "files2 eval fixtures failed: ${lib.concatStringsSep ", " failures}";

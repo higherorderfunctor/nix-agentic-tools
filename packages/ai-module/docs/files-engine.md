@@ -61,7 +61,7 @@ enum and mode strings.
 | `ro` mode without owner read permission                                                                 | `files2."<path>": ro mode must grant owner read permission`                                                   |
 | Expanded leaf duplicates another leaf or explicit target, or a directory target contains another target | `files2."<path>": destination overlaps "<other>"`                                                             |
 | Two or more runtimes declare one destination at layer 1 (an `enable = false` entry counts as a claim)   | `files2."<path>": runtime owners <a> and <b> claim one destination` (all owners, sorted, joined with " and ") |
-| Source symlink resolves to a directory during recursive walk                                            | `files2."<path>": recursive source contains a directory symlink at "<leaf>"`                                  |
+| Recursive `ro` source with a symlink that resolves to a directory (a copy has no file bytes for it)     | `files2."<path>": recursive ro source contains a directory symlink at "<leaf>"`                               |
 
 For `rw`, text/source/run bytes must decode as the selected codec's root map;
 failure is a runtime error naming the path and codec, before changing disk.
@@ -80,14 +80,16 @@ markdown source can use `symlink` or `ro`; its tag does not imply a formatter.
 owner claims ([layer 1](DESIGN.md#layer-1-runtime-file-overrides)) and emits one
 sorted plan. It resolves backend-specific methods, validates paths, renders
 `value` with the selected codec, and recursively walks `source` directories with
-`builtins.readDir`. Regular files and file symlinks become leaves under
-`<target>/<relative leaf>`; directory symlinks are refused. Every leaf carries
-its full root-relative path, source, method, format, and permissions. A
-recursive walk preserves path values or store-string context in its child
-sources, so serialized plans retain store references. A non-recursive directory
-symlink is one path. Sources are probed only when `recursive = true`, so a
-derivation source is never built at evaluation; a non-recursive directory given
-to `ro` is refused by the engine at runtime (`source must be a file`).
+`builtins.readDir`. Regular files and symlinks become leaves under
+`<target>/<relative leaf>`. A symlink is never followed, so a `symlink` entry
+delivers a directory symlink as one native link to its source path, as Home
+Manager's recursive link and the old devenv per-leaf walk did; `ro` refuses it.
+Every leaf carries its full root-relative path, source, method, format, and
+permissions. A recursive walk preserves path values or store-string context in
+its child sources, so serialized plans retain store references. A non-recursive
+directory symlink is one path. Sources are probed only when `recursive = true`,
+so a derivation source is never built at evaluation; a non-recursive directory
+given to `ro` is refused by the engine at runtime (`source must be a file`).
 Collisions are checked after expansion, including ancestor/descendant overlaps.
 The plan contains no per-consumer writer or ledger declaration.
 

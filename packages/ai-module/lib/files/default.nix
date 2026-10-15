@@ -133,7 +133,10 @@
     if builtins.isString method
     then method
     else method.${backend};
-  walk = target: source: let
+  # A symlink is never followed: it is one leaf, so a directory symlink is
+  # delivered as one link, as Home Manager's recursive link and the old devenv
+  # walk did. `ro` copies file bytes, and a directory symlink has none to copy.
+  walk = method: target: source: let
     entries = builtins.readDir source;
     visit = name: let
       child = source + "/${name}";
@@ -141,20 +144,15 @@
       kind = entries.${name};
     in
       if kind == "directory"
-      then walk leaf child
-      else if kind == "symlink" && isDirectory child
-      then [
-        {
-          path = leaf;
-          source = child;
-          error = error target ''recursive source contains a directory symlink at "${leaf}"'';
-        }
-      ]
+      then walk method leaf child
       else [
-        {
-          path = leaf;
-          source = child;
-        }
+        ({
+            path = leaf;
+            source = child;
+          }
+          // lib.optionalAttrs (method == "ro" && kind == "symlink" && isDirectory child) {
+            error = error target ''recursive ro source contains a directory symlink at "${leaf}"'';
+          })
       ];
   in
     lib.concatMap visit (builtins.attrNames entries);
@@ -211,7 +209,7 @@
       if !entry.enable || problem != null
       then []
       else if entry.recursive
-      then walk path source
+      then walk method path source
       else [{inherit path source;}];
     # The delivered content carries `requires`' string context after the walk,
     # since `readDir` would build it at evaluation.
