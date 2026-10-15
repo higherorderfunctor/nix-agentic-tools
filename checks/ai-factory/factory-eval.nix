@@ -29,6 +29,7 @@
     settings.reasoningEffort = "high";
     shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
+    worktrees.enable = true;
   };
   decomposeCase = backend: supportedPools: let
     record = ai.app.mkRuntime {

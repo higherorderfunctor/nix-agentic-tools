@@ -70,6 +70,9 @@
       != {}
     else if surface == "context"
     then aiCommon.hasContent value
+    # The root location has a default; only an enable value requests the policy.
+    else if surface == "worktrees"
+    then (value.enable or null) != null
     else nonEmpty value;
   message = path: reason: "${lib.showOption path} is set but ${backend} does not deliver it to ${runtime} (reason: ${reason})";
   gapRows = builtins.filter (row:

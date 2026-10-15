@@ -210,14 +210,14 @@ method("newSessionAdmitted", (text) =>
   replace(
     text,
     "let d = o?.overrideSessionId ?? wLt()",
-    "if (!o?.isEmptyWorkspace) { const resident = this.sessionState(o?.overrideSessionId); t = resident ? await nixRoots.residentRequest(t, resident) : r?.serverSession ? await nixRoots.workflowRequest(this, t, r.serverSession.ownerSessionId, Uke(t, false)) : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false)); } let d = o?.overrideSessionId ?? wLt()",
+    "if (!o?.isEmptyWorkspace) { const resident = this.sessionState(o?.overrideSessionId); t = resident ? await nixRoots.residentRequest(t, resident) : r?.serverSession ? await nixRoots.workflowRequest(this, t, r.serverSession.ownerSessionId, Uke(t, false)) : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false), this.workspaceTrusted); } let d = o?.overrideSessionId ?? wLt()",
   ),
 );
 method("loadSessionAdmitted", (text) =>
   replace(
     text,
     "let l = Uke(t, s?.isEmptyWorkspace === !0)",
-    "if (!s?.isEmptyWorkspace) { const resident = this.sessionState(t.sessionId); if (!resident && r?.nixRestoreRoots) t = await nixRoots.restoreRequest(this, t); t = resident ? await nixRoots.residentRequest(t, resident) : nixRoots.requestAuthority(t) ? t : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false)); } let l = Uke(t, s?.isEmptyWorkspace === !0)",
+    "if (!s?.isEmptyWorkspace) { const resident = this.sessionState(t.sessionId); if (!resident && r?.nixRestoreRoots) t = await nixRoots.restoreRequest(this, t); t = resident ? await nixRoots.residentRequest(t, resident) : nixRoots.requestAuthority(t) ? t : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false), this.workspaceTrusted); } let l = Uke(t, s?.isEmptyWorkspace === !0)",
   ),
 );
 
@@ -227,7 +227,7 @@ method("getOrCreateSpecSession", (text) => {
   text = replace(
     text,
     "let u = await this.persistence.loadSession(o, r);",
-    "const nixRequest = r.length ? await nixRoots.resolveRequest(this.homeDir, { cwd: r[0] }, r) : undefined; let u = await this.persistence.loadSession(o, nixRequest ? Uke(nixRequest, false) : []);",
+    "const nixRequest = r.length ? await nixRoots.resolveRequest(this.homeDir, { cwd: r[0] }, r, this.workspaceTrusted) : undefined; let u = await this.persistence.loadSession(o, nixRequest ? Uke(nixRequest, false) : []);",
   );
   return replace(
     text,
@@ -288,7 +288,7 @@ method("createNewSessionState", (text) => {
   text = replace(
     text,
     "{ let p =",
-    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId, t.cwd) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd); let p =",
+    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId, t.cwd) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd, nixWorktrees.requestPolicy(t)); let p =",
   );
   text = replace(
     text,
@@ -306,16 +306,49 @@ method("hydrateSessionForLoad", (text) =>
   replace(
     text,
     "lBr(w); let v =",
-    "lBr(w); m.nixWorkspaceRoots = nixRoots.requestAuthority(r) ?? { version: 1, protocol: Uke(r, d) }; m.nixPromptSnapshot = n ? nixPrompts.storedSnapshot(n.metadata) : await nixPrompts.resolveSnapshot(this.homeDir, d ? undefined : r.cwd); let v =",
+    "lBr(w); m.nixWorkspaceRoots = nixRoots.requestAuthority(r) ?? { version: 1, protocol: Uke(r, d) }; m.nixPromptSnapshot = n ? nixPrompts.storedSnapshot(n.metadata) : await nixPrompts.resolveSnapshot(this.homeDir, d ? undefined : r.cwd, nixWorktrees.requestPolicy(r)); let v =",
   ),
 );
-method("createSessionState", (text) =>
-  replace(
+method("createSessionState", (text) => {
+  text = replace(
+    text,
+    "let Z = this.createSessionPolicy(t, r, n, T, f);",
+    "let Z = this.createSessionPolicy(t, r, n, T, f, await nixRoots.writableRoot(this.homeDir, r, this.workspaceTrusted));",
+  );
+  return replace(
     text,
     "gt = { sessionId: t,",
     "gt = { nixWorkspaceRoots: c.nixWorkspaceRoots, nixPromptSnapshot: c.nixPromptSnapshot, sessionId: t,",
+  );
+});
+method("rebuildSessionPolicy", (text) =>
+  replace(
+    text,
+    "c = this.createSessionPolicy(t, n.workspacePaths, a, s, r),",
+    "c = this.createSessionPolicy(t, n.workspacePaths, a, s, r, await nixRoots.writableRoot(this.homeDir, n.workspacePaths, this.workspaceTrusted)),",
   ),
 );
+// The worktree policy root is writable through the vendor's own session-scoped
+// workspace rule shape, under a source that is never persisted as a user answer.
+const workspaceRule = unique(
+  (n) =>
+    ts.isFunctionDeclaration(n) &&
+    n.name?.text === "ODt" &&
+    n.parameters.length === 3,
+  "workspace rule scoping",
+);
+method("createSessionPolicy", (text) => {
+  text = replace(
+    text,
+    "createSessionPolicy(t, r, n, i, o) {",
+    "createSessionPolicy(t, r, n, i, o, nixWritable) {",
+  );
+  return replace(
+    text,
+    "initialSessionRules: o?.length ? rxo(o) : void 0,",
+    `initialSessionRules: [...(o?.length ? rxo(o) : []), ...(nixWritable ? ${workspaceRule.name.text}({ scope: "session", source: "nix:chat.worktrees", rule: { capability: "fs_write", match: ["./**"], effect: "allow" } }, nixWritable, this.homeDir).rules : [])],`,
+  );
+});
 method("buildInitialSessionMetadata", (text) =>
   replace(
     text,
@@ -388,7 +421,7 @@ for (let index = 0; index < edits.length; index++) {
 const importAt = source.startsWith("#!") ? source.indexOf("\n") + 1 : 0;
 source =
   source.slice(0, importAt) +
-  `import * as nixPrompts from "./prompt-files.mjs";\nimport * as nixRoots from "./additional-roots.mjs";\n` +
+  `import * as nixPrompts from "./prompt-files.mjs";\nimport * as nixWorktrees from "./worktree-policy.mjs";\nimport * as nixRoots from "./additional-roots.mjs";\n` +
   source.slice(importAt);
 const diagnostics = ts.createSourceFile(
   path,

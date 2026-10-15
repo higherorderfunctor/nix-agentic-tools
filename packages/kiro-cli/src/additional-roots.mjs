@@ -1,16 +1,8 @@
 // Relative permission rules apply in every admitted root; built-in modes and
 // bundled profiles thereby get the vendor default fs_read ./** allow there.
-import { realpath } from "node:fs/promises";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-  sep,
-} from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { settingsLayers } from "./session-settings.mjs";
+import * as worktrees from "./worktree-policy.mjs";
 
 const authority = Symbol("host workspace roots");
 const metadataKey = "nixWorkspaceRoots";
@@ -19,25 +11,17 @@ function fail(message) {
   throw new Error(`chat.additionalDirectories: ${message}`);
 }
 
-// Worktrees may not exist yet. Resolve existing ancestors without creating them.
-async function canonical(path) {
-  try {
-    return await realpath(path);
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-    const parent = dirname(path);
-    if (parent === path) throw error;
-    return join(await canonical(parent), basename(path));
-  }
-}
-
-export async function resolveRequest(homeDir, request, roots) {
+export async function resolveRequest(
+  homeDir,
+  request,
+  roots,
+  workspaceTrusted,
+) {
   // roots comes from the vendor validator, retaining protocol failures.
   const candidates = [...roots];
-  for (const { path, base, value } of await settingsLayers(
-    homeDir,
-    request.cwd,
-  )) {
+  const layers = await settingsLayers(homeDir, request.cwd);
+  const worktree = await worktrees.admit(layers, request.cwd, workspaceTrusted);
+  for (const { path, base, value } of layers) {
     const entries = value["chat.additionalDirectories"];
     if (entries === undefined) continue;
     if (!Array.isArray(entries)) fail(`${path}: expected an array of paths`);
@@ -53,31 +37,52 @@ export async function resolveRequest(homeDir, request, roots) {
       );
     }
   }
+  if (worktree?.root) candidates.push(worktree.root);
   const seen = new Set(),
     unique = [];
   for (const root of candidates) {
-    const key = await canonical(root);
+    const key = await worktrees.canonical(root);
     if (!seen.has(key)) {
       seen.add(key);
       unique.push(root);
     }
   }
-  return {
-    ...request,
-    additionalDirectories: unique.slice(1),
-    [authority]: Object.freeze({
-      version: 1,
-      protocol: Object.freeze([...roots]),
-    }),
-  };
+  return worktrees.carry(
+    {
+      ...request,
+      additionalDirectories: unique.slice(1),
+      [authority]: Object.freeze({
+        version: 1,
+        protocol: Object.freeze([...roots]),
+      }),
+    },
+    worktree,
+  );
+}
+
+// Membership alone leaves writes prompting. Only the admitted policy root is
+// writable; generic configured roots keep the vendor default.
+export async function writableRoot(homeDir, roots, workspaceTrusted) {
+  if (!roots.length) return undefined;
+  const root = (
+    await worktrees.admit(
+      await settingsLayers(homeDir, roots[0]),
+      roots[0],
+      workspaceTrusted,
+    )
+  )?.root;
+  if (!root) return undefined;
+  const key = await worktrees.canonical(root);
+  for (const candidate of roots)
+    if ((await worktrees.canonical(candidate)) === key) return candidate;
 }
 
 export async function residentRequest(request, resident) {
   // A join must use the same identity as the already-constructed tools/policy.
   if (
     resident.workspacePaths.length &&
-    (await canonical(request.cwd)) !==
-      (await canonical(resident.workspacePaths[0]))
+    (await worktrees.canonical(request.cwd)) !==
+      (await worktrees.canonical(resident.workspacePaths[0]))
   )
     fail("resident session has a different working directory");
   return {
@@ -158,6 +163,7 @@ export async function ownerRoots(
       agent.homeDir,
       { cwd: childRoots[0] },
       [childRoots[0]],
+      agent.workspaceTrusted,
     );
     return [request.cwd, ...request.additionalDirectories];
   }
@@ -174,14 +180,15 @@ export async function ownerRoots(
     agent.homeDir,
     { cwd: protocol[0] },
     protocol,
+    agent.workspaceTrusted,
   );
   return [request.cwd, ...request.additionalDirectories];
 }
 
 async function validateSubset(allowedRoots, roots) {
-  const allowed = await Promise.all(allowedRoots.map(canonical));
+  const allowed = await Promise.all(allowedRoots.map(worktrees.canonical));
   for (const root of roots) {
-    const candidate = await canonical(root);
+    const candidate = await worktrees.canonical(root);
     if (
       !allowed.some((base) => {
         const suffix = relative(base, candidate);
@@ -234,6 +241,7 @@ export async function restoreRequest(agent, request) {
     agent.homeDir,
     { ...request, cwd: protocol[0], additionalDirectories: protocol.slice(1) },
     protocol,
+    agent.workspaceTrusted,
   );
 }
 

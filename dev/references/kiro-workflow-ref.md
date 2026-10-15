@@ -1530,15 +1530,22 @@ matches against _captured output_, so it inherits the empty-capture hazard
 wholesale — under a cheap model the condition can never match and the loop
 silently runs to `maxIterations` (ledger §7.6).
 
-The repository no longer injects per-turn workflow reminders or decodes the
-vendor steering. The separate opt-in
-`ai.kiro.cli.tweaks.stripVendorWorktreeSteering` removes the vendor paragraph
-assigning worktree setup and a fast-forward of the checked-out base branch to
-workflows, leaving git workflow to repository instructions. Selected text
-replacements run when the packaged KAS is built; missing or ambiguous source
-anchors fail the build. Launch uses that fixed package path, with no launch-time
-patch attempt or drift fallback. With no text tweaks selected, vendor prompt
-text is preserved while the packaged session extensions remain available.
+The blanket `ai.kiro.cli.tweaks.stripVendorWorktreeSteering` option is retired.
+Use `ai.worktrees.enable` (or its Kiro override) for workflow-owned creation in
+the rendered `ai.worktrees.location` (by default the primary checkout's sibling
+worktree directory, which is then writable), with PR creation and
+user-controlled merging followed by cleanup. The packaged policy preserves the
+vendor's creation guidance instead of deleting the whole paragraph. A custom
+`worktreeGuidance` prompt file overrides the prose without disabling root
+admission. Prompt text is captured for a new conversation; later policy changes
+can revoke roots on cold resume without rewriting that conversation's snapshot.
+See
+[the shared policy contract](../../packages/kiro-cli/docs/settings-shape.md#shared-sibling-worktree-policy).
+
+Identity replacement and policy guidance extraction happen when the packaged KAS
+is built; missing or ambiguous source anchors fail the build. There is no
+launch-time patch attempt or drift fallback. With policy disabled and identity
+unselected, vendor prompt text remains unchanged.
 
 ### Small things that save a run
 

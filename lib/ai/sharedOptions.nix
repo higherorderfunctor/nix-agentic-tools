@@ -420,6 +420,11 @@
       default = {};
       description = "Cross-app skills fanned out to every enabled AI app: Claude, Codex, Copilot, Kimchi, and Kiro. Per-app entries replace root entries at the same key; null suppresses an inherited skill for that runtime.";
     };
+    worktrees = lib.mkOption {
+      type = aiCommon.worktreesType "../{{repo}}-worktrees";
+      default = {};
+      description = "Shared worktree policy (enable plus a location template), currently consumed only by Kiro. Unspecified enable emits no native setting; the runtime default is off. Other enabled runtimes warn when `ai.worktrees.enable` is set (true or false) because they cannot consume it; a location alone requests nothing and does not warn.";
+    };
   };
 in {
   imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];

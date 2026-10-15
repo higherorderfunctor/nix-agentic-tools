@@ -410,7 +410,7 @@
       hidden = config: !(lib.hasInfix "`run_workflow`" (readSkill (workflowChange config) "kiro"));
       effective = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques;
     in
-      !enabled.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering
+      !enabled.config.ai.kiro.cli.tweaks.identity.enable
       && !(lib.hasInfix "`run_workflow`" kiro)
       && !(lib.hasInfix "`run_workflow`" (readSkill (change {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = true;}) "kiro"))
       && techniqueCells enabledSkill "run_workflow" == ["`run_workflow`" "workflow" "true" "true" "interactive+headless+acp"]

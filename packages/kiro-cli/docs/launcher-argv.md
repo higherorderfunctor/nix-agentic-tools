@@ -103,15 +103,18 @@ KAS reads the flat `chat.promptFiles` object from global and repository
 `settings/cli.json` at conversation creation. The semantic slots are `identity`,
 `workflowFileCheckGuidance` and `worktreeGuidance`. It starts with the three
 selected packaged texts, overlays global slots, then repository slots. Existing
-identity and stripped-worktree tweak choices determine those defaults,
-preserving their on/off behavior. The file-check slot retains the vendor
-absolute-path text; sibling roots use `chat.additionalDirectories` rather than
-the retired relative-path workaround. A null slot restores the packaged
-selection. The global root is `KIRO_HOME` when set, otherwise the session home
-plus `.kiro`; relative global paths use the settings file directory, while
-repository paths use the session working directory. Regular UTF-8 files up to 1
-MiB are accepted, including empty text. Malformed settings, files or persisted
-snapshots fail visibly.
+identity selection determines that slot's default, preserving its on/off
+behavior. Enabled worktree policy customizes the selected worktree guidance with
+the admitted location root (a `<path>` placeholder when Git layout prevents
+deriving one) while preserving workflow-owned creation and requiring
+user-controlled PR merging. The blanket steering-strip tweak is retired. The
+file-check slot retains the vendor absolute-path text; sibling roots use
+`chat.additionalDirectories` rather than the retired relative-path workaround. A
+null slot restores the packaged selection. The global root is `KIRO_HOME` when
+set, otherwise the session home plus `.kiro`; relative global paths use the
+settings file directory, while repository paths use the session working
+directory. Regular UTF-8 files up to 1 MiB are accepted, including empty text.
+Malformed settings, files or persisted snapshots fail visibly.
 
 The session owns a frozen resolved snapshot. Initial metadata persistence must
 succeed before creation returns; `_meta.kiro.nixPromptSnapshot` is reserved and
@@ -224,9 +227,9 @@ The extraction sources stay distinct:
 `kiro-bundle-patch` executes synthetic fixtures across single, double and
 template quotes, UTF-8 offsets, escaped content and runtime holes; it refuses
 stale corpora, tagged selections and anchor drift. The real
-`kiro-bundle-patch-drift` check runs on both native builders, compares all four
-tweak selections, checks JavaScript syntax, executes only the changed standalone
-literal tokens to verify their values, and proves all other decoded text and
-source bytes survive. Existing KAS resource, initialization and dispatch checks
-remain in place. Native Darwin execution is CI evidence; parsing a Darwin bundle
-on Linux alone is not that evidence.
+`kiro-bundle-patch-drift` check runs on both native builders, compares both
+identity selections, checks JavaScript syntax, executes only the changed
+standalone literal tokens to verify their values, and proves all other decoded
+text and source bytes survive. Existing KAS resource, initialization and
+dispatch checks remain in place. Native Darwin execution is CI evidence; parsing
+a Darwin bundle on Linux alone is not that evidence.

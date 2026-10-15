@@ -1,8 +1,9 @@
 // Loaded by package-bound KAS. All mutable state belongs to a conversation.
 import { constants } from "node:fs";
-import { open } from "node:fs/promises";
+import { open, readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { settingsLayers } from "./session-settings.mjs";
+import { admit } from "./worktree-policy.mjs";
 
 const slots = ["identity", "workflowFileCheckGuidance", "worktreeGuidance"];
 const limit = 1024 * 1024;
@@ -85,7 +86,7 @@ function mapping(value, path) {
   return mapping;
 }
 
-export async function resolveSnapshot(homeDir, cwd) {
+export async function resolveSnapshot(homeDir, cwd, worktree) {
   const defaults = Object.fromEntries(
     await Promise.all(
       slots.map(async (slot) => [
@@ -109,6 +110,21 @@ export async function resolveSnapshot(homeDir, cwd) {
       fail(slot, error.message);
     }
   }
+  if (worktree && !selected.worktreeGuidance) {
+    const parts = JSON.parse(
+      await readFile(
+        new URL("./prompt-defaults/worktree-policy.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    // A layout without a derivable root keeps the PR guidance without naming a destination.
+    defaults.worktreeGuidance =
+      parts[0] +
+      (worktree.root
+        ? "'" + `${worktree.root}/<name>`.replaceAll("'", "'\"'\"'") + "'"
+        : "<path>") +
+      parts[1];
+  }
   return validateSnapshot({ version: 1, slots: defaults });
 }
 
@@ -124,7 +140,15 @@ export async function ownerSnapshot(agent, owner, cwd) {
     fail("workflow", `owner session ${owner} is unavailable`);
   // Vendor eviction may remove an owner first; resolve from the child's cwd,
   // matching the cwd reauthorization of its workspace roots.
-  return resolveSnapshot(agent.homeDir, cwd);
+  return resolveSnapshot(
+    agent.homeDir,
+    cwd,
+    await admit(
+      await settingsLayers(agent.homeDir, cwd),
+      cwd,
+      agent.workspaceTrusted,
+    ),
+  );
 }
 
 export function profile(definition, source, snapshot, original) {

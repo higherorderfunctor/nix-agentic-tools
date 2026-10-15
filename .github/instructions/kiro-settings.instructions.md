@@ -14,7 +14,12 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 > additive lists across all three configuration methods. Added roots apply
 > relative permission rules, but their `.kiro/settings/mcp.json` is ignored;
 > evicted workflow owners use fresh cwd authorization for their children and
-> detached run rebuilds.
+> detached run rebuilds. Nullable shared worktree policy preserves unspecified
+> and explicit false through native lowering; its location template renders per
+> session and may not cover the checkout or enter its common Git directory;
+> repository policy requires workspace trust, dangling ancestor symlinks are
+> refused, its root alone is writable, and non-derivable Git layouts and failing
+> Git probes degrade instead of failing.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -75,6 +80,94 @@ The setting requires a declarative v3 engine and the managed package. Explicit
 `package = null` produces the existing grouped inert-settings warning. A manual
 JSON setting combined with an explicit runtime V2 flag bypasses the declarative
 guard; that engine does not run this KAS extension.
+
+### Shared sibling-worktree policy
+
+```nix
+ai.worktrees.enable = true;
+# Optional; this is the default:
+ai.worktrees.location = "../{{repo}}-worktrees";
+# Optional withdrawal for Kiro:
+ai.kiro.worktrees.enable = false;
+```
+
+The shared `enable` field is nullable: null is unspecified, not false. A runtime
+null inherits the root value; explicit runtime false overrides root true. With
+both unset, no `chat.worktrees` key is emitted, so ordinary repository defaults
+do not overwrite a user-global enabled policy. The runtime default is off only
+when neither settings layer specifies it. An explicit root or runtime false
+emits `{ "enable": false }` and can disable a global policy.
+
+`location` is a template with two fixed variables: `{{repo}}`, the primary
+checkout's directory name, and `{{primary}}`, its absolute path. A relative
+result resolves against `{{primary}}`, so the default is the sibling
+`<primary-checkout>-worktrees`. There is no scripting. A runtime null location
+inherits the root value. A rendering equal to the primary checkout or one of its
+ancestors fails the session, because the grant below would make the checkout
+writable. A destination equal to or inside the common Git directory (`.git`) is
+also refused. The repository settings layer contributes `chat.worktrees` only
+when the workspace is trusted; user-global policy still applies in an untrusted
+workspace.
+
+Kiro lowers the normalized policy at default priority to
+`cli.native.settings.chat.worktrees`. Direct native settings win, including
+nested or flat `{ enable = false; }` and null (omit this layer). A non-null
+native object needs a boolean `enable` and may add a nonempty string `location`;
+other keys are refused. Each settings layer's object replaces lower layers
+whole. A static template with any other variable is an eval error naming it; KAS
+refuses the same in hand-written JSON when a session starts. Enabled policy
+requires V3; explicit package-null use warns through the existing grouped
+package warning. Manual native settings combined with runtime V2 still bypass
+KAS.
+
+| Runtime | Shared worktrees policy                                 |
+| ------- | ------------------------------------------------------- |
+| Claude  | Excluded; root value ignored, per-runtime option absent |
+| Codex   | Excluded; root value ignored, per-runtime option absent |
+| Copilot | Excluded; root value ignored, per-runtime option absent |
+| Kimchi  | Excluded; root value ignored, per-runtime option absent |
+| Kiro    | Same library, Home Manager and devenv lowering          |
+
+At admission, the packaged KAS finds the primary checkout from Git's common
+directory for ordinary and linked checkouts and renders the location there. It
+adds that root to the admitted roots without creating it. Membership enables
+default reads, and the server patch also grants `fs_write` inside that root
+only, through a session-scoped workspace rule: generic
+`chat.additionalDirectories` roots and a session cwd outside the policy root
+keep the vendor default, where writes prompt. A session started inside the root
+(a linked worktree) can write throughout the root. Explicit permission denies
+still win over the grant, and tool policy still refuses symlink escapes. Each
+session policy (new, loaded or rebuilt for a detached workflow) re-derives the
+root from its own cwd and grants it only while it is one of that session's
+admitted roots.
+
+Non-Git sessions gain no root and keep the vendor guidance. Layouts without a
+derivable primary checkout (submodules, worktrees of a bare clone, separate Git
+directories and bare repositories) admit no root and log a `chat.worktrees`
+warning, but still select the PR guidance, with a `<path>` placeholder instead
+of a destination. A failing Git probe other than "not a git repository" (a bare
+clone at `<dir>/.git`, or Git refusing a repository it does not trust) degrades
+the same way. Only a malformed `chat.worktrees` value, a location covering the
+primary checkout or entering its common Git directory, or a symlink at the
+rendered destination fails the session. Admission rejects an existing symlink at
+the rendered destination, including a dangling one, and refuses dangling
+symlinks in its ancestors; explicit additional-directory aliases retain their
+separate behavior. This is an admission-time check, not a guarantee against a
+later filesystem change. New and cold-resumed sessions recompute roots; resident
+sessions retain their admitted roots.
+
+For new conversations, the selected default worktree guidance keeps workflow
+ownership of creation and names the admitted destination. It replaces automatic
+rebase/fast-forward cleanup with PR creation and user-controlled merging
+followed by cleanup. The resolved text remains part of the fixed prompt
+snapshot: cold resume can revoke a root while retaining the conversation's
+original prose. An explicit `worktreeGuidance` file wins without being
+rewritten; root admission remains active. Null selects the policy-aware packaged
+guidance.
+
+`cli.tweaks.stripVendorWorktreeSteering` is retired. Both boolean values produce
+a named migration error when the runtime is enabled. Use the shared policy or a
+custom guidance file instead of deleting the entire vendor paragraph.
 
 ### File-backed prompt slots
 

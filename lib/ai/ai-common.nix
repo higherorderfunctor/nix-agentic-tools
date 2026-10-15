@@ -506,6 +506,24 @@ in {
     };
   };
 
+  # Null preserves the consumer's global native policy; false explicitly opts out.
+  # The root passes the default location; runtimes pass null so they inherit it.
+  worktreesType = locationDefault:
+    lib.types.submodule {
+      options = {
+        enable = lib.mkOption {
+          type = lib.types.nullOr lib.types.bool;
+          default = null;
+          description = "Admit the worktree location root with write access and select PR-based default worktree guidance; custom guidance files take precedence. Null is unspecified (inherits at runtime scope); false explicitly disables. Currently consumed only by Kiro.";
+        };
+        location = lib.mkOption {
+          type = lib.types.nullOr lib.types.nonEmptyStr;
+          default = locationDefault;
+          description = "Worktree root template, rendered per session from {{repo}} (the primary checkout's directory name) and {{primary}} (its absolute path). A relative result resolves against {{primary}}; other variables are an error. Null inherits.";
+        };
+      };
+    };
+
   # Recursively filter null values from an attrset (for typed settings
   # with freeformType where defaults are null). Also removes empty
   # sub-attrsets left after filtering.

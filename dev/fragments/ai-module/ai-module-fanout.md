@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-14 — shared option declarations register fanout
 > surfaces; decomposition shares unsupported requests with diagnostics; Kiro
-> selects its engine through native settings.
+> selects its engine through native settings and lowers the worktree policy's
+> location template; other runtimes warn only when its `enable` is set.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -603,6 +604,19 @@ it for the per-runtime option schema, keyed-pool merge, delivery callback, and
 shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
+
+Kiro alone consumes the `worktrees` pool. Its shared `enable` type is nullable:
+null inherits or remains unspecified, while false is an explicit withdrawal.
+`location` is a template whose root default is `../{{repo}}-worktrees`; the
+runtime instance of the same type defaults it to null, so it inherits. The
+root-to-runtime fold applies the existing scalar override rule to each field and
+exposes `ai.kiro.normalized.worktrees`; Kiro lowers it once into native settings
+at `mkDefault`. Untouched defaults emit no native key, preserving an
+independently configured global policy. Claude, Codex, Copilot and Kimchi warn
+when `ai.worktrees.enable` is set, true or false, and declare no runtime
+worktrees option; a location alone requests nothing and does not warn. The Nix
+layer writes only that setting; rendering the template and granting writes in
+its root happen per session in the packaged KAS.
 
 Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
 `mcpServers`, `rules`, `settings`, and `skills`. Its rules share Codex's flat

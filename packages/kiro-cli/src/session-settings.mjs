@@ -1,4 +1,4 @@
-// Shared settings source selection for the two package-bound KAS extensions.
+// Shared settings source selection for package-bound KAS extensions.
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
