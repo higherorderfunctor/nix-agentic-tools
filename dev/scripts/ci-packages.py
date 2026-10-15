@@ -8,9 +8,10 @@ from pathlib import Path
 
 from artifacts import downloaded
 
-# Generated documents are checked by `test`. Patched Kiro has dedicated native
-# jobs without cache uploads; it must never enter the public build cache.
+# Generated documents are checked by `test`. Patched Hestia has a dedicated
+# early cache-writing job; patched Kiro has jobs without cache uploads.
 EXCLUDED = {
+    "ci-hestia",
     "kiro-cli-rollout-canary",
     "repo-contributing",
     "repo-readme",

@@ -1,0 +1,1027 @@
+Prototype for Mic92/hestia v3.1.0 (dfed9ced335d28978ba74e513939a10db1f71025).
+
+Use the published CacheMetadata.scope protobuf field for separate PR/default
+manifest reads, union their contents, and reserve above both observed indices.
+The mock test proves local mechanics, including gaps and non-monotonic reads.
+Whether the live GitHub service honors this metadata selector is UNVERIFIED;
+validate that before treating the patch as a working production fix.
+
+Protocol definitions:
+https://github.com/actions/toolkit/blob/main/packages/cache/src/generated/results/api/v1/cache.ts
+https://github.com/actions/toolkit/blob/main/packages/cache/src/generated/results/entities/v1/cachemetadata.ts
+https://github.com/actions/toolkit/blob/main/packages/cache/src/generated/results/entities/v1/cachescope.ts
+
+diff --git a/src/gha/savemutable.rs b/src/gha/savemutable.rs
+index 769053a..733a516 100644
+--- a/src/gha/savemutable.rs
++++ b/src/gha/savemutable.rs
+@@ -23,17 +23,23 @@
+ //! PR job and a default-branch job can both finalize the same key. The
+ //! PR-scoped fork is discarded with its branch (see "PR scope isolation"
+ //! in the README), so the no-lost-writes merge guarantee is scope-local.
++//! PR manifest reads explicitly select and merge both the PR and default
++//! scopes. Their maximum observed index is the reservation floor; this does
++//! not promote PR writes into the default scope or eliminate lookup lag.
+ //! The conflict-retry loop re-loads until it sees the version that blocked
+ //! it. The stale-skip window must exceed the observed propagation lag, or
+ //! lag gets misdiagnosed as a crashed writer and the lagging changes are
+ //! dropped.
+ 
++use std::collections::BTreeSet;
+ use std::time::Duration;
+ 
+ use bytes::Bytes;
+ 
+-use crate::gha::twirp::{DownloadUrl, Reservation, TwirpClient};
++use crate::gha::twirp::{CacheMetadata, DownloadUrl, Reservation, TwirpClient};
+ use crate::gha::{Error, blob};
++use crate::manifest::{Manifest, PackHash};
++use crate::pipeline::decode_manifest_or_empty;
+ 
+ /// Cache key for version `index` of family `prefix`, e.g. `m#5`.
+ fn key_for(prefix: &str, index: u64) -> String {
+@@ -117,10 +123,40 @@ impl<'a> SaveMutable<'a> {
+ 
+     /// Load the newest entry of this family, or `None` if there is none yet.
+     pub async fn load(&self) -> Result<Option<MutableEntry>, Error> {
++        Ok(self.load_with_own_index(&BTreeSet::new()).await?.1)
++    }
++
++    /// The own-scope visibility barrier and merged data from the same lookup.
++    /// The merged entry's index remains the reservation floor across both scopes.
++    pub async fn load_with_own_index(
++        &self,
++        missing_packs: &BTreeSet<PackHash>,
++    ) -> Result<(u64, Option<MutableEntry>), Error> {
++        let scopes = self.twirp.manifest_scopes();
++        if scopes.is_empty() {
++            let entry = self.load_scope(None, missing_packs).await?;
++            return Ok((entry.as_ref().map_or(0, |entry| entry.index), entry));
++        }
++        let own = self.load_scope(Some(&scopes[0]), missing_packs).await?;
++        let own_index = own.as_ref().map_or(0, |entry| entry.index);
++        let default = self.load_scope(Some(&scopes[1]), missing_packs).await?;
++        eprintln!(
++            "hestia: manifest own index {}, default index {}",
++            own_index,
++            default.as_ref().map_or(0, |entry| entry.index),
++        );
++        Ok((own_index, merge_entries(own, default)?))
++    }
++
++    async fn load_scope(
++        &self,
++        scope: Option<&CacheMetadata>,
++        missing_packs: &BTreeSet<PackHash>,
++    ) -> Result<Option<MutableEntry>, Error> {
+         let prefix = search_prefix(&self.prefix);
+         let lookup = self
+             .twirp
+-            .get_download_url(&prefix, &[prefix.as_str()])
++            .get_download_url_in_scope(&prefix, &[prefix.as_str()], scope)
+             .await?;
+         let (url, matched_key) = match lookup {
+             DownloadUrl::Miss => return Ok(None),
+@@ -137,7 +173,10 @@ impl<'a> SaveMutable<'a> {
+         let refreshed_key = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+         let refreshed_in = std::sync::Arc::clone(&refreshed_key);
+         let data = blob::get_with_refresh(self.http, &url, None, async move || {
+-            match twirp.get_download_url(&prefix, &[prefix.as_str()]).await? {
++            match twirp
++                .get_download_url_in_scope(&prefix, &[prefix.as_str()], scope)
++                .await?
++            {
+                 DownloadUrl::Hit { url, matched_key } => {
+                     *refreshed_in.lock().expect("not poisoned") = Some(matched_key);
+                     Ok(url)
+@@ -157,6 +196,13 @@ impl<'a> SaveMutable<'a> {
+             None => (matched_key, index),
+         };
+ 
++        let data = if scope.is_some() && !missing_packs.is_empty() {
++            let mut manifest = decode_manifest_or_empty(&data);
++            exclude_missing_pack_chunks(&mut manifest, missing_packs);
++            encode_manifest(&manifest)?
++        } else {
++            data
++        };
+         Ok(Some(MutableEntry { key, index, data }))
+     }
+ 
+@@ -201,7 +247,12 @@ impl<'a> SaveMutable<'a> {
+ 
+         loop {
+             let current = self.load().await?;
+-            if current.as_ref().map(|entry| entry.index) > newest.as_ref().map(|entry| entry.index)
++            if !self.twirp.manifest_scopes().is_empty() {
++                // Either scope can advance while the maximum index stays the same.
++                // Keep both histories even when an eventually consistent read regresses.
++                newest = merge_entries(newest, current)?;
++            } else if current.as_ref().map(|entry| entry.index)
++                > newest.as_ref().map(|entry| entry.index)
+             {
+                 newest = current;
+             }
+@@ -241,6 +292,42 @@ impl<'a> SaveMutable<'a> {
+     }
+ }
+ 
++/// Discard known-dead locations before merge can prefer their repack history.
++pub(crate) fn exclude_missing_pack_chunks(manifest: &mut Manifest, missing: &BTreeSet<PackHash>) {
++    manifest
++        .chunks
++        .retain(|_, location| !missing.contains(&location.pack));
++}
++
++fn encode_manifest(manifest: &Manifest) -> Result<Bytes, Error> {
++    manifest
++        .encode()
++        .map(Bytes::from)
++        .map_err(|err| Error::InvalidResponse(format!("encoding merged manifest: {err}")))
++}
++
++// Only PR manifests use this union; main keeps the original opaque-entry path.
++// The merged entry's key/index records the maximum observed version, so its next
++// reservation is above both scopes even when eviction has left arbitrary gaps.
++fn merge_entries(
++    a: Option<MutableEntry>,
++    b: Option<MutableEntry>,
++) -> Result<Option<MutableEntry>, Error> {
++    let (mut a, b) = match (a, b) {
++        (Some(a), Some(b)) => (a, b),
++        (a, b) => return Ok(a.or(b)),
++    };
++    let data = encode_manifest(
++        &decode_manifest_or_empty(&a.data).merge(decode_manifest_or_empty(&b.data)),
++    )?;
++    if b.index > a.index {
++        a.key = b.key;
++        a.index = b.index;
++    }
++    a.data = data;
++    Ok(Some(a))
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/src/gha/twirp.rs b/src/gha/twirp.rs
+index 48e8ee4..feb4201 100644
+--- a/src/gha/twirp.rs
++++ b/src/gha/twirp.rs
+@@ -96,8 +96,23 @@ pub struct FinalizeCacheEntryUploadResponse {
+     pub entry_id: String,
+ }
+ 
++/// Scope selector from actions/toolkit's results/entities/v1/cachemetadata.proto.
++#[derive(Debug, Clone, Serialize, Deserialize)]
++pub struct CacheMetadata {
++    pub repository_id: String,
++    pub scope: Vec<CacheScope>,
++}
++
++#[derive(Debug, Clone, Serialize, Deserialize)]
++pub struct CacheScope {
++    pub permission: String,
++    pub scope: String,
++}
++
+ #[derive(Debug, Serialize, Deserialize)]
+ pub struct GetCacheEntryDownloadUrlRequest {
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub metadata: Option<CacheMetadata>,
+     pub key: String,
+     pub restore_keys: Vec<String>,
+     pub version: String,
+@@ -153,6 +168,7 @@ pub struct TwirpClient {
+     /// Cache entry `version` sent with every request ([`CACHE_VERSION`]
+     /// unless a namespace salt is configured).
+     version: String,
++    manifest_scopes: Vec<CacheMetadata>,
+ }
+ 
+ impl TwirpClient {
+@@ -166,6 +182,7 @@ impl TwirpClient {
+             base_url: results_url.into(),
+             token: runtime_token.into(),
+             version: CACHE_VERSION.to_string(),
++            manifest_scopes: Vec::new(),
+         }
+     }
+ 
+@@ -182,7 +199,33 @@ impl TwirpClient {
+             return Err(Error::MissingEnv(ENV_RUNTIME_TOKEN));
+         }
+         let salt = std::env::var(ENV_VERSION_SALT).unwrap_or_default();
+-        Ok(Self::new(http, url, token).with_version_salt(&salt))
++        let mut client = Self::new(http, url, token).with_version_salt(&salt);
++        let own_ref = std::env::var("GITHUB_REF").unwrap_or_default();
++        if own_ref.starts_with("refs/pull/") {
++            let event_path = std::env::var("GITHUB_EVENT_PATH")
++                .map_err(|_| Error::MissingEnv("GITHUB_EVENT_PATH"))?;
++            let event: serde_json::Value =
++                serde_json::from_slice(&std::fs::read(event_path).map_err(|err| {
++                    Error::InvalidResponse(format!("reading GitHub event: {err}"))
++                })?)
++                .map_err(|err| Error::InvalidResponse(format!("decoding GitHub event: {err}")))?;
++            let default_branch =
++                event["repository"]["default_branch"]
++                    .as_str()
++                    .ok_or_else(|| {
++                        Error::InvalidResponse(
++                            "GitHub event lacks repository.default_branch".into(),
++                        )
++                    })?;
++            let repository_id = std::env::var("GITHUB_REPOSITORY_ID")
++                .map_err(|_| Error::MissingEnv("GITHUB_REPOSITORY_ID"))?;
++            client = client.with_manifest_scopes(
++                &repository_id,
++                &own_ref,
++                &format!("refs/heads/{default_branch}"),
++            );
++        }
++        Ok(client)
+     }
+ 
+     /// The cache `version` namespace this client writes and reads.
+@@ -197,6 +240,25 @@ impl TwirpClient {
+         self
+     }
+ 
++    /// Restrict manifest lookups to each scope separately; pack reads stay unchanged.
++    pub fn with_manifest_scopes(mut self, repository_id: &str, own: &str, default: &str) -> Self {
++        self.manifest_scopes = [own, default]
++            .into_iter()
++            .map(|scope| CacheMetadata {
++                repository_id: repository_id.into(),
++                scope: vec![CacheScope {
++                    permission: "1".into(),
++                    scope: scope.into(),
++                }],
++            })
++            .collect();
++        self
++    }
++
++    pub(crate) fn manifest_scopes(&self) -> &[CacheMetadata] {
++        &self.manifest_scopes
++    }
++
+     async fn call<Req, Resp>(&self, method: &str, request: &Req) -> Result<Resp, Error>
+     where
+         Req: Serialize,
+@@ -360,8 +422,19 @@ impl TwirpClient {
+         &self,
+         key: &str,
+         restore_keys: &[&str],
++    ) -> Result<DownloadUrl, Error> {
++        self.get_download_url_in_scope(key, restore_keys, None)
++            .await
++    }
++
++    pub(crate) async fn get_download_url_in_scope(
++        &self,
++        key: &str,
++        restore_keys: &[&str],
++        metadata: Option<&CacheMetadata>,
+     ) -> Result<DownloadUrl, Error> {
+         let request = GetCacheEntryDownloadUrlRequest {
++            metadata: metadata.cloned(),
+             key: key.to_string(),
+             restore_keys: std::iter::once(key)
+                 .chain(restore_keys.iter().copied().filter(|&k| k != key))
+@@ -447,6 +520,7 @@ mod tests {
+         assert_eq!(json["size_bytes"], 42);
+ 
+         let request = GetCacheEntryDownloadUrlRequest {
++            metadata: None,
+             key: "m#".into(),
+             restore_keys: vec!["m#".to_string()],
+             version: CACHE_VERSION.into(),
+diff --git a/src/serve.rs b/src/serve.rs
+index 5fcf064..2f829ef 100644
+--- a/src/serve.rs
++++ b/src/serve.rs
+@@ -418,25 +418,40 @@ impl Daemon {
+     }
+ }
+ 
+-/// Load the newest committed manifest and publish it into the served
+-/// store if it is newer than the current view. A drain may have published
+-/// a newer manifest while the load was in flight (or the load may return a
+-/// stale version: lookups are eventually consistent); that version must
+-/// win. Recording the version makes drains start their reservations above
+-/// it even when cache lookups lag.
++/// Load the committed manifest, merging PR observations into the served store.
++/// Other refs replace only newer views. A drain may publish while a lookup is
++/// in flight or eventually consistent reads may regress; retain its contents
++/// and version floor so later reservations stay above every observed index.
++/// Return the own-scope index from this observation for the matrix wait barrier.
+ async fn load_published_manifest(
+     twirp: &TwirpClient,
+     http: &reqwest::Client,
+     manifest_store: &ManifestStore,
+-) {
++) -> u64 {
+     let save = crate::gha::savemutable::SaveMutable::new(twirp, http, MANIFEST_PREFIX);
+-    match save.load().await {
+-        Ok(Some(entry)) => manifest_store
+-            .set_version_if_newer(pipeline::decode_manifest_or_empty(&entry.data), entry.index),
+-        Ok(None) => {}
++    let own_index = match save
++        .load_with_own_index(&manifest_store.missing_packs())
++        .await
++    {
++        Ok((own_index, Some(entry))) => {
++            let manifest = pipeline::decode_manifest_or_empty(&entry.data);
++            if twirp.manifest_scopes().is_empty() {
++                manifest_store.set_version_if_newer(manifest, entry.index);
++            } else {
++                manifest_store.merge_version(manifest, entry.index);
++            }
++            own_index
++        }
++        Ok((_, None)) => 0,
+         Err(err) => {
+             eprintln!("hestia serve: cannot load the manifest, substituting nothing: {err}");
++            0
+         }
++    };
++    if twirp.manifest_scopes().is_empty() {
++        manifest_store.version()
++    } else {
++        own_index
+     }
+ }
+ 
+@@ -445,21 +460,20 @@ async fn load_published_manifest(
+ const MANIFEST_WAIT_TIMEOUT: Duration = Duration::from_secs(60);
+ const MANIFEST_WAIT_POLL: Duration = Duration::from_secs(2);
+ 
+-/// Retry `reload` until the served manifest's version reaches
++/// Retry `reload` until its own-scope observation reaches
+ /// `min_version` or the timeout expires (GHA cache lookups are eventually
+ /// consistent: a manifest committed by the eval job moments ago may not be
+ /// visible yet when a build job's daemon starts). On timeout the daemon
+ /// serves whatever it found; missing paths then surface as cache misses.
+-async fn wait_for_manifest_version<Fut: Future<Output = ()>>(
+-    manifest_store: &ManifestStore,
++async fn wait_for_manifest_version<Fut: Future<Output = u64>>(
+     min_version: u64,
+     reload: impl Fn() -> Fut,
+ ) {
+     // tokio's clock, not std::time::Instant: respects paused time in tests.
+     let deadline = tokio::time::Instant::now() + MANIFEST_WAIT_TIMEOUT;
+     loop {
+-        reload().await;
+-        if manifest_store.version() >= min_version {
++        let visible_version = reload().await;
++        if visible_version >= min_version {
+             return;
+         }
+         if tokio::time::Instant::now() >= deadline {
+@@ -468,7 +482,7 @@ async fn wait_for_manifest_version<Fut: Future<Output = ()>>(
+                  serving what was found",
+                 min_version,
+                 MANIFEST_WAIT_TIMEOUT.as_secs(),
+-                manifest_store.version(),
++                visible_version,
+             );
+             return;
+         }
+@@ -699,13 +713,17 @@ pub async fn run(args: &ServeArgs) -> ExitCode {
+                 let manifest_store = manifest_store.clone();
+                 async move { load_published_manifest(&twirp, &http, &manifest_store).await }
+             };
+-            wait_for_manifest_version(&manifest_store, min_version, reload).await;
++            wait_for_manifest_version(min_version, reload).await;
+             let _ = manifest_ready_tx.send(true);
+             // Only with a GITHUB_TOKEN (optional: build jobs need no
+             // permissions); without one the NAR handler's lazy negative
+             // cache still catches evictions, one failed request later.
+             if let Ok(rest) = crate::gha::rest::RestClient::from_env(http.clone()) {
+                 verify_packs(&rest, &manifest_store, MAX_PACK_VERIFY_ENTRIES).await;
++                if !twirp.manifest_scopes().is_empty() && !manifest_store.missing_packs().is_empty()
++                {
++                    load_published_manifest(&twirp, &http, &manifest_store).await;
++                }
+             }
+         })
+     };
+@@ -793,7 +811,7 @@ pub async fn run(args: &ServeArgs) -> ExitCode {
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+-    use crate::manifest::Manifest;
++    use crate::manifest::{Manifest, Root};
+ 
+     #[tokio::test(start_paused = true)]
+     async fn manifest_wait_retries_until_the_version_appears() {
+@@ -801,7 +819,7 @@ mod tests {
+         let attempts = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+         let reload_store = store.clone();
+         let reload_attempts = attempts.clone();
+-        wait_for_manifest_version(&store, 3, || {
++        wait_for_manifest_version(3, || {
+             let store = reload_store.clone();
+             let attempts = reload_attempts.clone();
+             async move {
+@@ -809,6 +827,7 @@ mod tests {
+                 if attempts.fetch_add(1, Ordering::SeqCst) + 1 >= 3 {
+                     store.set_version_if_newer(Manifest::new(), 3);
+                 }
++                store.version()
+             }
+         })
+         .await;
+@@ -816,15 +835,45 @@ mod tests {
+         assert_eq!(store.version(), 3);
+     }
+ 
++    #[tokio::test(start_paused = true)]
++    async fn manifest_wait_uses_own_scope_even_when_default_is_newer() {
++        let store = ManifestStore::new();
++        let attempts = Arc::new(std::sync::atomic::AtomicU64::new(0));
++        wait_for_manifest_version(101, || {
++            let attempts = attempts.clone();
++            let store = store.clone();
++            async move {
++                let own_index = 100 + attempts.fetch_add(1, Ordering::SeqCst);
++                let mut manifest = Manifest::new();
++                manifest.roots.insert(
++                    format!("own-{own_index}"),
++                    Root {
++                        paths: Default::default(),
++                        updated: own_index,
++                        run_id: None,
++                    },
++                );
++                store.merge_version(manifest, 102);
++                own_index
++            }
++        })
++        .await;
++        assert_eq!(attempts.load(Ordering::SeqCst), 2);
++        let (floor, manifest) = store.versioned();
++        assert_eq!(floor, 102);
++        assert!(manifest.roots.contains_key("own-101"));
++    }
++
+     #[tokio::test(start_paused = true)]
+     async fn manifest_wait_gives_up_after_the_timeout() {
+         let store = ManifestStore::new();
+         let attempts = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+         let reload_attempts = attempts.clone();
+-        wait_for_manifest_version(&store, 5, || {
++        wait_for_manifest_version(5, || {
+             let attempts = reload_attempts.clone();
+             async move {
+                 attempts.fetch_add(1, Ordering::SeqCst);
++                0
+             }
+         })
+         .await;
+diff --git a/src/substituter.rs b/src/substituter.rs
+index ce57e60..063e8fc 100644
+--- a/src/substituter.rs
++++ b/src/substituter.rs
+@@ -116,7 +116,7 @@ struct ManifestView {
+     version: u64,
+     /// Packs observed to be evicted from the cache. Affected paths 404
+     /// already at narinfo time. Lives inside the view so every manifest
+-    /// replacement starts from an empty set.
++    /// replacement starts from an empty set, except PR unions retain observations.
+     missing_packs: Mutex<BTreeSet<PackHash>>,
+ }
+ 
+@@ -142,7 +142,7 @@ impl ManifestView {
+             self.manifest
+                 .chunks
+                 .get(chunk)
+-                .is_none_or(|location| !missing.contains(&location.pack))
++                .is_some_and(|location| !missing.contains(&location.pack))
+         })
+     }
+ 
+@@ -219,6 +219,34 @@ impl ManifestStore {
+         }
+     }
+ 
++    /// Merge PR scope observations even when only the lower index advanced.
++    /// Keep the highest observed version as the next reservation's floor.
++    pub(crate) fn merge_version(&self, mut manifest: Manifest, version: u64) {
++        let mut inner = self.inner.write().expect("manifest lock poisoned");
++        let missing = inner
++            .missing_packs
++            .lock()
++            .expect("missing pack set poisoned")
++            .clone();
++        let mut known = inner.manifest.clone();
++        crate::gha::savemutable::exclude_missing_pack_chunks(&mut known, &missing);
++        crate::gha::savemutable::exclude_missing_pack_chunks(&mut manifest, &missing);
++        let view = ManifestView::new(known.merge(manifest), inner.version.max(version));
++        *view
++            .missing_packs
++            .lock()
++            .expect("missing pack set poisoned") = missing;
++        *inner = Arc::new(view);
++    }
++
++    pub(crate) fn missing_packs(&self) -> BTreeSet<PackHash> {
++        self.view()
++            .missing_packs
++            .lock()
++            .expect("missing pack set poisoned")
++            .clone()
++    }
++
+     /// The served manifest and its version (clone; manifests are small).
+     pub fn versioned(&self) -> (u64, Manifest) {
+         let view = self.view();
+@@ -638,7 +666,7 @@ pub async fn verify_packs(rest: &RestClient, store: &ManifestStore, max_entries:
+ }
+ 
+ /// Reloads the served manifest from the cache backend (the daemon wires
+-/// this to a SaveMutable load + ManifestStore::set_version_if_newer). The
++/// this to a SaveMutable load and a scope-aware ManifestStore update). The
+ /// NAR handler invokes it when a pack the current view points at is gone:
+ /// a concurrent gc repack moves live chunks into new packs and deletes the
+ /// old ones, so the committed manifest knows where the data went while the
+@@ -889,6 +917,9 @@ async fn nar(
+                 if !reloaded && state.manifest_reload.is_some() =>
+             {
+                 reloaded = true;
++                if let FetchError::PackUnavailable(pack) = &err {
++                    manifest_view.mark_pack_missing(*pack);
++                }
+                 eprintln!(
+                     "hestia substituter: {err}; reloading the manifest (concurrent gc repack?)"
+                 );
+@@ -1095,38 +1126,53 @@ async fn export_window(
+     view: &ManifestView,
+     window: &[PathHash],
+ ) -> Result<Vec<u8>, String> {
+-    let entries: Vec<(PathHash, &PathEntry)> = window
+-        .iter()
+-        .map(|hash| (*hash, &view.manifest.paths[hash]))
+-        .collect();
+-    let needed: BTreeSet<ChunkHash> = entries
+-        .iter()
+-        .flat_map(|(_, entry)| entry_chunks(entry))
+-        .collect();
+-    let chunks = Arc::new(
+-        state
+-            .fetcher
+-            .fetch_chunks(view, needed)
+-            .await
+-            .map_err(|err| {
++    let mut refreshed = None;
++    loop {
++        let view = refreshed.as_deref().unwrap_or(view);
++        let entries: Vec<(PathHash, &PathEntry)> = window
++            .iter()
++            .map(|hash| view.manifest.paths.get(hash).map(|entry| (*hash, entry)))
++            .collect::<Option<_>>()
++            .ok_or_else(|| "closure path disappeared during reload".to_string())?;
++        let needed: BTreeSet<ChunkHash> = entries
++            .iter()
++            .flat_map(|(_, entry)| entry_chunks(entry))
++            .collect();
++        let chunks = match state.fetcher.fetch_chunks(view, needed).await {
++            Ok(chunks) => Arc::new(chunks),
++            Err(err @ (FetchError::PackUnavailable(_) | FetchError::UnknownChunk(_)))
++                if refreshed.is_none() && state.manifest_reload.is_some() =>
++            {
++                if let FetchError::PackUnavailable(pack) = &err {
++                    view.mark_pack_missing(*pack);
++                }
++                (state.manifest_reload.as_ref().expect("checked above"))().await;
++                refreshed = Some(state.manifest.view());
++                continue;
++            }
++            Err(err) => {
++                if let FetchError::PackUnavailable(pack) = &err {
++                    view.mark_pack_missing(*pack);
++                }
+                 eprintln!("hestia substituter: closure export chunk fetch failed: {err}");
+-                err.to_string()
+-            })?,
+-    );
++                return Err(err.to_string());
++            }
++        };
+ 
+-    let mut out = Vec::new();
+-    for (path_hash, entry) in entries {
+-        // Prefetched paths are accesses (GC liveness), same as narinfo hits.
+-        state.access_log.record(path_hash);
+-        let nar = assemble_verified_nar(entry, Arc::clone(&chunks))
+-            .await
+-            .map_err(|err| {
+-                eprintln!("hestia substituter: closure export failed at {path_hash}: {err}");
+-                err
+-            })?;
+-        out.extend_from_slice(&export_frame(&state.store_dir, entry, &nar));
++        let mut out = Vec::new();
++        for (path_hash, entry) in entries {
++            // Prefetched paths are accesses (GC liveness), same as narinfo hits.
++            state.access_log.record(path_hash);
++            let nar = assemble_verified_nar(entry, Arc::clone(&chunks))
++                .await
++                .map_err(|err| {
++                    eprintln!("hestia substituter: closure export failed at {path_hash}: {err}");
++                    err
++                })?;
++            out.extend_from_slice(&export_frame(&state.store_dir, entry, &nar));
++        }
++        return Ok(out);
+     }
+-    Ok(out)
+ }
+ 
+ async fn closure(State(state): State<Arc<Substituter>>, Path(hashes): Path<String>) -> Response {
+@@ -1230,6 +1276,201 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn pr_manifest_reload_merges_equal_and_regressed_versions() {
++        let store = ManifestStore::new();
++        for (seed, version) in [(1, 100), (2, 100), (3, 90)] {
++            let mut manifest = Manifest::new();
++            manifest
++                .paths
++                .insert(test_path_hash(seed), test_entry(seed));
++            store.merge_version(manifest, version);
++        }
++        assert_eq!(store.version(), 100);
++        assert_eq!(store.path_count(), 3);
++        for seed in 1..=3 {
++            assert_eq!(
++                store.view().by_nar_hash.get(&Hash32::digest([seed])),
++                Some(&test_path_hash(seed))
++            );
++        }
++        // The default branch still rejects equal or regressed observations.
++        for version in [100, 90] {
++            store.set_version_if_newer(Manifest::new(), version);
++            assert_eq!(store.path_count(), 3);
++        }
++    }
++
++    #[test]
++    fn pr_reload_replaces_known_evicted_high_repack_location() {
++        let store = ManifestStore::new();
++        let chunk = ChunkHash::digest(b"chunk");
++        let old = PackHash::digest(b"P");
++        let fresh = PackHash::digest(b"Q");
++        let make_manifest = |pack, repacks_survived| {
++            let mut manifest = Manifest::new();
++            let mut entry = test_entry(1);
++            entry.tree = FileTree(FileSystemObject::Regular(Regular {
++                executable: false,
++                contents: ChunkList {
++                    chunks: vec![chunk],
++                    ..Default::default()
++                },
++            }));
++            manifest.paths.insert(test_path_hash(1), entry);
++            manifest.chunks.insert(
++                chunk,
++                ChunkLocation {
++                    pack,
++                    repacks_survived,
++                    offset: 0,
++                    compressed_size: 1,
++                    uncompressed_size: 1,
++                },
++            );
++            manifest
++        };
++        store.set_version(make_manifest(old, 5), 102);
++        store.view().mark_pack_missing(old);
++        store.merge_version(make_manifest(fresh, 0), 102);
++        // A stale reload must not bring P back or erase its negative mark.
++        store.merge_version(make_manifest(old, 5), 100);
++        let view = store.view();
++        assert_eq!(view.manifest.chunks[&chunk].pack, fresh);
++        assert!(view.missing_packs.lock().unwrap().contains(&old));
++        assert!(view.entry_available(&view.manifest.paths[&test_path_hash(1)]));
++        let stale_only = ManifestStore::new();
++        stale_only.set_version(make_manifest(old, 5), 102);
++        stale_only.view().mark_pack_missing(old);
++        stale_only.merge_version(make_manifest(old, 5), 102);
++        let view = stale_only.view();
++        assert!(!view.entry_available(&view.manifest.paths[&test_path_hash(1)]));
++    }
++
++    #[tokio::test]
++    async fn pr_nar_and_prefetch_recover_after_a_pack_miss() {
++        use axum::Json;
++        use axum::routing::post;
++        use serde_json::{Value, json};
++        use std::sync::atomic::{AtomicU64, Ordering};
++
++        let data = Bytes::from_static(b"hello");
++        let chunks = chunker::chunk_data(&data);
++        let mut builder = chunker::PackBuilder::new();
++        for chunk in &chunks {
++            builder.add(chunk).unwrap();
++        }
++        let pack = builder.finish();
++        let old = PackHash::digest(b"evicted P");
++        let mut entry = test_entry(1);
++        entry.tree = FileTree(FileSystemObject::Regular(Regular {
++            executable: false,
++            contents: ChunkList {
++                chunks: chunks.iter().map(|chunk| chunk.hash).collect(),
++                ..Default::default()
++            },
++        }));
++        let chunk_data = chunks
++            .iter()
++            .map(|chunk| (chunk.hash, chunk.data.clone()))
++            .collect();
++        let expected_nar = nar_from_chunks(&entry.tree, &chunk_data, &RefTable::new(&[]))
++            .await
++            .unwrap();
++        entry.nar_hash = Hash32::digest(&expected_nar);
++        entry.nar_size = expected_nar.len() as u64;
++        let mut fresh = Manifest::new();
++        fresh.paths.insert(test_path_hash(1), entry.clone());
++        fresh.chunks.extend(pack.locations());
++        let mut stale = fresh.clone();
++        for location in stale.chunks.values_mut() {
++            location.pack = old;
++            location.repacks_survived = 5;
++        }
++        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++        let base = format!("http://{}", listener.local_addr().unwrap());
++        let blob_url = format!("{base}/blob");
++        let live_key = pack.cache_key();
++        let app = Router::new()
++            .route(
++                "/twirp/github.actions.results.api.v1.CacheService/GetCacheEntryDownloadURL",
++                post(move |Json(request): Json<Value>| {
++                    let blob_url = blob_url.clone();
++                    let live_key = live_key.clone();
++                    async move {
++                        Json(if request["key"] == live_key {
++                            json!({"ok":true,"matched_key":live_key,"signed_download_url":blob_url})
++                        } else {
++                            json!({"ok":false})
++                        })
++                    }
++                }),
++            )
++            .route(
++                "/blob",
++                get(move || {
++                    let data = pack.data.clone();
++                    async move { (StatusCode::PARTIAL_CONTENT, data) }
++                }),
++            );
++        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
++        let http = reqwest::Client::new();
++        for prefetch in [false, true] {
++            let store = ManifestStore::new();
++            store.set_version(stale.clone(), 102);
++            let reload_store = store.clone();
++            let reload_fresh = fresh.clone();
++            let reloads = Arc::new(AtomicU64::new(0));
++            let count = reloads.clone();
++            let state = Substituter::new(
++                StoreDir::default(),
++                store.clone(),
++                AccessLog::new(),
++                TwirpClient::new(http.clone(), &base, "token"),
++                http.clone(),
++            )
++            .with_manifest_reload(Arc::new(move || {
++                let store = reload_store.clone();
++                let fresh = reload_fresh.clone();
++                let count = count.clone();
++                Box::pin(async move {
++                    assert!(store.missing_packs().contains(&old), "mark before reload");
++                    count.fetch_add(1, Ordering::SeqCst);
++                    store.merge_version(fresh, 102);
++                })
++            }));
++            let body = if prefetch {
++                export_window(&state, &store.view(), &[test_path_hash(1)])
++                    .await
++                    .unwrap()
++            } else {
++                let response = nar(
++                    State(Arc::new(state)),
++                    Path(format!("{}.nar", entry.nar_hash)),
++                    Ok(Query(NarQuery { hash: None })),
++                )
++                .await;
++                assert_eq!(response.status(), StatusCode::OK);
++                axum::body::to_bytes(response.into_body(), usize::MAX)
++                    .await
++                    .unwrap()
++                    .to_vec()
++            };
++            assert_eq!(reloads.load(Ordering::SeqCst), 1);
++            assert_eq!(
++                store.view().manifest.chunks[&chunks[0].hash].pack,
++                fresh.chunks[&chunks[0].hash].pack
++            );
++            let expected = if prefetch {
++                export_frame(&StoreDir::default(), &entry, &expected_nar)
++            } else {
++                expected_nar.clone()
++            };
++            assert_eq!(body, expected);
++        }
++        server.abort();
++    }
++
+     #[test]
+     fn manifest_store_indexes_nar_hashes() {
+         let store = ManifestStore::new();
+diff --git a/tests/pr_manifest_scope.rs b/tests/pr_manifest_scope.rs
+new file mode 100644
+index 0000000..2a2eb41
+--- /dev/null
++++ b/tests/pr_manifest_scope.rs
+@@ -0,0 +1,177 @@
++//! The fake deliberately honors metadata.scope; real service support still needs a CI probe.
++use std::sync::{Arc, Mutex};
++use std::time::Duration;
++
++use axum::{
++    Json, Router,
++    extract::{Path, State},
++    routing::{get, post, put},
++};
++use bytes::Bytes;
++use hestia::gha::{savemutable::SaveMutable, twirp::TwirpClient};
++use hestia::manifest::{ChunkHash, ChunkLocation, Manifest, PackHash, Root};
++use serde_json::{Value, json};
++
++#[derive(Default)]
++struct Seen {
++    lookups: Vec<Value>,
++    reservations: Vec<String>,
++    uploaded: Bytes,
++}
++
++#[derive(Clone)]
++struct Fake {
++    base: String,
++    fresh_pr: bool,
++    seen: Arc<Mutex<Seen>>,
++}
++
++fn manifest(name: &str) -> Manifest {
++    let mut manifest = Manifest::new();
++    manifest.roots.insert(
++        name.into(),
++        Root {
++            paths: Default::default(),
++            updated: 1,
++            run_id: None,
++        },
++    );
++    let own = name.starts_with("own");
++    manifest.chunks.insert(
++        ChunkHash::digest(b"chunk"),
++        ChunkLocation {
++            pack: PackHash::digest(if own { b"P" } else { b"Q" }),
++            repacks_survived: if own { 5 } else { 0 },
++            offset: 0,
++            compressed_size: 1,
++            uncompressed_size: 1,
++        },
++    );
++    manifest
++}
++
++async fn rpc(
++    State(fake): State<Fake>,
++    Path(method): Path<String>,
++    Json(request): Json<Value>,
++) -> Json<Value> {
++    let mut seen = fake.seen.lock().unwrap();
++    match method.as_str() {
++        "GetCacheEntryDownloadURL" => {
++            seen.lookups.push(request.clone());
++            let scope = request["metadata"]["scope"][0]["scope"].as_str();
++            if fake.fresh_pr && scope == Some("refs/pull/1/merge") {
++                return Json(json!({"ok": false}));
++            }
++            let changed = !seen.reservations.is_empty();
++            let (index, blob) = match scope {
++                Some("refs/pull/1/merge") if changed => (101, "own-new"),
++                Some("refs/pull/1/merge") => (100, "own-old"),
++                Some("refs/heads/main") if changed => (92, "main-stale"),
++                Some("refs/heads/main") | None => (102, "main-new"),
++                other => panic!("unexpected scope {other:?}"),
++            };
++            Json(json!({"ok": true, "matched_key": format!("m#{index}"),
++                "signed_download_url": format!("{}/blob/{blob}", fake.base)}))
++        }
++        "CreateCacheEntry" => {
++            seen.reservations
++                .push(request["key"].as_str().unwrap().into());
++            Json(if seen.reservations.len() == 1 {
++                json!({"ok": false})
++            } else {
++                json!({"ok": true, "signed_upload_url": format!("{}/upload", fake.base)})
++            })
++        }
++        "FinalizeCacheEntryUpload" => Json(json!({"ok": true, "entry_id": "1"})),
++        _ => panic!("unexpected RPC {method}"),
++    }
++}
++
++#[tokio::test]
++async fn pr_merges_scopes_and_retries_above_both_despite_gaps_and_regressed_reads() {
++    for fresh_pr in [false, true] {
++        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++        let fake = Fake {
++            base: format!("http://{}", listener.local_addr().unwrap()),
++            fresh_pr,
++            seen: Default::default(),
++        };
++        let app = Router::new()
++            .route(
++                "/twirp/github.actions.results.api.v1.CacheService/{method}",
++                post(rpc),
++            )
++            .route(
++                "/blob/{name}",
++                get(|Path(name): Path<String>| async move {
++                    Bytes::from(manifest(&name).encode().unwrap())
++                }),
++            )
++            .route(
++                "/upload",
++                put(|State(fake): State<Fake>, data: Bytes| async move {
++                    fake.seen.lock().unwrap().uploaded = data;
++                }),
++            )
++            .with_state(fake.clone());
++        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
++        let http = reqwest::Client::new();
++        let twirp = TwirpClient::new(http.clone(), &fake.base, "token").with_manifest_scopes(
++            "42",
++            "refs/pull/1/merge",
++            "refs/heads/main",
++        );
++        let save = SaveMutable::new(&twirp, &http, "m").with_retry(Duration::ZERO, 3, 3);
++        let (own_index, entry) = save.load_with_own_index(&Default::default()).await.unwrap();
++        let entry = entry.unwrap();
++        assert_eq!(own_index, if fresh_pr { 0 } else { 100 });
++        assert_eq!(entry.index, 102);
++        let loaded = Manifest::decode(&entry.data).unwrap();
++        assert!(loaded.roots.contains_key("main-new"));
++        assert_eq!(loaded.roots.contains_key("own-old"), !fresh_pr);
++        // Filtering EACH scope before union lets live Q beat evicted P's higher repack count.
++        let (_, filtered) = save
++            .load_with_own_index(&[PackHash::digest(b"P")].into())
++            .await
++            .unwrap();
++        let filtered = Manifest::decode(&filtered.unwrap().data).unwrap();
++        assert_eq!(
++            filtered.chunks[&ChunkHash::digest(b"chunk")].pack,
++            PackHash::digest(b"Q")
++        );
++        let index = save
++            .save(|entry| Ok(entry.unwrap().data.to_vec()))
++            .await
++            .unwrap();
++        assert_eq!(index, 103);
++        let seen = fake.seen.lock().unwrap();
++        assert_eq!(seen.reservations, ["m#103", "m#103"]);
++        let uploaded = Manifest::decode(&seen.uploaded).unwrap();
++        assert!(
++            uploaded.roots.contains_key("main-new"),
++            "retain the observed main state"
++        );
++        assert_eq!(uploaded.roots.contains_key("own-new"), !fresh_pr);
++        for request in &seen.lookups {
++            assert_eq!(request["metadata"]["repository_id"], "42");
++            assert!(request["metadata"].get("repositoryId").is_none());
++            assert_eq!(request["metadata"]["scope"][0]["permission"], "1");
++            assert_eq!(request["metadata"]["scope"].as_array().unwrap().len(), 1);
++        }
++        drop(seen);
++        // Unconfigured clients retain one unscoped lookup and the original blob.
++        let twirp = TwirpClient::new(http.clone(), &fake.base, "token");
++        fake.seen.lock().unwrap().lookups.clear();
++        let entry = SaveMutable::new(&twirp, &http, "m")
++            .load()
++            .await
++            .unwrap()
++            .unwrap();
++        assert_eq!(entry.data.as_ref(), manifest("main-new").encode().unwrap());
++        let seen = fake.seen.lock().unwrap();
++        assert_eq!(seen.lookups.len(), 1);
++        assert!(seen.lookups[0].get("metadata").is_none());
++        server.abort();
++    }
++}

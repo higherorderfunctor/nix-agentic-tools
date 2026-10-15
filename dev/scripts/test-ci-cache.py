@@ -2,11 +2,26 @@
 """Exercise the actual evaluation-input retention step without Nix or GHA."""
 
 import os
+import re
 import subprocess
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+
+
+class HestiaPinTest(unittest.TestCase):
+    def test_action_and_matrix_use_packaged_release(self):
+        root = Path(__file__).parents[2]
+        package = (root / "dev/ci-hestia.nix").read_text()
+        rev = re.search(r'rev = "([0-9a-f]{40})";', package).group(1)
+        version = re.search(r'version = "([^"]+)";', package).group(1)
+        pins = []
+        for path in (root / ".github/actions/check-cache/action.yml",
+                     root / ".github/workflows/ci.yml"):
+            pins.extend(re.findall(r"uses: Mic92/hestia(?:/matrix)?@([0-9a-f]{40}) # v([^\s]+)",
+                                   path.read_text()))
+        self.assertEqual(pins, [(rev, version), (rev, version)])
 
 
 class EvaluationInputRetentionTest(unittest.TestCase):

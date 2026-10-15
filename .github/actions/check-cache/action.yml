@@ -13,9 +13,18 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Obtain patched Hestia
+      id: binary
+      shell: bash
+      run: |
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        package="$(nix build --no-link --print-out-paths .#.ciHestia.x86_64-linux)"
+        printf 'path=%s/bin/hestia\n' "$package" >> "$GITHUB_OUTPUT"
     - uses: Mic92/hestia@dfed9ced335d28978ba74e513939a10db1f71025 # v3.1.0
       with:
-        version: v3.1.0
+        # A supplied binary bypasses the action's release attestation check.
+        binary: ${{ steps.binary.outputs.path }}
         # Retain devenv-signed evaluation inputs; exclude public dependencies.
         upstream-cache-filter: "true"
         upstream-cache-key-names:
