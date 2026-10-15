@@ -72,11 +72,15 @@ for it. When several entries match, their guidance composes.
   - Match:
     - `checks/ai-proxy/**`
     - `lib/ai/proxy/**`
+    - `packages/chatgpt-codex/lib/proxy.nix`
     - `packages/claude-code/lib/proxy.nix`
   - Read:
     - [`dev/fragments/ai-proxy/ai-proxy.md`](dev/fragments/ai-proxy/ai-proxy.md)
 - **`ai-proxy-runtimes`**
   - Match:
+    - `packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix`
+    - `packages/chatgpt-codex/checks/proxy-test.py`
+    - `packages/chatgpt-codex/lib/proxy.nix`
     - `packages/claude-code/checks/claude-proxy.nix`
     - `packages/claude-code/lib/proxy.nix`
   - Read:

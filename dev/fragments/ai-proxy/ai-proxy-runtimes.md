@@ -30,11 +30,41 @@ already writes (user on Home Manager, project on devenv). The proxy leaves are
 at ordinary priority, so a consumer's own value for one is a definition
 conflict.
 
-### Codex, Kimchi, Kiro, Copilot
+### Codex (`packages/chatgpt-codex/lib/proxy.nix`)
 
-Codex, Kimchi and Kiro omit `proxy` from `surfaceSupport`. They receive the
-standard unsupported-surface warning, not a silent drop. Copilot is out of scope
-and warns the same way. `ai-warnings-delivery` generates those cases from the
+One provider table per endpoint: `base_url` is the origin plus `/v1`, `name` is
+the provider id (Codex refuses to load a provider without one),
+`wire_api = "responses"` and `requires_openai_auth = false`. `true` would send a
+ChatGPT login's token to the proxy. `plain` becomes `experimental_bearer_token`.
+`file` and `helper` become command-backed `auth` (`cat <path>`, or the helper),
+which Codex re-runs every five minutes and after a 401. Never `env_key`: tool
+subprocesses inherit it, and Home Manager's launcher environment does not reach
+devenv's.
+
+- **Home Manager** writes `model_provider = "ai-proxy"` and
+  `[model_providers.ai-proxy]` into user config.toml, plus the overridable
+  defaults `features.plugins = false` and `analytics.enabled = false`, which
+  stop plugin sync and usage metrics from reaching other hosts. A devenv shell
+  inherits the user file with no devenv configuration.
+- **devenv** cannot use project config: Codex strips `model_provider` and
+  `model_providers` from project layers. Its launcher passes
+  `-c model_providers.ai-proxy-devenv={…}` and
+  `-c model_provider=ai-proxy-devenv`, the highest layer, baked in as
+  `--add-flag`s. The quieting defaults go to the trusted project's config.toml.
+- **A separate id on devenv is load-bearing.** Codex deep-merges layers per key,
+  so session flags reusing `ai-proxy` would add their auth fields to the user
+  table, and `auth` beside `experimental_bearer_token` fails to load.
+- No `[profiles.*]` or `profile`: the pinned Codex rejects both.
+
+`chatgpt-codex-proxy` runs the pinned binary against loopback mock proxies in
+the build sandbox. It covers each Home Manager key form, the devenv url form,
+and Home Manager plus devenv with different key forms.
+
+### Kimchi, Kiro, Copilot
+
+Kimchi and Kiro omit `proxy` from `surfaceSupport`. They receive the standard
+unsupported-surface warning, not a silent drop. Copilot is out of scope and
+warns the same way. `ai-warnings-delivery` generates those cases from the
 records on both backends.
 
 ### Checks
