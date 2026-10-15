@@ -16,17 +16,20 @@ in
       name = activation.nativeName "devenv" key entry;
     in {
       inherit name;
-      value = {
-        after = activation.devenvAfter secretNodes entry;
-        before = lib.unique (lib.concatMap nodesFor entry.before ++ entry.beforeNodes.devenv);
-        exec = ''
-          (
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          ${entry.command}
-          )
-        '';
-      };
+      value =
+        {
+          after = activation.devenvAfter secretNodes entry;
+          before = lib.unique (lib.concatMap nodesFor entry.before ++ entry.beforeNodes.devenv);
+          exec = ''
+            (
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            ${entry.command}
+            )
+          '';
+        }
+        # Generated entries only: the option schema has no such field.
+        // lib.optionalAttrs (entry.showOutput or false) {showOutput = true;};
     };
   in
     if issue != null

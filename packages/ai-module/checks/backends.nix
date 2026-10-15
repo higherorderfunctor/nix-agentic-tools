@@ -1,7 +1,8 @@
 # The two backend modules as the matrix and transition checks see them: one
 # evaluation function and, per backend, where its generated entries, native
-# links and secret edges live. The generated phases are read from the
-# evaluated entries, so the modules stay their one definition.
+# links and secret edges live. The engine phases are read from the
+# evaluated entries, so the modules stay their one definition; the devenv
+# observer's snapshot and inspect entries are not engine phases.
 {
   harness,
   lib,
@@ -11,7 +12,7 @@
     sink
     // {
       entry = config: name: (sink.entries config).${sink.prefix + name};
-      phases = config: map (lib.removePrefix sink.prefix) (builtins.filter (lib.hasPrefix sink.prefix) (builtins.attrNames (sink.entries config)));
+      phases = config: builtins.filter (phase: (sink.entries config) ? ${sink.prefix + phase}) ["apply" "guard" "prune"];
     }) {
     devenv = {
       command = entry: entry.exec;

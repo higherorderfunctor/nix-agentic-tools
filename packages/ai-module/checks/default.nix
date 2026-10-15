@@ -9,6 +9,7 @@
     ./hm.nix
     ./legacy.nix
     ./matrix.nix
+    ./observer.nix
     ./runtime.nix
     ./runtime-forward.nix
     ./rw.nix

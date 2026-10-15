@@ -140,14 +140,15 @@ HM's native linking. `files2-apply` is generated only for a nonempty plan.
 Backend lowering validates and lowers their union with the caller's
 `ai.activation2` graph; the generated entries are not option definitions that a
 whole-option priority override can remove. A caller key colliding with a
-reserved name fails evaluation, whether or not that entry is emitted. Generated
-entries have `runWhenDisabled = true`. Prune has
-`after = []; before = ["linkCheck"];`; apply has `after = ["files"]` plus
-`"secrets"` when any enabled entry uses `content.run`. Apply also depends
-directly on prune and, when emitted, the devenv native guard; devenv refuses a
-dependency on an absent task. The internal `materialized` point depends on
-apply. These reserved entries and their names cannot be overridden by callers.
-Content renderers execute only in apply.
+reserved name fails evaluation, whether or not that entry is emitted: both
+backends reserve `files2-apply` and `files2-prune`, and devenv also reserves
+`files2-guard`, `files2-inspect` and `files2-snapshot`. Generated entries have
+`runWhenDisabled = true`. Prune has `after = []; before = ["linkCheck"];`; apply
+has `after = ["files"]` plus `"secrets"` when any enabled entry uses
+`content.run`. Apply also depends directly on prune and, when emitted, the
+devenv native guard; devenv refuses a dependency on an absent task. The internal
+`materialized` point depends on apply. These reserved entries and their names
+cannot be overridden by callers. Content renderers execute only in apply.
 
 The devenv guard is a third ordinary generated activation entry, between
 `linkCheck` and `files`, emitted only when the plan has native links. It checks
@@ -156,6 +157,19 @@ store link, remove a stale store link, refuse regular files, special files and
 non-store links, and refuse symlinked parents. Only desired native destinations
 are examined; there is no native-link state in the engine. Native backends
 retract their own removed links.
+
+Devenv also generates the observer pair (L168, L169), which never deletes and
+never fails the shell. Both entries remain emitted with an empty plan:
+inspection must still report retained paths from its ledger, and snapshot
+precedes the always-present cleanup task. `files2-snapshot` clears both abstract
+defaults and runs before `devenv:files:cleanup`: it copies the owned paths of
+devenv's previous link list into `$DEVENV_STATE/ai-delivery-observed.json`.
+`files2-inspect` runs after `materialized` with devenv `showOutput`, because
+devenv hides a passing task's output. It warns for an owned link that is absent
+or replaced by a file, a directory or a stale link, and for a remembered path no
+longer delivered that is still on disk. Ownership is the normalized plan, each
+path named by its `ai.files2Owners` claim or else `ai.files2`, plus the live
+`ai.deliveredPaths`.
 
 ### Layer 3: generic activation
 
