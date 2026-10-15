@@ -213,6 +213,11 @@ the file cannot tell you: updates land on one standing grouped branch,
 the cleanup above only matches `update/*`, so the two never touch each other's
 branches.
 
+Hestia is excluded from Renovate's Actions manager. The `ci-hestia` package
+target runs one update script that resolves the release tag to a 40-hex commit,
+updates its source hash, and moves both `uses:` refs with the recipe. The pin
+drift test checks the three references together.
+
 Enabling `sha_pinning_required` is ordered: install the Mend Renovate app, widen
 the Hestia allowlist entries to `@*` (`.github/repo-settings.yml`; an exact-SHA
 entry makes every bump PR a `startup_failure`), merge Renovate's first pinning

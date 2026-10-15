@@ -67,7 +67,7 @@
   # ── A: overlay re-export ───────────────────────────────────────────
   repoDocs = builtins.filter (lib.hasPrefix "repo-") (builtins.attrNames ciPackages);
   # This validation recipe must stay outside every public package surface.
-  ciOnlyNames = ["kiro-cli-rollout-canary"];
+  ciOnlyNames = ["ci-hestia" "kiro-cli-rollout-canary"];
   leafNames = sorted (lib.subtractLists (ciOnlyNames ++ repoDocs) (builtins.attrNames ciPackages));
   claimNames = sorted (lib.unique (map lib.last claimedPaths));
   overlayMismatches =

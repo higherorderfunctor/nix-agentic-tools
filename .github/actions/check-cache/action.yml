@@ -16,11 +16,28 @@ runs:
     - name: Obtain patched Hestia
       id: binary
       shell: bash
+      env:
+        NON_DEFAULT_REF:
+          ${{ github.ref != format('refs/heads/{0}',
+          github.event.repository.default_branch) }}
       run: |
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         package="$(nix build --no-link --print-out-paths .#.ciHestia.x86_64-linux)"
-        printf 'path=%s/bin/hestia\n' "$package" >> "$GITHUB_OUTPUT"
+        binary="$package/bin/hestia"
+        if [[ "$NON_DEFAULT_REF" == true ]]; then
+          binary="$RUNNER_TEMP/hestia-family"
+          printf '#!/usr/bin/env bash\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n' > "$binary"
+          printf 'hestia=%q\n' "$package/bin/hestia" >> "$binary"
+          cat >> "$binary" <<'EOF'
+        if [[ "${1:-}" == serve ]]; then
+          exec "$hestia" "$@" --manifest-prefix m3pr --base-manifest-prefix m3
+        fi
+        exec "$hestia" "$@"
+        EOF
+          chmod +x "$binary"
+        fi
+        printf 'path=%s\n' "$binary" >> "$GITHUB_OUTPUT"
     - uses: Mic92/hestia@dfed9ced335d28978ba74e513939a10db1f71025 # v3.1.0
       with:
         # A supplied binary bypasses the action's release attestation check.
