@@ -2045,7 +2045,7 @@ in {
           package = lib.head devenv.config.packages;
           bin = "codex";
           needles = [
-            "'hooks.state={\"/tmp/devenv-root/.codex/hooks.json:pre_tool_use:0:0\" = {trusted_hash = \"${preToolUse}\"}, \"/tmp/devenv-root/.codex/hooks.json:stop:0:0\" = {trusted_hash = \"${stop}\"}}'"
+            "'hooks.state={\"/tmp/devenv-root/.codex/hooks.json:pre_tool_use:0:0\" = {\"trusted_hash\" = \"${preToolUse}\"}, \"/tmp/devenv-root/.codex/hooks.json:stop:0:0\" = {\"trusted_hash\" = \"${stop}\"}}'"
           ];
         };
 
