@@ -36,9 +36,14 @@
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
+  generatedFiles = import ./generatedFiles.nix {
+    inherit lib;
+    inherit (appRecord) pkgs;
+  };
   hooks = import ../hooks.nix {inherit lib;};
   pathProvenanceNotice = import ../runtime-path-provenance-notice.nix appRecord.pkgs;
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
+  runtimeModule = import ../../../packages/ai-module/lib/runtime.nix;
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
   # `_module.args`, which requires `config` and deadlocks against any
@@ -77,6 +82,7 @@
       assert checkRecord.contentTargets appRecord.name result; result);
     sharedTargets = sharedAgentsMdTargets;
     hasContext = normalizedHasContext;
+    inherit generatedContent;
   };
   supportedSurfaces = builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) (appRecord.surfaceSupport or {}));
   supportsPool = poolName: builtins.elem poolName supportedSurfaces;
@@ -604,6 +610,14 @@
       )
     else [];
   runtimeSinkFiles = builtins.removeAttrs cfg.files sharedAgentsMdTargets;
+  # `S` → `R`: the staged entries become layer-1 definitions over the
+  # runtime's one generated tree (the adapter builds it while the old path
+  # coexists). `S` is read only while the runtime is enabled.
+  generatedArgs = {
+    staged = cfg._generatedFiles;
+    tree = cfg._generatedTree;
+  };
+  generatedContent = generatedFiles.content generatedArgs;
   # ── Package installation ───────────────────────────────────────────────
   # Owned HERE, not by each factory. An enabled runtime installs something by
   # default; an explicit `package = null` keeps configuration enabled without
@@ -648,8 +662,20 @@
         '');
       };
 in {
+  # Layer 1: `ai.<runtime>.files2` forwards to `ai.files2` while enabled; the
+  # shared AGENTS.md keys forward without a claim, since their composer owns
+  # them.
+  imports = [
+    (runtimeModule {
+      enabled = cfg.enable;
+      inherit (appRecord) name;
+      shared = sharedAgentsMdTargets;
+    })
+  ];
+
   options.ai.${appRecord.name} = lib.recursiveUpdate (
     {
+      _generatedFiles = generatedFiles.stagedOption;
       _generatedTree = deliveryOptions.generatedTreeOption;
       _maxBytes = deliveryOptions.maxBytesOption;
       _ownPlans = deliveryOptions.ownPlansOption;
@@ -820,7 +846,18 @@ in {
       packageInstallConfig
       customConfig
       sharedAgentsMdConfig
+      {ai.${appRecord.name}.files2 = generatedFiles.layer1 generatedArgs;}
     ]))
+    (lib.optionalAttrs (options ? assertions) {
+      assertions = [
+        (generatedFiles.disjoint {
+          inherit (config.ai) files2;
+          old = lib.optionalAttrs cfg.enable (lib.filterAttrs (_path: runtimeFiles.isLive) runtimeSinkFiles);
+          option = "ai.${appRecord.name}.files";
+          inherit (generatedArgs) staged;
+        })
+      ];
+    })
     # Lower once, including retirement writers declared by migrationConfig.
     # Disabling a runtime removes every file claim and every ordinary writer;
     # only explicit runWhenDisabled writers can drain prior ownership.
@@ -830,6 +867,7 @@ in {
       cfg =
         cfg
         // {
+          _generatedFiles = lib.optionalAttrs cfg.enable cfg._generatedFiles;
           activation = lib.filterAttrs (_name: writer: cfg.enable || writer.runWhenDisabled) cfg.activation;
           files =
             if cfg.enable

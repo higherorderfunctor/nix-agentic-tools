@@ -49,6 +49,7 @@
     expectedCodexRoots = pkgs.writeText "expected-codex-option-roots" (
       lib.concatStringsSep "\n" [
         "ai.codex.activation"
+        "ai.codex.activation2"
         "ai.codex.agents"
         "ai.codex.agentsDir"
         "ai.codex.checks"
@@ -58,6 +59,7 @@
         "ai.codex.environmentVariables"
         "ai.codex.execpolicyRules"
         "ai.codex.files"
+        "ai.codex.files2"
         "ai.codex.hooks"
         "ai.codex.mcpServers"
         "ai.codex.methodFor"

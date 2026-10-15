@@ -1,13 +1,15 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-15 — the root-option provenance guard exempts the
-> ai-module layer-1 forwarding helper for its forwarded options; option
-> declarations supply policy surfaces and keyed withdrawal; runtime declarations
-> supply normalized policy gaps and the warning suite generates coverage for
-> every runtime, surface and backend; a record's `optionNamespaces` places
-> launcher and pool options, and `ai.copilot` is github.com Copilot with its
-> pools under `ai.copilot.github`; explicit normalized overrides warn for live
-> explicit contributions on unavailable backends, excluding empty or disabled
+> **Last verified:** 2026-10-15 — runtime factories stage moved surfaces in
+> `_generatedFiles` and forward them through the ai-module layer-1 helper over
+> one generated tree; the root-option provenance guard exempts the ai-module
+> layer-1 forwarding helper for its forwarded options; option declarations
+> supply policy surfaces and keyed withdrawal; runtime declarations supply
+> normalized policy gaps and the warning suite generates coverage for every
+> runtime, surface and backend; a record's `optionNamespaces` places launcher
+> and pool options, and `ai.copilot` is github.com Copilot with its pools under
+> `ai.copilot.github`; explicit normalized overrides warn for live explicit
+> contributions on unavailable backends, excluding empty or disabled
 > contributions beside inherited folds.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
@@ -812,6 +814,18 @@ replacement reload) and is a read-only copy on devenv, claimed by the
 reconciled (`lib/ai/own.nix`, a `dir` target) because the v3 scan keeps only
 `isFile()` entries. On Home Manager the same enable-independent writer declares
 nothing and only drains the steering copies an older ledger records.
+
+While PR 3 moves surfaces to the ai-module layers, both paths coexist. Every
+runtime factory imports the layer-1 helper, so `ai.<runtime>.files2` forwards to
+`ai.files2` while the runtime is enabled. A moved surface is staged in the
+internal `ai.<runtime>._generatedFiles` (the files engine entry plus `surface`).
+`lib/ai/app/generatedFiles.nix` builds the runtime's one generated tree from its
+staged and old live entries (the router calls it) and gives layer 1 each staged
+entry at `mkDefault`: text and non-recursive source as the tree file, a value
+per leaf, a recursive source or `run` as itself. An assertion refuses a
+destination live in `ai.<runtime>.files` that is also enabled in `ai.files2` or
+live in the staged entries; a staged path counts even with its `ai.files2` entry
+switched off, because the old file would still carry the staged bytes.
 
 ### Documentation parity is capability parity
 

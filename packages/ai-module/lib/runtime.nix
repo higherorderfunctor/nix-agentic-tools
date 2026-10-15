@@ -21,6 +21,9 @@
   forward = option: lib.modules.mkAliasAndWrapDefsWithPriority lib.id options.ai.${name}.${option};
 in {
   _file = toString ./runtime.nix;
+  # The root options it forwards into, for an owner evaluated without the
+  # backend modules; a path import, so it deduplicates with theirs.
+  imports = [../modules/common.nix];
 
   options.ai.${name} = {
     activation2 = lib.mkOption {
@@ -35,6 +38,8 @@ in {
       type = lib.types.listOf files2.legacyLedgerType;
       default = [];
       internal = true;
+      # Internal alone still lists the entry's sub-options in option docs.
+      visible = false;
     };
   };
 
