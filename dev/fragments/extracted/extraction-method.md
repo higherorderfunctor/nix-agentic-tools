@@ -9,9 +9,8 @@ follows the SOURCE, not the author's habit.
 1. **Eval or copy.** Ask the program for its own answer: run it, call tsserver
    or the TypeScript compiler API, import the module and print the computed
    object. When the source is JSON (a file, or a JSON block embedded in a
-   binary), parse it with a JSON parser and copy it. A transform is fine when it
-   serves the reader: take a subtree, or normalize. Copy the whole value; take a
-   subtree or normalize only for a named reader, never a 10% slice. This only
+   binary), parse it with a JSON parser and copy it. Copy the whole value; take
+   a subtree or normalize only for a named reader, never a 10% slice. This only
    breaks when the file or the anchor (a variable name, a key) goes away.
 2. **AST.** When eval is not feasible: ast-grep, tree-sitter, Python `ast`. It
    survives code moving around as long as the shape matches. A pattern may
