@@ -1,17 +1,15 @@
-# Pure committed delivery data plus independent consumer facts. Neither
-# production warning reader evaluates a module to import this policy.
+# Pure delivery facts for the warning readers: per surface, runtime and
+# backend, whether the runtime delivers it, and for each part it does not, the
+# reason and the input options a request arrives through. Neither production
+# warning reader evaluates a module to import this.
 {lib}: let
   schema = import ./ai-delivery-schema.nix {inherit lib;};
-  inherit (schema) ecosystems expectedKeys imperativePrimitives keyedSurfaces modes primitives sharedSurfaces surfaces writersOf;
+  inherit (schema) key keyedSurfaces modes sharedSurfaces writersOf;
   facts = import ./ai-delivery-facts.nix {inherit lib;};
-  generated = import ./ai-delivery-generated.nix;
-  inherit (facts) absent key;
+  inherit (facts) absent;
   optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
   inherit (optionPaths) records;
   delivered = row: builtins.elem row.mode (records.${row.ecosystem}.surfaceSupport.${row.surface}.backends or []);
-  # Native writers may remain when the normalized surface is unsupported
-  # (Kiro hooks/settings). Their absence becomes a diagnostic child, while a
-  # cell without a native writer becomes a primary notApplicable row.
   identity = cell: let
     parts = lib.splitString "/" cell;
   in {
@@ -29,11 +27,21 @@
           ((absent (support.reason or "${ecosystem}'s surfaceSupport does not consume this shared surface."))
             // {inputOptions = [["ai" surface]];})))
       modes)
-    ecosystems)
+    schema.ecosystems)
   sharedSurfaces);
   handRows =
-    schema.validateSupport records
+    schema.validateHand
     (lib.mapAttrsToList (cell: row: row // identity cell) facts.hand);
+  # Every other cell delivers, unless its record withholds the surface and no
+  # native writer serves it.
+  derivedRows = map (cell:
+    identity cell
+    // (
+      if supportAbsences ? ${cell} && !builtins.elem cell facts.nativeWriters
+      then supportAbsences.${cell}
+      else {primitive = "delivered";}
+    ))
+  (lib.subtractLists (builtins.attrNames facts.hand) schema.expectedKeys);
   staticGaps = row: let
     support = records.${row.ecosystem}.surfaceSupport.${row.surface} or {};
     paths =
@@ -58,35 +66,22 @@
         && builtins.isString gap.reason
         && builtins.elem row.mode (gap.backends or modes))
       (support.gaps or [])));
-  primaryKeys = map key (generated.rows ++ handRows);
-  absentRows =
-    lib.mapAttrsToList (cell: row: row // identity cell)
-    (builtins.removeAttrs supportAbsences primaryKeys);
-  handKeys = map key handRows;
-  derivedKeys = map key (generated.rows ++ absentRows);
   assemble = row: let
     cell = key row;
     children =
-      (row.additionalWriters or [])
-      ++ (facts.supplements.${cell} or [])
+      (facts.supplements.${cell} or [])
       ++ staticGaps row
       ++ lib.optional (row.primitive != "notApplicable" && supportAbsences ? ${cell}) supportAbsences.${cell};
-    annotateChild = child:
-      builtins.removeAttrs
-      (facts.annotate (child // {inherit (row) ecosystem mode surface;}))
-      ["ecosystem" "mode" "surface"];
   in
-    facts.annotate row
-    // facts.metadata row
-    // lib.optionalAttrs (children != []) {additionalWriters = map annotateChild children;};
-  validateRows = schema.validateRows {inherit derivedKeys handKeys;};
-  rows = validateRows (lib.sort (a: b: key a < key b) (map assemble (generated.rows ++ absentRows ++ handRows)));
+    row
+    // {inputOptions = facts.inputOptions row.surface row.ecosystem;}
+    // lib.optionalAttrs (children != []) {additionalWriters = children;};
+  rows = schema.validateRows (lib.sort (a: b: key a < key b) (map assemble (derivedRows ++ handRows)));
   definitions = lib.foldl' (acc: row:
     lib.recursiveUpdate acc
     (lib.setAttrByPath [row.surface row.ecosystem row.mode] (builtins.removeAttrs row ["ecosystem" "mode" "surface"]))) {}
   rows;
 in
   builtins.seq rows {
-    inherit definitions ecosystems expectedKeys imperativePrimitives key keyedSurfaces modes primitives rows surfaces validateRows writersOf;
-    imperativeWriters = lib.filter (writer: builtins.elem writer.primitive imperativePrimitives) (lib.concatMap writersOf rows);
+    inherit definitions key keyedSurfaces modes rows writersOf;
   }

@@ -14,6 +14,7 @@
     ./runtime-forward.nix
     ./rw.nix
     ./shared-surfaces.nix
+    ./sink-guard.nix
     ./state.nix
     ./transitions.nix
   ];

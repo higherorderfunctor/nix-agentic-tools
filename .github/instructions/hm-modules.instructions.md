@@ -8,9 +8,10 @@ applyTo: "packages/*/modules/homeManager/**"
 ## HM Module Conventions
 
 > **Last verified:** 2026-10-15 — `mkSkillFiles` interpolates every skill source
-> before the files engine walks it; Kiro is gated by `ai.kiro.cli.enable`;
-> factories read the derived, read-only `ai.kiro.enable`; `ai.copilot` is
-> github.com Copilot, with pools under `ai.copilot.github` and no launcher.
+> before the files engine walks it; no check gates the N-to-zero writer defect;
+> Kiro is gated by `ai.kiro.cli.enable`; factories read the derived, read-only
+> `ai.kiro.enable`; `ai.copilot` is github.com Copilot, with pools under
+> `ai.copilot.github` and no launcher.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -307,8 +308,10 @@ is the RETRACTION path: empty settings plus no prior ledger is a strict no-op,
 while empty settings plus a prior ledger must run so a later generation retracts
 the leaves it used to own without erasing native state. A
 `mkIf (cfg.native.settings != {})` around one of these writers is the N-to-zero
-defect, and `checks.ai-delivery` fails at eval on it — it evaluates every
-imperative writer under a populated AND an empty declaration.
+defect. The check that evaluated every imperative writer under a populated AND
+an empty declaration was retired with the generated writer matrix, so review
+catches it until the runtime moves to the files engine, which retires an
+undeclared copy itself.
 
 Devenv-side writes are otherwise unconditional (always write the file when
 `enable = true`): devenv files are project-local symlinks, not home-dir writes.
