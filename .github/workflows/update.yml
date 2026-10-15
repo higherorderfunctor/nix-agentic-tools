@@ -43,11 +43,11 @@ jobs:
       base: ${{ steps.base.outputs.sha }}
       matrix: ${{ steps.targets.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: automation
           persist-credentials: false
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: source
           ref: main
@@ -58,7 +58,7 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
           extra_nix_config: |
             accept-flake-config = true
@@ -99,21 +99,21 @@ jobs:
           shopt -s inherit_errexit 2>/dev/null || :
           echo "epoch=$(( $(date +%s) + 105 * 60 ))" >> "$GITHUB_OUTPUT"
         working-directory: ${{ github.workspace }}
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: automation
           persist-credentials: false
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: source
           ref: ${{ needs.discover.outputs.base }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
           extra_nix_config: |
             accept-flake-config = true
-      - uses: cachix/cachix-action@v17
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -164,7 +164,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" prepare 2>&1 | tee .update-logs/prepare.log
       - name: Generate publishing App token
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -177,7 +177,7 @@ jobs:
           bash "$GITHUB_WORKSPACE/automation/dev/scripts/update-publish.sh"
           python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" receipt
       - name: Upload published target receipt
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: update-receipt-${{ matrix.name }}
           path: ${{ runner.temp }}/update-receipt.json
@@ -200,7 +200,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" verdict
       - name: Upload update diagnostics
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: update-report-${{ matrix.name }}
           path: |
@@ -234,17 +234,17 @@ jobs:
       UPDATE_BASE_SHA: ${{ needs.discover.outputs.base }}
       UPDATE_MATRIX: ${{ needs.discover.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: automation
           persist-credentials: false
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: source
           ref: ${{ needs.discover.outputs.base }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: update-receipt-*
           path: source/receipts
@@ -255,7 +255,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" collect
       - name: Generate publishing App token
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -295,17 +295,17 @@ jobs:
     runs-on: *runner
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: automation
           persist-credentials: false
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: source
           ref: ${{ needs.discover.outputs.base }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
           extra_nix_config: |
             accept-flake-config = true
