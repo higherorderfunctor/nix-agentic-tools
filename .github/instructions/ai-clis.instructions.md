@@ -96,9 +96,8 @@ repository files (`AGENTS.md`, `.github/instructions/`, `.github/agents/`,
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-13 — Kiro binds the full selected KAS runtime from
-> its fetched release input; proprietary KAS outputs retain the kiro-cli cache
-> exclusion and full-closure cache exclusion contract.
+> **Last verified:** 2026-10-15 — Kiro parses embedded rollout JSON, preserving
+> state fields; copies must agree. The byte-preserving patcher remains strict.
 
 ### Overview
 
@@ -226,14 +225,16 @@ absent from the overlay and public outputs. Consumer
 `cli.features.<name>.enable` patches only features whose extracted vendor state
 needs it; workflows are GA since 2.26.0 and select the stock package. Long
 feature sets use a bounded derivation suffix with a feature count and digest;
-short sets retain readable names. The extractor counts treatment sites in each
-manifest and names unmatched entries if new fields escape its state regex.
-Separately, `rolloutPatchability` records whether every feature site matches the
-shared patcher entry regex and counts unmatched sites. An unpatchable feature is
-rejected at module evaluation with its name and the extracted flag if it needs a
-patch. Counts remain per platform; modules read only the aggregate flag. A
-patched canary contains modified proprietary bytes, so it must never be
-republished.
+short sets retain readable names. The extractor locates each manifest root and
+parses its JSON, copying every entry field except the unused description.
+Missing manifests and disagreeing copies fail extraction. State readers reject
+unknown fields; internal treatment must also be 100% to preserve the stock
+package. Separately, `rolloutPatchability` records whether every feature site
+matches the shared patcher entry regex and counts unmatched sites. An
+unpatchable feature is rejected at module evaluation with its name and the
+extracted flag if it needs a patch. Counts remain per platform; modules read
+only the aggregate flag. A patched canary contains modified proprietary bytes,
+so it must never be republished.
 
 **Excluding it from `ci.yml`'s native package shards is necessary and NOT
 sufficient.** That was the whole mitigation from #665 (2026-08-01), and the

@@ -42,6 +42,27 @@
           done
           touch "$out"
         '';
+      kiro-rollout-fixtures = let
+        inherit (import ../extract/rollout-coverage.nix) needsPatch;
+        ga = {treatment_percent = 100;};
+      in
+        assert needsPatch (ga // {internal_treatment_percent = 50;});
+        assert !(needsPatch (ga // {internal_treatment_percent = 100;}));
+          pkgs.runCommand "kiro-rollout-fixtures" {} ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            ${pkgs.python3}/bin/python3 - ${(import ../lib/packaging.nix).kiroRolloutExtractScript pkgs} <<'PY'
+            import json, pathlib, subprocess, sys
+            manifest = {"v3_prompt": {"description": "", "treatment_percent": 10, "internal_treatment_percent": 50}}
+            data = json.dumps(manifest, indent=2).encode()
+            path = pathlib.Path("binary")
+            for blob, error in [(data + b'\0' + json.dumps({"other": {"description": ""}}, indent=2).encode(), "conflicting rollout copies"), (b"no manifest", "no rollout manifest found")]:
+                path.write_bytes(blob)
+                result = subprocess.run([sys.executable, sys.argv[1], str(path)], capture_output=True, text=True)
+                assert result.returncode == 1 and error in result.stderr, result
+            PY
+            touch "$out"
+          '';
     }
     // mkOwnerCheck {
       dir = ../extracted;
