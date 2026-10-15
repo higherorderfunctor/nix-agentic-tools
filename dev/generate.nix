@@ -624,8 +624,8 @@
     | Rules | `.github/instructions/<name>.instructions.md`, `applyTo` from the rule's scopes |
     | Agents | `.github/agents/<name>.md` with `name`, `description` and `tools` |
 
-    Skills warn on both backends: committed store links dangle and the copy
-    ledger cannot copy recursive trees. Commit real files under `.github/skills`.
+    Skills warn on both backends: committed store links dangle and the module
+    does not copy skill trees. Commit real files under `.github/skills`.
     Home Manager has no repository, so a value set there warns. Environment
     variables, hooks, MCP servers, settings and the shell warn on both
     backends, each with the reason and a link to GitHub's documentation:

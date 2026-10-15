@@ -46,11 +46,12 @@ nix flake check       # linters + evaluation (does NOT build packages)
 > `mkTree` with the evaluated `ai.formatter` treefmt config and the named
 > guards; scoped rules rely on the normalized matcher-derived `fileMatch`
 > trigger default. `generate:all` writes instruction and repo-document
-> projections plus devenv.yaml, waiting on `ai2:files-ready` for AGENTS.md;
-> devenv.lock requires a separate network update; the generator produces content
-> only; `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction
-> file from its generated-file tree, formatted there with this repository's
-> treefmt; the drift check compares the built files.
+> projections plus devenv.yaml, waiting on `ai2:files-ready` for AGENTS.md and
+> the `.github/` instruction files; devenv.lock requires a separate network
+> update; the generator produces content only; `dev/ai.nix` hands it to `ai.*`,
+> which writes every agent instruction file from its generated-file tree,
+> formatted there with this repository's treefmt; the drift check compares the
+> built files.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -126,9 +127,9 @@ devenv tasks run --mode before generate:all  # instructions, repo docs, devenv.y
 ```
 
 `generate:all` orders the projection writers whose files are committed:
-`ai2:files-ready`, by which the files engine has written AGENTS.md, and
-`ai:copilot:materialize-instructions`; then `devenv:files` for the gitignored
-ones (Claude rules, Kiro steering and the rest), `generate:devenv-yaml`, and
+`ai2:files-ready`, by which the files engine has written AGENTS.md and the
+`.github/` instruction files; then `devenv:files` for the gitignored ones
+(Claude rules, Kiro steering and the rest), `generate:devenv-yaml`, and
 `generate:repo`. It is not a second writer. The aggregate form requires
 `--mode before`; without it devenv runs the named aggregate but skips its
 dependency leaves.

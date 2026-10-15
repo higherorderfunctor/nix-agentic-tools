@@ -24,50 +24,15 @@
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   docs = path: "https://docs.github.com/en/copilot/${path}";
   homeManagerReason = surface: "github.com Copilot reads ${surface} from a repository's committed tree, and Home Manager has no repository to write. Configure it through the devenv module. See ${docs "reference/custom-instructions-support"}.";
-  # github.com reads the COMMITTED tree, where a store symlink dangles, so
-  # instruction files and agent profiles are read-only copies. Each directory
-  # has a ledger that claims only the files it wrote, so a hand-written
-  # sibling survives. The writer is declared whether or not there are files
-  # and whether or not Copilot is enabled, so both N→0 and a disable retract
-  # the copies.
-  writer = "materialize-copilot-github";
-  ledgers = {
-    agents = "materialize/copilot-github-agents.manifest";
-    rules = "materialize/copilot-instructions.manifest";
-  };
-  # Where each unit lands, shared by the emitters and `contentTargets`.
+  # Where each unit lands, shared by the staged entries and `contentTargets`.
   instructionPath = cfg: name: "${cfg.github.projectDir}/instructions/${name}.instructions.md";
-  # The fact is a default, so a consumer can still state its own on one
-  # file (to keep a link, say) without a conflicting definition.
-  copyFields = ledger: {
-    entry = writer;
-    facts.symlinkReadable = lib.mkDefault {
-      devenv = false;
-      hm = true;
-    };
-    inherit ledger;
+  # github.com reads the COMMITTED tree, where a store symlink dangles, so
+  # instruction files and agent profiles are read-only copies.
+  copy = surface: content: {
+    inherit content surface;
+    format = "markdown";
+    method = "ro";
   };
-  writerConfig = {
-    backend,
-    cfg,
-    ...
-  }:
-    lib.optionalAttrs (backend == "devenv") {
-      ai.copilot.activation.${writer} = {
-        entry = "ai:copilot:materialize-instructions";
-        ledgers = {
-          ${ledgers.agents} = {
-            codec = "dir";
-            path = "${cfg.github.projectDir}/agents";
-          };
-          ${ledgers.rules} = {
-            codec = "dir";
-            path = "${cfg.github.projectDir}/instructions";
-          };
-        };
-        runWhenDisabled = true;
-      };
-    };
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -133,7 +98,7 @@ in
       };
       skills = {
         backends = [];
-        reason = "github.com Copilot reads committed skills, where Nix store symlinks dangle; the directory ledger cannot copy recursive skill trees. Commit real files under .github/skills instead. See ${docs "how-tos/use-copilot-agents/cloud-agent/create-skills"}.";
+        reason = "github.com Copilot reads committed skills, where Nix store symlinks dangle, and this module does not copy skill trees. Commit real files under .github/skills instead. See ${docs "how-tos/use-copilot-agents/cloud-agent/create-skills"}.";
       };
     };
     options.github.projectDir = lib.mkOption {
@@ -167,38 +132,24 @@ in
             }
           ];
         })
-        (lib.optionalAttrs (backend == "devenv") (lib.mkMerge [
+        (lib.optionalAttrs (backend == "devenv") {
           # One profile per agent. github.com names a profile by its filename
           # minus `.md` or `.agent.md`; `name` in the frontmatter wins.
-          {
-            ai.copilot.files = lib.mapAttrs' (name: content:
-              lib.nameValuePair "${cfg.github.projectDir}/agents/${name}.md" (copyFields ledgers.agents
-                // {
-                  content = lib.mkDefault (
-                    {
-                      _generated = true;
-                      _surface = "agents";
-                    }
-                    // (
-                      if lib.ai.agent.isSemantic content
-                      then lib.ai.agent.renderFile true name content
-                      else {text = lib.ai.agent.renderCopilot name content;}
-                    )
-                  );
-                  format = lib.mkDefault "markdown";
-                }))
-            mergedAgents;
-          }
-          {
-            ai.copilot.files = aiCommon.mkRuleFiles {
-              fields = copyFields ledgers.rules;
+          ai.copilot._generatedFiles =
+            lib.mapAttrs' (name: agent:
+              lib.nameValuePair "${cfg.github.projectDir}/agents/${name}.md" (copy "agents" (
+                if lib.ai.agent.isSemantic agent
+                then lib.ai.agent.renderFile true name agent
+                else {text = lib.ai.agent.renderCopilot name agent;}
+              )))
+            mergedAgents
+            // lib.mapAttrs (_path: text: copy "rules" {inherit text;}) (aiCommon.renderRules {
               path = instructionPath cfg;
               rules = mergedRules;
               runtime = "copilot";
               transformer = lib.ai.transformers.copilot.copilotTransformer;
-            };
-          }
-        ]))
+            });
+        })
       ];
     # The context joins the repository AGENTS.md through its one owner.
     sharedAgentsMd = {cfg, ...}: {key = cfg.github.context.filename;};
@@ -213,5 +164,22 @@ in
         context = cfg.github.context.filename;
         rules = lib.mapAttrs (name: _rule: instructionPath cfg name) mergedRules;
       };
-    migrationConfig = writerConfig;
+    # The old writer's directory ledgers, declared while Copilot is disabled
+    # too, so the copies it wrote drain on a disable as well as on N→0.
+    migrationConfig = {
+      backend,
+      cfg,
+      ...
+    }:
+      lib.optionalAttrs (backend == "devenv") {
+        ai.copilot.legacyLedgers =
+          lib.mapAttrsToList (dir: ledger: {
+            codec = "dir";
+            inherit ledger;
+            path = "${cfg.github.projectDir}/${dir}";
+          }) {
+            agents = "materialize/copilot-github-agents.manifest";
+            instructions = "materialize/copilot-instructions.manifest";
+          };
+      };
   }

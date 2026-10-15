@@ -4,7 +4,8 @@
 > `_generatedFiles` (skills first) and forward them through the ai-module
 > layer-1 helper over one generated tree, which every staged entry's delivery
 > requires; the shared AGENTS.md composer is the layer-1 owner `internal` and
-> the ai-module devenv module writes the treefmt excludes; the root-option
+> the ai-module devenv module writes the treefmt excludes; Copilot stages its
+> instructions and agent profiles and declares its old ledgers; the root-option
 > provenance guard exempts the ai-module layer-1 forwarding helper for its
 > forwarded options; option declarations supply policy surfaces and keyed
 > withdrawal; runtime declarations supply normalized policy gaps and the warning
@@ -399,7 +400,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Kimchi, and Kiro use
   their established native directories. github.com Copilot warns: committed
-  store links dangle, and directory ledgers cannot copy recursive skill trees.
+  store links dangle, and the module does not copy skill trees.
 - `ai.agents` — only the normalized
   `{ description, instructions = { text | source; }; tools?; }` record; a string
   or path is a type error there (a path is coerced to a thrown message, because
@@ -804,11 +805,13 @@ with `method` defaulting to `ro` and `enable` following whether any definition
 supplies content, so a runtime's entry alone still lands as a copy. The old
 writer's `materialize/agents-md.manifest` ledger is the composer's
 `legacyLedgers` entry. Copilot's devenv instruction files and agent profiles are
-copies for the same reason (github.com reads the committed tree), and Kiro's
-devenv steering is a copy so a developer's own steering beside it survives: each
-directory ledger claims only the files its writer wrote. `own` adopts a file
-whose bytes already match without a backup, so a `git pull` of a committed copy
-is silent.
+staged `ro` copies for the same reason (github.com reads the committed tree),
+its old writer's two directory ledgers its `legacyLedgers`. Kiro's devenv
+steering is a copy so a developer's own steering beside it survives: its
+directory ledger claims only the files its writer wrote. For Kiro's copies,
+`own` adopts a file whose bytes already match without a backup, so a `git pull`
+of a committed copy is silent; the engine-owned copies above adopt only an
+identical image.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
 files use `content.run` in an owned writer, and runtime state keeps its typed

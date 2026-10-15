@@ -7,9 +7,11 @@ applyTo: "packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix,packages/
 
 ## Copilot config delivery — github.com Copilot
 
-> **Last verified:** 2026-10-14 — `ai.copilot` is github.com Copilot: pools
-> under `ai.copilot.github`, devenv-only delivery, `ai.copilot.cli` reserved for
-> a launcher the module does not ship; skills declare the recursive-copy gap.
+> **Last verified:** 2026-10-15 — `ai.copilot` is github.com Copilot: pools
+> under `ai.copilot.github`, devenv-only delivery as staged read-only copies the
+> ai-module files engine writes, the old writer's ledgers declared as legacy
+> ledgers; `ai.copilot.cli` reserved for a launcher the module does not ship;
+> skills declare the copy gap.
 >
 > **Settled — do not relitigate.**
 >
@@ -51,27 +53,30 @@ with its own copies.
   (comma string) frontmatter. github.com also reads `model` and `mcp-servers`;
   only a raw native file at `ai.copilot.github.agents.<n>` carries those.
   github.com caps a profile's prompt at 30,000 characters.
-- Instructions and agent profiles are read-only COPIES written by
-  `ai:copilot:materialize-instructions`, one directory ledger each
-  (`copilot-instructions.manifest`, `copilot-github-agents.manifest`):
-  github.com reads the committed tree, where a store symlink dangles. A ledger
-  claims only files its writer wrote, and the writer runs while Copilot is
-  disabled, so N→0 and a disable retract the copies. Existing consumers delete
-  `.github/copilot-instructions.md` once by hand when migrating.
+- Instructions and agent profiles are staged in `ai.copilot._generatedFiles` as
+  read-only COPIES (`method = "ro"`) that the ai-module files engine writes:
+  github.com reads the committed tree, where a store symlink dangles. The engine
+  owns each copy by path, so a hand-written sibling survives and N→0 or a
+  disable retracts the copies. The old writer's directory ledgers
+  (`copilot-instructions.manifest`, `copilot-github-agents.manifest`) stay
+  declared in `ai.copilot.legacyLedgers` while Copilot is disabled too, so the
+  copies they recorded are imported once and then follow the plan. Existing
+  consumers delete `.github/copilot-instructions.md` once by hand when
+  migrating.
 
 ### What it refuses, and why
 
 Every other shared surface is declared `backends = []` with GitHub's reason and
 a docs.github.com link, so the shared registry warns at the path a consumer set:
 
-| surface              | why github.com cannot take it from this module                                             |
-| -------------------- | ------------------------------------------------------------------------------------------ |
-| environmentVariables | the cloud agent's environment is `copilot-setup-steps.yml` and secrets                     |
-| hooks                | code review runs none; the cloud agent reads `.github/hooks/*.json` only                   |
-| mcpServers           | a repository setting on github.com, not a file                                             |
-| settings             | no settings file; model and review options are repository settings                         |
-| shell                | GitHub's cloud environment, set by `copilot-setup-steps.yml`                               |
-| skills               | store links dangle in committed trees; directory ledgers cannot copy recursive skill trees |
+| surface              | why github.com cannot take it from this module                               |
+| -------------------- | ---------------------------------------------------------------------------- |
+| environmentVariables | the cloud agent's environment is `copilot-setup-steps.yml` and secrets       |
+| hooks                | code review runs none; the cloud agent reads `.github/hooks/*.json` only     |
+| mcpServers           | a repository setting on github.com, not a file                               |
+| settings             | no settings file; model and review options are repository settings           |
+| shell                | GitHub's cloud environment, set by `copilot-setup-steps.yml`                 |
+| skills               | store links dangle in committed trees; this module does not copy skill trees |
 
 Permissions has no shared option; its policy rows carry the same kind of reason.
 Home Manager has no repository, so the three delivered pools warn there too. The

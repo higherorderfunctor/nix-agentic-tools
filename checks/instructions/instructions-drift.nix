@@ -48,11 +48,8 @@
     # contain structured files whose CI-only configuration changes its store
     # path while these Markdown bytes remain identical.
     instructionPlans = evaluated:
-      map (target: harness.markdownInput evaluated target.path) (composed evaluated).targets
-      ++ map (target:
-        lib.mapAttrs (address: _: harness.markdownInput evaluated "${target.path}/${address}")
-        target.units)
-      (harness.ownPlan "copilot" "ai:copilot:materialize-instructions" evaluated).targets;
+      map (target: harness.markdownInput evaluated target.path)
+      ((composed evaluated).targets ++ (harness.ownPlan "copilot" "files2-apply" evaluated).targets);
     # The shared AGENTS.md composer's files, as the files engine writes them.
     composed = harness.ownPlan "internal" "files2-apply";
     failedAssertions = map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) repo.config.assertions);
@@ -68,16 +65,13 @@
       "ai.skills is set but devenv does not deliver it to ${runtime} (reason: ${support.reason})")
     (builtins.attrNames records);
 
-    # Each unit one writer's directory target will write, as the file it
-    # copies: the built file a Markdown unit points at, or its inline text.
-    unitsAt = runtime: writer: path: let
-      targets = lib.filter (target: target.path == path) (harness.ownPlan runtime writer repo).targets;
-    in
-      if builtins.length targets != 1
-      then throw "instructions-drift: expected one ${runtime} target at ${path}, found ${toString (builtins.length targets)}"
-      else lib.mapAttrs (address: unit: unit.store or (pkgs.writeText address unit.text)) (builtins.head targets).units;
     agentsMd = (lib.findFirst (target: target.path == "AGENTS.md") (throw "instructions-drift: the composer writes no AGENTS.md") (composed repo).targets).content.source;
-    copilotInstructions = pkgs.linkFarm "expected-github-instructions" (unitsAt "copilot" "ai:copilot:materialize-instructions" ".github/instructions");
+    # The Copilot instruction files the files engine copies, as the built files
+    # in Copilot's generated tree.
+    copilotInstructions = pkgs.linkFarm "expected-github-instructions" (map (target: {
+      name = lib.removePrefix ".github/instructions/" target.path;
+      path = target.content.source;
+    }) (lib.filter (target: lib.hasPrefix ".github/instructions/" target.path) (harness.ownPlan "copilot" "files2-apply" repo).targets));
 
     # Each entry: the tracked path, and the file to compare it against.
     # `regenerate` is the task the failure message names.

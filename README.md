@@ -445,14 +445,14 @@ copies, since a committed store link dangles on github.com:
 | Rules   | `.github/instructions/<name>.instructions.md`, `applyTo` from the rule's scopes |
 | Agents  | `.github/agents/<name>.md` with `name`, `description` and `tools`               |
 
-Skills warn on both backends: committed store links dangle and the copy ledger
-cannot copy recursive trees. Commit real files under `.github/skills`. Home
-Manager has no repository, so a value set there warns. Environment variables,
-hooks, MCP servers, settings and the shell warn on both backends, each with the
-reason and a link to GitHub's documentation: github.com reads none of them from
-a file this module writes, and its MCP servers are a repository setting on
-github.com. `ai.copilot.cli` is reserved for the Copilot CLI launcher, which
-this module does not ship; the `copilot-cli` package is still built.
+Skills warn on both backends: committed store links dangle and the module does
+not copy skill trees. Commit real files under `.github/skills`. Home Manager has
+no repository, so a value set there warns. Environment variables, hooks, MCP
+servers, settings and the shell warn on both backends, each with the reason and
+a link to GitHub's documentation: github.com reads none of them from a file this
+module writes, and its MCP servers are a repository setting on github.com.
+`ai.copilot.cli` is reserved for the Copilot CLI launcher, which this module
+does not ship; the `copilot-cli` package is still built.
 
 ## Configuration
 

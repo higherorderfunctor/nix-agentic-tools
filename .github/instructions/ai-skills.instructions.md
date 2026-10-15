@@ -11,7 +11,8 @@ applyTo: "lib/ai/hm-helpers.nix,lib/ai/mkSkillPackageModule.nix,packages/chatgpt
 > `ai.<runtime>._generatedFiles`, and the files engine walks each tree into
 > per-leaf links on both backends; runtime surfaceSupport declarations own
 > normalized backend reach and nested delivery diagnostics; package skills and
-> rules require the backend and follow its reach; Copilot declares a skill gap.
+> rules require the backend and follow its reach; Copilot declares a skill gap
+> because the module does not copy skill trees.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -20,8 +21,8 @@ Every runtime's factory writes its skills through the shared helper
 `helpers.mkSkillFiles`, never through a native `programs.<cli>.skills` option.
 Claude, Kimchi, and Kiro preserve Layout B: a real skill directory containing
 per-file store symlinks. Copilot declares skills unsupported: committed store
-links dangle and directory ledgers cannot copy recursive trees. Codex's scanner
-discovers Layout A, where the skill directory itself is a symlink.
+links dangle and the module does not copy skill trees. Codex's scanner discovers
+Layout A, where the skill directory itself is a symlink.
 
 ### Backend pattern
 
