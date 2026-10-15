@@ -335,6 +335,16 @@ for it. When several entries match, their guidance composes.
     - `**/*.nix`
   - Read:
     - [`dev/fragments/nix-standards/nix-standards.md`](dev/fragments/nix-standards/nix-standards.md)
+- **`open-keys`**
+  - Match:
+    - `checks/open-keys/**`
+    - `lib/open-keys/**`
+    - `lib/runtime-values/classify.nix`
+    - `packages/chatgpt-codex/lib/mkCodex.nix`
+    - `packages/claude-code/lib/mkClaude.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+  - Read:
+    - [`dev/fragments/open-keys/open-keys.md`](dev/fragments/open-keys/open-keys.md)
 - **`overlays`**
   - Match:
     - `lib/facets/**`

@@ -414,6 +414,17 @@ _: {
       scopes = ["**/*.nix"];
       sources = ["nix-standards"];
     };
+    open-keys = {
+      scopes = [
+        "checks/open-keys/**"
+        "lib/open-keys/**"
+        "lib/runtime-values/classify.nix"
+        "packages/chatgpt-codex/lib/mkCodex.nix"
+        "packages/claude-code/lib/mkClaude.nix"
+        "packages/kiro-cli/lib/mkKiro.nix"
+      ];
+      sources = ["open-keys"];
+    };
     # overlays: package sets, toolchains, and recipe patterns.
     # Scoped to package recipe files under `packages/*/packages/**`. IFD
     # guidance is NOT
