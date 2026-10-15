@@ -577,6 +577,8 @@
       pkgs = platformPkgs;
     };
   in
+    # Only the trust-tools diagnostic: a non-v3 engine also warns on its own.
+    lib.filter (lib.hasInfix "ai.kiro.cli.trustedMcpTools")
     (lib.evalModules {
       modules = [
         harness.aiBase.sharedOptions
