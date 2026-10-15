@@ -34,6 +34,7 @@
         dag = {
           entryAfter = _: text: {inherit text;};
           entryBefore = _: text: {inherit text;};
+          entryBetween = _: _: text: {inherit text;};
         };
       };
     };
