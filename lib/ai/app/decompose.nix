@@ -25,15 +25,20 @@
   normalizedUnits = surface: let
     path = ["ai" runtime] ++ namespaces.pool appRecord surface ++ ["normalized" surface];
     option = lib.attrByPath path null options;
-    # Merging only explicit definitions prevents empty overrides diagnosing folds.
+    # Only explicit definitions name the keys a consumer asked for; measuring
+    # those keys on the REAL merged pool keeps per-key priority arbitration
+    # (merging the explicit list again would revive per-key values the
+    # generated fold's mkDefault defeated, forcing content the pool discarded).
     definitions = lib.filter (definition: definition.file != toString ./mkBackendTransform.nix) option.definitionsWithLocations;
+    merged = lib.getAttrFromPath path config;
+    requested = lib.unique (lib.concatMap (definition: builtins.attrNames definition.value) definitions);
   in
     lib.optional (option
       != null
       && option.highestPrio < 1500
       && definitions != []) {
       inherit path;
-      value = option.type.merge path definitions;
+      value = lib.getAttrs (lib.filter (key: merged ? ${key}) requested) merged;
     };
   units = surface:
     [

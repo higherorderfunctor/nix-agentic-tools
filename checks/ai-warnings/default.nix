@@ -271,14 +271,27 @@
           path = ["ai" case.surface];
         }) [{} {inactive.enable = false;}])
     (lib.filter (case: case.surface == "rules") normalizedCases);
-  in
-    map (case:
+    # A per-key fallback the inherited key defeats is diagnosed from the real
+    # merged pool, so its discarded value is never forced: a throwing fallback
+    # still evaluates. It names the key, so the normalized unit warns too.
+    shadowedCases = map (case:
       case
       // {
+        extra = lib.setAttrByPath case.path {
+          probe = lib.mkOptionDefault {text = throw "a discarded per-key fallback must not be forced";};
+        };
+        path = ["ai" case.surface];
+        count = 2;
+      })
+    (lib.filter (case: case.surface == "rules") normalizedCases);
+  in
+    map (case:
+      {
         reason = absenceReason case;
         count = 1;
-      })
-    (unavailableCases ++ normalizedCases ++ mixedCases);
+      }
+      // case)
+    (unavailableCases ++ normalizedCases ++ mixedCases ++ shadowedCases);
   conditional = gap: gap ? when || (gap.each or false) || (gap.effective or false);
   staticCases = lib.concatMap (cell:
     lib.concatMap (gap:
