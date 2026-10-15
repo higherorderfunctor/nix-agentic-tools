@@ -109,8 +109,10 @@
 
       Select the endpoint with `url` and `key`.
       `ai.<runtime>.proxy`, declared only for a runtime that consumes
-      this surface (none yet), replaces this selection as a whole for that
-      runtime.
+      this surface, replaces this selection as a whole for that runtime.
+
+      Claude Code reads the selection from its settings files: the
+      settings.json each backend writes.
 
       A runtime that does not consume this surface warns when a selection
       reaches it.

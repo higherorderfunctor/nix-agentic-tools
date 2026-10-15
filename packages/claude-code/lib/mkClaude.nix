@@ -174,6 +174,7 @@
   # are formatted with, and the surface whose checks they run.
   staged = surface: format: content: {inherit content format surface;};
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+  claudeProxy = import ./proxy.nix {inherit lib pkgs;};
   pluginLib = import ./plugin.nix {inherit lib pkgs;};
 
   # The Home Manager personal plugin that carries MCP servers. Its directory
@@ -239,6 +240,7 @@ in
       };
       hooks = {};
       mcpServers = {};
+      proxy = {};
       rules = {};
       settings = {};
       shell = {};
@@ -532,6 +534,7 @@ in
       mergedSkills,
       moduleEnvironmentVariables,
       options,
+      resolvedProxy,
       resolvedSettings,
       resolvedShell,
       topHooks,
@@ -597,6 +600,7 @@ in
           ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
         })
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
+        (claudeProxy.config {inherit resolvedProxy;})
         # L2b → L3: expand `ai.claude.hookScriptsDir` into
         # `ai.claude.hookScripts`. Content is `readFile`'d into
         # `lib.types.lines` via hooksFromDir.
