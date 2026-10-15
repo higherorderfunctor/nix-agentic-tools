@@ -68,6 +68,12 @@ for it. When several entries match, their guidance composes.
     - [`dev/fragments/ai-module/dir-helpers.md`](dev/fragments/ai-module/dir-helpers.md)
     - [`dev/fragments/ai-module/layered-fanout.md`](dev/fragments/ai-module/layered-fanout.md)
     - [`dev/fragments/ai-module/shell-option.md`](dev/fragments/ai-module/shell-option.md)
+- **`ai-proxy`**
+  - Match:
+    - `checks/ai-proxy/**`
+    - `lib/ai/proxy/**`
+  - Read:
+    - [`dev/fragments/ai-proxy/ai-proxy.md`](dev/fragments/ai-proxy/ai-proxy.md)
 - **`ai-skills`**
   - Match:
     - `lib/ai/hm-helpers.nix`
