@@ -19,10 +19,15 @@
 #                 executors and panel use off the extracted path, such as
 #                 `request_retry`), a `secret` row's strings taking a secret.
 #                 The open keys refuse the login's identity and tokens: an
-#                 `ignored` row's field, or a name open-keys' credential policy
-#                 refuses (`access_token`, `api_key`).
+#                 `ignored` row's field at the top level, or a name
+#                 open-keys' credential policy refuses (`access_token`,
+#                 `api_key`) at any depth.
 #   configFilter  ./config.jq, the jq program that completes `render`'s
 #                 value at run time: secrets, client key, auth dir.
+#   knownAccounts open-keys `known` data for the unknown-account-key
+#                 warning: a map of account names to the typed field names.
+#   knownSettings the extracted configuration paths, `<name>` maps as `*`, as
+#                 open-keys `known` data for the unknown-settings warning.
 #   renderAccount an account value -> `{ value; secrets; }`, as `render`.
 #   tree          `nodes` (path -> node) and `fieldsAt` (an object's
 #                 key -> path), for checks that walk every path.

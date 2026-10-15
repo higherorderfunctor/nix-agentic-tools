@@ -369,18 +369,25 @@ in {
         }
     );
 
+    # A refused field fails even when the warning allowlist names it, and a
+    # credential name nested under an untyped field fails too. The positive
+    # control is an ordinary untyped field under the same allowlist shape.
     module-ai-proxy-refused-account-fields = mkTest "ai-proxy-refused-account-fields" (
-      lib.all (eval:
-        lib.all (name: let
-          account =
+      lib.all (eval: let
+        evaluates = name: value:
+          (builtins.tryEval (builtins.deepSeq
             (eval {
               ai.proxy.instances.main = instance {
                 allowUnrecognizedAccountFields = ["*.${name}"];
-                accounts.a.${name} = "refused-value";
+                accounts.a.${name} = value;
               };
-            }).config.ai.proxy.instances.main.accounts.a;
-        in
-          !(builtins.tryEval (builtins.deepSeq account true)).success)
+            }).config.ai.proxy.instances.main.accounts.a
+            true)).success;
+      in
+        evaluates "request_retry" 1
+        && !evaluates "metadata" {access_token = "refused-value";}
+        && !evaluates "metadata" [{nested.api_key = "refused-value";}]
+        && lib.all (name: !evaluates name "refused-value")
         ["access_token" "api_key" "email" "id_token" "plan_type" "refresh_token" "type"])
       [evalHm evalDevenv]
     );

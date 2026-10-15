@@ -7,10 +7,10 @@ applyTo: "checks/open-keys/**,lib/open-keys/**,lib/runtime-values/classify.nix,p
 
 ## Open keys: advisory inspection and explicit refusal
 
-> **Last verified:** 2026-10-14 — CPA uses shared freeform refusal with owner
-> reasons and config-level spelling warnings on both backends; warning
-> allowlists cannot permit refused fields. Kiro retains its workspace delivery
-> allowlist.
+> **Last verified:** 2026-10-15 — CPA uses shared freeform refusal, credential
+> names at every depth and owner reasons at the top level, with config-level
+> spelling warnings on both backends; warning allowlists cannot permit refused
+> fields. Kiro retains its workspace delivery allowlist.
 
 `lib/open-keys` is a pure `{lib}` import. It has no module, package, file
 writer, or runtime dependency. Owners supply schema data and choose the policy:
@@ -73,11 +73,15 @@ field.
 
 `refuse {type; reasons?;}` wraps an attribute type's `merge` for use as a
 submodule `freeformType`. The module system does not call that type's `check`,
-so refusal runs before merging each definition's keys. Ordinary unknown keys and
-their arbitrary values pass through unchanged. CPA supplies its reconciled
-`accounts.ignored` reasons and selects this guard only for open account fields;
-its declared secret options keep their own types. Warning suppressions never
-bypass refusal. Error messages contain the option path and reason, no values.
+so refusal runs before merging each definition's keys. Credential-shaped names
+are refused at every depth of a definition, through attribute sets and lists
+(`accounts.a.metadata.access_token`); owner reasons apply to top-level names
+only, because an owner names its own fields and a nested `type` is someone
+else's. Ordinary unknown keys and their arbitrary values pass through unchanged.
+CPA supplies its reconciled `accounts.ignored` reasons and selects this guard
+only for open account fields; its declared secret options keep their own types.
+Warning suppressions never bypass refusal. Error messages contain the option
+path and reason, no values.
 
 Codex's OAuth client-secret assertion takes the shared credential decision and
 appends its own delivery remedy. The composed message ends with a period and no

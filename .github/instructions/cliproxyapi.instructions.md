@@ -92,10 +92,10 @@ paths. `accountType` maps the Go types, a `secret` field's strings to
 executors' reads are off the extracted path. The open keys refuse every
 `ignored` row's field (`rules.nix` returns them as `accounts.ignored`, the
 reason in the error) through `lib/open-keys.refuse`, which also refuses
-credential-shaped names using the same policy as the reconcile classifier.
-`access_token`, `refresh_token` and `api_key` are not extracted, so annotation
-rows for them would fail as stale. `renderAccount` splits an account the way
-`render` splits settings. `tree` exposes the nodes for checks.
+credential-shaped names at any depth using the same policy as the reconcile
+classifier. `access_token`, `refresh_token` and `api_key` are not extracted, so
+annotation rows for them would fail as stale. `renderAccount` splits an account
+the way `render` splits settings. `tree` exposes the nodes for checks.
 
 `knownSettings` adapts reconciled config paths (`.<name>` becomes `.*`) through
 `openKeys.fromPaths`; `knownAccounts` is a map of literal extracted account

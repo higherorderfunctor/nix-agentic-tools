@@ -293,18 +293,18 @@
           logs in under a new name. The typed options are the auth-file
           fields the extraction finds CLIProxyAPI reading, apart from the
           login's identity and tokens. Any other key is written as given,
-          untyped, with an unknown-key warning: fields CLIProxyAPI's
-          executors and management panel use off that path, such as
-          `request_retry`, `websockets`, `disable_cooling` or the `cloak_*`
-          fields. A key naming the
-          login's identity or a token (`type`, `email`, `id_token`,
-          `plan_type`, or a credential-shaped name such as `access_token`
-          or `api_key`) fails evaluation: the login writes those, and Nix
-          never writes or owns them.
-          At every start the unit writes each set field into that file and
-          skips a file that does not exist yet. It owns only what it wrote:
-          a field or account removed here is removed from the file at the
-          next start, a field set in CLIProxyAPI's management panel and
+          untyped, with an unknown-key warning: fields CLIProxyAPI's executors
+          and management panel use off that path, such as `request_retry`,
+          `websockets`, `disable_cooling` or the `cloak_*` fields.
+          `allowUnrecognizedAccountFields` suppresses that warning. A key
+          naming the login's identity or a token (`type`, `email`,
+          `id_token`, `plan_type`, or a credential-shaped name such as
+          `access_token` or `api_key`, at any depth under an untyped key)
+          fails evaluation: the login writes those, and Nix never writes or
+          owns them. At every start the unit writes each set field into that
+          file and skips a file that does not exist yet. It owns only what it
+          wrote: a field or account removed here is removed from the file at
+          the next start, a field set in CLIProxyAPI's management panel and
           never declared here is left alone, and a declared field edited in
           the panel is reset.
         '';

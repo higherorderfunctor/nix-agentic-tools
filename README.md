@@ -639,16 +639,30 @@ Each login is a file in the auth dir, `claude-<hash>-<email>.json` or
 any typed auth-file field of that login (see the option docs), such as
 `priority`, `weight`, `prefix`, `proxy_url`, `headers`, `excluded_models` or
 `disabled`, plus any untyped key CLIProxyAPI reads elsewhere, such as
-`request_retry` or `websockets`, written as given. A `proxy_url` or `headers`
+`request_retry` or `websockets`. An untyped key is written as given, with an
+unknown-key warning that `allowUnrecognizedAccountFields` suppresses, `*`
+standing for every account (`["*.request_retry"]`). A `proxy_url` or `headers`
 value takes `plain`, `file` or `helper`, like a credential in `settings`. A key
 naming the login's identity or a token (`type`, `email`, `id_token`,
-`plan_type`, or a credential-shaped name such as `access_token`) fails
-evaluation. The fields are written into the file at every start without touching
-its tokens. Nix wins over an edit made in CLIProxyAPI's management panel:
+`plan_type`, or a credential-shaped name such as `access_token`, at any depth
+under an untyped key) fails evaluation, and no allowlist entry permits it. The
+fields are written into the file at every start without touching its tokens. Nix
+wins over an edit made in CLIProxyAPI's management panel:
 
 ```nix
-ai.proxy.instances.main.accounts."claude-1a2b3c4d-you@example.com".priority = 10;
+ai.proxy.instances.main = {
+  accounts."claude-1a2b3c4d-you@example.com" = {
+    priority = 10;
+    request_retry = 2;
+  };
+  allowUnrecognizedAccountFields = ["*.request_retry"];
+};
 ```
+
+`settings` works the same way: a key the pinned release's extraction does not
+know, such as a newer CLIProxyAPI's or a plugin's, is written as given with an
+unknown-key warning, and `allowUnrecognizedSettings` suppresses it
+(`["server.future-field"]`).
 
 A harness selects the proxy in one of two forms; setting both fails evaluation:
 

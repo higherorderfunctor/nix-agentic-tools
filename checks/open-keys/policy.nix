@@ -184,6 +184,9 @@
         reasons.myAPIToken = "the owner supplies the token reason";
       };
       attempt = value: builtins.tryEval (builtins.deepSeq (merge value) true);
+      # Credential names are refused at every depth, through maps and lists;
+      # owner reasons name top-level fields only.
+      nestedOwner = {future.identity = true;};
     in
       !owner.assertion
       && ownerToken.reason == "the owner supplies the token reason"
@@ -191,6 +194,9 @@
       && owner.message == "settings.identity cannot be set: the caller owns identity."
       && !(attempt {identity = {nested = true;};}).success
       && !(attempt {myAPIToken = null;}).success
+      && !(attempt {future.metadata.access_token = "x";}).success
+      && !(attempt {future = [{nested.myAPIToken = "x";}];}).success
+      && merge nestedOwner == nestedOwner
       && merge ordinaryValue == ordinaryValue;
     stale =
       length stale.warnings

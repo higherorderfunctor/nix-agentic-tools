@@ -1,10 +1,10 @@
 ## ai.proxy services: the CLIProxyAPI instances Home Manager runs
 
-> **Last verified:** 2026-10-14 — extracted settings and account fields use
+> **Last verified:** 2026-10-15 — extracted settings and account fields use
 > `lib/open-keys` for unknown-key warnings and per-instance suppressions on both
-> backends; account freeform refusal uses shared credential policy and the
-> owner's reconciled identity reasons. Services and account reconciliation
-> retain their existing lifecycle.
+> backends; account freeform refusal uses shared credential policy at every
+> depth and the owner's reconciled identity reasons at the top level. Services
+> and account reconciliation retain their existing lifecycle.
 >
 > **Settled — do not relitigate.** Freeform `settings` with a
 > `{ _secret = { file | helper }; }` marker, and a jq `. + $fields` merge of
@@ -75,15 +75,16 @@ identity and tokens, and `accountType` is open (`freeformType`) to the keys CPA
 reads off the extracted path (`request_retry`, `websockets`, `disable_cooling`,
 `cloak_*`), written as given with unknown-key warnings. Instance
 `allowUnrecognizedAccountFields` suppresses paths relative to the accounts map
-(`*.request_retry`). `lib/open-keys.refuse` rejects an `ignored` field using its
-reconciled reason (identity, `id_token`) and any credential-shaped name
-(`access_token`, `api_key`), even if allowlisted, before merging the freeform
-value, so no token reaches the store plan or the ledger. The file name is a
-login's only stable address: `claude-<hash>-<email>.json`, the hash being the
-first 8 hex digits of sha256(organization or account uuid)
-(`internal/auth/claude/filename.go`), and `codex-<hash>-<email>-<plan>.json`,
-hashing the ChatGPT account id (`internal/auth/codex/filename.go`,
-`sdk/auth/codex_device.go` `buildAuthRecord`).
+(`*.request_retry`). `lib/open-keys.refuse` rejects a top-level `ignored` field
+using its reconciled reason (identity, `id_token`) and a credential-shaped name
+(`access_token`, `api_key`) at any depth, through maps and lists, even if
+allowlisted, before merging the freeform value, so no token reaches the store
+plan or the ledger. The file name is a login's only stable address:
+`claude-<hash>-<email>.json`, the hash being the first 8 hex digits of
+sha256(organization or account uuid) (`internal/auth/claude/filename.go`), and
+`codex-<hash>-<email>-<plan>.json`, hashing the ChatGPT account id
+(`internal/auth/codex/filename.go`, `sdk/auth/codex_device.go`
+`buildAuthRecord`).
 
 - `proxy_url` and each `headers` value take `mkSecretType`; `renderAccount`
   returns a `file` or `helper` one with its path inside the account's fields,
