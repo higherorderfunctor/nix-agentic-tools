@@ -25,6 +25,14 @@ export async function canonical(path) {
     return await realpath(path);
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+    let stat;
+    try {
+      stat = await lstat(path);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    if (stat?.isSymbolicLink())
+      fail(`derived destination must not traverse a dangling symlink: ${path}`);
     const parent = dirname(path);
     if (parent === path) throw error;
     return join(await canonical(parent), basename(path));
@@ -143,15 +151,26 @@ export async function discover(cwd, location) {
   }
   // A root at or above the checkout would make the checkout itself writable;
   // compare canonically so a symlinked ancestor cannot hide the cover.
-  const inside = relative(await canonical(destination), primary);
+  const canonicalDestination = await canonical(destination);
+  const gitRelative = relative(commonPath, canonicalDestination);
+  if (
+    gitRelative !== ".." &&
+    !gitRelative.startsWith(`..${sep}`) &&
+    !isAbsolute(gitRelative)
+  )
+    fail(
+      `location must not be inside the common Git directory: ${destination}`,
+    );
+  const inside = relative(canonicalDestination, primary);
   if (inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside))
     fail(`location must not cover the primary checkout: ${destination}`);
   return { root: destination };
 }
 
 // One derivation for admission, the write grant and owner-less snapshots.
-export async function admit(layers, cwd) {
-  const enabled = policy(layers);
+export async function admit(layers, cwd, workspaceTrusted) {
+  // settingsLayers puts user-global settings first; repository policy needs trust.
+  const enabled = policy(workspaceTrusted ? layers : layers.slice(0, 1));
   return enabled ? discover(cwd, enabled.location) : undefined;
 }
 

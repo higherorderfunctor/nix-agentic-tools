@@ -109,7 +109,7 @@ try {
   const settings = (file, roots) =>
     fs.writeFile(file, JSON.stringify({ "chat.additionalDirectories": roots }));
   const resolve = (request) =>
-    rootsApi.resolveRequest(home, request, Uke(request, false));
+    rootsApi.resolveRequest(home, request, Uke(request, false), true);
   await settings(globalFile, ["../../global-root"]);
   await settings(repoFile(a), [
     "../a-extra",
@@ -153,6 +153,7 @@ try {
   let observed, resident;
   const host = {
     homeDir: home,
+    workspaceTrusted: true,
     initPromise: Promise.resolve(),
     sessions: new Map(),
     kickoffModelRefresh() {},
@@ -322,6 +323,47 @@ try {
     "fixture",
   );
   git("-C", repoC, "worktree", "add", "-b", "linked", linked);
+  // Repository settings cannot grant writes until the vendor trusts the workspace.
+  for (const location of [
+    path.join(tmp, "untrusted-root"),
+    "{{primary}}/.git",
+  ]) {
+    await fs.writeFile(
+      repoFile(repoC),
+      JSON.stringify({ "chat.worktrees": { enable: true, location } }),
+    );
+    observed = undefined;
+    await assert.rejects(
+      Agent.prototype.newSessionAdmitted.call(
+        { ...host, workspaceTrusted: false },
+        { cwd: repoC, mcpServers: [] },
+      ),
+      (error) => error === stop,
+    );
+    assert.deepEqual(observed, [repoC, path.join(tmp, "global-root")]);
+    assert.equal(
+      await rootsApi.writableRoot(
+        home,
+        [repoC, location.replace("{{primary}}", repoC)],
+        false,
+      ),
+      undefined,
+    );
+  }
+  await fs.writeFile(
+    repoFile(repoC),
+    JSON.stringify({
+      "chat.worktrees": { enable: true, location: "{{primary}}/.git" },
+    }),
+  );
+  await assert.rejects(
+    resolve({ cwd: repoC }),
+    /location must not be inside the common Git directory/,
+  );
+  await fs.writeFile(
+    repoFile(repoC),
+    JSON.stringify({ "chat.worktrees": { enable: true } }),
+  );
   const sibling = "../{{repo}}-worktrees";
   const discover = async (cwd, location = sibling) =>
     (await worktrees.discover(cwd, location))?.root;
@@ -344,6 +386,14 @@ try {
       discover(linked, location),
       /location must not cover the primary checkout/,
     );
+  for (const location of [
+    "{{primary}}/.git",
+    "{{primary}}/.git/worktrees/future",
+  ])
+    await assert.rejects(
+      discover(linked, location),
+      /location must not be inside the common Git directory/,
+    );
   // The cover test is by path segment: a checkout named "..repo" sits inside
   // its parent even though the relative path starts with "..".
   const dotted = path.join(tmp, "..repo");
@@ -360,6 +410,12 @@ try {
     /location must not cover the primary checkout/,
   );
   await fs.unlink(path.join(repoC, "up"));
+  await fs.symlink("node_modules/../..", path.join(repoC, "x"));
+  await assert.rejects(
+    discover(linked, "{{primary}}/x/{{repo}}"),
+    /derived destination must not traverse a dangling symlink/,
+  );
+  await fs.unlink(path.join(repoC, "x"));
   assert.equal(process.cwd(), cwdBefore);
   for (const suffix of ["\t", "\ninvalid"]) {
     const special = path.join(tmp, `policy-special${suffix}`);
@@ -522,7 +578,7 @@ try {
       ]);
       assert.deepEqual(worktrees.requestPolicy(degraded), { root: undefined });
       assert.equal(
-        await rootsApi.writableRoot(home, Uke(degraded, false)),
+        await rootsApi.writableRoot(home, Uke(degraded, false), true),
         undefined,
       );
       const guidance = (
@@ -582,6 +638,7 @@ try {
     await promptsApi.ownerSnapshot(
       {
         homeDir: home,
+        workspaceTrusted: true,
         sessionState: () => undefined,
         persistence: { loadSessionMetadata: async () => undefined },
       },
@@ -911,8 +968,8 @@ try {
   assert.deepEqual(
     policyCalls.map((call) => call.arguments.at(-1).getText(ast)),
     [
-      "await nixRoots.writableRoot(this.homeDir, n.workspacePaths)",
-      "await nixRoots.writableRoot(this.homeDir, r)",
+      "await nixRoots.writableRoot(this.homeDir, n.workspacePaths, this.workspaceTrusted)",
+      "await nixRoots.writableRoot(this.homeDir, r, this.workspaceTrusted)",
     ],
   );
 
@@ -997,6 +1054,7 @@ try {
       fixtureHome,
       { cwd: admissionCwd },
       [admissionCwd],
+      true,
     );
     const roots = Uke(request, false),
       ruleRoot = policyRoot ? path.dirname(sibling) : sibling;
@@ -1006,7 +1064,7 @@ try {
         ? [sibling]
         : [admissionCwd, ruleRoot],
     );
-    const writable = await rootsApi.writableRoot(fixtureHome, roots);
+    const writable = await rootsApi.writableRoot(fixtureHome, roots, true);
     assert.equal(writable, policyRoot ? ruleRoot : undefined);
     const cwd = roots[0],
       resolver = new yce(roots, fixtureHome),

@@ -210,14 +210,14 @@ method("newSessionAdmitted", (text) =>
   replace(
     text,
     "let d = o?.overrideSessionId ?? wLt()",
-    "if (!o?.isEmptyWorkspace) { const resident = this.sessionState(o?.overrideSessionId); t = resident ? await nixRoots.residentRequest(t, resident) : r?.serverSession ? await nixRoots.workflowRequest(this, t, r.serverSession.ownerSessionId, Uke(t, false)) : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false)); } let d = o?.overrideSessionId ?? wLt()",
+    "if (!o?.isEmptyWorkspace) { const resident = this.sessionState(o?.overrideSessionId); t = resident ? await nixRoots.residentRequest(t, resident) : r?.serverSession ? await nixRoots.workflowRequest(this, t, r.serverSession.ownerSessionId, Uke(t, false)) : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false), this.workspaceTrusted); } let d = o?.overrideSessionId ?? wLt()",
   ),
 );
 method("loadSessionAdmitted", (text) =>
   replace(
     text,
     "let l = Uke(t, s?.isEmptyWorkspace === !0)",
-    "if (!s?.isEmptyWorkspace) { const resident = this.sessionState(t.sessionId); if (!resident && r?.nixRestoreRoots) t = await nixRoots.restoreRequest(this, t); t = resident ? await nixRoots.residentRequest(t, resident) : nixRoots.requestAuthority(t) ? t : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false)); } let l = Uke(t, s?.isEmptyWorkspace === !0)",
+    "if (!s?.isEmptyWorkspace) { const resident = this.sessionState(t.sessionId); if (!resident && r?.nixRestoreRoots) t = await nixRoots.restoreRequest(this, t); t = resident ? await nixRoots.residentRequest(t, resident) : nixRoots.requestAuthority(t) ? t : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false), this.workspaceTrusted); } let l = Uke(t, s?.isEmptyWorkspace === !0)",
   ),
 );
 
@@ -227,7 +227,7 @@ method("getOrCreateSpecSession", (text) => {
   text = replace(
     text,
     "let u = await this.persistence.loadSession(o, r);",
-    "const nixRequest = r.length ? await nixRoots.resolveRequest(this.homeDir, { cwd: r[0] }, r) : undefined; let u = await this.persistence.loadSession(o, nixRequest ? Uke(nixRequest, false) : []);",
+    "const nixRequest = r.length ? await nixRoots.resolveRequest(this.homeDir, { cwd: r[0] }, r, this.workspaceTrusted) : undefined; let u = await this.persistence.loadSession(o, nixRequest ? Uke(nixRequest, false) : []);",
   );
   return replace(
     text,
@@ -313,7 +313,7 @@ method("createSessionState", (text) => {
   text = replace(
     text,
     "let Z = this.createSessionPolicy(t, r, n, T, f);",
-    "let Z = this.createSessionPolicy(t, r, n, T, f, await nixRoots.writableRoot(this.homeDir, r));",
+    "let Z = this.createSessionPolicy(t, r, n, T, f, await nixRoots.writableRoot(this.homeDir, r, this.workspaceTrusted));",
   );
   return replace(
     text,
@@ -325,7 +325,7 @@ method("rebuildSessionPolicy", (text) =>
   replace(
     text,
     "c = this.createSessionPolicy(t, n.workspacePaths, a, s, r),",
-    "c = this.createSessionPolicy(t, n.workspacePaths, a, s, r, await nixRoots.writableRoot(this.homeDir, n.workspacePaths)),",
+    "c = this.createSessionPolicy(t, n.workspacePaths, a, s, r, await nixRoots.writableRoot(this.homeDir, n.workspacePaths, this.workspaceTrusted)),",
   ),
 );
 // The worktree policy root is writable through the vendor's own session-scoped

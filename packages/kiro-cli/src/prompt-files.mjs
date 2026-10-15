@@ -143,7 +143,11 @@ export async function ownerSnapshot(agent, owner, cwd) {
   return resolveSnapshot(
     agent.homeDir,
     cwd,
-    await admit(await settingsLayers(agent.homeDir, cwd), cwd),
+    await admit(
+      await settingsLayers(agent.homeDir, cwd),
+      cwd,
+      agent.workspaceTrusted,
+    ),
   );
 }
 
