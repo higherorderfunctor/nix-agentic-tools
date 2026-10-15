@@ -200,7 +200,7 @@ _: {
         "packages/kiro-cli/lib/**"
         "packages/semble/lib/**"
       ];
-      sources = ["facts-architecture" "facts-contract"];
+      sources = ["extraction-method" "facts-architecture" "facts-contract"];
     };
     facets = {
       scopes = [
