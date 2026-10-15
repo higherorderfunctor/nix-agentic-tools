@@ -1,15 +1,17 @@
 ## Kiro settings: a flat format with object values, and where the key stops
 
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics. Unknown complete
-> settings keys warn; Home Manager permits them, while devenv refuses every key
-> outside the workspace allowlist. Both backends expose the spelling allowlist.
+> normalized backend reach and nested delivery diagnostics; native inventory
+> extends flatten boundaries; repo-readable exceptions are declared and ACP
+> reads persisted engine settings. Unknown complete settings keys warn; Home
+> Manager permits them, while devenv refuses every key outside the workspace
+> allowlist. Both backends expose the spelling allowlist.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
-the shipped TUI merge allows 23, including in 2.22.1. The package's
-project-local guard must follow the TUI consumer, so extraction uses the
-materialized source.
+the shipped TUI merge allows 23, including in 2.22.1. The TUI project-local
+guard follows that consumer. Declared repo-readable native keys are explicit
+exceptions, not a union with the broader native settings reads scope.
 
 ### Model suggestions
 
@@ -48,10 +50,14 @@ not a devenv-scope problem, it was unusable.
 
 `aiCommon.flattenDotKeysUntil` takes a list of dotted paths that are complete
 setting keys and stops recursing the moment the accumulated path is one of them.
-`mkKiro.nix` passes `kiroSettingKeys` — the union of two measured lists from the
-`packages/kiro-cli/extracted/` facts, read through `lib.extracted` (each host's
-raw measures them; consumers read the merged value):
+`mkKiro.nix` passes `kiroSettingKeys` — the union of three measured lists from
+the `packages/kiro-cli/extracted/` facts, read through `lib.extracted` (each
+host's raw measures them; consumers read the merged value):
 
+- `nativeSettingKeys`: the native JSON inventory from
+  `settings list --all --format json`, measured with isolated state. This
+  preserves object-valued keys such as `api.cps.service`; it does not infer
+  types from descriptions or expand the TUI allowlist.
 - `settingKeys`: the bundle's own `SCREAMING -> "dotted.key"` registry, 55 keys
   at 2.23.0, all `chat.*`.
 - `workspaceOverridableSettings`: the workspace allowlist, which adds 21 keys
@@ -62,7 +68,7 @@ raw measures them; consumers read the merged value):
   settings universe: the probe the allowlist scan keys off is itself absent from
   the registry scan.
 
-Neither alone covers the format, which is why the extractor reports them
+No single list covers the format, which is why the extractor reports them
 separately and the union is taken at the consumer. Since 2.23.0 the chat binary
 materializes its compressed TUI source on first launch. The extractor's runtime
 build requires a Nix sandbox, a fake KAS, and isolated state; CI explicitly
@@ -130,10 +136,41 @@ agree by construction.
 
 ### If a future setting is still written wrong
 
-The boundary only knows the keys the binary names. A setting absent from both
-lists flattens all the way, so an object-valued one added outside the registry
-would regress silently — the same failure this fixed, in a key nobody measured.
-`module-kiro-devenv-object-valued-setting-stays-nested` and its HM twin pin the
-behavior; `module-kiro-scalar-setting-still-flattens` is the control that the
-walk does not stop EARLY, which would write nested `{"chat":{...}}` that kiro
-cannot read either.
+The boundary only knows the keys the binary names. A setting absent from all
+three lists flattens all the way, so an object-valued one added outside the
+registry would regress silently — the same failure this fixed, in a key nobody
+measured. `module-kiro-devenv-object-valued-setting-stays-nested` and its HM
+twin pin the behavior; `module-kiro-scalar-setting-still-flattens` is the
+control that the walk does not stop EARLY, which would write nested
+`{"chat":{...}}` that kiro cannot read either.
+
+### Native startup settings and defaults
+
+`chat.agentEngine` is nullable and typed as `v1`, `v2` or `v3`; `chat.ui` is
+nullable and typed as `legacy` or `tui`. Freeform settings and typed keybindings
+remain available. Native repository settings override global values for these
+two repo-readable keys, so the declared `nativeRepoSettings` admits them
+separately from the TUI allowlist. Settings precedence alone does not establish
+which UI launches.
+
+For pinned 2.29.1 on Linux, a PTY probe with `chat.agentEngine = "v3"` observed
+successful `execve` of Bun running `tui.js chat` in four cases: no UI setting,
+global `legacy` with repository `tui`, global `tui` with repository `legacy`,
+and explicit `--tui`. Thus persisted `chat.ui = "legacy"` did not select the
+classic UI in the measured V3 path. Explicit `--legacy-ui` with V3 instead
+exited 1 with an unsupported-combination diagnostic. The probe isolated network
+access and used the existing fake KAS fixture. Bun subsequently aborted, so this
+establishes dispatch only, not UI health. Darwin and other engines were not
+measured. No UI default or upstream dispatch policy is changed here.
+
+Managed configurations default the engine to V3 through the settings writer. An
+explicit native null leaves selection to Kiro. Terminal CLI flags override
+persisted choices. ACP reads the same engine settings through the existing
+package build launchers because ACP does not consult persisted engine settings.
+The bare package retains upstream terminal defaults. See
+[launcher-argv.md](launcher-argv.md) for precedence, opt-out semantics and
+platform composition.
+
+Delegate-routing workflow visibility and module engine warnings reuse the Kiro
+declared-engine resolver. Flat keys take precedence over nested defaults,
+including explicit null, exactly as in delivered settings.

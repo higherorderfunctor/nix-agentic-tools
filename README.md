@@ -522,7 +522,6 @@ Kiro keeps shared files under `ai.kiro` and CLI controls under `ai.kiro.cli`:
 ai.kiro = {
   cli = {
     enable = true;
-    v3 = true;
     workflows.enable = true;
   };
   # cli.package = null; # keep shared files without installing the CLI

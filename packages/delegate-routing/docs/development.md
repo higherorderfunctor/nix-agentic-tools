@@ -1,9 +1,10 @@
 # Delegate routing package
 
 > **Last verified:** 2026-10-14 — workflow defaults cover the two KAS tweaks;
-> backend modules pass their scope to the shared skill-package factory, which
-> gates package rules by delivery capability; the per-turn reminder derives its
-> hook runtimes from that scope.
+> Kiro owns engine defaults and warnings, and routing only resolves workflow
+> visibility; backend modules pass their scope to the shared skill-package
+> factory, which gates package rules by delivery capability; the per-turn
+> reminder derives its hook runtimes from that scope.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -132,25 +133,24 @@ a model turn. Shared table rendering escapes cells once.
 
 ## Delivery and previews
 
-When an enabled runtime reaches Kiro, as the session runtime or through
-`extraRuntimes` or `manualExternalDelegates`, the program sets `ai.kiro.cli.v3`
-with `mkDefault` only when `ai.kiro.cli.package != null`. The skill's Kiro
-evidence covers the v3 engine only. A consumer's own `ai.kiro.cli.v3 = false`
-still wins and emits a mismatch warning. Every reached runtime must be enabled.
-With a managed package, Kiro's wrapper carries `--v3` to interactive and
-delegate launches alike; with `package = null`, there is no wrapper, v3 is left
-unset and the mismatch warning fires. A consumer without the Kiro module is
-untouched.
+Kiro independently defaults its native engine setting to V3 and warns for every
+other value, including null. Routing uses the shared declared-engine resolver
+for workflow visibility and adds no engine default or duplicate warning. Flat
+`chat.agentEngine` overrides the nested setting, including explicit null; tests
+compare the result with emitted settings on both backends. A consumer without
+the Kiro module is untouched. The package's existing launchers read the
+persisted settings for ACP; no routing wrapper reads config.
 
-The same reach test defaults `cli.tweaks.relativeFileCheckPaths` and
+When an enabled runtime reaches Kiro directly or through external delegation,
+the program defaults `cli.tweaks.relativeFileCheckPaths` and
 `cli.tweaks.stripVendorWorktreeSteering` to true only when
 `cli.workflows.enable` is true and the CLI package is managed. Explicit false
 wins.
 
-Kiro's `run_workflow` appears only with `cli.workflows.enable`, v3, and no
-explicit false for `cli.native.settings.chat.enableWorkflows`. Devenv's null
-setting leaves the external global prerequisite to its shell-entry warning. A
-raw rollout request alone does not opt into advertising the technique. The
+Kiro's `run_workflow` appears only with `cli.workflows.enable`, effective V3,
+and no explicit false for `cli.native.settings.chat.enableWorkflows`. Devenv's
+null setting leaves the external global prerequisite to its shell-entry warning.
+A raw rollout request alone does not opt into advertising the technique. The
 effective rendering view applies this gate even over an explicit technique
 enable; the acceptance inventory uses the same helper in
 `lib/select-families.nix` and excludes disabled nodes. Workflow modes are

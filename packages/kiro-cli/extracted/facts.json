@@ -7,6 +7,10 @@
     "source": "static",
     "type": "set"
   },
+  "nativeSettingKeys": {
+    "source": "host-run",
+    "type": "set"
+  },
   "rolloutFeatures": {
     "source": "static",
     "type": "set"

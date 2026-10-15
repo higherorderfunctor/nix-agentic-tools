@@ -324,13 +324,15 @@ rec {
     tuiJs="$PWD/kiro-tui.js"
     "$python3" ${../extract/embedded-tui.py} "$kiroChatBin" "$tuiJs" ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt ${kiroFakeKasScript pkgs}
     settingsJson=$(${kiroSettingsExtractScript pkgs} "$tuiJs")
+    nativeSettingsJson=$("$python3" ${../extract/native-settings.py} "$kiroChatBin")
     # `-S` sorts every object's keys, so both hosts emit one shape and the
     # field order written here carries no meaning.
     "$jq" -nS --argjson hooks "$hookTriggersJson" \
       --argjson rollout "$rolloutJson" \
       --argjson settings "$settingsJson" \
       --argjson prompts "$promptsJson" \
-      '$prompts + {hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
+      --argjson nativeSettings "$nativeSettingsJson" \
+      '($prompts + $nativeSettings + {hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings})' > "${dest}"
   '';
 
   # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to

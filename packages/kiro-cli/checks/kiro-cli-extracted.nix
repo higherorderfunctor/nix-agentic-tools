@@ -65,6 +65,12 @@
             key = "workspaceOverridableSettings";
           }
         ]
+        ++ [
+          {
+            contains = "api.cps.service";
+            key = "nativeSettingKeys";
+          }
+        ]
         ++ map (feature: {
           contains = feature;
           key = "rolloutFeatures";

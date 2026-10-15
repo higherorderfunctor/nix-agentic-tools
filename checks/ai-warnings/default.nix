@@ -552,12 +552,15 @@
     backend,
     darwin ? false,
     trustedMcpTools ? ["@probe"],
-    v3 ? false,
+    engine ? "v2",
   }: let
     declaration = {
       ai.kiro = {
         cli.enable = true;
-        cli = {inherit trustedMcpTools v3;};
+        cli = {
+          inherit trustedMcpTools;
+          native.settings.chat.agentEngine = engine;
+        };
       };
     };
     platformPkgs =
@@ -574,6 +577,8 @@
       pkgs = platformPkgs;
     };
   in
+    # Only the trust-tools diagnostic: a non-v3 engine also warns on its own.
+    lib.filter (lib.hasInfix "ai.kiro.cli.trustedMcpTools")
     (lib.evalModules {
       modules = [
         harness.aiBase.sharedOptions
@@ -598,17 +603,17 @@ in {
       && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
         backend = "devenv";
         darwin = true;
-        v3 = true;
+        engine = "v3";
       })
       && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
         backend = "devenv";
-        v3 = true;
+        engine = "v3";
       })
       # Recovered, or never withheld.
       && trustWarnings {
         backend = "hm";
         darwin = true;
-        v3 = true;
+        engine = "v3";
       }
       == []
       && trustWarnings {

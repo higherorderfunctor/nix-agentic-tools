@@ -728,13 +728,13 @@
         '';
       }
       {
-        assertion = (effectiveRolloutFeatures cfg) == [] || cfg.cli.v3;
-        message = "ai.kiro.cli.features: a rollout patch requires `v3 = true`; enable ai.kiro.cli.v3 so the kas engine can surface the feature.";
+        assertion = (effectiveRolloutFeatures cfg) == [] || effectiveEngine cfg == "v3";
+        message = "ai.kiro.cli.features: a rollout patch requires `native.settings.chat.agentEngine = \"v3\"`; select the v3 engine so the kas engine can surface the feature.";
       }
     ]
     ++ map (name: {
-      assertion = !cfg.cli.${name}.enable || cfg.cli.v3;
-      message = "ai.kiro.cli.${name}.enable requires `v3 = true`; this feature uses the kas engine.";
+      assertion = !cfg.cli.${name}.enable || effectiveEngine cfg == "v3";
+      message = "ai.kiro.cli.${name}.enable requires the v3 engine; this feature uses the kas engine.";
     })
     friendlyFeatureNames
     ++ lib.mapAttrsToList (name: feature: {
@@ -838,7 +838,7 @@
   #   "subagent"  -> { capability = subagent; }
   #   "use_aws" / other bare tokens -> dropped (aws_tool removed in v3)
   mkPermissionRules = cfg: let
-    hasV3 = cfg.cli.v3;
+    hasV3 = effectiveEngine cfg == "v3";
     trusted = cfg.cli.trustedMcpTools;
     mcpMatches = map (t: let
       body = lib.removePrefix "@" t;
@@ -880,6 +880,11 @@
     if (effectiveRolloutFeatures cfg) == []
     then cfg.cli.package
     else cfg.cli.package.withRolloutFeatures (effectiveRolloutFeatures cfg);
+  nativeSettingTypes = {
+    "chat.agentEngine" = lib.types.nullOr (lib.types.enum ["v1" "v2" "v3"]);
+    "chat.ui" = lib.types.nullOr (lib.types.enum ["legacy" "tui"]);
+  };
+  effectiveEngine = cfg: import ./effective-engine.nix (nativeSettings cfg);
   resolvePackage = cfg: let
     package = resolveRolloutPackage cfg;
   in
@@ -897,16 +902,13 @@
   tweakNames = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
   enabledTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) tweakNames;
 
-  # Kiro honors a PROJECT-LOCAL `.kiro/settings/cli.json` only for the keys on
-  # the allowlist its TUI carries; everything else in that file is read and
-  # discarded with no warning. The devenv backend writes exactly that file, so
-  # it must refuse a key Kiro would drop rather than emit a plausible-looking
-  # no-op. Home Manager writes the GLOBAL file, where every key is honored —
-  # that is why this is a lowering difference and not a divergent option.
-  workspaceOverridableSettings = kiroFact "workspaceOverridableSettings";
+  # Native startup and TUI settings have different project-scope consumers.
+  # Native repo-readable exceptions; chat.ui is verified only by settings reads.
+  nativeRepoSettings = ["chat.agentEngine" "chat.ui"];
+  workspaceOverridableSettings = lib.unique (kiroFact "workspaceOverridableSettings" ++ nativeRepoSettings);
 
   # The FLATTEN BOUNDARY: every dotted path kiro's binary names as a complete
-  # setting key. Union of the two measured lists, because they cover different
+  # setting key. Union of native and TUI measured lists, because they cover different
   # ground — the key registry is all `chat.*`, the workspace allowlist adds
   # `toolSearch.*`, `compaction.*` and `knowledge.*` — and taking the union is
   # the policy the sidecar deliberately leaves to its consumer.
@@ -916,9 +918,16 @@
   # the per-model records below it and writes
   # `chat.modelDefaults.<model>.<field>`, a key kiro never matches. Both
   # backends were affected; the setting was simply unusable from Nix.
-  kiroSettingKeys = lib.unique (kiroFact "settingKeys" ++ workspaceOverridableSettings);
+  kiroSettingKeys = lib.unique (kiroFact "nativeSettingKeys" ++ kiroFact "settingKeys" ++ workspaceOverridableSettings);
 
   flattenKiroSettings = aiCommon.flattenDotKeysUntil kiroSettingKeys;
+  nativeSettings = cfg: let
+    flat = flattenKiroSettings cfg.cli.native.settings;
+    invalid = lib.filterAttrs (key: type: !type.check (flat.${key} or null)) nativeSettingTypes;
+  in
+    if invalid == {}
+    then aiCommon.filterNulls flat
+    else throw "ai.kiro.cli.native.settings has invalid native values (including flat dotted keys): ${lib.concatStringsSep ", " (builtins.attrNames invalid)}";
 
   # The extracted lists omit this existing typed global setting. These are
   # complete literal file keys; object-valued settings remain opaque below them.
@@ -938,7 +947,7 @@
   # `flattenKiroSettings` stops at a known key, so the written key is now the
   # setting key and the two agree.
   nativeSettingKeys = cfg:
-    builtins.attrNames (flattenKiroSettings (aiCommon.filterNulls cfg.cli.native.settings));
+    builtins.attrNames (nativeSettings cfg);
 
   # devenv-ONLY. Never add this to `mkAssertions`: under Home Manager these same
   # keys are correct, and asserting there would reject a working config.
@@ -1104,7 +1113,7 @@
   # `process.env.SHELL || "/bin/sh"`, so `SHELL` is the whole knob, and `||`
   # makes an unusable path fail loudly at spawn rather than be ignored.
   # (`KIRO_CHAT_SHELL` exists only in the Rust binary and is absent from the
-  # v3 JS bundle, and the wrapper forces `--v3`, so it does not apply.
+  # v3 JS bundle; it does not configure the managed default engine.
   # Recorded so it is not re-chased.)
   #
   # Both backends install the IDENTICAL wrapper — the two call sites carried
@@ -1118,7 +1127,7 @@
   # particular must `cat` the decrypted file at launch rather than bake a
   # static value, so it could never have been a plain env write. On HM the
   # symlinkJoin wrapper is the only export mechanism at all, so env vars ride
-  # along with the `--v3` / `--trust-tools` flag injection either way.
+  # along with the `--trust-tools` flag injection either way.
   kiroInstallPackage = {
     cfg,
     launcherEnvironment,
@@ -1126,7 +1135,7 @@
     ...
   }:
     wrapKiroPackage {
-      inherit (cfg.cli) extraPackages trustedMcpTools useFhsSandbox v3;
+      inherit (cfg.cli) extraPackages trustedMcpTools useFhsSandbox;
       package = resolvePackage cfg;
       environmentVariables = launcherEnvironment;
       inherit ((import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers) secretEnv;
@@ -1237,7 +1246,7 @@ in
           '';
         };
         backgroundExecution.enable = lib.mkEnableOption "background execution for v3 sessions; rebind cli.native.settings.chat.keybindings.moveToBackground globally when needed";
-        codeToSpec.enable = lib.mkEnableOption "Code-to-Spec Explore and analysis tools (requires cli.v3; devenv also needs global chat.enableC2s)";
+        codeToSpec.enable = lib.mkEnableOption "Code-to-Spec Explore and analysis tools (requires the v3 engine; devenv also needs global chat.enableC2s)";
         extraPackages = lib.mkOption {
           type = lib.types.listOf lib.types.package;
           default = [];
@@ -1268,13 +1277,13 @@ in
               from the pinned binary. Upstream state: ${builtins.toJSON (kiroFact "rolloutStates.${name}")}.
               Features available to all stable users
               at 100% leave the package untouched; other enabled features
-              patch the binary's embedded manifest and require cli.v3. A raw
+              patch the binary's embedded manifest and require the v3 engine. A raw
               feature enables availability only; use the friendly switch when
               the feature also needs a client setting.
             '';
           };
         });
-        kvim.enable = lib.mkEnableOption "the /kvim Neovim pane (requires cli.v3 and nvim on PATH; no package is added automatically)";
+        kvim.enable = lib.mkEnableOption "the /kvim Neovim pane (requires the v3 engine and nvim on PATH; no package is added automatically)";
         # Kiro-specific settings are read-only copies on both backends.
         native.settings = lib.mkOption {
           type = lib.types.submodule {
@@ -1284,6 +1293,11 @@ in
                 type = lib.types.submodule {
                   freeformType = (pkgs.formats.json {}).type;
                   options = {
+                    agentEngine = lib.mkOption {
+                      type = nativeSettingTypes."chat.agentEngine";
+                      default = "v3";
+                      description = "Native engine for terminal and ACP. Repository settings override global settings and explicit CLI flags override both. Null lets Kiro auto-select its engine. Every module feature requires v3.";
+                    };
                     defaultModel = lib.mkOption {
                       type =
                         lib.types.nullOr
@@ -1332,6 +1346,11 @@ in
                       };
                       default = {};
                       description = "Chat key bindings generated from the pinned setting registry; Home Manager also accepts unknown keys through freeform settings.";
+                    };
+                    ui = lib.mkOption {
+                      type = nativeSettingTypes."chat.ui";
+                      default = null;
+                      description = "Native UI preference. Repository settings override the global value; actual UI dispatch remains upstream policy. Distinct from the TUI chat.uiMode setting.";
                     };
                   };
                 };
@@ -1395,7 +1414,7 @@ in
             so it tracks version bumps instead of being curated here.
           '';
         };
-        sandbox.enable = lib.mkEnableOption "local sandbox availability (requires cli.v3). Each run still needs --sandbox with --no-interactive or --output-format stream-json; Linux also needs bubblewrap and user namespaces";
+        sandbox.enable = lib.mkEnableOption "local sandbox availability (requires the v3 engine). Each run still needs --sandbox with --no-interactive or --output-format stream-json; Linux also needs bubblewrap and user namespaces";
         # MCP tools to auto-approve — appends `--trust-tools=<csv>`
         # to `kiro-cli-chat`. Eliminates the need for a bespoke
         # symlinkJoin wrapper in the consumer.
@@ -1412,8 +1431,8 @@ in
           tweakPatchNote = ''
             Uses the shared build-time KAS patch selection on Home Manager and
             devenv. Missing or duplicate selected source text fails the build.
-            Enabling any tweak overrides an inherited `KIRO_KAS_SERVER_PATH`;
-            with every tweak off, an explicit `KIRO_KAS_SERVER_PATH` is kept.
+            The packaged KAS replaces an inherited `KIRO_KAS_SERVER_PATH` even
+            when every tweak is off.
           '';
         in {
           relativeFileCheckPaths = lib.mkOption {
@@ -1451,31 +1470,7 @@ in
             package.
           '';
         };
-        # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
-        # launcher. The granular `--agent-engine`/`--mode` flags live ONLY on the
-        # `chat` subcommand and are rejected by the launcher, so the launcher's
-        # sole engine selector is this boolean.
-        #
-        # There is deliberately NO `tui` option. One existed: it injected `--tui`
-        # and implied `--v3`, and that implication was load-bearing rather than
-        # decorative — bare `--tui` conflicts with the chat binary's default
-        # engine (v1 on 2.16.0) and the launcher supplies none of its own.
-        # `--tui` selects the new TUI harness for the OLD engine; v3 already uses
-        # that harness, so under v3 it is redundant, and it is going away with v3
-        # regardless. Anyone who wants it on an older engine passes it on the
-        # command line.
-        v3 = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = ''
-            Append `--v3` (next-generation Kiro agent) to the kiro-cli
-            launcher wrapper. Applied by both backends.
-
-            Required by the friendly feature switches and raw rollout patches:
-            those features are surfaced by the v3 (`kas`) engine.
-          '';
-        };
-        workflows.enable = lib.mkEnableOption "Kiro CLI workflows (requires cli.v3; devenv also needs global chat.enableWorkflows)";
+        workflows.enable = lib.mkEnableOption "Kiro CLI workflows (requires the v3 engine; devenv also needs global chat.enableWorkflows)";
       };
       # Config directory (HOME-relative for HM, project-relative for
       # devenv). All file writes use this as root prefix. Exposed as an
@@ -1611,21 +1606,14 @@ in
             (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
           ignored)
         )) (builtins.attrNames cfg.hooks);
-      # `--trust-tools` reaches the chat binary on BOTH backends, so this is a
-      # withhold test rather than a platform test. Two argv paths drop the flag:
-      # Darwin's launcher resolves the chat binary by app-bundle discovery and never
-      # runs the wrapper that appends it, and the `acp` subcommand rejects it under
-      # the v3 engine (packages/kiro-cli/lib/wrapPackage.nix:194-256). Exactly one
-      # composition recovers the grant declaratively — Home Manager with v3, where
-      # mkPermissionRules also writes it into settings/permissions.yaml
-      # (packages/kiro-cli/lib/mkKiro.nix:707-742) — so that is the only case
-      # suppressed, and the devenv half that the wrapper's own comment says is not
-      # recovered declaratively now reports instead of staying silent.
+      # Darwin bundle discovery bypasses the chat wrapper's grant; ACP V3 rejects
+      # --trust-tools. Only HM with declared V3 recovers it via permissions.yaml.
+      kiroV3 = engine == "v3";
       trustToolsWarnings = lib.optional (cfg.cli.trustedMcpTools
         != []
-        && (pkgs.stdenv.hostPlatform.isDarwin || cfg.cli.v3)
-        && !(cfg.cli.v3 && backend == "hm"))
-      (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
+        && (pkgs.stdenv.hostPlatform.isDarwin || kiroV3)
+        && !(kiroV3 && backend == "hm"))
+      (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with the effective native engine v3 recovers it declaratively through settings/permissions.yaml.");
       nativeAgentPlans = lib.mapAttrs mkNativeAgentPlan nativeAgents;
       settingsDir = "${cfg.configDir}/settings";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
@@ -1643,14 +1631,13 @@ in
         extraPackages = [["ai" "kiro" "cli" "extraPackages"]];
         secrets = [["ai" "mcpServers"] ["ai" "kiro" "mcpServers"]];
         trustedMcpTools = [["ai" "kiro" "cli" "trustedMcpTools"]];
-        v3 = [["ai" "kiro" "cli" "v3"]];
       };
       wrapperPackageReasons =
         lib.mapAttrsToList (key: reason:
           reason // {explicit = explicitAt wrapperReasonPaths.${key};})
         (wrapperReasons {
           environmentVariables = mergedEnvironmentVariables;
-          inherit (cfg.cli) extraPackages trustedMcpTools v3;
+          inherit (cfg.cli) extraPackages trustedMcpTools;
           inherit (kiroSecrets) secretEnv;
         });
       # Beside the wrapper's own reasons: package-dependent options the
@@ -1703,8 +1690,21 @@ in
       inertPackageOptions =
         map (reason: reason.name)
         (lib.filter (reason: reason.active && reason.explicit) packageDependentReasons);
+      engine = effectiveEngine cfg;
+      engineState =
+        if engine == null
+        then "native.settings.chat.agentEngine is unset (null), so Kiro auto-selects its engine"
+        else "native.settings.chat.agentEngine is ${builtins.toJSON engine}";
+      engineWarnings =
+        lib.optional (engine != "v3")
+        "ai.kiro.cli: ${engineState}. Every Kiro feature in this module is built and tested against the v3 engine only; anything other than v3 is unsupported.";
+      explicitEngine =
+        lib.any (value: value ? "chat.agentEngine" || value ? chat.agentEngine)
+        (options.ai.kiro.cli.native.settings.definitions or []);
       packageWarnings =
-        lib.optional (cfg.cli.package == null && inertPackageOptions != [])
+        lib.optional (cfg.cli.package == null && engine != null && explicitEngine)
+        "ai.kiro.cli.package is null: the native engine setting is still delivered. ACP honors it through this flake's packaged launchers, which package = null does not install."
+        ++ lib.optional (cfg.cli.package == null && inertPackageOptions != [])
         "ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ${lib.concatStringsSep ", " inertPackageOptions}. Unset them or set ai.kiro.cli.package.";
       hasUrlSecret = kiroSecrets.urlSecretEnv != {};
       mcpRender = mkMcpJsonScript {
@@ -1715,7 +1715,7 @@ in
         templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
         inherit (kiroSecrets) urlSecretEnv;
       };
-      flatSettings = flattenKiroSettings (aiCommon.filterNulls cfg.cli.native.settings);
+      flatSettings = nativeSettings cfg;
       permissionRules = mkPermissionRules cfg;
       steeringEmitters = mkSteeringEmitters {
         inherit cfg mergedContext hasMergedContext mergedRules;
@@ -1740,7 +1740,8 @@ in
           }
           (lib.optionalAttrs (options ? warnings) {
             warnings =
-              packageWarnings
+              engineWarnings
+              ++ packageWarnings
               ++ hookWarnings
               ++ trustToolsWarnings
               ++ (openKeys.inspect {

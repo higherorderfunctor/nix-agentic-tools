@@ -80,7 +80,6 @@
   wrap = secretEnv:
     (import ../../packages/kiro-cli/lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage {
       package = stub;
-      v3 = false;
       trustedMcpTools = [];
       inherit secretEnv;
       secretOptionPaths.PROBE = "ai.kiro.mcpServers.probe.headers.Authorization";
@@ -113,19 +112,15 @@ in {
     && enabled.config.tasks."ai:delivery:observe-retired".before == ["devenv:files:cleanup"]
     && lib.hasInfix "workflows" (featureWarning {
       workflows.enable = true;
-      v3 = true;
     })
     && !(lib.hasInfix "global-feature" (featureWarning {
       features.workflows.enable = true;
-      v3 = true;
     }))
     && lib.hasInfix "codeToSpec" (featureWarning {
       codeToSpec.enable = true;
-      v3 = true;
     })
     && !(lib.hasInfix "global-feature" (featureWarning {
       features.c2s.enable = true;
-      v3 = true;
     }))
     && !(lib.hasInfix "workflows" (featureWarning {}))
   );

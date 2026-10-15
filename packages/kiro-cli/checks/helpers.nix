@@ -18,20 +18,16 @@
       mcpServers = lib.mapAttrs (name: mcpLib.renderServer pkgs name) (renderKiroSecrets servers).servers;
     };
 
-  # Helpers for the rollout-unlock tests. They exist to keep `lib.head` off an
-  # unguarded filtered list: if the wrapper were renamed or dropped, `head`
-  # throws an eval error, which surfaces as an infrastructure failure with a
-  # stack trace rather than as this test failing. Worse, a comparison between
-  # two silently-wrong singletons can pass VACUOUSLY. Asserting the match count
-  # as part of the returned boolean fixes both.
-  kiroWrappedDrvs = packages:
-    map (p: p.drvPath) (lib.filter (p: p.name == "kiro-cli-wrapped") packages);
+  # Select installed Kiro package derivations; callers check singleton counts
+  # before comparing, so a missing package cannot make a comparison vacuous.
+  kiroPackageDrvs = packages:
+    map (p: p.drvPath) (lib.filter (p: lib.hasPrefix "kiro-cli" p.name) packages);
 
-  # Exactly one wrapper on each side, and they must DIFFER (the unlock forked).
+  # Exactly one package on each side, and they must DIFFER (the unlock forked).
   soleFork = a: b:
     builtins.length a == 1 && builtins.length b == 1 && builtins.head a != builtins.head b;
 
-  # Exactly one wrapper on each side, and they must MATCH (dedupe collapsed).
+  # Exactly one package on each side, and they must MATCH (dedupe collapsed).
   soleSame = a: b:
     builtins.length a == 1 && builtins.length b == 1 && builtins.head a == builtins.head b;
 
@@ -119,5 +115,5 @@
   # of its own.
   hmRetirementLedgerScript = requireBody ["home" "activation" "retire-materialize-kiro-steering-ledger" "text"];
 in {
-  inherit dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
+  inherit dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroPackageDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
 }

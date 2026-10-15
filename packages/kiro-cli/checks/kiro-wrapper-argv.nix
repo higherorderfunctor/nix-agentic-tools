@@ -25,14 +25,20 @@
     # extraPackages paths are asserted.
     # `${KIRO_WRAPPER_TEST-unset}` keeps its default so the `-u` in strict mode
     # reports an unbaked env var rather than aborting the stub.
-    echoArgv = pkgs.writeShellScript "kiro-cli-stub-argv" ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      printf 'ENV=%s\n' "''${KIRO_WRAPPER_TEST-unset}"
-      printf 'AMBIENT=%s\n' "$(command -v kiro-ambient-sentinel || :)"
-      printf 'EXTRA=%s\n' "$(command -v kiro-path-sentinel || :)"
-      for nat_a in "$@"; do printf 'ARG=%s\n' "$nat_a"; done
-    '';
+    echoArgv = valueFlags:
+      pkgs.writeShellScript "kiro-cli-stub-argv" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${(import ../lib/acp-default.nix {
+            inherit lib;
+            inherit (pkgs) jq;
+          })
+          valueFlags}
+        printf 'ENV=%s\n' "''${KIRO_WRAPPER_TEST-unset}"
+        printf 'AMBIENT=%s\n' "$(command -v kiro-ambient-sentinel || :)"
+        printf 'EXTRA=%s\n' "$(command -v kiro-path-sentinel || :)"
+        for nat_a in "$@"; do printf 'ARG=%s\n' "$nat_a"; done
+      '';
     ambientSentinel = pkgs.writeShellApplication {
       name = "kiro-ambient-sentinel";
       bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
@@ -53,8 +59,8 @@
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       mkdir -p "$out/bin"
-      ln -s ${echoArgv} "$out/bin/kiro-cli"
-      ln -s ${echoArgv} "$out/bin/kiro-cli-chat"
+      ln -s ${echoArgv (import ../lib/native-argv.nix).launcherValueFlags} "$out/bin/kiro-cli"
+      ln -s ${echoArgv (import ../lib/native-argv.nix).chatValueFlags} "$out/bin/kiro-cli-chat"
     '';
 
     # A launcher stub that DISPATCHES, preserving the measured pre-split
@@ -168,35 +174,26 @@
       shopt -s inherit_errexit 2>/dev/null || :
       mkdir -p "$out/bin"
       ln -s ${dispatchLauncher} "$out/bin/kiro-cli"
-      ln -s ${echoArgv} "$out/bin/kiro-cli-chat"
+      ln -s ${echoArgv (import ../lib/native-argv.nix).chatValueFlags} "$out/bin/kiro-cli-chat"
     '';
 
     wrap = args:
       wrapKiroPackage ({
           package = stubPackage;
-          v3 = false;
           trustedMcpTools = [];
         }
         // args);
     wrapChain = args:
       wrapKiroPackage ({
           package = chainPackage;
-          v3 = false;
           trustedMcpTools = [];
         }
         // args);
 
-    # The consumer shape that broke: v3 active AND trustedMcpTools non-empty.
-    chainTrustV3 = wrapChain {
-      v3 = true;
-      trustedMcpTools = ["fs_read"];
-    };
-    # Same, without v3 — `--trust-tools` must still reach acp there.
-    chainTrustV2 = wrapChain {trustedMcpTools = ["fs_read"];};
+    chainTrust = wrapChain {trustedMcpTools = ["fs_read"];};
 
-    # v3 ⇒ --v3 everywhere. There is no `tui` option any more: it injected
-    # `--tui` and implied `--v3`, and `--tui` is redundant under v3.
-    v3Wrapped = wrap {v3 = true;};
+    # An environment-only wrapper must leave engine and UI selection native.
+    v3Wrapped = wrap {environmentVariables.KIRO_WRAPPER_TEST = "baked";};
     # trustedMcpTools ⇒ --trust-tools=… appended on the chat binary.
     trustWrapped = wrap {trustedMcpTools = ["fs_read" "@srv"];};
     # env only: the wrapper exists to export, and must inject nothing at all.
@@ -242,62 +239,13 @@
       P=${pathWrapped}/bin/kiro-cli
       PC=${pathWrapped}/bin/kiro-cli-chat
 
-      # ── the global lands BEFORE the subcommand, never after ─────────────────
-      # This is the regression that mattered: `kiro-cli acp --v3` is "error:
-      # unexpected argument found", while `--v3 acp` runs. A string match on the
-      # generated bash cannot catch a flag emitted on the wrong SIDE; running it
-      # can.
-      expect "bare launch"                  '--v3'                      "$V"
-      expect "chat keeps it in front"       '--v3|chat'                 "$V" chat
-      expect "chat INPUT stays last"        '--v3|chat|hello'           "$V" chat hello
-      expect "acp gets --v3, before it"     '--v3|acp'                  "$V" acp
-      expect "mcp gets --v3, before it"     '--v3|mcp|list'             "$V" mcp list
-      expect "agent gets --v3, before it"   '--v3|agent|list'           "$V" agent list
-      expect "settings gets --v3"           '--v3|settings|all'         "$V" settings all
-      expect "whoami gets --v3"             '--v3|whoami'               "$V" whoami
-
-      # ── the removed `tui` option must not resurrect itself ──────────────────
-      # `--tui` is redundant under v3 (which already uses the new TUI harness)
-      # and it is going away with v3. Nothing this module generates may emit it.
-      for sub in "" chat acp mcp agent settings whoami translate; do
-        if [ -z "$(argv "$V" $sub | tr '|' '\n' | grep -Fx -- --tui || true)" ]; then
-          ok "--tui absent from ''${sub:-bare launch}"
-        else
-          bad "--tui emitted for ''${sub:-bare launch}"
-        fi
-      done
-
-      # ── v3 never emits --tui, anywhere ──────────────────────────────────────
-      expect "v3-only bare"                 '--v3'                      "$V"
-      expect "v3-only chat"                 '--v3|chat'                 "$V" chat
-      expect "v3-only acp"                  '--v3|acp'                  "$V" acp
-
-      # ── an option VALUE is never read as the subcommand ─────────────────────
-      # The LAUNCHER no longer needs the value skip — `--v3` is injected
-      # unconditionally, with no subcommand gate to confuse. These pin that the
-      # injection survives argv shapes that used to matter, so a future gated
-      # launcher flag cannot quietly reintroduce the bug. The skip itself is
-      # still exercised below, by the chat binary's `--trust-tools` gate.
-      expect "--agent VALUE is a bare launch"     '--v3|--agent|acp'      "$V" --agent acp
-      expect "--agent=VALUE is a bare launch"     '--v3|--agent=acp'      "$V" --agent=acp
-      expect "a later chat still parses"          '--v3|--agent|a|chat'   "$V" --agent a chat
-      expect "--resume-id VALUE is a bare launch" '--v3|--resume-id|s1'   "$V" --resume-id s1
-      expect "-r is a bare launch"                '--v3|-r'               "$V" -r
-
-      # ── idempotence: a caller's own flag is never doubled ───────────────────
-      # `--v3` aborts with "cannot be used multiple times".
-      expect "caller's --v3 not doubled"    'chat|--v3'                 "$V" chat --v3
-      expect "caller's --v3 on acp"         'acp|--v3'                  "$V" acp --v3
-      # A caller may still pass --tui by hand; the wrapper must leave it alone
-      # rather than treat it as its own.
-      expect "caller's own --tui passes through" '--v3|chat|--tui'      "$V" chat --tui
-      # Exact-token match, not a substring scan of "$*": a prompt that merely
-      # mentions the flag must not suppress the real one.
-      expect "a prompt naming --v3 still gets it" \
-        '--v3|chat|explain --v3' "$V" chat 'explain --v3'
-
-      # ── `--` parks the scan; --v3 is global so it still leads ───────────────
-      expect "-- still gets --v3"           '--v3|--'                   "$V" --
+      # Engine selection is absent from the module wrapper. Native terminal
+      # settings and the package's ACP default are tested against real binaries.
+      expect "bare launcher receives no engine flag" "" "$V"
+      expect "terminal arguments stay unchanged" 'chat|hello' "$V" chat hello
+      expect "ACP default belongs to package" 'acp' "$V" acp
+      expect "explicit engine remains unchanged" 'chat|--v3' "$V" chat --v3
+      expect "UI policy stays native" 'chat|--tui' "$V" chat --tui
 
       # ── chat binary: --trust-tools is APPENDED, chat/acp only ───────────────
       # Opposite case to the globals: the chat binary declares --trust-tools on
@@ -367,18 +315,22 @@
         fi
       }
 
-      # The withhold fires through the TRANSLATED token: the launcher hands the
-      # chat wrapper `acp --agent-engine v3`, not the `--v3` the caller typed.
+      # The payload resolves runtime settings before deciding whether to grant.
+      export HOME="$TMPDIR/kiro-home"
+      mkdir -p "$HOME/.kiro/settings" .kiro/settings
+      printf '%s' '{"chat.agentEngine":"v2"}' > "$HOME/.kiro/settings/cli.json"
+      printf '%s' '{"chat.agentEngine":"v3"}' > .kiro/settings/cli.json
       chain_expect "v3+trust: acp gets NO --trust-tools" \
-        'acp|--agent-engine|v3' ${chainTrustV3} acp
+        'acp|--agent-engine|v3' ${chainTrust} acp
       # An EXPLICIT subcommand makes the launcher drop `--tui`, so the wrapper's
       # injection of it on `chat` is a no-op upstream (it survives only bare).
       chain_expect "v3+trust: chat still gets --trust-tools" \
-        'chat|--v3|--trust-tools=fs_read' ${chainTrustV3} chat
+        'chat|--trust-tools=fs_read' ${chainTrust} chat
+      printf '%s' '{}' > .kiro/settings/cli.json
       chain_expect "no v3: acp still gets --trust-tools" \
-        'acp|--trust-tools=fs_read' ${chainTrustV2} acp
+        'acp|--agent-engine|v2|--trust-tools=fs_read' ${chainTrust} acp
       chain_expect "no v3: chat still gets --trust-tools" \
-        'chat|--trust-tools=fs_read' ${chainTrustV2} chat
+        'chat|--trust-tools=fs_read' ${chainTrust} chat
 
       # ── the launcher's own scan: a VALUE is not a subcommand ────────────────
       # The real launcher forwards `kiro-cli --agent acp` as `chat --agent acp` —
@@ -386,48 +338,40 @@
       # would read it as the acp subcommand, the v3 gate would fire, and
       # --trust-tools would be withheld from what is really a chat launch.
       chain_expect "value skip: --agent VALUE is a bare launch" \
-        'chat|--v3|--agent|acp|--trust-tools=fs_read' \
-        ${chainTrustV3} --agent acp
+        'chat|--agent|acp|--trust-tools=fs_read' \
+        ${chainTrust} --agent acp
       # A bare launch is dispatched too, with `chat` injected as the subcommand,
       # so the chat-side gate fires on it.
       chain_expect "bare launch dispatches as chat" \
-        'chat|--v3|--trust-tools=fs_read' \
-        ${chainTrustV3}
+        'chat|--trust-tools=fs_read' \
+        ${chainTrust}
 
-      # ── the EFFECTIVE engine decides, and only argv knows it ────────────────
-      # A caller's --agent-engine overrides the injected --v3 — upstream drops the
-      # injected flag outright, measured: `kiro-cli --v3 acp --agent-engine=v2`
-      # forwards `acp --agent-engine=v2`. Both directions are real against the
-      # binary: `--v3 acp --agent-engine=v2 --trust-tools=x` RUNS, while
-      # `acp --agent-engine=v3 --trust-tools=x` CONFLICTS.
+      # Explicit native selectors override the runtime settings default.
       chain_expect "v3 config, caller opts out -> trust returns" \
         'acp|--agent-engine=v2|--trust-tools=fs_read' \
-        ${chainTrustV3} acp --agent-engine=v2
+        ${chainTrust} acp --agent-engine=v2
       chain_expect "v3 config, caller opts out (two-token form)" \
         'acp|--agent-engine|v2|--trust-tools=fs_read' \
-        ${chainTrustV3} acp --agent-engine v2
+        ${chainTrust} acp --agent-engine v2
       chain_expect "v3 config, caller re-asks for v3 -> still withheld" \
         'acp|--agent-engine=v3' \
-        ${chainTrustV3} acp --agent-engine=v3
+        ${chainTrust} acp --agent-engine=v3
       chain_expect "no-v3 config, caller opts IN -> withheld" \
         'acp|--agent-engine=v3' \
-        ${chainTrustV2} acp --agent-engine=v3
+        ${chainTrust} acp --agent-engine=v3
       chain_expect "no-v3 config, caller picks v1 -> trust kept" \
         'acp|--agent-engine=v1|--trust-tools=fs_read' \
-        ${chainTrustV2} acp --agent-engine=v1
+        ${chainTrust} acp --agent-engine=v1
       # chat is unconditional: v3 + chat + --trust-tools parses fine.
       chain_expect "chat is unaffected by the engine" \
-        'chat|--v3|--agent-engine=v3|--trust-tools=fs_read' \
-        ${chainTrustV3} chat --agent-engine=v3
+        'chat|--agent-engine=v3|--trust-tools=fs_read' \
+        ${chainTrust} chat --agent-engine=v3
 
-      # ── the chat binary reached DIRECTLY, with the launcher out of the chain ─
-      # This is what forces the fallback to be the chat binary's own default and
-      # not the Nix config's. `kiro-cli-chat acp` runs the v2 engine no matter
-      # what `v3 = true` says — there is no launcher to translate anything — so
-      # withholding --trust-tools here would strip a grant the session accepts.
-      expect "direct chat binary under a v3 config keeps --trust-tools" \
-        'acp|--trust-tools=fs_read' \
-        ${chainTrustV3}/bin/kiro-cli-chat acp
+      # Direct chat sees the same runtime repo override.
+      printf '%s' '{"chat.agentEngine":"v3"}' > .kiro/settings/cli.json
+      expect "direct ACP honors repo engine for trust" \
+        'acp|--agent-engine|v3' \
+        ${chainTrust}/bin/kiro-cli-chat acp
 
       # A `--` ends the engine scan. Past it a flag-looking token is a positional
       # the CLI will not honour, so neither do we. Measured on the direct
@@ -435,9 +379,43 @@
       # i.e. NOT an engine selection. (Through the launcher the point is moot —
       # it strips `--` before forwarding — so this only ever relaxes, never
       # tightens, what the launcher path sees.)
+      printf '%s' '{}' > .kiro/settings/cli.json
+      printf '%s' '{}' > "$HOME/.kiro/settings/cli.json"
       expect "-- ends the engine scan" \
-        'acp|--|--agent-engine=v3|--trust-tools=fs_read,@srv' \
+        'acp|--trust-tools=fs_read,@srv|--|--agent-engine=v3' \
         ${trustWrapped}/bin/kiro-cli-chat acp -- --agent-engine=v3
+
+      expect "explicit trust stays authoritative" 'chat|--trust-tools=custom' "$T" chat --trust-tools=custom
+      expect "private trust does not leak to native children" 'unset' ${pkgs.bash}/bin/bash -c 'NAT_KIRO_TRUST_TOOLS=fs_read; source ${echoArgv (import ../lib/native-argv.nix).chatValueFlags} >/dev/null; printf "ARG=%s\n" "''${NAT_KIRO_TRUST_TOOLS-unset}"' -- chat
+
+      # Payload bridge: argv precedence, cwd-local files, KIRO_HOME and --.
+      printf '%s' '{"chat.agentEngine":"v3"}' > .kiro/settings/cli.json
+      expect "repo v3 selects ACP" 'acp|--agent-engine|v3' "$V" acp
+      expect "explicit split v2 wins" 'acp|--agent-engine|v2' "$V" acp --agent-engine v2
+      expect "explicit equals v2 wins" 'acp|--agent-engine=v2' "$V" acp --agent-engine=v2
+      expect "explicit missing value stays native error" 'acp|--agent-engine' "$V" acp --agent-engine
+      expect "explicit empty value stays native error" 'acp|--agent-engine=' "$V" acp --agent-engine=
+      expect "engine-looking global value is not an engine" \
+        '--agent|--v2|acp|--agent-engine|v3' "$V" --agent --v2 acp
+      expect "global consumes separator-looking value" \
+        '--repo|--|acp|--agent-engine|v3' "$V" --repo -- acp
+      expect "direct v2 trust precedes separator" \
+        'acp|--agent-engine=v2|--trust-tools=fs_read,@srv|--' "$T" acp --agent-engine=v2 --
+      expect "acp-valued global does not select ACP" '--agent|acp' "$V" --agent acp
+      expect "separator ends subcommand scan" '--|acp' "$V" -- acp
+      expect "engine goes before separator" 'acp|--agent-engine|v3|--' "$V" acp --
+      for nat_engine in v1 v2 v3; do
+        expect "explicit $nat_engine alias wins" "--$nat_engine|acp" "$V" "--$nat_engine" acp
+      done
+      printf '%s' '{"chat.agentEngine":null}' > .kiro/settings/cli.json
+      expect "repo null leaves ACP unchanged" 'acp' "$V" acp
+      printf '%s' '{}' > .kiro/settings/cli.json
+      export KIRO_HOME="$TMPDIR/kiro-alternate"
+      mkdir -p "$KIRO_HOME/settings"
+      printf '%s' '{"chat.agentEngine":"v2"}' > "$KIRO_HOME/settings/cli.json"
+      expect "KIRO_HOME selects global file" 'acp|--agent-engine|v2' "$V" acp
+      unset KIRO_HOME
+      expect "no engine leaves ACP unchanged" 'acp' "$V" acp
 
       # ── the exec line's shape is depended on outside this repo's Nix ─────────
       # Probe scripts recover the real binary by reading it back out of the
