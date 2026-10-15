@@ -69,7 +69,7 @@
       hook = {
         enable = true;
         name = "gitleaks";
-        entry = "${pkgs.gitleaks}/bin/gitleaks protect --staged --verbose --redact";
+        package = pkgs.gitleaks;
         pass_filenames = false;
         stages = ["pre-commit"];
       };
