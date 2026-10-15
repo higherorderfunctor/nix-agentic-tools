@@ -10,14 +10,71 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
 > normalized backend reach and nested delivery diagnostics; native inventory
 > extends flatten boundaries; repo-readable exceptions are declared and ACP
-> reads persisted engine settings. Prompt-file slots preserve null resets across
-> all three configuration methods.
+> reads persisted engine settings. Prompt-file slots preserve null resets and
+> additional workspace roots use additive lists across all three configuration
+> methods. Added roots apply relative permission rules, but their
+> `.kiro/settings/mcp.json` is ignored; evicted workflow owners use fresh cwd
+> authorization for their children and detached run rebuilds.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
 the shipped TUI merge allows 23, including in 2.22.1. The TUI project-local
 guard follows that consumer. Declared repo-readable native keys are explicit
 exceptions, not a union with the broader native settings reads scope.
+
+### Additional workspace roots
+
+`cli.native.settings.chat.additionalDirectories` is a packaged KAS extension.
+For repository/devenv scope:
+
+```nix
+ai.kiro.cli.native.settings.chat.additionalDirectories = ["../worktrees"];
+```
+
+For Home Manager, use an absolute path to avoid resolving beside global
+settings:
+
+```nix
+ai.kiro.cli.native.settings.chat.additionalDirectories = ["/home/alice/projects/worktrees"];
+```
+
+The list contains nonempty strings; Nix path values are refused to avoid copying
+writable directories into the store. Nix null omits the setting; empty lists add
+nothing. Raw JSON null is invalid. KAS combines global and repository lists with
+the protocol roots. Relative global entries resolve beside `settings/cli.json`
+under `KIRO_HOME` (or `~/.kiro`); repository entries resolve from the
+conversation cwd. Existing ancestors are canonicalized for deduplication,
+preserving the first spelling, protocol order and nested roots. Missing
+directories are not created.
+
+New conversations and cold resumes resolve current settings. Resident resumes
+retain their admitted roots. Saved provenance distinguishes protocol roots from
+configured roots, so removing a setting revokes it on a cold resume. Workflow
+children inherit the owner's admitted roots; detached children validate against
+the owner's current roots. If the vendor evicts an owner, its child, and a
+detached run rebuilding its agent registry, resolve current settings and prompt
+files from their own cwd and validate saved roots against that result; revoked
+roots still fail. Older sessions without provenance treat their saved roots as
+protocol roots and cannot reconstruct which were previously configured.
+
+Relative permission rules apply in every admitted root. For built-in modes and
+bundled profiles that includes the vendor default `fs_read ./**` allow; custom
+agents use their own rules. Default writes still prompt; configure permission
+rules to narrow reads or grant writes. Tool policy still checks symlink escapes.
+The server patch ignores added roots' `.kiro/settings/mcp.json`; only global and
+session-cwd `mcp.json` loads, with cwd overriding a same-named global server.
+Custom agent profiles under an added root's `.kiro/agents/` still load and may
+declare their own `mcpServers`. Workflow writes and `fileCheck.path` can use the
+identical absolute `{{worktree_path}}/.agents/...` path inside an admitted root.
+The old `cli.tweaks.relativeFileCheckPaths` option is removed: either boolean
+value produces a migration error. The `workflowFileCheckGuidance` prompt slot
+remains available; this change does not replace the vendor's absolute-path
+guidance.
+
+The setting requires a declarative v3 engine and the managed package. Explicit
+`package = null` produces the existing grouped inert-settings warning. A manual
+JSON setting combined with an explicit runtime V2 flag bypasses the declarative
+guard; that engine does not run this KAS extension.
 
 ### File-backed prompt slots
 

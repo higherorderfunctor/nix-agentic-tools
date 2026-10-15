@@ -35,6 +35,75 @@
     else builtins.readFile entry.content.source;
 in {
   checks = {
+    module-kiro-additional-directories = mkTest "kiro-additional-directories" (
+      lib.all (
+        runner: let
+          evaluate = settings:
+            runner.eval {
+              ai.kiro.cli = {
+                enable = true;
+                native.settings = settings;
+              };
+            };
+          delivered = settings: runner.settings (evaluate settings);
+          succeeds = settings: (builtins.tryEval (builtins.deepSeq (delivered settings) true)).success;
+          roots = ["../sibling" "/tmp/worktrees"];
+          rejected = engine:
+            lib.any (a: !a.assertion)
+            (evaluate {
+              chat.agentEngine = engine;
+              chat.additionalDirectories = roots;
+            }).config.assertions;
+        in
+          (delivered {chat.additionalDirectories = roots;})."chat.additionalDirectories"
+          == roots
+          && (delivered {"chat.additionalDirectories" = roots;})."chat.additionalDirectories" == roots
+          && !(delivered {} ? "chat.additionalDirectories")
+          && (delivered {chat.additionalDirectories = [];})."chat.additionalDirectories" == []
+          && !(delivered {chat.additionalDirectories = null;} ? "chat.additionalDirectories")
+          && !(delivered {"chat.additionalDirectories" = null;} ? "chat.additionalDirectories")
+          && !rejected "v3"
+          && lib.all rejected [null "v1" "v2"]
+          && lib.all (
+            value:
+              !succeeds {chat.additionalDirectories = value;}
+              && !succeeds {"chat.additionalDirectories" = value;}
+          ) ["../sibling" [""] [42]]
+          && lib.all (
+            settings: let
+              result = runner.eval {
+                ai.gitSshConfigWorkaround = false;
+                ai.kiro.cli = {
+                  enable = true;
+                  package = null;
+                  native.settings = settings;
+                };
+              };
+            in
+              lib.all (a: a.assertion) result.config.assertions
+              && lib.any (warning: lib.hasInfix "chat.additionalDirectories" warning) result.config.warnings
+          ) [{chat.additionalDirectories = roots;} {"chat.additionalDirectories" = roots;}]
+          && lib.all (value: let
+            result = runner.eval {
+              ai.kiro.cli = {
+                enable = true;
+                tweaks.relativeFileCheckPaths = value;
+              };
+            };
+          in
+            lib.any (a: !a.assertion && lib.hasInfix "relativeFileCheckPaths has been removed" a.message) result.config.assertions) [true false]
+      ) [
+        {
+          eval = evalHm;
+          settings = hmCliSettings;
+        }
+        {
+          eval = evalDevenv;
+          settings = dvCliSettings;
+        }
+      ]
+    );
+
     module-kiro-prompt-files = mkTest "kiro-prompt-files" (
       lib.all (
         runner: let
@@ -160,7 +229,13 @@ in {
         settings: let
           chat = (settings.type.getSubOptions []).chat.type.getSubOptions [];
         in
-          lib.all chat.agentEngine.type.check [null "v1" "v2" "v3"]
+          chat.additionalDirectories.type.check ["../sibling"]
+          && !chat.additionalDirectories.type.check [./module-eval.nix]
+          && chat.additionalDirectories.type.check []
+          && chat.additionalDirectories.type.check null
+          && !chat.additionalDirectories.type.check [""]
+          && !chat.additionalDirectories.type.check [42]
+          && lib.all chat.agentEngine.type.check [null "v1" "v2" "v3"]
           && !chat.agentEngine.type.check "unknown"
           && lib.all chat.ui.type.check [null "legacy" "tui"]
           && !chat.ui.type.check "unknown"
@@ -667,7 +742,7 @@ in {
       in
         builtins.all (
           eval:
-            builtins.all (warns eval) ["relativeFileCheckPaths" "stripVendorWorktreeSteering"]
+            builtins.all (warns eval) ["stripVendorWorktreeSteering"]
         ) [evalHm evalDevenv]
     );
 
@@ -2204,7 +2279,7 @@ in {
         soleSame a b
     );
 
-    # Both boolean tweaks default off and select package-bound patches on either backend.
+    # Boolean tweaks default off and select package-bound patches on either backend.
     module-kiro-boolean-tweaks-default-off-and-parity = mkTest "kiro-boolean-tweaks-default-off-and-parity" (
       let
         forks = eval: select: name: let
@@ -2225,7 +2300,7 @@ in {
           };
         in
           !a.config.ai.kiro.cli.tweaks.${name} && soleFork (kiroPackageDrvs (select a)) (kiroPackageDrvs (select b));
-        names = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+        names = ["stripVendorWorktreeSteering"];
       in
         builtins.all (forks evalHm (v: v.config.home.packages)) names
         && builtins.all (forks evalDevenv (v: v.config.packages)) names

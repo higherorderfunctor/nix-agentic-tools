@@ -406,47 +406,11 @@
     "module-delegate-routing-${name}-kiro-workflows" = mkTest "delegate-routing-${name}-kiro-workflows" (let
       enabled = change {ai.kiro.cli.workflows.enable = true;};
       enabledSkill = readSkill enabled "kiro";
-      tweaksOn = result:
-        result.config.ai.kiro.cli.tweaks.relativeFileCheckPaths
-        && result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
-      tweaksOff = result:
-        !result.config.ai.kiro.cli.tweaks.relativeFileCheckPaths
-        && !result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
       workflowChange = config: change (lib.recursiveUpdate {ai.kiro.cli.workflows.enable = true;} config);
       hidden = config: !(lib.hasInfix "`run_workflow`" (readSkill (workflowChange config) "kiro"));
       effective = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques;
     in
-      tweaksOff result
-      && tweaksOn enabled
-      && !enabled.config.ai.kiro.cli.tweaks.identity.enable
-      && tweaksOff (workflowChange {ai.programs.delegate-routing.enable = false;})
-      && tweaksOff (workflowChange {ai.kiro.cli.package = null;})
-      && tweaksOff (workflowChange {
-        ai.kiro.cli.enable = lib.mkForce false;
-        ai.claude.enable = lib.mkForce false;
-      })
-      && tweaksOff (workflowChange {
-        ai.programs.delegate-routing.runtimes.kiro.enable = false;
-        ai.programs.delegate-routing.runtimes.claude.manualExternalDelegates = ["kimchi"];
-      })
-      && tweaksOn (workflowChange {ai.programs.delegate-routing.runtimes.kiro.enable = false;})
-      && tweaksOn (evaluate (lib.recursiveUpdate manualScenario {
-        ai.kiro.cli.workflows.enable = true;
-        ai.programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
-      }))
-      && tweaksOn (workflowChange {
-        ai.programs.delegate-routing.runtimes.kiro.enable = false;
-        ai.programs.delegate-routing.runtimes.claude = {
-          extraRuntimes = ["kiro"];
-          manualExternalDelegates = [];
-        };
-      })
-      && tweaksOff (workflowChange {
-        ai.kiro.cli.tweaks = {
-          relativeFileCheckPaths = false;
-          stripVendorWorktreeSteering = false;
-        };
-      })
+      !enabled.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering
       && !(lib.hasInfix "`run_workflow`" kiro)
       && !(lib.hasInfix "`run_workflow`" (readSkill (change {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = true;}) "kiro"))
       && techniqueCells enabledSkill "run_workflow" == ["`run_workflow`" "workflow" "true" "true" "interactive+headless+acp"]

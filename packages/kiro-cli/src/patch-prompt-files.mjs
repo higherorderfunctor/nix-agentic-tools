@@ -204,42 +204,123 @@ method("buildSessionAgentRegistry", (text) =>
   ),
 );
 
+// Resolve once before persistence identity lookup; remote/empty sessions retain
+// their vendor routes and resident joins retain their constructed policy.
+method("newSessionAdmitted", (text) =>
+  replace(
+    text,
+    "let d = o?.overrideSessionId ?? wLt()",
+    "if (!o?.isEmptyWorkspace) { const resident = this.sessionState(o?.overrideSessionId); t = resident ? await nixRoots.residentRequest(t, resident) : r?.serverSession ? await nixRoots.workflowRequest(this, t, r.serverSession.ownerSessionId, Uke(t, false)) : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false)); } let d = o?.overrideSessionId ?? wLt()",
+  ),
+);
+method("loadSessionAdmitted", (text) =>
+  replace(
+    text,
+    "let l = Uke(t, s?.isEmptyWorkspace === !0)",
+    "if (!s?.isEmptyWorkspace) { const resident = this.sessionState(t.sessionId); if (!resident && r?.nixRestoreRoots) t = await nixRoots.restoreRequest(this, t); t = resident ? await nixRoots.residentRequest(t, resident) : nixRoots.requestAuthority(t) ? t : await nixRoots.resolveRequest(this.homeDir, t, Uke(t, false)); } let l = Uke(t, s?.isEmptyWorkspace === !0)",
+  ),
+);
+
+// Spec reuse hydrates directly instead of calling session/load. Keep its
+// resident arm, but feed one resolved request to cold lookup and construction.
+method("getOrCreateSpecSession", (text) => {
+  text = replace(
+    text,
+    "let u = await this.persistence.loadSession(o, r);",
+    "const nixRequest = r.length ? await nixRoots.resolveRequest(this.homeDir, { cwd: r[0] }, r) : undefined; let u = await this.persistence.loadSession(o, nixRequest ? Uke(nixRequest, false) : []);",
+  );
+  return replace(
+    text,
+    "f = { sessionId: o, cwd: l, mcpServers: [], ...d.length > 0 ? { additionalDirectories: d } : {} }",
+    "f = { ...nixRequest, sessionId: o, cwd: l, mcpServers: [] }",
+  );
+});
+
+method("residentSessionState", (text) =>
+  replace(
+    text,
+    "isEmptyWorkspace: n.workspacePaths.length === 0 } } })",
+    "isEmptyWorkspace: n.workspacePaths.length === 0 } } }, { nixRestoreRoots: true })",
+  ),
+);
+method("loadSessionOnDemand", (text) =>
+  replace(
+    text,
+    "isEmptyWorkspace: n } } })",
+    "isEmptyWorkspace: n } } }, { nixRestoreRoots: true })",
+  ),
+);
+fn("A9r", (text) =>
+  replace(
+    text,
+    "e.loadSession($xo(t), {",
+    "e.loadSession($xo(t), { nixRestoreRoots: true,",
+  ),
+);
+
+// MCP configuration belongs to each session's cwd, not its added roots. Limit
+// registration before the manager combines roots across concurrent sessions.
+method("setWorkspacePaths", (text) =>
+  replace(
+    text,
+    "this.items.openSession(r, t, n)",
+    "this.items.openSession(r, t = t.slice(0, 1), n)",
+  ),
+);
+edit(
+  unique(
+    (n) =>
+      ts.isMethodDeclaration(n) &&
+      n.name.getText(file) === "stateWorkspace" &&
+      ts.isVariableDeclaration(n.parent.parent) &&
+      n.parent.parent.name.getText(file) === "S8e",
+    "MCP workspace staging",
+  ),
+  (text) =>
+    replace(
+      text,
+      "this.readWorkspaceFiles(t)",
+      "this.readWorkspaceFiles(t.slice(0, 1))",
+    ),
+);
+
 method("createNewSessionState", (text) => {
   text = replace(
     text,
     "{ let p =",
-    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd); let p =",
+    "{ const nixSnapshot = l ? await nixPrompts.ownerSnapshot(this, l.ownerSessionId, t.cwd) : await nixPrompts.resolveSnapshot(this.homeDir, r?.isEmptyWorkspace ? undefined : t.cwd); let p =",
   );
   text = replace(
     text,
     "{ semanticReviewEnabled: T,",
-    "{ nixPromptSnapshot: nixSnapshot, semanticReviewEnabled: T,",
+    "{ nixWorkspaceRoots: nixRoots.requestAuthority(t) ?? { version: 1, protocol: h }, nixPromptSnapshot: nixSnapshot, semanticReviewEnabled: T,",
   );
   return replace(
     text,
     "S.error(`[KiroAgent] Failed to save session ${i}:`, pe);",
-    "S.error(`[KiroAgent] Failed to save session ${i}:`, pe); if (nixSnapshot !== null) throw pe;",
+    // Creation must be durable before the caller receives a session.
+    "S.error(`[KiroAgent] Failed to save session ${i}:`, pe); throw pe;",
   );
 });
 method("hydrateSessionForLoad", (text) =>
   replace(
     text,
     "lBr(w); let v =",
-    "lBr(w); m.nixPromptSnapshot = n ? nixPrompts.storedSnapshot(n.metadata) : await nixPrompts.resolveSnapshot(this.homeDir, d ? undefined : r.cwd); let v =",
+    "lBr(w); m.nixWorkspaceRoots = nixRoots.requestAuthority(r) ?? { version: 1, protocol: Uke(r, d) }; m.nixPromptSnapshot = n ? nixPrompts.storedSnapshot(n.metadata) : await nixPrompts.resolveSnapshot(this.homeDir, d ? undefined : r.cwd); let v =",
   ),
 );
 method("createSessionState", (text) =>
   replace(
     text,
     "gt = { sessionId: t,",
-    "gt = { nixPromptSnapshot: c.nixPromptSnapshot, sessionId: t,",
+    "gt = { nixWorkspaceRoots: c.nixWorkspaceRoots, nixPromptSnapshot: c.nixPromptSnapshot, sessionId: t,",
   ),
 );
 method("buildInitialSessionMetadata", (text) =>
   replace(
     text,
     "...this.buildInitialSessionMeta(r.requestMeta, r.serverSession)",
-    "...this.buildInitialSessionMeta(r.requestMeta, r.serverSession), _meta: nixPrompts.snapshotMetadata(this.buildInitialSessionMeta(r.requestMeta, r.serverSession)._meta, t.nixPromptSnapshot)",
+    "...this.buildInitialSessionMeta(r.requestMeta, r.serverSession), _meta: nixRoots.authorityMetadata(nixPrompts.snapshotMetadata(this.buildInitialSessionMeta(r.requestMeta, r.serverSession)._meta, t.nixPromptSnapshot), t.nixWorkspaceRoots)",
   ),
 );
 // Forks intentionally copy a selected metadata subset. Carry this durable
@@ -248,12 +329,16 @@ method("forkSession", (text) =>
   replace(
     text,
     "m = { schemaVersion: i.metadata.schemaVersion,",
-    "m = { _meta: nixPrompts.snapshotMetadata(undefined, nixPrompts.storedSnapshot(i.metadata)), schemaVersion: i.metadata.schemaVersion,",
+    "m = { _meta: nixRoots.authorityMetadata(nixPrompts.snapshotMetadata(undefined, nixPrompts.storedSnapshot(i.metadata)), nixRoots.forkAuthority(t, i.metadata)), schemaVersion: i.metadata.schemaVersion,",
   ),
 );
 for (const name of ["stripAgentAuthoredMetaKeys", "stripLiftedMetaKeys"])
   method(name, (text) =>
-    replace(text, "{ let r =", "{ t = nixPrompts.stripSnapshot(t); let r ="),
+    replace(
+      text,
+      "{ let r =",
+      "{ t = nixRoots.stripAuthority(nixPrompts.stripSnapshot(t)); let r =",
+    ),
   );
 
 // Detached workflow rebuilds already know their owner. Forward that one value
@@ -289,7 +374,7 @@ edit(rebuild, (text) => {
   return replace(
     text,
     "let p = new wae,",
-    "let p = Object.assign(new wae, { nixPromptSnapshot: await nixPrompts.ownerSnapshot(this, owner) }),",
+    "await nixRoots.validateWorkflowRoots(this, owner, d); let p = Object.assign(new wae, { nixPromptSnapshot: await nixPrompts.ownerSnapshot(this, owner, d[0]) }),",
   );
 });
 
@@ -303,7 +388,7 @@ for (let index = 0; index < edits.length; index++) {
 const importAt = source.startsWith("#!") ? source.indexOf("\n") + 1 : 0;
 source =
   source.slice(0, importAt) +
-  `import * as nixPrompts from "./prompt-files.mjs";\n` +
+  `import * as nixPrompts from "./prompt-files.mjs";\nimport * as nixRoots from "./additional-roots.mjs";\n` +
   source.slice(importAt);
 const diagnostics = ts.createSourceFile(
   path,
