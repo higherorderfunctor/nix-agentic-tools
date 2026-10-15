@@ -1,6 +1,6 @@
-// Execute the patched registration and both real execution branches offline.
+// Execute the patched registration and the real execution path offline.
 // Only external collaborators are replaced; shell selection is observed where
-// the actual tool hands its local operations to Pi or the process registry.
+// the actual tool hands its local operations to the process registry.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
@@ -20,12 +20,16 @@ let registered;
 let sessionStart;
 const registry = {
   displaySnapshot: () => ({}),
+  getEntry() {},
+  snapshotSince: () => ({}),
+  snapshotTail: () => ({ text: "" }),
   spawn: (operations) => {
-    calls.push(["background", operations.shellPath]);
+    calls.push(operations.shellPath);
     return "handle";
   },
 };
 const dependencies = {
+  "../../cli-args.js": { resolveBashProcessLimitSeconds() {} },
   "../../settings-watcher.js": {
     getSettingsManager: () => ({ getShellPath: () => shellPath }),
   },
@@ -33,25 +37,29 @@ const dependencies = {
   "../work-attribution/commits.js": {
     createWorkCommitTrackingOperations: (_ctx, _id, operations) => operations,
   },
-  "./bash-display.js": { renderBashCall() {}, renderBashResult() {} },
-  "./checkin.js": {
-    awaitCheckin: async () => ({ state: "running", text: "" }),
-  },
+  "./bash-display.js": { createBashRenderers: () => ({}) },
   "./commands-panel.js": { CommandsPanel: class {} },
-  "./process-registry.js": { createProcessRegistry: () => registry },
-  "./session-registry.js": {
-    getSessionRegistry: () => registry,
-    setSessionRegistry() {},
+  "./process-registry.js": {
+    createProcessRegistry: () => registry,
+    DEFAULT_BASH_PROCESS_LIMIT_SECONDS: 3600,
+    elapsedSecondsSince: () => 0,
   },
+  "./review-coordinator.js": {
+    createReviewCoordinator: () => ({
+      awaitInitialHandoff: async () => "running",
+      handleSpawned() {},
+    }),
+  },
+  "./session-registry.js": { getSessionState() {}, setSessionState() {} },
+  "./status-text.js": {
+    handoffGuidanceText: () => "",
+    runningResultText: () => "",
+    terminalResultText: () => "",
+  },
+  "./terminal-delivery.js": { createTerminalDelivery: () => ({}) },
   "./terminal-status.js": { throwIfTerminal() {} },
   "@earendil-works/pi-coding-agent": {
-    createBashToolDefinition: (_cwd, options) => ({
-      description: "bash",
-      execute: async () => {
-        calls.push(["short", options.operations.shellPath]);
-        return { content: [] };
-      },
-    }),
+    createBashToolDefinition: () => ({ description: "bash" }),
     createLocalBashOperations: (options) => options,
   },
   typebox: {
@@ -96,21 +104,19 @@ entry.namespace.bashBackgroundExtension({
 });
 for (const value of ["/configured/shell", undefined]) {
   shellPath = value;
-  sessionStart({}, { cwd: "/project" });
-  for (const timeout of [1, 30]) {
-    await registered.execute(
-      "call",
-      { command: "true", timeout },
-      undefined,
-      undefined,
-      {},
-    );
-  }
-  assert.deepEqual(calls.splice(0), [
-    ["short", value],
-    ["background", value],
-  ]);
+  sessionStart(
+    {},
+    { cwd: "/project", sessionManager: { getSessionId: () => "session" } },
+  );
+  await registered.execute(
+    "call",
+    { command: "true" },
+    undefined,
+    undefined,
+    {},
+  );
+  assert.deepEqual(calls.splice(0), [value]);
 }
 console.log(
-  "PASS: configured and absent shellPath reach short and background operations",
+  "PASS: configured and absent shellPath reach the spawned operations",
 );
