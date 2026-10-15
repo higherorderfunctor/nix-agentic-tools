@@ -13,6 +13,7 @@
     ./runtime.nix
     ./runtime-forward.nix
     ./rw.nix
+    ./shared-agents-md.nix
     ./shared-surfaces.nix
     ./sink-guard.nix
     ./state.nix

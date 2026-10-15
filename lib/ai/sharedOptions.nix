@@ -642,9 +642,9 @@ in {
             lib.optionals (lib.attrByPath ["ai" name "enable"] false config)
             (livePaths runtimeFiles.isLive (lib.attrByPath ["ai" name "files"] {} config)))
           harnessNames
-          ++ livePaths runtimeFiles.isLive (config.ai.internal.files or {})
-          # The layers' plan: enabled runtimes forward their staged entries here.
-          ++ livePaths (entry: entry.enable) (config.ai.files2 or {})
+          # The layers' plan: enabled owners, the shared AGENTS.md composer
+          # among them, forward their staged entries here.
+          ++ livePaths (entry: entry.enable) config.ai.files2
         );
         rules = lib.mkIf (config.ai.rulesDir != null) (
           lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)

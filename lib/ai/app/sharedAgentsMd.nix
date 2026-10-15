@@ -1,18 +1,19 @@
-# One keyed writer for every repository-local AGENTS.md target shared by
+# One keyed composer for every repository-local AGENTS.md target shared by
 # AGENTS.md-standard runtimes. Runtime factories contribute named context/rule
 # units; this module renders each filename once after the module system has
 # deduplicated equal definitions and rejected divergent definitions for a key.
-# Applicable public final-file entries from enabled runtimes
-# arbitrate here too, before the single writer, so replacement and
-# tombstones cannot bypass ownership or their runtime's sole enable gate.
+# Applicable public final-file entries from enabled runtimes still on the old
+# path arbitrate here too, so replacement and tombstones cannot bypass the one
+# owner or their runtime's sole enable gate.
 #
-# The result lands as a read-only COPY, not a store symlink. A repository
-# AGENTS.md is normally committed, and a committed symlink into /nix/store
-# dangles on every other machine and on github.com. It goes through the same
-# router as a runtime's files, as the pseudo-runtime `internal`, with one
-# writer whose directory ledger at the project root claims each key it wrote
-# and nothing else, so it also retracts a key that loses its last
-# contributor. An entry that states its own `method` keeps it.
+# The composer is the layer-1 owner `internal`: the arbitrated file becomes its
+# staged entry (`ai.internal._generatedFiles`), is formatted and byte-checked in
+# its one tree, and reaches `ai.files2` as the single claim on the path. The
+# result is a read-only copy by default, not a store symlink: a committed
+# AGENTS.md that links into /nix/store dangles on every other machine and on
+# github.com. A runtime's own `files2` entry for the path forwards unclaimed
+# and arbitrates by module priority. An entry that states its own `method`
+# keeps it.
 {
   config,
   lib,
@@ -27,14 +28,12 @@
   aiTypes = import ../types.nix {inherit lib;};
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
-  runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # The guards' programs come from this flake's tree, not the raw pkgs.
-  adapters = import ../adapters {
+  generatedFiles = import ./generatedFiles.nix {
     inherit lib;
     pkgs = pkgs // {ai = config.ai.internal.packages;};
   };
-  writer = "materialize-agents-md";
-  ledger = "materialize/agents-md.manifest";
+  runtimeFiles = import ../runtime-files.nix {inherit lib;};
   deduplicatingType = {
     name,
     check,
@@ -142,22 +141,11 @@
   # The aggregate's method, and what a public claim on it resolves to: the
   # read-only copy unless the entry names another.
   aggregateMethod = _: "copy-ro";
-  # Carried by EVERY definition of a shared target, generated or projected
-  # from a runtime's public entry, so whichever one wins still names the
-  # writer, its ledger and the consumer fact that makes it a copy. A sibling
-  # definition cannot add them: the generated body is a whole-entry default
-  # that any ordinary definition discards.
-  ownership = {
-    entry = writer;
-    facts.symlinkReadable = false;
-    inherit ledger;
-  };
   # Only what can differ for a whole shared file crosses: its bytes and how it
   # lands. The runtime entry's other fields (its own writer and facts) name
   # that runtime's delivery, not the aggregate's.
   projectEntry = entry:
-    ownership
-    // lib.optionalAttrs (entry.method != null) {inherit (entry) method;}
+    lib.optionalAttrs (entry.method != null) {inherit (entry) method;}
     // lib.optionalAttrs (entry.mode != null) {inherit (entry) mode;}
     // {
       # `enable` is forwarded only where the runtime entry defines it: a
@@ -221,9 +209,50 @@
         (lib.mapAttrs (_filename: projectEntry) files);
     })
   runtimeNames;
+  # Transitional until the old path is deleted, which leaves the composer
+  # staging its composition directly: the arbitrated file as the composer's
+  # staged entry, the old method names mapped onto the engine's.
+  methods = {
+    copy-ro = "ro";
+    shared = "rw";
+    symlink = "symlink";
+  };
+  stage = entry: {
+    content =
+      lib.optionalAttrs entry.content.enable (aiTypes.textSourceFile entry.content)
+      // lib.optionalAttrs (entry.content.run != null) {inherit (entry.content) run;}
+      // lib.optionalAttrs (entry.content.value != null) {inherit (entry.content) value;};
+    inherit (entry) format mode;
+    method =
+      if entry.method == null
+      then "ro"
+      else methods.${entry.method};
+    surface = entry.content._surface;
+  };
+  staged = config.ai.internal._generatedFiles;
+  tree = generatedFiles.tree {
+    backend = "devenv";
+    checks = lib.genAttrs deliveryOptions.surfaces (surface: config.ai.checks.${surface});
+    inherit config;
+    entries = generatedFiles.treeEntries staged;
+    maxBytes = config.ai.internal._maxBytes;
+    runtime = "internal";
+  };
 in {
+  imports = [
+    (import ../../../packages/ai-module/lib/runtime.nix {
+      enabled = true;
+      name = "internal";
+    })
+  ];
+
   options.ai.internal = {
+    _generatedFiles = generatedFiles.stagedOption;
     _generatedTree = deliveryOptions.generatedTreeOption;
+    _maxBytes = deliveryOptions.maxBytesOption;
+    # The helper declares the composer's layer-1 options; they stay out of the
+    # option reference like the rest of `ai.internal`.
+    activation2 = lib.mkOption {visible = false;};
     agentsMd = lib.mkOption {
       type = lib.types.attrsOf fileType;
       default = {};
@@ -242,15 +271,6 @@ in {
         instead of inferring the key from a runtime option.
       '';
     };
-    _maxBytes = deliveryOptions.maxBytesOption;
-    _ownPlans = deliveryOptions.ownPlansOption;
-    activation = lib.mkOption {
-      type = deliveryOptions.writerMapType;
-      default = {};
-      internal = true;
-      visible = false;
-      description = "The writer that materializes the shared AGENTS.md targets on devenv.";
-    };
     files = lib.mkOption {
       type = deliveryOptions.fileMapType;
       default = {};
@@ -259,6 +279,7 @@ in {
       visible = false;
       description = "Single-owner repository files rendered from cross-runtime compositions.";
     };
+    files2 = lib.mkOption {visible = false;};
   };
 
   config = lib.mkMerge [
@@ -267,7 +288,33 @@ in {
     })
     (lib.optionalAttrs isDevenv (lib.mkMerge (
       [
-        {ai.internal._maxBytes = limits;}
+        {
+          ai.internal = {
+            _generatedFiles = lib.mapAttrs (_filename: stage) (lib.filterAttrs (_filename: runtimeFiles.isLive) config.ai.internal.files);
+            _generatedTree = tree;
+            _maxBytes = limits;
+            files2 = lib.mkMerge [
+              (generatedFiles.layer1 {inherit staged tree;})
+              # Every shared target is the composer's claim, so a runtime's
+              # entry alone still lands as a read-only copy, and only when some
+              # definition supplies content.
+              (lib.mapAttrs (filename: _: {
+                  enable = lib.mkDefault (config.ai.files2.${filename}.content._choice != null);
+                  method = lib.mkIf (!staged ? ${filename}) (lib.mkDefault "ro");
+                })
+                config.ai.internal.agentsMd)
+            ];
+            # The old writer's ledger, declared whether or not any key has
+            # content, so a copy it wrote drains when nothing contributes.
+            legacyLedgers = [
+              {
+                codec = "dir";
+                ledger = "materialize/agents-md.manifest";
+                path = ".";
+              }
+            ];
+          };
+        }
         (lib.mkIf (config.ai.internal.agentsMd != {}) {
           # Do not inspect rendered bytes to discover whether a target exists.
           # The separate boolean inventory lets priority arbitration discard this
@@ -277,41 +324,19 @@ in {
           # store-backed body is read; a sibling-only override is diagnosed as an
           # empty entry and must restate content.
           ai.internal.files = lib.mapAttrs (_filename: text:
-            lib.mkDefault (ownership
-              // {
-                content = {
-                  _generated = true;
-                  _surface =
-                    if config.ai.internal.agentsMd.${_filename}.context != null
-                    then "context"
-                    else "rules";
-                  enable = text != "";
-                  inherit text;
-                };
-                format = "markdown";
-              }))
+            lib.mkDefault {
+              content = {
+                _generated = true;
+                _surface =
+                  if config.ai.internal.agentsMd.${_filename}.context != null
+                  then "context"
+                  else "rules";
+                enable = text != "";
+                inherit text;
+              };
+              format = "markdown";
+            })
           generatedRendered;
-        })
-        # Declared whether or not any key has content, so the writer that
-        # wrote AGENTS.md is still there to retract it when nothing does.
-        {
-          ai.internal.activation.${writer} = {
-            entry = "ai:agents-md:materialize";
-            ledgers.${ledger} = {
-              codec = "dir";
-              path = ".";
-            };
-          };
-        }
-        (adapters.devenv {
-          cfg = {
-            inherit (config.ai.internal) _maxBytes activation files;
-            checks = lib.genAttrs deliveryOptions.surfaces (surface: config.ai.checks.${surface});
-            methodFor = deliveryMethod.byRule;
-          };
-          inherit config options;
-          manageTreefmt = true;
-          runtime = "internal";
         })
       ]
       ++ sharedOverrideDefinitions
