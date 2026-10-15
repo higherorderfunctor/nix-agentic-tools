@@ -8,7 +8,7 @@
     backend = "devenv";
     inherit config;
     root = "$DEVENV_ROOT";
-    state = "$DEVENV_STATE/nix-agentic-tools/files2/ai.json";
+    stateRoot = "$DEVENV_STATE/nix-agentic-tools";
   };
   nativeTargets = builtins.listToAttrs (map (item: {
       name = item.path;

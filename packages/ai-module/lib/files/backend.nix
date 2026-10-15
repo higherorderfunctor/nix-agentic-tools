@@ -7,7 +7,8 @@
   backend,
   config,
   root,
-  state,
+  # Parent of the engine state and of the old `own.py` ledgers it imports.
+  stateRoot,
 }: let
   files2 = import ./default.nix {inherit lib pkgs;};
   python = pkgs.python3.withPackages (ps: [ps.pyyaml ps.tomlkit]);
@@ -44,7 +45,9 @@
     export FILES2_BASH=${pkgs.bash}/bin/bash
     ${python}/bin/python3 -I ${./.}/engine.py \
       --plan ${planFile} --root "${root}" \
-      --state "${state}" \
+      --state "${stateRoot}/files2/ai.json" \
+      --legacy-plan ${lib.escapeShellArg (builtins.toJSON config.ai.legacyLedgers)} \
+      --legacy-state "${stateRoot}" \
       --phase ${name}
   '';
 in {

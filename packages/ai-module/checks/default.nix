@@ -5,6 +5,7 @@
     ./devenv.nix
     ./eval.nix
     ./hm.nix
+    ./legacy.nix
     ./matrix.nix
     ./runtime.nix
     ./runtime-forward.nix

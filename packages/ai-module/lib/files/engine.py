@@ -423,7 +423,90 @@ def reconcile_ro(root, state_path, state, relative, item):
     mutate(root, state_path, state, relative, after, next_entry, payload, observed=current)
 
 
-def reconcile(plan, root, state_path, phase):
+def read_ledger(path, codec):
+    """Units of an old `own.py` ledger, by its reader's rules; None when absent."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError(f"legacy ledger must be a regular file: {path}")
+    try:
+        text = path.read_bytes().decode()
+        if codec == "dir":
+            units = {}
+            for line in text.splitlines():
+                name, _, witness = line.partition("\t")
+                if name and "/" not in name and not name.startswith("."):
+                    units[name] = witness
+            return units
+        ledger = json.loads(text)
+    except ValueError as error:
+        raise ValueError(f"malformed legacy ledger: {path}: {error}") from error
+    addresses = ledger.get("managed_paths") if isinstance(ledger, dict) and ledger.get("version") == 1 else None
+    if (not isinstance(addresses, list)
+            or not all(isinstance(address, list) and address and all(isinstance(part, str) for part in address)
+                       for address in addresses)
+            or len({tuple(address) for address in addresses}) != len(addresses)):
+        raise ValueError(f"malformed legacy ledger: {path}")
+    return [tuple(address) for address in addresses]
+
+
+def legacy_entry(root, ledger, relative, record):
+    """The state entry for one old copy still on disk, or None to skip it.
+
+    `record` is a `dir` unit's witness or a `json` ledger's addresses.
+    """
+    if not valid_path(relative):
+        raise ValueError(f"invalid legacy ledger path: {ledger['ledger']}: {relative}")
+    destination = parent(root, relative)
+    current = image(destination)
+    if current["type"] == "absent":
+        return None
+    if ledger["codec"] == "dir":
+        # An old native link rather than an owned copy.
+        if current["type"] != "file":
+            return None
+        recorded = record if re.fullmatch(r"[0-9a-f]{64}", record) else current["digest"]
+        return {"created": True, "digest": recorded, "format": "raw", "keys": {}, "method": "ro",
+                "mode": current["mode"]}
+    document, _, _, current = read_document(destination, "json", relative)
+    keys = {}
+    for address in sorted(record):
+        found, value = lookup(document, address)
+        if found:
+            keys[pointer(address)] = key_digest(value)
+    return {"created": False, "digest": current["digest"], "format": "json", "keys": keys, "method": "rw",
+            "mode": current["mode"]}
+
+
+def import_legacy(root, state_path, state, legacy, legacy_state):
+    """Adopt each listed old ledger into state once, then delete the ledger."""
+    for ledger in sorted(legacy, key=lambda item: item["ledger"]):
+        if not valid_path(ledger["ledger"]):
+            raise ValueError(f"invalid legacy ledger: {ledger['ledger']}")
+        location = parent(legacy_state, ledger["ledger"])
+        units = read_ledger(location, ledger["codec"])
+        if units is None:
+            continue
+        if ledger["codec"] == "json":
+            targets = [(ledger["path"], units)]
+        else:
+            targets = [(name if ledger["path"] == "." else f"{ledger['path']}/{name}", witness)
+                       for name, witness in sorted(units.items())]
+        files = dict(state["files"])
+        for relative, record in targets:
+            if relative not in files:
+                found = legacy_entry(root, ledger, relative, record)
+                if found is not None:
+                    files[relative] = found
+        validate_state({**state, "files": files}, CURRENT_VERSION)
+        state["files"] = files
+        save(state_path, state)
+        location.unlink()
+
+
+def reconcile(plan, root, state_path, phase, legacy=(), legacy_state=None):
     if not root.is_dir() or root.is_symlink():
         raise ValueError(f"root must be a real directory: {root}")
     seen = set()
@@ -441,6 +524,7 @@ def reconcile(plan, root, state_path, phase):
     with lock.open("a+b") as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
         state = load_state(state_path)
+        import_legacy(root, state_path, state, legacy, legacy_state)
         desired = {item["path"]: item for item in plan}
         if phase == "prune":
             for relative in sorted(list(state["files"])):
@@ -476,8 +560,11 @@ def main():
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument("--phase", choices=("prune", "apply"), required=True)
+    parser.add_argument("--legacy-plan", default="[]")
+    parser.add_argument("--legacy-state", type=Path)
     args = parser.parse_args()
-    reconcile(json.loads(args.plan.read_text()), args.root, args.state, args.phase)
+    reconcile(json.loads(args.plan.read_text()), args.root, args.state, args.phase,
+              json.loads(args.legacy_plan), args.legacy_state)
 
 
 if __name__ == "__main__":

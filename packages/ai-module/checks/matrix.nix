@@ -119,7 +119,7 @@
   };
   backends = import ./backends.nix {inherit harness lib pkgs;};
   evaluate = cell: let
-    config = backends.evaluate cell.backend {${target} = declare cell;};
+    config = backends.evaluate cell.backend {files2.${target} = declare cell;};
   in {
     inherit config;
     sink = backends.sinks.${cell.backend};

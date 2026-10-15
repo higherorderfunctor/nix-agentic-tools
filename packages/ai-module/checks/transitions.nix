@@ -83,7 +83,7 @@
     ];
   generate = backend: declared: let
     sink = backends.sinks.${backend};
-    config = backends.evaluate backend declared.files;
+    config = backends.evaluate backend {files2 = declared.files;};
     phases = sink.phases config;
     links = lib.mapAttrs (_: sink.target) (sink.native config);
     plan = files2.normalize {
