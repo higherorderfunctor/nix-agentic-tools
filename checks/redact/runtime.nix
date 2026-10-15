@@ -24,10 +24,7 @@
     nul = fixture "redact-nul" ''printf '%s\0tail' "$REDACT_SENTINEL"'';
     ok = fixture "redact-ok" ''printf '%s\n\n' "$REDACT_SENTINEL"'';
   };
-  # A store command carries context, which redact refuses. A path with the
-  # context discarded is not a runtime dependency, so the check's runtimeInputs
-  # keep the fixtures alive instead.
-  command = name: redact.command (builtins.unsafeDiscardStringContext (lib.getExe fixtures.${name}));
+  command = name: redact.command (lib.getExe fixtures.${name});
   consumer = name: value: export: body:
     strict {
       inherit name;
@@ -54,7 +51,6 @@
   '';
 in {
   checks.redact-runtime = mkLintedCheck "redact-runtime" {
-    runtimeInputs = builtins.attrValues fixtures;
     text = ''
       REDACT_SENTINEL="redact-$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
       export REDACT_SENTINEL

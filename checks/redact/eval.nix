@@ -36,7 +36,7 @@
     "refuses a relative command" = !succeeds (redact.command "read-token");
     "refuses a Nix path value" = !succeeds (redact.file ./eval.nix);
     "refuses a path with store context" = !succeeds (redact.file "${./eval.nix}");
-    "refuses a command with store context" = !succeeds (redact.command (lib.getExe pkgs.hello));
+    "command takes a store program with context" = succeeds (redact.command (lib.getExe pkgs.hello));
     "refuses a store file without context" = !succeeds (redact.file "${builtins.storeDir}/aaaa-source/secret");
     "refuses a traversal into the store" = !succeeds (redact.file "/run/..${builtins.storeDir}/aaaa-source/secret");
     "refuses an empty segment" = !succeeds (redact.file "/${builtins.storeDir}/aaaa-source/secret");
@@ -103,6 +103,8 @@
     "assign reads a reference" =
       assign "TOKEN" (redact.file "/nonexistent/token") false
       == ''TOKEN="$(${reader} test.token file /nonexistent/token)" || exit 1'';
+    "assign keeps a store command as a dependency" =
+      builtins.hasAttr (builtins.unsafeDiscardStringContext pkgs.hello.drvPath) (builtins.getContext (assign "TOKEN" (redact.command (lib.getExe pkgs.hello)) false));
     "assign joins a concat" =
       assign "TOKEN" (redact.concat ["Bearer " (redact.file "/run/secrets/t") "/" command]) true
       == ''

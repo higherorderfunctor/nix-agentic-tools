@@ -1169,9 +1169,11 @@
 
     `lib.redact` lets an option name a secret instead of holding it. A reference
     says where the value lives. Nothing is read at evaluation: the launcher reads
-    it when it starts. Paths are absolute strings, and `./token` or
-    `"''${./token}"` is refused, because Nix has already copied that file into
-    the world-readable store. A file path under the store is refused too.
+    it when it starts. Paths are absolute strings. A file path such as
+    `./token` or `"''${./token}"` is refused, because Nix has already copied
+    that file into the world-readable store, and a file path under the store is
+    refused too. A command may name a store program, which becomes a dependency
+    of the launcher.
 
     A module declares the options and delivers them with `redact.assign`:
 
@@ -1224,16 +1226,14 @@
       # A command's stdout behind a literal prefix, joined at launch.
       environment.AUTHORIZATION = redact.concat [
         "Bearer "
-        (redact.command "/run/current-system/sw/bin/tool-token")
+        (redact.command "''${pkgs.tool-token}/bin/tool-token")
       ];
     };
     ```
 
     At launch a missing, empty or unreadable file, or a failing command, stops
     the launcher with `<option>: <reason>`. The value is never printed, never on
-    a command line, and never in the store. A path with string context is
-    refused, so a command is named by a profile path rather than
-    `''${pkgs.x}/bin/x`.
+    a command line, and never in the store.
 
     </details>
 

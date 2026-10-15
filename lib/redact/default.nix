@@ -4,25 +4,27 @@
 {lib}: let
   inherit (import ../runtime-values {inherit lib;}) classify;
 
-  # An interpolated Nix path has already copied the file into the store, so a
-  # path string carrying store context names a world-readable copy. A path is
-  # also refused with an empty, `.` or `..` segment, so the store test below
-  # sees the path the reader will open; symlinks are not resolved.
+  # A path is refused with an empty, `.` or `..` segment, so the path tested is
+  # the path the reader opens or runs; symlinks are not resolved.
   isPath = path:
     builtins.isString path
     && lib.hasPrefix "/" path
-    && !builtins.hasContext path
     && !lib.any (lib.flip lib.elem ["" "." ".."]) (lib.tail (lib.splitString "/" path));
-  # A file in the store is world-readable whatever its context. A command skips
-  # this location test, because its program is code and its output is the
-  # value; `isPath` still refuses context for both kinds alike.
-  inStore = path: lib.hasPrefix "${builtins.storeDir}/" path;
+  # A file in the store is world-readable: an interpolated Nix path
+  # (`"${./secret}"`) carries context naming that copy, and a context-free
+  # `toString ./secret` from a flake still points into the store. A command takes neither
+  # test, because its program is code and its output is the value; its
+  # context makes the program a dependency of the launcher that runs it.
+  isSecretFile = path: isPath path && !builtins.hasContext path && !lib.hasPrefix "${builtins.storeDir}/" path;
   isMarker = value: builtins.isAttrs value && builtins.attrNames value == ["_redact"] && builtins.isAttrs value._redact;
   isReference = value:
     isMarker value
     && lib.elem (builtins.attrNames value._redact) [["command"] ["file"]]
-    && isPath (value._redact.command or value._redact.file)
-    && !(value._redact ? file && inStore value._redact.file);
+    && (
+      if value._redact ? file
+      then isSecretFile value._redact.file
+      else isPath value._redact.command
+    );
   isConcat = value:
     isMarker value
     && builtins.attrNames value._redact == ["concat"]
@@ -40,7 +42,7 @@
       throw ''
         ${where}: refused a value that is not a redact reference. It is not printed, since it may be a secret.
         Use redact.file with an absolute path outside the Nix store, redact.command with an absolute program path, or redact.concat with at least one of them.
-        A path has no string context and no empty, `.` or `..` segment.'';
+        A path has no empty, `.` or `..` segment, and a file path has no string context.'';
 
   # `check` accepts everything because the module system prints a definition
   # that fails `check`; `merge` refuses through `sealed` instead.

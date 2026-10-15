@@ -9,9 +9,10 @@ applyTo: "checks/redact/**,lib/redact/**"
 
 > **Last verified:** 2026-10-15 — library only: references, `redacted`,
 > `maybeRedacted`, `concat`, `environment` and `assign`; file paths in the store
-> are refused by location, commands only by context; a null beside a value is a
-> conflict; no consumer uses it yet, and `lib/credentials.nix` and
-> `lib/ai/mcpServer/secretValue.nix` remain until consumers move over.
+> are refused by context and by location, commands may name a store program; a
+> null beside a value is a conflict; no consumer uses it yet, and
+> `lib/credentials.nix` and `lib/ai/mcpServer/secretValue.nix` remain until
+> consumers move over.
 
 `lib/redact` is a pure `{lib}` import, exported as `lib.redact`. A value either
 is cleartext, which is visible and lands in the store, or names where a secret
@@ -27,21 +28,18 @@ header prefix or a token inside a URL. It is the intended replacement for the
 `prefix`/`suffix` fields of `secretValue.nix` once consumers move over. A concat
 needs at least one reference and cannot nest.
 
-A path must be an absolute string without string context and without an empty,
-`.` or `..` segment. `./secret` and `"${./secret}"` have already copied the file
-into the world-readable store, so both are refused. A file path under
-`builtins.storeDir` is refused whatever its context, so a context-free
-`toString ./secret` from a flake is refused too. The test is lexical: a symlink
-that leads into the store is not resolved.
+A path must be an absolute string without an empty, `.` or `..` segment. A file
+path must also have no string context: `./secret` and `"${./secret}"` have
+already copied the file into the world-readable store, so both are refused. A
+file path under `builtins.storeDir` is refused whatever its context, so a
+context-free `toString ./secret` from a flake is refused too. The test is
+lexical: a symlink that leads into the store is not resolved.
 
-A command skips the store-location test, because the program is code and its
-output is the value. Its context is still refused, since one rule covers both
-kinds, so `"${pkgs.x}/bin/x"` is refused and a helper is named by a profile path
-such as `/run/current-system/sw/bin/x`. A store path with its context discarded
-is accepted, but it is no longer a runtime dependency of the launcher: the
-consumer must keep the program alive itself. `checks/redact/runtime.nix` names
-its fixtures that way and keeps them alive through `runtimeInputs`. Nothing
-checks what a program contains, so a script that embeds a secret is not caught.
+A command takes neither test, because the program is code and its output is the
+value. `redact.command "${pkgs.x}/bin/x"` is the normal form: its context
+carries into the launcher `assign` writes, so the program stays a runtime
+dependency of that launcher. Nothing checks what a program contains, so a script
+that embeds a secret is not caught.
 
 The marker shape is the only representation. `isMarker`, `isReference`,
 `isConcat` and `isRedacted` in `default.nix` are the one copy of that logic.
