@@ -3076,6 +3076,11 @@
       "description": "SendKeepAliveBeforeFT controls whether SSE heartbeats are sent before the first token arrives\nwhen KeepAliveSeconds > 0. Default is false.",
       "type": "bool"
     },
+    "requests.tls-handshake-timeout-seconds": {
+      "description": "TLSHandshakeTimeoutSeconds bounds upstream TLS handshakes made by the\nshared uTLS client, in seconds. It applies to both the Claude Code\nAnthropic transport and the Chrome ChatGPT/Codex transport; the\nstandard fallback transport is unaffected. It starts after TCP or\nproxy connection establishment returns and does not bound dialing or\nproxy CONNECT. Those uTLS paths use custom TLS dialing, for which Go\nignores http.Transport.TLSHandshakeTimeout, so a peer that accepts the\nconnection but never answers the ClientHello would otherwise block the\nrequest indefinitely and request-retry could never engage. The bound\napplies only during the TLS handshake and is removed once it succeeds,\nso inference and long-running streams are unaffected. The default 0\ndisables the bound (previous behavior); negative values are treated as\n0, and values beyond the representable duration range saturate.",
+      "template": "Maximum time, in seconds, for upstream TLS handshakes made by the shared built-in\nuTLS client. It applies to both the Claude Code Anthropic transport and the Chrome\nChatGPT/Codex transport; the standard fallback transport is unaffected. The timer\nstarts after TCP or proxy connection establishment returns; it does not bound dialing\nor proxy CONNECT. When the upstream path accepts the connection but never answers the\nTLS ClientHello, the request would otherwise wait indefinitely and request-retry could\nnever engage. The bound applies only during the TLS handshake and is lifted once it\nsucceeds, so inference and long-running streams are never time-limited.\nSet to 0 to disable (default).",
+      "type": "int"
+    },
     "routing": {
       "description": "Routing controls credential selection behavior.",
       "template": "Routing strategy for selecting credentials when multiple match.",

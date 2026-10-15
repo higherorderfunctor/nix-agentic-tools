@@ -7,7 +7,9 @@ applyTo: "packages/cliproxyapi/**"
 
 ## CLIProxyAPI extraction: the typed config and auth-file fields
 
-> **Last verified:** 2026-10-14 — account freeform refusal uses `lib/open-keys`
+> **Last verified:** 2026-10-15 — CPA 8.0.29: 866 config nodes (576 leaves, 556
+> under `api-keys`), 16 auth-file fields; 13 config rows (5 of them patterns)
+> and 10 account rows by hand; account freeform refusal uses `lib/open-keys`
 > with reconciled identity reasons; extracted settings paths and account names
 > feed unknown-key warnings and per-instance suppressions on both backends.
 >
