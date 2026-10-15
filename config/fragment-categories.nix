@@ -147,8 +147,22 @@ _: {
       scopes = [
         "checks/ai-proxy/**"
         "lib/ai/proxy/**"
+        "packages/claude-code/lib/proxy.nix"
       ];
       sources = ["ai-proxy"];
+    };
+    # ai-proxy-runtimes: how Claude renders the resolved endpoint.
+    ai-proxy-runtimes = {
+      scopes = [
+        "packages/claude-code/checks/claude-proxy.nix"
+        "packages/claude-code/lib/proxy.nix"
+      ];
+      sources = [
+        {
+          dir = "ai-proxy";
+          name = "ai-proxy-runtimes";
+        }
+      ];
     };
     # ai-skills: uniform skill layout through the shared `mkSkillFiles` helper.
     # Scoped to the runtime implementations, package factory modules, and skill

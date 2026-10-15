@@ -703,7 +703,7 @@ non-empty list for `fileMatch` content.
 - `ai.proxy` — a client selection (`url` + `key`) pointing harnesses at a local
   CLIProxyAPI. A runtime that declares `proxy` gets `ai.<runtime>.proxy`, which
   replaces the root selection whole when it selects anything, and consumes the
-  resolved `normalized.proxy`; none does yet. See the `ai-proxy` fragment.
+  resolved `normalized.proxy`; only Claude does. See the `ai-proxy` fragment.
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools
