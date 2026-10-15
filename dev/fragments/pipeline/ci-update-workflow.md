@@ -1,7 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-15 — native extracted-facts CI plans from owner
-> declarations and extraction derivations before scheduling Darwin workers.
+> **Last verified:** 2026-10-15 — native extracted-facts CI evaluates one Nix
+> planner for logical owners, Darwin declarations, and extraction derivations.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -251,17 +251,17 @@ publication; every Cachix step holding the token, package matrix and update
 workers alike, carries `pushFilter: kiro-cli`.
 
 Codex and Kiro facts are host-run, so Linux updates can regenerate only their
-Linux raws. The Linux `plan-extracted-facts` job reads the `host-run` rows in
-the same `facts.json` declarations loaded by `mkOwnerCheck`, evaluates each
-candidate's Darwin `passthru.extracted.{system,drvPath}` at HEAD and base, and
-schedules only native owners whose derivation changed. A shared `lib/extracted/`
-change or unavailable comparison schedules every native owner. All package
-extraction derivations currently report Darwin as their system, including static
-ones, so `.system` alone cannot identify host-run owners. `workflow_dispatch`
-runs all native owners. An empty matrix skips the Darwin producer; both required
-build contexts accept that only when planning passed. The producer still
-regenerates and checks each selected owner's facts. The Kiro patch Scope gate
-does not gate it.
+Linux raws. The Linux `plan-extracted-facts` job evaluates
+`checks/extracted/ci-plan.nix` at HEAD and base. It uses the shared logical
+owner map and `lib.extracted.hostRunOn` to select every owner declared host-run
+on Darwin, then returns each owner's Darwin `passthru.extracted.drvPath` from
+`ciPackages`. It does not evaluate Darwin checks on Linux. A shared
+`lib/extracted/` change or unavailable comparison schedules every selected
+owner; if derivation evaluation itself fails, the same Nix planner is retried
+for names only. `workflow_dispatch` runs all selected owners. An empty matrix
+skips the Darwin producer; both required build contexts accept that only when
+planning passed. The producer still regenerates and checks each selected owner's
+facts. The Kiro patch Scope gate does not gate it.
 
 On a same-repository `update/*` branch, changed raws are committed with bot
 author and committer identities and pushed with the App token, preserving

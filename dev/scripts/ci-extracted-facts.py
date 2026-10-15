@@ -1,4 +1,4 @@
-"""Plan native extraction from the declarations consumed by mkOwnerCheck."""
+"""Plan Darwin extraction from the Nix owner map, declarations, and derivations."""
 
 import json
 import os
@@ -8,33 +8,21 @@ import sys
 import tempfile
 
 
-SYSTEM = "aarch64-darwin"
+PLAN = Path(__file__).resolve().parents[2] / "checks/extracted/ci-plan.nix"
 
 
-def owners(root):
-    found = []
-    for path in sorted(Path(root).glob("packages/*/extracted/facts.json")):
-        try:
-            facts = json.loads(path.read_text())
-            needed = any(
-                row["source"] == "host-run" and SYSTEM in row.get("systems", [SYSTEM])
-                for row in facts.values()
-            )
-        except (AttributeError, KeyError, OSError, TypeError, ValueError):
-            needed = True
-        if needed:
-            found.append(path.parent.parent.name)
-    return found
-
-
-def derivations(root, names):
+def derivations(root, include_derivations=True):
     expression = (
-        "packages: builtins.listToAttrs (map (name: { inherit name; "
-        "value = { inherit (packages.${name}.passthru.extracted) drvPath system; }; "
-        "}) (builtins.fromJSON " + json.dumps(json.dumps(names)) + "))"
+        "let root = builtins.toPath "
+        + json.dumps(str(root))
+        + "; flake = builtins.getFlake (toString root); in import (builtins.toPath "
+        + json.dumps(str(PLAN))
+        + ") { inherit flake root; derivations = "
+        + ("true" if include_derivations else "false")
+        + "; }"
     )
     result = subprocess.run(
-        ["timeout", "300", "nix", "eval", "--json", f".#ciPackages.{SYSTEM}", "--apply", expression],
+        ["timeout", "300", "nix", "eval", "--json", "--impure", "--expr", expression],
         cwd=root,
         capture_output=True,
         check=True,
@@ -44,15 +32,22 @@ def derivations(root, names):
     return json.loads(result.stdout)
 
 
+def report_failure(error):
+    print(f"Native extraction comparison unavailable; running every host-run owner: {error}", file=sys.stderr)
+    stderr = getattr(error, "stderr", None)
+    if stderr:
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode(errors="replace")
+        print(stderr, end="" if stderr.endswith("\n") else "\n", file=sys.stderr)
+
+
 def plan(root, event, base):
-    current = owners(root)
+    head = None
     try:
-        head = derivations(root, current)
-        native = [name for name in current if head[name]["system"] == SYSTEM]
-        if event == "workflow_dispatch":
-            return native
-        if not base or set(base) == {"0"}:
-            return native
+        head = derivations(root)
+        current = list(head)
+        if event == "workflow_dispatch" or not base or set(base) == {"0"}:
+            return current
         with tempfile.TemporaryDirectory() as temporary:
             base_root = Path(temporary) / "base"
             subprocess.run(
@@ -63,8 +58,7 @@ def plan(root, event, base):
                 text=True,
             )
             try:
-                previous = owners(base_root)
-                old = derivations(base_root, [name for name in native if name in previous])
+                old = derivations(base_root)
                 wrapper_changed = subprocess.run(
                     ["git", "diff", "--quiet", base, "HEAD", "--", "lib/extracted"],
                     cwd=root,
@@ -78,13 +72,14 @@ def plan(root, event, base):
         if wrapper_changed not in (0, 1):
             raise RuntimeError("cannot compare lib/extracted with base")
         return [
-            name
-            for name in native
-            if wrapper_changed or name not in previous or head[name]["drvPath"] != old[name]["drvPath"]
+            name for name in current if wrapper_changed or name not in old or head[name]["drvPath"] != old[name]["drvPath"]
         ]
     except (OSError, RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as error:
-        print(f"Native extraction comparison unavailable; running every host-run owner: {error}", file=sys.stderr)
-        return current
+        report_failure(error)
+        if head is not None:
+            return list(head)
+        # A derivation evaluation can fail while declarations remain readable.
+        return list(derivations(root, include_derivations=False))
 
 
 if __name__ == "__main__":

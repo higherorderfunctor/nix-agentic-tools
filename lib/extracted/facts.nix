@@ -253,7 +253,7 @@
       };
   in
     entry.value or (throw "extracted fact `${key}` has no combined value (${problem.kind}): ${builtins.toJSON problem.details}. Fix: ${problem.fix}");
-in {
+in rec {
   inherit get merge;
 
   children = aggregate: pattern: let
@@ -274,7 +274,18 @@ in {
         })
         matches);
 
-  # The only reader of an owner's `extracted/` directory: its declarations,
+  declarations = dir: let
+    file = dir + "/facts.json";
+  in
+    if !builtins.pathExists file
+    then throw "lib.extracted.load: ${toString file} is missing; an owner's extracted/ directory declares its keys there"
+    else builtins.fromJSON (builtins.readFile file);
+
+  hostRunOn = system: dir:
+    lib.any (row: row.source == "host-run" && builtins.elem system (row.systems or (import ../../config/systems.nix)))
+    (builtins.attrValues (declarations dir));
+
+  # The aggregate reader of an owner's `extracted/` directory: its declarations,
   # its decisions, and the raw of every configured system it holds. Merged
   # against every configured system, so an absent raw is `missing-system`.
   load = {
@@ -286,17 +297,14 @@ in {
     configured = import ../../config/systems.nix;
     systems = builtins.filter (system: present "${system}.json") configured;
   in
-    if !present "facts.json"
-    then throw "lib.extracted.load: ${toString dir}/facts.json is missing; an owner's extracted/ directory declares its keys there"
-    else
-      merge {
-        inherit secretHints;
-        declarations = read "facts.json";
-        decisions = lib.optionalAttrs (present "decisions.json") (read "decisions.json");
-        raws = lib.genAttrs systems (system: read "${system}.json");
-        systems = configured;
-      }
-      // {inherit systems;};
+    merge {
+      inherit secretHints;
+      declarations = declarations dir;
+      decisions = lib.optionalAttrs (present "decisions.json") (read "decisions.json");
+      raws = lib.genAttrs systems (system: read "${system}.json");
+      systems = configured;
+    }
+    // {inherit systems;};
 
   expect = {
     aggregate,
