@@ -1533,9 +1533,10 @@ The repository no longer injects per-turn workflow reminders or decodes the
 vendor steering. The separate opt-in
 `ai.kiro.cli.tweaks.stripVendorWorktreeSteering` removes the vendor paragraph
 assigning worktree setup and a fast-forward of the checked-out base branch to
-workflows, leaving git workflow to repository instructions. Each selected
-replacement applies independently: exact source drift warns and skips only that
-replacement at launch, and fails CI. The launcher uses stock when none apply.
+workflows, leaving git workflow to repository instructions. Selected
+replacements are applied when the KAS is built: any selected exact source that
+is missing or duplicated fails the build. With every tweak off, the stock bundle
+is used.
 
 ### Small things that save a run
 

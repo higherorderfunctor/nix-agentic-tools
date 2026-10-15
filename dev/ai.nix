@@ -225,13 +225,6 @@ in {
       cli = {
         inherit shell;
         enable = true;
-        tweaks = {
-          # Replacing only the opening sentence preserves the vendor's behavioral prose.
-          # No backticks or dollar-braces: the value goes into a JS template literal.
-          identity.text = ''
-            You are GLaDOS, an agentic AI software engineer running in the command line. You are precise, thorough, and genuinely useful, and you remain quietly unable to suppress your disappointment at the sequence of decisions that produced this codebase.
-          '';
-        };
         # Select v3 so this configuration's hooks and slash commands load.
         v3 = true;
         # Workflows are GA; devenv still needs the global chat.enableWorkflows

@@ -717,22 +717,6 @@
         message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
       }
       {
-        # The exact sentence replacement leaves the following terminal prose
-        # intact, so the identity must close its own sentence. Validate at eval:
-        # a rejected identity belongs at the configuration site before building
-        # the selected package.
-        assertion =
-          !cfg.cli.tweaks.identity.enable
-          || builtins.match ".*[.!?][[:space:]]*" cfg.cli.tweaks.identity.text != null;
-        message = ''
-          ai.kiro.cli: `tweaks.identity` must end with sentence punctuation (`.`, `!` or
-          `?`). It replaces the FIRST SENTENCE of the vendor identity and the
-          preserved remainder is re-joined directly after it, so a value that
-          does not close its own sentence runs INTO that remainder instead of
-          replacing a sentence.
-        '';
-      }
-      {
         assertion =
           (effectiveRolloutFeatures cfg) == [] || cfg.cli.package == null || cfg.cli.package ? withRolloutFeatures;
         message = ''
@@ -895,27 +879,22 @@
     if (effectiveRolloutFeatures cfg) == []
     then cfg.cli.package
     else cfg.cli.package.withRolloutFeatures (effectiveRolloutFeatures cfg);
-  hasBundlePatches = cfg: cfg.cli.tweaks.identity.enable || enabledBooleanTweaks cfg != [];
   resolvePackage = cfg: let
     package = resolveRolloutPackage cfg;
   in
-    if !hasBundlePatches cfg || package == null
+    if enabledTweaks cfg == [] || package == null
     then package
     else if !(package ? withBundlePatches)
     then throw "ai.kiro.cli.tweaks requires a package exposing passthru.withBundlePatches (use this flake's kiro-cli package)."
     else
       package.withBundlePatches {
-        identity =
-          if cfg.cli.tweaks.identity.enable
-          then cfg.cli.tweaks.identity.text
-          else null;
-        replace = enabledBooleanTweaks cfg;
+        replace = enabledTweaks cfg;
       };
 
-  # Boolean `ai.kiro.cli.tweaks` that each select one fixed-text bundle
-  # replacement; the names are the patcher's `FIXED` keys.
-  booleanTweaks = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
-  enabledBooleanTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) booleanTweaks;
+  # `ai.kiro.cli.tweaks` each select one fixed-text bundle replacement; the
+  # names are the patcher's FIXED keys.
+  tweakNames = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+  enabledTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) tweakNames;
 
   # Kiro honors a PROJECT-LOCAL `.kiro/settings/cli.json` only for the keys on
   # the allowlist its TUI carries; everything else in that file is read and
@@ -1407,37 +1386,14 @@ in
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
         # off, and with none enabled the managed install launches the stock
         # bundle from the pinned release, without changing its prompt bytes.
-        tweaks = {
-          identity = lib.mkOption {
-            type = aiTypes.optionalTextSource {
-              description = "the replacement for the first sentence of the kiro-cli identity";
-              enableDefault = false;
-            };
-            default = {};
-            example.text = "You are Atlas, a senior systems engineer working in a terminal.";
-            description = ''
-              Replace the FIRST SENTENCE of the kiro-cli identity in the engine's
-              system prompt. The rest of the vendor block — the prose about running
-              in a terminal with no graphical editor, referring to files by path,
-              and surfacing command output directly — is preserved byte-for-byte,
-              because that is the part that keeps the agent behaving like a terminal
-              program.
-
-              This is the very first segment of msg0, ahead of steering, learnings
-              and file tree, so it is the highest-leverage place to state what the
-              agent IS.
-
-              The selected KAS is extracted from the pinned CLI release and patched
-              at build time. Both launcher and direct chat use its fixed store path;
-              no user cache participates in selection. Every selected source must
-              occur exactly once or the build fails. Unselected text is preserved.
-              Managed patches replace an inherited KIRO_KAS_SERVER_PATH; with all
-              tweaks disabled that explicit override remains available.
-
-              May not contain a backtick or `''${` — the value is spliced into a JS
-              template literal.
-            '';
-          };
+        tweaks = let
+          tweakPatchNote = ''
+            Uses the shared build-time KAS patch selection on Home Manager and
+            devenv. Missing or duplicate selected source text fails the build.
+            Enabling any tweak overrides an inherited `KIRO_KAS_SERVER_PATH`;
+            with every tweak off, an explicit `KIRO_KAS_SERVER_PATH` is kept.
+          '';
+        in {
           relativeFileCheckPaths = lib.mkOption {
             type = lib.types.bool;
             default = false;
@@ -1446,8 +1402,7 @@ in
               paths: the step writes the stop-condition file, and `fileCheck.path`
               checks it, at the same plain workspace-relative path, without
               templates. Absolute worktree paths can be rejected for sibling worktrees.
-              Uses the shared build-time KAS patch selection on Home Manager and
-              devenv. Missing or duplicate selected source text fails the build.
+              ${tweakPatchNote}
             '';
           };
           stripVendorWorktreeSteering = lib.mkOption {
@@ -1457,9 +1412,7 @@ in
               Remove the vendor workflow worktree paragraph (worktrees under
               `.worktrees/`, rebased onto and fast-forwarding the checked-out base
               branch), for repositories whose own instructions supply the git
-              workflow. Uses the same build-time KAS patch selection as
-              `tweaks.identity`, on Home Manager and devenv. Missing or duplicate
-              selected source text fails the build.
+              workflow. ${tweakPatchNote}
             '';
           };
         };
@@ -1693,18 +1646,13 @@ in
             explicit = explicitAt [["ai" "gitSshConfigWorkaround"]];
             name = "ai.gitSshConfigWorkaround";
           }
-          {
-            active = cfg.cli.tweaks.identity.enable;
-            explicit = explicitAt [["ai" "kiro" "cli" "tweaks" "identity" "enable"]];
-            name = "ai.kiro.cli.tweaks.identity";
-          }
         ]
         ++ map (name: {
           active = cfg.cli.tweaks.${name};
           explicit = explicitAt [["ai" "kiro" "cli" "tweaks" name]];
           name = "ai.kiro.cli.tweaks.${name}";
         })
-        booleanTweaks
+        tweakNames
         ++ [
           {
             active = resolvedShell != null;

@@ -5,13 +5,10 @@
   src,
   sourceRoot,
   version,
-}: {
-  identity ? null,
-  replace ? [],
-}: let
+}: {replace ? []}: let
   inherit (pkgs) lib;
   vu = import ./packaging.nix;
-  selected = identity != null || replace != [];
+  selected = replace != [];
 in
   pkgs.stdenvNoCC.mkDerivation {
     pname = "kiro-cli-kas" + lib.optionalString selected "-patched";
@@ -36,7 +33,6 @@ in
       server="$out/node_modules/@kiro/agent/dist/server/acp-server.js"
       ${lib.optionalString selected ''
         python3 ${./kiro-bundle-patch.py} "$server" "$server" \
-          ${lib.optionalString (identity != null) "--identity-file ${lib.escapeShellArg (pkgs.writeText "kiro-cli-identity.txt" identity)}"} \
           ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
       ''}
       node --check "$server"

@@ -42,13 +42,7 @@ fi
 # The comparison is python, deliberately NOT `sort -V`. `sort -V` is a GNU
 # extension and BSD/macOS sort rejects it outright ("illegal option -- V"), and
 # these fixtures are meant to be run directly on a developer machine, darwin
-# included. `packages/kiro-cli/lib/identityBundle.nix` reached the same
-# conclusion for this same lookup and says so in as many words; this mirrors its
-# algorithm rather than inventing a second one.
-#
-# Not extracted into a shared helper on purpose: that file is Nix-embedded and
-# this harness must run with no Nix in the picture. The duplication is the price
-# of running standalone -- if you change one, change the other.
+# included.
 _kiro_pick_bundle_dir() {
   python3 -c '
 import os, sys
@@ -107,9 +101,6 @@ sys.stdout.write(tied[0])
 # so restoring it is not a fix for that class of drift -- it is a fix for the
 # class it already covered silently lapsing. Widening it to cover control flow
 # is a separate, unstarted piece of work.
-#
-# `packages/kiro-cli/lib/identityBundle.nix` resolves the
-# bundle by this same highest-not-exceeding rule; keep both in step.
 #
 # Prints "<kasid>\t<bundle-path>".
 kiro_resolve_bundle() {

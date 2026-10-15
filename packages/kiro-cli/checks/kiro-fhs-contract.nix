@@ -13,7 +13,6 @@
         inherit pkgs;
       }).wrapPackage;
     selectedKiroPackage = (kiroPackage.withBundlePatches {
-      identity = "Custom identity. Another sentence!";
       replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
     }).withRolloutFeatures ["background_execution"];
     trustedKiroPackage = wrapKiroPackage {
