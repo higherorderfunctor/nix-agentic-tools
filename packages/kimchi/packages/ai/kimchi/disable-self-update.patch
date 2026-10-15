@@ -5,11 +5,11 @@ stops listing the now-inert `KIMCHI_NO_UPDATE_CHECK`. The `opts.signal!`
 assertion keeps TypeScript's narrowing in the now-unreachable launch path.
 
 diff --git i/src/commands/help.ts w/src/commands/help.ts
-index 9070622..29c0675 100644
+index 2ba41e7..5875aba 100644
 --- i/src/commands/help.ts
 +++ w/src/commands/help.ts
-@@ -39,7 +39,6 @@ const KIMCHI_ENV: FlagDoc[] = [
- 		description: "Override telemetry (1/true to enable, 0/false to disable). On by default.",
+@@ -40,7 +40,6 @@ const KIMCHI_ENV: FlagDoc[] = [
+ 			"Override telemetry (1/true to enable, 0/false to disable). On by default; an organization policy can enforce the effective state.",
  	},
  	{ name: "KIMCHI_TAGS", description: "Comma-separated `key:value` tags applied to every LLM request" },
 -	{ name: "KIMCHI_NO_UPDATE_CHECK", description: "Disable the background self-update probe" },
