@@ -1,5 +1,6 @@
-# Drift check — the committed packages/kiro-cli/extracted/<host>.json must
-# match what the packaged kiro binary contains, the facts must merge across systems, and the facts the
+# Drift check — every platform's side of the committed
+# packages/kiro-cli/extracted/extracted.json must match what that platform's
+# release contains, the facts must merge across systems, and the facts the
 # Kiro modules were written against must still hold. Blocking (a typed trigger
 # vanishing is a correctness signal the typed surface must react to). The build
 # of passthru.extracted also enforces the shape assertions baked into
@@ -12,7 +13,6 @@
 }: {
   checks = let
     inherit (import ../lib/friendly-features.nix) featureSettingImplications friendlyRolloutFeatures;
-    inherit (pkgs.stdenv.hostPlatform) system;
     inherit (extractedLib {inherit pkgs;}) mkOwnerCheck;
   in
     {
@@ -88,6 +88,8 @@
           contains = "chat.${setting}";
           key = "settingKeys";
         }) (builtins.attrValues featureSettingImplications);
-      package = self.ciPackages.${system}.kiro-cli;
+      # Static reads of every release, run on Linux; on Darwin the check
+      # compares nothing and validates the committed facts only.
+      inherit (self.ciPackages.x86_64-linux.kiro-cli.passthru) extracted;
     };
 }

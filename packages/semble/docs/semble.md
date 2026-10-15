@@ -1,7 +1,8 @@
 # Semble integrations
 
-> **Last verified:** 2026-10-11 — Semble uses measured-once extracted facts;
-> grouped dependency updates respect the pinned release requirements.
+> **Last verified:** 2026-10-15 — Semble uses measured-once extracted facts, one
+> unforked `extracted.json`; grouped dependency updates respect the pinned
+> release requirements.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -453,10 +454,11 @@ on x86_64-linux only. On 0.1.2 the linux-x86_64 and macos-arm64 manifests both
 list the same 77 grammars as that bundled manifest.
 
 The single `semble-extracted` drift check uses the shared `mkOwnerCheck`
-builder. A mismatch prints a sorted JSON diff naming the committed raw and the
-command `nix run .#checks.<host>.semble-extracted.passthru.regenerate` to
-restore and format it. Darwin compares its fresh extraction against the same
-Linux raw. The check validates the facts reader while leaving
+builder. A mismatch prints a sorted JSON diff naming the host's side of the
+committed file and the command
+`nix run .#checks.<host>.semble-extracted.passthru.regenerate` to restore and
+format it. Darwin compares its fresh extraction against its projection of the
+same unforked file. The check validates the facts reader while leaving
 `passthru.extracted` buildable for regeneration. Template coverage remains a
 separate review gate reading the combined facts.
 
@@ -466,8 +468,8 @@ vendored dependency selects the newest stable PyPI release satisfying its
 non-extra requirement in the pinned Semble release's PyPI `requires_dist`. The
 dependency rows read the Semble version from `sources.json` when they run, so
 the CLI runs first to apply a new release's bounds in the same sweep. The
-grouped script then uses `regenCommand { name = "semble"; }` to regenerate the
-merged raw from the package's single `passthru.extracted` derivation.
+grouped script then uses `regenCommand { name = "semble"; }` to carry the
+package's single `passthru.extracted` derivation into the committed file.
 Human-reviewed template hashes remain a separate approval gate.
 
 ## Direct configuration

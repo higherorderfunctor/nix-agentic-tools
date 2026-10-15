@@ -10,6 +10,7 @@
 }: let
   inherit (import ../../lib/extracted/facts.nix {inherit lib;}) children expect get load merge;
   inherit (import ../../lib/extracted {inherit pkgs;}) index;
+  platforms = import ../../lib/extracted/platforms.nix;
   systems = import ../../config/systems.nix;
   run = input: merge (input // {inherit systems;});
   kinds = result: map (failure: failure.kind) result.failures;
@@ -261,28 +262,70 @@
       } ["apiToken"] ["undeclared-secret"];
     };
 
-    # `load`. ./load/all-present holds both configured raws, a raw for a
-    # system config/systems.nix does not list (never read) and a decision
-    # the differing raws need. ./load/absent-system lacks the Darwin raw and
-    # keeps a `prefer:aarch64-darwin` decision.
+    # `load`. ./load/all-present forks a key across both configured systems
+    # and one config/systems.nix does not list (never read), with the
+    # decision the differing values need. In ./load/absent-system Darwin's
+    # side lacks every key, and a `prefer:aarch64-darwin` decision stays
+    # valid. ./load/carried is a committed file with a fork, carried forward
+    # by a fresh Linux raw that adds a feature (the update that once left
+    # Kiro's aggregate failing evaluation, PR #2559).
     load = let
       all = load {dir = ./load/all-present;};
       absent = load {dir = ./load/absent-system;};
       once = load {dir = ./load/measured-once;};
+      carriedDir = ./load/carried;
+      read = file: builtins.fromJSON (builtins.readFile (carriedDir + "/${file}"));
+      carried = platforms.carry {
+        fresh.x86_64-linux = {
+          features = ["new" "old"];
+          patchability = {
+            new = {
+              patchable = true;
+              unmatchedSites = 0;
+            };
+            old = {
+              patchable = false;
+              unmatchedSites = 1;
+            };
+          };
+        };
+        merged = read "extracted.json";
+        inherit systems;
+      };
+      carriedLoad = merge {
+        declarations = read "facts.json";
+        decisions = read "decisions.json";
+        raws = lib.genAttrs systems (platforms.project carried);
+        inherit systems;
+      };
+      darwin = platforms.project carried "aarch64-darwin";
+      # Replacing only Linux's side, as the per-system files did.
+      replaced = merge {
+        declarations = read "facts.json";
+        decisions = read "decisions.json";
+        raws = {
+          aarch64-darwin = platforms.project (read "extracted.json") "aarch64-darwin";
+          x86_64-linux = platforms.project carried "x86_64-linux";
+        };
+        inherit systems;
+      };
     in {
       absent-system-fails =
-        absent.systems
-        == ["x86_64-linux"]
-        && absent.failures
+        absent.failures
         == map (key: {
           inherit key;
           details = ["aarch64-darwin"];
           fix = "extract `${key}` on aarch64-darwin, or narrow its declared `systems`";
           kind = "missing-system";
         }) ["limit" "mode"];
-      all-present = all.systems == systems && all.failures == [] && all.aggregate.limit.combine == "per-platform";
-      measured-once = once.systems == ["x86_64-linux"] && once.failures == [] && get once.aggregate "limit" == 5;
+      all-present = all.failures == [] && all.aggregate.limit.combine == "per-platform" && all.aggregate.limit.bySystem == split 3 5;
+      carried-committed-loads = (load {dir = carriedDir;}).failures == [];
+      carried-darwin-follows = darwin.features == ["new" "old"] && darwin.patchability.new.unmatchedSites == 0 && darwin.patchability.old.unmatchedSites == 2;
+      carried-loads = carriedLoad.failures == [] && get carriedLoad.aggregate "features" == ["new" "old"];
+      replaced-diverges = lib.elem "divergent" (kinds replaced);
+      measured-once = once.failures == [] && get once.aggregate "limit" == 5;
       missing-facts-throws = !(builtins.tryEval (load {dir = ./.;})).success;
+      unmeasured-throws = !(builtins.tryEval (load {dir = ./load/unmeasured;})).success;
     };
 
     # `get` refuses a `per-platform` key, which has no combined value; `get`
@@ -395,7 +438,7 @@
   # facts.nix and what it imports, for the evaluator in divergent-fix.
   source = lib.fileset.toSource {
     root = ../..;
-    fileset = lib.fileset.unions [../../lib/extracted/facts.nix ../../lib/open-keys ../../lib/runtime-values];
+    fileset = lib.fileset.unions [../../lib/extracted/facts.nix ../../lib/extracted/platforms.nix ../../lib/open-keys ../../lib/runtime-values];
   };
   vocabulary = ["and" "equal" "ignore" "intersection" "max" "min" "or" "per-platform" "union"] ++ map (system: "prefer:${system}") systems;
 in {

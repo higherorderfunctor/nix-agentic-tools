@@ -3,6 +3,7 @@
 # option module can call them before `pkgs` exists; index takes `pkgs` itself.
 {lib}: let
   inherit (import ../runtime-values {inherit lib;}) classify;
+  platforms = import ./platforms.nix;
   nonBlank = value: builtins.isString value && builtins.match "[[:space:]]*" value == null;
   # Well-formed only: `decided` is provenance, nothing reads it as a date.
   # The pasted placeholder `YYYY-MM-DD` has no digits, so it is refused too.
@@ -285,9 +286,9 @@ in rec {
     lib.any (row: row.source == "host-run" && builtins.elem system (row.systems or (import ../../config/systems.nix)))
     (builtins.attrValues (declarations dir));
 
-  # The aggregate reader of an owner's `extracted/` directory: its declarations,
-  # its decisions, and the raw of every configured system it holds. Merged
-  # against every configured system, so an absent raw is `missing-system`.
+  # The aggregate reader of an owner's `extracted/` directory: its
+  # declarations, its decisions, and every configured system's projection of
+  # its committed `extracted.json`.
   load = {
     dir,
     secretHints ? {},
@@ -296,18 +297,20 @@ in rec {
     present = file: builtins.pathExists (dir + "/${file}");
     configured = import ../../config/systems.nix;
     declared = declarations dir;
-    systems = builtins.filter (system: present "${system}.json") configured;
+    merged =
+      if present "extracted.json"
+      then read "extracted.json"
+      else throw "lib.extracted.load: ${toString dir}/extracted.json is missing; an owner's extracted/ directory commits its measurements there";
   in
-    builtins.seq declared (
+    builtins.seq declared (builtins.seq merged (
       merge {
         inherit secretHints;
         declarations = declared;
         decisions = lib.optionalAttrs (present "decisions.json") (read "decisions.json");
-        raws = lib.genAttrs systems (system: read "${system}.json");
+        raws = lib.genAttrs configured (platforms.project merged);
         systems = configured;
       }
-      // {inherit systems;}
-    );
+    ));
 
   expect = {
     aggregate,

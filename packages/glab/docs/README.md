@@ -115,19 +115,20 @@ store path, even though upstream does not class it as a credential.
 
 ## Settings
 
-> **Last verified:** 2026-10-11 — glab reads measured-once config-key facts
-> through the shared extracted aggregate and owner drift check.
+> **Last verified:** 2026-10-15 — glab reads measured-once config-key facts, one
+> unforked `extracted.json`, through the shared extracted aggregate and owner
+> drift check.
 
 `glab.settings.*` is **generated** from the `packages/glab/extracted/` facts.
 The Go dump reads glab's vendored `internal/config.KeySchema` without running
-the CLI. One static declaration, `keys.<name>`, covers every key record; only
-`x86_64-linux.json` is committed because the artifact gives the same answer on
-every host. `lib/schema.nix` reads the combined records through `load` and
-`children`, without building during module evaluation. Option names and
+the CLI. One static declaration, `keys.<name>`, covers every key record; the
+committed `extracted.json` has no forks because the artifact gives the same
+answer on every host. `lib/schema.nix` reads the combined records through `load`
+and `children`, without building during module evaluation. Option names and
 descriptions remain upstream's own.
 
-`checks.glab-extracted` compares fresh measurements to the committed raw on each
-host. Its regenerator rewrites that same raw:
+`checks.glab-extracted` compares fresh measurements to each host's projection of
+the committed file. Its regenerator carries them into it:
 `nix run .#checks.x86_64-linux.glab-extracted.passthru.regenerate`. The update
 script runs the owner regenerator after source, Go-floor and vendor-hash repair.
 The extractor's scope, required-key and environment-variable guards still reject

@@ -1,8 +1,9 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-15 — owner checks use `mkOwnerCheck`; the pure
-> `ciExtractedFacts` output reads the same declarations through `hostRunOn` and
-> shares the logical owner map with `checks.extracted-index`.
+> **Last verified:** 2026-10-15 — each owner commits one `extracted.json` with
+> `__platforms` forks; `load` projects it per system; `regenerate` carries a
+> host's fresh raws into it, and only a Linux carry makes other systems follow;
+> owner checks use `mkOwnerCheck`.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -13,16 +14,59 @@ contains merge, combine or platform logic. A check enforces that.
 
 ## Files per owner
 
-| File                                        | Written by                                   | Holds                                                           |
-| ------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------- |
-| `packages/<owner>/extracted/<system>.json`  | CI on that system, or Linux for static facts | the raw measured value tree; an owner measured once commits one |
-| `packages/<owner>/extracted/facts.json`     | the extractor's author                       | declarations: one row per key, type and source                  |
-| `packages/<owner>/extracted/decisions.json` | a human, dated                               | exceptions: how a key combines when systems differ              |
+| File                                        | Written by                               | Holds                                                                    |
+| ------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------ |
+| `packages/<owner>/extracted/extracted.json` | `regenerate`, on each host that extracts | every system's raw measured value tree, forked only where systems differ |
+| `packages/<owner>/extracted/facts.json`     | the extractor's author                   | declarations: one row per key, type and source                           |
+| `packages/<owner>/extracted/decisions.json` | a human, dated                           | exceptions: how a key combines when systems differ                       |
 
 The aggregate is never committed per owner. `lib.extracted.index` writes it from
 the inputs above; absent decisions default to `{}`.
 
 `<system>` is one of `config/systems.nix`.
+
+## The committed file (`extracted.json`)
+
+One tree for every system in `config/systems.nix`. Where the systems agree a
+value appears once. Where they differ, the smallest differing node is replaced
+by a fork, `{"__platforms": {"<system>": value, ...}}`; a system absent under
+`__platforms` lacks that key. Attribute sets are compared per key; any other
+value, arrays included, forks whole. An owner measured on one host commits its
+raw unforked, and every system's projection is that raw.
+
+```json
+{
+  "rolloutFeatures": ["standalone_toolbox", "v3_prompt"],
+  "rolloutPatchability": {
+    "v3_prompt": {
+      "patchable": false,
+      "unmatchedSites": {
+        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
+      }
+    }
+  }
+}
+```
+
+`lib/extracted/platforms.nix` (builtins only) owns the shape:
+
+- `merge { "<system>" = raw; }` → the committed tree. Measured data holding the
+  key `__platforms` anywhere, inside lists included, throws naming the path.
+- `project merged system` → that system's raw. A fork mixing `__platforms` with
+  other keys, a fork value holding `__platforms`, or a tree with no side for the
+  system throws.
+- `carry { merged; fresh = { "<system>" = raw; }; systems; }` → the committed
+  tree with `fresh`'s sides replaced. When the base system `x86_64-linux` is
+  fresh, every other system keeps its own fork values and follows the fresh raw
+  at every unforked node, new and removed keys included, so a base bump
+  introduces no divergence; a forked parent the fresh raw removes or retypes
+  keeps the follower's whole committed value. When another system is fresh,
+  every other system keeps its exact projection, so a new difference becomes a
+  fork. When the base is fresh and some system is not, the base is the only
+  fresh system; otherwise `carry` throws.
+
+Nothing outside `lib/extracted/` and `checks/extracted/` reads the file or its
+forks.
 
 ## Keys
 
@@ -120,18 +164,17 @@ load {
   dir;                       # path: the owner's extracted/ directory
   secretHints ? {};
 }
-→ merge result // { systems = [ "<system>" ]; }
+→ merge result
 ```
 
-The only way to read raws. Reads `facts.json` (required: its absence throws when
-`load` is forced to weak head normal form, naming the path), `decisions.json`
-(optional, `{}` when absent) and `<system>.json` for every system in
-`config/systems.nix` present under `dir`, then calls `merge` against every
-system in `config/systems.nix`. A configured system without a raw therefore
-fails as `missing-system` for every key its declaration requires; a
-declaration's own `systems` still narrows that. A file for a system outside
-`config/systems.nix` is never read. `systems` lists the raws found, for
-information.
+The only way to read raws. Reads `facts.json` and `extracted.json` (both
+required: the absence of either throws when `load` is forced to weak head normal
+form, naming the path) and `decisions.json` (optional, `{}` when absent), then
+calls `merge` with every configured system's projection against every system in
+`config/systems.nix`. A key a system's side lacks therefore fails as
+`missing-system` for that system when its declaration requires it; a
+declaration's own `systems` still narrows that. A fork's side for a system
+outside `config/systems.nix` is never read.
 
 ### `merge`
 
@@ -243,39 +286,34 @@ External readers build that attribute and read its files.
 
 ## Drift
 
-`mkOwnerCheck { dir; name; package; needs ? []; results ? {}; }` in
-`lib/extracted/default.nix` loads an owner's facts, checks its optional consumer
-needs and supplied annotation `results`, and compares the host's
-`package.passthru.extracted`. `results.facts` and `results.consumers` are the
-builder's own surfaces; a `results` that names either is refused, so a supplied
-`facts.failures = []` can never silence a merge failure. `dir` names the
-committed facts directory; `name` identifies the check and its
-`packages/<name>/extracted` regeneration paths, independently of that
-directory's physical location.
+`mkOwnerCheck { dir; name; package ? null; extracted ? { <host> = package.passthru.extracted; }; needs ? []; results ? {}; }`
+in `lib/extracted/default.nix` loads an owner's facts, checks its optional
+consumer needs and supplied annotation `results`, and compares each extraction.
+`results.facts` and `results.consumers` are the builder's own surfaces; a
+`results` that names either is refused, so a supplied `facts.failures = []` can
+never silence a merge failure. `dir` names the committed facts directory; `name`
+identifies the check and its `packages/<name>/extracted/extracted.json`
+regeneration path, independently of that directory's physical location. An owner
+whose extractions run on another host passes `extracted` itself: Kiro reads both
+releases statically on Linux.
 
-`mkOwnerCheck` delegates drift comparison to `mkDriftCheck` with per-system
-inputs. Owners never name a per-system raw file: `committed` is the owner's
-`extracted/` directory as a path, `sidecar` is that directory's repository path
-as a string, and the lib derives `<system>.json` under each for every system in
-`config/systems.nix` that has an extraction. `extracted` is
-`{ "<system>" = derivation; }`. On host `S` the check diffs every system whose
-extraction derivation can build on `S`; a static extractor supplies several, a
-host-run one supplies only `S`. Every drifted system is reported, each by its
-committed file path, and the check fails once at the end.
-
-An owner measured once declares `systems = ["x86_64-linux"]` on every key and
-commits only that raw. When a host's own raw is absent, the drift check compares
-its fresh extraction against the single committed raw named by
-`config/systems.nix`, and `regenerate` rewrites that same raw. Darwin still
-validates the measured-once answer. If the host's raw is absent and zero or
-several configured raws are present, evaluation throws naming the directory and
-the expected host raw or single configured raw. A directory with the host's own
-raw keeps per-system behavior.
+`mkDriftCheck { committed; extracted; name; results ? {}; sidecar; }` takes the
+committed `extracted.json` as a path, its repository path as a string, and
+`extracted = { "<system>" = derivation; }`. A derivation's `system` is the host
+its extraction runs on. On host `S` the check compares every system whose
+extraction runs on `S` with that system's projection of the committed file; a
+static extractor may supply several systems, a host-run one only `S`, and a host
+that runs none compares nothing. Every drifted system is reported, each naming
+its side of the committed file, and the check fails once at the end.
 
 Owner checks expose `passthru.regenerate`: run
 `nix run .#checks.<host>.<name>-extracted.passthru.regenerate` from the
-repository root to rewrite and format exactly the sidecars the check compares,
-set their mode to 0644 and report each written path.
+repository root to `carry` every extraction this host runs into the committed
+file, format it, set its mode to 0644 and report the written path. A host that
+runs every system's extraction rewrites the file from fresh raws alone. Linux
+carries the other systems forward at every unforked node, and their own host's
+check then validates their projection; any other host rewrites only its own
+side, forming a fork wherever it now differs.
 
 Owner update scripts use `regenCommand { name; }` to build and run that
 regenerator on the current host.
@@ -283,8 +321,9 @@ regenerator on the current host.
 ## The guard
 
 `checks.extracted-contract-guard` fails when any tracked file outside
-`lib/extracted/` and `checks/extracted/` reads a per-system raw path, reaches
-into `bySystem`, or defines a combine. Owners supply data and extractors only.
+`lib/extracted/` and `checks/extracted/` names `extracted/extracted.json` or
+`__platforms`, reaches into `bySystem`, or defines a combine. Owners supply data
+and extractors only.
 
 ## Fixtures (`checks/extracted/facts.nix`)
 
@@ -313,15 +352,28 @@ its refused input or its visible result, plus one derivation that asserts the
     divergent key throws and the entry carries merge's failure, and
     `extracted-facts-divergent-fix` evaluates that `get` in a dummy-store
     `nix-instantiate` to assert its message names the key and the row.
-15. `load` (fixture directories under `checks/extracted/load/`): both configured
-    raws present, plus one for a system outside `config/systems.nix` that is
-    never read, merge clean with their decision applied; with Darwin's raw
-    absent, every declared key fails `missing-system` naming it, and a
+15. `load` (fixture directories under `checks/extracted/load/`): a key forked
+    across both configured systems and one outside `config/systems.nix` (never
+    read) merges clean with its decision applied; with Darwin's side lacking
+    every key, each declared key fails `missing-system` naming it, and a
     `prefer:aarch64-darwin` decision is not a `bad-decision`. `load` on a
-    directory without `facts.json` throws. A measured-once directory with one
-    raw and every declaration requiring only that system loads without failures.
+    directory without `facts.json`, or without `extracted.json`, throws. An
+    unforked file whose declarations require only Linux loads without failures.
+    A committed file with a fork, carried by a fresh Linux raw that adds a
+    feature, loads clean and Darwin's projection holds the feature and keeps its
+    fork; replacing only Linux's side instead fails `divergent`.
 
-`checks/extracted/drift.nix` runs `mkDriftCheck`'s script per case; a case with
-`regenerate` also reads the per-system regenerate script's text, which must name
-the compared sidecar and omit the unused one, including the other system's raw
-when the owner was measured once.
+`checks/extracted/platforms.nix` pins the committed file: agreement stored once,
+the smallest differing node forked, arrays forked whole, a key one system lacks,
+a single raw left unforked, the merge/project round trip, the sentinel refused
+in measured data (lists included) and in malformed forks, and `carry` following,
+dropping, collapsing a fork, merging when every system is fresh, keeping a
+removed or retyped forked parent whole, a Darwin carry leaving Linux as
+committed and forming the fork a later Linux carry keeps, and refusing two fresh
+systems while another is not.
+
+`checks/extracted/drift.nix` runs `mkDriftCheck`'s script per case: a fork is
+compared through the host's projection, a foreign-system extraction is skipped,
+and every drifted system is named while a matching one is not. A case with
+`regenerate` also reads the regenerate script's text, which must name each fresh
+raw this host carries and omit the foreign one.

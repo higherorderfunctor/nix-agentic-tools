@@ -68,18 +68,9 @@
           "fieldWeights": {
             "optional": true,
             "properties": {
-              "description": {
-                "type": "number",
-                "typeExpression": "number"
-              },
-              "name": {
-                "type": "number",
-                "typeExpression": "number"
-              },
-              "schemaKey": {
-                "type": "number",
-                "typeExpression": "number"
-              }
+              "description": { "type": "number", "typeExpression": "number" },
+              "name": { "type": "number", "typeExpression": "number" },
+              "schemaKey": { "type": "number", "typeExpression": "number" }
             },
             "type": "object",
             "typeExpression": "{ name: number; description: number; schemaKey: number; }"
@@ -208,10 +199,7 @@
         "typeExpression": "string"
       },
       "skillPaths": {
-        "items": {
-          "type": "string",
-          "typeExpression": "string"
-        },
+        "items": { "type": "string", "typeExpression": "string" },
         "optional": true,
         "project": true,
         "type": "array",
@@ -503,11 +491,7 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
-      "CI": {
-        "consumerOverridable": true,
-        "readBy": ["pi"],
-        "type": "string"
-      },
+      "CI": { "consumerOverridable": true, "readBy": ["pi"], "type": "string" },
       "CLOUDSDK_CONFIG": {
         "consumerOverridable": true,
         "readBy": ["pi"],

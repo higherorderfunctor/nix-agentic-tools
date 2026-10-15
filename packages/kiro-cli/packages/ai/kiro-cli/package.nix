@@ -12,22 +12,28 @@
   vu = packageLib // import ../../../lib/packaging.nix;
 
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
-  platformSrc = sources.${system} or (throw "kiro-cli: unsupported system ${system}");
+  platforms = builtins.removeAttrs sources ["version"];
 
-  # Derived from the URL rather than branched on the platform, so a future
-  # third platform picks up whichever archive form it publishes instead of
-  # silently inheriting the linux suffix.
-  srcExt =
-    if pkgs.lib.hasSuffix ".dmg" platformSrc.url
-    then "dmg"
-    else "tar.gz";
+  # The archive form is derived from the URL rather than branched on the
+  # platform, so a future third platform picks up whichever form it publishes
+  # instead of silently inheriting the linux suffix. Every platform's release
+  # is fetchable on any host, which is what lets one host extract them all.
+  releaseSourceFor = target:
+    fetchurl {
+      inherit (platforms.${target}) url hash;
+      name = "kiro-cli-source-${sources.version}-${target}.${
+        if pkgs.lib.hasSuffix ".dmg" platforms.${target}.url
+        then "dmg"
+        else "tar.gz"
+      }";
+    };
   # Both selected prompt patches and rollout features follow every public,
   # direct and FHS payload route. The native output binds one selected KAS;
   # KAS depends only on the fetched release input, never on the native output.
-  releaseSource = fetchurl {
-    inherit (platformSrc) url hash;
-    name = "kiro-cli-source-${sources.version}-${system}.${srcExt}";
-  };
+  releaseSource =
+    if platforms ? ${system}
+    then releaseSourceFor system
+    else throw "kiro-cli: unsupported system ${system}";
   mkKas = import ../../../lib/kas.nix {
     inherit pkgs;
     src = releaseSource;
@@ -102,7 +108,7 @@
       then readableRolloutSuffix
       else "rollout-${toString (builtins.length rolloutFeatures)}-${builtins.substring 0 12 (builtins.hashString "sha256" (pkgs.lib.concatStringsSep "," rolloutFeatures))}";
 
-    pinned = basePackage.overrideAttrs (finalAttrs: attrs:
+    pinned = basePackage.overrideAttrs (attrs:
       {
         inherit (sources) version;
         # An explicit `name` is the only way these are identifiable in a store
@@ -170,23 +176,18 @@
               inherit pkgs;
             };
 
-            # Pure extraction from THIS package's chat binary. IFD-safe:
-            # consumed ONLY by `nix build` (drift check + update script), never
-            # readFile'd at eval.
-            #
-            # `finalAttrs.finalPackage` is `pinned` — the derivation that CARRIES
-            # the binaries — and never the exported wrapper, whose `$out/bin`
-            # holds only sandbox launchers under the split described above.
-            # It is a package ROOT, not a file: the chat binary is resolved
-            # under it by CONTENT inside the builder, so no wrapper name appears
-            # anywhere on this path and the eval-time IFD profile is unchanged.
-            extracted = pkgs.runCommandLocal "kiro-cli-extracted.json" {} (
-              vu.mkKiroExtract {
-                dest = "$out";
-                inherit kas pkgs;
-                root = "${finalAttrs.finalPackage}";
-              }
-            );
+            # Every platform's release, read statically on this host: no
+            # binary is executed, so the drift check and the update script
+            # measure every platform from one host. IFD-safe: consumed ONLY by
+            # `nix build` (drift check + update script), never readFile'd at
+            # eval.
+            extracted = pkgs.lib.mapAttrs (target: _:
+              pkgs.runCommandLocal "kiro-cli-${target}-extracted.json" {} (vu.mkKiroExtract {
+                architecture = (pkgs.lib.systems.elaborate target).parsed.cpu.name;
+                inherit pkgs;
+                release = releaseSourceFor target;
+              }))
+            platforms;
 
             inherit kas;
             withBundlePatches = patches: mkKiroCliWithPayload rawFeatures patches null;

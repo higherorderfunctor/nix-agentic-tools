@@ -1,9 +1,10 @@
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics. Unknown complete
-> settings keys warn; Home Manager permits them, while devenv refuses every key
-> outside the workspace allowlist. Both backends expose the spelling allowlist.
+> **Last verified:** 2026-10-15 — the TUI source is decoded statically from each
+> release; runtime surfaceSupport declarations own normalized backend reach and
+> nested delivery diagnostics. Unknown complete settings keys warn; Home Manager
+> permits them, while devenv refuses every key outside the workspace allowlist.
+> Both backends expose the spelling allowlist.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -64,16 +65,13 @@ raw measures them; consumers read the merged value):
 
 Neither alone covers the format, which is why the extractor reports them
 separately and the union is taken at the consumer. Since 2.23.0 the chat binary
-materializes its compressed TUI source on first launch. The extractor's runtime
-build requires a Nix sandbox, a fake KAS, and isolated state; CI explicitly
-enables and checks the sandbox on both platforms. HOME/XDG isolation alone does
-not prevent native credential discovery from reaching host facilities. To
-accommodate platform-dependent state layouts, it finds a unique TUI asset
-beneath the isolated state root and accepts it only after its SHA-256 matches
-the binary's materialized checksum. TypeScript AST checks then locate the
-registry, the allowlist, and the workspace merge that uses it. The two validated
-expressions and the selected merge helper are evaluated with inert loaders and
-dynamic code generation disabled.
+embeds its TUI source as a zstd frame followed by the payload's SHA-256 hex.
+`extract/embedded-tui.py` decodes the one bun-script frame whose checksum sits
+right after it, without running the binary, so each platform's release is read
+on Linux. TypeScript AST checks then locate the registry, the allowlist, and the
+workspace merge that uses it. The two validated expressions and the selected
+merge helper are evaluated with inert loaders and dynamic code generation
+disabled.
 
 `flattenDotKeys` is now `flattenDotKeysUntil []` — the historical
 flatten-everything behavior, unchanged for anything that does not pass a

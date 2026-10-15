@@ -26,10 +26,7 @@ in
       shopt -s inherit_errexit 2>/dev/null || :
       runHook preInstall
       chat=$(python3 ${vu.kiroLocateChatScript pkgs} .)
-      python3 ${../extract/embedded-kas.py} "$chat" "$out" \
-        --architecture ${lib.escapeShellArg pkgs.stdenv.hostPlatform.parsed.cpu.name} \
-        --zstd-library ${lib.getLib pkgs.zstd}/lib/libzstd${pkgs.stdenv.hostPlatform.extensions.sharedLibrary} \
-        --zstd ${pkgs.zstd}/bin/zstd
+      python3 ${../extract/embedded-kas.py} "$chat" "$out" ${vu.kiroEmbeddedArgs pkgs pkgs.stdenv.hostPlatform.parsed.cpu.name}
       server="$out/node_modules/@kiro/agent/dist/server/acp-server.js"
       ${lib.optionalString selected ''
         python3 ${./kiro-bundle-patch.py} "$server" "$server" \

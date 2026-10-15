@@ -1,8 +1,9 @@
 # cspell:ignore ENDFILE gsub RLENGTH RSTART
 # The facts contract's guard: owners supply data and extractors only. Every
 # tracked file outside lib/extracted/ and checks/extracted/ is scanned for
-# the three things only those directories may do: read a per-system raw
-# path, reach into `bySystem`, or define a `combine` attribute.
+# the things only those directories may do: read the committed
+# `extracted/extracted.json` or its `__platforms` forks, reach into
+# `bySystem`, or define a `combine` attribute.
 #
 # Every regular file is scanned except Markdown, which describes the
 # contract (generated instruction projections included), and JSON, which is
@@ -28,13 +29,13 @@
   ...
 }: let
   runner = import ./runner.nix {inherit lib;};
-  systems = lib.concatMapStringsSep "|" lib.escapeRegex (import ../../config/systems.nix);
   # gawk regexes; `\y` is a word boundary. `combine` as an attribute name
   # (`=`, not `==`) or an object key (`:`).
   patterns = [
     "\\ybySystem\\y"
     "\\ycombine[\"']?[[:space:]]*[:=]([^=]|$)"
-    "extracted/(${systems}|\\$\\{[^}]*\\})\\.json"
+    "\\y__platforms\\y"
+    "extracted/extracted\\.json"
   ];
   # Prints each offending file with its first match; exits 1 on any.
   match = pkgs.writeText "extracted-contract-guard.awk" ''
@@ -73,7 +74,7 @@
     case "$status" in
       0) echo "extracted-contract-guard: ''${#files[@]} files clean" ;;
       1)
-        echo "FAIL: per-owner code above reads a per-system raw, bySystem, or defines a combine." >&2
+        echo "FAIL: per-owner code above reads the committed extracted.json, its forks or bySystem, or defines a combine." >&2
         echo "Read facts through lib.extracted (get, expect); combine rules go in decisions.json." >&2
         exit 1
         ;;
@@ -101,7 +102,7 @@
       clean
       // {
         "checks/extracted/x.nix" = "bySystem\n";
-        "lib/extracted/x.nix" = "./extracted/x86_64-linux.json\n";
+        "lib/extracted/x.nix" = "./extracted/extracted.json\n";
         "packages/fake/README.md" = "bySystem\n";
         "packages/fake/comment.nix" = "{} # reads bySystem\n";
         "packages/fake/extracted/decisions.json" = "{\"models\": {\"combine\": \"max\"}}\n";
@@ -111,7 +112,7 @@
       fails = "packages/fake/checks.nix";
     };
     offending-hash-string = {
-      files = clean // {"packages/fake/hash.nix" = "let marker = \"#\"; in builtins.readFile ./extracted/x86_64-linux.json\n";};
+      files = clean // {"packages/fake/hash.nix" = "let marker = \"#\"; in builtins.readFile ./extracted/extracted.json\n";};
       fails = "packages/fake/hash.nix";
     };
     offending-merge = {
@@ -121,6 +122,10 @@
     offending-multiline = {
       files = clean // {"packages/fake/multiline.nix" = "{ combine\n  = \"max\"; }\n";};
       fails = "packages/fake/multiline.nix";
+    };
+    offending-sentinel = {
+      files = clean // {"packages/fake/fork.nix" = "raw: raw.count.__platforms\n";};
+      fails = "packages/fake/fork.nix";
     };
     offending-ts = {
       files = clean // {"packages/fake/read.ts" = "export const x = facts.bySystem;\n";};

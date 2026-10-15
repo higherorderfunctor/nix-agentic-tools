@@ -7,9 +7,9 @@ applyTo: "checks/git-tool-settings/**,lib/git-tool-settings/**,packages/git-abso
 
 # Git tool settings: census, sidecar, generator
 
-> **Last verified:** 2026-10-11 — measured-once git-tool facts use
-> `mkOwnerCheck`; update discovery invokes `regenCommand` and the check’s
-> `passthru.regenerate`.
+> **Last verified:** 2026-10-15 — measured-once git-tool facts are one unforked
+> `extracted.json`, checked by `mkOwnerCheck`; update discovery invokes
+> `regenCommand` and the check’s `passthru.regenerate`.
 >
 > **Settled — do not relitigate.**
 >
@@ -47,13 +47,13 @@ the generator and helpers sit here and not in one owner.
 
 ## Sidecar schema
 
-Each owner commits `extracted/facts.json` and one `extracted/x86_64-linux.json`.
-Every declaration is static and requires only `x86_64-linux`: the census reads
-patched source under `stdenvNoCC`, with no host dependence. `settings`,
-`foreign`, `deadKeys` and `source` are opaque objects; git-branchless also
-declares `revsetFunctions` as a list. Dotted keys and literal `<name>` in
-setting names rule out wildcard declarations. `source.version` remains because
-the generator's `schema.source` validates it.
+Each owner commits `extracted/facts.json` and one unforked
+`extracted/extracted.json`. Every declaration is static and requires only
+`x86_64-linux`: the census reads patched source under `stdenvNoCC`, with no host
+dependence. `settings`, `foreign`, `deadKeys` and `source` are opaque objects;
+git-branchless also declares `revsetFunctions` as a list. Dotted keys and
+literal `<name>` in setting names rule out wildcard declarations.
+`source.version` remains because the generator's `schema.source` validates it.
 `lib/git-tool-settings/extracted.nix` uses `load` and `get` to assemble the
 plain tree the generator and fixture callers consume.
 

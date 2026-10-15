@@ -1,7 +1,8 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-15 — native extracted-facts CI uses one planner;
-> the check-cache jobs consume a Hestia binary published by an early CI job.
+> **Last verified:** 2026-10-15 — native extracted-facts CI uses one planner and
+> selects Codex alone; Kiro's facts are static reads on Linux; the check-cache
+> jobs consume a Hestia binary published by an early CI job.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -247,37 +248,40 @@ scripts. The full Devenv Diagnostic remains manual-only.
 
 Generated documents stay in the flake checks. Kiro's scoped native jobs build
 the extracted-metadata drift check and packaged KAS checks on both Linux and
-Darwin. They cover TUI materialization, strict vendor patch selection, native
-resources, ACP initialization and fresh/stale-cache dispatch on macOS where the
-Linux-only flake check cannot. These jobs explicitly enable and assert the Nix
-sandbox before the materializer executes; Darwin's Nix default does not provide
-that guarantee. Patched proprietary Kiro stays in those jobs without cache
-publication; every Cachix step holding the token, package matrix and update
-workers alike, carries `pushFilter: kiro-cli`.
+Darwin. They cover strict vendor patch selection, native resources, ACP
+initialization and fresh/stale-cache dispatch on macOS where the Linux-only
+flake check cannot; the drift check reads both platforms' releases on Linux and
+compares nothing on Darwin. These jobs explicitly enable and assert the Nix
+sandbox; Darwin's Nix default does not provide that guarantee. Patched
+proprietary Kiro stays in those jobs without cache publication; every Cachix
+step holding the token, package matrix and update workers alike, carries
+`pushFilter: kiro-cli`.
 
-Codex and Kiro facts are host-run, so Linux updates can regenerate only their
-Linux raws. The Linux `plan-extracted-facts` job evaluates the pure
-`ciExtractedFacts` flake output at HEAD and at the immutable base revision. Each
-revision uses its own logical owner map, `lib.extracted.hostRunOn` predicate and
-Darwin `ciPackages` to return `{ <owner> = { drvPath = ...; }; }` for owners
-declared host-run on Darwin. It does not evaluate Darwin checks on Linux. A
-shared `lib/extracted/` change or unavailable base comparison schedules every
-HEAD owner; if HEAD derivation evaluation fails, the same output is retried for
-names only. `workflow_dispatch` runs all selected owners. An empty matrix skips
-the Darwin producer; both required build contexts accept that only when planning
-passed. The producer still regenerates and checks each selected owner's facts.
-The Kiro patch Scope gate does not gate it.
+Codex facts are host-run, so a Linux update carries its fresh Linux raw into
+`extracted.json` and Darwin's side follows every unforked node while keeping its
+forks; the Darwin leg then re-measures and rewrites only Darwin's side, so a
+difference new in the release becomes a fork. The Linux `plan-extracted-facts`
+job evaluates the pure `ciExtractedFacts` flake output at HEAD and at the
+immutable base revision. Each revision uses its own logical owner map,
+`lib.extracted.hostRunOn` predicate and Darwin `ciPackages` to return
+`{ <owner> = { drvPath = ...; }; }` for owners declared host-run on Darwin. It
+does not evaluate Darwin checks on Linux. A shared `lib/extracted/` change or
+unavailable base comparison schedules every HEAD owner; if HEAD derivation
+evaluation fails, the same output is retried for names only. `workflow_dispatch`
+runs all selected owners. An empty matrix skips the Darwin producer; both
+required build contexts accept that only when planning passed. The producer
+still regenerates and checks each selected owner's facts. The Kiro patch Scope
+gate does not gate it.
 
-On a same-repository `update/*` branch, changed raws are committed with bot
-author and committer identities and pushed with the App token, preserving
-`update-publish.sh`'s bot ownership. Each matrix leg restores only its owner's
-directory onto the event's immutable head before a plain push. A moved branch
-rejects that push; an accepted push triggers fresh CI and cancels the old run.
-The owner matrix runs one leg at a time, so when both owners drift, successive
-runs may finish their bot updates. Other branches upload an
-`<owner>-extracted-aarch64-darwin` artifact, print copy commands derived from
-the owner's changed files, and fail until those measurements are committed. CI
-names owner directories only; the drift library chooses the raw paths.
+On a same-repository `update/*` branch, a changed `extracted.json` is committed
+with bot author and committer identities and pushed with the App token,
+preserving `update-publish.sh`'s bot ownership. Each matrix leg restores only
+its owner's directory onto the event's immutable head before a plain push. A
+moved branch rejects that push; an accepted push triggers fresh CI and cancels
+the old run. Other branches upload an `<owner>-extracted-aarch64-darwin`
+artifact, print copy commands derived from the owner's changed files, and fail
+until those measurements are committed. CI names owner directories only; the
+drift library chooses the file.
 
 The internal `kiro-cli-rollout-canary` patches every feature whose aggregate
 vendor state needs a patch and whose measured patchability is true. Its scope

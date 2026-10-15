@@ -1,0 +1,4 @@
+{
+  "limit": { "__platforms": { "x86_64-linux": 5 } },
+  "mode": { "__platforms": { "x86_64-linux": "linux" } }
+}

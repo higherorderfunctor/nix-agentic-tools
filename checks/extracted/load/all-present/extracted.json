@@ -1,0 +1,9 @@
+{
+  "limit": {
+    "__platforms": {
+      "aarch64-darwin": 3,
+      "i686-linux": "not a configured system, never read",
+      "x86_64-linux": 5
+    }
+  }
+}
