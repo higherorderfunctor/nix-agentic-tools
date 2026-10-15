@@ -229,6 +229,11 @@
       forAllSystems (system:
         import ./dev/ci-check-evaluator.nix {pkgs = pkgsFor system;});
 
+    ciHestia.x86_64-linux = import ./dev/ci-hestia.nix {
+      inherit inputs;
+      pkgs = pkgsFor "x86_64-linux";
+    };
+
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.
     # devShells.ci is a lightweight shell for the CI update pipeline.
@@ -238,6 +243,9 @@
     # names it opts in to unfree, the same as building `checks`.
     ciPackages = forAllSystems (system:
       flatPackagesFor system
+      // lib.optionalAttrs (system == "x86_64-linux") {
+        ci-hestia = self.ciHestia.x86_64-linux;
+      }
       // {
         kiro-cli-rollout-canary = import ./packages/kiro-cli/rollout-canary.nix {
           inherit lib;

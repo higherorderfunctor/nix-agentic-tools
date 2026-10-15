@@ -7,8 +7,8 @@ applyTo: ".github/actions/check-cache/**,.github/actions/warm-ifd/**,.github/rep
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-15 — native extracted-facts CI evaluates one Nix
-> planner for logical owners, Darwin declarations, and extraction derivations.
+> **Last verified:** 2026-10-15 — native extracted-facts CI uses one planner;
+> the check-cache jobs consume a Hestia binary published by an early CI job.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -220,6 +220,11 @@ the file cannot tell you: updates land on one standing grouped branch,
 the cleanup above only matches `update/*`, so the two never touch each other's
 branches.
 
+Hestia is excluded from Renovate's Actions manager. The `ci-hestia` package
+target runs one update script that resolves the release tag to a 40-hex commit,
+updates its source hash, and moves both `uses:` refs with the recipe. The pin
+drift test checks the three references together.
+
 Enabling `sha_pinning_required` is ordered: install the Mend Renovate app, widen
 the Hestia allowlist entries to `@*` (`.github/repo-settings.yml`; an exact-SHA
 entry makes every bump PR a `startup_failure`), merge Renovate's first pinning
@@ -294,23 +299,25 @@ multi-user Nix installer fixed.
 
 ### Linux check cache
 
-The existing Linux `test` job installs the pinned Hestia helper before IFD
-warming, explicitly registers and verifies the original patched devenv nixpkgs
-source, then runs the unchanged `nix flake check` entrypoint. Public checks and
-package-matrix Cachix publication retain their existing behavior. The daily
-`hestia-gc.yml` job bounds stale CI-only roots and packs. Cache filters, source
-identity, scope and fallback limitations are documented in
+The Linux `publish-hestia` job builds and publishes the patched Hestia binary
+before the test and check evaluator jobs. The package shards exclude that
+CI-only derivation. The `test` job installs the pinned Hestia action with that
+binary before IFD warming, explicitly registers and verifies the original
+patched devenv nixpkgs source, then runs the unchanged `nix flake check`
+entrypoint. The daily `hestia-gc.yml` job bounds stale CI-only roots and packs.
+Cache filters, source identity, scope and fallback limitations are documented in
 `dev/fragments/flake/binary-cache.md`.
 
-Beside it, three NON-required jobs demonstrate eval-once check building.
-`checks-eval` runs Hestia's matrix subaction over `.#.ciChecks.x86_64-linux`
-(one row per `meta.hestia.group`), `checks-build` builds each uncached row as
-`<drvPath>^*` without flake evaluation, and `checks-matrix` fails on a failed
-evaluation or a failed or cancelled worker; an all-cached plan passes. Hestia
-keeps nix-eval-jobs' stdout to itself and lists only uncached rows by their
-first member, so a wrapper captures the raw rows of that same evaluation. The
-plan check requires the evaluated attrs to equal `checks.x86_64-linux` attr
-names and the planned drvs to equal the uncached ones.
+Beside it, three jobs perform eval-once check building; `checks-matrix` is a
+required status context. `checks-eval` runs Hestia's matrix subaction over
+`.#.ciChecks.x86_64-linux` (one row per `meta.hestia.group`), `checks-build`
+builds each uncached row as `<drvPath>^*` without flake evaluation, and
+`checks-matrix` fails on a failed evaluation or a failed or cancelled worker; an
+all-cached plan passes. Hestia keeps nix-eval-jobs' stdout to itself and lists
+only uncached rows by their first member, so a wrapper captures the raw rows of
+that same evaluation. The plan check requires the evaluated attrs to equal
+`checks.x86_64-linux` attr names and the planned drvs to equal the uncached
+ones.
 
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
 `dev/ci-check-evaluator.nix` records why.

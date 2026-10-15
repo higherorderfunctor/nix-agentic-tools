@@ -7,10 +7,9 @@ applyTo: ".github/actions/check-cache/**,.github/workflows/hestia-gc.yml,flake.n
 
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-14 — the Linux test job retains check outputs and
-> the original patched devenv nixpkgs input in a separate Hestia cache; the
-> non-required check matrix registers drv closures there; Semble publication
-> remains in the package matrix.
+> **Last verified:** 2026-10-15 — CI builds a patched Hestia before cache
+> consumers, publishes it to Cachix, and uses separate key families for PR and
+> main manifests.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -50,11 +49,24 @@ it does not remove or weaken the flake check above.
 ### CI-only check cache
 
 The Linux `test` job installs `.github/actions/check-cache` before warming IFD
-sources and still runs `nix flake check`. The helper pins both Hestia's action
-commit and binary release to v3.1.0. Its post-build hook retains check outputs
-and runtime closures in GitHub Actions cache, independently of public Cachix
-publication. The signature filter excludes only `cache.nixos.org-1` and
-`nix-agentic-tools.cachix.org-1`; retaining devenv-signed paths is intentional.
+sources and still runs `nix flake check`. The helper pins Hestia's action to
+v3.1.0 and supplies `ciHestia`, built from that release with a local manifest
+scope patch. `dev/scripts/test-ci-cache.py` requires the action and matrix pins
+to match the binary's source SHA and version. Supplying `binary:` skips the
+action's release attestation; the source hash and in-repo build pin its bytes.
+Its post-build hook retains check outputs and runtime closures in GitHub Actions
+cache, independently of public Cachix publication. The signature filter excludes
+only `cache.nixos.org-1` and `nix-agentic-tools.cachix.org-1`; retaining
+devenv-signed paths is intentional.
+
+`publish-hestia` builds `ciHestia` before the test and check evaluator jobs. Its
+credentialed Cachix action publishes the Rust binary and keeps the
+`pushFilter: kiro-cli` exclusion. The package shards exclude `ci-hestia` because
+that early job owns its build. Jobs obtain the binary from the project Cachix
+cache, configured before `check-cache`; the daily GC job also enables that
+read-only substituter. On a cold main or same-repository PR run, the early job
+pays one Rust build before cache consumers start. Fork PRs have no publication
+token, so their test job builds the binary locally if it is absent from Cachix.
 
 `ciEvaluationInputs.<system>.devenv-nixpkgs` explicitly exposes the original
 patched source through
@@ -69,9 +81,21 @@ errors. Its narinfo endpoint requires an available manifest entry rather than
 falling back to the local store.
 
 Cold or changed inputs, eviction, and inaccessible GitHub cache scopes still
-require upstream substitution or a local build. Pull requests read
-default-branch caches and write their own PR scope; same-PR reruns can reuse it,
-while other PRs need a default-branch seed after merge. Fork PRs explicitly use
+require upstream substitution or a local build. The default branch continues to
+read and write `m3#N`. Other refs read its newest entry plus their own `m3pr#N`
+entry and write only `m3pr#N`. GitHub's PR-first lookup can shadow an identical
+prefix, so the distinct prefixes make new reads unambiguous. Refs that already
+hold PR-scoped `m3#` entries keep loading those as their base until every such
+entry is deleted; the orchestrator performs a one-time deletion after merge. The
+merged view takes main's chunk, path, and pack entries where present, keeps
+PR-only entries, and merges roots with Hestia's upstream rule. This lets a main
+reupload at `repacks_survived = 0` replace a stale PR location at a higher
+count. Reservation and wait indices count only the own family. GC is upstream's,
+unchanged: it runs on the default branch, whose token cannot read PR-scoped
+caches, so packs only a PR references are orphans to it and are deleted after
+Hestia's `min_age`; a later PR run rebuilds them. That was already true of
+PR-scoped `m3#` manifests before this patch. GC cleanup deletes only superseded
+`m3#` entries. The daemon logs both loaded keys. Fork PRs explicitly use
 read-only mode and skip registration and its positive narinfo guard. They can
 restore accessible entries or fall back upstream without needing cache write
 access. No live warm-cache result or speedup is established by local validation.
@@ -80,9 +104,9 @@ mode and `actions: write` for garbage collection, limiting stale roots and packs
 within GitHub's shared cache quota. Garbage collection does not prevent GitHub's
 own expiry or LRU eviction. This cache carries no Cachix publishing token.
 
-The non-required `checks-eval` job registers every evaluated `.drv` closure in
-the same cache. Its workers pass the eval job's `manifest-version` through the
-helper's `wait-manifest-version` input and run `hestia prefetch` before
-building: with `filter-drv-closures`, the public references are omitted from the
-closure and prefetch prepares them. Fork PRs skip that matrix, since a read-only
-cache cannot register the closures the workers need.
+The `checks-eval` job registers every evaluated `.drv` closure in the same
+cache. Its workers pass the eval job's `manifest-version` through the helper's
+`wait-manifest-version` input and run `hestia prefetch` before building: with
+`filter-drv-closures`, the public references are omitted from the closure and
+prefetch prepares them. Fork PRs skip that matrix, since a read-only cache
+cannot register the closures the workers need.
