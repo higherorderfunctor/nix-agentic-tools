@@ -1,51 +1,20 @@
-# cspell:ignore apikey clientsecret privatekey
-# Callers classify a name whose value is a string (Codex flags with a value,
-# string leaves of JSON/settings) or a string-to-string map container such as
-# Kimchi's gitTokens; never a struct object or a boolean node.
+# Callers classify string leaves or string-to-string containers, never struct
+# objects or boolean nodes. Keep this API for facts and annotation reconciliation;
+# key-name patterns and their reasons belong to the generic open-key policy.
 {lib}: let
-  secretSuffixes = [
-    "access_key"
-    "api_key"
-    "apikey"
-    "authorization"
-    "clientsecret"
-    "credential"
-    "credentials"
-    "git_tokens"
-    "passwd"
-    "password"
-    "pat"
-    "private_key"
-    "privatekey"
-    "secret"
-    "secret_key"
-    "token"
-  ];
-  # Word boundaries, applied in order: an acronym before a title-cased word
-  # (IDToken, myAPIToken), then a lower-case letter or digit before a capital.
-  boundaries = ["([A-Z]+)([A-Z][a-z])" "([a-z0-9])([A-Z])"];
-  snake = name:
-    lib.foldl' (acc: boundary:
-      lib.concatMapStrings (part:
-        if builtins.isList part
-        then lib.concatStringsSep "_" part
-        else part)
-      (builtins.split boundary acc))
-    name
-    boundaries;
+  inherit (import ../open-keys {inherit lib;}) credentialReason;
 in {
   classify = {
     hints ? {},
     path,
     secretContainer ? false,
-  }: let
-    lowered = lib.toLower (lib.replaceStrings ["-" "."] ["_" "_"] (snake (
+  }:
+    hints.keyring or false
+    || secretContainer
+    || credentialReason (
       if path == []
       then ""
       else lib.last path
-    )));
-  in
-    hints.keyring or false
-    || secretContainer
-    || lib.any (suffix: lib.hasSuffix "_${suffix}" ("_" + lowered)) secretSuffixes;
+    )
+    != null;
 }

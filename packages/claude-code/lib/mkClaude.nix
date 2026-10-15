@@ -17,7 +17,7 @@
   in
     extracted.get (extracted.load {dir = ../extracted;}).aggregate;
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
-  unrecognizedSettings = import ./unrecognizedSettings.nix {inherit lib;};
+  openKeys = import ../../../lib/open-keys {inherit lib;};
 
   # The `native.settings` option surface: one option per path in the packaged
   # binary's own settings schema, merged with the hand-authored exceptions.
@@ -28,34 +28,23 @@
     inherit claudeFact lib pkgs;
   };
 
-  # Guard for the freeform `native.settings` tail: every key the packaged
-  # binary's own extracted settings schema does not declare is a hard failure
-  # unless `allowUnrecognizedSettings` names it. Claude ignores an unknown
-  # settings key SILENTLY, so without this a misspelling looks applied and does
-  # nothing.
-  #
-  # Consumed once by the shared config callback, which serves both backends —
-  # the check is a property of the option, not of a backend, and the two
-  # backends write the same settings tree. Same shape as mkKiro's `mkAssertions cfg`.
-  #
-  # `cfg.package.version` is read ONLY inside message strings, so a passing
-  # assertion never forces the package (and never triggers overlay IFD).
-  nativeFileAssertions = cfg:
-    unrecognizedSettings.mkAssertions {
-      declared = nativeFileSurface.settings;
+  # Inspect the document both backends write. Unknown keys stay available for
+  # forward compatibility; diagnostics belong at config level, outside type merge.
+  nativeFileWarnings = cfg:
+    (openKeys.inspect {
+      known = openKeys.fromPaths {
+        inherit (nativeFileSurface.settings) paths;
+        names = nativeFileSurface.settings.publicKeys ++ nativeFileSurface.settings.internalKeys;
+      };
       # The tree actually written — identical to the
       # `aiCommon.filterNulls cfg.native.settings` settings document below.
       # Filtering FIRST is load-bearing: a typed sub-option sitting at its
       # `null` default would otherwise report itself the day upstream renames
       # that key, for every consumer, including ones who never set it.
-      settings = aiCommon.filterNulls cfg.native.settings;
+      value = aiCommon.filterNulls cfg.native.settings;
       allowed = cfg.allowUnrecognizedSettings;
-      optionPath = "ai.claude.native.settings";
-      allowOptionPath = "ai.claude.allowUnrecognizedSettings";
-      version =
-        if cfg.package == null
-        then null
-        else cfg.package.version or null;
+      optionPath = ["ai" "claude" "native" "settings"];
+      allowOptionPath = ["ai" "claude" "allowUnrecognizedSettings"];
       # Keys THIS MODULE writes are reported against the option that writes
       # them, so a binary that drops one does not read as consumer error.
       # Deliberately not an exemption — an exemption would suppress exactly the
@@ -66,10 +55,10 @@
         effortLevel = ownWrite "ai.settings.reasoningEffort";
         enableWorkflows = ownWrite "ai.claude.ultracodeOnLaunch";
         env = ownWrite "ai.shell / ai.environmentVariables";
-        ultracode = ownWrite "ai.claude.ultracodeOnLaunch";
         mcpServers = "MCP servers do not belong in settings.json — declare them\n      under `ai.mcpServers` or `ai.claude.mcpServers`, which render into\n      the project .mcp.json (devenv) or the Home Manager personal plugin.";
+        ultracode = ownWrite "ai.claude.ultracodeOnLaunch";
       };
-    };
+    }).warnings;
 
   # A single handler. `command` is modelled fully; the exotic handler types
   # (http/prompt/agent/mcp_tool) round-trip via the freeform JSON tail.
@@ -306,8 +295,8 @@ in
           nothing.
 
           The freeform catch-all still accepts a key newer than this
-          package's schema — see `allowUnrecognizedSettings`, which is what
-          stops it accepting typos too. The `ultracode`
+          package's schema. Unrecognized keys warn with spelling suggestions;
+          `allowUnrecognizedSettings` suppresses selected warnings. The `ultracode`
           key is intentionally NOT a hand-authored option (see
           ultracodeOnLaunch) but is declared by the binary and so is typed
           like any other.
@@ -318,8 +307,8 @@ in
         default = [];
         example = ["someBrandNewKey"];
         description = ''
-          Dotted paths under `native.settings` that may be written even though
-          the packaged claude-code binary does not declare them.
+          Dotted paths under `native.settings` whose unrecognized-key warnings
+          are suppressed.
 
           The freeform tail of `native.settings` exists so a key upstream ships
           today is settable today. Its cost is that a TYPO is shaped exactly
@@ -327,29 +316,25 @@ in
           silently, so a misspelling looks applied and does nothing. Every key
           the binary's own extracted schema
           (packages/claude-code/extracted/, settings.paths) does not declare is
-          therefore a
-          HARD FAILURE unless it is listed here:
+          therefore reported as a warning unless it is listed here. The value
+          passes through unchanged in either case:
 
           ```nix
           ai.claude.native.settings.someBrandNewKey = true;
           ai.claude.allowUnrecognizedSettings = ["someBrandNewKey"];
           ```
 
-          An entry is a full dotted path, so a nested key works too
-          (`"permissions.somethingNew"`). A `*` segment stands in for a key you
-          chose yourself, so one entry covers every instance
-          (`"modelPricing.overrides.*.newField"`).
+          ${openKeys.allowlistSyntax}
 
           This is a per-key opt-out that lasts until you delete it, not a home
           for the key. Once the sidecar catches up and the binary declares it,
-          the entry is REPORTED AS AN ERROR rather than ignored — left in place
+          the entry is reported as a stale warning — left in place
           it would silently re-open the typo hole for that one key at the next
           upstream rename.
 
-          Keys under a container the binary declares freeform — `hooks`, `env`,
-          `skillOverrides`, `enabledPlugins`, `pluginConfigs`, `modelOverrides`,
-          `vimInsertModeRemaps` and the rest — are never checked, so they never
-          need an entry.
+          Opaque leaf containers such as `env` accept arbitrary children. Maps
+          accept arbitrary entry names while declared fields below each entry
+          remain checked; lists inspect their declared element shape.
         '';
       };
       unpinLaunchEffort = lib.mkOption {
@@ -645,12 +630,10 @@ in
       lib.mkMerge [
         (lib.optionalAttrs (options ? warnings) {
           warnings =
-            lib.optional (!isHm && cfg.plugins != {})
+            nativeFileWarnings cfg
+            ++ lib.optional (!isHm && cfg.plugins != {})
             "ai.claude.plugins is set but ${backend} does not deliver it to claude (reason: The devenv backend has no writer for this Claude surface.)";
         })
-        # Unrecognized-key guard for the freeform native.settings tail. One
-        # builder, both backends — see nativeFileAssertions.
-        {assertions = nativeFileAssertions cfg;}
         {
           assertions = [
             {

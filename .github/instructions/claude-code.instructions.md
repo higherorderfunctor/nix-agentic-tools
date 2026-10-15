@@ -8,12 +8,14 @@ applyTo: "packages/claude-code/packages/ai/claude-code/package.nix,packages/clau
 ## claude-code Package and Plugin Delivery
 
 > **Last verified:** 2026-10-14 — the personal plugin carries MCP servers only;
-> settings are generated from the committed facts in
-> packages/claude-code/extracted/, measured once on Linux; Darwin validates its
-> own extraction against that raw. The schema check gates stale and shadowed
-> rows, missing paths and wildcard grammar. Catalog, retirement and launch-pin
-> facts are content-located AST reads of the unpacked graph; unsupported catalog
-> properties, retirement rows and launch-pin shapes fail with PROBE.
+> unknown native settings and stale warning suppressions use the generic
+> open-keys inspector on both backends; settings are generated from the
+> committed facts in packages/claude-code/extracted/, measured once on Linux;
+> Darwin validates its own extraction against that raw. The schema check gates
+> stale and shadowed rows, missing paths and wildcard grammar. Catalog,
+> retirement and launch-pin facts are content-located AST reads of the unpacked
+> graph; unsupported catalog properties, retirement rows and launch-pin shapes
+> fail with PROBE.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -128,11 +130,14 @@ Three things follow, and each of them is a trap if you assume the old shape:
   tables.** A row aimed at a key upstream renamed, or a row present in both
   tables, fails `nix flake check` instead of quietly doing nothing. It also
   checks missing schema paths and the wildcard grammar that could lose typing.
-- **A key the binary does NOT declare is a hard failure**, not a freeform
-  passthrough, unless `ai.claude.allowUnrecognizedSettings` names it — Claude
-  ignores an unknown settings key silently, so a typo otherwise looks applied
-  and does nothing. A redundant allowlist entry is also a hard failure; see
-  `packages/claude-code/lib/unrecognizedSettings.nix`.
+- **A key the binary does not declare passes through with a warning.** The
+  shared `lib/open-keys` inspector suggests nearby declared names on both
+  backends. `ai.claude.allowUnrecognizedSettings` suppresses selected dotted
+  paths, including wildcard map entries; redundant entries warn as stale.
+  Inspection runs after null filtering, so unset typed defaults never warn.
+  Opaque schema leaves remain open, while maps and lists inspect the declared
+  shape below their arbitrary entry names or elements. Unknown-key warnings do
+  not weaken separate credential or ownership refusals.
 
 <!-- Fragment: packages/claude-code/docs/heron-brook-clamp.md -->
 

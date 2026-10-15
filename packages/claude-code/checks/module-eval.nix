@@ -7,7 +7,7 @@
   ...
 }: let
   inherit (harness) claudeMcpPath claudeMcpServers claudeSettings deliveredMarkdown evalDevenv evalDevenvModules evalHm evalHmModules fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasGuardHook;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg claudeSettingsWarnings handlerCommands hasGuardHook;
   unpinDocument = ownedDocument "claude" ".claude.json";
   # A contract both backends deliver alike, stated once and evaluated on each:
   # `eval` evaluates a configuration (`evalModules` a list of modules), `files`
@@ -1422,41 +1422,49 @@ in {
       );
 
       module-claude-unrecognized-settings-known-keys-accepted = mkTest "claude-unrecognized-settings-known-keys-accepted" (
-        claudeAssertionsPass (evalHm claudeKnownKeysCfg)
-        && claudeAssertionsPass (evalDevenv claudeKnownKeysCfg)
-      );
-
-      module-claude-unrecognized-settings-nested-typo-rejected = mkTest "claude-unrecognized-settings-nested-typo-rejected" (
-        claudeAssertionFails "permissions.alow" (evalHm claudeNestedTypoCfg)
-        && claudeAssertionFails "permissions.alow" (evalDevenv claudeNestedTypoCfg)
-      );
-
-      # The allowlist is a per-key opt-out, and an entry is a full dotted path —
-      # so the same nested typo passes once it is named.
-      module-claude-unrecognized-settings-allowlist-rescues-typo = mkTest "claude-unrecognized-settings-allowlist-rescues-typo" (
-        let
-          cfg =
-            lib.recursiveUpdate claudeNestedTypoCfg
-            {ai.claude.allowUnrecognizedSettings = ["permissions.alow"];};
+        lib.all (arm: let
+          evaluated = arm.eval claudeKnownKeysCfg;
         in
-          claudeAssertionsPass (evalHm cfg) && claudeAssertionsPass (evalDevenv cfg)
+          claudeAssertionsPass evaluated
+          && claudeSettingsWarnings evaluated == []) (lib.attrValues backends)
       );
 
-      # A redundant entry is a HARD FAILURE, not a warning: `ultracode` is declared
-      # by the packaged binary, so the entry suppresses nothing — and left in place
-      # it is a standing opt-out that silently re-opens the typo hole for that one
-      # key the day upstream renames it.
-      module-claude-unrecognized-settings-redundant-allowlist-rejected = mkTest "claude-unrecognized-settings-redundant-allowlist-rejected" (
-        let
-          cfg = {
+      module-claude-unrecognized-settings-nested-typo-warns = mkTest "claude-unrecognized-settings-nested-typo-warns" (
+        lib.all (arm: let
+          evaluated = arm.eval claudeNestedTypoCfg;
+          warnings = claudeSettingsWarnings evaluated;
+        in
+          claudeAssertionsPass evaluated
+          && builtins.length warnings == 1
+          && lib.hasInfix "ai.claude.native.settings.permissions.alow" (builtins.head warnings)
+          && lib.hasInfix "did you mean `ai.claude.native.settings.permissions.allow`" (builtins.head warnings)
+          && (claudeSettings evaluated).permissions.alow == ["Read"]) (lib.attrValues backends)
+      );
+
+      module-claude-unrecognized-settings-allowlist-suppresses-warning = mkTest "claude-unrecognized-settings-allowlist-suppresses-warning" (
+        lib.all (arm: let
+          evaluated = arm.eval (lib.recursiveUpdate claudeNestedTypoCfg {
+            ai.claude.allowUnrecognizedSettings = ["permissions.alow"];
+          });
+        in
+          claudeAssertionsPass evaluated
+          && claudeSettingsWarnings evaluated == []
+          && (claudeSettings evaluated).permissions.alow == ["Read"]) (lib.attrValues backends)
+      );
+
+      module-claude-unrecognized-settings-redundant-allowlist-warns = mkTest "claude-unrecognized-settings-redundant-allowlist-warns" (
+        lib.all (arm: let
+          evaluated = arm.eval {
             ai.claude = {
               enable = true;
               allowUnrecognizedSettings = ["ultracode"];
             };
           };
+          warnings = claudeSettingsWarnings evaluated;
         in
-          claudeAssertionFails "allowUnrecognizedSettings" (evalHm cfg)
-          && claudeAssertionFails "allowUnrecognizedSettings" (evalDevenv cfg)
+          claudeAssertionsPass evaluated
+          && builtins.length warnings == 1
+          && lib.hasInfix "ai.claude.allowUnrecognizedSettings: stale allowlist entry `ultracode`" (builtins.head warnings)) (lib.attrValues backends)
       );
     }
     // families.checks;

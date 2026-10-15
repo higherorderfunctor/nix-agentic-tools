@@ -1,5 +1,5 @@
 # End-to-end module contracts; the shared harness discovers every backend.
-# cspell:ignore batchmode sembleignore
+# cspell:ignore batchmode defaut sembleignore
 {
   lib,
   pkgs,
@@ -336,6 +336,89 @@ in {
         rawDisabled.config.assertions;
     in
       lib.all (backend: lib.all (name: check backend backends.${backend} name cases.${name}) (builtins.attrNames cases)) (builtins.attrNames backends));
+
+    # cli.json's complete dotted keys form one struct level. Unknown names warn
+    # on both backends; devenv still rejects keys outside its workspace list.
+    # Payloads below a complete key stay open.
+    module-kiro-native-settings-unrecognized-warns = mkTest "kiro-native-settings-unrecognized-warns" (let
+      check = backend: evaluate: let
+        unknown = evaluate {
+          ai.kiro.cli = {
+            enable = true;
+            native.settings.chat.defautModel = "future-model";
+          };
+        };
+        known = evaluate {
+          ai.kiro.cli = {
+            enable = true;
+            native.settings = {
+              chat.modelDefaults."future.model".futureField = true;
+              chat.enableTangentMode = true;
+            };
+          };
+        };
+        settingsWarnings = result: lib.filter (lib.hasPrefix "ai.kiro.cli.native.settings") result.config.warnings;
+        warnings = settingsWarnings unknown;
+      in
+        (
+          if backend == "hm"
+          then lib.all (item: item.assertion) unknown.config.assertions
+          else lib.any (item: !item.assertion && lib.hasInfix "chat.defautModel" item.message) unknown.config.assertions
+        )
+        && builtins.length warnings == 1
+        && lib.hasInfix ''ai.kiro.cli.native.settings."chat.defautModel"'' (builtins.head warnings)
+        && lib.hasInfix ''did you mean `ai.kiro.cli.native.settings."chat.defaultModel"`'' (builtins.head warnings)
+        && (hmCliSettings unknown)."chat.defautModel" == "future-model"
+        && settingsWarnings known == []
+        && (hmCliSettings known)."chat.modelDefaults"."future.model".futureField
+        && (hmCliSettings known)."chat.enableTangentMode";
+    in
+      check "hm" evalHm && check "devenv" evalDevenv);
+
+    module-kiro-native-settings-allowlisted = mkTest "kiro-native-settings-allowlisted" (let
+      check = backend: evaluate: let
+        plain = evaluate {ai.kiro.cli.enable = true;};
+        result = evaluate {
+          ai.kiro.cli = {
+            allowUnrecognizedSettings = [''"chat.defautModel"''];
+            enable = true;
+            native.settings.chat.defautModel = "future-model";
+          };
+        };
+        warnings = lib.filter (lib.hasPrefix "ai.kiro.cli.") result.config.warnings;
+      in
+        plain.config.ai.kiro.cli.allowUnrecognizedSettings
+        == []
+        && plain.options.ai.kiro.cli.allowUnrecognizedSettings.type.nestedTypes.elemType.check "example"
+        && !(plain.options.ai.kiro.cli.allowUnrecognizedSettings.type.nestedTypes.elemType.check 42)
+        && warnings == []
+        && (hmCliSettings result)."chat.defautModel" == "future-model"
+        && (
+          if backend == "hm"
+          then lib.all (item: item.assertion) result.config.assertions
+          else lib.any (item: !item.assertion && lib.hasInfix "chat.defautModel" item.message) result.config.assertions
+        );
+    in
+      check "hm" evalHm && check "devenv" evalDevenv);
+
+    module-kiro-native-settings-stale-allowlist-warns = mkTest "kiro-native-settings-stale-allowlist-warns" (let
+      check = evaluate: let
+        result = evaluate {
+          ai.kiro.cli = {
+            allowUnrecognizedSettings = [''"chat.defaultModel"''];
+            enable = true;
+            native.settings.chat.defaultModel = "future-model";
+          };
+        };
+        warnings = lib.filter (lib.hasPrefix "ai.kiro.cli.") result.config.warnings;
+      in
+        lib.all (item: item.assertion) result.config.assertions
+        && builtins.length warnings == 1
+        && lib.hasPrefix "ai.kiro.cli.allowUnrecognizedSettings: stale allowlist entry" (builtins.head warnings)
+        && lib.hasInfix ''"chat.defaultModel"'' (builtins.head warnings)
+        && lib.hasInfix "is already declared; remove it." (builtins.head warnings);
+    in
+      lib.all check [evalHm evalDevenv]);
 
     module-kiro-cli-keybindings-typed = mkTest "kiro-cli-keybindings-typed" (let
       expected = map (lib.removePrefix "chat.keybindings.") (lib.filter (lib.hasPrefix "chat.keybindings.") (kiroFact "settingKeys"));

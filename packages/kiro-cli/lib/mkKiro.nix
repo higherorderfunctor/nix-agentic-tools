@@ -26,6 +26,7 @@
   # backend blocks previously imported it separately.
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
+  openKeys = import ../../../lib/open-keys {inherit lib;};
 
   inherit (aiTypes) enabledTextOrNull;
 
@@ -919,6 +920,14 @@
 
   flattenKiroSettings = aiCommon.flattenDotKeysUntil kiroSettingKeys;
 
+  # The extracted lists omit this existing typed global setting. These are
+  # complete literal file keys; object-valued settings remain opaque below them.
+  knownNativeSettingKeys = lib.unique (kiroSettingKeys ++ ["telemetry.enabled"]);
+  nativeSettingsKnown = openKeys.fromPaths {
+    names = knownNativeSettingKeys;
+    paths = [];
+  };
+
   # The dotted keys a given config would write, in the flattened form the
   # settings file actually carries — the same `flattenKiroSettings` both backends
   # use, so what is checked is exactly what would be written.
@@ -949,8 +958,8 @@
         Workspace-overridable keys for the pinned kiro:
         ${lib.concatStringsSep ", " workspaceOverridableSettings}
 
-        Anything else is global-only: set it under home-manager
-        (`ai.kiro.cli.native.settings`, which owns the global
+        Keys outside that list cannot be delivered at project scope. Configure
+        global-only settings under home-manager (`ai.kiro.cli.native.settings`, which owns the global
         ~/.kiro/settings/cli.json). Without home-manager the global file
         is Kiro's own: `kiro-cli settings <key> <value>`.
 
@@ -1217,6 +1226,16 @@ in
     };
     options = {
       cli = {
+        allowUnrecognizedSettings = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          example = [''"chat.futureSetting"''];
+          description = ''
+            Suppress spelling warnings for intentional unrecognized complete
+            setting keys. This does not change devenv's workspace allowlist.
+            ${openKeys.allowlistSyntax}
+          '';
+        };
         backgroundExecution.enable = lib.mkEnableOption "background execution for v3 sessions; rebind cli.native.settings.chat.keybindings.moveToBackground globally when needed";
         codeToSpec.enable = lib.mkEnableOption "Code-to-Spec Explore and analysis tools (requires cli.v3; devenv also needs global chat.enableC2s)";
         extraPackages = lib.mkOption {
@@ -1312,7 +1331,7 @@ in
                             });
                       };
                       default = {};
-                      description = "Chat key bindings generated from the pinned setting registry; unknown keys remain available through freeform settings.";
+                      description = "Chat key bindings generated from the pinned setting registry; Home Manager also accepts unknown keys through freeform settings.";
                     };
                   };
                 };
@@ -1345,10 +1364,12 @@ in
             that file up and restores the declaration, so in-app changes do not
             persist.
 
-            Known keys are typed; unknown keys are accepted via freeformType —
-            by the TYPE. Whether a key is then honored is a separate question the
-            backend answers, and under devenv the answer is no for anything off
-            the allowlist below, including two of the typed options above
+            Known keys are typed; unknown complete file keys produce a spelling
+            warning on both backends and pass through on Home Manager. Inspection uses the extracted
+            setting registry and workspace list, plus the existing typed telemetry
+            key, and stops below each complete key's value. The lists are not a
+            complete schema. Under devenv every key outside the workspace
+            allowlist is refused, including two of the typed options above
             (`chat.enableWorkflows`, `telemetry.enabled`). Those are global-only
             settings; the type accepts them because Home Manager writes the file
             where they work.
@@ -1365,8 +1386,9 @@ in
             where kiro honors everything. devenv writes the PROJECT-LOCAL
             `<configDir>/settings/cli.json`, which kiro merges over the global one
             through an allowlist — every other key is read and discarded with no
-            warning. The devenv backend therefore REFUSES a non-allowlisted key at
-            eval rather than writing a file that looks applied and is not; the
+            warning. The devenv backend therefore REFUSES every non-allowlisted
+            key at eval rather than writing a file that looks applied and is not.
+            Home Manager keeps unknown keys usable before the facts catch up. The
             assertion names the keys the pinned kiro does honor there. That
             allowlist is extracted from the binary
             (`packages/kiro-cli/extracted/`, `workspaceOverridableSettings`),
@@ -1716,7 +1738,19 @@ in
               ++ mkAgentFormatAssertions nativeAgentPlans
               ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);
           }
-          (lib.optionalAttrs (options ? warnings) {warnings = packageWarnings ++ hookWarnings ++ trustToolsWarnings;})
+          (lib.optionalAttrs (options ? warnings) {
+            warnings =
+              packageWarnings
+              ++ hookWarnings
+              ++ trustToolsWarnings
+              ++ (openKeys.inspect {
+                known = nativeSettingsKnown;
+                value = flatSettings;
+                optionPath = ["ai" "kiro" "cli" "native" "settings"];
+                allowed = cfg.cli.allowUnrecognizedSettings;
+                allowOptionPath = ["ai" "kiro" "cli" "allowUnrecognizedSettings"];
+              }).warnings;
+          })
           {
             # Writer identities survive empty declarations: N→0 must retract
             # earlier files, including when the final hook disappears.

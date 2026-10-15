@@ -1716,7 +1716,7 @@ in {
           description = "Review.";
           instructions.text = "Review carefully.";
         };
-        agentServers.mcp_servers.tracker = remote {inherit oauth;};
+        agentServers.mcp_servers."tracker.dotted" = remote {inherit oauth;};
         pooled.ai = {
           agents.reviewer = reviewAgent;
           codex = {
@@ -1727,27 +1727,29 @@ in {
               reviewer = agentServers;
             };
             mcpServers = {
-              local = remote {codex.oauth = oauth;};
+              "local.dotted" = remote {codex.oauth = oauth;};
               replaced = remote {codex.oauth.client_id = "public-client";};
             };
           };
           mcpServers = {
             replaced = remote {codex.oauth = oauth;};
-            shared = remote {codex.oauth = oauth;};
+            "shared.dotted" = remote {codex.oauth = oauth;};
           };
         };
         native.ai.codex = {
           enable = true;
-          native.settings.mcp_servers.direct = remote {inherit oauth;};
+          native.settings.mcp_servers."direct.dotted" = remote {inherit oauth;};
         };
         secretFailures = result:
           builtins.filter (assertion:
             !assertion.assertion
-            && lib.hasInfix ".oauth.client_secret would copy" assertion.message)
+            && lib.hasInfix ".oauth.client_secret cannot be set:" assertion.message)
           result.config.assertions;
-        # Agent tables get the role-layer remedy, server tables the Nix-managed
-        # credential routes; never the other's, and neither points at a runtime
-        # `codex mcp` command, since Nix owns MCP configuration.
+        # Every route retains the shared credential reason and quotes dotted
+        # names as one segment. Agent tables get the role-layer remedy, server
+        # tables the Nix-managed credential routes; never the other's, and
+        # neither points at a runtime `codex mcp` command, since Nix owns MCP
+        # configuration.
         rejectsExactly = paths: result: let
           failures = secretFailures result;
         in
@@ -1755,8 +1757,16 @@ in {
           == builtins.length (builtins.attrNames paths)
           && lib.all lib.id (lib.mapAttrsToList (path: remedy:
             builtins.any (assertion:
-              lib.hasPrefix "${path}.oauth.client_secret would copy" assertion.message
+              lib.hasPrefix "${path}.oauth.client_secret cannot be set: secret fields carry confidential authentication material." assertion.message
+              && lib.hasSuffix "." assertion.message
+              && lib.hasInfix "world-readable Nix store" assertion.message
+              && lib.hasInfix "environment-variable or file reference" assertion.message
               && lib.hasInfix remedy assertion.message
+              && lib.all (part: lib.hasInfix part assertion.message) (
+                if remedy == agentRemedy
+                then ["ai.mcpServers or ai.codex.mcpServers" "without a client secret"]
+                else ["codex.bearerTokenEnvVar" "codex.envHttpHeaders" "Home Manager's local credential" "proxy.headers"]
+              )
               && !(lib.hasInfix (
                   if remedy == agentRemedy
                   then serverRemedy
@@ -1767,14 +1777,14 @@ in {
             failures)
           paths);
         agentRemedy = "Codex role layers ignore mcp_servers";
-        serverRemedy = "set proxy.enable with the";
+        serverRemedy = "set proxy.enable with";
         pooledPaths = {
-          "ai.codex.native.agents.auditor.mcp_servers.tracker" = agentRemedy;
-          "ai.codex.native.agents.reviewer.mcp_servers.tracker" = agentRemedy;
-          "ai.codex.mcpServers.local.codex" = serverRemedy;
-          "ai.mcpServers.shared.codex" = serverRemedy;
+          "ai.codex.mcpServers.\"local.dotted\".codex" = serverRemedy;
+          "ai.codex.native.agents.auditor.mcp_servers.\"tracker.dotted\"" = agentRemedy;
+          "ai.codex.native.agents.reviewer.mcp_servers.\"tracker.dotted\"" = agentRemedy;
+          "ai.mcpServers.\"shared.dotted\".codex" = serverRemedy;
         };
-        nativePaths."ai.codex.native.settings.mcp_servers.direct" = serverRemedy;
+        nativePaths."ai.codex.native.settings.mcp_servers.\"direct.dotted\"" = serverRemedy;
       in
         builtins.all (evaluate:
           rejectsExactly pooledPaths (evaluate pooled)
