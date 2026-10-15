@@ -21,6 +21,10 @@
       command = "probe";
       headers.Authorization = "probe";
     };
+    proxy = {
+      key.plain = "probe";
+      url = "http://127.0.0.1:8317";
+    };
     rules.probe.text = "probe";
     settings.reasoningEffort = "high";
     shell = pkgs.bash;
