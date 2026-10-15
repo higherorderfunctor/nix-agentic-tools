@@ -12,7 +12,7 @@
   ...
 }: let
   ai = import ../../../lib/ai {inherit lib;};
-  markdown = "Title\n=====\n";
+  markdown = "* item\n";
   document = {
     owned = 3;
     sibling = 2;
@@ -101,8 +101,8 @@ in {
     pkgs.runCommandLocal "ai-module-generated-files" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      # The formatter rewrote the setext heading, so the tree file is formatted.
-      ${pkgs.gnugrep}/bin/grep -qx '# Title' ${source}
+      # Prettier rewrites the `*` bullet to `-`, so the tree file is formatted.
+      ${pkgs.gnugrep}/bin/grep -qx -- '- item' ${source}
       printf 'PASS: staged files reach ai.files2 formatted, mergeable, overridable and gated\n' > "$out"
     '';
 }
