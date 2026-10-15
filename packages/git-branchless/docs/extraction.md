@@ -1,8 +1,8 @@
 # git-branchless config extraction
 
-> **Last verified:** 2026-10-11 — measured-once declared facts use shared
-> readers and `mkOwnerCheck`; update discovery invokes `regenCommand` and the
-> check’s `passthru.regenerate`.
+> **Last verified:** 2026-10-15 — measured-once declared facts are one unforked
+> `extracted.json`, read by shared readers and checked by `mkOwnerCheck`; update
+> discovery invokes `regenCommand` and the check’s `passthru.regenerate`.
 >
 > **Settled — do not relitigate.**
 >
@@ -52,11 +52,11 @@ Every config access goes through `ConfigRead`/`ConfigWrite` in
 
 `extracted/facts.json` declares opaque static objects `deadKeys`, `foreign`,
 `settings` and `source`, plus the `revsetFunctions` list. Every declaration
-requires only `x86_64-linux`, and `extracted/x86_64-linux.json` is the single
-source census. Setting names contain dots and literal `<name>`, so their parent
-object is opaque rather than a wildcard declaration. The shared reader assembles
-the generator's plain tree through `load` and `get`. `source.version` remains
-validated by the generator's `schema.source`.
+requires only `x86_64-linux`, and the unforked `extracted/extracted.json` is the
+single source census. Setting names contain dots and literal `<name>`, so their
+parent object is opaque rather than a wildcard declaration. The shared reader
+assembles the generator's plain tree through `load` and `get`. `source.version`
+remains validated by the generator's `schema.source`.
 
 - `settings.<key>` — every `branchless.*` key: `type` (`bool`, `int`, `string`,
   `path`, `enum` + `values`), `default`, `description`, `status` (`current` /

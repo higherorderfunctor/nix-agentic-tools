@@ -1,0 +1,12 @@
+{
+  "features": {
+    "combine": "equal",
+    "decided": "2026-10-15",
+    "reason": "fixture: a feature one platform lacks is divergent, as Kiro's rolloutFeatures"
+  },
+  "patchability.<name>.unmatchedSites": {
+    "combine": "per-platform",
+    "decided": "2026-10-15",
+    "reason": "fixture: each host keeps its own count, as Kiro's"
+  }
+}

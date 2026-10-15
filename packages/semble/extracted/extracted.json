@@ -732,13 +732,8 @@
         "properties": {
           "content": {
             "anyOf": [
-              {
-                "enum": ["code", "docs", "config", "all"],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+              { "enum": ["code", "docs", "config", "all"], "type": "string" },
+              { "type": "null" }
             ],
             "default": null,
             "description": "Content containing the related file. Defaults to the MCP server configuration.",
@@ -755,30 +750,15 @@
             "type": "integer"
           },
           "max_snippet_lines": {
-            "anyOf": [
-              {
-                "minimum": 0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "minimum": 0, "type": "integer" }, { "type": "null" }],
             "default": 10,
             "description": "Lines of source per result. Default 10 = signature + first body lines. 0 = location only. None = full chunk.",
             "title": "Max Snippet Lines"
           },
           "repo": {
             "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              }
+              { "type": "string" },
+              { "items": { "type": "string" }, "type": "array" }
             ],
             "description": "A local directory path or https:// or http:// git URL (e.g. https://github.com/org/repo) to index and search, or a list of them to search several repos at once. Indexes are cached after the first call, so repeat queries are fast. Multi-repo results prefix file_path with the repo name.",
             "title": "Repo"
@@ -796,12 +776,7 @@
         "type": "object"
       },
       "outputSchema": {
-        "properties": {
-          "result": {
-            "title": "Result",
-            "type": "string"
-          }
-        },
+        "properties": { "result": { "title": "Result", "type": "string" } },
         "required": ["result"],
         "title": "find_relatedOutput",
         "type": "object"
@@ -813,28 +788,15 @@
         "properties": {
           "content": {
             "anyOf": [
-              {
-                "enum": ["code", "docs", "config", "all"],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+              { "enum": ["code", "docs", "config", "all"], "type": "string" },
+              { "type": "null" }
             ],
             "default": null,
             "description": "Content to search. Defaults to the MCP server's configured content.",
             "title": "Content"
           },
           "max_snippet_lines": {
-            "anyOf": [
-              {
-                "minimum": 0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "anyOf": [{ "minimum": 0, "type": "integer" }, { "type": "null" }],
             "default": 10,
             "description": "Lines of source to include per result. Default (10): function/class signature + first body lines, enough to confirm the location. 0: file path and line range only. None: full chunk (~10-20 lines). If the snippet does not contain enough context to confirm you have the right location, call again with max_snippet_lines=None.",
             "title": "Max Snippet Lines"
@@ -846,15 +808,8 @@
           },
           "repo": {
             "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              }
+              { "type": "string" },
+              { "items": { "type": "string" }, "type": "array" }
             ],
             "description": "A local directory path or https:// or http:// git URL (e.g. https://github.com/org/repo) to index and search, or a list of them to search several repos at once. Indexes are cached after the first call, so repeat queries are fast. Multi-repo results prefix file_path with the repo name.",
             "title": "Repo"
@@ -872,12 +827,7 @@
         "type": "object"
       },
       "outputSchema": {
-        "properties": {
-          "result": {
-            "title": "Result",
-            "type": "string"
-          }
-        },
+        "properties": { "result": { "title": "Result", "type": "string" } },
         "required": ["result"],
         "title": "searchOutput",
         "type": "object"

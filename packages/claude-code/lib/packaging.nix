@@ -74,7 +74,7 @@ rec {
     # CONTENT-located: nothing here names a chunk file, a minified identifier or
     # a byte offset, because macOS and Linux builds of one version agree on none
     # of those. (Measured at 2.1.245 and again at 2.1.296: the two platforms'
-    # censuses are byte-identical, so the per-system raws agree and the facts
+    # censuses are byte-identical, so the committed facts carry no fork and
     # merge without a decision row.)
     #
     # bununpack.py prints its graph summary on stdout; send it to stderr so it

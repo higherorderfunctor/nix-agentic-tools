@@ -241,61 +241,51 @@ rec {
       exec ${pkgs.nodejs}/bin/node ${../extract/hook-triggers.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
     '';
 
-  kiroFakeKasScript = pkgs:
-    pkgs.writeTextFile {
-      name = "kiro-extract-fake-kas";
-      executable = true;
-      text = "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../extract/fake-kas.py;
-    };
+  # embedded-kas.py's flags for a release whose CPU is `architecture`; shared
+  # by `mkKiroExtract` and ./kas.nix.
+  kiroEmbeddedArgs = pkgs: architecture: "--architecture ${pkgs.lib.escapeShellArg architecture} --zstd-library ${pkgs.lib.getLib pkgs.zstd}/lib/libzstd${pkgs.stdenv.hostPlatform.extensions.sharedLibrary} --zstd ${pkgs.zstd}/bin/zstd";
 
-  # Every fact the kiro chat binary carries, as one JSON raw.
-  #   root: store path of the derivation that CARRIES the kiro binaries — its
-  #         `$out`, never a path inside `bin/`. The chat binary is resolved
-  #         under it by CONTENT, inside the builder, by `kiroLocateChatScript`;
-  #         nothing about the wrapper naming is assumed. Pass the UNWRAPPED
-  #         derivation where nixpkgs splits one out, since a wrapper-only output
-  #         carries no binary to read.
-  #   pkgs: nixpkgs set.
-  #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
+  # Every fact one platform's release carries, as one JSON raw written to
+  # "$out". Nothing in the release is executed, so the package's update and
+  # drift check read every platform's release on one host.
+  #   pkgs: this host's nixpkgs set.
+  #   release: the fetched release archive, `.tar.gz` or `.dmg`.
+  #   architecture: the release's CPU name, as embedded-kas.py takes it.
   mkKiroExtract = {
     pkgs,
-    root,
-    kas,
-    dest ? "/dev/stdout",
-  }: ''
+    release,
+    architecture,
+  }: let
+    embedded = kiroEmbeddedArgs pkgs architecture;
+  in ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     jq="${pkgs.jq}/bin/jq"
     python3="${pkgs.python3}/bin/python3"
 
-    # LOCATE. Resolved by content in the builder, so eval does no filesystem
-    # guessing and the IFD profile is unchanged. Its own failures are phrased
-    # as location failures.
-    kiroChatBin=$("$python3" ${kiroLocateChatScript pkgs} "${root}")
+    mkdir release
+    ${
+      if pkgs.lib.hasSuffix ".dmg" release.name
+      then "(cd release && ${pkgs.undmg}/bin/undmg ${release})"
+      else "tar -xzf ${release} -C release"
+    }
 
-    if [ ! -f "$kiroChatBin" ] || [ ! -r "$kiroChatBin" ]; then
-      echo "kiro-extract: located chat binary '$kiroChatBin' is missing or unreadable; nothing was extracted (LOCATION failure, not a vocabulary change)" >&2
-      exit 1
-    fi
+    # LOCATE, by content; its own failures are phrased as location failures.
+    kiroChatBin=$("$python3" ${kiroLocateChatScript pkgs} "$PWD/release")
 
-    # KAS is already extracted from the release input; reading it never runs
-    # native code or selects a cache. TUI extraction below remains host-run.
-    kasJs="${kas}/node_modules/@kiro/agent/dist/server/acp-server.js"
-    hookTriggersJson=$(${kiroHookTriggersExtractScript pkgs} "$kasJs")
+    "$python3" ${../extract/embedded-kas.py} "$kiroChatBin" kas ${embedded}
+    hookTriggersJson=$(${kiroHookTriggersExtractScript pkgs} "$PWD/kas/node_modules/@kiro/agent/dist/server/acp-server.js")
     rolloutJson=$("$python3" ${kiroRolloutExtractScript pkgs} "$kiroChatBin")
-    # The chat executable materializes its embedded TUI JavaScript on first
-    # launch. Since 2.23.0 the JS is no longer present as plaintext in the ELF,
-    # so both settings fields come from that authoritative TUI source. The
-    # materializer stops before agent startup and has only a fake KAS available.
-    tuiJs="$PWD/kiro-tui.js"
-    "$python3" ${../extract/embedded-tui.py} "$kiroChatBin" "$tuiJs" ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt ${kiroFakeKasScript pkgs}
-    settingsJson=$(${kiroSettingsExtractScript pkgs} "$tuiJs")
-    # `-S` sorts every object's keys, so both hosts emit one shape and the
+    # Both settings fields come from the TUI JavaScript the chat binary
+    # embeds; it has not been plaintext in the binary since 2.23.0.
+    "$python3" ${../extract/embedded-tui.py} "$kiroChatBin" kiro-tui.js --frames ${../extract/embedded-kas.py} ${embedded}
+    settingsJson=$(${kiroSettingsExtractScript pkgs} kiro-tui.js)
+    # `-S` sorts every object's keys, so every release emits one shape and the
     # field order written here carries no meaning.
     "$jq" -nS --argjson hooks "$hookTriggersJson" \
       --argjson rollout "$rolloutJson" \
       --argjson settings "$settingsJson" \
-      '{hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "${dest}"
+      '{hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "$out"
   '';
 
   # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to

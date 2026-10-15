@@ -21,9 +21,7 @@
       "default": false,
       "description": "By default, git-absorb will only consider files that you've staged to the index via `git add`. However, sometimes one wants to try and absorb from all changes, which would require to stage them first via `git add .`. To avoid this extra step, set `absorb.autoStageIfNothingStaged = true` which tells git-absorb, when no changes are staged, to auto-stage them all, create fixup commits where possible, and unstage remaining changes from the index.",
       "invalid": "default",
-      "reads": {
-        "src/config.rs#auto_stage_if_nothing_staged": ["repository"]
-      },
+      "reads": { "src/config.rs#auto_stage_if_nothing_staged": ["repository"] },
       "status": "current",
       "type": "bool",
       "writes": {}
@@ -37,9 +35,7 @@
       "default": false,
       "description": "By default, git-absorb will generate fixup commits. To instead generate squash commits, set `absorb.createSquashCommits = true`. When this option is set, \"fixup commit\" may be read as \"squash commit\" throughout the documentation. All configuration relating to fixup commits will apply to the squash commits instead.",
       "invalid": "default",
-      "reads": {
-        "src/config.rs#unify": ["repository"]
-      },
+      "reads": { "src/config.rs#unify": ["repository"] },
       "status": "current",
       "type": "bool",
       "writes": {}
@@ -48,9 +44,7 @@
       "default": false,
       "description": "By default, git-absorb will create fixup commits with their messages pointing to the target commit's summary, and if there are duplicate summaries, will fall back to pointing to the target's SHA. Instead, can always point to the target's SHA via `absorb.fixupTargetAlwaysSHA = true`.",
       "invalid": "default",
-      "reads": {
-        "src/config.rs#fixup_target_always_sha": ["repository"]
-      },
+      "reads": { "src/config.rs#fixup_target_always_sha": ["repository"] },
       "status": "current",
       "type": "bool",
       "writes": {}
@@ -64,9 +58,7 @@
       "default": false,
       "description": "By default, git-absorb will only generate fixup commits for commits that were authored by you. To always generate fixups for any author's commits, set `absorb.forceAuthor = true`.",
       "invalid": "default",
-      "reads": {
-        "src/config.rs#unify": ["repository"]
-      },
+      "reads": { "src/config.rs#unify": ["repository"] },
       "status": "current",
       "type": "bool",
       "writes": {}
@@ -80,9 +72,7 @@
       "default": false,
       "description": "By default, git-absorb will not generate fixup commits when HEAD is not a branch (\"is detached\"). To always generate fixups on detached HEADs, set `absorb.forceDetach = true`.",
       "invalid": "default",
-      "reads": {
-        "src/config.rs#unify": ["repository"]
-      },
+      "reads": { "src/config.rs#unify": ["repository"] },
       "status": "current",
       "type": "bool",
       "writes": {}
@@ -92,9 +82,7 @@
       "description": "When run without `--base`, git-absorb will only search for candidate commits to fixup within a certain range (by default 10). Set `absorb.maxStack = 50`. Stack size can also be disabled temporarily for one command (see `--no-limit`)",
       "invalid": "default",
       "minimum": 1,
-      "reads": {
-        "src/config.rs#max_stack": ["repository"]
-      },
+      "reads": { "src/config.rs#max_stack": ["repository"] },
       "status": "current",
       "type": "int",
       "writes": {}
@@ -108,15 +96,11 @@
       "default": false,
       "description": "By default, git-absorb will generate separate fixup commits for every absorbable hunk. To always generate only 1 fixup commit for all hunks that absorb into the same commit, set `absorb.oneFixupPerCommit = true`.",
       "invalid": "default",
-      "reads": {
-        "src/config.rs#unify": ["repository"]
-      },
+      "reads": { "src/config.rs#unify": ["repository"] },
       "status": "current",
       "type": "bool",
       "writes": {}
     }
   },
-  "source": {
-    "version": "0.9.0"
-  }
+  "source": { "version": "0.9.0" }
 }

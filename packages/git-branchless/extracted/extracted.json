@@ -8,17 +8,13 @@
   "foreign": {
     "advice.detachedHead": {
       "reads": {},
-      "writes": {
-        "git-branchless-init/src/lib.rs#set_configs": ["file"]
-      }
+      "writes": { "git-branchless-init/src/lib.rs#set_configs": ["file"] }
     },
     "alias.<name>": {
       "reads": {
         "git-branchless-init/src/lib.rs#install_alias": ["file", "global"]
       },
-      "writes": {
-        "git-branchless-init/src/lib.rs#install_alias": ["file"]
-      }
+      "writes": { "git-branchless-init/src/lib.rs#install_alias": ["file"] }
     },
     "branch.<name>.pushRemote": {
       "reads": {
@@ -81,21 +77,15 @@
     },
     "log.excludeDecoration": {
       "reads": {},
-      "writes": {
-        "git-branchless-init/src/lib.rs#set_configs": ["file"]
-      }
+      "writes": { "git-branchless-init/src/lib.rs#set_configs": ["file"] }
     },
     "man.branchless.cmd": {
       "reads": {},
-      "writes": {
-        "git-branchless-init/src/lib.rs#install_man_pages": ["file"]
-      }
+      "writes": { "git-branchless-init/src/lib.rs#install_man_pages": ["file"] }
     },
     "man.viewer": {
       "reads": {},
-      "writes": {
-        "git-branchless-init/src/lib.rs#install_man_pages": ["file"]
-      }
+      "writes": { "git-branchless-init/src/lib.rs#install_man_pages": ["file"] }
     },
     "remote.<name>.gh-resolved": {
       "reads": {
@@ -207,9 +197,7 @@
         ]
       },
       "status": "current",
-      "writes": {
-        "git-branchless-init/src/lib.rs#set_configs": ["file"]
-      }
+      "writes": { "git-branchless-init/src/lib.rs#set_configs": ["file"] }
     },
     "branchless.core.protectCheckedOutBranches": {
       "default": true,
@@ -328,10 +316,7 @@
       "status": "current",
       "type": "enum",
       "values": [
-        {
-          "description": "Add all untracked files.",
-          "value": "add"
-        },
+        { "description": "Add all untracked files.", "value": "add" },
         {
           "description": "Disable all untracked file checking and processing.",
           "value": "disable"
@@ -340,10 +325,7 @@
           "description": "Prompt the user about how to handle each untracked file.",
           "value": "prompt"
         },
-        {
-          "description": "Skip all untracked files.",
-          "value": "skip"
-        }
+        { "description": "Skip all untracked files.", "value": "skip" }
       ],
       "writes": {}
     },
@@ -360,9 +342,7 @@
       "writes": {}
     },
     "branchless.revsets.alias.<name>": {
-      "reads": {
-        "git-branchless-revset/src/eval.rs#eval_fn": ["repository"]
-      },
+      "reads": { "git-branchless-revset/src/eval.rs#eval_fn": ["repository"] },
       "status": "current",
       "type": "string",
       "writes": {}
@@ -414,9 +394,7 @@
       "writes": {}
     },
     "branchless.test.jobs": {
-      "reads": {
-        "git-branchless-test/src/lib.rs#resolve": ["repository"]
-      },
+      "reads": { "git-branchless-test/src/lib.rs#resolve": ["repository"] },
       "status": "current",
       "type": "int",
       "writes": {}
@@ -424,9 +402,7 @@
     "branchless.test.strategy": {
       "default": "working-copy",
       "description": "How to execute tests.",
-      "reads": {
-        "git-branchless-test/src/lib.rs#resolve": ["repository"]
-      },
+      "reads": { "git-branchless-test/src/lib.rs#resolve": ["repository"] },
       "status": "current",
       "type": "enum",
       "values": [
@@ -454,7 +430,5 @@
       "writes": {}
     }
   },
-  "source": {
-    "version": "0.11.1"
-  }
+  "source": { "version": "0.11.1" }
 }

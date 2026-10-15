@@ -75,24 +75,31 @@ def validate_archive(archive, destination):
     return metadata, members
 
 
-def extract(binary, destination, architecture, library, zstd):
+def frames(data, start, end, library):
+    """Every complete zstd frame in data[start:end], as (offset, frame bytes).
+
+    embedded-tui.py reads the TUI through this scan too.
+    """
     decoder = ctypes.CDLL(library)
     decoder.ZSTD_findFrameCompressedSize.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
     decoder.ZSTD_findFrameCompressedSize.restype = ctypes.c_size_t
     decoder.ZSTD_isError.argtypes = [ctypes.c_size_t]
     decoder.ZSTD_isError.restype = ctypes.c_uint
+    position = start
+    while (position := data.find(MAGIC, position, end)) != -1:
+        pointer = ctypes.addressof(ctypes.c_char.from_buffer(data, position))
+        size = decoder.ZSTD_findFrameCompressedSize(pointer, end - position)
+        offset = position
+        position += len(MAGIC)
+        if not decoder.ZSTD_isError(size):
+            yield offset, data[offset:offset + size]
+
+
+def extract(binary, destination, architecture, library, zstd):
     candidates = []
     with binary.open("rb") as source, mmap.mmap(source.fileno(), 0, access=mmap.ACCESS_COPY) as data, tempfile.TemporaryDirectory() as tmp:
         start, end = architecture_range(data, architecture)
-        position = start
-        while (position := data.find(MAGIC, position, end)) != -1:
-            pointer = ctypes.addressof(ctypes.c_char.from_buffer(data, position))
-            size = decoder.ZSTD_findFrameCompressedSize(pointer, end - position)
-            offset = position
-            position += len(MAGIC)
-            if decoder.ZSTD_isError(size):
-                continue
-            frame = data[offset:offset + size]
+        for offset, frame in frames(data, start, end, library):
             digest = hashlib.sha256(frame).hexdigest()
             archive_path = Path(tmp) / f"{offset}.tar"
             with archive_path.open("wb") as target:

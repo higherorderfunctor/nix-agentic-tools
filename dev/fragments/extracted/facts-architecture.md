@@ -1,8 +1,9 @@
 # Extracted facts: the architecture
 
-> **Last verified:** 2026-10-15 — every extractor owner is on the contract;
-> Darwin CI selects host-run owners from declarations through the shared Nix
-> owner map. Probes are not on the contract yet.
+> **Last verified:** 2026-10-15 — every owner commits one forked
+> `extracted.json`; only a Linux carry makes Darwin follow; Kiro reads both
+> releases statically on Linux, so Darwin CI selects Codex alone. Probes are not
+> on the contract yet.
 
 The contract (`facts-contract.md`, same category) is the spec: file shapes,
 functions, failure kinds. This file is the why and the rules that keep the
@@ -15,7 +16,7 @@ Five stages. Two of them take human input, and they are different inputs.
 
 | Stage     | Lives in                                          | Written by                | Holds                                                                       |
 | --------- | ------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------- |
-| extract   | `packages/<owner>/extract/`, `passthru.extracted` | the extractor, in a build | one raw value tree per system, `extracted/<system>.json`                    |
+| extract   | `packages/<owner>/extract/`, `passthru.extracted` | the extractor, in a build | one raw per system, carried into the forked `extracted/extracted.json`      |
 | declare   | `packages/<owner>/extracted/facts.json`           | the extractor's author    | one row per key: type, source, which systems must carry it                  |
 | decide    | `packages/<owner>/extracted/decisions.json`       | a human, dated            | ONLY how a key combines when systems disagree; absent when nothing diverges |
 | aggregate | `lib.extracted.load` → `checks.extracted-index`   | evaluation                | the combined value per key; `index.json` for readers outside Nix            |
@@ -31,8 +32,29 @@ Kiro and Codex) have no decisions file.
 
 Consumers read the aggregate with `get` and `children`, at the place the value
 is used. Nothing else reads a raw: the guard (`checks.extracted-contract-guard`)
-fails any owner file that opens `<system>.json`, reaches into `bySystem` or
-defines a combine.
+fails any owner file that names `extracted/extracted.json` or `__platforms`,
+reaches into `bySystem` or defines a combine.
+
+## One file, carried per host
+
+Each per-system extraction runs on a declared host, its derivation's `system`. A
+static read of another platform's artifact runs on Linux and fills that
+platform's side; only an extraction that must execute the binary runs on the
+macOS runner, and it writes only Darwin's side. `regenerate` carries each host's
+fresh raws into the one committed file. Only a carry from the base system,
+`x86_64-linux`, makes the other systems follow every unforked node while keeping
+their forks; any other host's carry leaves the rest exactly as committed, so a
+difference new in its release becomes a fork that the next Linux carry keeps.
+Following from both hosts would let each regenerate overwrite the other's side,
+and no new difference could ever fork. Following from Linux is what keeps a
+Linux bump evaluable: the per-system files it replaced let a Linux update
+rewrite only Linux's raw, and every `equal` key a new release changed went
+`divergent` against the stale Darwin raw. `get` throws on that at evaluation,
+and `checks` forces every fact, so the Darwin regenerate that would have fixed
+it could not evaluate (PR #2559, kiro 2.29.1 → 2.31.1, 2026-10-15).
+
+Darwin CI's `extracted-facts` job therefore runs only owners with a `host-run`
+row for Darwin, today Codex (clap help is compiled per platform).
 
 ## The subtractive rule
 
@@ -51,10 +73,11 @@ serves a named consumer. Concretely:
   presence-only need (`{ key = "..."; }`), and the fixtures keep that working;
   owners do not write one, because `get` already throws on a missing key, so a
   presence row is the same check written twice.
-- **Measured once means one raw.** An owner whose extraction is the same on
-  every host commits `x86_64-linux.json` only, with
-  `"systems": ["x86_64-linux"]` on every row; the darwin CI leg verifies against
-  that one raw. A byte-identical second raw is a defect.
+- **Measured once means no forks.** An owner whose extraction is the same on
+  every host commits its Linux raw unforked, with `"systems": ["x86_64-linux"]`
+  on every row; a Darwin host's own extraction is still compared with its
+  projection. A fork whose sides are equal is a defect: `merge` never writes
+  one.
 - **No decision without a printed divergence.** A `decisions.json` row exists
   because the drift check failed `divergent` and printed it. An empty
   `decisions.json` is deleted; `load` treats absent as `{}`.
@@ -71,6 +94,20 @@ serves a named consumer. Concretely:
 - **Delete in the PR that removes the last caller.** `mkExtractRegen`,
   `mkRegenerateExtracted` and single-mode `mkDriftCheck` outlived their last
   caller by three PRs because deletion was "a later batch". It is not.
+
+## Settled — do not relitigate
+
+- **Per-system raw files, retired 2026-10-15.** `<system>.json` per owner left
+  each host free to rewrite only its own raw, which made every release bump a
+  two-host race (PR #2559). Making `checks` lazy does not help: the rejected
+  `lazyAttrsOf` probe still failed, because derived check names force every
+  `ciPackages` entry. The fix is the single carried file.
+- **Kiro's TUI is decoded, not materialized.** Its settings came from running
+  the chat binary in a PTY until it wrote `tui.js`. The same payload is a zstd
+  frame in the binary followed by its SHA-256 hex, which the chat binary accepts
+  as `tui.js.sha256`; the static read matched the host-run facts byte for byte
+  on 2.29.1 for both platforms (2026-10-15). Only the asset loader was not
+  disassembled.
 - **A hand-copied measured fact is a defect, not a backlog.** The 2026-10-10
   census counted 572 facts hand-copied into docs and tables, 281 with no feed.
   That number is a measurement of the problem, not a work list; the fix is a

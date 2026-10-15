@@ -1,83 +1,67 @@
 {pkgs}: let
   inherit (pkgs) lib;
   facts = import ./facts.nix {inherit lib;};
+  platforms = import ./platforms.nix;
   host = pkgs.stdenv.hostPlatform.system;
   # The drift check's `passthru.regenerate`; regenCommand runs it.
   regenerateName = name: "${name}-regenerate-extracted";
   mkDriftCheck = {
-    # The owner's `extracted/` directory; `<system>.json` is derived under it.
+    # The owner's committed `extracted.json`.
     committed,
-    # `{ "<system>" = derivation; }`.
+    # `{ "<system>" = derivation; }`; a derivation's `system` is the host its
+    # extraction runs on.
     extracted,
     name,
     results ? {},
-    # The sidecar's repository path, as a string, for messages only. A path
-    # derived from `committed` would move with its owner, and
-    # checks.facet-owner-relocation requires the check not to. It names
-    # the directory, like `committed`.
+    # The committed file's repository path, as a string, for messages and
+    # `regenerate`. A path derived from `committed` would move with its owner,
+    # and checks.facet-owner-relocation requires the check not to.
     sidecar,
   }: let
     failures = lib.concatMap (surface: surface.failures) (builtins.attrValues results);
-    # A host-run extractor builds only on its own system; a static one may
-    # supply every system's raw from this host. Each is compared, and
-    # regenerated, at the same derived paths.
-    targets =
-      map (system: let
-        present = builtins.filter (candidate: builtins.hasAttr "${candidate}.json" (builtins.readDir committed)) (import ../../config/systems.nix);
-        measured =
-          if builtins.pathExists (committed + "/${system}.json")
-          then system
-          else if builtins.length present == 1
-          then builtins.head present
-          else throw "mkDriftCheck: ${toString committed} expected ${system}.json or exactly one raw named by config/systems.nix";
-      in {
-        committed = committed + "/${measured}.json";
-        extracted = extracted.${system};
-        sidecar = "${sidecar}/${measured}.json";
-      })
-      (builtins.filter (system: extracted ? ${system} && extracted.${system}.system == host) (import ../../config/systems.nix));
-    compare = {
-      committed,
-      extracted,
-      # Record drift and fail after comparing every buildable extraction.
-      onDrift,
-      # The operator's commands, as `echo` lines to stderr.
-      regenerate,
-      sidecar,
-    }: ''
-      if ! "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} '$a == $b' > /dev/null; then
-        echo "FAIL: ${name} sidecar (${sidecar}) is out of sync with its extraction sources." >&2
-        "$jq" -S . ${committed} > committed.json
-        "$jq" -S . ${extracted} > fresh.json
+    merged = builtins.fromJSON (builtins.readFile committed);
+    # Every system whose extraction runs on this host, compared with its
+    # projection of the committed file.
+    handled = builtins.filter (system: extracted ? ${system} && extracted.${system}.system == host) (import ../../config/systems.nix);
+    projection = system: pkgs.writeText "${name}-${system}-committed.json" (builtins.toJSON (platforms.project merged system));
+    compare = system: ''
+      if ! "$jq" -e -n --slurpfile a ${extracted.${system}} --slurpfile b ${projection system} '$a == $b' > /dev/null; then
+        echo "FAIL: ${name}: the ${system} side of ${sidecar} is out of sync with its extraction sources." >&2
+        "$jq" -S . ${projection system} > committed.json
+        "$jq" -S . ${extracted.${system}} > fresh.json
         ${pkgs.diffutils}/bin/diff -u committed.json fresh.json >&2 || :
         echo "Regenerate from the repository root:" >&2
-        ${regenerate}
-        ${onDrift}
+        echo '  nix run .#checks.${host}.${name}-extracted.passthru.regenerate' >&2
+        drifted=1
       fi
     '';
-    comparisons = ''
-      drifted=0
-      ${lib.concatMapStrings (target:
-        compare (target
-          // {
-            onDrift = "drifted=1";
-            regenerate = "echo '  nix run .#checks.${host}.${name}-extracted.passthru.regenerate' >&2";
-          }))
-      targets}if [ "$drifted" -eq 1 ]; then exit 1; fi
-    '';
-    # Copies each buildable extraction over the same sidecar it compared,
-    # including the sole committed raw of an owner measured once.
+    # Carries this host's fresh raws into the committed file; only an
+    # x86_64-linux carry makes the other systems follow (platforms.nix carry).
     regenerate = import ../strict-shell-application.nix pkgs {
       name = regenerateName name;
       text =
-        lib.concatMapStrings (target: ''
-          echo "${name}: regenerating ${target.sidecar}"
-          ${pkgs.coreutils}/bin/cp ${target.extracted} ${target.sidecar}
-          ${pkgs.coreutils}/bin/chmod 644 ${target.sidecar}
-          ${pkgs.nix}/bin/nix fmt -- ${target.sidecar}
-          echo "${name}: wrote ${target.sidecar}"
-        '')
-        targets;
+        if handled == []
+        then ''
+          echo "${name}: no extraction runs on ${host}; ${sidecar} is unchanged"
+        ''
+        else ''
+          echo "${name}: carrying ${toString handled} into ${sidecar}"
+          ${pkgs.nix}/bin/nix-instantiate --eval --strict --json \
+            --argstr committed "$PWD/${sidecar}" --expr ${lib.escapeShellArg ''
+            {committed}: let
+              read = file: builtins.fromJSON (builtins.readFile file);
+            in
+              (import ${./platforms.nix}).carry {
+                fresh = {${lib.concatMapStrings (system: "\"${system}\" = read \"${extracted.${system}}\"; ") handled}};
+                merged = read committed;
+                systems = builtins.fromJSON ${builtins.toJSON (builtins.toJSON (import ../../config/systems.nix))};
+              }
+          ''} > "${sidecar}.new"
+          ${pkgs.coreutils}/bin/mv "${sidecar}.new" "${sidecar}"
+          ${pkgs.coreutils}/bin/chmod 644 "${sidecar}"
+          ${pkgs.nix}/bin/nix fmt -- "${sidecar}"
+          echo "${name}: wrote ${sidecar}"
+        '';
     };
   in {
     "${name}-extracted" =
@@ -87,7 +71,9 @@
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         jq="${pkgs.jq}/bin/jq"
-        ${comparisons}${lib.optionalString (failures != []) ''
+        drifted=0
+        ${lib.concatMapStrings compare handled}if [ "$drifted" -eq 1 ]; then exit 1; fi
+        ${lib.optionalString (failures != []) ''
           echo 'FAIL: ${name} extraction rows need attention:' >&2
           "$jq" . ${pkgs.writeText "${name}-extracted-failures.json" (builtins.toJSON failures)} >&2
           exit 1
@@ -105,15 +91,16 @@ in {
     dir,
     name,
     needs ? [],
-    package,
+    package ? null,
+    # An owner whose extractions run on other hosts names each one.
+    extracted ? {${host} = package.passthru.extracted;},
     results ? {},
   }: let
     ownerFacts = facts.load {inherit dir;};
   in
     mkDriftCheck {
-      committed = dir;
-      extracted.${host} = package.passthru.extracted;
-      inherit name;
+      committed = dir + "/extracted.json";
+      inherit extracted name;
       # `facts` and `consumers` are this builder's own surfaces; an owner's
       # `results` (reconcile output) may not shadow them, or a supplied
       # `facts.failures = []` would silence every merge failure.
@@ -129,11 +116,11 @@ in {
             };
             facts = ownerFacts;
           });
-      sidecar = "packages/${name}/extracted";
+      sidecar = "packages/${name}/extracted/extracted.json";
     };
 
-  # An owner's update script regenerates its per-system raws on this host;
-  # the script echoes each written path.
+  # An owner's update script carries this host's extractions into its
+  # committed file; the script echoes the written path.
   regenCommand = {name}: ''
     regenerate=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
       ".#checks.${host}.${name}-extracted.passthru.regenerate")

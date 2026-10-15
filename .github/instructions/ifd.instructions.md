@@ -8,8 +8,8 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 ## IFD Patterns and Gotchas
 
 > **Last verified:** 2026-10-15 — Kiro's rollout manifest is JSON-decoded and
-> its closed-formals reader replaces the entry floor; KAS extraction stays
-> static and TUI a sandboxed host-run extraction.
+> its closed-formals reader replaces the entry floor; KAS and the TUI are both
+> decoded statically from each platform's release on Linux.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -246,29 +246,29 @@ than anything this repo recognizes by eye. Everything located by that path is
 located by CONTENT — never a chunk filename, a minified identifier or a byte
 offset, none of which the macOS and Linux builds of one version agree on. That
 lets each host extract its own release binary. Claude is measured once on Linux
-in `packages/claude-code/extracted/`; Darwin validates its own fresh extraction
-against that raw, including the whole `settings.paths` schema. Kimchi's
-JavaScript extractor reads the hash-pinned release source, exact pi npm package,
-and the three pi declaration packages imported by its settings type through
-nixpkgs' pinned TypeScript compiler API. The checker supplies declared settings
-keys and types; syntax-tree queries supply validation and environment access
-sites. It measures both native settings files and every environment read it can
-resolve without unpacking the Bun executable or pattern-matching TypeScript
-text. It extracted both CLI layers until 2026-09-23; that surface was dropped
-because the Kimchi wrapper passes no flags, so nothing read it. The code is at
-`git show b92a18a8:packages/kimchi/extract/extract.mjs` if a consumer appears.
-Two measurements are attribution, not collection. A `JSON.parse` in `config.ts`
-counts toward `config.json` only when its `readFileSync` path resolves there;
-1.1.30 also parses `harness/settings.json` in that file, and a read that
-resolves to neither fails the extraction. The extractor emits every resolved
-environment name; reconcile in `packages/kimchi/extract/rules.nix` decides its
-optional controls prose or grouped ignore reason. Reconcile fails a hand row
-whose name vanished and a new secret without a recorded row. Harness keys take
-the same path: a key Kimchi reads that is neither a pi `Settings` key nor a
-typed addition is emitted with `type = null`, and reconcile fails it as
-`needs-human` until a row supplies the type or an ignore reason. pi's own
-variable names come from Kimchi's `piConfig.name` the way pi derives them, not
-from pi's `PI_` default.
+in `packages/claude-code/extracted/extracted.json`; Darwin validates its own
+fresh extraction against its projection, including the whole `settings.paths`
+schema. Kimchi's JavaScript extractor reads the hash-pinned release source,
+exact pi npm package, and the three pi declaration packages imported by its
+settings type through nixpkgs' pinned TypeScript compiler API. The checker
+supplies declared settings keys and types; syntax-tree queries supply validation
+and environment access sites. It measures both native settings files and every
+environment read it can resolve without unpacking the Bun executable or
+pattern-matching TypeScript text. It extracted both CLI layers until 2026-09-23;
+that surface was dropped because the Kimchi wrapper passes no flags, so nothing
+read it. The code is at `git show b92a18a8:packages/kimchi/extract/extract.mjs`
+if a consumer appears. Two measurements are attribution, not collection. A
+`JSON.parse` in `config.ts` counts toward `config.json` only when its
+`readFileSync` path resolves there; 1.1.30 also parses `harness/settings.json`
+in that file, and a read that resolves to neither fails the extraction. The
+extractor emits every resolved environment name; reconcile in
+`packages/kimchi/extract/rules.nix` decides its optional controls prose or
+grouped ignore reason. Reconcile fails a hand row whose name vanished and a new
+secret without a recorded row. Harness keys take the same path: a key Kimchi
+reads that is neither a pi `Settings` key nor a typed addition is emitted with
+`type = null`, and reconcile fails it as `needs-human` until a row supplies the
+type or an ignore reason. pi's own variable names come from Kimchi's
+`piConfig.name` the way pi derives them, not from pi's `PI_` default.
 
 Owner layout, combination and platform rules live in the
 `dev/fragments/extracted/facts-contract.md`.
@@ -375,27 +375,28 @@ rollout manifest works this way (`extract/rollout-coverage.nix`), per
 
 Kiro 2.23.0 stopped exposing its TUI JavaScript as plaintext in the chat
 executable. An ELF byte scan therefore lost the registry even though the
-registry still exists in the compressed source materialized on first launch. The
-extractor requires a sandboxed Nix build with fake KAS and isolated state; CI
-explicitly enables and checks the sandbox on both platforms. It checks the
-materialized SHA-256, then parses the actual source. HOME/XDG isolation alone is
-insufficient: native credential discovery can reach host facilities outside
-those directories.
+registry still exists in the compressed source the binary writes on first
+launch. `extract/embedded-tui.py` decodes that source statically: it is one zstd
+frame in the target architecture's slice, followed directly by the SHA-256 hex
+of the decompressed payload, the checksum the binary itself accepts as
+`tui.js.sha256`. Exactly one bun-script frame with that adjacent checksum is
+required. Nothing executes, so Linux reads the Darwin release too (the
+`extracted` attribute set in `packages/ai/kiro-cli/package.nix`).
 
 The TypeScript AST probe requires one settings registry, one workspace
 allowlist, and a merge that consults that very set. It evaluates their validated
 expressions and the selected merge helper with inert loaders in an isolated
 JavaScript VM. Missing or ambiguous anchors fail.
 
-Hook triggers come from the package-bound KAS `acp-server.js`, statically
-extracted from the fetched release before native CLI packaging. The hook map
-facts are now `static`; TUI settings remain `host-run`. The KAS extractor
-selects the target Mach-O architecture, validates its compressed frame checksum
-and full archive layout, and installs one selected runtime tree. The final CLI
-may reference KAS; KAS never references the final CLI. No consumer reads the
-output at evaluation. `extract/hook-triggers.mjs` still locates the frozen map
-by decoded `SessionStart` key, requires literal entries and canonical identity
-entries, and emits `hookTriggers` plus `hookTriggerAliases`. See
+Hook triggers come from the KAS `acp-server.js` each release embeds; the package
+binds the same KAS, extracted from the fetched release before native CLI
+packaging. Every Kiro fact is `static`. The KAS extractor selects the target
+Mach-O architecture, validates its compressed frame checksum and full archive
+layout, and installs one selected runtime tree. The final CLI may reference KAS;
+KAS never references the final CLI. No consumer reads the output at evaluation.
+`extract/hook-triggers.mjs` still locates the frozen map by decoded
+`SessionStart` key, requires literal entries and canonical identity entries, and
+emits `hookTriggers` plus `hookTriggerAliases`. See
 `packages/kiro-cli/docs/launcher-argv.md` for package and patch selection.
 
 #### An anchor can lose its TYPE information without losing its match

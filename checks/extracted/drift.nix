@@ -1,8 +1,8 @@
 # mkDriftCheck with per-system inputs. Each case runs the generated drift
 # script outside its derivation, so a case that must fail can, and asserts
 # the exit status and the message the operator reads. A case with
-# `regenerate` reads the per-system regenerate script's text for the
-# sidecars it must write (`names`) and must not (`omits`).
+# `regenerate` reads the regenerate script's text for the fresh raws it must
+# carry (`names`) and must not (`omits`).
 {
   lib,
   pkgs,
@@ -20,103 +20,88 @@
     name = "foreign-extracted";
     system = other;
   };
-  # An owner's `extracted/` directory, as the string of a store path so
-  # mkDriftCheck can append `/<system>.json` as it does to `./extracted`.
-  directory = raws: "${pkgs.linkFarm "committed" (lib.mapAttrsToList (system: value: {
-      name = "${system}.json";
-      path = raw system value;
-    })
-    raws)}";
-  sidecar = "packages/fake/extracted";
+  # The committed file, written at evaluation time so reading it is no
+  # import from derivation.
+  committed = merged: builtins.toFile "extracted.json" (builtins.toJSON merged);
+  sidecar = "packages/fake/extracted/extracted.json";
+  fresh = {
+    drifted = raw "fresh-drifted" {a = 2;};
+    matching = raw "fresh-matching" {a = 1;};
+  };
   cases = {
-    measured-once-drift = {
+    # A fork is compared through the host's projection, not the stored tree.
+    forked-match = {
       args = {
-        committed = directory {${other} = {a = 1;};};
-        extracted.${host} = raw "extracted" {a = 2;};
-        inherit sidecar;
+        committed = committed {
+          a.__platforms = {
+            ${host} = 1;
+            ${other} = 2;
+          };
+        };
+        extracted.${host} = fresh.matching;
       };
-      fails = ["${sidecar}/${other}.json"];
-      omits = ["${sidecar}/${host}.json"];
-    };
-    measured-once-match = {
-      args = {
-        committed = directory {${other} = {a = 1;};};
-        extracted.${host} = raw "extracted" {a = 1;};
-        inherit sidecar;
-      };
-      regenerate = {
-        names = ["${sidecar}/${other}.json"];
-        omits = ["${sidecar}/${host}.json"];
-      };
+      regenerate.names = [fresh.matching];
     };
     per-system-drift = {
       args = {
-        committed = directory {${host} = {a = 1;};};
-        extracted.${host} = raw "extracted" {a = 2;};
-        inherit sidecar;
+        committed = committed {a = 1;};
+        extracted.${host} = fresh.drifted;
       };
-      fails = ["${sidecar}/${host}.json"];
+      fails = [host];
+      omits = [other];
     };
     per-system-skips-foreign = {
       args = {
-        committed = directory {
-          ${host} = {a = 1;};
-          ${other} = {a = 0;};
-        };
+        committed = committed {a = 1;};
         extracted = {
-          ${host} = raw "extracted" {a = 1;};
+          ${host} = fresh.matching;
           ${other} = foreign;
         };
-        inherit sidecar;
       };
       regenerate = {
-        names = ["${sidecar}/${host}.json"];
-        omits = ["${sidecar}/${other}.json"];
+        names = [fresh.matching];
+        omits = [foreign];
       };
     };
     # Every drifted system is named before the check fails.
     static-names-both = {
       args = {
-        committed = directory {
-          ${host} = {a = 0;};
-          ${other} = {a = 0;};
-        };
+        committed = committed {a = 0;};
         extracted = {
-          ${host} = raw "fresh-host" {a = 1;};
-          ${other} = raw "fresh-other" {a = 2;};
+          ${host} = fresh.matching;
+          ${other} = fresh.drifted;
         };
-        inherit sidecar;
       };
-      fails = ["${sidecar}/${host}.json" "${sidecar}/${other}.json"];
+      fails = [host other];
     };
     # A static extractor supplies every system from this host; only the
     # drifted one is named, the matching one is not.
     static-names-drifted = {
       args = {
-        committed = directory {
-          ${host} = {a = 1;};
-          ${other} = {a = 0;};
-        };
+        committed = committed {a = 1;};
         extracted = {
-          ${host} = raw "extracted" {a = 1;};
-          ${other} = raw "fresh" {a = 2;};
+          ${host} = fresh.matching;
+          ${other} = fresh.drifted;
         };
-        inherit sidecar;
       };
-      fails = ["${sidecar}/${other}.json"];
-      omits = ["${sidecar}/${host}.json"];
+      fails = [other];
+      omits = [host];
+      regenerate.names = [fresh.matching fresh.drifted];
     };
   };
-  check = case: (mkDriftCheck (case.args // {name = "fake";})).fake-extracted;
+  check = case: (mkDriftCheck (case.args // {inherit sidecar name;})).fake-extracted;
+  name = "fake";
   script = case: (check case).buildCommand;
   # Unmet `regenerate` expectations, each naming its case.
   regenerating = lib.concatLists (lib.mapAttrsToList (label: case: let
-    inherit ((check case).regenerate) text;
+    # The store paths only: matching needs no build of what they name.
+    text = builtins.unsafeDiscardStringContext (check case).regenerate.text;
+    carries = path: lib.hasInfix (builtins.unsafeDiscardStringContext "${path}") text;
   in
-    map (path: "${label} does not write ${path}") (builtins.filter (path: !lib.hasInfix path text) case.regenerate.names)
-    ++ map (path: "${label} writes ${path}") (builtins.filter (path: lib.hasInfix path text) case.regenerate.omits))
+    map (path: "${label} does not carry ${path}") (builtins.filter (path: !carries path) case.regenerate.names or [])
+    ++ map (path: "${label} carries ${path}") (builtins.filter carries case.regenerate.omits or []))
   (lib.filterAttrs (_: case: case ? regenerate) cases));
-  named = path: "sidecar (${path})";
+  named = system: "the ${system} side of ${sidecar}";
   run = label: case:
     runner {
       inherit label;

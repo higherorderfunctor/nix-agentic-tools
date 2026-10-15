@@ -24,11 +24,11 @@
     "type": "object"
   },
   "settingKeys": {
-    "source": "host-run",
+    "source": "static",
     "type": "set"
   },
   "workspaceOverridableSettings": {
-    "source": "host-run",
+    "source": "static",
     "type": "set"
   }
 }
