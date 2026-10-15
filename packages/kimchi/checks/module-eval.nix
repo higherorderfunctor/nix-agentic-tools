@@ -72,25 +72,28 @@
     enableInstallTelemetry = false;
     theme = "kimchi-minimal";
   };
-  # The keys come from the sidecar; each needs a sample value here, so a key
-  # that becomes user-scope fails evaluation until someone adds one.
+  # The keys and boolean samples come from the sidecar; other shapes need a
+  # deliberate sample so a new user-scope key cannot pass unnoticed.
+  facts = import ../../../lib/extracted/facts.nix {inherit lib;};
+  inherit (facts) get;
+  inherit (facts.load {dir = ../extracted;}) aggregate;
   userScopeOnlyHarnessSettingKeys =
     (import ../lib/extracted.nix {
-      inherit extractedLib lib pkgs;
-      inherit ((import ../../../lib/extracted/facts.nix {inherit lib;}).load {dir = ../extracted;}) aggregate;
+      inherit aggregate extractedLib lib pkgs;
     }).userScopeHarnessKeys;
   userScopeOnlyHarnessSettingValues = {
     defaultProjectTrust = "always";
     fermentV2.autoResume = true;
-    hidePhaseChanges = true;
     httpProxy = "http://proxy.invalid:3128";
     lastTerminalWarnings.kitty = "0.35.0";
     modelMetadata.example.description = "Example model";
     modelRoles.builder = "provider/model";
-    multiModel = true;
-    shellProfileApiKeyMigrationDismissed = true;
     statusLine.pinned = ["model"];
   };
+  userScopeOnlyHarnessSettingValue = key:
+    if (get aggregate "harness.keys.${key}").type == "boolean"
+    then true
+    else userScopeOnlyHarnessSettingValues.${key} or (throw "packages/kimchi/checks/module-eval.nix: add a sample value for the user-scope harness key ${key}");
   kimchiStub = pkgs.writeShellScriptBin "kimchi" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -165,8 +168,7 @@
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
-            native.harnessSettings = lib.setAttrByPath [key] (userScopeOnlyHarnessSettingValues.${key}
-              or (throw "packages/kimchi/checks/module-eval.nix: add a sample value for the user-scope harness key ${key}"));
+            native.harnessSettings = lib.setAttrByPath [key] (userScopeOnlyHarnessSettingValue key);
           };
         };
         failed = builtins.filter (entry: !entry.assertion) rejected.config.assertions;
@@ -179,7 +181,7 @@
           (evalHm {
             ai.kimchi = {
               enable = true;
-              native.harnessSettings = lib.setAttrByPath [key] userScopeOnlyHarnessSettingValues.${key};
+              native.harnessSettings = lib.setAttrByPath [key] (userScopeOnlyHarnessSettingValue key);
             };
           }).config.home.activation.kimchiFiles
           true);

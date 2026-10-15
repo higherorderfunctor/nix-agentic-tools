@@ -1,7 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> **Last verified:** 2026-10-15 — harness helper read guards supply accepted
+> types for their keys; parser-driven additions retain their deep shapes.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -111,32 +111,39 @@ while the non-blank and non-empty checks do not), and one description note.
 `checks/native-options.nix` fails on it. Reconcile detects stale exclusion rows.
 
 The extractor has hand-written parts of its own, each guarded only as far as
-stated. Kimchi's harness additions (`fermentV2`, `modelRoles` and the rest, each
-typed from a named declaration) are a hand list in `extract.mjs`. Two censuses
-discover keys beyond it: every harness key config.ts parses, and every constant
-key passed to config/settings.ts's `readConfigSetting`,
+stated. Kimchi's structured harness additions remain a hand list in
+`extract.mjs`. For `fermentV2` and `modelRoles`, the helper guards accept a
+broad object while downstream parsers validate the individual leaves. Two
+censuses discover keys beyond it: every harness key config.ts parses, and every
+constant key passed to config/settings.ts's `readConfigSetting`,
 `readConfigSettingAsync`, `writeConfigSetting` and `writeConfigSettingAsync`
-anywhere in `src/`, is matched against pi `Settings` and the additions. A key in
-neither is not an extraction failure: the extractor emits it untyped
-(`type = null`, user scope, optional), and the harness surface fails it as
-`needs-human` until its row supplies a `type`, or `ignored = "<reason>"` when
-Nix should not expose it. A row's `type` is a bare JSON type with no `enum`,
-`items` or `properties`, so a structured addition belongs in the `extract.mjs`
-hand list instead. The option generator reads only reconciled entries, so an
-ignored read never becomes an option. An untyped read becomes an untyped JSON
-option, which both `report.untyped` and the drift check fail until its row
-supplies a `type`. As in config, a string key the classifier calls secret is
-never accepted without a recorded row carrying `excluded`. Other direct readers
-of the harness file are not censused (in 1.1.37, `telemetry/config-snapshot.ts`
-reads `model` and `provider` for telemetry), so a key upstream adds there meets
-the closed submodule as an unknown option with no drift signal. The config.json
-shapes of `teleport`, `gitTokens` and the `surveys` record have no declared
-type, so they are written by hand and pinned both ways to their readers' runtime
-guards (`readTeleportCompactHintEnabled`, `readGitToken`, `readSurveyConfig`):
-every scalar leaf must be `typeof`-guarded as its type, and every guarded path
-must be in the shape. That check also runs the generator over a fixture sidecar
-with a key added, a key removed and an enum widened, and requires the option
-surface to move with it.
+anywhere in `src/`, is matched against pi `Settings` and the additions. The read
+helpers' second argument supplies the accepted type through the TypeScript
+predicate, including named guards and typed array items. Incompatible predicates
+for one key stop extraction with both source locations and types. A guard whose
+JSON kind is disjoint from a retained pi or parser-derived shape also stops
+extraction; a broad object guard can retain a parser's deeper shape. An
+unresolved guard for a retained key emits a diagnostic with its read site.
+Writes and fallbacks supply no accepted type. A key with no resolved read guard
+is emitted untyped (`type = null`, user scope, optional), and the harness
+surface fails it as `needs-human` until its row supplies a `type`, or
+`ignored = "<reason>"` when Nix should not expose it. A row's `type` is a bare
+JSON type with no `enum`, `items` or `properties`, so a structured addition
+belongs in the `extract.mjs` hand list instead. The option generator reads only
+reconciled entries, so an ignored read never becomes an option. An untyped read
+becomes an untyped JSON option, which both `report.untyped` and the drift check
+fail until its row supplies a `type`. As in config, a string key the classifier
+calls secret is never accepted without a recorded row carrying `excluded`. Other
+direct readers of the harness file are not censused (in 1.1.37,
+`telemetry/config-snapshot.ts` reads `model` and `provider` for telemetry), so a
+key upstream adds there meets the closed submodule as an unknown option with no
+drift signal. The config.json shapes of `teleport`, `gitTokens` and the
+`surveys` record have no declared type, so they are written by hand and pinned
+both ways to their readers' runtime guards (`readTeleportCompactHintEnabled`,
+`readGitToken`, `readSurveyConfig`): every scalar leaf must be `typeof`-guarded
+as its type, and every guarded path must be in the shape. That check also runs
+the generator over a fixture sidecar with a key added, a key removed and an enum
+widened, and requires the option surface to move with it.
 
 The sidecar also drives two rejections and one lookup. Devenv rejects
 `native.settings` keys whose `project` flag is false, because Kimchi merges only

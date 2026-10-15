@@ -193,6 +193,14 @@
       && accepts real.harnessSettingsOptions {statusLine.pinned = ["model"];}
       && !(accepts real.harnessSettingsOptions {statusLine.pinned = ["probe"];});
 
+    helper-guard-derived-option =
+      real.harnessSettingsOptions ? workSemanticMatching
+      && accepts real.harnessSettingsOptions {workSemanticMatching = true;}
+      && accepts real.harnessSettingsOptions {workSemanticMatching = false;}
+      && accepts real.harnessSettingsOptions {workSemanticMatching = null;}
+      && !(accepts real.harnessSettingsOptions {workSemanticMatching = "true";})
+      && (hmHarness {workSemanticMatching = true;}).workSemanticMatching;
+
     hand-tables-are-current =
       real.report.staleNotes
       == []
@@ -203,7 +211,7 @@
     # Kimchi's own additions and pi's global-only keys a hand list once
     # missed.
     user-scope-harness-follows-the-sidecar =
-      lib.all (key: lib.elem key real.userScopeHarnessKeys) ["defaultProjectTrust" "httpProxy" "lastTerminalWarnings" "modelRoles"]
+      lib.all (key: lib.elem key real.userScopeHarnessKeys) ["defaultProjectTrust" "httpProxy" "lastTerminalWarnings" "modelRoles" "workSemanticMatching"]
       && !(lib.elem "defaultThinkingLevel" real.userScopeHarnessKeys)
       && !(lib.elem "theme" real.userScopeHarnessKeys)
       && lib.elem "theme" withUserScopeTheme.userScopeHarnessKeys

@@ -1226,6 +1226,16 @@ const SETTINGS_HELPERS = [
   "writeConfigSettingAsync",
 ];
 
+function jsonKinds(descriptor) {
+  if (descriptor.type === "enum")
+    return [...new Set(descriptor.enum.map((value) => typeof value))];
+  return ["array", "boolean", "number", "object", "string"].includes(
+    descriptor.type,
+  )
+    ? [descriptor.type]
+    : [];
+}
+
 function settingsHelperKeys(settingsSource, kimchiSources, context) {
   const { checker, ts } = context;
   const helpers = new Set(
@@ -1239,7 +1249,7 @@ function settingsHelperKeys(settingsSource, kimchiSources, context) {
       return declarations;
     }),
   );
-  const keys = new Set();
+  const keys = new Map();
   for (const sourceFile of kimchiSources) {
     if (sourceFile === settingsSource) continue;
     function visit(node) {
@@ -1260,7 +1270,50 @@ function settingsHelperKeys(settingsSource, kimchiSources, context) {
               `${sourceFile.fileName}:${line + 1} passes a non-constant key to ${symbol.name}: ${node.getText()}`,
             );
           }
-          keys.add(key);
+          const location = sourceFile.getLineAndCharacterOfPosition(
+            node.getStart(),
+          );
+          const where = `${sourceFile.fileName}:${location.line + 1}`;
+          const reads = symbol.declarations.some(
+            (declaration) =>
+              helpers.has(declaration) &&
+              declaration.name?.text.startsWith("readConfigSetting"),
+          );
+          const guard = reads && node.arguments[1];
+          const signatures = guard
+            ? checker.getTypeAtLocation(guard).getCallSignatures()
+            : [];
+          const predicate =
+            signatures.length === 1 &&
+            checker.getTypePredicateOfSignature(signatures[0]);
+          const accepted =
+            predicate?.type &&
+            !(predicate.type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown))
+              ? predicate.type
+              : undefined;
+          const previous = keys.get(key);
+          if (
+            accepted &&
+            previous?.type &&
+            (!checker.isTypeAssignableTo(accepted, previous.type) ||
+              !checker.isTypeAssignableTo(previous.type, accepted))
+          )
+            fail(
+              `harness setting ${key} has incompatible read guards: ${previous.where} accepts ${previous.descriptor.typeExpression}; ${where} accepts ${descriptorForType(accepted, guard, checker, ts).typeExpression}`,
+            );
+          keys.set(key, {
+            descriptor:
+              previous?.descriptor ??
+              (accepted &&
+                descriptorForType(accepted, guard, checker, ts, {
+                  deep: true,
+                })),
+            type: previous?.type ?? accepted,
+            unresolvedAt:
+              previous?.unresolvedAt ??
+              (reads && !accepted ? where : undefined),
+            where: previous?.type ? previous.where : where,
+          });
         }
       }
       ts.forEachChild(node, visit);
@@ -1360,12 +1413,6 @@ function extractHarness(
       typeExpression: "FermentV2Settings",
       properties: membersOfDeclaration(ferment, checker, ts, true),
     },
-    hidePhaseChanges: descriptorForType(
-      checker.getBooleanType(),
-      ferment,
-      checker,
-      ts,
-    ),
     lastTerminalWarnings: terminalMembers.lastTerminalWarnings,
     modelMetadata: {
       additionalProperties: typeBoxDescriptor(
@@ -1381,19 +1428,7 @@ function extractHarness(
       typeExpression: "ModelRoles",
       properties: membersOfDeclaration(roles, checker, ts, true),
     },
-    multiModel: descriptorForType(
-      checker.getBooleanType(),
-      ferment,
-      checker,
-      ts,
-    ),
     resources: resourceMembers.resources,
-    shellProfileApiKeyMigrationDismissed: descriptorForType(
-      checker.getBooleanType(),
-      ferment,
-      checker,
-      ts,
-    ),
     statusLine: descriptorForNode(statusLine.type, checker, ts, true),
   };
   // Kimchi's harness settings readers accept an absent top-level key and
@@ -1444,17 +1479,47 @@ function extractHarness(
   // derivable type; extract/rules.nix decides whether it needs a human. Like
   // the additions, Kimchi reads it from the user file only, and absent is
   // allowed.
-  const unknownHarnessReads = [
-    ...configTsHarnessReads,
-    ...settingsHelperKeys(settingsHelperSource, kimchiSources, analysisContext),
-  ].filter((name) => !keys[name]);
-  for (const name of unknownHarnessReads)
+  const helperKeys = settingsHelperKeys(
+    settingsHelperSource,
+    kimchiSources,
+    analysisContext,
+  );
+  for (const [name, read] of helperKeys) {
+    if (keys[name]) {
+      if (read.unresolvedAt)
+        console.warn(
+          `kimchi-extract: ${read.unresolvedAt} has an unresolved read guard for known harness setting ${name}`,
+        );
+      const retained = jsonKinds(keys[name]);
+      const accepted = read.descriptor && jsonKinds(read.descriptor);
+      if (
+        accepted?.length &&
+        retained.length &&
+        accepted.every((kind) => !retained.includes(kind))
+      )
+        fail(
+          `harness setting ${name} has incompatible retained ${keys[name].typeExpression} and read guard ${read.descriptor.typeExpression} at ${read.where}`,
+        );
+      continue;
+    }
+    keys[name] = {
+      source: "kimchi",
+      optional: true,
+      project: false,
+      ...(read.descriptor && !read.unresolvedAt
+        ? read.descriptor
+        : { type: null }),
+    };
+  }
+  for (const name of configTsHarnessReads) {
+    if (keys[name]) continue;
     keys[name] = {
       source: "kimchi",
       optional: true,
       project: false,
       type: null,
     };
+  }
   return {
     definitions: sortObject(definitions),
     keys: sortObject(keys),
