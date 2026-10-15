@@ -28,10 +28,10 @@
       specialArgs = {inherit pkgs;};
       modules =
         [../modules/common.nix program {programs.sample.enable = true;}]
-        ++ lib.mapAttrsToList (name: enabled: runtimeModule {inherit enabled name;}) runtimes
+        ++ lib.mapAttrsToList (name: args: runtimeModule ({inherit name;} // args)) runtimes
         ++ modules;
     }).config;
-  sample = evaluate {sample = true;};
+  sample = evaluate {sample.enabled = true;};
   plan = config:
     files2.normalize {
       backend = "hm";
@@ -161,11 +161,11 @@
     run "runtime low" (map (at runtime) row.low ++ map (at direct) row.high)
     ++ run "runtime high" (map (at direct) row.low ++ map (at runtime) row.high);
   # A disabled runtime contributes nothing, not even an evaluated source.
-  disabled = evaluate {sample = false;} [(at runtime (entry ["content" "source"] (throw "disabled source was evaluated")))];
+  disabled = evaluate {sample.enabled = false;} [(at runtime (entry ["content" "source"] (throw "disabled source was evaluated")))];
   twoRuntimes = beta:
     evaluate {
-      alpha = true;
-      inherit beta;
+      alpha.enabled = true;
+      beta.enabled = beta;
     } [
       {ai.alpha.files2.${path}.content.text = "same";}
       {ai.beta.files2.${path}.content.text = "same";}
@@ -173,16 +173,98 @@
   collision = twoRuntimes true;
   gated = twoRuntimes false;
   collisionIssue = ''files2."${path}": runtime owners alpha and beta claim one destination'';
+  # Commands and old ledgers forward in either owner state; a command's
+  # `enable` follows the owner unless its producer sets it. `wrap` repeats the
+  # commands under an option-wide default, which must not drop them.
+  ledger = {
+    codec = "dir";
+    ledger = "materialize/sample.manifest";
+    path = ".";
+  };
+  owner = enabled: wrap:
+    evaluate {sample = {inherit enabled;};} [
+      {
+        ai.sample = {
+          activation2 = wrap {
+            forced = {
+              command = "forced";
+              enable = true;
+            };
+            plain.command = "plain";
+            release = {
+              command = "release";
+              runWhenDisabled = true;
+            };
+          };
+          files2.${path}.content.text = "owned";
+          legacyLedgers = [ledger];
+        };
+      }
+    ];
+  commands = config: lib.mapAttrs (_: entry: {inherit (entry) command enable runWhenDisabled;}) config.ai.activation2;
+  expectedCommands = enabled:
+    lib.genAttrs ["forced" "plain" "release"] (key: {
+      command = key;
+      enable = key == "forced" || enabled;
+      runWhenDisabled = key == "release";
+    });
+  ownerCase = {
+    enabled,
+    wrap,
+  }: let
+    config = owner enabled wrap;
+    state =
+      (
+        if enabled
+        then "enabled owner"
+        else "disabled owner"
+      )
+      + lib.optionalString (wrap {} != {}) " under an option-wide default";
+  in
+    lib.optional (commands config != expectedCommands enabled) "${state}: commands"
+    ++ lib.optional (config.ai.legacyLedgers != [ledger]) "${state}: ledgers"
+    ++ lib.optional ((config.ai.files2 ? ${path}) != enabled) "${state}: files";
+  # A shared key forwards with its priorities but only the composer claims it.
+  sharedKey = "AGENTS.md";
+  composed =
+    evaluate {
+      alpha = {
+        enabled = true;
+        shared = [sharedKey];
+      };
+      internal.enabled = true;
+    } [
+      {ai.internal.files2.${sharedKey}.content.text = lib.mkDefault "composed";}
+      {
+        ai.alpha.files2 = {
+          ${path}.content.text = "alpha";
+          ${sharedKey}.content.text = "replaced";
+        };
+      }
+    ];
+  sharedEntry = lib.findFirst (item: item.path == sharedKey) null (plan composed);
   failures =
     lib.concatMap checkCase cases
     ++ lib.optional (map (item: item.path) (plan disabled) != ["program.txt"] || disabled.ai.files2Owners != {}) "disabled runtime"
     ++ lib.optional (gated.ai.files2Owners != {${path} = ["alpha"];} || (selected gated).content != {text = "same";}) "disabled runtime owner"
-    ++ lib.optional (files2.validateOwners collision.ai.files2Owners != collisionIssue || (builtins.tryEval (builtins.deepSeq (plan collision) true)).success) "runtime collision";
+    ++ lib.optional (files2.validateOwners collision.ai.files2Owners != collisionIssue || (builtins.tryEval (builtins.deepSeq (plan collision) true)).success) "runtime collision"
+    ++ lib.concatMap ownerCase (lib.cartesianProduct {
+      enabled = [false true];
+      wrap = [lib.id lib.mkDefault];
+    })
+    ++ lib.optional (
+      composed.ai.files2Owners
+      != {
+        ${path} = ["alpha"];
+        ${sharedKey} = ["internal"];
+      }
+      || sharedEntry.content.text or null != "replaced"
+    ) "unclaimed shared key";
 in {
   checks.ai-module-runtime-forward = assert lib.assertMsg (failures == []) "runtime forwarding: ${lib.concatStringsSep ", " failures}";
     pkgs.runCommandLocal "ai-module-runtime-forward" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      printf 'PASS: runtime forwarding, priorities, gating, owners\n' > "$out"
+      printf 'PASS: runtime forwarding, priorities, gating, owners, commands, ledgers, shared keys\n' > "$out"
     '';
 }

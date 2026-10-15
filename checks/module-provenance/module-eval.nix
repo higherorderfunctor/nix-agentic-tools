@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) normalizedPoolNames packagePoolCollisions packagePoolProbeConfigs packagePoolsClean rootPoolClean rootPoolProbeConfig rootPoolSrcRoot rootPoolViolations;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) forwardedOptions forwardingHelper normalizedPoolNames packagePoolCollisions packagePoolProbeConfigs packagePoolsClean rootPoolClean rootPoolProbeConfig rootPoolSrcRoot rootPoolViolations;
   optionPaths = import ../../lib/ai/option-paths.nix {inherit lib pkgs;};
   inherit (harness) aiStubs evalDevenv evalHm harnessNames hmLib mkTest;
 in {
@@ -219,6 +219,66 @@ in {
         threw = !(builtins.tryEval (rootPoolClean "probe" probe)).success;
       in
         named && threw
+    );
+
+    # The layer-1 exemption covers the forwarded options from the helper's file
+    # only. An owner forwarding through the helper is clean, and the helper
+    # really did write every forwarded option; the same options written from
+    # another repo file are reported; the helper's file writing any other root
+    # option is reported.
+    module-ai-root-pool-forwarding-exempt = mkTest "ai-root-pool-forwarding-exempt" (
+      let
+        probe = modules:
+          lib.evalModules {
+            specialArgs = {inherit pkgs;};
+            modules =
+              [
+                ../../packages/ai-module/modules/common.nix
+                {
+                  options.ai.skills = lib.mkOption {
+                    type = lib.types.attrsOf lib.types.anything;
+                    default = {};
+                  };
+                }
+              ]
+              ++ modules;
+          };
+        owner = probe [
+          (import ../../packages/ai-module/lib/runtime.nix {
+            enabled = true;
+            name = "probe";
+          })
+          {
+            ai.probe = {
+              activation2.probe.command = "true";
+              files2."probe.txt".content.text = "probe";
+              legacyLedgers = [
+                {
+                  codec = "dir";
+                  ledger = "materialize/probe.manifest";
+                  path = ".";
+                }
+              ];
+            };
+          }
+        ];
+        direct = probe [./fixtures/root-layer-writer.nix];
+        impostor = probe [
+          {
+            _file = forwardingHelper;
+            config.ai.skills.probe = "impostor";
+          }
+        ];
+        forwarded = lib.all (option:
+          lib.any (definition: toString definition.file == forwardingHelper)
+          owner.options.ai.${option}.definitionsWithLocations)
+        forwardedOptions;
+        reported = map (violation: builtins.head (lib.splitString " " violation)) (rootPoolViolations direct);
+      in
+        forwarded
+        && rootPoolViolations owner == []
+        && reported == map (option: "ai.${option}") forwardedOptions
+        && rootPoolViolations impostor == ["ai.skills <- ${forwardingHelper}"]
     );
   };
 }

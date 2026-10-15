@@ -36,12 +36,21 @@ drain old ownership. Removing the base module itself cannot drain anything.
 
 ### Layer 1: runtime file overrides
 
-`runtimeModule { name; enabled; }` declares `ai.<name>.files2`, an
+`runtimeModule { name; enabled; shared ? []; }` declares `ai.<name>.files2`, an
 `attrsOf fileEntry`, default `{}`. `name` is the stable runtime identifier;
 `enabled` is the owning module's existing boolean. These are constructor inputs,
-not another runtime enable option. Checks install synthetic runtime modules in
-PR 2; PR 3 installs the helper in runtime owners. Shared skills, rules and other
-surfaces produce entries here; their rendering stays above this layer.
+not another runtime enable option. The helper also declares
+`ai.<name>.activation2` (layer 3) and the internal `ai.<name>.legacyLedgers`
+(`listOf { codec = enum ["dir" "json"]; ledger; path; }`), both forwarded
+outside the `enabled` gate into `ai.activation2` and the internal root
+`ai.legacyLedgers`, so a disabled owner still runs its `runWhenDisabled`
+commands and drains its old ledgers. Each forwarded command gets
+`enable = mkDefault enabled` at the forwarded priority; a producer that sets
+`enable` overrides it. Keys listed in `shared` forward without a claim in
+`ai.files2Owners`, which leaves their composer the single claimant. Checks
+install synthetic runtime modules in PR 2; PR 3 installs the helper in runtime
+owners. Shared skills, rules and other surfaces produce entries here; their
+rendering stays above this layer.
 
 Keys are **backend-root-relative final paths**, just like layer 2. There is no
 implicit prefix added by forwarding. A runtime producer computes its configured
@@ -75,8 +84,11 @@ priority, so an option-wide `mkDefault` map still loses to an ordinary layer-2
 definition; plain `lib.mkAliasDefinitions` strips it and turns that case into an
 equal-priority conflict. Forwarded definitions report the helper module's
 location, not the producer's; no fixture needs the producer location, so no
-custom forwarder exists. Content selection examines only the highest-priority
-defined alternative, so a discarded source is never evaluated.
+custom forwarder exists. The helper sets `_file` to its own path, so every
+forwarded root definition reports `lib/runtime.nix`; the module-provenance guard
+exempts exactly that file for `activation2`, `files2`, `files2Owners` and
+`legacyLedgers`. Content selection examines only the highest-priority defined
+alternative, so a discarded source is never evaluated.
 
 The helper also records each declared key, including one with `enable = false`,
 in the internal `ai.files2Owners.<path>` list; a disabled entry would otherwise
