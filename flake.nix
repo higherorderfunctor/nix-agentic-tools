@@ -186,6 +186,9 @@
         # of lib/packaging.nix is the repo's own update/build tooling. It takes
         # the caller's `pkgs` as an argument, so it builds on their nixpkgs.
         packaging = {inherit (import ./lib/packaging.nix) fetchHuggingFaceModel;};
+        # Secrets kept out of the Nix store: references, sealed types, and the
+        # launch-time `assign` (lib/redact).
+        redact = import ./lib/redact {inherit lib;};
         runtimeValues = import ./lib/runtime-values {inherit lib;};
       };
     in
