@@ -19,5 +19,11 @@ in {
       type = lib.types.attrsOf files2.entryType;
       default = {};
     };
+    # Destination -> declaring runtimes; written by `runtimeModule` only.
+    files2Owners = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+      default = {};
+      internal = true;
+    };
   };
 }
