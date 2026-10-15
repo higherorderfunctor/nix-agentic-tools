@@ -35,7 +35,7 @@ for backend, plans in sorted(fixtures.items()):
         assert [item.read_text() for item in state.parent.glob("*.bak")] == ["local"]
         engine.reconcile(plans["empty"], root, state, "prune")
         assert not copy.exists() and sibling.read_text() == "keep"
-        assert json.loads(state.read_text()) == {"version": 1, "files": {}}
+        assert not state.exists()
         engine.reconcile(plans["source"], root, state, "apply")
         leaf = root / "tree" / "b" / "c.md"
         assert leaf.read_bytes() == Path(plans["source"][0]["content"]["source"]).read_bytes()
@@ -87,7 +87,7 @@ for backend, plans in sorted(fixtures.items()):
             backups = list(owned_state.parent.glob("*.bak"))
             assert not nested_copy.exists() and len(backups) == 1
             assert backups[0].read_text() == "local" and len(backups[0].name.encode()) <= 255
-            assert json.loads(owned_state.read_text())["files"] == {}
+            assert not owned_state.exists()
         for kind in ("file", "symlink"):
             with tempfile.TemporaryDirectory() as refusal:
                 refused_root = Path(refusal) / "root"
@@ -131,7 +131,7 @@ for backend, plans in sorted(fixtures.items()):
                 engine.reconcile(plans[f"ownerRead-{mode}"], owned_root, owned_state, "apply")
                 assert owned.read_text() == "readable" and stat.S_IMODE(owned.stat().st_mode) == int(mode, 8)
                 engine.reconcile(plans["empty"], owned_root, owned_state, "prune")
-                assert not owned.exists() and json.loads(owned_state.read_text())["files"] == {}
+                assert not owned.exists() and not owned_state.exists()
         for name, expected, mode in (("executable", "executable", 0o555), ("imposedMode", "private", 0o400)):
             with tempfile.TemporaryDirectory() as permissions:
                 mode_root = Path(permissions) / "root"
@@ -170,9 +170,8 @@ for backend, plans in sorted(fixtures.items()):
             assert list(adopted_state.parent.glob("*.bak")) == []
             engine.reconcile(plans["disabled"], adopted_root, adopted_state, "prune")
             engine.reconcile(plans["disabled"], adopted_root, adopted_state, "apply")
-            recorded = json.loads(adopted_state.read_text())
             assert not adopted.exists() and adopted.parent.is_dir()
-            assert recorded["files"] == {}
+            assert not adopted_state.exists()
         with tempfile.TemporaryDirectory() as refusal:
             refused_root = Path(refusal) / "root"
             refused_root.mkdir()
@@ -187,5 +186,5 @@ for backend, plans in sorted(fixtures.items()):
             else:
                 raise AssertionError("special file accepted")
             assert stat.S_ISFIFO(fifo.lstat().st_mode)
-            assert json.loads(refused_state.read_text())["files"] == {}
+            assert not refused_state.exists()
         print(f"PASS: {backend} ro runtime, adoption, drain, modes, refusals")

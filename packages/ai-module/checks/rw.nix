@@ -13,16 +13,16 @@
       files =
         (lib.evalModules {
           modules = [
-            files2.module
+            ../modules/common.nix
             {
-              files2."nested/settings" = {
+              ai.files2."nested/settings" = {
                 content.value = {owned = 1;};
                 inherit format;
                 method = "rw";
               };
             }
           ];
-        }).config.files2;
+        }).config.ai.files2;
       namespace = "renderer";
     });
 in {

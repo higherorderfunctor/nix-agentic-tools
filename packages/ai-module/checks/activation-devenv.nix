@@ -68,6 +68,7 @@
     config,
     hasNative,
   }: let
+    # No files2 link emits no guard, so link-check reaches the next anchor.
     linkedFrom =
       if hasNative
       then "devenv:files"

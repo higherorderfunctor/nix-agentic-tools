@@ -98,7 +98,7 @@
     };
   };
   failures =
-    lib.optional (builtins.attrNames graph != ["ai2-drain" "ai2-files-ready" "ai2-ready" "ai2-write" "external-name"]) "gating"
+    lib.optional (builtins.attrNames graph != ["ai2-drain" "ai2-files-ready" "ai2-files2-prune" "ai2-ready" "ai2-write" "external-name"]) "gating"
     ++ lib.optional (graph.ai2-write.after != ["linkGeneration"] || graph.ai2-write.before != ["ai2-ready"]) "default edges"
     ++ lib.optional (graph.external-name.after != ["external-provider"] || graph.external-name.before != ["checkLinkTargets"]) "native edges"
     ++ lib.optional (graph.ai2-files-ready.after != ["linkGeneration"] || graph.ai2-files-ready.before != ["ai2-ready"]) "internal points"

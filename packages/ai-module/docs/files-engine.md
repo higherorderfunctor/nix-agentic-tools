@@ -4,8 +4,8 @@
 
 The file schema and engine rules below remain the contract for the moved
 implementation. [The ai-module design](DESIGN.md) defines its owner, generic
-options and backend lowering. The existing standalone module remains only until
-later PR 2 chunks replace its lowering; no production consumer imports it.
+options and backend lowering. The generic `ai.files2` option owns the map; no
+production consumer imports it yet.
 
 | Option           | Nix type                                                                                   | Default     | Meaning                                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -98,36 +98,38 @@ activation to drain; module registration is therefore a documented integration
 invariant, not an extra file option.
 
 State lives at
-`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/files2/<namespace>.json`
-for HM and `$DEVENV_STATE/nix-agentic-tools/files2/<namespace>.json` for devenv.
-The namespace is a validated single path segment, supplied once to the library
-constructor. Schema version 1:
+`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/files2/ai.json` for HM
+and `$DEVENV_STATE/nix-agentic-tools/files2/ai.json` for devenv. The base fixes
+the namespace to `ai`. Schema version 1:
 `{ "version": 1, "files": { "relative/path": { "method": "ro|rw", "format": "...", "digest": "sha256 hex", "mode": "actual octal mode", "created": false, "keys": {"/nested/key": "sha256 of canonical value"} } } }`.
 `digest` is the last installed whole-file byte digest for `ro` and `rw`; `rw`
 also uses JSON Pointer encoded `keys`. `created` records whether files2 first
 made a copy, for both `ro` and `rw`. Native links have no state entry. Entries
-are keyed by complete relative path, never basename or directory ledger. The
-state file remains after the last entry is retired with empty `files`. State
-itself is private mode `0600`, written with atomic replacement under a namespace
-lock immediately after each successful file mutation. An invalid version, path,
-or state symlink fails closed. Only the engine writes this state.
+are keyed by complete relative path, never basename or directory ledger. A run
+that ends owning nothing deletes the state file instead of saving empty `files`,
+so an absent state file means nothing is owned and generated prune of an empty
+map skips the engine. State itself is private mode `0600`, written with atomic
+replacement under a namespace lock immediately after each successful file
+mutation. An invalid version, path, or state symlink fails closed. Only the
+engine writes this state.
 
 State version 0 has the same `files` payload as version 1. Under the lock, the
 engine validates version 0, changes only its version to 1, validates again, and
 atomically saves it before reconciling destinations. Missing state begins at
-version 1. A second load of version 1 does not rewrite the state. Missing or
-unsupported versions and malformed payloads are refused before destination
-mutation; future migrations append to the ordered chain.
+version 1 and is not written until something is owned. A second load of version
+1 does not rewrite the state. Missing or unsupported versions and malformed
+payloads are refused before destination mutation; future migrations append to
+the ordered chain.
 
 ## Backend lowering and order
 
 [The ai-module design](DESIGN.md#backend-graph-and-execution) defines the
-backend graph and delivery phases. The relocated standalone lowering function
-remains for existing checks until later PR 2 chunks replace it. The engine never
-records, validates or retires native symlinks. A backend removes its old native
-link before apply writes a `ro` or `rw` copy; apply refuses any link still at
-that path. Prune retires an owned copy before native linking. Native collision
-handling belongs to the backend.
+backend graph and delivery phases. Both backends lower through `ai.files2` and
+the shared activation graph. The engine never records, validates or retires
+native symlinks. A backend removes its old native link before apply writes a
+`ro` or `rw` copy; apply refuses any link still at that path. Prune retires an
+owned copy before native linking. Native collision handling belongs to the
+backend.
 
 ## Runtime engine and codecs
 
@@ -247,19 +249,19 @@ applies to owned copies, including their retirement.
 | `rw` → removed or disabled (`O`)       | H: owned keys removed, native keys retained; deletable `M` removed / `∅`   | D: same                      |
 
 No-op changes retain the current bytes, including local whitespace; state may
-adopt that full image for later comparisons. At N→0 the plan is empty and still
-executes both required phases; state becomes `{ "version": 1, "files": {} }`. A
-disabled consumer has the same result because its always-installed module passes
-an empty map. An explicit `ro` mode must include the owner read bit because
-retirement compares the current bytes with the installed image before draining
-it.
+adopt that full image for later comparisons. At N→0 the plan is empty; prune
+still runs, retires every owned copy and deletes the state file, and no apply is
+generated. A disabled consumer has the same result because its always-installed
+module passes an empty map. An explicit `ro` mode must include the owner read
+bit because retirement compares the current bytes with the installed image
+before draining it.
 
 ## Friction hunt
 
 The table groups current declarations by **materialization need**, not by
 runtime name. Every entry below uses only file fields from the schema; the
-namespace is set once by integration. `method = { devenv = ...; hm = ...; }` is
-a file switch, not backend-specific writer code. These are proposed files2
+namespace is fixed by the base. `method = { devenv = ...; hm = ...; }` is a file
+switch, not backend-specific writer code. These are proposed files2
 declarations, not a migration in this project.
 
 | Current need and evidence                                                                                                                                                                                                                                                                | files2 declaration                                                                                                                                                                   |

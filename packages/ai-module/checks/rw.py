@@ -76,17 +76,16 @@ for format_name in formats:
         assert target.read_bytes() == before_bytes
         run([], root, state, "prune")
         assert document(target, format_name) == {"nested": {"native": "keep"}, "sibling": 3}
-        assert state_data(state)["files"] == {}
+        assert not state.exists()
         broken = b"[not valid\n" if format_name == "toml" else b"{broken"
         target.write_bytes(broken)
-        before_state = state.read_bytes()
         try:
             run(initial, root, state)
         except ValueError as error:
             assert "malformed" in str(error)
         else:
             raise AssertionError(f"malformed {format_name} accepted")
-        assert target.read_bytes() == broken and state.read_bytes() == before_state
+        assert target.read_bytes() == broken and not state.exists()
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary) / "root"
         root.mkdir()
@@ -94,7 +93,7 @@ for format_name in formats:
         target = root / "nested/settings"
         run(plan(format_name, {"one": 1}), root, state)
         run([], root, state, "prune")
-        assert not target.exists() and state_data(state)["files"] == {}
+        assert not target.exists() and not state.exists()
         target.parent.mkdir(exist_ok=True)
         target.write_bytes(engine.codecs.serialize(format_name, {"one": 1}))
         run(plan(format_name, {"one": 1}), root, state)
@@ -112,7 +111,7 @@ for format_name in formats:
         target.write_bytes(engine.codecs.serialize(format_name, {"owned": 1, "native": {}}))
         run([], root, state, "prune")
         assert document(target, format_name) == {"native": {}}
-        assert state_data(state)["files"] == {}
+        assert not state.exists()
         assert len(list(state.parent.glob("*.bak"))) == 1
         target.unlink()
         run(initial, root, state)
@@ -137,7 +136,7 @@ for format_name in formats:
         assert target.read_bytes() == before_bytes and state.read_bytes() == before_state
         run([], root, state, "prune")
         assert document(target, format_name) == {"owned": {}}
-        assert state_data(state)["files"] == {}
+        assert not state.exists()
     print(f"PASS: {format_name} keys, native data, backup, retirement, malformed input, adoption")
 
 with tempfile.TemporaryDirectory() as temporary:
@@ -304,7 +303,7 @@ for format_name in formats:
             assert (target.read_bytes(), state.read_bytes()) == before
             target.write_bytes(engine.codecs.serialize(format_name, {"owned": 1}))
             run(wanted, root, state, "prune")
-            assert not target.exists() and state_data(state)["files"] == {}
+            assert not target.exists() and not state.exists()
             if method == "ro":
                 run(wanted, root, state)
                 assert document(target, format_name) == {"new": 2}

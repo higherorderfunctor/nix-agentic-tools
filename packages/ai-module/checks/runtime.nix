@@ -69,7 +69,7 @@
   normalize = backend: files:
     files2.normalize {
       inherit backend;
-      files = (lib.evalModules {modules = [files2.module {files2 = files;}];}).config.files2;
+      files = (lib.evalModules {modules = [../modules/common.nix {ai.files2 = files;}];}).config.ai.files2;
       namespace = "runtime";
     };
   fixtures = lib.genAttrs ["devenv" "hm"] (backend: lib.mapAttrs (_: normalize backend) definitions);

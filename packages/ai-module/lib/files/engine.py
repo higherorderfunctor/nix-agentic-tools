@@ -115,9 +115,7 @@ CURRENT_VERSION = 1
 
 def load_state(state_path):
     if not state_path.exists():
-        state = {"files": {}, "version": CURRENT_VERSION}
-        save(state_path, state)
-        return state
+        return {"files": {}, "version": CURRENT_VERSION}
     state = json.loads(state_path.read_text())
     version = state.get("version") if isinstance(state, dict) else None
     if type(version) is not int or version < 0 or version > CURRENT_VERSION:
@@ -465,7 +463,11 @@ def reconcile(plan, root, state_path, phase):
                     continue
                 if item["method"] == "ro":
                     reconcile_ro(root, state_path, state, relative, item)
-        save(state_path, state)
+        # No state file means nothing is owned; prune of an empty map skips on it.
+        if state["files"]:
+            save(state_path, state)
+        else:
+            state_path.unlink(missing_ok=True)
 
 
 def main():
