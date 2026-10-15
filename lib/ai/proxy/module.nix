@@ -37,6 +37,7 @@
   proxyLib = import ./. {inherit lib;};
   cliproxyapi = import ../../../packages/cliproxyapi/lib/extracted.nix {inherit lib;};
   credentials = import ../../credentials.nix {inherit lib;};
+  openKeys = import ../../open-keys {inherit lib;};
   own = import ../../own {inherit lib;};
   cfg = config.ai.proxy;
   inherit (cfg) instances;
@@ -275,6 +276,24 @@ in {
           }
         ]
         ++ lib.concatLists (lib.mapAttrsToList instanceAssertions instances);
+    })
+    (lib.optionalAttrs (options ? warnings) {
+      warnings = lib.concatLists (lib.mapAttrsToList (name: inst:
+        (openKeys.inspect {
+          known = cliproxyapi.knownSettings;
+          inherit (cliproxyapi.render inst.settings) value;
+          optionPath = path name ++ ["settings"];
+          allowed = inst.allowUnrecognizedSettings;
+          allowOptionPath = path name ++ ["allowUnrecognizedSettings"];
+        }).warnings
+        ++ (openKeys.inspect {
+          known = cliproxyapi.knownAccounts;
+          value = lib.mapAttrs (_: account: account.value) (accountsOf inst);
+          optionPath = path name ++ ["accounts"];
+          allowed = inst.allowUnrecognizedAccountFields;
+          allowOptionPath = path name ++ ["allowUnrecognizedAccountFields"];
+        }).warnings)
+      instances);
     })
     (lib.optionalAttrs isHomeManager {
       xdg.configFile.${proxyLib.registryPath} = lib.mkIf (instances != {}) {

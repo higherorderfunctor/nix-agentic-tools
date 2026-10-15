@@ -19,8 +19,8 @@
 #                 executors and panel use off the extracted path, such as
 #                 `request_retry`), a `secret` row's strings taking a secret.
 #                 The open keys refuse the login's identity and tokens: an
-#                 `ignored` row's field, or a name the credential classifier
-#                 flags (`access_token`, `api_key`).
+#                 `ignored` row's field, or a name open-keys' credential policy
+#                 refuses (`access_token`, `api_key`).
 #   configFilter  ./config.jq, the jq program that completes `render`'s
 #                 value at run time: secrets, client key, auth dir.
 #   renderAccount an account value -> `{ value; secrets; }`, as `render`.
@@ -33,7 +33,7 @@
   inherit (lib) mkOption types;
   credentials = import ../../../lib/credentials.nix {inherit lib;};
   inherit (import ../extract/rules.nix {inherit lib;}) accounts config;
-  inherit (import ../../../lib/runtime-values {inherit lib;}) classify;
+  openKeys = import ../../../lib/open-keys {inherit lib;};
 
   # Path grammar (the extractor's): `.` between keys, `[]` for a list
   # element, `.<name>` for a map value.
@@ -204,33 +204,13 @@
       secrets = collect (builtins.attrValues results);
     }
     else resolve at value;
-  # An open account key naming the login's identity or a token fails with
-  # the reason: the login writes those fields and CPA refreshes the tokens,
-  # so Nix never writes or owns them. The guard wraps `merge`, the only part
-  # of a `freeformType` the module system calls; its `check` never runs.
-  refuseLoginFields = type:
-    type
-    // {
-      merge = loc: defs: let
-        refuse = name: let
-          option = lib.showOption (loc ++ [name]);
-        in
-          if accounts.ignored ? ${name}
-          then throw "${option}: the login's field `${name}` cannot be set: ${accounts.ignored.${name}}"
-          else if
-            classify {
-              path = [name];
-              hints = {type = "string";};
-            }
-          then throw "${option}: `${name}` is credential-shaped and cannot be set: Nix never writes a login's tokens."
-          else true;
-      in
-        builtins.seq (lib.all refuse (lib.concatMap (def: builtins.attrNames def.value) defs)) (type.merge loc defs);
-    };
 in {
   accountType = {jsonType}:
     types.submodule {
-      freeformType = refuseLoginFields jsonType;
+      freeformType = openKeys.refuse {
+        type = jsonType;
+        reasons = accounts.ignored;
+      };
       options = lib.mapAttrs (field: entry:
         mkOption {
           type = types.nullOr (goType jsonType (entry ? secret) entry.type);
@@ -244,6 +224,14 @@ in {
     };
 
   configFilter = ./config.jq;
+
+  knownAccounts.map = openKeys.fromPaths {
+    names = builtins.attrNames accounts.entries;
+    paths = [];
+  };
+  knownSettings = openKeys.fromPaths {
+    paths = map (lib.replaceStrings [".<name>"] [".*"]) (builtins.attrNames config.entries);
+  };
 
   render = walk "" [];
 

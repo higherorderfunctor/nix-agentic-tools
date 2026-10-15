@@ -31,8 +31,9 @@
 # against the same table: here at evaluation, and by render.jq at run time.
 {lib}: let
   inherit (lib) mkOption types;
-  credentials = import ../../credentials.nix {inherit lib;};
   cliproxyapi = import ../../../packages/cliproxyapi/lib/extracted.nix {inherit lib;};
+  credentials = import ../../credentials.nix {inherit lib;};
+  openKeys = import ../../open-keys {inherit lib;};
 
   keyForms = ["file" "helper" "plain"];
 
@@ -292,9 +293,10 @@
           logs in under a new name. The typed options are the auth-file
           fields the extraction finds CLIProxyAPI reading, apart from the
           login's identity and tokens. Any other key is written as given,
-          untyped: fields CLIProxyAPI's executors and management panel use
-          off that path, such as `request_retry`, `websockets`,
-          `disable_cooling` or the `cloak_*` fields. A key naming the
+          untyped, with an unknown-key warning: fields CLIProxyAPI's
+          executors and management panel use off that path, such as
+          `request_retry`, `websockets`, `disable_cooling` or the `cloak_*`
+          fields. A key naming the
           login's identity or a token (`type`, `email`, `id_token`,
           `plan_type`, or a credential-shaped name such as `access_token`
           or `api_key`) fails evaluation: the login writes those, and Nix
@@ -305,6 +307,27 @@
           next start, a field set in CLIProxyAPI's management panel and
           never declared here is left alone, and a declared field edited in
           the panel is reset.
+        '';
+      };
+      allowUnrecognizedAccountFields = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        example = ["*.request_retry"];
+        description = ''
+          Suppress unknown-key warnings at these paths relative to
+          `accounts`, `*` standing for every account name. An entry never
+          permits an identity or credential field.
+          ${openKeys.allowlistSyntax}
+        '';
+      };
+      allowUnrecognizedSettings = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        example = ["server.future-field"];
+        description = ''
+          Suppress unknown-key warnings at these paths relative to `settings`.
+          Unknown keys remain writable without an allowlist entry.
+          ${openKeys.allowlistSyntax}
         '';
       };
       clientKey = credentials.mkSecretOption {
@@ -354,11 +377,11 @@
           CLIProxyAPI configuration in its v8 layout (`server.*`,
           `access.*`, `oauth.*`, …), typed from the pinned CLIProxyAPI's own
           configuration structs; a key the typing does not know passes
-          through as written. Unset options are left out, so CLIProxyAPI
-          keeps its defaults. A credential, such as an upstream `api-key`,
-          and a value that can carry one (a `proxy-url`, an upstream
-          `headers` value) takes `plain`, `file` or `helper`: the start script reads a `file`
-          or `helper` and writes its contents in that place of the private
+          through as written, with an unknown-key warning. Unset options are
+          left out, so CLIProxyAPI keeps its defaults. A credential, such as
+          an upstream `api-key`, and a value that can carry one (a
+          `proxy-url`, an upstream `headers` value) takes `plain`, `file` or
+          `helper`: the start script reads a `file` or `helper` and writes its contents in that place of the private
           config, failing the unit if the file is missing or empty or the
           helper fails, and only the path reaches the store. Logins are
           stored in `oauth.auth-dir`, which defaults to the unit's state

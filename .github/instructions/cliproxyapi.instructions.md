@@ -7,10 +7,9 @@ applyTo: "packages/cliproxyapi/**"
 
 ## CLIProxyAPI extraction: the typed config and auth-file fields
 
-> **Last verified:** 2026-10-14 — CPA 8.0.28: 865 config nodes (575 leaves, 556
-> under `api-keys`), 16 auth-file fields; 13 config rows (5 of them patterns)
-> and 10 account rows by hand; the instance sample is loaded with `LoadConfig`;
-> the account type's open keys refuse `ignored` and credential-shaped names.
+> **Last verified:** 2026-10-14 — account freeform refusal uses `lib/open-keys`
+> with reconciled identity reasons; extracted settings paths and account names
+> feed unknown-key warnings and per-instance suppressions on both backends.
 >
 > **Settled — do not relitigate.** `v8Paths` is NOT the v8 schema: its 118
 > entries are only the RELOCATED leaves (every one has `old != current`, and it
@@ -90,11 +89,21 @@ paths. `accountType` maps the Go types, a `secret` field's strings to
 `mkSecretType`, and is open to any other key (`freeformType`), since the
 executors' reads are off the extracted path. The open keys refuse every
 `ignored` row's field (`rules.nix` returns them as `accounts.ignored`, the
-reason in the error) and every name `lib/runtime-values`' `classify` flags as
-credential-shaped, the reconcile test's classifier: `access_token`,
-`refresh_token` and `api_key` are not extracted, so a row for them would fail as
-stale. `renderAccount` splits an account the way `render` splits settings.
-`tree` exposes the nodes for checks.
+reason in the error) through `lib/open-keys.refuse`, which also refuses
+credential-shaped names using the same policy as the reconcile classifier.
+`access_token`, `refresh_token` and `api_key` are not extracted, so annotation
+rows for them would fail as stale. `renderAccount` splits an account the way
+`render` splits settings. `tree` exposes the nodes for checks.
+
+`knownSettings` adapts reconciled config paths (`.<name>` becomes `.*`) through
+`openKeys.fromPaths`; `knownAccounts` is a map of literal extracted account
+field names. The proxy module inspects rendered values, after nulls and secret
+references are removed, and publishes warnings behind `options ? warnings` on
+both backends. Unknown names remain writable and get spelling suggestions.
+Instance `allowUnrecognizedSettings` paths are relative to settings;
+`allowUnrecognizedAccountFields` paths are relative to the accounts map (for
+example `*.request_retry`). These suppress spelling warnings only; stale and
+unused entries warn, and identity and credential refusal still applies.
 
 ### Checks and updates
 

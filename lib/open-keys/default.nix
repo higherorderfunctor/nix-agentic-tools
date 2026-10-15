@@ -25,19 +25,41 @@
   check = {
     name,
     optionPath ? [],
+    reasons ? {},
   }: let
-    reason = credentialReason name;
+    reason = reasons.${name} or (credentialReason name);
   in {
     inherit reason;
     assertion = reason == null;
     message = "${lib.showOption (optionPath ++ [name])} cannot be set: ${
       if reason == null
       then "no refusal applies"
-      else reason
+      else lib.removeSuffix "." reason
     }.";
   };
 in
   warnings
   // {
     inherit check credentialReason;
+    # Freeform submodules call merge without calling the type's check. Refuse
+    # credential-shaped names and owner-named fields before merging values.
+    refuse = {
+      type,
+      reasons ? {},
+    }:
+      type
+      // {
+        merge = loc: defs: let
+          refuseName = name: let
+            result = check {
+              inherit name reasons;
+              optionPath = loc;
+            };
+          in
+            if result.assertion
+            then true
+            else throw result.message;
+        in
+          builtins.seq (lib.all refuseName (lib.concatMap (def: builtins.attrNames def.value) defs)) (type.merge loc defs);
+      };
   }

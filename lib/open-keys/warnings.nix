@@ -149,9 +149,9 @@
       else null;
 in {
   inherit fromPaths;
-  # Shared by Claude and Kiro's allowUnrecognizedSettings option descriptions.
+  # Shared syntax for owner warning allowlist option descriptions.
   allowlistSyntax = ''
-    Entries are dotted paths relative to the settings document. Use `*` for
+    Entries are dotted paths relative to the inspected document. Use `*` for
     user-named map entries (`"services.*.newField"`) and glued `[]` for list
     elements (`"entries[].newField"`). Quote a literal segment containing dots
     inside the string (`"\"chat.futureSetting\""`). Warnings print the exact

@@ -1,3 +1,4 @@
+# cspell:ignore por priorty
 # `ai.proxy` core contracts (lib/ai/proxy): selection validation and
 # resolution, the per-runtime override, the Home Manager services and
 # registry, the devenv rejection of services, the unsupported-runtime
@@ -366,6 +367,102 @@ in {
             port = 8317;
           };
         }
+    );
+
+    module-ai-proxy-refused-account-fields = mkTest "ai-proxy-refused-account-fields" (
+      lib.all (eval:
+        lib.all (name: let
+          account =
+            (eval {
+              ai.proxy.instances.main = instance {
+                allowUnrecognizedAccountFields = ["*.${name}"];
+                accounts.a.${name} = "refused-value";
+              };
+            }).config.ai.proxy.instances.main.accounts.a;
+        in
+          !(builtins.tryEval (builtins.deepSeq account true)).success)
+        ["access_token" "api_key" "email" "id_token" "plan_type" "refresh_token" "type"])
+      [evalHm evalDevenv]
+    );
+
+    module-ai-proxy-unrecognized-accounts-warn = mkTest "ai-proxy-unrecognized-accounts-warn" (
+      lib.all (eval: let
+        result = eval {
+          ai.proxy.instances.main = instance {
+            accounts."user.with.dots" = {
+              headers.X-Team.file = "/run/secrets/header";
+              priorty = 3;
+              request_retry = 2;
+            };
+          };
+        };
+        warnings = result.config.warnings;
+        fields = (cliproxyapi.renderAccount result.config.ai.proxy.instances.main.accounts."user.with.dots").value;
+      in
+        builtins.length warnings
+        == 2
+        && lib.hasInfix ''ai.proxy.instances.main.accounts."user.with.dots".priorty: unrecognized key'' (builtins.head warnings)
+        && lib.hasInfix ''did you mean `ai.proxy.instances.main.accounts."user.with.dots".priority`?'' (builtins.head warnings)
+        && lib.hasInfix ''[ "*.priorty" ]'' (builtins.head warnings)
+        && fields
+        == {
+          priorty = 3;
+          request_retry = 2;
+        })
+      [evalHm evalDevenv]
+    );
+
+    module-ai-proxy-unrecognized-settings-warn = mkTest "ai-proxy-unrecognized-settings-warn" (
+      lib.all (eval: let
+        result = eval {
+          ai.proxy.instances.main = instance {
+            settings = {
+              api-keys.claude = [
+                {
+                  headers.X-Team.plain = "infra";
+                  keys = [
+                    {
+                      api-key.file = "/run/secrets/upstream";
+                      weight = 1;
+                    }
+                  ];
+                }
+              ];
+              server.por = 9000;
+            };
+          };
+        };
+        warnings = result.config.warnings;
+      in
+        builtins.length warnings
+        == 1
+        && lib.hasInfix "ai.proxy.instances.main.settings.server.por: unrecognized key" (builtins.head warnings)
+        && lib.hasInfix "did you mean `ai.proxy.instances.main.settings.server.port`?" (builtins.head warnings)
+        && (cliproxyapi.render result.config.ai.proxy.instances.main.settings).value.server.por == 9000)
+      [evalHm evalDevenv]
+    );
+
+    module-ai-proxy-warning-allowlists = mkTest "ai-proxy-warning-allowlists" (
+      lib.all (eval: let
+        evaluated = extra:
+          eval {
+            ai.proxy.instances.main = instance ({
+                accounts.a.request_retry = 2;
+                allowUnrecognizedAccountFields = ["*.request_retry"];
+                allowUnrecognizedSettings = ["server.por"];
+                settings.server.por = 9000;
+              }
+              // extra);
+          };
+        result = evaluated {};
+        stale = evaluated {allowUnrecognizedSettings = ["server.port"];};
+      in
+        result.config.warnings
+        == []
+        && (cliproxyapi.render result.config.ai.proxy.instances.main.settings).value.server.por == 9000
+        && result.config.ai.proxy.instances.main.accounts.a.request_retry == 2
+        && builtins.any (lib.hasInfix "stale allowlist entry `server.port` is already declared") stale.config.warnings)
+      [evalHm evalDevenv]
     );
 
     # Instances are checked one by one: a name that cannot be a unit, a

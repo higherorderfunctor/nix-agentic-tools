@@ -7,14 +7,11 @@ applyTo: "checks/ai-proxy/**,lib/ai/proxy/default.nix,lib/ai/proxy/module.nix,pa
 
 ## ai.proxy services: the CLIProxyAPI instances Home Manager runs
 
-> **Last verified:** 2026-10-14 — instance `settings` and `accounts` are typed
-> from the extraction (`packages/cliproxyapi/docs/cliproxyapi-extraction.md`);
-> secrets in settings take the secret type in place; account fields reconcile
-> through `lib/own`, one ledger per account; proxy URLs and upstream headers, in
-> settings and accounts, are secrets; accounts take untyped keys but refuse
-> `ignored` fields and credential-shaped names; the native login flow; a start
-> that always fails ends the unit `failed`; `oauth.auth-dir` is absolute, `~` or
-> `~/…`.
+> **Last verified:** 2026-10-14 — extracted settings and account fields use
+> `lib/open-keys` for unknown-key warnings and per-instance suppressions on both
+> backends; account freeform refusal uses shared credential policy and the
+> owner's reconciled identity reasons. Services and account reconciliation
+> retain their existing lifecycle.
 >
 > **Settled — do not relitigate.** Freeform `settings` with a
 > `{ _secret = { file | helper }; }` marker, and a jq `. + $fields` merge of
@@ -42,7 +39,10 @@ never argv.
 - `settings` is `packages/cliproxyapi/lib/extracted.nix`'s `settingsType`: one
   `nullOr` option per extracted v8 path, default null, every object open to keys
   the extraction does not know. `render` drops nulls and empty typed objects, so
-  CLIProxyAPI keeps its own defaults.
+  CLIProxyAPI keeps its own defaults. Unknown keys warn with spelling
+  suggestions; `allowUnrecognizedSettings` suppresses selected paths. Warnings
+  inspect the rendered value at config level, behind `options ? warnings`, on
+  both backends.
 - The jq that completes the config at start (secrets, client key, auth dir) is
   `packages/cliproxyapi/lib/config.jq` (`configFilter`), shared with
   `cliproxyapi-config-validates` so the check loads what a service would.
@@ -80,9 +80,12 @@ never argv.
 before each exec; the typed options are the extracted auth-file fields minus
 identity and tokens, and `accountType` is open (`freeformType`) to the keys CPA
 reads off the extracted path (`request_retry`, `websockets`, `disable_cooling`,
-`cloak_*`), written as given. That hatch refuses an `ignored` field (identity,
-`id_token`) and any name `classify` flags as credential-shaped (`access_token`,
-`api_key`), so no token reaches the store plan or the ledger. The file name is a
+`cloak_*`), written as given with unknown-key warnings. Instance
+`allowUnrecognizedAccountFields` suppresses paths relative to the accounts map
+(`*.request_retry`). `lib/open-keys.refuse` rejects an `ignored` field using its
+reconciled reason (identity, `id_token`) and any credential-shaped name
+(`access_token`, `api_key`), even if allowlisted, before merging the freeform
+value, so no token reaches the store plan or the ledger. The file name is a
 login's only stable address: `claude-<hash>-<email>.json`, the hash being the
 first 8 hex digits of sha256(organization or account uuid)
 (`internal/auth/claude/filename.go`), and `codex-<hash>-<email>-<plan>.json`,
