@@ -7,7 +7,8 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-14 — Kiro is gated by `ai.kiro.cli.enable`;
+> **Last verified:** 2026-10-15 — `mkSkillFiles` interpolates every skill source
+> before the files engine walks it; Kiro is gated by `ai.kiro.cli.enable`;
 > factories read the derived, read-only `ai.kiro.enable`; `ai.copilot` is
 > github.com Copilot, with pools under `ai.copilot.github` and no launcher.
 >
@@ -506,11 +507,12 @@ This matters when passing values to options that gate on `lib.isPath` or
 
 - **Skill trees.** Both backends go through
   `lib/ai/hm-helpers.nix:mkSkillFiles`, which asks `builtins.readFileType` —
-  agnostic to path versus string — and the devenv walk in `lib/ai/formats.nix`
-  does the same. That is why skill packages can feed store-path strings through
-  `lib/ai/mkSkillPackageModule.nix`. Our helper checked the strict `lib.isPath`
-  until commit `1f1ad35`, and a string input fell through to writing the value
-  as **TEXT CONTENT** to `.claude/skills/<name>/SKILL.md` — a single line like
+  agnostic to path versus string — and interpolates the source, so the files
+  engine walks one store path either way. That is why skill packages can feed
+  store-path strings through `lib/ai/mkSkillPackageModule.nix`. Our helper
+  checked the strict `lib.isPath` until commit `1f1ad35`, and a string input
+  fell through to writing the value as **TEXT CONTENT** to
+  `.claude/skills/<name>/SKILL.md` — a single line like
   `/nix/store/abc-skills/stack-fix` instead of real YAML frontmatter, so Claude
   couldn't load the skill.
 

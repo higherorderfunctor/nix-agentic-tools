@@ -1,6 +1,8 @@
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
+> **Last verified:** 2026-10-15 — `mkSkillFiles` stages skills in
+> `ai.<runtime>._generatedFiles`, and the files engine walks each tree into
+> per-leaf links on both backends; runtime surfaceSupport declarations own
 > normalized backend reach and nested delivery diagnostics; package skills and
 > rules require the backend and follow its reach; Copilot declares a skill gap.
 >
@@ -57,9 +59,11 @@ replace them without following the old link.
 
 ### How to apply
 
-- Call `helpers.mkSkillFiles`, which writes DELIVERY entries into
-  `ai.<runtime>.files` for both backends: `recursive = true` is Layout B, and
-  `recursive = false` with a directory source is Codex's Layout A.
+- Call `helpers.mkSkillFiles`, which writes STAGED entries into
+  `ai.<runtime>._generatedFiles` for both backends; the runtime factory forwards
+  them to `ai.<runtime>.files2` and the files engine. `recursive = true` is
+  Layout B, and `recursive = false` with a directory source is Codex's Layout A.
+  A consumer's own `ai.<runtime>.files2.<path>` beats the staged default.
 - Do not add a second writer for a native skills path.
 - Keep module-eval coverage for both root and per-runtime skill contributions.
 
@@ -75,34 +79,29 @@ devenv emits project-root `.agents/skills`; neither destination is derived from
 ### Devenv counterpart
 
 `devenv.files.*.source` is structurally incapable of recursive walks, so the
-DELIVERY ROUTER walks a `recursive` entry at evaluation time and emits one
-devenv entry per leaf, preserving nested relative paths. That walk is shared: it
-replaced the per-backend skill helpers and kiro's inline agents-directory copy
-of the same recursion, so a factory declares the tree once and both backends
-expand it. Codex instead relies on devenv's identity behavior: one directory
-source creates the exact Layout A link its scanner requires at project-root
+files engine (`packages/ai-module/lib/files/default.nix`, `walk`) expands a
+recursive skill at evaluation time into one link per leaf, preserving nested
+relative paths. It does so on both backends: Home Manager gets the same per-leaf
+`home.file` links instead of one recursive entry, which lays down the same real
+directories. Codex instead relies on each backend's identity behavior: one
+directory source creates the exact Layout A link its scanner requires at
 `.agents/skills/<name>`.
 
 Kimchi gives the recursive entry a `.kimchi/skills/<name>` project path on
 devenv and a `<configDir>/harness/skills/<name>` user path on Home Manager.
 
-A skill entry states `executable = null`, which reaches the sink as an absent
-attribute and leaves every file's mode alone. Stating a mode there would clear
-the executable bit on a script a skill ships.
+A skill entry leaves `executable` at its null default, which reaches the sink as
+an absent attribute and leaves every file's mode alone. Stating a mode there
+would clear the executable bit on a script a skill ships.
 
 ### Preserve source identity across layouts
 
-`lib/ai/formats.nix:walk` traverses the original directory but builds every
-devenv leaf target beneath one interpolated store root. Do not point each leaf
-at its separately interpolated Nix path: Kimchi/Pi discovers both Codex's Layout
-A directory link and Kimchi's Layout B leaf links, and it deduplicates them by
-real path rather than by file contents.
-
-Each emitted target also carries the separately interpolated leaf's string
-context. That context keeps devenv's per-file direnv inputs without changing the
-path the native symlink targets.
-`module-delivery-recursive-entry-walks-for-devenv` locks both properties and
-keeps standalone leaf identities as negative controls.
+`mkSkillFiles` interpolates every source once, so the engine walks one store
+root and every leaf link targets beneath it. Do not let the walk run on a path
+literal: each leaf would become its own store path, and a relative symlink
+between two leaves of the tree would dangle. Kimchi/Pi deduplicates skills by
+real path rather than by file contents; a skill Codex also delivers resolves to
+Codex's generated tree instead, as it did before the move.
 
 ### Skill-package program gating
 

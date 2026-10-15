@@ -19,6 +19,7 @@ production consumer imports it yet.
 | `method`         | `enum ["ro" "rw" "symlink"]` or submodule `{ devenv; hm; }` with both enum fields required | `"symlink"` | Delivery per backend; the two-field form expresses differing reader behavior.                                     |
 | `mode`           | `nullOr (strMatching "0?[0-7]{3}")`                                                        | `null`      | Exact permissions on an owned copy; `ro` requires owner read permission for later reconciliation.                 |
 | `recursive`      | `bool`                                                                                     | `false`     | Expand a source directory into leaves at any depth; otherwise a directory source is one native directory symlink. |
+| `requires`       | `listOf package`, internal                                                                 | `[]`        | Derivations built before delivery, never read: their string context rides on each delivered leaf after the walk.  |
 
 The submodule keeps text/source/value/run as nullable sibling options. After
 each sibling merges its own definitions, normalization walks the siblings from

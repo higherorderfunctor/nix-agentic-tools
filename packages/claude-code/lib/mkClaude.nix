@@ -748,7 +748,7 @@ in
           cfg.hookScripts;
         }
         {
-          ai.claude.files = helpers.mkSkillFiles {
+          ai.claude._generatedFiles = helpers.mkSkillFiles {
             configDir = ".claude";
             skills = mergedSkills;
           };

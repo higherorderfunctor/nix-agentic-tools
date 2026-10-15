@@ -1522,17 +1522,17 @@ in
                 executable = null;
               };
             })
-            # Codex discovers a skill when the skill DIRECTORY is itself a
-            # symlink, and not when the backend creates a real directory of
-            # symlinked leaves — a measured consumer fact, and the whole reason
-            # this runtime delivers a directory source with `recursive` off.
-            # `normalizeCodexSkills` wraps single-file skills into directories.
-            (helpers.mkSkillFiles {
-              configDir = ".agents";
-              recursive = false;
-              skills = codexSkills;
-            })
           ];
+          # Codex discovers a skill when the skill DIRECTORY is itself a
+          # symlink, and not when the backend creates a real directory of
+          # symlinked leaves — a measured consumer fact, and the whole reason
+          # this runtime delivers a directory source with `recursive` off.
+          # `normalizeCodexSkills` wraps single-file skills into directories.
+          ai.codex._generatedFiles = helpers.mkSkillFiles {
+            configDir = ".agents";
+            recursive = false;
+            skills = codexSkills;
+          };
         }
         {
           ai.codex.activation.codexMigrateSkillLinks = lib.mkIf (mergedSkills != {}) (

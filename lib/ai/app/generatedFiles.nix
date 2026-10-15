@@ -68,6 +68,9 @@ in {
       method = lib.mkDefault entry.method;
       mode = lib.mkDefault entry.mode;
       recursive = lib.mkDefault entry.recursive;
+      # Delivery waits for the tree, so its checks gate a recursive source or a
+      # value that does not point into it.
+      requires = lib.mkDefault (lib.optional (args.tree != null) args.tree);
     })
     (live args.staged);
 

@@ -39,7 +39,10 @@
       if mode == "devenv"
       then config.ai.internal.files
       else {};
-    files = lib.filterAttrs (_: entry: entry != null) (cfg.files // shared);
+    # Staged entries (skills) reach the files engine, which links them and
+    # walks a recursive tree into its leaves on both backends.
+    staged = lib.filterAttrs (_: entry: entry.enable) cfg._generatedFiles;
+    files = lib.filterAttrs (_: entry: entry != null) (cfg.files // shared) // staged;
     # A shared target is written by the owner's writer, not the runtime's.
     activationFor = path:
       if shared ? ${path}
@@ -75,7 +78,7 @@
           method
         };
       leaf =
-        if mode == "devenv" && entry.recursive
+        if (mode == "devenv" || staged ? ${path}) && entry.recursive
         then
           assert lib.assertMsg (builtins.hasAttr "${path}/SKILL.md" (formats.walk path entry.content.source))
           "ai-delivery: the recursive skill specimen has no SKILL.md"; "${path}/SKILL.md"

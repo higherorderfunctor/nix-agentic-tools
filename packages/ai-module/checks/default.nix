@@ -5,6 +5,7 @@
     ./devenv.nix
     ./eval.nix
     ./generated-files.nix
+    ./generated-tree-gates.nix
     ./hm.nix
     ./legacy.nix
     ./matrix.nix

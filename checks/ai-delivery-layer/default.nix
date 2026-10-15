@@ -93,11 +93,15 @@
       };
       treefmt.enable = treefmtEnable;
     };
-  generatedEntries = evaluated:
+  # The live entries of one per-runtime option, tagged with path and runtime:
+  # the old-path `files`, or the staged `_generatedFiles` (`S`).
+  liveEntries = option: isLive: evaluated:
     lib.concatMap (runtime:
       lib.mapAttrsToList (path: entry: entry // {inherit path runtime;})
-      (lib.filterAttrs (_: runtimeFiles.isLive) (evaluated.config.ai.${runtime}.files or {})))
+      (lib.filterAttrs (_: isLive) (evaluated.config.ai.${runtime}.${option} or {})))
     (harnessNames ++ ["internal"]);
+  generatedEntries = liveEntries "files" runtimeFiles.isLive;
+  stagedEntries = liveEntries "_generatedFiles" (entry: entry.enable);
   candidateType = path:
     if lib.hasSuffix ".json" path
     then "json"
@@ -250,6 +254,7 @@ in {
       routed = lib.all (backend: let
         evaluated = generatedEvaluations.${backend};
         files = deliveredFiles evaluated.config;
+        deliveredFromTree = path: files ? ${path} && fromGeneratedTree path files.${path};
         entries = lib.filter (entry: entry.path != "AGENTS.md" || entry.runtime == "internal") (generatedEntries evaluated);
         verifies = entry: let
           cfg = evaluated.config.ai.${entry.runtime};
@@ -259,7 +264,6 @@ in {
             methodFor = cfg.methodFor or deliveryMethod.byRule;
           };
           treeMember = entry.content.run == null && method != "shared";
-          deliveredFromTree = path: files ? ${path} && fromGeneratedTree path files.${path};
           recursiveLeaves = lib.attrNames (formats.walk entry.path entry.content.source);
         in
           if treeMember && entry.recursive && backend == "devenv"
@@ -270,22 +274,27 @@ in {
             && deliveredFromTree entry.path
           else if treeMember
           then deliveredFromTree entry.path
-          else !(files ? ${entry.path} && fromGeneratedTree entry.path files.${entry.path});
+          else !deliveredFromTree entry.path;
+        # `S` → `R`: a non-recursive staged source enters the tree, while a
+        # recursive one passes as itself and is walked into one leaf each.
+        verifiesStaged = entry:
+          if entry.recursive
+          then
+            lib.all (leaf: files ? ${leaf} && !fromGeneratedTree leaf files.${leaf})
+            (lib.attrNames (formats.walk entry.path entry.content.source))
+          else deliveredFromTree entry.path;
+        staged = lib.filter (entry: evaluated.config.ai.${entry.runtime}.enable or false) (stagedEntries evaluated);
       in
-        lib.all verifies entries) ["devenv" "hm"];
+        lib.all verifies entries && staged != [] && lib.all verifiesStaged staged) ["devenv" "hm"];
       rawFiles = map (backend: (deliveredFiles generatedEvaluations.${backend}.config).".claude/hooks/raw-probe") ["devenv" "hm"];
       recursiveExecutable = ./fixtures/probe-skill/scripts/executable-probe;
-      recursiveExecutableFiles = [
-        "${(deliveredFiles generatedEvaluations.hm.config).".claude/skills/probe".source}/scripts/executable-probe"
-        (deliveredFiles generatedEvaluations.devenv.config).".claude/skills/probe/scripts/executable-probe".source
-      ];
+      # A staged skill tree is walked into one link per leaf on both backends.
+      skillLeaf = leaf: map (backend: (deliveredFiles generatedEvaluations.${backend}.config).".claude/skills/probe/${leaf}".source) ["devenv" "hm"];
+      recursiveExecutableFiles = skillLeaf "scripts/executable-probe";
       recursiveLeaf = ./fixtures/probe-skill/SKILL.md;
-      recursiveFiles = [
-        "${(deliveredFiles generatedEvaluations.hm.config).".claude/skills/probe".source}/SKILL.md"
-        (deliveredFiles generatedEvaluations.devenv.config).".claude/skills/probe/SKILL.md".source
-      ];
+      recursiveFiles = skillLeaf "SKILL.md";
     in
-      assert lib.assertMsg routed "delivery-generated-tree-routing: run and shared entries must stay out of the tree, and every other live entry must come from it";
+      assert lib.assertMsg routed "delivery-generated-tree-routing: run and shared entries must stay out of the tree, every other live entry must come from it, a non-recursive staged entry must come from it, and a recursive staged entry must arrive as one leaf per walked file from outside it";
         pkgs.runCommand "module-test-delivery-generated-tree-routing" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :

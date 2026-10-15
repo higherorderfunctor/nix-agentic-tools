@@ -592,7 +592,8 @@ in {
           && lib.hasInfix "Always use strict mode" ruleFile
       );
 
-      # Skills land as links under ~/.claude/skills, a directory's leaves each.
+      # Skills land as links under ~/.claude/skills, a directory's leaves each:
+      # one recursive layer-1 entry the engine walks into per-leaf links.
       module-claude-hm-skills-land-as-files = mkTest "claude-hm-skills-land-as-files" (
         let
           src = ../../stacked-workflows/skills/stack-fix;
@@ -600,11 +601,42 @@ in {
             ai.claude.enable = true;
             ai.skills.stack-fix = src;
           };
-          file = result.config.home.file.".claude/skills/stack-fix" or {};
+          entry = result.config.ai.files2.".claude/skills/stack-fix";
         in
-          fromGeneratedTree ".claude/skills/stack-fix" file
-          && (markdownInput result ".claude/skills/stack-fix").source == src
-          && (file.recursive or false)
+          (markdownInput result ".claude/skills/stack-fix").source
+          == "${src}"
+          && entry.recursive
+          && entry.method == "symlink"
+          && result.config.home.file.".claude/skills/stack-fix/SKILL.md".source == "${src}/SKILL.md"
+          && !(result.config.home.file ? ".claude/skills/stack-fix")
+          && !(result.config.ai.claude.files ? ".claude/skills/stack-fix")
+      );
+
+      # A consumer's layer-1 entry beats a staged skill: text replaces a
+      # single-file skill, and `enable = false` drops a tree's leaves.
+      module-claude-hm-skill-consumer-override-wins = mkTest "claude-hm-skill-consumer-override-wins" (
+        let
+          inherit
+            (evalHm {
+              ai.claude = {
+                enable = true;
+                files2 = {
+                  ".claude/skills/probe/SKILL.md".content.text = "mine";
+                  ".claude/skills/stack-fix".enable = false;
+                };
+              };
+              ai.skills = {
+                probe = ./fixtures/claude-skills/skill-a/SKILL.md;
+                stack-fix = ../../stacked-workflows/skills/stack-fix;
+              };
+            })
+            config
+            ;
+        in
+          config.ai.files2.".claude/skills/probe/SKILL.md".content._choice
+          == "text"
+          && config.home.file ? ".claude/skills/probe/SKILL.md"
+          && !(lib.any (lib.hasPrefix ".claude/skills/stack-fix/") (builtins.attrNames config.home.file))
       );
 
       # Every Claude surface lands as its own file: the Markdown and script
@@ -634,7 +666,7 @@ in {
             ".claude/skills/home-manager/.claude-plugin/plugin.json"
             ".claude/skills/home-manager/.mcp.json"
             ".claude/settings.json"
-            ".claude/skills/probe"
+            ".claude/skills/probe/SKILL.md"
           ]
           && settings.permissions.allow == ["Read"]
           && handlerCommands settings.hooks.PreToolUse == ["true"]
@@ -1166,7 +1198,7 @@ in {
           };
           files = result.config.home.file;
         in
-          files ? ".claude/skills/skill-a" && files ? ".claude/skills/skill-b"
+          files ? ".claude/skills/skill-a/SKILL.md" && files ? ".claude/skills/skill-b/SKILL.md"
       );
 
       # Submodule form with a filter that excludes skill-b.
@@ -1183,7 +1215,7 @@ in {
           };
           files = result.config.home.file;
         in
-          files ? ".claude/skills/skill-a" && !(files ? ".claude/skills/skill-b")
+          files ? ".claude/skills/skill-a/SKILL.md" && !(files ? ".claude/skills/skill-b/SKILL.md")
       );
 
       # A per-runtime directory-generated entry replaces the same-key root entry.
@@ -1197,8 +1229,9 @@ in {
             };
           };
         in
-          fromGeneratedTree ".claude/skills/skill-a" result.config.home.file.".claude/skills/skill-a"
-          && (markdownInput result ".claude/skills/skill-a").source == ./fixtures/claude-skills/skill-a
+          result.config.home.file.".claude/skills/skill-a/SKILL.md".source
+          == "${./fixtures/claude-skills/skill-a}/SKILL.md"
+          && (markdownInput result ".claude/skills/skill-a").source == "${./fixtures/claude-skills/skill-a}"
       );
 
       # ── ai.claude.agentsDir Dir helper ─────────────────────────
