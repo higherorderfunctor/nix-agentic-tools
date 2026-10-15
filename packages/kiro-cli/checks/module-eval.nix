@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree hasLiteral lspEntryOf markdownInput mkTest mkWrapperGrepTest;
+  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest;
   kiroFact = let
     extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
   in
@@ -199,7 +199,7 @@ in {
         tree = result.options.ai.kiro;
       in
         lib.all (path: !lib.hasAttrByPath path tree && lib.hasAttrByPath (["cli"] ++ path) tree) moved
-        && lib.all (key: builtins.hasAttr key tree) ["activation" "agents" "configDir" "context" "enable" "files" "hooks" "lspServers" "mcpServers" "permissions" "rules" "skills"]
+        && lib.all (key: builtins.hasAttr key tree) ["activation" "agents" "configDir" "context" "enable" "files" "hooks" "mcpServers" "permissions" "rules" "skills"]
         && tree.cli ? enable
         && tree.enable.readOnly
         && !(builtins.tryEval (evaluate {ai.kiro = {package = null;};}).config).success;
@@ -2119,33 +2119,6 @@ in {
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
 
-    # HM: lsp.json — the `languages` envelope with snake_case fields.
-    module-kiro-hm-writes-lsp-json = mkTest "kiro-hm-writes-lsp-json" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            lspServers.nix = {
-              command = "nixd";
-              args = [];
-              extensions = ["nix"];
-            };
-          };
-        };
-      in
-        # The whole documented Kiro entry, inside the `languages` envelope.
-        lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "nix"
-        == {
-          args = [];
-          command = "nixd";
-          exclude_patterns = [];
-          file_extensions = ["nix"];
-          initialization_options = {};
-          name = "nix";
-          project_patterns = [];
-        }
-    );
-
     # HM: explicit `permissions` rules render permissions.yaml (source is a
     # pkgs.formats.yaml derivation, so we assert the file ENTRY exists).
     module-kiro-hm-permissions-explicit-rendered = mkTest "kiro-hm-permissions-explicit-rendered" (
@@ -3544,46 +3517,6 @@ in {
         && !(result.config.files ? ".kiro/settings/mcp.json")
     );
 
-    # Devenv: lsp.json — the `languages` envelope with snake_case fields.
-    module-kiro-devenv-writes-lsp-json = mkTest "kiro-devenv-writes-lsp-json" (
-      let
-        result = evalDevenv {
-          ai.kiro = {
-            cli.enable = true;
-            lspServers.nix = {
-              command = "nixd";
-              args = [];
-              extensions = ["nix"];
-            };
-          };
-        };
-      in
-        # The whole documented Kiro entry, inside the `languages` envelope.
-        lspEntryOf "languages" (result.config.files.".kiro/settings/lsp.json" or null) "nix"
-        == {
-          args = [];
-          command = "nixd";
-          exclude_patterns = [];
-          file_extensions = ["nix"];
-          initialization_options = {};
-          name = "nix";
-          project_patterns = [];
-        }
-    );
-
-    # Kiro routes files to LSP servers by extension alone, so a server
-    # without `extensions` must fail evaluation, not render an entry that
-    # never starts.
-    module-kiro-lsp-without-extensions-throws = mkTest "kiro-lsp-without-extensions-throws" (
-      let
-        result = evalDevenv {
-          ai.kiro.cli.enable = true;
-          ai.lspServers.nixd.command = "nixd";
-        };
-      in
-        !(builtins.tryEval result.config.files.".kiro/settings/lsp.json".text).success
-    );
-
     # Devenv: environment variables are baked into the launcher, not exported
     # into the project shell (which is what the old `env` blob did).
     module-kiro-devenv-env-wrapper-populated = let
@@ -4040,60 +3973,6 @@ in {
         && lib.hasInfix "Write tests" (ruleFile.text or "")
     );
 
-    # HM: top-level ai.lspServers fans out to Kiro's settings/lsp.json.
-    module-kiro-hm-top-level-lsp-fanout = mkTest "kiro-hm-top-level-lsp-fanout" (
-      let
-        result = evalHm {
-          ai.kiro.cli.enable = true;
-          ai.lspServers.nixd = {
-            command = "nixd";
-            args = [];
-            extensions = ["nix"];
-          };
-        };
-      in
-        (lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "nixd").command or null
-        == "nixd"
-    );
-
-    # Devenv: top-level ai.lspServers fans out to Kiro's settings/lsp.json.
-    module-kiro-devenv-top-level-lsp-fanout = mkTest "kiro-devenv-top-level-lsp-fanout" (
-      let
-        result = evalDevenv {
-          ai.kiro.cli.enable = true;
-          ai.lspServers.nixd = {
-            command = "nixd";
-            args = [];
-            extensions = ["nix"];
-          };
-        };
-      in
-        (lspEntryOf "languages" (result.config.files.".kiro/settings/lsp.json" or null) "nixd").command or null
-        == "nixd"
-    );
-
-    # HM: per-CLI ai.kiro.lspServers overrides top-level ai.lspServers on
-    # name collision. Kiro-specific override wins.
-    module-kiro-hm-per-cli-lsp-overrides-top-level = mkTest "kiro-hm-per-cli-lsp-overrides-top-level" (
-      let
-        result = evalHm {
-          ai = {
-            kiro.cli.enable = true;
-            lspServers.nixd = {
-              command = "nixd-top-level";
-              extensions = ["nix"];
-            };
-            kiro.lspServers.nixd = {
-              command = "nixd-kiro-specific";
-              extensions = ["nix"];
-            };
-          };
-        };
-      in
-        (lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "nixd").command or null
-        == "nixd-kiro-specific"
-    );
-
     # HM: top-level ai.environmentVariables fans out to the Kiro wrapper.
     #
     # This asserted only that A wrapper appeared, which cannot tell "the
@@ -4151,26 +4030,6 @@ in {
         needles = ["SHARED" "kiro-specific-winner"];
         absentNeedles = ["top-level-loser"];
       };
-
-    # Kiro HM: package-based declaration renders `${package}/bin/${binary}`.
-    # Exercises the package+binary resolution branch.
-    module-kiro-hm-lsp-package-command-rendering = mkTest "kiro-hm-lsp-package-command-rendering" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            lspServers.hello-lsp = {
-              package = pkgs.hello;
-              binary = "hello";
-              args = [];
-              extensions = ["hello"];
-            };
-          };
-        };
-      in
-        lib.hasSuffix "/bin/hello"
-        ((lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "hello-lsp").command or "")
-    );
 
     # ── ai.*.rulesDir Dir helper ──────────────────────────────────
     # See lib/ai/dir-helpers.nix + lib/ai/sharedOptions.nix + the

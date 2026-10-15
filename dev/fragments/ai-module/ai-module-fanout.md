@@ -9,6 +9,17 @@
 > wrongly. Full lineage:
 > `git show d1c28a21:dev/fragments/ai-module/ai-module-fanout.md`.
 >
+> - **There is no shared `ai.lspServers` pool — don't restore it.** It fanned
+>   one typed record out to Claude, Copilot and Kiro until the operator removed
+>   it on 2026-10-14 (#2526) because nobody set it; a normalized surface returns
+>   only when two harnesses share a lossless shape. Native settings options stay
+>   and no new native LSP option replaces it. Two measurements that would
+>   otherwise be re-derived: under Home Manager, Copilot's LSP toggle renames a
+>   temporary over `lsp-config.json`, so a symlinked file there is replaced and
+>   a consumer must deliver a real copy; Kiro reads `settings/lsp.json` relative
+>   to the workspace, so a copy under `$HOME/.kiro` is live only when the
+>   workspace is `$HOME`. Last version:
+>   `git show 0964eec2:lib/ai/sharedOptions.nix`.
 > - **Root silence for unsupported runtimes is rejected.** It was the design,
 >   rejected by the operator on 2026-10-13; repeated activation warnings,
 >   including Copilot's, are accepted. Prior design:
@@ -132,7 +143,7 @@ global setting there. Devenv warns when either requested global setting is
 missing, and refuses explicit project-only writes of global keys. The
 environment and shell folds live at `cli.normalized.environmentVariables` and
 `cli.normalized.shell`. All other normalized pools, native agents, permissions,
-hooks, MCP/LSP, files and activation remain shared under `ai.kiro`. There are no
+hooks, MCP, files and activation remain shared under `ai.kiro`. There are no
 old-path aliases. `ai.kiro.cli.enable = true; ai.kiro.cli.package = null;` keeps
 shared files without installing a CLI.
 
@@ -560,20 +571,6 @@ there is no file scope or a non-empty list for `fileMatch` content.
   directly. The MCP server key is also the managed-unit identity, so reused
   proxy-owner keys fail and direct owners must choose different keys. A
   top-level proxy inherited by no enabled capable runtime creates no unit.
-- `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
-  Kiro native config. Claude receives them on Home Manager only, in its personal
-  plugin's `.lsp.json`; devenv has no Claude LSP route and warns. Codex is
-  deliberately excluded: its current public config reference and pinned CLI
-  expose no LSP-server registration surface, so pretending to fan out this pool
-  would silently discard the declaration. The Copilot and Kiro producers
-  (`mkCopilotLspFile`, `mkKiroLspFile`) emit the WHOLE file, envelope included
-  (`lspServers` / `languages`): both CLIs reject a bare per-server map, which is
-  what shipped until 2026-09-23 while substring checks stayed green. Both route
-  files to servers by extension alone, so a server they receive with empty
-  `extensions` throws at eval rather than render an entry that never starts;
-  drop it for that runtime with `ai.<runtime>.lspServers.<name> = null`. Copilot
-  also keys `lspServers` by the attribute name and rejects the whole file for a
-  name outside `[A-Za-z0-9_-]+`, so such a name throws for Copilot too.
 - `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
   of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
@@ -643,10 +640,7 @@ physical delivery and native diagnostics; they no longer choose normalized
 delivery warnings or override their reasons. Package rule contributors consult
 the record's backend reach before writing. Native diagnostics belong to runtime
 factories. Transport-dependent MCP field warnings and final-file replacement
-warnings remain generic in the shared reader. Kiro Home Manager LSP delivery is
-conditional on launching with $HOME as the workspace; Home Manager has no launch
-workspace value, so a populated LSP declaration always explains that condition.
-Devenv LSP stays quiet.
+warnings remain generic in the shared reader.
 
 Diagnostic units currently enumerate per-runtime pools at the runtime root. A
 future gap on launcher-prefixed `shell` or `environmentVariables` needs that
@@ -816,10 +810,10 @@ nothing and only drains the steering copies an older ledger records.
 Do not describe every top-level pool as mechanically reaching all five runtimes.
 The shared option descriptions and generated README capability matrix must name
 each registered runtime as a consumer or an intentional exclusion. In
-particular, Codex has no native LSP registry; its `shell_environment_policy`
-filters child-command inheritance rather than setting the Codex process
-environment; a raw Codex agent is TOML, never Markdown; and only the
-Claude/Codex lifecycle intersection belongs in portable hooks.
+particular, Codex's `shell_environment_policy` filters child-command inheritance
+rather than setting the Codex process environment; a raw Codex agent is TOML,
+never Markdown; and only the Claude/Codex lifecycle intersection belongs in
+portable hooks.
 
 `lib/options-doc.nix` evaluates both complete published module trees and
 produces their CommonMark/JSON references. The old mdbook/NuschtOS site is gone,
@@ -852,9 +846,9 @@ If the list stays empty despite `ai.claude.enable = true`, the fanout is broken
 ### Shared-pool is per-evaluation, NOT cross-backend
 
 `lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`, `ai.rules`,
-`ai.mcpServers`, `ai.lspServers`, `ai.environmentVariables`, `ai.agents`,
-`ai.hooks`, `ai.context`). Both backend module trees import it, and
-`lib/ai/app/default.nix` selects the one shared transform body per backend.
+`ai.mcpServers`, `ai.environmentVariables`, `ai.agents`, `ai.hooks`,
+`ai.context`). Both backend module trees import it, and `lib/ai/app/default.nix`
+selects the one shared transform body per backend.
 
 **The option declarations are shared. The values are NOT.**
 

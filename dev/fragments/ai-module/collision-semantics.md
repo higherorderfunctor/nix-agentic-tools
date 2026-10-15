@@ -1,7 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> normalized backend reach and nested delivery diagnostics; five keyed pools.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -40,16 +40,15 @@ That does not change the nullable-scalar inheritance contract in B4 or B5.
 
 ### Keyed-pool rule
 
-The six normalized keyed pools are:
+The five normalized keyed pools are:
 
 - `agents`
 - `environmentVariables`
-- `lspServers`
 - `mcpServers`
 - `rules`
 - `skills`
 
-Five pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
+Four pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
 whose entries default `enable = true`. For a capable runtime, nullable-pool
 composition is:
 

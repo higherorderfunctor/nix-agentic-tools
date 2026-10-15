@@ -649,14 +649,12 @@ in {
         config.ai = {
           agents.removed = null;
           environmentVariables.removed = null;
-          lspServers.removed = null;
           mcpServers.removed = null;
           rules.removed.enable = false;
           skills.removed = null;
 
           claude = {
             agents.removed = null;
-            lspServers.removed = null;
             mcpServers.removed = null;
             rules.removed.enable = false;
             skills.removed = null;
@@ -671,7 +669,6 @@ in {
           copilot = {
             agents.removed = null;
             environmentVariables.removed = null;
-            lspServers.removed = null;
             mcpServers.removed = null;
             rules.removed.enable = false;
             skills.removed = null;
@@ -679,7 +676,6 @@ in {
           kimchi.environmentVariables.removed = null;
           kiro = {
             cli.environmentVariables.removed = null;
-            lspServers.removed = null;
             mcpServers.removed = null;
             rules.removed.enable = false;
             skills.removed = null;
@@ -688,7 +684,7 @@ in {
         keepsNulls = evaluated:
           evaluated.config.ai.agents.removed
           == null
-          && evaluated.config.ai.claude.lspServers.removed == null
+          && evaluated.config.ai.claude.mcpServers.removed == null
           && evaluated.config.ai.codex.environmentVariables.removed == null
           && evaluated.config.ai.copilot.mcpServers.removed == null
           && evaluated.config.ai.kimchi.environmentVariables.removed == null

@@ -534,8 +534,7 @@ Claude Code hook adapter, a shared hook that also reaches
 The app record's `surfaceSupport` consumes `agents`, `context`,
 `environmentVariables`, `hooks`, `mcpServers`, `rules`, `settings`, `shell`, and
 `skills`. Kimchi has no native path-scoped rule loader, so rules use the same
-flat AGENTS.md handling as Codex. LSP remains excluded; a shared LSP request
-warns because Kimchi cannot consume it. The shared `resolveOverride` result for
+flat AGENTS.md handling as Codex. The shared `resolveOverride` result for
 `ai.shell` / `ai.kimchi.shell` lowers to `native.harnessSettings.shellPath` at
 default priority, so an explicit native value wins. Both backends use the
 existing harness settings writer; devenv retains project trust and exact-cwd

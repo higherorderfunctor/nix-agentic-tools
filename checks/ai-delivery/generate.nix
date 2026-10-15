@@ -111,8 +111,8 @@
               (
                 if path == ".claude.json"
                 then 20
-                # The personal plugin's manifest only loads its .mcp.json and
-                # .lsp.json, which carry the servers and so represent the row.
+                # The personal plugin's manifest only loads its .mcp.json,
+                # which carries the servers and so represents the row.
                 else if lib.hasSuffix "/.claude-plugin/plugin.json" path
                 then 1
                 else if lib.hasSuffix "/harness/settings.json" path

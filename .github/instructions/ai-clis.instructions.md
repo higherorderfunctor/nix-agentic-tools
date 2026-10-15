@@ -170,16 +170,10 @@ Inside the project it touches ONLY:
 never opened, and never even stat'd. From `$HOME` it opens
 `~/.copilot/{config,mcp-config,lsp-config}.json` plus session state.
 
-That trace predates repository-scope LSP. copilot-cli 1.0.88 also loads
-`.github/lsp.json` from the repository root: the npm package README documents it
-("Repository-level configuration"), `app.js` calls
-`lspConfigsLoadRawProjectConfig`, and the native `runtime.node` carries the path
-string. Both LSP files take the same `{"lspServers": {…}}` envelope; the
-validator rejects a bare per-server map (`lspServers must be an object`), marks
-`fileExtensions` Required, and rejects any server name that is empty or holds a
-character outside ASCII letters, digits, `_` and `-` ("LSP server name must only
-contain alphanumeric characters, underscores, and hyphens"; probed against
-`settingsParseLspServersConfig` in the 1.0.88 `runtime.node`).
+That trace predates repository-scope LSP: copilot-cli 1.0.88 also loads
+`.github/lsp.json` from the repository root. This repo writes neither LSP file;
+`git show 0964eec2:dev/fragments/ai-clis/copilot-config-delivery.md` records the
+measured envelope and server-name rules for both.
 
 ### Repository settings (copilot-cli 1.0.88)
 
@@ -315,26 +309,19 @@ contributes `GIT_SSH_COMMAND` there (devenv has no `programs.git`), so an
 MCP-less devenv project no longer keeps the bare package. Home Manager still
 does, since it states that default in Git's own config instead.
 
-### Where LSP and settings go
+### Where settings go
 
-Both are delivered at repository scope on devenv. LSP servers go to
-`<projectDir>/lsp.json` (default `.github/lsp.json`); settings go to the fixed
+Settings are delivered at repository scope on devenv, to the fixed
 `.github/copilot/settings.json`. Home Manager writes the user-scope
-`~/.copilot/lsp-config.json`, `mcp-config.json` and `settings.json` as read-only
-copies, always, with empty maps when nothing is declared. Nothing but
-`mcp-config.json` lives under the devenv `configDir` any more.
+`~/.copilot/mcp-config.json` and `settings.json` as read-only copies, always,
+with empty maps when nothing is declared. Nothing but `mcp-config.json` lives
+under the devenv `configDir` any more.
 
 The repository-settings schema assertions are scoped to
 `ai.copilot.native.settings`, which only Copilot reads, so they cannot hard-fail
 a project that targets another runtime. Shared pools are different: asserting on
 one because a single runtime cannot deliver it would, which is why shared-pool
 exclusions are documented and warned about rather than asserted.
-
-The two LSP throws are different in kind: a server Copilot receives with empty
-`extensions`, or with a name its validator rejects (a quoted attribute such as
-`"nix.lsp"`), throws, because Copilot would otherwise reject the whole file.
-Each names a fixable entry (set `extensions` or rename the server, or
-`ai.copilot.lspServers.<name> = null`), not an undeliverable surface.
 
 ### What would change this decision
 

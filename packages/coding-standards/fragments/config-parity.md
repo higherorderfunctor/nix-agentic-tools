@@ -10,8 +10,8 @@ If a feature can be configured in HM, it must also be configurable in devenv and
 vice versa. Gaps between methods are bugs.
 
 Surfaces to keep aligned across all three methods: skills,
-instructions/steering, MCP servers, LSP servers, settings, hooks, agents,
-environment variables, permissions.
+instructions/steering, MCP servers, settings, hooks, agents, environment
+variables, permissions.
 
 The `ai.*` module (both HM and devenv) provides a unified interface that fans
 out shared surfaces to enabled ecosystems (Claude, Codex, Copilot, Kimchi, Kiro)

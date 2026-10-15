@@ -23,7 +23,6 @@ are bugs unless marked N/A with rationale.
 | Environment vars | N/A                           | `ai.environmentVariables`; Claude `native.settings.env`                                                | `ai.environmentVariables`; Claude `native.settings.env`                                                   |
 | Hooks            | N/A                           | `ai.hooks` (Claude, Codex); per-CLI `.hooks` for claude, codex, kiro; Kimchi none (warns); copilot N/A | `ai.hooks` (Claude, Codex, Kimchi); per-CLI `.hooks` for claude, codex, kimchi, kiro; copilot N/A         |
 | Context/rules    | N/A                           | `ai.context`, `ai.rules`, per-runtime                                                                  | `ai.context`, `ai.rules`, per-runtime                                                                     |
-| LSP servers      | N/A                           | `ai.lspServers`; claude, copilot, kiro `.lspServers`                                                   | `ai.lspServers`, copilot + kiro `.lspServers`; Claude none (warns)                                        |
 | MCP servers      | `mkStdioEntry`, `mkHttpEntry` | `ai.mcpServers`, per-CLI `.mcpServers`; Claude → personal plugin's `.mcp.json`                         | `ai.mcpServers`, per-CLI `.mcpServers`; Claude → project `.mcp.json`                                      |
 | Permissions      | N/A                           | claude + codex `native.settings.permissions`; kimchi + kiro `.permissions`; copilot N/A                | claude + codex `native.settings.permissions`; kimchi `.permissions`; kiro none (global-only); copilot N/A |
 | Settings         | N/A                           | Per-CLI `native.settings` (typed + freeform)                                                           | Per-CLI `native.settings` (typed + freeform)                                                              |
@@ -53,12 +52,6 @@ can own, so under Home Manager the shared pool does not reach it and
 `ai.kimchi.hooks` warns. Kiro hooks are not fanned out: `ai.kiro.hooks` (plus
 `hooksDir` / `hooksJson`) are typed v3 records written to
 `.kiro/hooks/<name>.json` on both backends. Copilot CLI has no hooks support.
-
-**LSP servers** -- Claude reads LSP servers only from a plugin. Home Manager
-delivers `ai.lspServers` / `ai.claude.lspServers` through the personal plugin's
-`~/.claude/skills/home-manager/.lsp.json`. devenv has no Claude LSP delivery (an
-absent row in the delivery matrix, and a warning); Copilot and Kiro get them on
-both backends.
 
 **MCP servers** -- `ai.mcpServers` fans typed server records out to every
 enabled runtime on both backends, and per-CLI `.mcpServers` adds or overrides

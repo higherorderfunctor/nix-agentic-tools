@@ -221,11 +221,10 @@
 
   # ── Full README content ──────────────────────────────────────────────
   # The AI feature matrix is intentionally capability-oriented rather than a
-  # blanket "all CLIs" claim. Codex lacks some native surfaces (notably LSP
-  # registration and process-environment fanout), while agents and hooks only
-  # have smaller semantic intersections. Keeping those distinctions visible at
-  # the front door prevents documentation parity from becoming fake runtime
-  # parity.
+  # blanket "all CLIs" claim. Some runtimes lack native surfaces, while agents
+  # and hooks only have smaller semantic intersections. Keeping those
+  # distinctions visible at the front door prevents documentation parity from
+  # becoming fake runtime parity.
   readmeMd = ''
     # nix-agentic-tools
 
@@ -558,7 +557,6 @@
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi + Kiro) | Same; project-native paths |
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
-    | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Copilot + Kiro; Claude has no project LSP route (warns); Codex has no native LSP registry |
     | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. Copilot is explicitly excluded |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
@@ -620,7 +618,7 @@
 
     | User-global setting | Home Manager | devenv only |
     | ------------------- | ------------ | ----------- |
-    | `settings.json`, `mcp-config.json`, `lsp-config.json` | Nix, as read-only copies (empty when nothing is declared); in-app changes such as `/model` or `copilot mcp add` are reset at the next activation | Copilot |
+    | `settings.json`, `mcp-config.json` | Nix, as read-only copies (empty when nothing is declared); in-app changes such as `/model` or `copilot mcp add` are reset at the next activation | Copilot |
     | Trusted folders (`trustedFolders` in `config.json`) | Nix (`ai.copilot.trustedFolders`, absolute paths; a folder covers its subfolders); a folder trusted at Copilot's prompt stays trusted only until the next activation | Copilot's trust prompt |
     | Sign-in, tokens, session and acknowledgement state (the rest of `config.json`) | Copilot | Copilot |
 
@@ -655,11 +653,6 @@
         text = "Use strict mode everywhere";
         matcher = ["src/**"];
         description = "Project standards";
-      };
-
-      lspServers.nixd = {
-        package = pkgs.nixd;
-        extensions = ["nix"];
       };
 
       settings.reasoningEffort = "high";
@@ -714,7 +707,7 @@
 
     Package, process environment, shell, extra packages, native CLI settings,
     trust flags, tweaks, rollout features and FHS selection all use `cli`.
-    Agents, hooks, permissions, MCP/LSP, context, rules and skills stay shared.
+    Agents, hooks, permissions, MCP, context, rules and skills stay shared.
     Workflows are generally available since Kiro 2.26.0; the switch selects
     the v3 engine's client setting without a binary patch. Friendly switches
     also cover `backgroundExecution`, `codeToSpec`, `kvim` and `sandbox`.
@@ -798,11 +791,11 @@
 
     | Runtime | Static JSON/TOML/YAML in scope | Outside the build tree |
     | ------- | ------------------------------ | ---------------------- |
-    | Claude | `settings.json` on both backends; devenv `.mcp.json`; Home Manager plugin `.mcp.json`, `.lsp.json` and manifest | `.claude.json` shared mutable state |
+    | Claude | `settings.json` on both backends; devenv `.mcp.json`; Home Manager plugin `.mcp.json` and manifest | `.claude.json` shared mutable state |
     | Codex | Agent TOML files, `hooks.json`, both `config.toml` locations, Home Manager daemon settings | Runtime-rendered files |
-    | Copilot | Home Manager `lsp-config.json`; devenv `.github/lsp.json`; `mcp-config.json`; both `settings.json` locations | Home Manager `config.json` shared trust and state |
+    | Copilot | `mcp-config.json`; both `settings.json` locations | Home Manager `config.json` shared trust and state |
     | Kimchi | Static config, harness settings, MCP, permissions and devenv hooks | `trust.json` and credential-rendered `config.json` |
-    | Kiro | `cli.json`, `lsp.json`, Home Manager `permissions.yaml`, agent and hook JSON files | Runtime-rendered `mcp.json` |
+    | Kiro | `cli.json`, Home Manager `permissions.yaml`, agent and hook JSON files | Runtime-rendered `mcp.json` |
 
     A single file can opt out of formatting and guards with
     `ai.<runtime>.files."<path>".format = "raw"`; it remains in the store tree.

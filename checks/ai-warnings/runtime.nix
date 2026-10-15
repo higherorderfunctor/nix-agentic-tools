@@ -18,17 +18,17 @@
       native.settings.model = "probe";
     };
     ai.kiro = {
+      agents.probe = {
+        description = "probe";
+        instructions.text = "probe";
+      };
+      cli.enable = true;
       configDir = ".custom-kiro";
       # A second shared-owner key. Codex contributes AGENTS.md, Kiro this one;
       # each must be attributed to the runtime whose context it is.
       context = {
         filename = "KIRO.md";
         text = "kiro probe";
-      };
-      cli.enable = true;
-      lspServers.probe = {
-        command = "probe";
-        extensions = ["nix"];
       };
     };
     # Consumer-declared, inside a runtime's own config directory. The delivery

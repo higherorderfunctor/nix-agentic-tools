@@ -13,10 +13,6 @@ in {
           context.text = "probe";
           environmentVariables.PROBE = "value";
           hooks.PreToolUse = [{hooks = [{command = "true";}];}];
-          lspServers.probe = {
-            command = "true";
-            extensions = ["nix"];
-          };
           mcpServers.probe.command = "true";
           rules.probe.text = "probe";
           rules.scoped = {
@@ -90,13 +86,11 @@ in {
     then ["settings"]
     else if path == ".claude/settings.json"
     then ["hooks" "permissions" "settings" "shell"]
-    # A personal plugin's manifest exists to load its MCP and LSP files.
+    # A personal plugin's manifest exists to load its MCP file.
     else if lib.hasSuffix "/.claude-plugin/plugin.json" path
-    then ["lspServers" "mcpServers"]
+    then ["mcpServers"]
     else if path == ".codex/config.toml"
     then ["mcpServers" "permissions" "settings"]
-    else if lib.hasSuffix "/.lsp.json" path || lib.hasSuffix "/lsp-config.json" path || lib.hasSuffix "/lsp.json" path
-    then ["lspServers"]
     else if path == ".mcp.json" || lib.hasSuffix "/.mcp.json" path || lib.hasSuffix "/mcp-config.json" path || lib.hasSuffix "/mcp.json" path
     then ["mcpServers"]
     else if lib.hasInfix "/agents/" path || lib.hasSuffix "/agents" path

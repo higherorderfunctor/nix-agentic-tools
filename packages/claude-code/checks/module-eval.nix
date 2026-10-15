@@ -354,8 +354,6 @@
           ? ".claude/settings.json")))
     ];
   };
-  # The Home Manager personal plugin's LSP file, as the value it renders.
-  pluginLsp = result: result.config.ai.claude.files.".claude/skills/home-manager/.lsp.json".content.value or {};
   # Refuses an absent or blank body, so a renamed writer fails the check
   # instead of passing it with an empty string.
   unpinWriter = result:
@@ -623,7 +621,6 @@ in {
                 native.settings.permissions.allow = ["Read"];
               };
               hooks.PreToolUse = [{hooks = [{command = "true";}];}];
-              lspServers.probe.command = "probe";
               mcpServers.probe.command = "probe";
               skills.probe = ./fixtures/claude-skills/skill-a;
             };
@@ -635,7 +632,6 @@ in {
             ".claude/agents/probe.md"
             ".claude/hooks/probe"
             ".claude/skills/home-manager/.claude-plugin/plugin.json"
-            ".claude/skills/home-manager/.lsp.json"
             ".claude/skills/home-manager/.mcp.json"
             ".claude/settings.json"
             ".claude/skills/probe"
@@ -646,7 +642,7 @@ in {
 
       # The personal plugin's manifest names it `hm`, which is the MCP tool
       # namespace (`mcp__plugin_hm_<server>__<tool>`) consumers may have pinned.
-      # No manifest at all when the plugin carries neither MCP nor LSP servers.
+      # No manifest at all when the plugin carries no MCP servers.
       module-claude-hm-personal-plugin-manifest-is-hm = mkTest "claude-hm-personal-plugin-manifest-is-hm" (
         let
           manifest = ".claude/skills/home-manager/.claude-plugin/plugin.json";
@@ -670,14 +666,14 @@ in {
             ai = {
               claude = {
                 enable = true;
-                native.settings.env.ENABLE_LSP_TOOL = "0";
+                native.settings.effortLevel = "low";
                 ultracodeOnLaunch = true;
               };
-              lspServers.probe.command = "probe";
+              settings.reasoningEffort = "high";
             };
           });
         in
-          settings.env.ENABLE_LSP_TOOL == "0" && settings.enableWorkflows
+          settings.effortLevel == "low" && settings.enableWorkflows
       );
 
       # Devenv: typed ai.claude.mcpServers entries are RENDERED into the project
@@ -721,24 +717,6 @@ in {
           hmServers
           != {}
           && hmServers == dvServers
-      );
-
-      # The LSP tool flag follows LSP servers only: an MCP server alone gives
-      # Claude's LSP tool nothing to read.
-      module-claude-hm-sets-lsp-env-when-lsp-servers-present = mkTest "claude-hm-sets-lsp-env-when-lsp-servers-present" (
-        let
-          lspEnv = servers: (claudeSettings (evalHm {ai = {claude.enable = true;} // servers;})).env.ENABLE_LSP_TOOL or null;
-        in
-          lspEnv {lspServers.nixd.command = "nixd";}
-          == "1"
-          && lspEnv {
-            mcpServers.test-server = {
-              type = "stdio";
-              package = pkgs.hello;
-              command = "hello";
-            };
-          }
-          == null
       );
 
       # ── Claude launch-effort unpin reconciler ──────────────────────
@@ -1006,64 +984,6 @@ in {
             };
           })
           && !(failing skill)
-      );
-
-      # HM: top-level ai.lspServers fans out to the personal plugin's .lsp.json,
-      # which is delivered as a link.
-      module-claude-hm-top-level-lsp-fanout = mkTest "claude-hm-top-level-lsp-fanout" (
-        let
-          result = evalHm {
-            ai.claude.enable = true;
-            ai.lspServers.nixd = {
-              command = "nixd";
-              args = [];
-            };
-          };
-        in
-          ((pluginLsp result).nixd.command or null)
-          == "nixd"
-          && result.config.home.file ? ".claude/skills/home-manager/.lsp.json"
-      );
-
-      # HM: ai.claude.lspServers per-CLI overrides top-level ai.lspServers on
-      # name collision. Claude-specific override wins.
-      module-claude-hm-per-cli-lsp-overrides-top-level = mkTest "claude-hm-per-cli-lsp-overrides-top-level" (
-        let
-          result = evalHm {
-            ai = {
-              claude.enable = true;
-              lspServers.nixd = {
-                command = "nixd-top-level";
-              };
-              claude.lspServers.nixd = {
-                command = "nixd-claude-specific";
-              };
-            };
-          };
-        in
-          ((pluginLsp result).nixd.command or null) == "nixd-claude-specific"
-      );
-
-      # Claude HM: typed LSP with `extensions` emits extensionToLanguage
-      # mapping via mkClaudeLspConfig.
-      module-claude-hm-lsp-extension-to-language = mkTest "claude-hm-lsp-extension-to-language" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              lspServers.go = {
-                command = "gopls";
-                args = ["serve"];
-                extensions = ["go"];
-              };
-            };
-          };
-          entry = (pluginLsp result).go or {};
-        in
-          (entry.command or null)
-          == "gopls"
-          && ((entry.extensionToLanguage or {}).".go" or null)
-          == "go"
       );
 
       # HM: a top-level normalized ai.agents record fans out to

@@ -16,6 +16,17 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > wrongly. Full lineage:
 > `git show d1c28a21:dev/fragments/ai-module/ai-module-fanout.md`.
 >
+> - **There is no shared `ai.lspServers` pool — don't restore it.** It fanned
+>   one typed record out to Claude, Copilot and Kiro until the operator removed
+>   it on 2026-10-14 (#2526) because nobody set it; a normalized surface returns
+>   only when two harnesses share a lossless shape. Native settings options stay
+>   and no new native LSP option replaces it. Two measurements that would
+>   otherwise be re-derived: under Home Manager, Copilot's LSP toggle renames a
+>   temporary over `lsp-config.json`, so a symlinked file there is replaced and
+>   a consumer must deliver a real copy; Kiro reads `settings/lsp.json` relative
+>   to the workspace, so a copy under `$HOME/.kiro` is live only when the
+>   workspace is `$HOME`. Last version:
+>   `git show 0964eec2:lib/ai/sharedOptions.nix`.
 > - **Root silence for unsupported runtimes is rejected.** It was the design,
 >   rejected by the operator on 2026-10-13; repeated activation warnings,
 >   including Copilot's, are accepted. Prior design:
@@ -139,7 +150,7 @@ global setting there. Devenv warns when either requested global setting is
 missing, and refuses explicit project-only writes of global keys. The
 environment and shell folds live at `cli.normalized.environmentVariables` and
 `cli.normalized.shell`. All other normalized pools, native agents, permissions,
-hooks, MCP/LSP, files and activation remain shared under `ai.kiro`. There are no
+hooks, MCP, files and activation remain shared under `ai.kiro`. There are no
 old-path aliases. `ai.kiro.cli.enable = true; ai.kiro.cli.package = null;` keeps
 shared files without installing a CLI.
 
@@ -567,20 +578,6 @@ there is no file scope or a non-empty list for `fileMatch` content.
   directly. The MCP server key is also the managed-unit identity, so reused
   proxy-owner keys fail and direct owners must choose different keys. A
   top-level proxy inherited by no enabled capable runtime creates no unit.
-- `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
-  Kiro native config. Claude receives them on Home Manager only, in its personal
-  plugin's `.lsp.json`; devenv has no Claude LSP route and warns. Codex is
-  deliberately excluded: its current public config reference and pinned CLI
-  expose no LSP-server registration surface, so pretending to fan out this pool
-  would silently discard the declaration. The Copilot and Kiro producers
-  (`mkCopilotLspFile`, `mkKiroLspFile`) emit the WHOLE file, envelope included
-  (`lspServers` / `languages`): both CLIs reject a bare per-server map, which is
-  what shipped until 2026-09-23 while substring checks stayed green. Both route
-  files to servers by extension alone, so a server they receive with empty
-  `extensions` throws at eval rather than render an entry that never starts;
-  drop it for that runtime with `ai.<runtime>.lspServers.<name> = null`. Copilot
-  also keys `lspServers` by the attribute name and rejects the whole file for a
-  name outside `[A-Za-z0-9_-]+`, so such a name throws for Copilot too.
 - `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
   of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
@@ -650,10 +647,7 @@ physical delivery and native diagnostics; they no longer choose normalized
 delivery warnings or override their reasons. Package rule contributors consult
 the record's backend reach before writing. Native diagnostics belong to runtime
 factories. Transport-dependent MCP field warnings and final-file replacement
-warnings remain generic in the shared reader. Kiro Home Manager LSP delivery is
-conditional on launching with $HOME as the workspace; Home Manager has no launch
-workspace value, so a populated LSP declaration always explains that condition.
-Devenv LSP stays quiet.
+warnings remain generic in the shared reader.
 
 Diagnostic units currently enumerate per-runtime pools at the runtime root. A
 future gap on launcher-prefixed `shell` or `environmentVariables` needs that
@@ -823,10 +817,10 @@ nothing and only drains the steering copies an older ledger records.
 Do not describe every top-level pool as mechanically reaching all five runtimes.
 The shared option descriptions and generated README capability matrix must name
 each registered runtime as a consumer or an intentional exclusion. In
-particular, Codex has no native LSP registry; its `shell_environment_policy`
-filters child-command inheritance rather than setting the Codex process
-environment; a raw Codex agent is TOML, never Markdown; and only the
-Claude/Codex lifecycle intersection belongs in portable hooks.
+particular, Codex's `shell_environment_policy` filters child-command inheritance
+rather than setting the Codex process environment; a raw Codex agent is TOML,
+never Markdown; and only the Claude/Codex lifecycle intersection belongs in
+portable hooks.
 
 `lib/options-doc.nix` evaluates both complete published module trees and
 produces their CommonMark/JSON references. The old mdbook/NuschtOS site is gone,
@@ -859,9 +853,9 @@ If the list stays empty despite `ai.claude.enable = true`, the fanout is broken
 ### Shared-pool is per-evaluation, NOT cross-backend
 
 `lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`, `ai.rules`,
-`ai.mcpServers`, `ai.lspServers`, `ai.environmentVariables`, `ai.agents`,
-`ai.hooks`, `ai.context`). Both backend module trees import it, and
-`lib/ai/app/default.nix` selects the one shared transform body per backend.
+`ai.mcpServers`, `ai.environmentVariables`, `ai.agents`, `ai.hooks`,
+`ai.context`). Both backend module trees import it, and `lib/ai/app/default.nix`
+selects the one shared transform body per backend.
 
 **The option declarations are shared. The values are NOT.**
 
@@ -1016,7 +1010,7 @@ package-provenance guard (see `collision-semantics.md`).
 ## ai.\* Pool Composition and Collision Semantics
 
 > **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics.
+> normalized backend reach and nested delivery diagnostics; five keyed pools.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -1055,16 +1049,15 @@ That does not change the nullable-scalar inheritance contract in B4 or B5.
 
 ### Keyed-pool rule
 
-The six normalized keyed pools are:
+The five normalized keyed pools are:
 
 - `agents`
 - `environmentVariables`
-- `lspServers`
 - `mcpServers`
 - `rules`
 - `skills`
 
-Five pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
+Four pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
 whose entries default `enable = true`. For a capable runtime, nullable-pool
 composition is:
 
@@ -1445,7 +1438,8 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 ## ai.\* Layered Fanout Pattern
 
 > **Last verified:** 2026-10-14 — delivery policy derives shared surfaces, keyed
-> withdrawal and normalized gaps from option and runtime declarations.
+> withdrawal and normalized gaps from option and runtime declarations;
+> `poolOptions` covers `agentsDir` and `environmentVariables` only.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1550,27 +1544,27 @@ constructor and transform both validate it.
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
 - **Structured documents contribute ordinary leaves.** Codex settings and
-  Copilot MCP/LSP use `content.value` at ordinary priority. Adding one leaf
-  keeps generated siblings; defaulting the whole content would silently drop
-  them. Text and source content retain their whole-content defaults.
+  Copilot MCP use `content.value` at ordinary priority. Adding one leaf keeps
+  generated siblings; defaulting the whole content would silently drop them.
+  Text and source content retain their whole-content defaults.
 - **Claude delivers its own files.** Agents, commands, output styles, hook
-  scripts, skills, plugins, `.claude/settings.json` and the MCP/LSP files are
+  scripts, skills, plugins, `.claude/settings.json` and the MCP files are
   ordinary `ai.claude.files` entries, like every other runtime's. All of them
-  reach both backends except consumer plugins and the MCP/LSP personal plugin
-  (its manifest, `.mcp.json` and `.lsp.json`), which are Home Manager only
-  because a plugin is user-scope; devenv writes MCP servers to the project
-  `.mcp.json` instead. Nothing is handed to an upstream Home Manager or devenv
-  Claude module. Settings and MCP servers are configuration, so
-  `.claude/settings.json` and the devenv `.mcp.json` are Nix-owned read-only
-  links rather than reconciled documents, and an in-app change such as `/tui`
-  does not persist. Every settings contribution goes through
-  `ai.claude.native.settings`, so one entry carries the whole document. Claude's
-  user-global `.claude.json` is the exception: it holds OAuth tokens and runtime
-  state, so it claims the existing JSON ledger under `claudeUnpinLaunchEffort`;
-  its writer survives empty declarations and remains Home Manager only. That
-  writer keeps whatever mode it finds, whether or not it rewrites the file, so
-  an ungated `claudeConfigMode` command writer is the only thing that narrows
-  the token-bearing file to owner-only, on every activation.
+  reach both backends except consumer plugins and the MCP personal plugin (its
+  manifest and `.mcp.json`), which are Home Manager only because a plugin is
+  user-scope; devenv writes MCP servers to the project `.mcp.json` instead.
+  Nothing is handed to an upstream Home Manager or devenv Claude module.
+  Settings and MCP servers are configuration, so `.claude/settings.json` and the
+  devenv `.mcp.json` are Nix-owned read-only links rather than reconciled
+  documents, and an in-app change such as `/tui` does not persist. Every
+  settings contribution goes through `ai.claude.native.settings`, so one entry
+  carries the whole document. Claude's user-global `.claude.json` is the
+  exception: it holds OAuth tokens and runtime state, so it claims the existing
+  JSON ledger under `claudeUnpinLaunchEffort`; its writer survives empty
+  declarations and remains Home Manager only. That writer keeps whatever mode it
+  finds, whether or not it rewrites the file, so an ungated `claudeConfigMode`
+  command writer is the only thing that narrows the token-bearing file to
+  owner-only, on every activation.
 - **The CLI's write primitive picks the method.** Codex's `config.toml` is a
   store symlink on both backends: every Codex config writer writes a temporary
   beside the link's target, so an in-app save fails and the link survives
@@ -1816,18 +1810,18 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   (default `.md`). It also includes `native.agents`, declared for a record that
   supplies `agentNativeType` and `agentTransformer` and joined to the record's
   own `native.*` options. `poolOptions.<pool>` is merged over the builder's
-  declaration of `agentsDir`, `environmentVariables` or `lspServers`, so a
-  runtime states only its own description. The `agents` description takes no
-  override: the record's `agentsDescriptionSuffix` is the only per-runtime hook
-  for it, appended to the builder's text so the shared sentences stay in one
-  place. The builder reads `poolOptions` by pool name, so
-  `lib/ai/app/checkRecord.nix` rejects any other key, in `mkRuntime` and again
-  in the transform: `agents`, a pool outside `environmentVariables` and
-  `lspServers`, one the record's `surfaceSupport` omits, or `agentsDir` without
-  `agents`. It also rejects `agentNativeType` without `agentTransformer` or the
-  reverse, either one, `agentsDirSuffixes` or `agentsDescriptionSuffix` without
-  the agents pool, and an empty or non-string `agentsDirSuffixes`. The native
-  pair is tested for presence, so an explicit null counts as set.
+  declaration of `agentsDir` or `environmentVariables`, so a runtime states only
+  its own description. The `agents` description takes no override: the record's
+  `agentsDescriptionSuffix` is the only per-runtime hook for it, appended to the
+  builder's text so the shared sentences stay in one place. The builder reads
+  `poolOptions` by pool name, so `lib/ai/app/checkRecord.nix` rejects any other
+  key, in `mkRuntime` and again in the transform: `agents`, a pool other than
+  `environmentVariables`, one the record's `surfaceSupport` omits, or
+  `agentsDir` without `agents`. It also rejects `agentNativeType` without
+  `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
+  `agentsDescriptionSuffix` without the agents pool, and an empty or non-string
+  `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
+  null counts as set.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus

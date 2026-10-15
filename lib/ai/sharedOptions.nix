@@ -265,30 +265,6 @@
         v3 trigger schema is not semantically interchangeable.
       '';
     };
-    lspServers = keyedOption {
-      type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
-      default = {};
-      description = ''
-        Typed LSP server declarations fanned out to enabled Claude, Copilot,
-        and Kiro. Each per-ecosystem translator renders the runtime's whole
-        native file on emission: Kiro gets `{ languages.<name> = { … }; }`
-        with snake_case fields (`name`, `command`, `args`, `file_extensions`,
-        `initialization_options`, `project_patterns`, `exclude_patterns`);
-        Copilot gets `{ lspServers.<name> = { … }; }` with `command`, `args`,
-        `fileExtensions` and any `initializationOptions`; Claude gets one
-        entry per server, with an `extensionToLanguage` map when `extensions`
-        is set. Claude receives them on Home Manager only, in its personal
-        plugin's `.lsp.json`; devenv has no Claude LSP route and warns.
-        Copilot and Kiro route files to servers by extension alone,
-        so every server they receive must set `extensions`, and Copilot
-        additionally requires the server name to be non-empty ASCII letters,
-        digits, `_` and `-`; evaluation throws otherwise, rather than render a
-        file the runtime rejects or a server that never starts. Codex is
-        intentionally excluded because its public configuration has no native
-        LSP-server surface. Per-app entries replace root entries at the same
-        key; null suppresses an inherited server for that runtime.
-      '';
-    };
     mcpServers = keyedOption {
       type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
         modules = [(import ./mcpServer/commonSchema.nix)];

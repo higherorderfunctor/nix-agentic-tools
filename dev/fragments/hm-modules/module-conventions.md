@@ -1,6 +1,6 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-09 — Kiro is gated by `ai.kiro.cli.enable`;
+> **Last verified:** 2026-10-14 — Kiro is gated by `ai.kiro.cli.enable`;
 > factories read the derived, read-only `ai.kiro.enable`.
 >
 > Full lineage:
@@ -27,10 +27,9 @@ The submodule is the logical grouping — do not flatten per-ecosystem options
 into the top level.
 
 **Flat at top level for cross-ecosystem.** `ai.context`, `ai.rules`,
-`ai.skills`, `ai.lspServers`, and `ai.environmentVariables` are NOT nested
-inside a per-ecosystem submodule. They fan out to whichever ecosystems are
-enabled at `mkDefault` priority. Anything that's "one option, many destinations"
-lives flat.
+`ai.skills`, and `ai.environmentVariables` are NOT nested inside a per-ecosystem
+submodule. They fan out to whichever ecosystems are enabled at `mkDefault`
+priority. Anything that's "one option, many destinations" lives flat.
 
 **Keep normalized and native settings separate.** `ai.<runtime>.settings` is a
 closed normalized submodule for runtimes that support the settings pool; Kiro
@@ -361,8 +360,8 @@ enforces exact flattened option-name and type parity across the full generated
 `ai.*` trees; module-eval tests cover backend-specific lowering and diagnostics.
 
 **Shared types live in `lib/`.** Both HM and devenv modules import types from
-`lib/ai/ai-common.nix` (`ruleModule`, `lspServerModule`, `mkCopilotLspFile`,
-`mkKiroLspFile`) so the surfaces stay in sync by construction.
+`lib/ai/ai-common.nix` (such as `ruleModule`) so the surfaces stay in sync by
+construction.
 
 **Stronger than shared types: one shared DECLARATION.** `packages/glab` puts its
 entire `options.glab` block in `packages/glab/modules/options.nix` and both

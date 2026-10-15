@@ -5,7 +5,6 @@
   ...
 }: let
   ai = import ../ai {inherit lib;};
-  aiCommon = import ../ai/ai-common.nix {inherit lib;};
 
   # Stub HM option types so mkRuntime's baseline home.file render
   # (introduced when the render pipeline was wired) can write to
@@ -107,7 +106,6 @@
     mergedArgByPool = {
       agents = "mergedAgents";
       environmentVariables = "mergedEnvironmentVariables";
-      lspServers = "mergedLspServers";
       mcpServers = "mergedServers";
       rules = "mergedRules";
       skills = "mergedSkills";
@@ -120,10 +118,6 @@
       };
       environmentVariables = lib.mkOption {
         type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-        default = {};
-      };
-      lspServers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
         default = {};
       };
     };
@@ -219,4 +213,4 @@
         }
       ];
     };
-in {inherit ai aiCommon devenvStubs evalService factoryProxyServer hmStubs mkProxyTestRecord mkServiceServerDef mkTest poolMergeContract;}
+in {inherit ai devenvStubs evalService factoryProxyServer hmStubs mkProxyTestRecord mkServiceServerDef mkTest poolMergeContract;}

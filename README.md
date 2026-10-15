@@ -379,7 +379,6 @@ instruction building.
 | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
 | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi + Kiro) | Same; project-native paths |
 | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
-| LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Copilot + Kiro; Claude has no project LSP route (warns); Codex has no native LSP registry |
 | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
 | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. Copilot is explicitly excluded |
 | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
@@ -441,7 +440,7 @@ Who manages each one depends on whether you use Home Manager:
 
 | User-global setting                                                            | Home Manager                                                                                                                                                         | devenv only            |
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| `settings.json`, `mcp-config.json`, `lsp-config.json`                          | Nix, as read-only copies (empty when nothing is declared); in-app changes such as `/model` or `copilot mcp add` are reset at the next activation                     | Copilot                |
+| `settings.json`, `mcp-config.json`                                             | Nix, as read-only copies (empty when nothing is declared); in-app changes such as `/model` or `copilot mcp add` are reset at the next activation                     | Copilot                |
 | Trusted folders (`trustedFolders` in `config.json`)                            | Nix (`ai.copilot.trustedFolders`, absolute paths; a folder covers its subfolders); a folder trusted at Copilot's prompt stays trusted only until the next activation | Copilot's trust prompt |
 | Sign-in, tokens, session and acknowledgement state (the rest of `config.json`) | Copilot                                                                                                                                                              | Copilot                |
 
@@ -475,11 +474,6 @@ ai = {
     text = "Use strict mode everywhere";
     matcher = ["src/**"];
     description = "Project standards";
-  };
-
-  lspServers.nixd = {
-    package = pkgs.nixd;
-    extensions = ["nix"];
   };
 
   settings.reasoningEffort = "high";
@@ -533,17 +527,16 @@ ai.kiro = {
 
 Package, process environment, shell, extra packages, native CLI settings, trust
 flags, tweaks, rollout features and FHS selection all use `cli`. Agents, hooks,
-permissions, MCP/LSP, context, rules and skills stay shared. Workflows are
-generally available since Kiro 2.26.0; the switch selects the v3 engine's client
-setting without a binary patch. Friendly switches also cover
-`backgroundExecution`, `codeToSpec`, `kvim` and `sandbox`.
-`cli.features.<name>.enable` exposes every extracted rollout name, while
-`cli.native.settings.chat.keybindings` types the extracted key bindings. Home
-Manager implies workflows and Code-to-Spec's global chat settings; devenv
-requires those settings in the user's global config and warns when a friendly
-switch requests a setting that is missing. Delegate routing defaults the two
-workflow tweaks when it reaches that managed CLI, and advertises `run_workflow`
-only when workflows are enabled.
+permissions, MCP, context, rules and skills stay shared. Workflows are generally
+available since Kiro 2.26.0; the switch selects the v3 engine's client setting
+without a binary patch. Friendly switches also cover `backgroundExecution`,
+`codeToSpec`, `kvim` and `sandbox`. `cli.features.<name>.enable` exposes every
+extracted rollout name, while `cli.native.settings.chat.keybindings` types the
+extracted key bindings. Home Manager implies workflows and Code-to-Spec's global
+chat settings; devenv requires those settings in the user's global config and
+warns when a friendly switch requests a setting that is missing. Delegate
+routing defaults the two workflow tweaks when it reaches that managed CLI, and
+advertises `run_workflow` only when workflows are enabled.
 
 > **Kiro steering-copy upgrade:** when upgrading from a release that
 > materialized steering as real copies, keep the previous `ai.kiro.configDir`
@@ -613,13 +606,13 @@ are excluded because their final bytes do not exist at build time. Shared
 document entries are excluded because they own reconciled leaves rather than a
 whole file.
 
-| Runtime | Static JSON/TOML/YAML in scope                                                                                  | Outside the build tree                             |
-| ------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Claude  | `settings.json` on both backends; devenv `.mcp.json`; Home Manager plugin `.mcp.json`, `.lsp.json` and manifest | `.claude.json` shared mutable state                |
-| Codex   | Agent TOML files, `hooks.json`, both `config.toml` locations, Home Manager daemon settings                      | Runtime-rendered files                             |
-| Copilot | Home Manager `lsp-config.json`; devenv `.github/lsp.json`; `mcp-config.json`; both `settings.json` locations    | Home Manager `config.json` shared trust and state  |
-| Kimchi  | Static config, harness settings, MCP, permissions and devenv hooks                                              | `trust.json` and credential-rendered `config.json` |
-| Kiro    | `cli.json`, `lsp.json`, Home Manager `permissions.yaml`, agent and hook JSON files                              | Runtime-rendered `mcp.json`                        |
+| Runtime | Static JSON/TOML/YAML in scope                                                                     | Outside the build tree                             |
+| ------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Claude  | `settings.json` on both backends; devenv `.mcp.json`; Home Manager plugin `.mcp.json` and manifest | `.claude.json` shared mutable state                |
+| Codex   | Agent TOML files, `hooks.json`, both `config.toml` locations, Home Manager daemon settings         | Runtime-rendered files                             |
+| Copilot | `mcp-config.json`; both `settings.json` locations                                                  | Home Manager `config.json` shared trust and state  |
+| Kimchi  | Static config, harness settings, MCP, permissions and devenv hooks                                 | `trust.json` and credential-rendered `config.json` |
+| Kiro    | `cli.json`, Home Manager `permissions.yaml`, agent and hook JSON files                             | Runtime-rendered `mcp.json`                        |
 
 A single file can opt out of formatting and guards with
 `ai.<runtime>.files."<path>".format = "raw"`; it remains in the store tree. Byte

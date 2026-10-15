@@ -4,7 +4,7 @@
 # `lib.ai.app.hmTransform` and `lib.ai.app.devenvTransform` project it into
 # the Home Manager and devenv modules. One delivery description serves both
 # backends: read-only copies of settings/cli.json and settings/mcp.json,
-# settings/lsp.json, steering, skills, agents and hooks under `<configDir>`,
+# steering, skills, agents and hooks under `<configDir>`,
 # with environment variables baked into the launcher on both backends.
 {
   lib,
@@ -21,7 +21,7 @@
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
   frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
 
-  # Shared AI helpers (filterNulls, mkKiroLspFile, flattenDotKeysUntil, …). Hoisted to
+  # Shared AI helpers (filterNulls, flattenDotKeysUntil, …). Hoisted to
   # the top-level `let` so option TYPES and renderers can reach it too — both
   # backend blocks previously imported it separately.
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -1204,14 +1204,6 @@ in
         backends = [];
         reason = "Kiro's v3 trigger schema has no lossless mapping from portable command hooks; its native hooks are a separate surface (packages/kiro-cli/lib/mkKiro.nix).";
       };
-      lspServers = {
-        gaps = [
-          {
-            backends = ["hm"];
-            reason = "Kiro reads settings/lsp.json relative to the workspace; Home Manager writes it under $HOME/.kiro, so it is delivered only when the workspace is $HOME. Use the devenv backend for a project workspace.";
-          }
-        ];
-      };
       mcpServers = {};
       rules = {
         gaps = [
@@ -1243,11 +1235,6 @@ in
     defaults = {
       package = pkgs.ai.kiro-cli;
       packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "kiro-cli";
-    };
-    # The builder declares `agents`, `agentsDir`, `environmentVariables`
-    # (baked into the launcher on both backends), and `lspServers`.
-    poolOptions = {
-      lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
     };
     options = {
       cli = {
@@ -1622,7 +1609,6 @@ in
       mergedServers,
       mergedSkills,
       mergedRules,
-      mergedLspServers,
       mergedContext,
       hasMergedContext,
       moduleEnvironmentVariables,
@@ -1819,20 +1805,6 @@ in
           {
             ai.kiro.files = lib.mkMerge [
               {
-                # Kiro reads `<workspace>/.kiro/settings/lsp.json`, so the
-                # Home Manager copy is live only when the workspace is $HOME
-                # (a case kiro-cli 2.22.1 itself calls a mistake). Written
-                # anyway and NOT asserted: `ai.lspServers` is a shared pool,
-                # and the devenv backend is the one that delivers per project.
-                "${settingsDir}/lsp.json" = lib.mkIf (mergedLspServers != {}) {
-                  content = {
-                    _generated = true;
-                    _surface = "settings";
-                    value = aiCommon.mkKiroLspFile mergedLspServers;
-                  };
-                  executable = null;
-                  format = "json";
-                };
                 # Every key Kiro writes into cli.json is configuration (model,
                 # effort, toggles, UI preferences), so the file is Nix's
                 # whole. Its writers rename a temporary over the path, which

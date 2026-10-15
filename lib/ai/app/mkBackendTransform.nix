@@ -97,7 +97,6 @@
   rawAgents = lib.optionalAttrs hasNativeAgents (lib.filterAttrs (_: value: !(agent.isSemantic value)) poolAgents);
   mergedAgents = removeAttrs poolAgents (builtins.attrNames rawAgents);
   mergedEnvironmentVariables = mergePool "environmentVariables" config.ai.environmentVariables (launcherCfg.environmentVariables or {});
-  mergedLspServers = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
   # Suppression applies after runtime entries replace root entries so a
   # runtime-local `enable = false` can retract an inherited root rule.
   mergedRules = lib.filterAttrs (_: aiCommon.hasContent) (mergePool "rules" config.ai.rules cfg.rules);
@@ -233,7 +232,6 @@
   normalizedKeyedPools = {
     agents = normalizedAgents;
     environmentVariables = mergedEnvironmentVariables;
-    lspServers = mergedLspServers;
     mcpServers = mergedServers;
     rules = normalizedRules;
     skills = mergedSkills;
@@ -257,9 +255,6 @@
       apply = lib.filterAttrs (_event: blocks: blocks != []);
       default = topHooks;
       type = hooks.hooksType;
-    };
-    lspServers = {
-      type = lib.types.attrsOf aiCommon.lspServerModule;
     };
     # Proxy entries are already lowered here; applying the declaration schema
     # again would add defaults to the credential-free client record.
@@ -437,7 +432,6 @@
     nativeAgents = lib.optionalAttrs hasNativeAgents cfg.native.agents;
     mergedContext = normalizedPool "context" null;
     mergedEnvironmentVariables = normalizedPool "environmentVariables" {};
-    mergedLspServers = normalizedPool "lspServers" {};
     mergedRules = normalizedPool "rules" {};
     mergedServers = normalizedPool "mcpServers" {};
     mergedSkills = normalizedPool "skills" {};
@@ -666,10 +660,6 @@ in {
           description = "Directory of native agent files (${lib.concatStringsSep ", " agentsDirSuffixes}), expanded into raw `ai.${appRecord.name}.agents` entries keyed by basename minus the suffix. Accepts a path, a path-like string or derivation, or `{ path, filter? }`. Only top-level regular files with those suffixes are expanded; subdirectories and other files are not delivered, and two files with one stem fail evaluation. They blend with named entries; a named entry at the same key wins.";
         }
         // poolOptions.agentsDir or {});
-    }
-    // poolOption "lspServers" {
-      type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
-      description = "${appRecord.name}-specific LSP servers. Entries replace top-level ai.lspServers at the same key; null suppresses an inherited server.";
     }
     // lib.optionalAttrs (supportsPool "settings") {
       settings = lib.mkOption {
