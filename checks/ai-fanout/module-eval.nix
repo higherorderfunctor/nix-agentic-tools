@@ -9,10 +9,8 @@
   inherit (harness) aiStubs claudeSettings evalDevenv evalHm harnessNames hmLib markdownInput mkTest setEnable;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDaemonDefault;
   optionPaths = import ../../lib/ai/option-paths.nix {inherit lib pkgs;};
-  # Runtimes whose app record supports the normalized settings pool. Kiro is
-  # excluded: it persists effort only per model, so it declares no
-  # `ai.kiro.settings` (packages/kiro-cli/checks: kiro-settings-pool-excluded).
-  settingsHarnessNames = lib.remove "kiro" harnessNames;
+  # Runtimes whose record declares settings support.
+  settingsHarnessNames = builtins.filter (name: (optionPaths.records.${name}.surfaceSupport.settings.backends or []) != []) harnessNames;
 in {
   checks = {
     # A skill package writes a pool only where the runtime delivers it on
