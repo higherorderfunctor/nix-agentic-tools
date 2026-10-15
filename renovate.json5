@@ -1,0 +1,90 @@
+// Renovate owns GitHub Actions pins ONLY. Nix inputs (flake.lock, devenv.lock,
+// sources.json) belong to the 4x/day sweep in .github/workflows/update.yml;
+// see dev/fragments/pipeline/ci-update-workflow.md "Renovate owns Actions pins".
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  // ── Scope: which managers may run ──
+  // enabledManagers implicitly disables every other manager (nix, npm, ...),
+  // so nothing here can touch flake.lock, devenv.lock or sources.json. Lock
+  // file maintenance is off by default and stays off.
+  enabledManagers: ["custom.regex", "github-actions"],
+  extends: [
+    "config:recommended",
+    // Pin every `uses:` to a full SHA, which is all sha_pinning_required
+    // demands, with the resolved tag as a trailing comment.
+    "helpers:pinGitHubActionDigestsToSemver",
+  ],
+
+  // ── Cadence: one grouped PR, clear of the update sweep ──
+  // A tag must be 3 days old before Renovate proposes it.
+  minimumReleaseAge: "3 days",
+  // 02:00-05:59 UTC sits between the 00:00 and 06:00 UTC sweeps (Renovate's
+  // timezone defaults to UTC; cron needs `*` in the minute field).
+  schedule: ["* 2-5 * * *"],
+  separateMajorMinor: false,
+
+  // ── Shape: conventional commits on the default renovate/* branches ──
+  // update-cleanup.sh only touches update/* branches; renovate/* is disjoint.
+  // Explicit rather than auto-detected: the convco commit check rejects a
+  // non-conventional title, and detection reads recent history, which an
+  // unrelated run of plain commits could flip.
+  semanticCommitScope: "actions",
+  semanticCommits: "enabled",
+
+  // ── Landing: GitHub-native auto-merge (the default platform mode), like
+  // the update/* PRs. The ruleset's required checks and review-thread
+  // resolution gate it; majors land the same way, by design.
+  automerge: true,
+
+  customManagers: [
+    {
+      // Mic92/hestia's `with: version:` selects the binary the action
+      // downloads. One match covers the SHA, its version comment and the
+      // binary pin, so a single github-tags lookup rewrites all three. The
+      // regex engine has no backreferences: the rewrite replaces every
+      // occurrence of the matched version, so `with: version:` MUST equal the
+      // `# vX.Y.Z` comment or it silently stops moving.
+      customType: "regex",
+      datasourceTemplate: "github-tags",
+      description: "Mic92/hestia: SHA, version comment and binary version move together",
+      extractVersionTemplate: "^(?<version>v\\d+\\.\\d+\\.\\d+)$",
+      managerFilePatterns: ["/^\\.github/(actions|workflows)/.+\\.ya?ml$/"],
+      matchStrings: [
+        "uses: (?<depName>Mic92/hestia)@(?<currentDigest>[0-9a-f]{40}) # (?<currentValue>v\\d+\\.\\d+\\.\\d+)\\s+with:\\s+version: v\\d+\\.\\d+\\.\\d+",
+      ],
+    },
+  ],
+
+  packageRules: [
+    {
+      // The github-actions manager also reads `runs-on:` images. Runner
+      // upgrades change the build host, not an action pin; keep them manual.
+      description: "Leave runner images (runs-on) out of scope",
+      enabled: false,
+      matchDatasources: ["github-runners"],
+    },
+    {
+      description: "All action pins land as one PR per run",
+      groupName: "github actions",
+      matchManagers: ["custom.regex", "github-actions"],
+    },
+    {
+      // cachix/cachix-action publishes major tags only (v17, v16, ...), so the
+      // full-semver filter above would find no version and leave it unpinned,
+      // which sha_pinning_required then rejects. Accept bare majors for it.
+      description: "cachix/cachix-action has no full-semver tags",
+      extractVersion: "^(?<version>v\\d+)$",
+      matchPackageNames: ["cachix/cachix-action"],
+    },
+    {
+      // The regex manager above owns this line; two managers editing one
+      // span would conflict.
+      description: "Leave the hestia step carrying `with: version:` to the regex manager",
+      enabled: false,
+      matchFileNames: [".github/actions/check-cache/action.yml"],
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["Mic92/hestia"],
+    },
+  ],
+}

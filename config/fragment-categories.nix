@@ -459,11 +459,13 @@ _: {
     # fragment chain, update scripts, CI workflow, ninja DAG
     # generation, and both registries — config.fragments.categories
     # (this file + lib/fragments-registry.nix) and
-    # config.update.targets.
+    # config.update.targets, plus the Renovate config and the
+    # Actions allowlist manifest it depends on.
     pipeline = {
       scopes = [
         ".github/actions/check-cache/**"
         ".github/actions/warm-ifd/**"
+        ".github/repo-settings.yml"
         ".github/workflows/ci.yml"
         ".github/workflows/hestia-gc.yml"
         ".github/workflows/update.yml"
@@ -485,6 +487,7 @@ _: {
         "lib/generated.nix"
         "lib/update.nix"
         "packages/*/registry.nix"
+        "renovate.json5"
       ];
       sources = [
         "ci-update-workflow"
