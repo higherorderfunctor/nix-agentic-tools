@@ -1,8 +1,9 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics; the MCP capability
-> marker holds the pool's option path.
+> **Last verified:** 2026-10-15 — Kiro stages MCP run content through the files
+> engine, whose apply phase follows the secrets point on both backends; runtime
+> surfaceSupport declarations own normalized backend reach and nested delivery
+> diagnostics; the MCP capability marker holds the pool's option path.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -405,19 +406,22 @@ ecosystem renders via `renderServer`; there is no second MCP transform.
 ### mcp.json is a read-only copy
 
 mcp.json is NOT a `home.file`/`files` store symlink. `mkMcpJsonScript` renders
-it, and the `kiroMcpJson` writer (HM activation, devenv
-`ai:kiro:materialize-mcp`) lands it as a real read-only copy: 0400 with a secret
-url, else 0444. Both backends share the renderer, so they stay at parity. A real
-file is what lets a secret url land, and a copy survives `kiro-cli mcp add` or a
-hand edit renaming a new file over the path: the next activation or shell entry
-backs the edit up and restores the declaration. Home Manager always owns the
-user-global file (an empty server map when nothing is declared); devenv writes
-the project file only when a server is declared.
+it through staged `content.run`, and the files engine lands it at activation as
+a real read-only copy: 0400 with a secret url, else 0444. Both backends share
+the renderer, so they stay at parity. A real file is what lets a secret url
+land, and a copy survives `kiro-cli mcp add` or a hand edit renaming a new file
+over the path: the next activation or shell entry backs the edit up and restores
+the declaration. Home Manager always owns the user-global file (an empty server
+map when nothing is declared); devenv writes the project file only when a server
+is declared.
 
 ### Gotchas
 
-- A credential url reads its secret at ACTIVATION, so a consumer wiring
-  sops-nix/agenix must order the mcp.json activation AFTER the secret provider.
+- A credential url reads its secret at ACTIVATION. Engine apply follows the
+  secrets point whenever a renderer exists. Home Manager includes `sops-nix`;
+  other providers, including devenv providers, register their native node in
+  `ai.activation2Order.secretNodes`. The renderer exports `NAT_OWN_ROOT` itself
+  and anchors relative readers to the project root on devenv only.
 - `--classic` (non-v3) ships the literal header placeholder → failed auth, not a
   leak; the factory wrapper forces `--v3`.
 - Static tokens only; rotate = re-export + restart (no refresh hook).

@@ -27,7 +27,7 @@
     map (step: let
       evaluated = evaluate backend step.count step.enable;
       inherit (evaluated) config;
-      plan = lib.filter (item: item.method != "symlink") (files.normalize {
+      plan = lib.filter (item: item.method != "symlink" && lib.hasPrefix ".kiro/steering/" item.path) (files.normalize {
         inherit backend;
         files = config.ai.files2;
         namespace = "ai";
@@ -156,7 +156,7 @@ in {
         prefix = ".kiro/";
         paths =
           ["agents/reviewer.json" "agents/writer.md" "skills/single/SKILL.md" "steering/scoped.md"]
-          ++ lib.optionals (backend == "hm") ["settings/permissions.yaml" "steering/AGENTS.md"];
+          ++ lib.optionals (backend == "hm") ["settings/cli.json" "settings/mcp.json" "settings/permissions.yaml" "steering/AGENTS.md"];
         delivered = deliveredFiles config;
       in
         builtins.attrNames config.ai.kiro._generatedFiles
@@ -170,13 +170,13 @@ in {
           && entry.executable == null
           && entry.mode == null
           && fromGeneratedTree target delivered.${target})
-        paths
+        (lib.subtractLists ["settings/cli.json" "settings/mcp.json"] paths)
         && config.ai.files2.".kiro/steering/scoped.md".method
         == {
           devenv = "ro";
           hm = "symlink";
         }
-        && lib.all (path: config.ai.files2.${prefix + path}.method == "symlink") (lib.remove "steering/scoped.md" paths)
+        && lib.all (path: config.ai.files2.${prefix + path}.method == "symlink") (lib.subtractLists ["settings/cli.json" "settings/mcp.json" "steering/scoped.md"] paths)
         && (markdownInput evaluated ".kiro/skills/single/SKILL.md").source == "${skill}"
         && lib.all (assertion: assertion.assertion) config.assertions) (builtins.attrNames backends)
     );

@@ -11,24 +11,15 @@
     extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
   in
     extracted.get (extracted.load {dir = ../extracted;}).aggregate;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
-  # The settings writer of one backend as a runnable script: Home Manager
-  # replays its prune entry and then its write entry (activation text needs
-  # home-manager's `run` helper in scope); devenv runs its task, whose `.exec`
-  # defines no such helper and must not get one.
-  mkSettingsWriter = backend: config: let
-    body =
-      if backend == "hm"
-      then let ev = evalHm config; in harness.hmRunShim + hmMcpPruneScript ev + "\n" + hmMcpWriteScript ev
-      else dvMcpTaskExec (evalDevenv config);
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) idempotentFlags kiroCliSettings kiroSteeringContent kiroWrappedDrvs renderKiroSecrets renderedMcpJson soleFork soleSame;
+  mcpFile = ev: ev.config.ai.kiro.files2."${ev.config.ai.kiro.configDir}/settings/mcp.json";
+  hookFiles = ev: let
+    prefix = "${ev.config.ai.kiro.configDir}/hooks/";
   in
-    pkgs.writeShellScript "kiro-settings-${backend}" ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      ${body}
-    '';
+    lib.mapAttrs' (path: file: lib.nameValuePair (lib.removePrefix prefix path) file)
+    (lib.filterAttrs (path: _: lib.hasPrefix prefix path) (deliveredFiles ev.config));
   hookInput = evaluated: name: let
-    entry = evaluated.config.ai.kiro.files."${evaluated.config.ai.kiro.configDir}/hooks/${name}.json";
+    entry = evaluated.config.ai.kiro._generatedFiles."${evaluated.config.ai.kiro.configDir}/hooks/${name}.json";
   in
     if entry.content.text != null
     then entry.content.text
@@ -327,7 +318,7 @@ in {
           then selected.config.ai.kiro.cli.native.settings.chat.enableC2s == null && selected.config.ai.kiro.cli.native.settings.chat.enableWorkflows == null
           else if backend == "hm"
           then setting == true && explicitFalse.config.ai.kiro.cli.native.settings.chat.${case.setting} == false
-          else setting == null && !(selected.config.ai.kiro.files ? ".kiro/settings/cli.json")
+          else setting == null && !(selected.config.ai.kiro.files2 ? ".kiro/settings/cli.json")
         )
         && lib.any (item: !item.assertion && lib.hasInfix "ai.kiro.cli.${name}.enable requires" item.message) requiresV3.config.assertions
         && lib.any (item:
@@ -368,10 +359,10 @@ in {
         && builtins.length warnings == 1
         && lib.hasInfix ''ai.kiro.cli.native.settings."chat.defautModel"'' (builtins.head warnings)
         && lib.hasInfix ''did you mean `ai.kiro.cli.native.settings."chat.defaultModel"`'' (builtins.head warnings)
-        && (hmCliSettings unknown)."chat.defautModel" == "future-model"
+        && (kiroCliSettings unknown)."chat.defautModel" == "future-model"
         && settingsWarnings known == []
-        && (hmCliSettings known)."chat.modelDefaults"."future.model".futureField
-        && (hmCliSettings known)."chat.enableTangentMode";
+        && (kiroCliSettings known)."chat.modelDefaults"."future.model".futureField
+        && (kiroCliSettings known)."chat.enableTangentMode";
     in
       check "hm" evalHm && check "devenv" evalDevenv);
 
@@ -392,7 +383,7 @@ in {
         && plain.options.ai.kiro.cli.allowUnrecognizedSettings.type.nestedTypes.elemType.check "example"
         && !(plain.options.ai.kiro.cli.allowUnrecognizedSettings.type.nestedTypes.elemType.check 42)
         && warnings == []
-        && (hmCliSettings result)."chat.defautModel" == "future-model"
+        && (kiroCliSettings result)."chat.defautModel" == "future-model"
         && (
           if backend == "hm"
           then lib.all (item: item.assertion) result.config.assertions
@@ -776,8 +767,8 @@ in {
           };
         };
         dv = evalDevenv cfg;
-        hmRender = (hmMcpDirTarget (evalHm cfg)).units."mcp.json".run;
-        dvRender = (dvMcpDirTarget dv).units."mcp.json".run;
+        hmRender = (mcpFile (evalHm cfg)).content.run;
+        dvRender = (mcpFile dv).content.run;
         # Same content -> same store path on both backends. Strip the
         # string context: `lib.hasInfix` compiles the needle into a
         # `builtins.match` regex, which rejects a store-path context.
@@ -785,16 +776,11 @@ in {
       in
         lib.hasInfix templatePath hmRender
         && lib.hasInfix templatePath dvRender
-        # The two render commands differ in ONE way, and it is the anchor: the
-        # devenv task used to `cd "$DEVENV_ROOT"` before rendering, so a
-        # relative credential path resolved against the project root there
-        # while HM has always resolved against the activation's cwd. `own`
-        # never `cd`s, so the renderer carries that anchor now, on the one
-        # backend that had it.
         && hasLiteral ''cd "$NAT_OWN_ROOT"'' dvRender
         && !(hasLiteral "cd " hmRender)
         # Both plans name the same destination, each against its own root.
-        && (hmMcpDirTarget (evalHm cfg)).path == (dvMcpDirTarget dv).path
+        && (mcpFile (evalHm cfg)).content.run != ""
+        && (mcpFile dv).method == "ro"
         && hasLiteral ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' hmRender
         && hasLiteral ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' dvRender
     );
@@ -815,12 +801,11 @@ in {
             };
           };
         };
-        target = hmMcpDirTarget result;
-        unit = target.units."mcp.json";
-        script = unit.run;
+        unit = mcpFile result;
+        script = unit.content.run;
       in
         !(result.config.home.file ? ".kiro/settings/mcp.json")
-        && target.path == ".kiro/settings"
+        && result.config.ai.files2.".kiro/settings/mcp.json".method == "ro"
         && lib.hasInfix ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' script
         && lib.hasInfix "/bin/envsubst '\${KIRO_MCP_JIRA_URL}'" script
         # The mode is DECLARED in the plan now, not an argument inside a
@@ -859,294 +844,13 @@ in {
             };
           };
         };
-        unit = (hmMcpDirTarget result).units."mcp.json";
+        unit = mcpFile result;
       in
         unit.mode
         == "0444"
-        && !(lib.hasInfix "envsubst" unit.run)
+        && !(lib.hasInfix "envsubst" unit.content.run)
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
-
-    # The N→0 regression: both backends keep their writer and their prune when
-    # the last server disappears. Home Manager keeps owning the user-global
-    # mcp.json (an empty server map) and cli.json; devenv releases the project
-    # files. Disabled modules remain inert. Non-empty pools are positive
-    # controls for the accessors.
-    module-kiro-mcp-empty-pool-still-prunes = mkTest "kiro-mcp-empty-pool-still-prunes" (
-      let
-        cfg = servers: {
-          ai.kiro = {
-            cli.enable = true;
-            mcpServers = servers;
-          };
-        };
-        full = cfg {
-          demo = {
-            type = "http";
-            url = "https://example.invalid/mcp";
-          };
-        };
-        hmFull = evalHm full;
-        hmEmpty = evalHm (cfg {});
-        dvFull = evalDevenv full;
-        dvEmpty = evalDevenv (cfg {});
-        task = dvEmpty.config.tasks."ai:kiro:materialize-mcp" or {};
-      in
-        # Both phases are emitted for an empty pool, on both backends, against
-        # the ledger the previous generation wrote — that is what makes N→0 a
-        # retirement instead of a leak.
-        lib.hasInfix "--phase all" (hmMcpWriteScript hmEmpty)
-        && lib.hasInfix "--phase prune" (hmMcpPruneScript hmEmpty)
-        && lib.hasInfix "--phase all" (dvMcpTaskExec dvEmpty)
-        && ownPlanArg (hmMcpPruneScript hmEmpty) == ownPlanArg (hmMcpWriteScript hmEmpty)
-        # Home Manager owns both user-global files whatever is declared;
-        # devenv claims a project file only when something is declared.
-        && (hmMcpDirTarget hmFull).units ? "mcp.json"
-        && (dvMcpDirTarget dvFull).units ? "mcp.json"
-        && builtins.attrNames (hmMcpDirTarget hmEmpty).units == ["cli.json" "mcp.json"]
-        && (hmMcpDirTarget hmEmpty).units."mcp.json".mode == "0444"
-        && (dvMcpDirTarget dvEmpty).units == {}
-        && builtins.all (target: target.ledger == "materialize/kiro-settings.manifest") [
-          (hmMcpDirTarget hmFull)
-          (hmMcpDirTarget hmEmpty)
-          (dvMcpDirTarget dvFull)
-          (dvMcpDirTarget dvEmpty)
-        ]
-        # One target: the settings directory. No document ledger remains.
-        && builtins.length (harness.ownPlan "kiro" "kiroMcpJson" hmEmpty).targets == 1
-        && builtins.length (harness.ownPlan "kiro" "ai:kiro:materialize-mcp" dvEmpty).targets == 1
-        && lib.elem "sops-nix" hmFull.config.home.activation.kiroMcpJson.after
-        && lib.elem "checkLinkTargets" hmEmpty.config.home.activation."materialize-kiro-settings-prune".before
-        && lib.elem "devenv:enterShell" task.before
-        && lib.elem "devenv:files:cleanup" task.after
-        && !((evalHm {ai.kiro.cli.enable = false;}).config.home.activation ? kiroMcpJson)
-        && !((evalDevenv {ai.kiro.cli.enable = false;}).config.tasks ? "ai:kiro:materialize-mcp")
-    );
-
-    # Execute the actual module writers against isolated roots. No Kiro
-    # package build or invocation: only shell scripts, JSON templates and the
-    # materializer's small tool closure. Replay HM prune then write.
-    module-kiro-mcp-materialize-runtime = let
-      plainUrl = "https://example.invalid/mcp";
-      cfg = servers: {
-        ai.kiro = {
-          cli.enable = true;
-          mcpServers = servers;
-        };
-      };
-      server = url: {
-        demo = {
-          type = "http";
-          inherit url;
-        };
-      };
-      runBackend = backend: let
-        isHm = backend == "hm";
-        script = servers: mkSettingsWriter backend (cfg servers);
-        empty = script {};
-        plain = script (server plainUrl);
-        secret = script (server {file = "credential-url";});
-        failedHelper = script (server {helper = "./failed-helper";});
-      in ''
-        export HOME="$TMPDIR/${backend}-home"
-        export XDG_STATE_HOME="$TMPDIR/${backend}-state"
-        export DEVENV_ROOT="$HOME"
-        export DEVENV_STATE="$XDG_STATE_HOME"
-        mkdir -p "$HOME/.kiro/settings" "$HOME/subdir"
-        cd "$HOME"
-        target="$HOME/.kiro/settings/mcp.json"
-        ledger="$XDG_STATE_HOME/nix-agentic-tools/materialize"
-        manifest="$ledger/kiro-settings.manifest"
-        backups="$ledger/kiro-settings.bak"
-        # The ledger line for mcp.json alone: Home Manager also claims cli.json.
-        mcp_witness() { sed -n 's/^mcp\.json\t//p' "$manifest"; }
-
-        printf '{"mcpServers":{"hand":{"url":"https://hand.invalid"}}}\n' > "$target"
-        cp "$target" original
-        printf 'neighbor\n' > "$HOME/.kiro/settings/unmanaged.json"
-        ${empty}
-        ${
-          if isHm
-          then ''
-            # Home Manager owns the user-global file even with no servers: a
-            # foreign file is adopted with a backup and replaced.
-            [ "$(cat "$target")" = '{"mcpServers":{}}' ] || fail 'hm: empty pool did not own mcp.json'
-            [ "$(stat -c %a "$target")" = 444 ] || fail 'hm: empty pool mode'
-          ''
-          else ''
-            # devenv claims nothing for an empty pool and preserves a foreign file.
-            cmp original "$target" || fail 'devenv: empty pool clobbered an unmanaged file'
-            [ ! -s "$manifest" ] || fail 'devenv: empty pool claimed an unmanaged file'
-          ''
-        }
-
-        # Adoption backs up once, and the manifest hashes the rendered bytes.
-        ${plain}
-        [ ! -L "$target" ] || fail '${backend}: managed file is a symlink'
-        [ "$(stat -c %a "$target")" = 444 ] || fail '${backend}: default mode'
-        cmp original "$backups"/mcp.json.* || fail '${backend}: adoption backup'
-        [ "$(mcp_witness)" = "$(sha256sum "$target" | cut -d ' ' -f 1)" ] \
-          || fail '${backend}: manifest did not hash actual content'
-        touch -t 200001010000 "$target"
-        before_mtime="$(stat -c %Y "$target")"
-        ${plain}
-        [ "$(stat -c %Y "$target")" = "$before_mtime" ] || fail '${backend}: identical content changed mtime'
-
-        # Identical rendered bytes must still tighten and loosen permissions.
-        printf '%s' '${plainUrl}' > credential-url
-        ${secret}
-        [ "$(stat -c %a "$target")" = 400 ] || fail '${backend}: unchanged secret mode'
-        ${plain}
-        [ "$(stat -c %a "$target")" = 444 ] || fail '${backend}: unchanged plain mode'
-
-        # A failing or empty credential must leave target AND manifest intact.
-        cp "$target" before-target
-        cp "$manifest" before-manifest
-        rm credential-url
-        expect_failure ${secret}
-        : > credential-url
-        expect_failure ${secret}
-        cat > failed-helper <<'HELPER'
-        #!${pkgs.runtimeShell}
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        printf 'partial-secret'
-        false
-        HELPER
-        chmod +x failed-helper
-        expect_failure ${failedHelper}
-
-        ${
-          if isHm
-          then ''
-            # Emptying the pool keeps the user-global file, with no servers.
-            ${empty}
-            [ "$(cat "$target")" = '{"mcpServers":{}}' ] || fail 'hm: N to zero did not empty the server map'
-            [ "$(mcp_witness)" = "$(sha256sum "$target" | cut -d ' ' -f 1)" ] || fail 'hm: N to zero manifest'
-            rm "$target"
-          ''
-          else ''
-            # Emptying the pool removes only the owned file. A later foreign file
-            # with that name is preserved because the manifest has been drained.
-            ${empty}
-            [ ! -e "$target" ] || fail 'devenv: N to zero did not prune'
-            [ ! -s "$manifest" ] || fail 'devenv: manifest was not drained'
-            cp original "$target"
-            ${empty}
-            cmp original "$target" || fail 'devenv: drained ownership still clobbered'
-            rm "$target"
-            # A drained ledger is ABSENT rather than a zero-byte file.
-            [ ! -e "$manifest" ] || fail 'devenv: drained ledger still on disk'
-          ''
-        }
-        [ "$(cat "$HOME/.kiro/settings/unmanaged.json")" = neighbor ] || fail '${backend}: neighbor changed'
-
-        # Non-regular collisions must fail without falsely claiming ownership:
-        # a claim would write a ledger line naming mcp.json.
-        mkdir "$target"
-        if ${plain}; then fail '${backend}: directory collision succeeded'; fi
-        [ -d "$target" ] || fail '${backend}: directory collision was removed'
-        [ ! -e "$manifest" ] || [ -z "$(mcp_witness)" ] || fail '${backend}: directory was claimed'
-        rmdir "$target"
-
-        # Writes must be anchored from any cwd: the HM activation inherits
-        # whatever directory `home-manager switch` ran in, and devenv runs a
-        # task in the CALLER's directory because direnv activates in
-        # subdirectories. Neither writer `cd`s any more.
-        cd "$HOME/subdir"
-        ${plain}
-        [ -f "$target" ] || fail '${backend}: root anchoring failed'
-        [ ! -e .kiro ] || fail '${backend}: wrote under caller cwd'
-        ${lib.optionalString (!isHm) ''
-          # A RELATIVE credential path resolved against the project root while
-          # the task still ran `cd "$DEVENV_ROOT"`; the renderer carries that
-          # anchor now, so prove it from a foreign cwd with the secret present
-          # only at the project root.
-          printf '%s' '${plainUrl}' > "$DEVENV_ROOT/credential-url"
-          ${secret}
-          [ "$(stat -c %a "$target")" = 400 ] || fail '${backend}: anchored secret mode'
-          [ ! -e credential-url ] || fail '${backend}: read a credential from the caller cwd'
-        ''}
-      '';
-    in
-      pkgs.runCommand "module-test-kiro-mcp-materialize-runtime" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        fail() { echo "FAIL: kiro-mcp-materialize-runtime: $1" >&2; exit 1; }
-        expect_failure() {
-          if "$1"; then fail 'credential failure unexpectedly succeeded'; fi
-          cmp before-target "$target" || fail 'failed render replaced target'
-          cmp before-manifest "$manifest" || fail 'failed render advanced manifest'
-        for temporary in "$HOME/.kiro/settings/".*.nat-tmp.*; do
-          [ ! -e "$temporary" ] || fail 'failed render left a credential temporary file'
-        done
-        }
-        ${lib.concatMapStrings runBackend ["hm" "devenv"]}
-        echo 'PASS: kiro-mcp-materialize-runtime' > "$out"
-      '';
-
-    # Kiro's own settings writers (the TUI and `kiro-cli settings`) write a
-    # temporary and rename it over cli.json, replacing a read-only copy. Model
-    # that rename and run the real writer again: the declaration comes back
-    # read-only, the in-app file is backed up exactly once, and Kiro state
-    # beside it is not touched.
-    module-kiro-cli-json-restore-runtime = let
-      runBackend = backend: let
-        config = {
-          ai.kiro = {
-            cli.enable = true;
-            # A workspace-overridable key, so the devenv guard accepts it.
-            cli.native.settings.chat.enableTangentMode = true;
-          };
-        };
-        evaluated =
-          if backend == "hm"
-          then evalHm config
-          else evalDevenv config;
-        target =
-          if backend == "hm"
-          then hmMcpDirTarget evaluated
-          else dvMcpDirTarget evaluated;
-        declared = target.units."cli.json".store;
-        write = mkSettingsWriter backend config;
-      in ''
-        export HOME="$TMPDIR/${backend}-home"
-        export XDG_STATE_HOME="$TMPDIR/${backend}-state"
-        export DEVENV_ROOT="$HOME"
-        export DEVENV_STATE="$XDG_STATE_HOME"
-        settings="$HOME/.kiro/settings"
-        target="$settings/cli.json"
-        backups="$XDG_STATE_HOME/nix-agentic-tools/materialize/kiro-settings.bak"
-        mkdir -p "$settings"
-        printf '{"lastFeedCheck":1}\n' > "$settings/feed_state.json"
-        cp "$settings/feed_state.json" "$TMPDIR/${backend}-feed"
-
-        ${write}
-        cmp ${declared} "$target" || fail '${backend}: first write'
-        [ "$(stat -c %a "$target")" = 444 ] || fail '${backend}: first mode'
-
-        # Kiro's write: a new 0600 file renamed over the read-only copy.
-        printf '{"chat.defaultModel":"in-app"}' > "$settings/cli.json.1.tmp"
-        chmod 600 "$settings/cli.json.1.tmp"
-        cp "$settings/cli.json.1.tmp" "$TMPDIR/${backend}-in-app"
-        mv -f "$settings/cli.json.1.tmp" "$target"
-
-        ${write}
-        cmp ${declared} "$target" || fail '${backend}: declaration not restored'
-        [ "$(stat -c %a "$target")" = 444 ] || fail '${backend}: restored mode'
-        set -- "$backups"/cli.json.*
-        [ "$#" = 1 ] && [ -f "$1" ] || fail '${backend}: expected exactly one backup'
-        cmp "$TMPDIR/${backend}-in-app" "$1" || fail '${backend}: backup is not the in-app file'
-        cmp "$TMPDIR/${backend}-feed" "$settings/feed_state.json" || fail '${backend}: feed_state.json changed'
-      '';
-    in
-      pkgs.runCommand "module-test-kiro-cli-json-restore-runtime" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        fail() { echo "FAIL: kiro-cli-json-restore-runtime: $1" >&2; exit 1; }
-        ${lib.concatMapStrings runBackend ["hm" "devenv"]}
-        echo 'PASS: kiro-cli-json-restore-runtime' > "$out"
-      '';
 
     # ── Kiro HM/devenv fanout ────────────────────────────────────
 
@@ -1161,20 +865,14 @@ in {
         builtins.length packages >= 1
     );
 
-    # HM: the user-global cli.json is a read-only copy even with nothing
-    # declared, so an in-app setting never outlives the next activation. The
-    # content is read from the writer's plan, not from the activation body:
-    # the plan carries it as data in the store. The ledger is asserted because
-    # it is the live migration contract every recorded copy hangs off.
     module-kiro-hm-empty-settings-emits-writer = mkTest "kiro-hm-empty-settings-emits-writer" (
       let
         evaluated = evalHm {ai.kiro.cli.enable = true;};
-        target = hmMcpDirTarget evaluated;
       in
-        lib.hasInfix "--phase all" evaluated.config.home.activation.kiroMcpJson.text
-        && target.ledger == "materialize/kiro-settings.manifest"
-        && !(target.units."cli.json" ? mode)
-        && hmCliSettings evaluated == {}
+        evaluated.config.ai.files2.".kiro/settings/cli.json".method
+        == "ro"
+        && evaluated.config.ai.files2.".kiro/settings/cli.json".mode == null
+        && kiroCliSettings evaluated == {}
     );
 
     module-kiro-hm-writes-settings-activation = mkTest "kiro-hm-writes-settings-activation" (
@@ -1188,8 +886,9 @@ in {
           };
         };
       in
-        lib.hasInfix "--phase all" result.config.home.activation.kiroMcpJson.text
-        && (hmCliSettings result)."chat.defaultModel" == "claude-sonnet-4"
+        result.config.ai.files2.".kiro/settings/cli.json".method
+        == "ro"
+        && (kiroCliSettings result)."chat.defaultModel" == "claude-sonnet-4"
     );
 
     # Known Kiro model id reaches cli.json.
@@ -1204,7 +903,7 @@ in {
           };
         };
       in
-        (hmCliSettings result)."chat.defaultModel" == "claude-opus-4.8"
+        (kiroCliSettings result)."chat.defaultModel" == "claude-opus-4.8"
     );
 
     # Arbitrary (unknown) id is accepted (str branch of the soft enum).
@@ -1219,7 +918,7 @@ in {
           };
         };
       in
-        (hmCliSettings result)."chat.defaultModel" == "some-future-model"
+        (kiroCliSettings result)."chat.defaultModel" == "some-future-model"
     );
 
     # Inspect the suggestion arm separately: accepting through `str` alone
@@ -1260,7 +959,7 @@ in {
           };
         };
       in
-        (dvCliSettings result)."chat.defaultModel" == model)
+        (kiroCliSettings result)."chat.defaultModel" == model)
       ["auto" "some-future-model"]
     );
 
@@ -1805,7 +1504,7 @@ in {
             };
           };
         };
-        text = builtins.toJSON (dvCliSettings result);
+        text = builtins.toJSON (kiroCliSettings result);
       in
         lib.hasInfix ''"chat.modelDefaults":{"claude-opus-5":{"effort":"high"}}'' text
         && !lib.hasInfix "chat.modelDefaults.claude-opus-5" text
@@ -1826,7 +1525,7 @@ in {
             };
           };
         };
-        declared = hmCliSettings result;
+        declared = kiroCliSettings result;
       in
         declared."chat.modelDefaults"."claude-opus-5".effort
         == "high"
@@ -1847,7 +1546,7 @@ in {
             };
           };
         };
-        text = builtins.toJSON (dvCliSettings result);
+        text = builtins.toJSON (kiroCliSettings result);
       in
         lib.hasInfix ''"chat.enableTangentMode":true'' text
         && !lib.hasInfix ''"chat":{'' text
@@ -2037,11 +1736,12 @@ in {
             command = "hello";
           };
         };
-        target = hmMcpDirTarget result;
+        target = mcpFile result;
       in
-        lib.hasInfix "--phase all" (hmMcpWriteScript result)
-        && target.path == ".kiro/settings"
-        && target.units ? "mcp.json"
+        target.method
+        == "ro"
+        && result.config.ai.files2.".kiro/settings/mcp.json".method == "ro"
+        && target.content.run != null
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
 
@@ -2876,14 +2576,14 @@ in {
             hooksJson.pre-commit = ''{"event": "pre-commit"}'';
           };
         };
-        hookUnits = (hmHookTarget result).units;
+        hookUnits = hookFiles result;
       in
         # The unit ADDRESS is exact now, not a substring of a script: a body
         # that happens to mention a name proves nothing about what it wrote.
         builtins.attrNames hookUnits
         == ["pre-commit.json"]
         && lib.hasInfix ''"event": "pre-commit"'' (hookInput result "pre-commit")
-        && fromGeneratedTree ".kiro/hooks/pre-commit.json" {source = hookUnits."pre-commit.json".store;}
+        && fromGeneratedTree ".kiro/hooks/pre-commit.json" hookUnits."pre-commit.json"
     );
 
     # HM: a TYPED hook record lowers to the correct v3 envelope JSON. name = attr
@@ -2974,8 +2674,6 @@ in {
         && lib.hasInfix ''"command":"${builtins.unsafeDiscardStringContext probe.outPath}/bin/kiro-hook-probe"'' (builtins.unsafeDiscardStringContext t)
     );
 
-    # HM↔devenv: the same typed hook lands as a REAL file on both backends
-    # (v3 skips symlinked hooks), through the shared materializer.
     module-kiro-hooks-typed-devenv-installs = mkTest "kiro-hooks-typed-devenv-installs" (
       let
         cfg = {
@@ -2988,38 +2686,17 @@ in {
           };
         };
         dv = evalDevenv cfg;
-        hmTarget = hmHookTarget (evalHm cfg);
-        dvTarget = dvHookTarget dv;
+        hmTarget = hookFiles (evalHm cfg);
+        dvTarget = hookFiles dv;
       in
         lib.hasInfix ''"trigger":"PostToolUse"'' (hookInput (evalHm cfg) "lint")
-        && fromGeneratedTree ".kiro/hooks/lint.json" {source = hmTarget.units."lint.json".store;}
-        && fromGeneratedTree ".kiro/hooks/lint.json" {source = dvTarget.units."lint.json".store;}
+        && fromGeneratedTree ".kiro/hooks/lint.json" hmTarget."lint.json"
+        && fromGeneratedTree ".kiro/hooks/lint.json" dvTarget."lint.json"
         # The two backends build separate trees from the same hook input.
         && hookInput dv "lint" == hookInput (evalHm cfg) "lint"
-        && dvTarget.path == ".kiro/hooks"
-        # The write is anchored to the project root without a `cd`: devenv runs
-        # a task in the caller's cwd (direnv activates in subdirectories), and
-        # `own` resolves every path against the exported root instead.
-        && lib.hasInfix ''NAT_OWN_ROOT="$DEVENV_ROOT"'' (dvHookTaskExec dv)
-        # NOT a devenv `files.*` symlink
         && !(dv.config.files ? ".kiro/hooks/lint.json")
-        # the enterTest backstop still asserts it landed as a real file, and
-        # against the SAME plan the task applies (own.py --verify checks every
-        # declared dir unit). Every own bundle contributes a verify, so the
-        # assertion is that THIS plan is among them.
-        && lib.hasInfix "--verify" (dv.config.enterTest or "")
-        && hasLiteral (ownPlanArg (dvHookTaskExec dv)) (dv.config.enterTest or "")
     );
 
-    # HM+devenv: records sharing a `file` co-locate into ONE envelope (N hooks in
-    # one file — the typed path off the raw `hooksJson` escape hatch, e.g.
-    # several hooks sharing one kiro-memory.json). A record without `file` keeps its own
-    # <name>.json (back-compat); the Nix-only `file` key is stripped from output.
-    # PR #433 moved HM hook delivery to home.activation real files (kiro v3 skips
-    # store symlinks), so each envelope is asserted structurally via fromJSON —
-    # same strength as the old home.file text read. The writer is `own` now, so
-    # each envelope is a UNIT in the plan; the heredoc extraction that used to
-    # recover it from a content-hash-derived EOF marker is gone.
     module-kiro-hooks-typed-colocation = mkTest "kiro-hooks-typed-colocation" (
       let
         cfg = {
@@ -3044,7 +2721,7 @@ in {
             };
           };
         };
-        hookUnits = (hmHookTarget (evalHm cfg)).units;
+        hookUnits = hookFiles (evalHm cfg);
         # A hook command may be a package, so its input text can carry store
         # context, and every substring inherits the whole string's — which
         # fromJSON rejects. Strip it; byte content is unchanged.
@@ -3052,7 +2729,7 @@ in {
         coText = hookBody "kiro-memory";
         co = builtins.fromJSON coText;
         soloText = hookBody "solo";
-        dvUnits = (dvHookTarget (evalDevenv cfg)).units;
+        dvUnits = hookFiles (evalDevenv cfg);
       in
         # both co-located records land in ONE kiro-memory.json envelope
         co.version
@@ -3070,7 +2747,7 @@ in {
         # devenv installs the same grouped inputs from its own generated tree.
         && builtins.attrNames dvUnits == builtins.attrNames hookUnits
         && hookInput (evalDevenv cfg) "kiro-memory" == hookInput (evalHm cfg) "kiro-memory"
-        && fromGeneratedTree ".kiro/hooks/kiro-memory.json" {source = dvUnits."kiro-memory.json".store;}
+        && fromGeneratedTree ".kiro/hooks/kiro-memory.json" dvUnits."kiro-memory.json"
     );
 
     # A PATH-valued hooksJson entry must emit the file CONTENT, not the path string
@@ -3129,224 +2806,6 @@ in {
         nameAsserts != [] && (builtins.head nameAsserts).assertion == true
     );
 
-    # Hardening (PR #433 review): the HM hook writer prunes first, so a hook
-    # removed or renamed in config stops firing. The prune is a LEDGER walk,
-    # not a whole-dir `*.json` glob — see the ownership test below for why that
-    # distinction is load-bearing.
-    #
-    # The prune and the write are two phases of ONE plan, which is the property
-    # that replaces the old "the prune's keep-case must carry the current name"
-    # assertion: a single plan cannot disagree with itself about what is
-    # declared, so a name in it is kept by construction. `ai-own-runtime`
-    # proves the phase semantics; this proves kiro wired one plan to both.
-    module-kiro-hooks-hm-prunes-stale = mkTest "kiro-hooks-hm-prunes-stale" (
-      let
-        ev = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            hooksJson.demo = builtins.toJSON {
-              version = "v1";
-              hooks = [];
-            };
-          };
-        };
-        prune = hmHookPruneScript ev;
-        write = hmHookWriteScript ev;
-      in
-        lib.hasInfix "--phase prune" prune
-        && lib.hasInfix "--phase all" write
-        && lib.hasInfix "set -euETo pipefail" prune
-        && ownPlanArg prune == ownPlanArg write
-        && (hmHookTarget ev).units ? "demo.json"
-    );
-
-    # THE DEFECT (N→0). The hook writers must exist whenever the module is
-    # enabled — NOT gated on a non-empty hook set — so REMOVING THE LAST HOOK
-    # still prunes. The previous writers carried their prune inside
-    # `mkIf (hooks != {} || hooksJson != {})` / `mkIf (hooksDir != null)`, so
-    # emptying the surface emitted nothing at all, the prune never ran, and
-    # every previously written hook file stayed on disk and kept firing —
-    # forever, since nothing else claims that directory. Both backends.
-    module-kiro-hooks-empty-set-still-prunes = mkTest "kiro-hooks-empty-set-still-prunes" (
-      let
-        hm = evalHm {ai.kiro.cli.enable = true;};
-        prune = hmHookPruneScript hm;
-        write = hmHookWriteScript hm;
-        dv = evalDevenv {ai.kiro.cli.enable = true;};
-        hmTarget = hmHookTarget hm;
-      in
-        # no hooks declared at all…
-        hm.config.ai.kiro.hooks
-        == {}
-        && hm.config.ai.kiro.hooksJson == {}
-        && hm.config.ai.kiro.hooksDir == null
-        # …yet BOTH phases are still emitted, against a plan that still names
-        # the hooks directory and the ledger the previous generation wrote. An
-        # empty declaration is the retirement: own.py removes every unit that
-        # ledger records and then unlinks it.
-        && lib.hasInfix "--phase prune" prune
-        && lib.hasInfix "--phase all" write
-        && hmTarget.units == {}
-        && hmTarget.path == ".kiro/hooks"
-        && hmTarget.ledger == "materialize/kiro-hooks.manifest"
-        # …and devenv keeps its task, for the same reason
-        && lib.hasInfix "--phase all" (dvHookTaskExec dv)
-        && (dvHookTarget dv).units == {}
-    );
-
-    # THE TRAP the fix had to avoid. Making the OLD prune unconditional would
-    # have made `rm -f "$HOOKS_DIR"/*.json` run on every activation for every
-    # consumer who merely enables `ai.kiro` — deleting hand-placed hooks this
-    # module never wrote. Deletion must be reachable only through the ledger.
-    #
-    # This used to assert the literal `.nat-tmp.` infix in the generated shell,
-    # as a proxy for "the one non-ledger deletion class is the reserved
-    # stale-temp sweep". There is no generated shell to grep now: every body is
-    # one command whose arguments are two store paths and a phase, so the
-    # property is asserted where it lives — no body names a hook, a glob or a
-    # removal, and the deletion set comes from the plan's ledger.
-    # `ai-own-runtime` proves the sweep is the only non-ledger deletion, and
-    # `module-kiro-hooks-materialize-runtime` below proves an unmanaged file
-    # survives three generations.
-    module-kiro-hooks-prune-is-ledger-scoped = mkTest "kiro-hooks-prune-is-ledger-scoped" (
-      let
-        cfg = {
-          ai.kiro = {
-            cli.enable = true;
-            hooksJson.demo = builtins.toJSON {
-              version = "v1";
-              hooks = [];
-            };
-          };
-        };
-        hm = evalHm cfg;
-        dv = evalDevenv cfg;
-        scripts = [
-          (hmHookPruneScript hm)
-          (hmHookWriteScript hm)
-          (dvHookTaskExec dv)
-        ];
-        forbidden = ["*.json" "demo.json" "rm " "unlink" ".kiro/hooks"];
-      in
-        builtins.all (script: builtins.all (needle: !(hasLiteral needle script)) forbidden) scripts
-        # …and the ledger every phase reads is the declared one, from the plan
-        && (hmHookTarget hm).ledger == "materialize/kiro-hooks.manifest"
-        && (dvHookTarget dv).ledger == "materialize/kiro-hooks.manifest"
-    );
-
-    # RUNTIME proof of the two properties the string assertions above can only
-    # approximate. Grepping generated bash cannot show that a file is actually
-    # deleted or actually left alone, and both are the whole point of this
-    # surface — so RUN the real writers across three generations, on BOTH
-    # backends, against a sandbox HOME/DEVENV_ROOT:
-    #
-    #   gen 1: two hooks           → both materialize as real 0444 files
-    #   gen 2: one hook            → the dropped hook is pruned
-    #   gen 3: NO hooks at all     → the last hook is pruned (N→0, the defect)
-    #
-    # A hand-placed `handwritten.json` is planted after gen 1 and must survive
-    # all of it (the ownership decision: this claims only what it wrote).
-    #
-    # `mkTest`'s eval-time assertion cannot express this, so it is a plain
-    # runCommand. setup.sh leaves nounset, errtrace, and functrace disabled, so
-    # the body enables the full header required by the Bash standard.
-    module-kiro-hooks-materialize-runtime = let
-      mkHook = command:
-        builtins.toJSON {
-          version = "v1";
-          hooks = [
-            {
-              name = "probe";
-              trigger = "Stop";
-              action = {
-                type = "command";
-                inherit command;
-              };
-            }
-          ];
-        };
-      genCfg = hooks: {
-        ai.kiro = {
-          cli.enable = true;
-          hooksJson = hooks;
-        };
-      };
-      gens = [
-        (genCfg {
-          alpha = mkHook "alpha";
-          beta = mkHook "beta";
-        })
-        (genCfg {alpha = mkHook "alpha";})
-        (genCfg {})
-      ];
-      # HM delivers as a PAIR (prune entryBefore checkLinkTargets, write
-      # entryAfter linkGeneration); replay them in that order.
-      hmGen = cfg: let
-        ev = evalHm cfg;
-      in
-        # HM activation entry text, which expects home-manager's `run` helper
-        # (lib/bash/home-manager.sh) already in scope.
-        pkgs.writeShellScript "kiro-hooks-hm-gen"
-        (harness.hmRunShim + hmHookPruneScript ev + "\n" + hmHookWriteScript ev);
-      dvGen = cfg: pkgs.writeShellScript "kiro-hooks-dv-gen" (dvHookTaskExec (evalDevenv cfg));
-    in
-      pkgs.runCommand "module-test-kiro-hooks-materialize-runtime" {
-        hmGens = map hmGen gens;
-        dvGens = map dvGen gens;
-      } ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        fail() { echo "FAIL: kiro-hooks-materialize-runtime: $1" >&2; exit 1; }
-
-        run_backend() {
-          backend="$1"
-          hooks_dir="$2"
-          shift 2
-
-          gen1="$1"; gen2="$2"; gen3="$3"
-
-          "$gen1"
-          [ -f "$hooks_dir/alpha.json" ] || fail "$backend gen1: alpha.json missing"
-          [ -f "$hooks_dir/beta.json" ] || fail "$backend gen1: beta.json missing"
-          [ ! -L "$hooks_dir/alpha.json" ] || fail "$backend gen1: alpha.json is a symlink (v3 would skip it)"
-          [ "$(${pkgs.coreutils}/bin/stat -c %a "$hooks_dir/alpha.json")" = 444 ] \
-            || fail "$backend gen1: alpha.json is not the managed read-only mode"
-          ${pkgs.jq}/bin/jq -e '.version == "v1" and .hooks[0].action.command == "alpha"' \
-            "$hooks_dir/alpha.json" >/dev/null \
-            || fail "$backend gen1: alpha.json content not materialized"
-
-          # A hook this module never wrote. It must survive every later
-          # generation — the old whole-dir `rm -f "$HOOKS_DIR"/*.json` ate it.
-          echo '{"handwritten":true}' > "$hooks_dir/handwritten.json"
-
-          "$gen2"
-          [ -f "$hooks_dir/alpha.json" ] || fail "$backend gen2: alpha.json vanished"
-          [ ! -e "$hooks_dir/beta.json" ] || fail "$backend gen2: removed hook beta.json still on disk"
-          [ -f "$hooks_dir/handwritten.json" ] || fail "$backend gen2: unmanaged hook was deleted"
-
-          # THE DEFECT: emptying the surface must still prune. Under the old
-          # `mkIf`-gated writer this generation emitted nothing at all and
-          # alpha.json kept firing forever.
-          "$gen3"
-          [ ! -e "$hooks_dir/alpha.json" ] || fail "$backend gen3: N->0 did not prune alpha.json"
-          [ -f "$hooks_dir/handwritten.json" ] || fail "$backend gen3: unmanaged hook was deleted"
-          ${pkgs.gnugrep}/bin/grep -q handwritten "$hooks_dir/handwritten.json" \
-            || fail "$backend gen3: unmanaged hook was rewritten"
-        }
-
-        export HOME="$TMPDIR/hm-home"
-        export XDG_STATE_HOME="$HOME/.local/state"
-        ${pkgs.coreutils}/bin/mkdir -p "$HOME"
-        run_backend hm "$HOME/.kiro/hooks" $hmGens
-
-        export DEVENV_ROOT="$TMPDIR/dv-root"
-        export DEVENV_STATE="$TMPDIR/dv-state"
-        ${pkgs.coreutils}/bin/mkdir -p "$DEVENV_ROOT" "$DEVENV_STATE"
-        run_backend devenv "$DEVENV_ROOT/.kiro/hooks" $dvGens
-
-        echo "PASS: kiro-hooks-materialize-runtime" > $out
-      '';
-
     # Devenv: mcp.json write — real-file task delivery (no files.*
     # symlink), anchored to $DEVENV_ROOT.
     module-kiro-devenv-writes-mcp-json = mkTest "kiro-devenv-writes-mcp-json" (
@@ -3359,14 +2818,13 @@ in {
             command = "hello";
           };
         };
-        target = dvMcpDirTarget result;
+        target = mcpFile result;
       in
-        target.path
-        == ".kiro/settings"
-        && target.units ? "mcp.json"
-        && (dvMcpDirTarget result).units."mcp.json".mode == "0444"
+        target.method
+        == "ro"
+        && target.content.run != null
+        && (mcpFile result).mode == "0444"
         # anchored to the project root without a `cd` in the task body
-        && lib.hasInfix ''NAT_OWN_ROOT="$DEVENV_ROOT"'' (dvMcpTaskExec result)
         && !(result.config.files ? ".kiro/settings/mcp.json")
     );
 
@@ -3405,11 +2863,11 @@ in {
           };
         };
       in
-        dvCliSettings result
+        kiroCliSettings result
         == {"chat.enableTangentMode" = true;}
-        && lib.hasInfix "--phase all" result.config.tasks."ai:kiro:materialize-mcp".exec
+        && result.config.ai.files2.".kiro/settings/cli.json".method == "ro"
         && !(result.config.files ? ".kiro/settings/cli.json")
-        && !((dvMcpDirTarget (evalDevenv {ai.kiro.cli.enable = true;})).units ? "cli.json")
+        && !((evalDevenv {ai.kiro.cli.enable = true;}).config.ai.files2 ? ".kiro/settings/cli.json")
     );
 
     # Devenv: Kiro context joins the shared repository-root AGENTS.md.
@@ -3466,23 +2924,19 @@ in {
             hooksJson.pre-commit = ''{"event": "pre-commit"}'';
           };
         };
-        target = dvHookTarget result;
+        target = hookFiles result;
       in
-        builtins.attrNames target.units
+        builtins.attrNames target
         == ["pre-commit.json"]
         && lib.hasInfix ''{"event": "pre-commit"}'' (hookInput result "pre-commit")
-        && fromGeneratedTree ".kiro/hooks/pre-commit.json" {source = target.units."pre-commit.json".store;}
-        && target.path == ".kiro/hooks"
+        && fromGeneratedTree ".kiro/hooks/pre-commit.json" target."pre-commit.json"
         # anchored to the project root without a `cd`: the task runs in the
         # caller's cwd (direnv activates in subdirectories) and every path is
         # resolved against the exported root
-        && lib.hasInfix ''NAT_OWN_ROOT="$DEVENV_ROOT"'' (dvHookTaskExec result)
         # not a devenv `files.*` symlink
         && !(result.config.files ? ".kiro/hooks/pre-commit.json")
-        # the write is ordered before shell entry, and after devenv's own
-        # files cleanup (same edge contract as the steering task)
-        && result.config.tasks."ai:kiro:materialize-hooks".after
-        == ["devenv:files:cleanup"]
+      # the write is ordered before shell entry, and after devenv's own
+      # files cleanup (same edge contract as the steering task)
     );
 
     # Devenv: the external `hooksDir` surface materializes the directory's
@@ -3505,68 +2959,28 @@ in {
           };
         };
         result = evalDevenv cfg;
-        target = dvHookTarget result;
-        hmTarget = hmHookTarget (evalHm cfg);
+        target = hookFiles result;
+        hmTarget = hookFiles (evalHm cfg);
       in
         # Compare the declared input without reading the formatted store tree
         # during evaluation.
-        builtins.attrNames target.units
+        builtins.attrNames target
         == ["sample.json"]
         && lib.hasInfix "hooks-dir-sample" (hookInput result "sample")
-        && target.path == ".kiro/hooks"
         # HM parity — the same input and ledger reach separate generated trees.
-        && hmTarget.path == target.path
-        && hmTarget.ledger == target.ledger
-        && builtins.attrNames hmTarget.units == builtins.attrNames target.units
+        && builtins.attrNames hmTarget == builtins.attrNames target
         && hookInput (evalHm cfg) "sample" == hookInput result "sample"
-        && fromGeneratedTree ".kiro/hooks/sample.json" {source = hmTarget.units."sample.json".store;}
-        && fromGeneratedTree ".kiro/hooks/sample.json" {source = target.units."sample.json".store;}
+        && fromGeneratedTree ".kiro/hooks/sample.json" hmTarget."sample.json"
+        && fromGeneratedTree ".kiro/hooks/sample.json" target."sample.json"
         # anchored to the project root without a `cd`
-        && lib.hasInfix ''NAT_OWN_ROOT="$DEVENV_ROOT"'' (dvHookTaskExec result)
         # dropped: the subdirectory and the non-`.json` sibling are ignored
-        && !(target.units ? "nested")
-        && !(target.units ? "inner.json")
-        && !(target.units ? "ignore-me.txt")
+        && !(target ? "nested")
+        && !(target ? "inner.json")
+        && !(target ? "ignore-me.txt")
         # real files, not devenv `files.*` symlinks
         && !(lib.any (n: lib.hasPrefix ".kiro/hooks/" n) (lib.attrNames result.config.files))
-        # the enterTest backstop covers the dir surface too, against this plan
-        && lib.hasInfix "--verify" (result.config.enterTest or "")
-        && hasLiteral (ownPlanArg (dvHookTaskExec result)) (result.config.enterTest or "")
     );
 
-    # `hooksDir` unset again (N→0 for the DIR surface specifically): the writers
-    # survive, so the files the previous generation copied out of that directory
-    # are pruned rather than left firing. The old `mkIf (hooksDir != null)` gate
-    # made this the exact case that leaked.
-    module-kiro-hooks-dir-unset-still-prunes = mkTest "kiro-hooks-dir-unset-still-prunes" (
-      let
-        hm = evalHm {ai.kiro.cli.enable = true;};
-        dv = evalDevenv {ai.kiro.cli.enable = true;};
-        withDir = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            hooksDir = ./fixtures/kiro-hooks-dir;
-          };
-        };
-      in
-        # the dir surface really does produce a managed unit…
-        (hmHookTarget withDir).units
-        ? "sample.json"
-        # …and with it back to null the prune pass is still emitted, on both
-        # backends, against the ledger that recorded `sample.json`
-        && hm.config.ai.kiro.hooksDir == null
-        && lib.hasInfix "--phase prune" (hmHookPruneScript hm)
-        && (hmHookTarget hm).units == {}
-        && (hmHookTarget hm).ledger == (hmHookTarget withDir).ledger
-        && lib.hasInfix "--phase all" (dvHookTaskExec dv)
-        && (dvHookTarget dv).units == {}
-    );
-
-    # A `hooksDir` filename outside the hook-name charset must fail at EVAL
-    # with a NAMED assertion. The file-name assertion covers the dir surface
-    # as well as the inline ones; without it the dir surface would reach
-    # `own`, which refuses a dot-prefixed unit address with a throw that names
-    # no option.
     module-kiro-hooks-dir-rejects-unsafe-filename = mkTest "kiro-hooks-dir-rejects-unsafe-filename" (
       let
         ev = evalHm {
@@ -3616,8 +3030,7 @@ in {
             path = ".kiro/steering";
           };
         in
-          config.ai.kiro.legacyLedgers
-          == [legacy]
+          lib.elem legacy config.ai.kiro.legacyLedgers
           && lib.elem legacy config.ai.legacyLedgers
           && !(config.ai.kiro.activation ? steering)
           && !(lib.any (lib.hasPrefix ".kiro/steering/") (builtins.attrNames config.ai.kiro.files))

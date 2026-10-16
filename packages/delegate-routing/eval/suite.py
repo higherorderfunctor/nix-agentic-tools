@@ -555,7 +555,7 @@ def render_fixture(case, root, state):
         if "renderCommand" in file:
             rendered = subprocess.run([file["renderShell"], "-c", "set -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + file["renderCommand"]],
                                       capture_output=True, text=True, check=False, timeout=60,
-                                      env={**os.environ, "NAT_OWN_ROOT": str(root), "NAT_OWN_STATE": str(state)})
+                                      env={**os.environ, "DEVENV_ROOT": str(root), "NAT_OWN_ROOT": str(root), "NAT_OWN_STATE": str(state)})
             if rendered.returncode:
                 raise ValueError(f"config renderer failed for {file['path']}: {rendered.stderr}")
             path.write_text(rendered.stdout)
