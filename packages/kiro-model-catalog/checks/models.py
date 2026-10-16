@@ -36,10 +36,11 @@ class ModelExtraction(unittest.TestCase):
     def test_table_boundaries_annotations_and_new_versions(self):
         captured = models.capture(document(
             "**Auto**", "**Claude Sonnet 4.0**",
-            "**Claude Opus 99.1**<sup>†</sup>", "GPT-99.1 Luna",
+            "**Claude Opus 99.1**<sup>†</sup>", "GPT-99.1 Luna", "Kimi K99.1",
         ))
         self.assertEqual(models.model_ids(captured), [
             "auto", "claude-opus-99.1", "claude-sonnet-4", "gpt-99.1-luna",
+            "kimi-k99.1",
         ])
 
     def test_recipe_id_supplements_display_inference(self):

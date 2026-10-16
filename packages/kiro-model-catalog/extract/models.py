@@ -11,7 +11,7 @@ from pathlib import Path
 ADDITIONAL_IDS = {"claude-fable-5.1": ["claude-fable-5"]}
 MODEL_SHAPE = re.compile(
     r"auto|claude-[a-z]+-\d+(?:\.\d+)*|gpt-\d+(?:\.\d+)*(?:-[a-z]+)?|"
-    r"deepseek-\d+(?:\.\d+)*|glm-\d+(?:\.\d+)*|"
+    r"deepseek-\d+(?:\.\d+)*|glm-\d+(?:\.\d+)*|kimi-k\d+(?:\.\d+)*|"
     r"minimax-m\d+(?:\.\d+)*|qwen\d+-coder-[a-z0-9]+"
 )
 

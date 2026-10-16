@@ -7,9 +7,9 @@ applyTo: "dev/tasks/check.nix,packages/kiro-cli/checks/module-eval.nix,packages/
 
 # Kiro public model catalog
 
-> **Last verified:** 2026-10-12 — public-document pins, model facts and updates
+> **Last verified:** 2026-10-16 — public-document pins, model facts and updates
 > are independent of the proprietary CLI release; Kiro and Kimchi share the
-> documentation snapshot and update machinery.
+> documentation snapshot and update machinery; Kimi model names are accepted.
 
 ### Model suggestions are a public catalog, not an account entitlement list
 
@@ -49,12 +49,14 @@ account can use every listed model. Documentation can still lag a server
 rollout.
 
 The current snapshot covers all 19 IDs observed across the two accounts below.
-Its `claude-fable-5.1` suggestion is inferred from the public display name; that
-CLI spelling has not been verified against an authenticated account. The parser
-also retains `claude-fable-5`, observed in Kiro 2.22.1's bundled
-`feature-pipeline` and `semantic-review-multi-model` recipes via the token-free
-ACP `_kiro/workflow/listRecipes` method. The recipe ID does not establish that
-Fable 5 and 5.1 are aliases, so both suggestions are retained. An unknown naming
+Its `claude-fable-5.1` and `kimi-k3` suggestions are inferred from the public
+display names; neither CLI spelling has been verified against an authenticated
+account. Kimi K3 is offered to paid accounts only: a free account on Kiro 2.31.1
+did not list it on 2026-10-16. The parser also retains `claude-fable-5`,
+observed in Kiro 2.22.1's bundled `feature-pipeline` and
+`semantic-review-multi-model` recipes via the token-free ACP
+`_kiro/workflow/listRecipes` method. The recipe ID does not establish that Fable
+5 and 5.1 are aliases, so both suggestions are retained. An unknown naming
 format or an unavailable public source fails only the isolated model-catalog
 update target until the source recovers or the normalization is reviewed.
 
