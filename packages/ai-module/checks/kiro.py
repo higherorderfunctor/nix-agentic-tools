@@ -44,7 +44,9 @@ with tempfile.TemporaryDirectory() as temporary:
                     (root / path).symlink_to("/nix/store/kiro-test-source")
                 previous = step["native"]
                 engine.reconcile(plan, root, state, "apply", legacy, old)
-                records = json.loads(state.read_text())["files"]
+                # The engine deletes its state file when a run ends owning nothing.
+                assert state.exists() == bool(plan)
+                records = json.loads(state.read_text())["files"] if plan else {}
                 assert set(records) == {item["path"] for item in plan}
                 for item in plan:
                     path = root / item["path"]
