@@ -35,6 +35,10 @@
   # writes; shared by the emitter and `contentTargets`.
   userHarnessDir = cfg: "${cfg.configDir}/harness";
   userContextPath = cfg: "${userHarnessDir cfg}/${cfg.context.filename}";
+  agentsDirectory = backend: cfg:
+    if backend == "devenv"
+    then "${projectDir}/agents"
+    else "${userHarnessDir cfg}/agents";
   # Kimchi 1.1.37 hard-codes the user permissions file to
   # resolve(homedir(), ".config", "kimchi", "harness", "permissions.json")
   # (src/extensions/permissions/config.ts:35), so unlike the rest of the
@@ -415,22 +419,10 @@
       else userPermissionsDir;
     # Kimchi 1.1.37 loads `<agentDir>/agents/*.md` and a trusted project's
     # `.kimchi/agents/*.md` (src/extensions/agents/personas/custom-agents.ts:21-35).
-    agentsDir =
-      if isDevenv
-      then "${projectDir}/agents"
-      else "${harness}/agents";
+    agentsDir = agentsDirectory backend cfg;
     userScopeOnlyHarnessSettings = lib.intersectLists sidecar.userScopeHarnessKeys (builtins.attrNames filteredProjectHarnessSettings);
     userScopeConfigSettings = lib.intersectLists sidecar.userScopeConfigKeys (builtins.attrNames filteredProjectSettings);
     fixedEnvironmentVariables = builtins.attrNames (builtins.intersectAttrs sidecar.fixedEnvironmentVariables (lib.filterAttrs (_: value: value != null) mergedEnvironmentVariables));
-    # Home Manager's agents ledger identity predates project-path delivery and
-    # is an upgrade contract: keep hashing configDir so a new generation
-    # retracts files owned before this port. Devenv keys its ledger by the
-    # actual project path.
-    agentsLedger = "materialize/kimchi-agents-${builtins.hashString "sha256" (
-      if isDevenv
-      then agentsDir
-      else cfg.configDir
-    )}.manifest";
     # One directory ledger per directory the settings copies land in, keyed
     # by that directory: own refuses two live targets on one path.
     filesLedger = dir: "materialize/kimchi-files-${builtins.hashString "sha256" dir}.manifest";
@@ -558,19 +550,6 @@
               '';
             }
           ];
-        # A directory of whole files; Home Manager needs the second entry
-        # that deletes a retired real file before checkLinkTargets.
-        ai.kimchi.activation.kimchiAgents = {
-          entry = {
-            devenv = "ai:kimchi:agents";
-            hm = "kimchiAgents";
-          };
-          ledgers.${agentsLedger} = {
-            codec = "dir";
-            path = agentsDir;
-          };
-          pruneEntry = "kimchiAgentsPrune";
-        };
         # Read-only settings copies keep one directory ledger per directory;
         # shared documents add their own JSON ledgers. Empty directory ledgers
         # retract retired copies. The directories stay writable for runtime
@@ -597,10 +576,11 @@
         ai.kimchi.native.harnessSettings.packages = map (name: "extensions/${name}") (builtins.attrNames cfg.extensions);
       })
       {
-        ai.kimchi.files = lib.mapAttrs' (name: extension:
+        ai.kimchi._generatedFiles = lib.mapAttrs' (name: extension:
           lib.nameValuePair "${harness}/extensions/${name}" {
             content.source = lib.ai.linkDirectory pkgs "kimchi-extension-${lib.strings.sanitizeDerivationName name}" extension;
-            executable = null;
+            format = "raw";
+            method = "symlink";
           })
         cfg.extensions;
       }
@@ -675,14 +655,11 @@
       # inline or indexed Kimchi rule. Devenv contributes the same units to the
       # shared repository AGENTS.md through `sharedAgentsMd` below.
       (lib.mkIf (hasAgentsMdContent && !isDevenv) {
-        ai.kimchi.files.${userContextPath cfg} = lib.mkDefault {
-          content = {
-            _generated = true;
-            _surface = "context";
-            enable = agentsMd != "";
-            text = agentsMd;
-          };
+        ai.kimchi._generatedFiles.${userContextPath cfg} = {
+          content = lib.mkDefault {text = agentsMd;};
           format = "markdown";
+          method = "symlink";
+          surface = "context";
         };
       })
 
@@ -698,23 +675,18 @@
       # list would fail on the first unmatched name.
       # lib/ai/delivery-warnings.nix names the native remedy.
       {
-        ai.kimchi.files = lib.mapAttrs' (name: value:
+        ai.kimchi._generatedFiles = lib.mapAttrs' (name: value:
           lib.nameValuePair "${agentsDir}/${name}.md" {
             # A store-path string, as a flake input yields, is a source too;
             # `builtins.isPath` alone would write the path as the agent's text.
-            content = lib.mkDefault ({
-                _generated = true;
-                _surface = "agents";
-              }
-              // lib.ai.agent.renderFile false name (
-                if lib.ai.agent.isSemantic value
-                then value // {tools = null;}
-                else value
-              ));
-            entry = "kimchiAgents";
-            format = lib.mkDefault "markdown";
-            ledger = agentsLedger;
-            method = lib.mkDefault "copy-ro";
+            content = lib.mkDefault (lib.ai.agent.renderFile false name (
+              if lib.ai.agent.isSemantic value
+              then value // {tools = null;}
+              else value
+            ));
+            format = "markdown";
+            method = "ro";
+            surface = "agents";
           })
         mergedAgents;
       }
@@ -797,7 +769,7 @@ in
       "Each lands as one `<name>.md`: Home Manager writes `<configDir>/harness/agents/`, devenv a trusted project's `.kimchi/agents/`."
       "A normalized record renders to Kimchi frontmatter plus body."
       "Markdown here is Kimchi's own and is not translated, but it is built into the runtime's generated-file tree, where `ai.formatter` formats it, `ai.guards.parseCompare` protects its frontmatter, and `ai.checks.agents` checks it;"
-      "set `ai.kimchi.files.\"<path>\".format = \"raw\"` to deliver one agent file as written."
+      "To deliver one agent file as written, replace its whole content with `ai.kimchi.files2.\"<path>\".content = { text = \"<original Markdown>\"; };` or `{ source = ./agent.md; }`; this bypasses the generated Markdown tree."
       "A record's Claude/Copilot `tools` list has no Kimchi reading: it is dropped with a warning naming this option as the remedy."
       "Each file is a read-only copy: Kimchi's /agents commands cannot edit a declared agent, and an agent they create beside it is left alone."
     ];
@@ -951,6 +923,27 @@ in
 
     config = kimchiDelivery;
     installPackage = kimchiInstallPackage;
+    migrationConfig = {
+      backend,
+      cfg,
+      ...
+    }: let
+      isDevenv = backend == "devenv";
+      agentsDir = agentsDirectory backend cfg;
+    in {
+      ai.kimchi.legacyLedgers = [
+        {
+          codec = "dir";
+          # HM historically hashed configDir; devenv hashed the destination.
+          ledger = "materialize/kimchi-agents-${builtins.hashString "sha256" (
+            if isDevenv
+            then agentsDir
+            else cfg.configDir
+          )}.manifest";
+          path = agentsDir;
+        }
+      ];
+    };
     # context.filename names the Home Manager harness file; devenv always
     # contributes context and rule units at the fixed repository key.
     sharedAgentsMd = {mergedRules, ...}:

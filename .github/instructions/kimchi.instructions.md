@@ -7,19 +7,21 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-15 — source patches edit code paths only and leave
-> upstream's user-facing text alone.
+> **Last verified:** 2026-10-15 — agents, context, extensions and skills use the
+> files layers; the agents legacy ledger drains even while Kimchi is disabled.
+> Settings and hooks retain the old delivery path until chunk 10b.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
 settings). The HM and devenv modules are thin shims that apply `hmTransform` /
 `devenvTransform` to the record.
 
-Its record-level `config`, `kimchiDelivery`, describes each file: its bytes,
-consumer facts, and writer if it is not a symlink. It serves both backends,
-reading `backend` for the paths only one of them has, with the merged pools
-supplied by `mkBackendTransform.nix`, and `lib/ai/deliver.nix` decides how each
-entry lands. One record-level `installPackage` likewise serves both, adding the
+Its record-level `config`, `kimchiDelivery`, serves both backends with the
+merged pools supplied by `mkBackendTransform.nix`. Agents, context, extensions
+and skills stage content, format and method in `ai.kimchi._generatedFiles`; the
+shared router forwards them through `ai.kimchi.files2` to `ai.files2`. Settings
+and hooks still describe consumer facts and writers in `ai.kimchi.files` until
+chunk 10b. One record-level `installPackage` likewise serves both, adding the
 exact-cwd guard on devenv only.
 
 The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings` and
@@ -377,15 +379,15 @@ cloud" choices too. Resuming a persisted `remote_run:state` entry bypasses that
 function, and the early `--ssh-proxy` argv path bypasses normal extension
 startup and the teleport resource.
 
-Everything else Kimchi delivers except the settings files (above) and agents
-(below) is immutable and symlink-readable, so it takes both defaults and states
-no fact at all. Normalized context and rules render into one `ai.kimchi.files`
-AGENTS.md entry on Home Manager. Devenv contributes the same keyed units to the
-single root `AGENTS.md` owner shared with Codex and Kiro, through the record's
-`sharedAgentsMd`; identical rule keys and bytes deduplicate there. In either
-backend, the generated body is a default on the entry's `content` option, so a
-consumer can replace or suppress it. When root and Kimchi-specific context are
-both configured, their bodies concatenate root-first. Home Manager honors
+Context, extensions and skills use `method = "symlink"`; agents use `"ro"`.
+Normalized context and rules render into one staged AGENTS.md entry on Home
+Manager. Devenv contributes the same keyed units to the single root `AGENTS.md`
+owner shared with Codex and Kiro, through the record's `sharedAgentsMd`;
+identical rule keys and bytes deduplicate there. In either backend, the
+generated body is a whole-content default at layer 1, so a consumer can replace
+it through `ai.kimchi.files2.<path>.content` or suppress it with
+`enable = false`. When root and Kimchi-specific context are both configured,
+their bodies concatenate root-first. Home Manager honors
 `ai.kimchi.context.filename`; devenv always writes `AGENTS.md`.
 
 Project config, MCP, skills, and harness settings remain inert until project
@@ -470,14 +472,17 @@ Kimchi 1.1.37 loads `<agentDir>/agents/*.md` and a trusted project's
 (`src/extensions/agents/personas/custom-agents.ts:21-85`). Its /agents commands
 write those same files: Edit, Disable and Enable `writeFileSync` in place, and
 Create and Eject add new ones (`src/extensions/agents/index.ts:2556-2874`). Each
-agent file states `method = "copy-ro"` at `mkDefault` and takes the reconciler's
-read-only mode: one real file per agent in a real directory, owned by the
-`kimchiAgents` writer's `dir` ledger (`ai:kimchi:agents` on devenv, plus
-`kimchiAgentsPrune` on HM). An in-place edit of a declared agent fails; a file
-renamed over one is backed up and replaced at the next activation; a file Kimchi
-created is an unowned sibling and is never touched. To turn a declared agent
-off, set it to null. Locked by `module-kimchi-agents` and
-`module-kimchi-agents-runtime`, which runs the real writers.
+agent stages `method = "ro"`, forwarded at `mkDefault`, and takes the engine's
+read-only mode: one real file per agent in a real directory. The old agents
+writer is deleted. Ungated `migrationConfig` declares its directory ledger in
+`ai.kimchi.legacyLedgers`, retaining HM's hash of `configDir` and devenv's hash
+of `.kimchi/agents`, so an owner disabled at first upgrade still drains old
+copies. An in-place edit of a declared agent fails; a file renamed over one is
+backed up and replaced at the next activation; a file Kimchi created is an
+unowned sibling and is never touched. To turn a declared agent off, set it to
+null. Locked by `module-kimchi-agents` and `ai-module-kimchi-agents`, which
+executes the engine on evaluated plans for both backends and default and custom
+directories.
 
 `/agents` Edit, Disable and Enable cannot change a declared read-only agent;
 Kimchi surfaces the failed in-place write. Create and Eject can still add an
@@ -623,8 +628,8 @@ accepts a free-form map of derivations, empty by default. For example:
 ai.kimchi.extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
 ```
 
-Each key delivers a directory link through `ai.kimchi.files`:
-`<configDir>/harness/extensions/<key>` on Home Manager and
+Each key stages a directory link through `ai.kimchi._generatedFiles` and the
+files layers: `<configDir>/harness/extensions/<key>` on Home Manager and
 `<project>/.config/kimchi/harness/extensions/<key>` on devenv. The link retains
 the package closure's string context. Sorted relative names populate
 `native.harnessSettings.packages` and merge with consumer package entries. Pi
@@ -722,9 +727,10 @@ the link targets.
 
 # External workflows
 
-> **Last verified:** 2026-10-15 — upstream selects the NAT pnpm major; build and
+> **Last verified:** 2026-10-16 — upstream selects the NAT pnpm major; build and
 > runtime use that derivation, with stamped metadata and noninteractive
-> generated dependency migration.
+> generated dependency migration. Extension links stage in `_generatedFiles` and
+> reach both backends through the files layers, retaining package store context.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's lock. Its owner-local
@@ -814,22 +820,23 @@ ai.kimchi.extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
 `extensions` is a free-form map of derivations, empty by default. Each key names
 a directory link under the harness: Home Manager delivers
 `<configDir>/harness/extensions/<key>` and devenv delivers
-`<project>/.config/kimchi/harness/extensions/<key>`. The existing
-`ai.kimchi.files` writer retains each package's store context. The shared
-`lib.ai.linkDirectory pkgs name source` builder supplies a tiny directory of
-absolute top-level links into the package, so generated-tree delivery copies
-only links and leaves the dependency payload in its original store path. Harness
-settings load those links through `packages = [ "extensions/<key>" ];`, sorted
-by key, alongside raw `native.harnessSettings.packages` entries. Under Home
-Manager, a non-empty `extensions` map or any `native.harnessSettings.packages`
-declaration owns the whole harness `packages` list, replacing packages added
-with `kimchi install` on activation; declare those packages in
-`native.harnessSettings.packages`. Pi reads the package manifest's
-`pi.extensions`; Nix carries no extension entry metadata. Removing a key
-withdraws its link and settings entry. Delivery requires `ai.kimchi.enable`.
-Devenv's project settings engage the existing exact-cwd launcher guard and load
-only in a trusted project: pi drops untrusted project settings
-(`dist/core/settings-manager.js:189`), and Home Manager's
+`<project>/.config/kimchi/harness/extensions/<key>`. Each link stages in
+`ai.kimchi._generatedFiles` with `method = "symlink"` and reaches both backends
+through `ai.kimchi.files2` and `ai.files2`, retaining each package's store
+context. The shared `lib.ai.linkDirectory pkgs name source` builder supplies a
+tiny directory of absolute top-level links into the package, so generated-tree
+delivery copies only links and leaves the dependency payload in its original
+store path. Harness settings load those links through
+`packages = [ "extensions/<key>" ];`, sorted by key, alongside raw
+`native.harnessSettings.packages` entries. Under Home Manager, a non-empty
+`extensions` map or any `native.harnessSettings.packages` declaration owns the
+whole harness `packages` list, replacing packages added with `kimchi install` on
+activation; declare those packages in `native.harnessSettings.packages`. Pi
+reads the package manifest's `pi.extensions`; Nix carries no extension entry
+metadata. Removing a key withdraws its link and settings entry. Delivery
+requires `ai.kimchi.enable`. Devenv's project settings engage the existing
+exact-cwd launcher guard and load only in a trusted project: pi drops untrusted
+project settings (`dist/core/settings-manager.js:189`), and Home Manager's
 `defaultProjectTrust = "never"` never prompts. Trust the root with
 `ai.kimchi.projectTrust."<abs dir>" = true` (or `--approve` per session). Kimchi
 still lists an untrusted project package as an enabled Plugins row, because its

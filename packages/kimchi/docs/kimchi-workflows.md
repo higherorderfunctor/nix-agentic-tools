@@ -1,8 +1,9 @@
 # External workflows
 
-> **Last verified:** 2026-10-15 — upstream selects the NAT pnpm major; build and
+> **Last verified:** 2026-10-16 — upstream selects the NAT pnpm major; build and
 > runtime use that derivation, with stamped metadata and noninteractive
-> generated dependency migration.
+> generated dependency migration. Extension links stage in `_generatedFiles` and
+> reach both backends through the files layers, retaining package store context.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's lock. Its owner-local
@@ -92,22 +93,23 @@ ai.kimchi.extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
 `extensions` is a free-form map of derivations, empty by default. Each key names
 a directory link under the harness: Home Manager delivers
 `<configDir>/harness/extensions/<key>` and devenv delivers
-`<project>/.config/kimchi/harness/extensions/<key>`. The existing
-`ai.kimchi.files` writer retains each package's store context. The shared
-`lib.ai.linkDirectory pkgs name source` builder supplies a tiny directory of
-absolute top-level links into the package, so generated-tree delivery copies
-only links and leaves the dependency payload in its original store path. Harness
-settings load those links through `packages = [ "extensions/<key>" ];`, sorted
-by key, alongside raw `native.harnessSettings.packages` entries. Under Home
-Manager, a non-empty `extensions` map or any `native.harnessSettings.packages`
-declaration owns the whole harness `packages` list, replacing packages added
-with `kimchi install` on activation; declare those packages in
-`native.harnessSettings.packages`. Pi reads the package manifest's
-`pi.extensions`; Nix carries no extension entry metadata. Removing a key
-withdraws its link and settings entry. Delivery requires `ai.kimchi.enable`.
-Devenv's project settings engage the existing exact-cwd launcher guard and load
-only in a trusted project: pi drops untrusted project settings
-(`dist/core/settings-manager.js:189`), and Home Manager's
+`<project>/.config/kimchi/harness/extensions/<key>`. Each link stages in
+`ai.kimchi._generatedFiles` with `method = "symlink"` and reaches both backends
+through `ai.kimchi.files2` and `ai.files2`, retaining each package's store
+context. The shared `lib.ai.linkDirectory pkgs name source` builder supplies a
+tiny directory of absolute top-level links into the package, so generated-tree
+delivery copies only links and leaves the dependency payload in its original
+store path. Harness settings load those links through
+`packages = [ "extensions/<key>" ];`, sorted by key, alongside raw
+`native.harnessSettings.packages` entries. Under Home Manager, a non-empty
+`extensions` map or any `native.harnessSettings.packages` declaration owns the
+whole harness `packages` list, replacing packages added with `kimchi install` on
+activation; declare those packages in `native.harnessSettings.packages`. Pi
+reads the package manifest's `pi.extensions`; Nix carries no extension entry
+metadata. Removing a key withdraws its link and settings entry. Delivery
+requires `ai.kimchi.enable`. Devenv's project settings engage the existing
+exact-cwd launcher guard and load only in a trusted project: pi drops untrusted
+project settings (`dist/core/settings-manager.js:189`), and Home Manager's
 `defaultProjectTrust = "never"` never prompts. Trust the root with
 `ai.kimchi.projectTrust."<abs dir>" = true` (or `--approve` per session). Kimchi
 still lists an untrusted project package as an enabled Plugins row, because its
