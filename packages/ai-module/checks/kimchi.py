@@ -40,7 +40,9 @@ with tempfile.TemporaryDirectory() as temporary:
                     engine.reconcile(plan, root, state, "prune", legacy, old)
                     assert not ledger.exists() and not (agents / "retired.md").exists()
                     engine.reconcile(plan, root, state, "apply", legacy, old)
-                    records = json.loads(state.read_text())["files"]
+                    # The engine deletes its state file when a run ends owning nothing.
+                    assert state.exists() == bool(plan)
+                    records = json.loads(state.read_text())["files"] if plan else {}
                     assert set(records) == {item["path"] for item in plan}
                     assert {path.name for path in agents.iterdir()} == {"created.md"} | {
                         Path(item["path"]).name for item in plan}
