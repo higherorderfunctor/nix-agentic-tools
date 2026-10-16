@@ -187,14 +187,14 @@ in {
         && hmConfig.ai.claude._generatedFiles ? ".claude/rules/scoped.md"
         && hmConfig.ai.codex.files ? ".codex/AGENTS.md"
         && hmConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
-        && hmConfig.ai.kiro.files ? ".kiro/steering/AGENTS.md"
-        && hmConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
+        && hmConfig.ai.kiro._generatedFiles ? ".kiro/steering/AGENTS.md"
+        && hmConfig.ai.kiro._generatedFiles ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.claude._generatedFiles ? ".claude/CLAUDE.md"
         && devenvConfig.ai.claude._generatedFiles ? ".claude/rules/scoped.md"
         && devenvConfig.ai.internal.agentsMdTargets.copilot == "AGENTS.md"
         && devenvConfig.ai.copilot._generatedFiles ? ".github/instructions/scoped.instructions.md"
         && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
-        && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
+        && devenvConfig.ai.kiro._generatedFiles ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"
         && devenvConfig.ai.internal.files."AGENTS.md".content.text == markdownOf devenvConfig "AGENTS.md"
     );
@@ -213,13 +213,13 @@ in {
           ai.codex.files."AGENTS.md".content.text = "CONSUMER-REPLACEMENT";
         });
         suppressed = evalDevenv (lib.recursiveUpdate base {
-          ai.kiro.files."AGENTS.md".content.enable = false;
+          ai.kiro.files2."AGENTS.md".enable = false;
         });
         deduplicated = evalDevenv (lib.recursiveUpdate base {
           ai = {
             codex.files."AGENTS.md".content.text = "SHARED-CONSUMER";
             kimchi.files."AGENTS.md".content.text = "SHARED-CONSUMER";
-            kiro.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+            kiro.files2."AGENTS.md".content.text = "SHARED-CONSUMER";
           };
         });
         divergent = builtins.tryEval (let
@@ -227,7 +227,7 @@ in {
             ai = {
               codex.files."AGENTS.md".content.text = "OTHER-CONSUMER";
               kimchi.files."AGENTS.md".content.text = "KIMCHI-CONSUMER";
-              kiro.files."AGENTS.md".content.text = "OTHER-CONSUMER";
+              kiro.files2."AGENTS.md".content.text = "OTHER-CONSUMER";
             };
           });
         in
@@ -312,20 +312,32 @@ in {
         sourced = runtime: let
           file = pkgs.writeText "${runtime}-agents.md" "SOURCED-${runtime}";
           evaluated = evalDevenv (lib.recursiveUpdate base {
-            ai.${runtime}.files."AGENTS.md".content.source = file;
+            ai.${
+              runtime
+            }.${
+              if runtime == "kiro"
+              then "files2"
+              else "files"
+            }."AGENTS.md".content.source =
+              file;
           });
         in
           (builtins.tryEval "${(deliveredFiles evaluated.config)."AGENTS.md".source}").success
-          && fromGeneratedTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
-          && toString (markdownInput evaluated "AGENTS.md").source == toString file;
+          && (
+            if runtime == "kiro"
+            then (deliveredFiles evaluated.config)."AGENTS.md".source == toString file
+            else
+              fromGeneratedTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
+              && toString (markdownInput evaluated "AGENTS.md").source == toString file
+          );
       in
         replaced.config.ai.internal.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
         && markdownOf replaced.config "AGENTS.md" == "CONSUMER-REPLACEMENT"
-        && !suppressed.config.ai.internal.files."AGENTS.md".content.enable
+        && !suppressed.config.ai.files2."AGENTS.md".enable
         && !((deliveredFiles suppressed.config) ? "AGENTS.md")
         && deduplicated.config.ai.internal.files."AGENTS.md".content.text == "SHARED-CONSUMER"
-        && markdownOf deduplicated.config "AGENTS.md" == "SHARED-CONSUMER"
+        && deduplicated.config.ai.files2."AGENTS.md".content.text == "SHARED-CONSUMER"
         && !divergent.success
         && markdownOf consumerOnly.config "AGENTS.md" == "CONSUMER-ONLY"
         && markdownOf kimchiConsumerOnly.config "AGENTS.md" == "KIMCHI-CONSUMER-ONLY"
@@ -505,7 +517,7 @@ in {
             kiro = {
               context.text = "RUNTIME-CONTEXT";
               cli.enable = true;
-              files.".kiro/steering/AGENTS.md".content.enable = false;
+              files2.".kiro/steering/AGENTS.md".enable = false;
             };
           };
         };
@@ -515,7 +527,7 @@ in {
             kiro = {
               context.text = "RUNTIME-CONTEXT";
               cli.enable = true;
-              files."AGENTS.md".content.enable = false;
+              files2."AGENTS.md".enable = false;
             };
           };
         };
@@ -625,53 +637,33 @@ in {
         && !((deliveredFiles disabled.config) ? "AGENTS.md")
     );
 
-    # `content.enable = false` is the one suppression lever, so it must reach
-    # every content form. A `value` document or a `run` body that ignored it
-    # would be written while the consumer's disable is accepted in silence.
+    # L078: entry enable suppresses structured values and run content.
     module-runtime-files-disable-suppresses-every-form = mkTest "runtime-files-disable-suppresses-every-form" (
-      let
-        runtimeFiles = import ../../lib/ai/runtime-files.nix {inherit lib;};
-        target = ".kiro/probe.json";
-        valueEntry = contents:
-          lib.mkMerge ([
-              {
+      lib.all (evaluate:
+        lib.all (content:
+          lib.all (enable: let
+            inherit
+              ((evaluate {
                 ai.kiro = {
                   cli.enable = true;
-                  files.${target}.format = "json";
+                  files2.".kiro/probe.json" = {
+                    inherit content;
+                    enable = lib.mkForce enable;
+                    format = "json";
+                    method =
+                      if content ? run
+                      then "ro"
+                      else "symlink";
+                  };
                 };
-              }
-            ]
-            ++ map (content: {ai.kiro.files.${target}.content = content;}) contents);
-        delivered = config:
-          (evalHm config).config.home.file
-          ? ${target}
-          && (evalDevenv config).config.files ? ${target};
-        suppressed = config:
-          !((evalHm config).config.home.file ? ${target})
-          && !((evalDevenv config).config.files ? ${target});
-        runEntry = extra:
-          (evalHm {
-            ai.kiro = {
-              cli.enable = true;
-              files.".kiro/probe.run".content = {run = "printf probe";} // extra;
-            };
-          }).config.ai.kiro.files.".kiro/probe.run";
-      in
-        # Control: an ordinary value document is delivered.
-        delivered (valueEntry [{value.a = true;}])
-        && suppressed (valueEntry [
-          {
-            enable = false;
-            value.a = true;
-          }
-        ])
-        # A generated leaf default, disabled by a separate consumer module.
-        && suppressed (valueEntry [
-          {value.a = lib.mkDefault true;}
-          {enable = false;}
-        ])
-        && runtimeFiles.isLive (runEntry {})
-        && !runtimeFiles.isLive (runEntry {enable = false;})
+              }))
+              config
+              ;
+            entry = config.ai.files2.".kiro/probe.json";
+            delivered = deliveredFiles config;
+          in
+            entry.enable == enable && (delivered ? ".kiro/probe.json") == enable)
+          [false true]) [{value.a = true;} {value.a = lib.mkDefault true;} {run = "printf '{}'";}]) [evalHm evalDevenv]
     );
 
     # A store-backed replacement of the shared AGENTS.md stays lazy: its size

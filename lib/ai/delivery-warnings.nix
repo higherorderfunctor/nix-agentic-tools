@@ -149,52 +149,79 @@
   # sets inside its own `content` definition, which any consumer `content`
   # definition discards whole (lib/ai/delivery-options.nix).
   #
-  # The final entry is the runtime's own, except for a shared AGENTS.md key
-  # on devenv, whose final entry is the owner's; there the override is named
-  # on whichever enabled runtime's public entry states it.
+  # During coexistence the old shared entry supplies staged content and
+  # default liveness. Final shared overrides arbitrate in ai.files2 below.
   finalEntry = path:
     if builtins.elem path sharedTargets
     then config.ai.internal.files.${path} or null
     else cfg.files.${path} or null;
   switchedOff = entry: !(runtimeFiles.isLive entry);
   replaced = entry: runtimeFiles.isLive entry && !(entry.content._generated or false);
-  overridingRuntime = test: path: let
+  overridingRuntime = files: test: path: let
     overrides = name: let
       other = config.ai.${name} or {};
     in
       (other.enable or false)
-      && (other.files or {}) ? ${path}
-      && test other.files.${path};
+      && (other.${files} or {}) ? ${path}
+      && test other.${files}.${path};
     candidates = builtins.attrNames (config.ai.internal.agentsMdTargets or {});
   in
     if builtins.elem path sharedTargets
-    then lib.findFirst overrides runtime (lib.sort lib.lessThan candidates)
+    then lib.findFirst overrides null (lib.sort lib.lessThan candidates)
     else runtime;
   # A staged path is carried by its final layer-1 entry: switched off by its
   # `enable`, replaced when its winning content is not the generated one. A
   # consumer value leaf merges with the generated document; it never replaces it.
   generatedDropReason = path: let
-    option = suffix: lib.showOption (["ai" runtime "files2" path] ++ suffix);
+    shared = builtins.elem path sharedTargets;
+    entry =
+      if shared
+      then config.ai.files2.${path}
+      else cfg.files2.${path};
+    contentReplaced =
+      if shared
+      then entry._contentPrio < (lib.mkDefault null).priority
+      else generatedReplaced path;
+    owner = overridingRuntime "files2" (candidate:
+      if !entry.enable
+      then !candidate.enable
+      else candidate._contentPrio == entry._contentPrio)
+    path;
+    option = suffix: lib.showOption (["ai"] ++ lib.optional (owner != null) owner ++ ["files2" path] ++ suffix);
   in
-    if !cfg.files2.${path}.enable
+    if !entry.enable
     then "${option ["enable"]} = false switches off `${path}`, the file that carries it"
-    else if generatedReplaced path
+    else if contentReplaced
     then "${option ["content"]} replaces `${path}`, the file that carries it, with its own bytes"
     else null;
   # The reason a unit's file does not carry it, or null when it does.
-  dropReason = path: let
+  legacyDropReason = path: let
     entry = finalEntry path;
-    option = test: suffix: lib.showOption (["ai" (overridingRuntime test path) "files" path] ++ suffix);
+    option = test: suffix: lib.showOption (["ai" (lib.defaultTo runtime (overridingRuntime "files" test path)) "files" path] ++ suffix);
   in
-    if generatedContent ? ${path}
-    then generatedDropReason path
-    else if entry == null
+    if entry == null
     then null
     else if switchedOff entry
     then "${option switchedOff ["content" "enable"]} = false switches off `${path}`, the file that carries it"
     else if replaced entry
     then "${option replaced ["content"]} replaces `${path}`, the file that carries it, with its own bytes"
     else null;
+  dropReason = path:
+    if builtins.elem path sharedTargets
+    then let
+      entry = config.ai.files2.${path};
+      legacy = finalEntry path;
+    in
+      # Old public disables still supply the composer's enable default. A
+      # migrated override wins at the final shared entry and names files2.
+      if !entry.enable && overridingRuntime "files2" (candidate: !candidate.enable) path == null && legacy != null && switchedOff legacy
+      then legacyDropReason path
+      else if !entry.enable || entry._contentPrio < (lib.mkDefault null).priority
+      then generatedDropReason path
+      else legacyDropReason path
+    else if generatedContent ? ${path}
+    then generatedDropReason path
+    else legacyDropReason path;
   offMessage = unit: path: remedy:
     message unit (dropReason path)
     + ". Remove that override, or withhold it from ${runtime} with ${remedy}.";

@@ -694,19 +694,20 @@ in {
             && lib.hasInfix "${file}${lib.optionalString (!lib.hasInfix ".files2." file) ".content"}.enable = false switches off" message
             && lib.hasInfix remedy message)
           messages;
-        # Codex's shared AGENTS.md on devenv, switched off by ANOTHER
-        # runtime's public entry: the message names Kiro's option.
-        sharedOff = evaluate "devenv" {
-          ai = {
-            codex.enable = true;
-            context.text = "CTX";
-            kiro = {
-              cli.enable = true;
-              files."AGENTS.md".content.enable = false;
-            };
-            rules.probe.text = "RULE";
-          };
-        };
+        # Shared context and rules warn when another runtime overrides the
+        # final AGENTS.md entry.
+        sharedRuntimes = ["codex" "copilot" "kimchi" "kiro"];
+        sharedWarnings = extra:
+          evaluate "devenv" (lib.foldl' lib.recursiveUpdate {
+              ai = {
+                context.text = "CTX";
+                rules.probe.text = "RULE";
+              };
+            }
+            (map (runtime: harness.setEnable runtime true) sharedRuntimes ++ [extra]));
+        sharedLegacyOff = sharedWarnings {ai.codex.files."AGENTS.md".content.enable = false;};
+        sharedOff = sharedWarnings {ai.kiro.files2."AGENTS.md".enable = false;};
+        sharedReplaced = sharedWarnings {ai.kiro.files2."AGENTS.md".content.text = "MINE";};
         # Codex's user AGENTS.md on Home Manager.
         hmCodexOff = evaluate "hm" {
           ai = {
@@ -722,7 +723,7 @@ in {
         steeringOff = evaluate "devenv" {
           ai.kiro = {
             cli.enable = true;
-            files.".kiro/steering/scoped.md".content.enable = false;
+            files2.".kiro/steering/scoped.md".enable = false;
             rules.scoped = {
               matcher = ["src/**"];
               text = "SCOPED";
@@ -830,12 +831,27 @@ in {
           };
         };
       in
-        offMessage sharedOff "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && offMessage sharedOff "ai.context" ''ai.kiro.files."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
-        && offMessage sharedOff "ai.context" ''ai.kiro.files."AGENTS.md"'' "withhold it from kiro"
+        lib.all (runtime: let
+          contextRemedy = "${lib.showOption (lib.init (optionPaths.pool runtime "context") ++ ["normalized" "context"])} = lib.mkForce null";
+          rulesRemedy = "${lib.showOption (optionPaths.pool runtime "rules" ++ ["probe" "enable"])} = false";
+        in
+          offMessage sharedOff "ai.context" ''ai.kiro.files2."AGENTS.md"'' contextRemedy
+          && offMessage sharedLegacyOff "ai.context" ''ai.codex.files."AGENTS.md"'' contextRemedy
+          && replacedMessage sharedReplaced "ai.context" ''ai.kiro.files2."AGENTS.md"'' contextRemedy
+          # Copilot's rules have their own instruction files; only its context
+          # shares AGENTS.md with the other three runtimes.
+          && (
+            if runtime == "copilot"
+            then !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (sharedOff ++ sharedLegacyOff ++ sharedReplaced))
+            else
+              offMessage sharedOff "ai.rules.probe" ''ai.kiro.files2."AGENTS.md"'' rulesRemedy
+              && offMessage sharedLegacyOff "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' rulesRemedy
+              && replacedMessage sharedReplaced "ai.rules.probe" ''ai.kiro.files2."AGENTS.md"'' rulesRemedy
+          ))
+        sharedRuntimes
         && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
         && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
-        && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
+        && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files2.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
         && offMessage claudeOff "ai.rules.probe" ''ai.claude.files2.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
         && replacedMessage replaced "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
         && replacedMessage replaced "ai.context" ''ai.codex.files."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"

@@ -1,12 +1,12 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-15 — Claude uses engine-backed `rw` ownership,
-> Kimchi retains legacy ledgers, and Claude has an ordered activation2 mode
-> command; `mkSkillFiles` interpolates every skill source before the files
-> engine walks it; no check gates the N-to-zero writer defect; Kiro is gated by
-> `ai.kiro.cli.enable`; factories read the derived, read-only `ai.kiro.enable`;
-> `ai.copilot` is github.com Copilot, with pools under `ai.copilot.github` and
-> no launcher.
+> **Last verified:** 2026-10-15 — Claude uses engine-backed `rw` ownership, Kiro
+> drains its steering legacy ledger through the engine; Kimchi retains legacy
+> ledgers, and Claude has an ordered activation2 mode command; `mkSkillFiles`
+> interpolates every skill source before the files engine walks it; no check
+> gates the N-to-zero writer defect; Kiro is gated by `ai.kiro.cli.enable`;
+> factories read the derived, read-only `ai.kiro.enable`; `ai.copilot` is
+> github.com Copilot, with pools under `ai.copilot.github` and no launcher.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -184,11 +184,11 @@ directory. `entryAfter ["writeBoundary"]` is NOT sufficient for that:
 from `lib.toposort`), so a writeBoundary-ordered script can run before
 `home.file` entries exist on disk. The `entryBefore` users all come from one
 function: `lib/ai/own.nix` gives every bundle holding a `dir` target a prune
-entry at `entryBefore ["checkLinkTargets"]` (kiro's hooks, its `settings`
-directory and the legacy steering retirement), which must clear a real file
-flipping to a symlink before HM checks link targets. A document-only bundle has
-no prune entry, because a document's retraction and its assertion are one
-read-modify-write that must not be split across two processes.
+entry at `entryBefore ["checkLinkTargets"]` (Kiro's hooks and `settings`
+directory), which must clear a real file flipping to a symlink before HM checks
+link targets. A document-only bundle has no prune entry, because a document's
+retraction and its assertion are one read-modify-write that must not be split
+across two processes.
 
 **NEVER use `exit` as a short-circuit.** `home.activation.<name>` blocks are
 **inlined** into a single outer bash script at

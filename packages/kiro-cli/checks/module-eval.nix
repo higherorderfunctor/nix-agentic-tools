@@ -11,7 +11,7 @@
     extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
   in
     extracted.get (extracted.load {dir = ../extracted;}).aggregate;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
   # The settings writer of one backend as a runnable script: Home Manager
   # replays its prune entry and then its write entry (activation text needs
   # home-manager's `run` helper in scope); devenv runs its task, whose `.exec`
@@ -2452,7 +2452,7 @@ in {
         valid = evaluated:
           lib.any (lib.hasInfix expected) evaluated.config.warnings
           && builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions == []
-          && !((builtins.fromJSON evaluated.config.ai.kiro.files.".kiro/agents/worker.json".content.text) ? tools);
+          && !((builtins.fromJSON evaluated.config.ai.kiro._generatedFiles.".kiro/agents/worker.json".content.text) ? tools);
       in
         valid (evalHm config) && valid (evalDevenv config)
     );
@@ -2496,7 +2496,7 @@ in {
           };
         };
         valid = evaluated:
-          !(evaluated.config.ai.kiro.files ? ".kiro/agents/worker.json")
+          !(evaluated.config.ai.kiro._generatedFiles ? ".kiro/agents/worker.json")
           && !(evaluated.config.ai.kiro.native.agents ? worker)
           && builtins.filter (lib.hasInfix "ai.agents.worker.tools") evaluated.config.warnings == []
           && builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions == [];
@@ -2580,7 +2580,7 @@ in {
           };
         };
         valid = evaluated: let
-          files = evaluated.config.ai.kiro.files;
+          files = evaluated.config.ai.kiro._generatedFiles;
           entry = files.".kiro/agents/writer.md";
           text = entry.content.text;
         in
@@ -2616,7 +2616,7 @@ in {
         };
         expected = ''{"description":"Reviews diffs","name":"reviewer","prompt":"You review diffs.","tools":["read","shell"]}'';
         valid = evaluated: let
-          files = evaluated.config.ai.kiro.files;
+          files = evaluated.config.ai.kiro._generatedFiles;
           entry = files.".kiro/agents/reviewer.json";
         in
           entry.format
@@ -3234,83 +3234,6 @@ in {
         && (dvHookTarget dv).ledger == "materialize/kiro-hooks.manifest"
     );
 
-    # The hooks task and legacy steering-retirement task share one materializer
-    # state directory and devenv may run them concurrently. The lock is
-    # deliberately STATE-DIR-wide, not per slug: every stale-temp sweep must
-    # exclude every other writer's live manifest temp before it can delete the
-    # reserved `.nat-tmp.` namespace. Prove both generated tasks block behind
-    # that lock, then release it and run them concurrently. Hooks still
-    # materialize; steering must not, because the native files layer owns it.
-    module-kiro-materializer-tasks-serialize-runtime = let
-      ev = evalDevenv {
-        ai.kiro = {
-          cli.enable = true;
-          hooksJson.demo = builtins.toJSON {
-            version = "v1";
-            hooks = [];
-          };
-          rules.serialized = {
-            matcher = ["**"];
-            text = "SERIALIZED-STEERING-TOKEN.";
-          };
-        };
-      };
-      hookTask = pkgs.writeShellScript "kiro-hooks-lock-probe" (dvHookTaskExec ev);
-      steeringTask = pkgs.writeShellScript "kiro-steering-lock-probe" (dvTaskExec ev);
-    in
-      pkgs.runCommand "module-test-kiro-materializer-tasks-serialize-runtime" {
-        inherit hookTask steeringTask;
-      } ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        fail() { echo "FAIL: kiro-materializer-tasks-serialize-runtime: $1" >&2; exit 1; }
-
-        export DEVENV_ROOT="$TMPDIR/root"
-        export DEVENV_STATE="$TMPDIR/state"
-        state_dir="$DEVENV_STATE/nix-agentic-tools/materialize"
-        steering_dir="$DEVENV_ROOT/.kiro/steering"
-        ${pkgs.coreutils}/bin/mkdir -p "$steering_dir" "$state_dir"
-        printf 'legacy steering\n' > "$steering_dir/legacy.md"
-        legacy_hash="$(${pkgs.coreutils}/bin/sha256sum "$steering_dir/legacy.md" | ${pkgs.coreutils}/bin/cut -d ' ' -f 1)"
-        printf 'legacy.md\t%s\n' "$legacy_hash" > "$state_dir/kiro-steering.manifest"
-
-        exec 9> "$state_dir/lock"
-        ${lib.getExe pkgs.flock} 9
-        for probe in hookTask steeringTask; do
-          task="''${!probe}"
-          if ${pkgs.coreutils}/bin/timeout 1 "$task"; then
-            fail "$probe ignored the shared materializer lock"
-          else
-            timeout_code=$?
-          fi
-          [ "$timeout_code" -eq 124 ] \
-            || fail "$probe failed with $timeout_code instead of blocking on the lock"
-        done
-        ${lib.getExe pkgs.flock} -u 9
-        exec 9>&-
-
-        "$hookTask" &
-        hook_pid=$!
-        "$steeringTask" &
-        steering_pid=$!
-        wait "$hook_pid"
-        wait "$steering_pid"
-
-        [ -f "$DEVENV_ROOT/.kiro/hooks/demo.json" ] \
-          || fail "hook task did not materialize demo.json"
-        [ -f "$steering_dir/serialized.md" ] && [ ! -L "$steering_dir/serialized.md" ] \
-          || fail "steering task did not materialize serialized.md as a real file"
-        [ ! -e "$steering_dir/legacy.md" ] \
-          || fail "steering task did not prune the copy it no longer declares"
-        ${pkgs.gnugrep}/bin/grep -q '^serialized[.]md' "$state_dir/kiro-steering.manifest" \
-          || fail "steering task did not record the copy it wrote"
-        manifests=("$state_dir"/*.manifest)
-        [ "''${#manifests[@]}" -eq 2 ] \
-          || fail "concurrent tasks did not each keep their own manifest"
-
-        echo "PASS: kiro-materializer-tasks-serialize-runtime" > $out
-      '';
-
     # RUNTIME proof of the two properties the string assertions above can only
     # approximate. Grepping generated bash cannot show that a file is actually
     # deleted or actually left alone, and both are the whole point of this
@@ -3659,7 +3582,7 @@ in {
         nameAsserts != [] && (builtins.head nameAsserts).assertion == false
     );
 
-    # ── Kiro steering through ai.kiro.files ─────────────────────────────
+    # ── Kiro steering through ai.kiro.files2 ─────────────────────────────
 
     # Two generators producing the same target with divergent whole entries at
     # the same priority must fail. A rule named "AGENTS" and the default context
@@ -3676,100 +3599,33 @@ in {
               };
             };
           in
-            builtins.seq ev.config.ai.kiro.files.".kiro/steering/AGENTS.md".content.text true
+            builtins.seq ev.config.ai.kiro._generatedFiles.".kiro/steering/AGENTS.md".content.text true
         );
       in
         !attempt.success
     );
 
-    # The steering writer sits outside the runtime enable gate so an
-    # upgrade+disable generation still drains what its ledger records. A
-    # retirement is not a mechanism: it is a target that declares NOTHING, so
-    # "writes no steering content" is asserted as an empty unit set rather than
-    # as the absence of a manifest-rewrite variable in generated shell. A
-    # ledger-absent run is a strict no-op, which `ai-own-runtime`'s virgin case
-    # proves and the runtime check below exercises end to end.
+    # Ungated declarations drain even an owner disabled at first upgrade.
     module-kiro-steering-legacy-copies-still-prune = mkTest "kiro-steering-legacy-copies-still-prune" (
-      let
-        hm = evalHm {ai.kiro.cli.enable = false;};
-        dv = evalDevenv {ai.kiro.cli.enable = false;};
-        target = steeringTargetOf "retire-materialize-kiro-steering-ledger" hm;
-      in
-        hm.config.ai.kiro.files
-        == {}
-        && dv.config.ai.kiro.files == {}
-        && hm.config.ai.kiro.activation.steering.runWhenDisabled
-        && dv.config.ai.kiro.activation.steering.runWhenDisabled
-        && builtins.attrNames hm.config.ai.kiro._ownPlans == ["retire-materialize-kiro-steering-ledger"]
-        && builtins.attrNames dv.config.ai.kiro._ownPlans == ["ai:kiro:materialize-steering"]
-        && target.units == {}
-        && target.path == ".kiro/steering"
-        && target.ledger == "materialize/kiro-steering.manifest"
-        # Home Manager needs BOTH phases: the file has to be gone before
-        # checkLinkTargets, and the ledger is unlinked afterwards.
-        && lib.hasInfix "--phase prune" (hmRetirementScript hm)
-        && lib.hasInfix "--phase all" (hmRetirementLedgerScript hm)
-        && ownPlanArg (hmRetirementScript hm) == ownPlanArg (hmRetirementLedgerScript hm)
-        && lib.hasInfix "--phase all" (dvTaskExec dv)
-        && (steeringTargetOf "ai:kiro:materialize-steering" dv).units == {}
+      lib.all (evaluate:
+        lib.all (enable: let
+          inherit ((evaluate {ai.kiro.cli.enable = enable;})) config;
+          legacy = {
+            codec = "dir";
+            ledger = "materialize/kiro-steering.manifest";
+            path = ".kiro/steering";
+          };
+        in
+          config.ai.kiro.legacyLedgers
+          == [legacy]
+          && lib.elem legacy config.ai.legacyLedgers
+          && !(config.ai.kiro.activation ? steering)
+          && !(lib.any (lib.hasPrefix ".kiro/steering/") (builtins.attrNames config.ai.kiro.files))
+          && (enable || config.ai.kiro.files2 == {})) [false true]) [evalHm evalDevenv]
     );
 
-    module-kiro-steering-legacy-retirement-runtime = let
-      # HM delivers as a PAIR: the prune phase deletes the recorded copies
-      # before checkLinkTargets, the write phase unlinks the drained ledger.
-      # Replay them in that order, exactly as activation would.
-      # HM activation entry text, which expects home-manager's `run` helper
-      # (lib/bash/home-manager.sh) already in scope.
-      hmScript = pkgs.writeShellScript "kiro-steering-hm-retirement" (
-        let
-          ev = evalHm {ai.kiro.cli.enable = false;};
-        in
-          harness.hmRunShim + hmRetirementScript ev + "\n" + hmRetirementLedgerScript ev
-      );
-      devenvScript = pkgs.writeShellScript "kiro-steering-devenv-retirement" (
-        dvTaskExec (evalDevenv {ai.kiro.cli.enable = false;})
-      );
-    in
-      pkgs.runCommand "module-test-kiro-steering-legacy-retirement-runtime" {
-        inherit devenvScript hmScript;
-      } ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        fail() { echo "FAIL: kiro-steering-legacy-retirement-runtime: $1" >&2; exit 1; }
-
-        hm_home="$TMPDIR/hm-home"
-        hm_state="$TMPDIR/hm-state"
-        hm_target="$hm_home/.kiro/steering"
-        hm_ledger="$hm_state/nix-agentic-tools/materialize"
-        mkdir -p "$hm_target" "$hm_ledger"
-        printf 'managed hm\n' > "$hm_target/managed.md"
-        printf 'unmanaged hm\n' > "$hm_target/unmanaged.md"
-        hm_hash="$(sha256sum "$hm_target/managed.md" | cut -d ' ' -f 1)"
-        printf 'managed.md\t%s\n' "$hm_hash" > "$hm_ledger/kiro-steering.manifest"
-        HOME="$hm_home" XDG_STATE_HOME="$hm_state" "$hmScript"
-        [ ! -e "$hm_target/managed.md" ] || fail "HM kept the owned legacy copy"
-        [ -e "$hm_target/unmanaged.md" ] || fail "HM removed an unmanaged file"
-        [ ! -e "$hm_ledger/kiro-steering.manifest" ] || fail "HM kept the retired manifest"
-
-        dv_root="$TMPDIR/dv-root"
-        dv_state="$TMPDIR/dv-state"
-        dv_target="$dv_root/.kiro/steering"
-        dv_ledger="$dv_state/nix-agentic-tools/materialize"
-        mkdir -p "$dv_target" "$dv_ledger"
-        printf 'managed devenv\n' > "$dv_target/managed.md"
-        printf 'unmanaged devenv\n' > "$dv_target/unmanaged.md"
-        dv_hash="$(sha256sum "$dv_target/managed.md" | cut -d ' ' -f 1)"
-        printf 'managed.md\t%s\n' "$dv_hash" > "$dv_ledger/kiro-steering.manifest"
-        DEVENV_ROOT="$dv_root" DEVENV_STATE="$dv_state" "$devenvScript"
-        [ ! -e "$dv_target/managed.md" ] || fail "devenv kept the owned legacy copy"
-        [ -e "$dv_target/unmanaged.md" ] || fail "devenv removed an unmanaged file"
-        [ ! -e "$dv_ledger/kiro-steering.manifest" ] || fail "devenv kept the retired manifest"
-
-        echo "PASS: kiro-steering-legacy-retirement-runtime" > "$out"
-      '';
-
     # Conditional steering is a link on Home Manager and a read-only copy on
-    # devenv, where its directory ledger claims only the files it wrote, so a
+    # devenv, where the engine owns only its declared files, so a
     # developer's own steering beside them survives. Unscoped devenv content
     # still goes to the shared AGENTS.md owner.
     module-kiro-steering-uses-runtime-file-sinks = mkTest "kiro-steering-uses-runtime-file-sinks" (
@@ -3789,36 +3645,31 @@ in {
       in
         fromGeneratedTree ".kiro/steering/enter-test.md" hm.config.home.file.".kiro/steering/enter-test.md"
         && (markdownInput hm ".kiro/steering/enter-test.md").text
-        == hm.config.ai.kiro.files.".kiro/steering/enter-test.md".content.text
+        == hm.config.ai.kiro._generatedFiles.".kiro/steering/enter-test.md".content.text
         && fromGeneratedTree ".kiro/steering/AGENTS.md" hm.config.home.file.".kiro/steering/AGENTS.md"
         && fromGeneratedTree ".kiro/steering/enter-test.md" (deliveredFiles dv.config).".kiro/steering/enter-test.md"
         && (markdownInput dv ".kiro/steering/enter-test.md").text
-        == dv.config.ai.kiro.files.".kiro/steering/enter-test.md".content.text
+        == dv.config.ai.kiro._generatedFiles.".kiro/steering/enter-test.md".content.text
         && lib.hasInfix "CONTEXT-TOKEN." (markdownInput dv "AGENTS.md").text
         && !(dv.config.files ? ".kiro/steering/enter-test.md")
-        && builtins.attrNames (steeringTargetOf "ai:kiro:materialize-steering" dv).units == ["enter-test.md"]
-        # Home Manager's writer only retires older copies: it declares NO
-        # units, so it cannot write a steering file it links.
-        && (steeringTargetOf "retire-materialize-kiro-steering-ledger" hm).units == {}
+        && dv.config.ai.files2.".kiro/steering/enter-test.md".method.devenv == "ro"
+        && dv.config.ai.files2.".kiro/steering/enter-test.md".mode == null
+        && (harness.ownPlan "kiro" "files2-apply" dv).targets != []
     );
 
-    # Legacy cleanup stays ordered before native file creation only when that
-    # task exists; the conditional edge avoids TasksNotFound.
+    # Engine prune precedes native link checks, with and without native files.
     module-kiro-steering-retire-task-edges = mkTest "kiro-steering-retire-task-edges" (
-      let
-        bare = evalDevenv {ai.kiro.cli.enable = true;};
-        bareTask = bare.config.tasks."ai:kiro:materialize-steering" or {};
-        withFiles = evalDevenv {
-          ai.kiro.cli.enable = true;
-          files."probe.txt".text = "probe";
-        };
-        filesTask = withFiles.config.tasks."ai:kiro:materialize-steering" or {};
+      lib.all (files: let
+        inherit
+          ((evalDevenv {
+            ai.kiro.cli.enable = true;
+            inherit files;
+          }))
+          config
+          ;
       in
-        bareTask.after
-        == ["devenv:files:cleanup"]
-        && lib.elem "devenv:enterShell" bareTask.before
-        && !(lib.elem "devenv:files" bareTask.before)
-        && lib.elem "devenv:files" filesTask.before
+        lib.elem "ai2:link-check" config.tasks."ai2:files2-prune".before
+        && !(config.tasks ? "ai:kiro:materialize-steering")) [{} {"probe.txt".text = "probe";}]
     );
 
     # Consumer content replaces generated defaults; `enable = false` suppresses
@@ -3833,17 +3684,17 @@ in {
               matcher = ["src/**"];
               text = "SYMLINK-RULE-TOKEN.";
             };
-            files = {
+            files2 = {
               ".kiro/steering/AGENTS.md".content.text = "CONSUMER-CONTEXT.";
-              ".kiro/steering/symlinked.md".content.enable = false;
+              ".kiro/steering/symlinked.md".enable = false;
             };
           };
         };
         hm = evalHm cfg;
         dv = evalDevenv cfg;
       in
-        fromGeneratedTree ".kiro/steering/AGENTS.md" hm.config.home.file.".kiro/steering/AGENTS.md"
-        && (markdownInput hm ".kiro/steering/AGENTS.md").text == "CONSUMER-CONTEXT."
+        hm.config.ai.files2.".kiro/steering/AGENTS.md".content.text
+        == "CONSUMER-CONTEXT."
         && !(hm.config.home.file ? ".kiro/steering/symlinked.md")
         && fromGeneratedTree "AGENTS.md" (deliveredFiles dv.config)."AGENTS.md"
         && (markdownInput dv "AGENTS.md").text == "SYMLINK-CTX-TOKEN."

@@ -277,7 +277,6 @@ in {
     files = lib.mkOption {
       type = deliveryOptions.fileMapType;
       default = {};
-      apply = runtimeFiles.validateFiles "internal";
       internal = true;
       visible = false;
       description = "Single-owner repository files rendered from cross-runtime compositions.";
@@ -293,7 +292,9 @@ in {
       [
         {
           ai.internal = {
-            _generatedFiles = lib.mapAttrs (_filename: stage) (lib.filterAttrs (_filename: runtimeFiles.isLive) config.ai.internal.files);
+            # Keep keys structural: checking old content here would read a
+            # source before a layer-1 replacement or disable can discard it.
+            _generatedFiles = lib.mapAttrs (_filename: stage) config.ai.internal.files;
             _generatedTree = tree;
             _maxBytes = limits;
             files2 = lib.mkMerge [
@@ -303,7 +304,13 @@ in {
               # definition supplies content. Read by priority, so the content
               # (and the tree it points into) stays unevaluated.
               (lib.mapAttrs (filename: _: {
-                  enable = lib.mkDefault (config.ai.files2.${filename}._contentPrio < (lib.mkOptionDefault null).priority);
+                  enable = lib.mkDefault (
+                    if config.ai.files2.${filename}._contentPrio < (lib.mkDefault null).priority
+                    then true
+                    else if config.ai.internal.files ? ${filename}
+                    then runtimeFiles.isLive config.ai.internal.files.${filename}
+                    else config.ai.files2.${filename}._contentPrio < (lib.mkOptionDefault null).priority
+                  );
                   method = lib.mkIf (!staged ? ${filename}) (lib.mkDefault "ro");
                 })
                 config.ai.internal.agentsMd)
