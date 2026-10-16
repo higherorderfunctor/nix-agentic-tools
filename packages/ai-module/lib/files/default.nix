@@ -20,22 +20,18 @@
     readOnly = true;
   };
   selectContent = config: options: let
-    present = builtins.filter (field: config.${field} != null) contentFields;
     priority = field: options.${field}.highestPrio;
-    ordered = builtins.sort (a: b: priority a < priority b) present;
-    winner =
-      if ordered == []
-      then null
-      else builtins.head ordered;
-    tied = builtins.filter (field: priority field == priority winner) present;
+    levels = lib.unique (builtins.sort builtins.lessThan (map priority contentFields));
+    # The strongest level with a non-null field wins; weaker fields stay unevaluated.
+    present = lib.findFirst (fields: fields != []) [] (map (level: builtins.filter (field: priority field == level && config.${field} != null) contentFields) levels);
   in {
     choice =
-      if winner == null || builtins.length tied > 1
-      then null
-      else winner;
+      if builtins.length present == 1
+      then builtins.head present
+      else null;
     tie =
-      if builtins.length tied > 1
-      then "content alternatives tie at priority ${toString (priority winner)}: ${lib.concatStringsSep ", " tied}"
+      if builtins.length present > 1
+      then "content alternatives tie at priority ${toString (priority (builtins.head present))}: ${lib.concatStringsSep ", " present}"
       else null;
   };
   storeString = types.addCheck (types.strMatching "/nix/store/[a-z0-9]{32}-[^/]+(/[^/]+)*") (source: lib.all (segment: segment != "." && segment != "..") (lib.splitString "/" source));
@@ -219,7 +215,13 @@
   in
     builtins.deepSeq (
       if entry.enable
-      then entry
+      then {
+        inherit (entry) enable executable format method mode recursive;
+        selectedContent =
+          if choice == null
+          then null
+          else entry.content.${choice};
+      }
       else {}
     ) {
       issue =
@@ -260,13 +262,28 @@
     else if firstIssue != null
     then firstIssue
     else overlaps [] sorted;
-  normalize = args: let
-    issue = validate args;
-    entries = lib.concatMap (path: (inspect args.backend path args.files.${path}).entries) (builtins.attrNames args.files);
+  normalize = {
+    backend,
+    files,
+    namespace,
+    owners ? {},
+  }: let
+    ownerIssue = validateOwners owners;
+    issue = validate {inherit backend files namespace;};
+    entries = lib.concatMap (path: (inspect backend path files.${path}).entries) (builtins.attrNames files);
   in
-    if issue != null
+    if ownerIssue != null
+    then throw ownerIssue
+    else if issue != null
     then throw issue
     else builtins.sort (a: b: a.path < b.path) entries;
+  # `owners` maps each layer-1 destination to the runtimes declaring it.
+  validateOwners = owners: let
+    shared = lib.findFirst (path: builtins.length owners.${path} > 1) null (builtins.attrNames owners);
+  in
+    if shared == null
+    then null
+    else error shared "runtime owners ${lib.concatStringsSep " and " (lib.sort lib.lessThan owners.${shared})} claim one destination";
 in {
-  inherit entryType normalize validate;
+  inherit entryType normalize validate validateOwners;
 }

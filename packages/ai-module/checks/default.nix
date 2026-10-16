@@ -6,7 +6,9 @@
     ./eval.nix
     ./hm.nix
     ./runtime.nix
+    ./runtime-forward.nix
     ./rw.nix
+    ./shared-surfaces.nix
     ./state.nix
   ];
 }

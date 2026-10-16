@@ -21,43 +21,46 @@ production consumer imports it yet.
 | `recursive`      | `bool`                                                                                     | `false`     | Expand a source directory into leaves at any depth; otherwise a directory source is one native directory symlink. |
 
 The submodule keeps text/source/value/run as nullable sibling options. After
-each sibling merges its own definitions, normalization discards null siblings,
-compares `options.content.<field>.highestPrio`, and selects the non-null sibling
-with the lowest numeric priority. It rejects two non-null alternatives tied at
-that winning priority; weaker alternatives do not conflict. Thus explicit
-`source` replaces default `text`, and explicit `text` replaces default `source`
-without changing the generated definition. An enabled entry needs one winner;
-disabled entries need no content. `method` resolves after option merging. Empty
-`value = {}` is valid and can retire previously declared keys. `run` needs no
-per-file ordering switch: the backend supplies its provider edge.
+each sibling merges its own definitions, normalization walks the siblings from
+the lowest numeric `options.content.<field>.highestPrio`, skips a priority whose
+siblings are all null, and selects the non-null sibling there. It rejects two
+non-null alternatives tied at that winning priority; weaker alternatives are
+neither compared nor evaluated. Thus explicit `source` replaces default `text`,
+and explicit `text` replaces default `source` without changing the generated
+definition. An enabled entry needs one winner; disabled entries need no content.
+`method` resolves after option merging. Empty `value = {}` is valid and can
+retire previously declared keys. `run` needs no per-file ordering switch: the
+backend supplies its provider edge.
 
 All validation is forced when normalizing a module's `files2` map, before
-building a plan. For each enabled entry this includes every declared option and
-both fields of a backend-specific `method`, even when only one backend's plan is
-requested. Store-path strings under `content.source` must start with a Nix store
-object path (`/nix/store/<32-character hash>-<name>`) and may name a child
-within it only when no child segment is `.` or `..`; Nix path values remain
-valid. Invalid source strings fail the option type check, which names
+building a plan. For each enabled entry this includes every declared option
+except discarded content alternatives, and both fields of a backend-specific
+`method`, even when only one backend's plan is requested. Store-path strings
+under `content.source` must start with a Nix store object path
+(`/nix/store/<32-character hash>-<name>`) and may name a child within it only
+when no child segment is `.` or `..`; Nix path values remain valid. Invalid
+source strings fail the option type check, which names
 `files2."<path>".content.source`. Message templates below are exact; `<path>`,
 `<method>`, and `<format>` are interpolated with the offending values. Errors
 from Nix's enum or `strMatching` type checker name the option path for malformed
 enum and mode strings.
 
-| Refused input                                                                                           | Evaluation error                                                                             |
-| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Empty, absolute, repeated slash, `.` or `..` target segment                                             | `files2."<path>": target must be a normalized relative path without empty, . or .. segments` |
-| Enabled entry with no non-null content field                                                            | `files2."<path>": set one of content.text, content.source, content.value, content.run`       |
-| Two non-null content fields at the winning priority                                                     | `files2."<path>": content alternatives tie at priority <priority>: <fields>`                 |
-| `content.value` with markdown/raw                                                                       | `files2."<path>": content.value requires json, toml or yaml format`                          |
-| `method = rw` with markdown/raw                                                                         | `files2."<path>": rw requires json, toml or yaml format`                                     |
-| `recursive` without a directory source                                                                  | `files2."<path>": recursive requires content.source to be a directory`                       |
-| `recursive` with `rw`                                                                                   | `files2."<path>": rw cannot be recursive`                                                    |
-| `content.run` with symlink                                                                              | `files2."<path>": content.run requires ro or rw method`                                      |
-| `mode` with symlink                                                                                     | `files2."<path>": mode requires ro or rw method`                                             |
-| `mode` and non-null `executable` together                                                               | `files2."<path>": mode and executable cannot both be set`                                    |
-| `ro` mode without owner read permission                                                                 | `files2."<path>": ro mode must grant owner read permission`                                  |
-| Expanded leaf duplicates another leaf or explicit target, or a directory target contains another target | `files2."<path>": destination overlaps "<other>"`                                            |
-| Source symlink resolves to a directory during recursive walk                                            | `files2."<path>": recursive source contains a directory symlink at "<leaf>"`                 |
+| Refused input                                                                                           | Evaluation error                                                                                              |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Empty, absolute, repeated slash, `.` or `..` target segment                                             | `files2."<path>": target must be a normalized relative path without empty, . or .. segments`                  |
+| Enabled entry with no non-null content field                                                            | `files2."<path>": set one of content.text, content.source, content.value, content.run`                        |
+| Two non-null content fields at the winning priority                                                     | `files2."<path>": content alternatives tie at priority <priority>: <fields>`                                  |
+| `content.value` with markdown/raw                                                                       | `files2."<path>": content.value requires json, toml or yaml format`                                           |
+| `method = rw` with markdown/raw                                                                         | `files2."<path>": rw requires json, toml or yaml format`                                                      |
+| `recursive` without a directory source                                                                  | `files2."<path>": recursive requires content.source to be a directory`                                        |
+| `recursive` with `rw`                                                                                   | `files2."<path>": rw cannot be recursive`                                                                     |
+| `content.run` with symlink                                                                              | `files2."<path>": content.run requires ro or rw method`                                                       |
+| `mode` with symlink                                                                                     | `files2."<path>": mode requires ro or rw method`                                                              |
+| `mode` and non-null `executable` together                                                               | `files2."<path>": mode and executable cannot both be set`                                                     |
+| `ro` mode without owner read permission                                                                 | `files2."<path>": ro mode must grant owner read permission`                                                   |
+| Expanded leaf duplicates another leaf or explicit target, or a directory target contains another target | `files2."<path>": destination overlaps "<other>"`                                                             |
+| Two or more runtimes declare one destination at layer 1 (an `enable = false` entry counts as a claim)   | `files2."<path>": runtime owners <a> and <b> claim one destination` (all owners, sorted, joined with " and ") |
+| Source symlink resolves to a directory during recursive walk                                            | `files2."<path>": recursive source contains a directory symlink at "<leaf>"`                                  |
 
 For `rw`, text/source/run bytes must decode as the selected codec's root map;
 failure is a runtime error naming the path and codec, before changing disk.
@@ -72,7 +75,8 @@ markdown source can use `symlink` or `ro`; its tag does not imply a formatter.
 
 ## Normalized plan and ownership
 
-`normalize` takes the effective map, backend, and stable namespace and emits one
+`normalize` takes the effective map, backend, stable namespace and the runtime
+owner claims ([layer 1](DESIGN.md#layer-1-runtime-file-overrides)) and emits one
 sorted plan. It resolves backend-specific methods, validates paths, renders
 `value` with the selected codec, and recursively walks `source` directories with
 `builtins.readDir`. Regular files and file symlinks become leaves under

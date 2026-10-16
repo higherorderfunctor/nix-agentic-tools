@@ -15,6 +15,7 @@
     inherit backend;
     files = config.ai.files2;
     namespace = "ai";
+    owners = config.ai.files2Owners;
   };
   planFile = pkgs.writeText "files2-ai-plan.json" (builtins.toJSON plan);
   links = builtins.filter (item: item.method == "symlink") plan;
