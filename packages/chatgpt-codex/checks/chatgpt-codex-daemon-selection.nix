@@ -46,8 +46,8 @@
     hanging = stubRoot "hanging" "exec ${pkgs.coreutils}/bin/sleep 60";
     stopping = stubRoot "stopping" '': > "$CODEX_HOME/stopped"'';
   };
-  # The settings copy and the selection, in the order Home Manager runs them:
-  # the copy's prune entry, then its write entry, then the selector.
+  # Exercise both engine phases and selection in one activation fixture.
+  # Apply and selection each follow files; neither requires the other's order.
   activation = pinDaemonToPackage: let
     entries =
       (harness.evalHm {
@@ -60,9 +60,9 @@
       .home
       .activation;
   in
-    entries.materialize-codex-daemon-settings-prune.text
-    + entries.materialize-codex-daemon-settings.text
-    + entries.codexDaemonSelect.text;
+    entries."ai2-files2-prune".text
+    + entries."ai2-files2-apply".text
+    + entries."ai2-codex-daemon-select".text;
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     chatgpt-codex-daemon-selection =

@@ -10,7 +10,8 @@
 > engine writes its rules copies on devenv; staged Markdown and raw entries are
 > whole-content defaults; Kiro stages every surface, with hooks, settings and
 > steering legacy ledgers declared outside its enable gate; Kimchi stages every
-> surface, with every legacy ledger ungated; hand rows are confined to the
+> surface, with every legacy ledger ungated; Codex stages every surface and
+> declares both copy ledgers while disabled; hand rows are confined to the
 > policy-only permissions surface.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
@@ -109,27 +110,20 @@ rather than a second path field: a runtime names exactly the groups it moves.
   proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes and
   emits unique active systemd units, while only lowered client entries traverse
   this five-stage pipeline.
-- **One owner per physical path.** Enabled runtime file maps supply claims on
-  both backends. Only shared repository context targets arbitrate multiple
-  runtime claims; contributors are discovered from their context target and
-  delivery options, without a runtime-name list. Public overrides and disabled
-  entries enter the aggregate before lowering, and claimants must agree with its
-  symlink method. All three readers use `deliveryMethod.resolve`, so an explicit
-  method beats `methodFor` consistently after option merging. Kimchi's devenv
-  project context is one of those claimants; its user context stays under its
-  harness directory.
-- **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
-  writer decide whether a file exists by reading composed content. Deferring
-  that read until priority arbitration keeps replaced store sources lazy. Staged
-  Markdown and raw entries get the same whole-content default at layer 1, and a
-  runtime's generated tree leaves out one a stronger content definition
-  replaced, judged by `_contentPrio` alone, so Claude's composed context stays
-  unread when a consumer replaces it. Kimchi's staged Home Manager context
-  follows the same rule; devenv uses the shared composer.
-- **Structured documents contribute ordinary leaves.** Codex settings use
-  `content.value` at ordinary priority. Adding one leaf keeps generated
-  siblings; defaulting the whole content would silently drop them. Text and
-  source content retain their whole-content defaults.
+- **One owner per physical path.** Enabled runtime file maps supply layer-1
+  claims on both backends. Disabled entries still claim their path; disabled
+  owners forward nothing. Shared repository context forwards unclaimed through
+  the helper's `shared` list, leaving its composer the single owner. Agreeing
+  content merges; divergent content conflicts. The shared default method is
+  `ro`, with consumer method overrides governed by ordinary priorities.
+- **Compiled content stays lazy.** Staged Markdown and raw entries receive a
+  whole-content default at layer 1. A stronger replacement discards generated
+  sources unread, judged by `_contentPrio`. Codex's empty user context is
+  suppressed only when generated content wins. The shared repository composer
+  follows the same priority rule.
+- **Structured settings contribute per-leaf defaults.** Codex settings use
+  `content.value`. Adding one consumer leaf keeps generated siblings; defaulting
+  the whole document would drop them.
 - **Claude delivers its own files.** Agents, commands, output styles, hook
   scripts, skills, plugins, rules, context, `.claude/settings.json` and the MCP
   files are staged entries (`ai.claude._generatedFiles`) that reach the backends
@@ -154,33 +148,24 @@ rather than a second path field: a runtime names exactly the groups it moves.
   beside the link's target, so an in-app save fails and the link survives
   (`chatgpt-codex-readonly-config`). Its daemon `settings.json` is the opposite
   case: Codex renames a temporary over it, which would swap a link for a real
-  file and fail the next switch's link check, so it is a read-only copy of
-  `materialize-codex-daemon-settings`, claimed file by file in the
-  `app-server-daemon` directory. Kiro and Kimchi rename too, so their settings
-  are copies as well.
-- **Writers belong beside the file map.** Codex's skill-link migrator owns no
-  ledger and uses `activation.<name>.command`: HM needs `after = []` and
-  `before = ["linkCheck"]`, while devenv uses the default file/shell edges.
-  Commands omit a final newline because the router supplies it, along with
-  strict mode and a scoped subshell. Directory skill sources keep
+  file and fail the next switch's link check, so it stages one `ro` JSON copy in
+  the `app-server-daemon` directory. Kiro and Kimchi rename too, so their
+  settings are copies as well.
+- **Commands use layer 3.** Codex's skill-link migrator owns no ledger and uses
+  `activation2.codex-migrate-skill-links`, with `after = []` and
+  `before = ["linkCheck"]` on both backends. Home Manager's outer `run` makes
+  dry runs inert. Its daemon selector uses `activation2.codex-daemon-select` on
+  Home Manager, with `runWhenDisabled = true`. Directory skill sources keep
   `recursive = false` because Codex discovers directory symlinks.
-- **devenv guards native link updates.** For a runtime with symlink entries, the
-  router emits `ai:<runtime>:guard-symlink-updates` from the lowered file map,
-  including recursive leaves whose final `copyMode` is `symlink`, using
-  `config.files.<path>.file` as the desired target (including executable
-  wrappers). It runs after file cleanup and all owned and command writers of its
-  runtime ordered before file creation, then before `devenv:files`. It removes
-  stale store-backed links, and fails loudly on a real file or directory at a
-  delivered path, where devenv itself would only warn and skip. For a non-store
-  link, devenv ran `ln -sf` without `-n`: a link to a file, or a dangling link,
-  was replaced, but a link to a writable directory was followed, leaving the old
-  link and adding a stray link inside that directory. The guard now refuses
-  both. A cross-owner handoff from an owned copy to a symlink can fail the guard
-  for one shell entry until the other owner's retraction has run. It reports
-  every offender before failing. A failed guard makes `devenv:files` and
-  `devenv:enterShell` `DependencyFailed`: shell entry continues with a warning,
-  but no `files.*` entry from any runtime or the user is created or updated, and
-  `devenv test` fails.
+- **devenv guards native links after pruning.** The base emits one
+  `ai2:files2-guard` from the final native file map. It follows cleanup, prune
+  and commands positioned before `linkCheck`, then precedes native file
+  creation. It removes stale store-backed links and refuses foreign links or
+  real files at desired link paths. The engine retires copies before this check,
+  so a copy-to-link transition completes in one generation. With no native files
+  the graph uses its internal linked point instead of requiring a missing
+  `devenv:files` task. A failed guard prevents dependent file creation and shell
+  tasks from succeeding.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` is a
   writable state file with Nix-owned leaves. The files engine restores declared
   keys on activation and retains native keys. Its legacy ledger name remains a
@@ -189,16 +174,6 @@ rather than a second path field: a runtime names exactly the groups it moves.
   Its git-token branch retains `ro` mode 0400 with an activation-time renderer,
   as does trust with the read-only default mode. Engine apply follows secret
   providers; all old Kimchi ledgers are ungated legacy declarations.
-- **A document ledger reserves its path against symlink delivery.** Both
-  `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
-  symlink destination still has a declared JSON ledger, even without a claimant.
-  Empty retirement preserves the regular document and native siblings; it cannot
-  safely hand that path to a link writer. Ordinary empty retirement remains
-  supported.
-- **Owned entries must agree with their ledgers.** `copy-ro` requires a
-  directory ledger. A document claimant's path and format must exactly match its
-  JSON ledger: the ledger controls the actual destination and codec, so a
-  mismatch would redirect output or silently change its ownership semantics.
 - **Kiro stages settings and hooks as read-only copies.** `cli.json` carries a
   JSON value and `mcp.json` a `run` renderer through S → R → F. Kiro's own
   writers rename a temporary over either file, which replaces a symlink and a
@@ -226,21 +201,14 @@ rather than a second path field: a runtime names exactly the groups it moves.
   alike.
 - **Codex execpolicy rules are read-only copies on both backends.** Codex keeps
   a `rules/*.rules` entry only when `DirEntry::file_type().is_file()`, which
-  does not follow symlinks, so a linked rule is skipped silently (codex
-  0.156.0). Each rule states `facts.symlinkReadable = false` and is claimed file
-  by file through the `materialize/codex-execpolicy.manifest` directory ledger:
-  Codex writes its own `rules/default.rules` beside them, which the ledger never
-  records and so never touches. The writer is declared from `migrationConfig`
-  with `runWhenDisabled = true`, so both N→0 and disabling Codex retract the
-  copies; an `allow` policy must not outlive its declaration.
-- **Retirement can survive disable explicitly.** Kiro's `migrationConfig`
-  declares its hooks, settings and steering `legacyLedgers` outside the enable
-  gate. The engine imports and retires those copies before native links. Codex's
-  remaining execpolicy writer uses `runWhenDisabled = true`. The adapter strips
-  every file claim and ordinary writer while disabled; the opted-in writer keeps
-  both HM phases or the existing devenv task. A directory ledger's unit
-  basenames must be unique; the router rejects collisions before a claimant can
-  disappear into the attribute map.
+  does not follow symlinks, so a linked rule is skipped silently. Each staged
+  rule states `method = "ro"` and `format = "raw"`; the engine owns individual
+  paths, preserving Codex's native `rules/default.rules` beside them.
+- **Retirement survives disable.** Every runtime's `migrationConfig` declares
+  its deleted writers' `legacyLedgers` outside the enable gate. The engine
+  imports them before native link checks and retires paths absent from the
+  desired plan, including during a disabled owner's first upgrade. Codex
+  declares execpolicy on both backends and daemon settings on Home Manager.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use

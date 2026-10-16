@@ -8,7 +8,10 @@
 }: let
   inherit (harness) deliveredFiles deliveredMarkdown evalDevenv evalHm fromGeneratedTree harnessNames markdownInput mkTest setEnable;
   # A delivered Markdown file's text, from the evaluated `config`.
-  markdownOf = config: deliveredMarkdown {inherit config;};
+  markdownOf = config: path:
+    if fromGeneratedTree path (deliveredFiles config).${path}
+    then deliveredMarkdown {inherit config;} path
+    else config.ai.files2.${path}.content.text;
 in {
   checks = {
     # ── A5a: final per-runtime literal file registry ────────────────────
@@ -185,7 +188,7 @@ in {
       in
         hmConfig.ai.claude._generatedFiles ? ".claude/CLAUDE.md"
         && hmConfig.ai.claude._generatedFiles ? ".claude/rules/scoped.md"
-        && hmConfig.ai.codex.files ? ".codex/AGENTS.md"
+        && hmConfig.ai.codex._generatedFiles ? ".codex/AGENTS.md"
         && hmConfig.ai.kimchi._generatedFiles ? ".config/kimchi/harness/AGENTS.md"
         && hmConfig.ai.kiro._generatedFiles ? ".kiro/steering/AGENTS.md"
         && hmConfig.ai.kiro._generatedFiles ? ".kiro/steering/scoped.md"
@@ -210,28 +213,28 @@ in {
           };
         };
         replaced = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files."AGENTS.md".content.text = "CONSUMER-REPLACEMENT";
+          ai.codex.files2."AGENTS.md".content.text = "CONSUMER-REPLACEMENT";
         });
         suppressed = evalDevenv (lib.recursiveUpdate base {
           ai.kiro.files2."AGENTS.md".enable = false;
         });
         deduplicated = evalDevenv (lib.recursiveUpdate base {
           ai = {
-            codex.files."AGENTS.md".content.text = "SHARED-CONSUMER";
-            kimchi.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+            codex.files2."AGENTS.md".content.text = "SHARED-CONSUMER";
+            kimchi.files2."AGENTS.md".content.text = "SHARED-CONSUMER";
             kiro.files2."AGENTS.md".content.text = "SHARED-CONSUMER";
           };
         });
         divergent = builtins.tryEval (let
           evaluated = evalDevenv (lib.recursiveUpdate base {
             ai = {
-              codex.files."AGENTS.md".content.text = "OTHER-CONSUMER";
-              kimchi.files."AGENTS.md".content.text = "KIMCHI-CONSUMER";
+              codex.files2."AGENTS.md".content.text = "OTHER-CONSUMER";
+              kimchi.files2."AGENTS.md".content.text = "KIMCHI-CONSUMER";
               kiro.files2."AGENTS.md".content.text = "OTHER-CONSUMER";
             };
           });
         in
-          builtins.deepSeq evaluated.config.ai.internal.files."AGENTS.md" true);
+          builtins.deepSeq evaluated.config.ai.files2."AGENTS.md" true);
         # The consumerOnly* cases have NO generated context, so Kimchi never
         # registers its generated shared target. A consumer-authored final
         # AGENTS.md must still arbitrate with Codex's, land alone, suppress,
@@ -240,11 +243,11 @@ in {
           ai = {
             codex = {
               enable = true;
-              files."AGENTS.md".content.text = "CONSUMER-ONLY";
+              files2."AGENTS.md".content.text = "CONSUMER-ONLY";
             };
             kimchi = {
               enable = true;
-              files."AGENTS.md".content.text = "CONSUMER-ONLY";
+              files2."AGENTS.md".content.text = "CONSUMER-ONLY";
             };
           };
         };
@@ -252,7 +255,7 @@ in {
           ai.kimchi = {
             enable = true;
             context.filename = "custom.md";
-            files."AGENTS.md".content.text = "KIMCHI-CONSUMER-ONLY";
+            files2."AGENTS.md".content.text = "KIMCHI-CONSUMER-ONLY";
           };
         };
         # Generated Kimchi context beside a custom (Home Manager) filename. The
@@ -266,14 +269,14 @@ in {
               filename = "custom.md";
               text = "KIMCHI-GENERATED";
             };
-            files."AGENTS.md".content.text = "KIMCHI-CONTEXT-OVERRIDE";
+            files2."AGENTS.md".content.text = "KIMCHI-CONTEXT-OVERRIDE";
           };
         };
         consumerOnlySuppressed = evalDevenv {
           ai.kimchi = {
             enable = true;
             context.filename = "custom.md";
-            files."AGENTS.md".content.enable = false;
+            files2."AGENTS.md".enable = false;
           };
         };
         # Identical to consumerOnly except Kimchi suppresses instead of
@@ -285,24 +288,19 @@ in {
           ai = {
             codex = {
               enable = true;
-              files."AGENTS.md".content.text = "CONSUMER-ONLY";
+              files2."AGENTS.md" = {
+                enable = true;
+                content.text = "CONSUMER-ONLY";
+              };
             };
             kimchi = {
               enable = true;
-              files."AGENTS.md".content.enable = false;
+              files2."AGENTS.md".enable = false;
             };
           };
         };
-        divergentContent = consumerOnlyDivergentEval.config.ai.internal.files."AGENTS.md".content;
         consumerOnlyDivergent = builtins.tryEval (builtins.deepSeq (deliveredFiles consumerOnlyDivergentEval.config)."AGENTS.md" true);
-        divergentEnables =
-          lib.sort (a: b: !a && b)
-          (map (definition: definition.value."AGENTS.md".content.enable)
-            (builtins.filter (definition: (definition.value."AGENTS.md".content or {}) ? enable)
-              consumerOnlyDivergentEval.options.ai.internal.files.definitionsWithLocations));
-        consumerOnlyDivergentCause =
-          !(builtins.tryEval divergentContent.enable).success
-          && divergentEnables == [false true];
+        consumerOnlyDivergentCause = !(builtins.tryEval consumerOnlyDivergentEval.config.ai.files2."AGENTS.md".enable).success;
         # A source-backed consumer AGENTS.md beside generated context. Only the
         # shared owner may lower it: when a runtime's ordinary sink lowers the
         # same target too (the runtime missing from mkBackendTransform's
@@ -312,31 +310,17 @@ in {
         sourced = runtime: let
           file = pkgs.writeText "${runtime}-agents.md" "SOURCED-${runtime}";
           evaluated = evalDevenv (lib.recursiveUpdate base {
-            ai.${
-              runtime
-            }.${
-              if runtime == "kiro"
-              then "files2"
-              else "files"
-            }."AGENTS.md".content.source =
-              file;
+            ai.${runtime}.files2."AGENTS.md".content.source = file;
           });
         in
           (builtins.tryEval "${(deliveredFiles evaluated.config)."AGENTS.md".source}").success
-          && (
-            if runtime == "kiro"
-            then (deliveredFiles evaluated.config)."AGENTS.md".source == toString file
-            else
-              fromGeneratedTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
-              && toString (markdownInput evaluated "AGENTS.md").source == toString file
-          );
+          && (deliveredFiles evaluated.config)."AGENTS.md".source == toString file;
       in
-        replaced.config.ai.internal.files."AGENTS.md".content.text
+        replaced.config.ai.files2."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
         && markdownOf replaced.config "AGENTS.md" == "CONSUMER-REPLACEMENT"
         && !suppressed.config.ai.files2."AGENTS.md".enable
         && !((deliveredFiles suppressed.config) ? "AGENTS.md")
-        && deduplicated.config.ai.internal.files."AGENTS.md".content.text == "SHARED-CONSUMER"
         && deduplicated.config.ai.files2."AGENTS.md".content.text == "SHARED-CONSUMER"
         && !divergent.success
         && markdownOf consumerOnly.config "AGENTS.md" == "CONSUMER-ONLY"
@@ -361,7 +345,7 @@ in {
           evalDevenv (lib.recursiveUpdate (setEnable activeRuntime true) {
             ai = {
               context.text = "ACTIVE-SHARED-CONTEXT";
-              ${dormantRuntime}.files."AGENTS.md" = entry;
+              ${dormantRuntime}.files2."AGENTS.md" = entry;
             };
           });
         evaluations = [
@@ -404,17 +388,16 @@ in {
         evaluations
     );
 
-    # The byte limit measures the file that WINS at its path, in the tree that
-    # delivers it: a short replacement of an oversized generated AGENTS.md
-    # builds under an 8-byte limit on both backends, and a disabled one is not
-    # delivered at all.
+    # Layer-1 replacements discard oversized generated content unread, and
+    # suppression removes delivery. Generated defaults retain their byte limit;
+    # consumer content bypasses that generated-tree guard (design gap X1).
     module-runtime-files-byte-limit-follows-final-entry = let
       oversized = lib.concatStrings (lib.replicate 64 "x");
       hmReplacement = evalHm {
         ai.codex = {
           context.text = oversized;
           enable = true;
-          files.".codex/AGENTS.md".content.text = "short";
+          files2.".codex/AGENTS.md".content.text = "short";
           projectDocMaxBytes = 8;
         };
       };
@@ -422,7 +405,7 @@ in {
         ai.codex = {
           context.text = oversized;
           enable = true;
-          files.".codex/AGENTS.md".content.enable = false;
+          files2.".codex/AGENTS.md".enable = false;
           projectDocMaxBytes = 8;
         };
       };
@@ -430,7 +413,7 @@ in {
         ai = {
           codex = {
             enable = true;
-            files."AGENTS.md".content.text = "short";
+            files2."AGENTS.md".content.text = "short";
             projectDocMaxBytes = 8;
           };
           context.text = oversized;
@@ -440,7 +423,7 @@ in {
         ai = {
           codex = {
             enable = true;
-            files."AGENTS.md".content.enable = false;
+            files2."AGENTS.md".enable = false;
             projectDocMaxBytes = 8;
           };
           context.text = oversized;
@@ -453,16 +436,16 @@ in {
       assert lib.assertMsg (lib.all passes [hmReplacement hmDisabled devenvReplacement devenvDisabled])
       "runtime-files-byte-limit-follows-final-entry: a fixture fails its assertions";
       assert lib.assertMsg (markdownOf hmReplacement.config ".codex/AGENTS.md" == "short" && markdownOf devenvReplacement.config "AGENTS.md" == "short")
-      "runtime-files-byte-limit-follows-final-entry: the replacement is not what the tree is built from";
+      "runtime-files-byte-limit-follows-final-entry: the replacement does not reach the final entry";
       assert lib.assertMsg (hmReplacement.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 8 && devenvReplacement.config.ai.internal._maxBytes."AGENTS.md".bytes == 8)
       "runtime-files-byte-limit-follows-final-entry: the replacement's path lost its limit";
+      assert devenvFile.text == "short";
       assert lib.assertMsg (!(hmDisabled.config.home.file ? ".codex/AGENTS.md") && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md"))
       "runtime-files-byte-limit-follows-final-entry: a disabled AGENTS.md is still delivered";
         pkgs.runCommand "module-test-runtime-files-byte-limit-follows-final-entry" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           [ "$(cat ${hmFile.source})" = short ]
-          [ "$(cat ${devenvFile.source})" = short ]
           echo PASS > "$out"
         '';
 
@@ -477,7 +460,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".codex/AGENTS.md".content.text = "HM-REPLACEMENT";
+              files2.".codex/AGENTS.md".content.text = "HM-REPLACEMENT";
             };
           };
         };
@@ -487,7 +470,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".codex/AGENTS.md".content.enable = false;
+              files2.".codex/AGENTS.md".enable = false;
             };
           };
         };
@@ -497,7 +480,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files."AGENTS.md".content.text = "DEVENV-REPLACEMENT";
+              files2."AGENTS.md".content.text = "DEVENV-REPLACEMENT";
             };
           };
         };
@@ -507,7 +490,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files."AGENTS.md".content.enable = false;
+              files2."AGENTS.md".enable = false;
             };
           };
         };
@@ -678,7 +661,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files."AGENTS.md".content.source = source;
+              files2."AGENTS.md".content.source = source;
               projectDocMaxBytes = 8;
             };
             context.text = "SHARED-CONTEXT";
@@ -686,8 +669,7 @@ in {
         };
       in
         builtins.all (assertion: assertion.assertion) evaluated.config.assertions
-        && fromGeneratedTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
-        && toString (markdownInput evaluated "AGENTS.md").source == toString source
+        && (deliveredFiles evaluated.config)."AGENTS.md".source == toString source
     );
 
     module-runtime-files-discarded-composed-context-stays-lazy = mkTest "runtime-files-discarded-composed-context-stays-lazy" (

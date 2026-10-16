@@ -705,7 +705,7 @@ in {
               };
             }
             (map (runtime: harness.setEnable runtime true) sharedRuntimes ++ [extra]));
-        sharedLegacyOff = sharedWarnings {ai.codex.files."AGENTS.md".content.enable = false;};
+        sharedCodexOff = sharedWarnings {ai.codex.files2."AGENTS.md".enable = false;};
         sharedOff = sharedWarnings {ai.kiro.files2."AGENTS.md".enable = false;};
         sharedReplaced = sharedWarnings {ai.kiro.files2."AGENTS.md".content.text = "MINE";};
         # Codex's user AGENTS.md on Home Manager.
@@ -713,7 +713,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files.".codex/AGENTS.md".content.enable = false;
+              files2.".codex/AGENTS.md".enable = false;
               rules.local.text = "LOCAL";
             };
             rules.probe.text = "RULE";
@@ -744,7 +744,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files."AGENTS.md".content.enable = false;
+              files2."AGENTS.md".enable = false;
               normalized.context = lib.mkForce null;
               rules.probe.enable = false;
             };
@@ -764,7 +764,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files."AGENTS.md".content.text = "MINE";
+              files2."AGENTS.md".content.text = "MINE";
             };
             context.text = "CTX";
             rules.probe.text = "RULE";
@@ -774,7 +774,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files.".codex/AGENTS.md".content.text = "MINE";
+              files2.".codex/AGENTS.md".content.text = "MINE";
             };
             rules.probe.text = "RULE";
           };
@@ -798,8 +798,8 @@ in {
             rules.probe.text = "RULE";
           };
         };
-        # Every runtime's ordinary generated files carry the `_generated`
-        # marker: with nothing overridden, no unit reads as replaced.
+        # Ordinary generated entries never warn about replacement when no
+        # final content override was declared.
         ordinary = mode:
           evaluate mode {
             ai = {
@@ -821,13 +821,13 @@ in {
         nothing = evaluate "devenv" {
           ai.codex = {
             enable = true;
-            files."AGENTS.md".content.enable = false;
+            files2."AGENTS.md".enable = false;
           };
         };
         nothingReplaced = evaluate "devenv" {
           ai.codex = {
             enable = true;
-            files."AGENTS.md".content.text = "MINE";
+            files2."AGENTS.md".content.text = "MINE";
           };
         };
       in
@@ -836,26 +836,26 @@ in {
           rulesRemedy = "${lib.showOption (optionPaths.pool runtime "rules" ++ ["probe" "enable"])} = false";
         in
           offMessage sharedOff "ai.context" ''ai.kiro.files2."AGENTS.md"'' contextRemedy
-          && offMessage sharedLegacyOff "ai.context" ''ai.codex.files."AGENTS.md"'' contextRemedy
+          && offMessage sharedCodexOff "ai.context" ''ai.codex.files2."AGENTS.md"'' contextRemedy
           && replacedMessage sharedReplaced "ai.context" ''ai.kiro.files2."AGENTS.md"'' contextRemedy
           # Copilot's rules have their own instruction files; only its context
           # shares AGENTS.md with the other three runtimes.
           && (
             if runtime == "copilot"
-            then !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (sharedOff ++ sharedLegacyOff ++ sharedReplaced))
+            then !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (sharedOff ++ sharedCodexOff ++ sharedReplaced))
             else
               offMessage sharedOff "ai.rules.probe" ''ai.kiro.files2."AGENTS.md"'' rulesRemedy
-              && offMessage sharedLegacyOff "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' rulesRemedy
+              && offMessage sharedCodexOff "ai.rules.probe" ''ai.codex.files2."AGENTS.md"'' rulesRemedy
               && replacedMessage sharedReplaced "ai.rules.probe" ''ai.kiro.files2."AGENTS.md"'' rulesRemedy
           ))
         sharedRuntimes
-        && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
+        && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files2.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files2.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
         && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files2.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
         && offMessage claudeOff "ai.rules.probe" ''ai.claude.files2.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
-        && replacedMessage replaced "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && replacedMessage replaced "ai.context" ''ai.codex.files."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
-        && replacedMessage hmCodexReplaced "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && replacedMessage replaced "ai.rules.probe" ''ai.codex.files2."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && replacedMessage replaced "ai.context" ''ai.codex.files2."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
+        && replacedMessage hmCodexReplaced "ai.rules.probe" ''ai.codex.files2.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
         && replacedMessage claudeReplaced "ai.rules.probe" ''ai.claude.files2.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
         && !(contains "switches off" replaced)
         && !(contains "the file that carries it" withheld)
