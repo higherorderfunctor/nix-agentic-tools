@@ -104,15 +104,17 @@ paths, not the owners.
 ordinary program modules equally. `fileEntry` is the moved engine design's
 schema: content alternatives `run/source/text/value` default null; `enable`
 defaults true; `executable` and `mode` default null; `format` defaults `raw`;
-`method` defaults `symlink`; `recursive` defaults false. One internal field is
-added: `requires`, a list of derivations, default `[]`. The engine appends their
-string context to each delivered leaf after the recursive walk, so the backends
-build them before delivery and evaluation never reads them; a runtime's
-generated files require its generated tree, whose guards, surface checks and
-byte limits then gate a recursive source or a value that does not point into it.
-Types, priority arbitration and all refused combinations remain in the engine
-document. A backend-specific method still requires both `devenv` and `hm`
-fields.
+`method` defaults `symlink`; `recursive` defaults false. Two internal fields are
+added. `_contentPrio` is read-only: the strongest priority of any `content`
+definition, read without evaluating one, so a runtime's generated tree can leave
+out a whole-content default a consumer replaced. `requires` is a list of
+derivations, default `[]`. The engine appends their string context to each
+delivered leaf after the recursive walk, so the backends build them before
+delivery and evaluation never reads them; a runtime's generated files require
+its generated tree, whose guards, surface checks and byte limits then gate a
+recursive source or a value that does not point into it. Types, priority
+arbitration and all refused combinations remain in the engine document. A
+backend-specific method still requires both `devenv` and `hm` fields.
 
 Normalize the complete map once, after merging and runtime gating, then check
 expanded destination collisions. Symlinks lower to `home.file` or devenv

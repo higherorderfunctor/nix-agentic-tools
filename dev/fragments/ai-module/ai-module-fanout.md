@@ -5,15 +5,18 @@
 > layer-1 helper over one generated tree, which every staged entry's delivery
 > requires; the shared AGENTS.md composer is the layer-1 owner `internal` and
 > the ai-module devenv module writes the treefmt excludes; Copilot stages its
-> instructions, declares an agents gap and keeps both old ledgers; the
-> root-option provenance guard exempts the ai-module layer-1 forwarding helper
-> for its forwarded options; option declarations supply policy surfaces and
-> keyed withdrawal; runtime declarations supply normalized policy gaps and the
-> warning suite generates coverage for every runtime, surface and backend; a
-> record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
-> is github.com Copilot with its pools under `ai.copilot.github`; explicit
+> instructions, declares an agents gap and keeps both old ledgers, and Claude
+> every surface but `.claude.json` with its rules ledger; the root-option
+> provenance guard exempts the ai-module layer-1 forwarding helper for its
+> forwarded options; option declarations supply policy surfaces and keyed
+> withdrawal; runtime declarations supply normalized policy gaps and the warning
+> suite generates coverage for every runtime, surface and backend; a record's
+> `optionNamespaces` places launcher and pool options, and `ai.copilot` is
+> github.com Copilot with its pools under `ai.copilot.github`; explicit
 > normalized overrides warn for live explicit contributions on unavailable
-> backends, excluding empty or disabled contributions beside inherited folds.
+> backends, excluding empty or disabled contributions beside inherited folds;
+> the coexistence assertion counts a switched-off staged path for its layer-1
+> entry and engine state, not for tree bytes.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -184,17 +187,17 @@ and only writers with that explicit opt-in; ordinary command and owned writers
 remain gated. An opted-in owned writer therefore receives empty targets, so
 ordinary retraction removes only what the previous generation's ledger recorded
 and then drops the ledger. It cannot emit product files while disabled. The
-callers are writers whose files nothing else retracts: Claude's devenv rules
-copies, Codex's execpolicy copies, and Kiro's steering writer (it materializes
-read-only copies on devenv and only drains an older ledger on Home Manager). A
-ledger-owned copy outlives a disable unless its writer opts in, because Home
-Manager's generation diff and `devenv:files:cleanup` only remove links. On Home
-Manager a directory writer is a PAIR of entries: the prune phase deletes the
-real files before `checkLinkTargets`, the write phase unlinks the drained
-ledger. Kiro's retirement and Codex's Home Manager writer derive the target from
-the current `configDir`, so a custom directory must remain unchanged for the
-generation that disables or retires; change or remove it only after one
-activation/shell entry has drained the old ledger.
+callers are writers whose files nothing else retracts: Codex's execpolicy copies
+and Kiro's steering writer (it materializes read-only copies on devenv and only
+drains an older ledger on Home Manager). A ledger-owned copy outlives a disable
+unless its writer opts in, because Home Manager's generation diff and
+`devenv:files:cleanup` only remove links. On Home Manager a directory writer is
+a PAIR of entries: the prune phase deletes the real files before
+`checkLinkTargets`, the write phase unlinks the drained ledger. Kiro's
+retirement and Codex's Home Manager writer derive the target from the current
+`configDir`, so a custom directory must remain unchanged for the generation that
+disables or retires; change or remove it only after one activation/shell entry
+has drained the old ledger.
 
 ### Why there's no master switch
 
@@ -836,11 +839,12 @@ recursive source or a value too. The context cannot ride on the walked source:
 `readDir` builds every derivation in a string's context, so the tree would build
 at evaluation. An assertion refuses a destination live in `ai.<runtime>.files`
 that is also enabled in `ai.files2` or live in the staged entries; a staged path
-counts even with its `ai.files2` entry switched off, because the old file would
-still carry the staged bytes. Skills are the first moved surface: `mkSkillFiles`
-stages one entry per tree, which the files engine walks into per-leaf links on
-both backends, and `ai.deliveredPaths` lists enabled `ai.files2` keys so
-devenv's treefmt still skips them.
+counts even with its `ai.files2` entry switched off: the tree leaves its bytes
+out, but it keeps its layer-1 entry and engine state, so the engine would still
+own the destination. Skills are the first moved surface: `mkSkillFiles` stages
+one entry per tree, which the files engine walks into per-leaf links on both
+backends, and `ai.deliveredPaths` lists enabled `ai.files2` keys so devenv's
+treefmt still skips them.
 
 ### Documentation parity is capability parity
 

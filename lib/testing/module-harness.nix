@@ -427,9 +427,9 @@
     else if lib.length hits == 1
     then lib.head hits
     else throw "module-test: expected exactly one ai.${runtime} document plan for \"${path}\", found ${toString (lib.length hits)}";
-  # A Claude JSON document as delivered on either backend: the value its
-  # `ai.claude.files` entry renders, `{}` when none is declared. Throws when an
-  # entry is declared but the backend's symlink sink does not carry it, so a
+  # A Claude JSON document as delivered on either backend: the value of its
+  # layer-1 entry (`ai.claude.files2`), `{}` when none is declared. Throws when
+  # an entry is declared but the backend's symlink sink does not carry it, so a
   # value can never pass for a file nothing writes.
   claudeDocument = path: evaluated: let
     inherit (evaluated) config;
@@ -437,13 +437,13 @@
       if config ? home
       then config.home.file
       else config.files;
-    entry = config.ai.claude.files.${path} or null;
+    entry = config.ai.claude.files2.${path} or null;
   in
     if entry == null
     then {}
     else if sink ? ${path}
     then entry.content.value
-    else throw "module-test: ai.claude.files.\"${path}\" is declared but not delivered";
+    else throw "module-test: ai.claude.files2.\"${path}\" is declared but not delivered";
   claudeSettings = claudeDocument ".claude/settings.json";
   # Where Claude's MCP servers land: the project .mcp.json on devenv, the
   # personal plugin's .mcp.json on Home Manager.

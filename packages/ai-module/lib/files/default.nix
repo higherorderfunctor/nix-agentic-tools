@@ -55,8 +55,16 @@
       _tie = (selectContent config options).tie;
     };
   });
-  entryType = types.submodule {
+  entryType = types.submodule ({options, ...}: {
     options = {
+      # The strongest priority any `content` definition carries, read without
+      # evaluating one: a whole-content default it beats stays unevaluated.
+      _contentPrio = mkOption {
+        type = types.int;
+        internal = true;
+        readOnly = true;
+        visible = false;
+      };
       content = defaulted contentType {};
       enable = defaulted types.bool true;
       executable = nullable types.bool;
@@ -81,7 +89,8 @@
         visible = false;
       };
     };
-  };
+    config._contentPrio = options.content.highestPrio;
+  });
   # An `own.py` ledger the engine imports into its state once.
   legacyLedgerType = types.submodule {
     options = {

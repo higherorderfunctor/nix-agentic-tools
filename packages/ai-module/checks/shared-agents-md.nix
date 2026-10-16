@@ -124,8 +124,10 @@
     harness.evalDevenv {
       ai.claude = {
         enable = true;
-        files.".claude/hooks/raw-probe".content.source = ../../../dev/scripts/update-report.sh;
-        files.".claude/settings.json".content.enable = false;
+        files2 = {
+          ".claude/hooks/raw-probe".content.source = ../../../dev/scripts/update-report.sh;
+          ".claude/settings.json".enable = false;
+        };
         rules.probe.text = "probe";
         skills.probe = ./fixtures/probe-skill;
       };
