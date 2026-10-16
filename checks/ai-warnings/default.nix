@@ -262,10 +262,14 @@
         count = 1;
       }
       // case)
-    (unavailableCases
+    (let
+      runtimeCases = lib.filter (case: builtins.length case.path > 2) unavailableCases;
+    in
+      unavailableCases
       # Root and runtime pool both set still warn once, naming the runtime pool.
-      ++ map (case: case // {extra = lib.setAttrByPath ["ai" case.surface] case.value;})
-      (lib.filter (case: builtins.length case.path > 2) unavailableCases));
+      ++ map (case: case // {extra = lib.setAttrByPath ["ai" case.surface] case.value;}) runtimeCases
+      # A value set only on the public normalized option warns too.
+      ++ map (case: case // {path = lib.init case.path ++ ["normalized" case.surface];}) runtimeCases);
   conditional = gap: gap ? when || (gap.each or false);
   staticCases = lib.concatMap (cell:
     map (gap:

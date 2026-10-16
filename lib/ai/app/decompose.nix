@@ -24,13 +24,21 @@
     value = config.ai.${surface};
   };
   # The inputs a consumer sets a surface through, most specific first: the
-  # runtime's own pool where its record declares one, then the portable root.
-  units = surface:
-    lib.optional (supported surface && lib.hasAttrByPath (runtimePath surface) cfg) {
-      path = ["ai" runtime] ++ runtimePath surface;
-      value = lib.getAttrFromPath (runtimePath surface) cfg;
-    }
-    ++ [(root surface)];
+  # runtime's own pool, the portable root, then the runtime's public
+  # normalized option. Both runtime options exist only where some backend
+  # delivers the surface. The normalized option defaults to the fold of the
+  # other two, so it is reached only when both are empty, where any value it
+  # holds was set on it directly.
+  units = surface: let
+    runtimeUnit = relative:
+      lib.optional (supported surface && lib.hasAttrByPath relative cfg) {
+        path = ["ai" runtime] ++ relative;
+        value = lib.getAttrFromPath relative cfg;
+      };
+  in
+    runtimeUnit (runtimePath surface)
+    ++ [(root surface)]
+    ++ runtimeUnit (namespaces.pool appRecord surface ++ ["normalized" surface]);
   # A gap is one field a delivered surface drops: in every keyed entry (`each`,
   # root or runtime pool), otherwise in the portable root.
   gapWarnings = surface: gap: let
@@ -50,14 +58,15 @@
   in
     lib.concatMap warnings candidates;
   # An undelivered surface warns once, naming the most specific input set.
+  # findFirst stops at that input, so a later one (the normalized fold) is
+  # never forced once an earlier one already warns.
   surfaceWarnings = surface: let
     declaration = declarations.${surface} or {};
+    inert = lib.findFirst (unit: present unit.path unit.value) null (units surface);
   in
     if builtins.elem backend (declaration.backends or [])
     then lib.concatMap (gapWarnings surface) (declaration.gaps or [])
-    else
-      lib.take 1 (map (unit: message unit.path (declaration.reason or defaultReason))
-        (lib.filter (unit: present unit.path unit.value) (units surface)));
+    else lib.optional (inert != null) (message inert.path (declaration.reason or defaultReason));
 in {
   warnings = lib.concatMap surfaceWarnings sharedSurfaces;
 }

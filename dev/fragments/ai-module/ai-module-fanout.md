@@ -13,9 +13,10 @@
 > gaps and the warning suite generates coverage for every runtime, surface and
 > backend; a record's `optionNamespaces` places launcher and pool options, and
 > `ai.copilot` is github.com Copilot with its pools under `ai.copilot.github`;
-> an undelivered surface warns once per runtime and backend, and record gaps are
-> `path`, `each`, `when` and `reason` only; ai-module owns the delivered-path
-> inventory and backend lowering.
+> an undelivered surface warns once per runtime and backend, set at the root,
+> the runtime pool or its normalized option, and record gaps are `path`, `each`,
+> `when` and `reason` only; ai-module owns the delivered-path inventory and
+> backend lowering.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -615,9 +616,12 @@ unavailable. Omitted surfaces warn with the generic reason.
 
 `app/decompose.nix` derives warnings from those declarations, including for
 third-party `mkRuntime` records. A surface the backend does not deliver warns
-ONCE per runtime when anything is set for it, at the root or in the runtime's
-own pool, with the record's reason; the line names the most specific input set
-and never tracks where a value came from. Silencing it takes a visible record
+ONCE per runtime when anything is set for it, at the root, in the runtime's own
+pool or on its public `normalized` option, with the record's reason; the line
+names the first input set in that order (runtime pool, root, normalized) and
+never tracks where a value came from. The normalized option defaults to the fold
+of the other two, so it is checked only when both are empty, and `findFirst`
+never forces it once an earlier input warns. Silencing it takes a visible record
 edit with a reason, never a stub writer. A gap is one field a delivered surface
 drops: a nonempty `path`, a reason and an optional `when` predicate. With `each`
 it checks every keyed entry, root or runtime pool; without, the portable root
@@ -629,11 +633,12 @@ inherited entries before warnings.
 real runtime records, the evaluated shared-surface registry and both backends.
 It covers every unavailable surface, declared-but-unavailable runtime option,
 and static record gap, plus root and runtime pool set together to pin the one
-line; every supported cell gets a control against the whole-surface unsupported
-warning. Samples must exist for each shared surface and static gap path.
-Conditional and keyed-entry gaps retain explicit runtime/path cases, whose
-exhaustiveness assertion names any uncovered record gap. Expected normalized
-reasons come from the records, including dynamic reasons.
+line and a value set only on the normalized option; every supported cell gets a
+control against the whole-surface unsupported warning. Samples must exist for
+each shared surface and static gap path. Conditional and keyed-entry gaps retain
+explicit runtime/path cases, whose exhaustiveness assertion names any uncovered
+record gap. Expected normalized reasons come from the records, including dynamic
+reasons.
 
 Policy rows derive normalized absence and static gaps from the records alongside
 physical delivery and native diagnostics; they no longer choose normalized
