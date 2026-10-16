@@ -80,7 +80,7 @@
         || lib.all (path:
           config.ai.files2Owners.${path}
           == ["codex"]
-          && config.ai.files2.${path}.requires == [config.ai.codex._generatedTree]
+          && config.ai.files2.${path}.requires == ["${config.ai.codex._generatedTree}"]
           && config.ai.files2.${path}.mode == null
           && config.ai.files2.${path}.executable
           == (

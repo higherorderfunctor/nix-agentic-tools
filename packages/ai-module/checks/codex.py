@@ -47,7 +47,8 @@ with tempfile.TemporaryDirectory() as temporary:
                     assert not (rules / "retired.rules").exists()
                     assert (rules / "default.rules").read_bytes() == b"native policy\n"
                     assert all((root / entry["path"] / "unmanaged").read_bytes() == b"keep\n" for entry in step["legacy"])
-                    records = json.loads(state.read_text())["files"]
+                    assert state.exists() == bool(plan)
+                    records = json.loads(state.read_text())["files"] if plan else {}
                     assert set(records) == {item["path"] for item in plan}
                     assert {path.name for path in rules.iterdir()} == {"default.rules", "unmanaged"} | {
                         Path(item["path"]).name for item in plan if item["path"].endswith(".rules")}
@@ -70,6 +71,6 @@ with tempfile.TemporaryDirectory() as temporary:
                         previous = state.read_bytes()
                         engine.reconcile(plan, root, state, "apply", step["legacy"], old)
                         assert state.read_bytes() == previous
-                assert json.loads(state.read_text())["files"] == {}
+                assert not state.exists()
                 assert not (root / steps[0]["prefix"] / "app-server-daemon/settings.json").exists()
                 print(f"PASS: {backend}, prefix={index}, disabled-first={disabled_first}: bytes, modes, state, restore, backup, retirement, legacy drain")

@@ -1188,12 +1188,25 @@ in {
           && !(nativeFiles ? ".codex/rules/probe.rules")
           && execpolicyTargets (evaluate emptied) == []
           && execpolicyTargets off == []
-          && lib.all (result: lib.elem ledger result.config.ai.legacyLedgers) [evaluated off (evaluate emptied)]
-          && (
-            if off.config ? home
-            then off.config.home.activation ? "ai2-files2-apply" && off.config.home.activation ? "ai2-files2-prune"
-            else off.config.tasks ? "ai2:files2-apply" && off.config.tasks ? "ai2:files2-prune"
-          );
+          && engineTargets off == []
+          && lib.all (result: let
+            isHm = result.config ? home;
+            graph =
+              if isHm
+              then result.config.home.activation
+              else result.config.tasks;
+            applyName =
+              if isHm
+              then "ai2-files2-apply"
+              else "ai2:files2-apply";
+            pruneName =
+              if isHm
+              then "ai2-files2-prune"
+              else "ai2:files2-prune";
+          in
+            lib.elem ledger result.config.ai.legacyLedgers
+            && (graph ? ${applyName}) == (engineTargets result != [])
+            && graph ? ${pruneName}) [evaluated off (evaluate emptied)];
       in
         copies evalHm && copies evalDevenv
     );
@@ -1288,7 +1301,9 @@ in {
           path = ".codex/app-server-daemon";
         }
         disabled.config.ai.legacyLedgers
-        && lib.all (entry: disabled.config.home.activation ? ${entry}) ["ai2-files2-apply" "ai2-files2-prune"]
+        && engineTargets disabled == []
+        && !(disabled.config.home.activation ? "ai2-files2-apply")
+        && disabled.config.home.activation ? "ai2-files2-prune"
     );
 
     module-codex-daemon-hm-needs-package-layout = mkTest "codex-daemon-hm-needs-package-layout" (
