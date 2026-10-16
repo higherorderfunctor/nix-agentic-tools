@@ -17,12 +17,12 @@
     recipeFile = repoPath ./package.nix;
   };
 
-  rev = "69698fe8ebe234009db8a207cc84f1722c7bffb8";
+  rev = "8897346fff24a9bd0c719099dc1af8e7200572c1";
   src = pkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "tsgolint";
     inherit rev;
-    hash = "sha256-4P8OCwqzDKqAYVhf235t/GEuyoMNhwlxs6z+I8CJ1C8=";
+    hash = "sha256-enisSKtSjWUnQzsAERmDzF8pSD5OArlD03S5D3tOP/Y=";
     fetchSubmodules = true;
   };
 in
