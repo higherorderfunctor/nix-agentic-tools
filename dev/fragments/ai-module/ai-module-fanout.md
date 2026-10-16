@@ -13,10 +13,10 @@
 > gaps and the warning suite generates coverage for every runtime, surface and
 > backend; a record's `optionNamespaces` places launcher and pool options, and
 > `ai.copilot` is github.com Copilot with its pools under `ai.copilot.github`;
-> explicit normalized overrides warn for live explicit contributions on
-> unavailable backends, excluding empty or disabled contributions beside
-> inherited folds; ai-module owns the delivered-path inventory and backend
-> lowering.
+> an undelivered surface warns once per runtime and backend, set at the root,
+> the runtime pool or its normalized option, and record gaps are `path`, `each`,
+> `when` and `reason` only; ai-module owns the delivered-path inventory and
+> backend lowering.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -614,26 +614,28 @@ Every runtime's `surfaceSupport` maps a surface name to
 non-empty backend list keeps both backend option trees, even where delivery is
 unavailable. Omitted surfaces warn with the generic reason.
 
-`app/decompose.nix` derives unavailable-backend, whole-surface, nested and
-conditional warnings from those declarations, including for third-party
-`mkRuntime` records. A gap names a relative `path`, a reason and optional
-backend restriction or `when` predicate; `each` checks keyed entries,
-`effective` checks the winning scalar input, and `rootOnly` restricts a gap to
-the portable root. Predicates and dynamic reasons receive the backend, config,
-runtime cfg, field value, whole entry value, path and entry name. Keyed runtime
-replacements and tombstones withdraw inherited entries before warnings. Explicit
-normalized-pool overrides also warn when the backend delivers no pool. Option
-priority excludes bare defaults; generated keyed folds carry their source file
-through `mkDefinition`. Diagnostics merge only non-generated definitions with
-the option's own type before checking presence, so empty or disabled explicit
-contributions beside live inherited entries do not report the raw request twice.
+`app/decompose.nix` derives warnings from those declarations, including for
+third-party `mkRuntime` records. A surface the backend does not deliver warns
+ONCE per runtime when anything is set for it, at the root, in the runtime's own
+pool or on its public `normalized` option, with the record's reason; the line
+names the first input set in that order (runtime pool, root, normalized) and
+never tracks where a value came from. The normalized option defaults to the fold
+of the other two, so it is checked only when both are empty, and `findFirst`
+never forces it once an earlier input warns. Silencing it takes a visible record
+edit with a reason, never a stub writer. A gap is one field a delivered surface
+drops: a nonempty `path`, a reason and an optional `when` predicate. With `each`
+it checks every keyed entry, root or runtime pool; without, the portable root
+field. Predicates and dynamic reasons receive the runtime cfg and the entry's
+name, path and value. Keyed runtime replacements and tombstones withdraw
+inherited entries before warnings.
 
 `checks/ai-warnings` generates populated, empty and disabled probes from the
 real runtime records, the evaluated shared-surface registry and both backends.
 It covers every unavailable surface, declared-but-unavailable runtime option,
-and static record gap; every supported cell gets a control against the
-whole-surface unsupported warning. Samples must exist for each shared surface
-and static gap path. Conditional, keyed-entry and effective-value gaps retain
+and static record gap, plus root and runtime pool set together to pin the one
+line and a value set only on the normalized option; every supported cell gets a
+control against the whole-surface unsupported warning. Samples must exist for
+each shared surface and static gap path. Conditional and keyed-entry gaps retain
 explicit runtime/path cases, whose exhaustiveness assertion names any uncovered
 record gap. Expected normalized reasons come from the records, including dynamic
 reasons.

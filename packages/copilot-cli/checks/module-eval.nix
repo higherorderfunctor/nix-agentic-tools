@@ -99,7 +99,9 @@ in {
         lib.all (path: !(lib.hasPrefix ".copilot" path) && !(lib.hasPrefix ".github" path)) (builtins.attrNames result.config.home.file)
         && result.config.ai.copilot._generatedFiles == {}
         && result.config.ai.copilot.legacyLedgers == []
-        && lib.all warns ["ai.context" "ai.copilot.github.context" "ai.copilot.github.rules" "ai.skills"]
+        # Root and per-runtime context warn once, naming the per-runtime pool.
+        && lib.all warns ["ai.copilot.github.context" "ai.copilot.github.rules" "ai.skills"]
+        && !(warns "ai.context")
     );
 
     # `projectDir` keeps one type and default in both trees, but only devenv

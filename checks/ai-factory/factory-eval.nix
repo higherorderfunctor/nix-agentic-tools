@@ -112,38 +112,6 @@ in {
             && (evaluate request true).ai.testapp.normalized.agents.probe.description == "probe"
         ) ["devenv" "hm"]
     );
-    factory-mkRuntime-declared-conditional-gap = mkTest "mkRuntime-declared-conditional-gap" (
-      let
-        reason = "High effort is unavailable on this runtime.";
-        record = ai.app.mkRuntime {
-          inherit pkgs;
-          name = "testapp";
-          surfaceSupport.settings.gaps = [
-            {
-              effective = true;
-              path = ["reasoningEffort"];
-              inherit reason;
-              when = {value, ...}: value == "high";
-            }
-          ];
-        };
-        request.settings.reasoningEffort = "high";
-      in
-        lib.all (
-          backend: let
-            warnings = requests: enabled: (evaluateSupport backend record requests enabled).config.warnings;
-            expected = path: ["${path}.reasoningEffort is set but ${backend} does not deliver it to testapp (reason: ${reason})"];
-          in
-            warnings request true
-            == expected "ai.settings"
-            && warnings (request // {testapp.settings.reasoningEffort = "high";}) true == expected "ai.testapp.settings"
-            && warnings (request // {testapp.settings.reasoningEffort = "low";}) true == []
-            && warnings (request // {testapp.settings.reasoningEffort = null;}) true == expected "ai.settings"
-            && warnings {settings.reasoningEffort = "low";} true == []
-            && warnings {} true == []
-            && warnings request false == []
-        ) ["devenv" "hm"]
-    );
     factory-mkRuntime-declared-nested-gap = mkTest "mkRuntime-declared-nested-gap" (
       let
         reason = "This runtime has no portable tool allowlist.";

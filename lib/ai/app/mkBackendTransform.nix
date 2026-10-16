@@ -66,7 +66,7 @@
       lib.setAttrByPath (normalizedPath pool) value)
     values);
   deliveryWarnings = import ../delivery-warnings.nix {inherit lib;} {
-    inherit appRecord backend config options;
+    inherit appRecord backend config;
     # Where this runtime's context and rules land, from its own path
     # bindings, and which of those paths the shared AGENTS.md owner holds.
     contentTargets = lib.optionalAttrs (appRecord ? contentTargets) (let
@@ -733,12 +733,7 @@ in {
     })
     {
       ai.${appRecord.name} = placeNormalized (
-        lib.mapAttrs (_: pool:
-          lib.mkDefinition {
-            # Diagnostics must distinguish this fold from explicit normalized inputs.
-            inherit (__curPos) file;
-            value = lib.mapAttrs (_: lib.mkDefault) pool;
-          })
+        lib.mapAttrs (_: pool: lib.mapAttrs (_: lib.mkDefault) pool)
         (lib.filterAttrs (pool: _: supportsPool pool) normalizedKeyedPools)
       );
     }

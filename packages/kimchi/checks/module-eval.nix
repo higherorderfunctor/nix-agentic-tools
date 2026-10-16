@@ -1034,9 +1034,9 @@ in {
     # src/extensions/hook-adapters/discovery.ts:130-190), and never writes it.
     # Its event set has no PermissionRequest, so that event is left out of the
     # file rather than written as bytes nothing reads. Home Manager has no
-    # user-scope lifecycle file it can own: it writes nothing. Shared requests
-    # warn for that missing sink and the unsupported PermissionRequest event;
-    # per-runtime Home Manager requests warn for the missing sink too.
+    # user-scope lifecycle file it can own: it writes nothing. Devenv warns for
+    # the unsupported PermissionRequest event; Home Manager warns once for the
+    # missing sink, naming the per-runtime pool when it is set.
     module-kimchi-hooks = mkTest "kimchi-hooks" (
       let
         config.ai = {
@@ -1117,7 +1117,7 @@ in {
         && !((evalDevenv {ai.kimchi.enable = true;}).config.files ? ".kimchi/hooks.json")
         && (evalDevenv {ai.kimchi.enable = true;}).config.warnings == []
         && hmHookPaths == []
-        && hm.config.warnings == map hmHookWarning [["ai" "hooks"] ["ai" "kimchi" "hooks"]]
+        && hm.config.warnings == [(hmHookWarning ["ai" "kimchi" "hooks"])]
         && hmRootOnly.config.warnings == [(hmHookWarning ["ai" "hooks"])]
         && (evalHm {ai.kimchi.enable = true;}).config.warnings == []
     );

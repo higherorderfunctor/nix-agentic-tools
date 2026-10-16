@@ -716,7 +716,6 @@ in
         gaps =
           map (event: {
             path = [event];
-            rootOnly = true;
             reason = "Kimchi's lifecycle event list has no ${event} event; projectHooksFor filters it out (packages/kimchi/lib/mkKimchi.nix).";
           })
           (lib.subtractLists (import ./hook-events.nix) sharedHooks.portableEvents);

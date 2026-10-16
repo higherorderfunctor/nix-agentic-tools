@@ -26,14 +26,12 @@
 #                                    # a narrower list keeps backend option parity
 #                                    # but warns where delivery is unavailable.
 #                                    # reason explains unavailable delivery. gaps
-#                                    # declare nested or conditional drops:
-#                                    # {path?; each?; effective?; rootOnly?;
-#                                    #  backends?; reason; when?;}.
-#                                    # each inspects keyed entries; effective picks
-#                                    # the winning scalar input; path is relative
-#                                    # to the surface/entry. when receives cfg,
-#                                    # config, backend, value, entryValue and the
-#                                    # entry's path/name; reason may use those too.
+#                                    # declare fields a delivered surface drops:
+#                                    # {path; each?; reason; when?;}. path is
+#                                    # relative to the portable root, or with
+#                                    # each to every keyed root/runtime entry.
+#                                    # when receives cfg and the entry's
+#                                    # name/path/value; reason may use those too.
 #                                    # Omitted surfaces always warn from the shared
 #                                    # registry. Native options are independent.
 #     contextDescription ? null;     # runtime-specific option description override
