@@ -1,6 +1,6 @@
 # A runtime factory's staged generated files (`ai.<runtime>._generatedFiles`)
 # over the layers, through a synthetic runtime record and every repository
-# module: formatted text reaches `ai.files2` as its tree file, value leaves
+# module: formatted text reaches `ai.files` as its tree file, value leaves
 # merge with a consumer's, a consumer's layer-1 content wins, a disabled
 # runtime reads and forwards nothing, a switched-off context file is warned
 # about by its layer-1 option, the
@@ -48,16 +48,16 @@
   enabled = evaluate {
     ai.probe = {
       enable = true;
-      files2 = {
+      files = {
         "override.txt".content.text = "consumer";
         "settings.json".content.value.owned = document.owned;
       };
     };
   };
-  inherit (enabled.config.ai) files2;
+  inherit (enabled.config.ai) files;
   source = "${enabled.config.ai.probe._generatedTree}/doc.md";
   # A disabled runtime never reads its staged entries: neither its layer 1
-  # (`ai.probe.files2`) nor its tree forces this throw.
+  # (`ai.probe.files`) nor its tree forces this throw.
   disabled = evaluate {
     ai.probe._generatedFiles."lazy.txt".content.text = throw "a disabled runtime read its staged entries";
   };
@@ -66,7 +66,7 @@
       context.text = "context";
       probe = {
         enable = true;
-        files2."doc.md".enable = false;
+        files."doc.md".enable = false;
       };
     };
   };
@@ -97,12 +97,12 @@
   buildLog = tree: "${pkgs.testers.testBuildFailure tree}/testBuildFailure.log";
   delivered = harness.deliveredFiles enabled.config;
   failures =
-    lib.optional (files2."doc.md".content.source != source || files2."doc.md".method != "ro") "formatted source reaches ai.files2"
-    ++ lib.optional (files2."settings.json".content.value != document) "value leaves merge"
-    ++ lib.optional (files2."override.txt".content._choice != "text" || files2."override.txt".content.text != "consumer") "consumer layer-1 content wins"
-    ++ lib.optional (disabled.config.ai.probe.files2 != {} || disabled.config.ai.probe._generatedTree != null || disabled.config.ai.files2 != {} || disabled.config.ai.files2Owners != {}) "disabled runtime forwards nothing"
-    ++ lib.optional (!lib.any (lib.hasInfix ''ai.probe.files2."doc.md".enable = false'') switchedOff.config.warnings) "warnings read layer-1 enable"
-    ++ lib.optional (map (target: target.path) (harness.ownPlan "probe" "files2-apply" enabled).targets != ["doc.md" "settings.json"]) "ownPlan"
+    lib.optional (files."doc.md".content.source != source || files."doc.md".method != "ro") "formatted source reaches ai.files"
+    ++ lib.optional (files."settings.json".content.value != document) "value leaves merge"
+    ++ lib.optional (files."override.txt".content._choice != "text" || files."override.txt".content.text != "consumer") "consumer layer-1 content wins"
+    ++ lib.optional (disabled.config.ai.probe.files != {} || disabled.config.ai.probe._generatedTree != null || disabled.config.ai.files != {} || disabled.config.ai.filesOwners != {}) "disabled runtime forwards nothing"
+    ++ lib.optional (!lib.any (lib.hasInfix ''ai.probe.files."doc.md".enable = false'') switchedOff.config.warnings) "warnings read layer-1 enable"
+    ++ lib.optional (map (target: target.path) (harness.ownPlan "probe" "files-apply" enabled).targets != ["doc.md" "settings.json"]) "ownPlan"
     ++ lib.optional ((harness.ownedDocument "probe" "settings.json" enabled).value != document) "ownedDocument"
     ++ lib.optional ((delivered."doc.md".source or null) != source || (delivered."settings.json".method or null) != "rw") "deliveredFiles"
     ++ lib.optional (harness.markdownInput enabled "doc.md" != {text = markdown;}) "markdownInput"
@@ -117,6 +117,6 @@ in {
       ${pkgs.gnugrep}/bin/grep -qF 'no formatter for path: doc.md' ${buildLog unformatted.config.ai.probe._generatedTree}
       ${pkgs.gnugrep}/bin/grep -qF 'Generated-file guard tableCells failed.' ${buildLog (guarded {})}
       [[ -f ${guarded {tableCells = false;}}/table.md ]]
-      printf 'PASS: staged files reach ai.files2 formatted, mergeable, overridable and gated\n' > "$out"
+      printf 'PASS: staged files reach ai.files formatted, mergeable, overridable and gated\n' > "$out"
     '';
 }

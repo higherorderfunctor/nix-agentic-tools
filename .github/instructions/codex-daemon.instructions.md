@@ -7,7 +7,7 @@ applyTo: "packages/chatgpt-codex/**"
 
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-15 — settings stage through the files engine and
+> **Last verified:** 2026-10-16 — settings stage through the files engine and
 > selection uses an ungated layer-3 command; devenv can opt into runtime project
 > trust; launcher flags are checked as root-command `uses`; Home Manager owns
 > daemon selection and settings; both backends run the offline project-document
@@ -69,7 +69,7 @@ JSON through the files layers. The engine owns only this path beside the lock
 and pid files the daemon keeps there. The deleted writer's
 `materialize/codex-daemon-settings.manifest` remains in `legacyLedgers` while
 Codex is disabled too, so a first upgrade while disabled still retracts it.
-`activation2.codex-daemon-select` runs on Home Manager after `files`, with
+`activation.codex-daemon-select` runs on Home Manager after `files`, with
 `runWhenDisabled = true`, to release a selection when Codex is disabled.
 
 It is a read-only copy, not a symlink, because Codex saves the file by writing a

@@ -7,7 +7,7 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-15 — every surface uses the files layers; shared
+> **Last verified:** 2026-10-16 — every surface uses the files layers; shared
 > documents use `rw`, renderers execute after secrets, and every legacy ledger
 > drains even while Kimchi is disabled.
 
@@ -19,9 +19,8 @@ settings). The HM and devenv modules are thin shims that apply `hmTransform` /
 Its record-level `config`, `kimchiDelivery`, serves both backends with the
 merged pools supplied by `mkBackendTransform.nix`. Every surface stages content,
 format and method in `ai.kimchi._generatedFiles`; the shared router forwards
-them through `ai.kimchi.files2` to `ai.files2`. One record-level
-`installPackage` likewise serves both, adding the exact-cwd guard on devenv
-only.
+them through `ai.kimchi.files` to `ai.files`. One record-level `installPackage`
+likewise serves both, adding the exact-cwd guard on devenv only.
 
 The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings` and
 `ai.kimchi.native.harnessSettings`. The closed `ai.kimchi.settings` submodule is
@@ -330,7 +329,7 @@ token from its file and merges it into the declaration with `jq` at activation.
 This branch retains whole-file `ro` ownership and mode 0400. The store holds
 only credential paths and the renderer. The engine apply phase follows the
 `secrets` point on both backends, including HM's `sops-nix`; consumers register
-other providers once in `ai.activation2Order.secretNodes`. Switching an existing
+other providers once in `ai.activationOrder.secretNodes`. Switching an existing
 `rw` document to this whole-file owner refuses while native keys remain, per the
 engine contract. `native.settings` has no `gitTokens` option, which would write
 the secret into the store. Devenv rejects the option by name. The API key needs
@@ -388,7 +387,7 @@ Manager. Devenv contributes the same keyed units to the single root `AGENTS.md`
 owner shared with Codex and Kiro, through the record's `sharedAgentsMd`;
 identical rule keys and bytes deduplicate there. In either backend, the
 generated body is a whole-content default at layer 1, so a consumer can replace
-it through `ai.kimchi.files2.<path>.content` or suppress it with
+it through `ai.kimchi.files.<path>.content` or suppress it with
 `enable = false`. When root and Kimchi-specific context are both configured,
 their bodies concatenate root-first. Home Manager honors
 `ai.kimchi.context.filename`; devenv always writes `AGENTS.md`.
@@ -824,7 +823,7 @@ a directory link under the harness: Home Manager delivers
 `<configDir>/harness/extensions/<key>` and devenv delivers
 `<project>/.config/kimchi/harness/extensions/<key>`. Each link stages in
 `ai.kimchi._generatedFiles` with `method = "symlink"` and reaches both backends
-through `ai.kimchi.files2` and `ai.files2`, retaining each package's store
+through `ai.kimchi.files` and `ai.files`, retaining each package's store
 context. The shared `lib.ai.linkDirectory pkgs name source` builder supplies a
 tiny directory of absolute top-level links into the package, so generated-tree
 delivery copies only links and leaves the dependency payload in its original

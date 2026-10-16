@@ -39,9 +39,9 @@
           ;
         plan = lib.filter (item: item.method != "symlink" && lib.hasPrefix "${prefix}/" item.path) (files.normalize {
           inherit backend;
-          files = config.ai.files2;
+          files = config.ai.files;
           namespace = "ai";
-          owners = config.ai.files2Owners;
+          owners = config.ai.filesOwners;
         });
         expected =
           [".agents/skills/probe" "${prefix}/agents/reviewer.toml" "${prefix}/config.toml" "${prefix}/hooks.json"]
@@ -51,7 +51,7 @@
           if isHm
           then config.home.activation
           else config.tasks;
-        migrator = config.ai.codex.activation2.codex-migrate-skill-links or null;
+        migrator = config.ai.codex.activation.codex-migrate-skill-links or null;
         legacy =
           lib.optional isHm {
             codec = "dir";
@@ -77,17 +77,17 @@
         assert lib.all (entry: lib.elem entry config.ai.legacyLedgers) legacy;
         assert !enable
         || lib.all (path:
-          config.ai.files2Owners.${path}
+          config.ai.filesOwners.${path}
           == ["codex"]
-          && config.ai.files2.${path}.requires == ["${config.ai.codex._generatedTree}"]
-          && config.ai.files2.${path}.mode == null
-          && config.ai.files2.${path}.executable
+          && config.ai.files.${path}.requires == ["${config.ai.codex._generatedTree}"]
+          && config.ai.files.${path}.mode == null
+          && config.ai.files.${path}.executable
           == (
             if lib.hasSuffix ".rules" path
             then false
             else null
           )
-          && config.ai.files2.${path}.format
+          && config.ai.files.${path}.format
           == (
             if lib.hasSuffix ".toml" path
             then "toml"
@@ -97,27 +97,27 @@
             then "markdown"
             else "raw"
           )
-          && config.ai.files2.${path}.method
+          && config.ai.files.${path}.method
           == (
             if lib.hasSuffix ".rules" path || lib.hasSuffix "settings.json" path
             then "ro"
             else "symlink"
           ))
         expected;
-        assert enable || (config.ai.codex.files2 == {} && migrator == null);
+        assert enable || (config.ai.codex.files == {} && migrator == null);
         assert !enable || (migrator.after == [] && migrator.before == ["linkCheck"]);
         assert !enable
         || (
           if isHm
-          then graph.ai2-codex-migrate-skill-links.before == ["checkLinkTargets"] && graph.ai2-codex-migrate-skill-links.after == []
-          else graph."ai2:codex-migrate-skill-links".before == ["ai2:link-check"] && graph."ai2:codex-migrate-skill-links".after == ["devenv:files:cleanup"]
+          then graph.ai-codex-migrate-skill-links.before == ["checkLinkTargets"] && graph.ai-codex-migrate-skill-links.after == []
+          else graph."ai:codex-migrate-skill-links".before == ["ai:link-check"] && graph."ai:codex-migrate-skill-links".after == ["devenv:files:cleanup"]
         );
         assert if isHm
         then
-          config.ai.codex.activation2.codex-daemon-select.runWhenDisabled
-          && graph ? ai2-codex-daemon-select
-          && graph.ai2-codex-daemon-select.after == ["linkGeneration"]
-        else !(config.ai.codex.activation2 ? codex-daemon-select);
+          config.ai.codex.activation.codex-daemon-select.runWhenDisabled
+          && graph ? ai-codex-daemon-select
+          && graph.ai-codex-daemon-select.after == ["linkGeneration"]
+        else !(config.ai.codex.activation ? codex-daemon-select);
         assert lib.all (entry: entry.assertion) config.assertions; {
           inherit legacy plan prefix;
           inputs = lib.mapAttrs (_: entry: {inherit (entry.content) text value;}) config.ai.codex._generatedFiles;
@@ -152,9 +152,9 @@
       {
         ai.codex = {
           enable = true;
-          files2."literal/codex".content.text = "Codex";
+          files."literal/codex".content.text = "Codex";
         };
-        ai.probe.files2."literal/codex" = {
+        ai.probe.files."literal/codex" = {
           enable = entryEnabled;
           content.text = lib.mkDefault "probe";
         };
@@ -163,9 +163,9 @@
   in
     builtins.tryEval (builtins.deepSeq (files.normalize {
         backend = "hm";
-        files = evaluated.config.ai.files2;
+        files = evaluated.config.ai.files;
         namespace = "ai";
-        owners = evaluated.config.ai.files2Owners;
+        owners = evaluated.config.ai.filesOwners;
       })
       true);
   fixtureJson = builtins.toJSON fixture;
@@ -173,8 +173,8 @@ in {
   checks = {
     ai-module-codex = assert lib.all (evaluate:
       !((evaluate {
-        ai.codex.files2."literal/codex".content.text = "disabled";
-      }).config.ai.files2 ? "literal/codex")) [evalHm evalDevenv];
+        ai.codex.files."literal/codex".content.text = "disabled";
+      }).config.ai.files ? "literal/codex")) [evalHm evalDevenv];
     assert (collision false true).success;
     assert !(collision true true).success;
     assert !(collision true false).success;
@@ -201,7 +201,7 @@ in {
             shopt -s inherit_errexit 2>/dev/null || :
             exit 1
           '';
-          override = lib.setAttrByPath (["ai"] ++ lib.optional cell.runtime "codex" ++ ["files2" path]) (
+          override = lib.setAttrByPath (["ai"] ++ lib.optional cell.runtime "codex" ++ ["files" path]) (
             if cell.disabled
             then {enable = false;}
             else {content.text = "replacement";}
@@ -220,7 +220,7 @@ in {
         in
           ((deliveredFiles config) ? ${path})
           == !cell.disabled
-          && (cell.disabled || config.ai.files2.${path}.content.text == "replacement")
+          && (cell.disabled || config.ai.files.${path}.content.text == "replacement")
           && (tree == null || tree.drvPath != "")
       ) (lib.cartesianProduct {
         backend = ["devenv" "hm"];
@@ -270,14 +270,14 @@ in {
         evaluated = evaluate {
           ai.codex = {
             enable = true;
-            files2.".codex/config.toml".content.value.ui.theme = "dark";
+            files.".codex/config.toml".content.value.ui.theme = "dark";
             native.settings = {
               model = "generated-model";
               model_reasoning_effort = "xhigh";
             };
           };
         };
-        settings = evaluated.config.ai.files2.".codex/config.toml".content.value;
+        settings = evaluated.config.ai.files.".codex/config.toml".content.value;
       in
         settings.ui.theme
         == "dark"

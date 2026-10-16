@@ -62,7 +62,7 @@
     hmJson = "${docs.hmOptionsDoc.optionsJSON}/share/doc/nixos/options.json";
     expectedCodexRoots = pkgs.writeText "expected-codex-option-roots" (
       lib.concatStringsSep "\n" [
-        "ai.codex.activation2"
+        "ai.codex.activation"
         "ai.codex.agents"
         "ai.codex.agentsDir"
         "ai.codex.checks"
@@ -71,7 +71,7 @@
         "ai.codex.enable"
         "ai.codex.environmentVariables"
         "ai.codex.execpolicyRules"
-        "ai.codex.files2"
+        "ai.codex.files"
         "ai.codex.hooks"
         "ai.codex.mcpServers"
         "ai.codex.native"
@@ -220,7 +220,7 @@
           if backend == "hm"
           then devenvJsonDoc
           else hmJsonDoc;
-        names = lib.concatMap (owner: ["ai.${owner}.activation2.<name>.command" "ai.${owner}.files2.<name>.enable"]) localOwners.${backend};
+        names = lib.concatMap (owner: ["ai.${owner}.activation.<name>.command" "ai.${owner}.files.<name>.enable"]) localOwners.${backend};
       in
         guardEach "require_key" [own] [] names + "\n" + guardEach "forbid_key" [other] [] names) ["devenv" "hm"]}
 

@@ -7,7 +7,7 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-10-15 — Kiro stages MCP run content through the files
+> **Last verified:** 2026-10-16 — Kiro stages MCP run content through the files
 > engine, whose apply phase follows the secrets point on both backends; runtime
 > surfaceSupport declarations own normalized backend reach and nested delivery
 > diagnostics; the MCP capability marker holds the pool's option path.
@@ -427,7 +427,7 @@ is declared.
 - A credential url reads its secret at ACTIVATION. Engine apply follows the
   secrets point whenever a renderer exists. Home Manager includes `sops-nix`;
   other providers, including devenv providers, register their native node in
-  `ai.activation2Order.secretNodes`. The renderer exports `NAT_OWN_ROOT` itself
+  `ai.activationOrder.secretNodes`. The renderer exports `NAT_OWN_ROOT` itself
   and anchors relative readers to the project root on devenv only.
 - `--classic` (non-v3) ships the literal header placeholder → failed auth, not a
   leak; the factory wrapper forces `--v3`.

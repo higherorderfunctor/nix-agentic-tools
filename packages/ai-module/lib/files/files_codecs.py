@@ -1,4 +1,4 @@
-"""Document codecs used by the files2 merge engine and value renderer."""
+"""Document codecs used by the files merge engine and value renderer."""
 
 import json
 import re

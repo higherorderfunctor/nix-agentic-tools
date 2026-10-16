@@ -25,7 +25,7 @@ def main():
     bash, shim = sys.argv[2], Path(sys.argv[3]).read_text()
     with tempfile.TemporaryDirectory() as temporary:
         home = Path(temporary)
-        state = home / ".local/state/nix-agentic-tools/files2/ai.json"
+        state = home / ".local/state/nix-agentic-tools/files/ai.json"
         destination = home / "settings.json"
         previous_link = None
         missing = [script.replace(fixtures["python"], "/missing") for script in fixtures["drain"]]

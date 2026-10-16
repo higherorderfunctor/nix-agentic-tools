@@ -349,7 +349,7 @@
           paths = [".claude/settings.json" arm.mcpPath];
         in
           lib.all (path: (arm.files on.config) ? ${path} && !((arm.files off.config) ? ${path})) paths
-          && lib.all (path: on.config.ai.files2.${path}.method == "symlink") paths
+          && lib.all (path: on.config.ai.files.${path}.method == "symlink") paths
       ))
 
       # Nothing set, nothing written: an empty settings.json would still
@@ -505,11 +505,11 @@ in {
           evaluated = evalDevenv cfg;
           emptied = evalDevenv {ai.claude.enable = true;};
           disabled = evalDevenv (lib.recursiveUpdate cfg {ai.claude.enable = false;});
-          claimsNoRule = result: !(lib.any (lib.hasPrefix ".claude/rules/") (builtins.attrNames result.config.ai.files2Owners));
+          claimsNoRule = result: !(lib.any (lib.hasPrefix ".claude/rules/") (builtins.attrNames result.config.ai.filesOwners));
           composed = (markdownInput evaluated ".claude/CLAUDE.md").text;
           # Project rules are read-only copies, not links: see mkClaude's rules
           # entry. The engine copies each one's file in the generated tree.
-          rules = lib.listToAttrs (map (target: lib.nameValuePair target.path target) (ownPlan "claude" "files2-apply" evaluated).targets);
+          rules = lib.listToAttrs (map (target: lib.nameValuePair target.path target) (ownPlan "claude" "files-apply" evaluated).targets);
           copied = path:
             rules.${path}.method
             == "ro"
@@ -621,7 +621,7 @@ in {
             ai.claude.enable = true;
             ai.skills.stack-fix = src;
           };
-          entry = result.config.ai.files2.".claude/skills/stack-fix";
+          entry = result.config.ai.files.".claude/skills/stack-fix";
         in
           (markdownInput result ".claude/skills/stack-fix").source
           == "${src}"
@@ -639,7 +639,7 @@ in {
             (evalHm {
               ai.claude = {
                 enable = true;
-                files2 = {
+                files = {
                   ".claude/skills/probe/SKILL.md".content.text = "mine";
                   ".claude/skills/stack-fix".enable = false;
                 };
@@ -652,7 +652,7 @@ in {
             config
             ;
         in
-          config.ai.files2.".claude/skills/probe/SKILL.md".content._choice
+          config.ai.files.".claude/skills/probe/SKILL.md".content._choice
           == "text"
           && config.home.file ? ".claude/skills/probe/SKILL.md"
           && !(lib.any (lib.hasPrefix ".claude/skills/stack-fix/") (builtins.attrNames config.home.file))
@@ -771,7 +771,7 @@ in {
             }).config;
           bare = (evalHm {ai.claude.enable = true;}).config;
         in
-          withServers.ai.claude.files2.${manifest}.content.value
+          withServers.ai.claude.files.${manifest}.content.value
           == {name = "hm";}
           && !(bare.home.file ? ${manifest})
       );
@@ -845,7 +845,7 @@ in {
           result = evalHm {ai.claude.enable = true;};
           document = unpinDocument result;
         in
-          result.config.ai.files2.".claude.json".method
+          result.config.ai.files.".claude.json".method
           == "rw"
           && lib.any (entry: entry.ledger == "json-settings/claude-unpin-launch-effort.json" && entry.path == ".claude.json" && entry.codec == "json") result.config.ai.legacyLedgers
           && document.value.unpinOpus48LaunchEffort
@@ -860,11 +860,11 @@ in {
             ai.claude.unpinLaunchEffort = lib.mkForce {};
           };
         in
-          result.config.home.activation ? ai2-files2-prune
-          && !(result.config.home.activation ? ai2-files2-apply)
-          && result.config.ai.files2 == {}
+          result.config.home.activation ? ai-files-prune
+          && !(result.config.home.activation ? ai-files-apply)
+          && result.config.ai.files == {}
           && result.config.ai.claude._generatedFiles.".claude.json".content.value == {}
-          && !(result.config.ai.files2 ? ".claude.json")
+          && !(result.config.ai.files ? ".claude.json")
       );
 
       # A key set false is still written (re-pins that model deliberately).

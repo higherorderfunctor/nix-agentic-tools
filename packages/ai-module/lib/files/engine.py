@@ -1,4 +1,4 @@
-"""Reconcile owned files against a normalized files2 plan."""
+"""Reconcile owned files against a normalized files plan."""
 
 import argparse
 import fcntl
@@ -12,7 +12,7 @@ import stat
 import subprocess
 import tempfile
 
-codec_spec = importlib.util.spec_from_file_location("files2_codecs", Path(__file__).with_name("files2_codecs.py"))
+codec_spec = importlib.util.spec_from_file_location("files_codecs", Path(__file__).with_name("files_codecs.py"))
 codecs = importlib.util.module_from_spec(codec_spec)
 codec_spec.loader.exec_module(codecs)
 
@@ -45,7 +45,7 @@ def atomic_json(path, value):
 
 
 def atomic_bytes(path, data, mode, guard=None):
-    fd, temporary = tempfile.mkstemp(prefix=".files2-", dir=path.parent)
+    fd, temporary = tempfile.mkstemp(prefix=".files-", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as stream:
             stream.write(data)
@@ -79,9 +79,9 @@ def parent(root, relative, create=False):
 
 def validate_state(state, version):
     if not isinstance(state, dict) or type(state.get("version")) is not int or state["version"] != version or set(state) != {"version", "files"}:
-        raise ValueError("invalid files2 state schema")
+        raise ValueError("invalid files state schema")
     if not isinstance(state.get("files"), dict):
-        raise ValueError("invalid files2 state files")
+        raise ValueError("invalid files state files")
     for path, item in state["files"].items():
         if not valid_path(path):
             raise ValueError(f"invalid state path: {path}")
@@ -119,13 +119,13 @@ def load_state(state_path):
     state = json.loads(state_path.read_text())
     version = state.get("version") if isinstance(state, dict) else None
     if type(version) is not int or version < 0 or version > CURRENT_VERSION:
-        raise ValueError(f"unsupported files2 state version: {state_path}")
+        raise ValueError(f"unsupported files state version: {state_path}")
     validate_state(state, version)
     migrated = version < CURRENT_VERSION
     while version < CURRENT_VERSION:
         migration = MIGRATIONS.get(version)
         if migration is None:
-            raise ValueError(f"missing files2 state migration from version {version}: {state_path}")
+            raise ValueError(f"missing files state migration from version {version}: {state_path}")
         state = migration(state)
         version += 1
         validate_state(state, version)
@@ -161,7 +161,7 @@ def desired_data(item):
         source_mode = 0o444
     elif "run" in content:
         script = "set -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + content["run"]
-        payload = subprocess.run([os.environ["FILES2_BASH"], "-c", script], check=True, stdout=subprocess.PIPE).stdout
+        payload = subprocess.run([os.environ["FILES_BASH"], "-c", script], check=True, stdout=subprocess.PIPE).stdout
         source_mode = 0o444
     else:
         raise ValueError(f"unsupported ro content at {item['path']}")
@@ -520,6 +520,12 @@ def reconcile(plan, root, state_path, phase, legacy=(), legacy_state=None):
         if not valid_path(relative) or relative in seen or item["method"] not in ("ro", "rw", "symlink"):
             raise ValueError(f"invalid plan entry: {relative}")
         seen.add(relative)
+    # Move the interim state directory before creating or locking the final one.
+    if legacy_state is not None:
+        previous = legacy_state / "files2"
+        current = legacy_state / "files"
+        if previous.exists() and not current.exists():
+            previous.rename(current)
     state_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     state_path.parent.chmod(0o700)
     if state_path.is_symlink():

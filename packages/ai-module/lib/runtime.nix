@@ -1,4 +1,4 @@
-# Layer 1: `ai.<name>.{activation2,files2,legacyLedgers}` forward to the root.
+# Layer 1: `ai.<name>.{activation,files,legacyLedgers}` forward to the root.
 # `_file` attributes the forwarded definitions to this file, the one root
 # writer the module-provenance guard exempts. Keys in `shared` forward without
 # a claim, so their composer stays the single owner.
@@ -14,7 +14,7 @@
   ...
 }: let
   activation = import ./activation.nix {inherit lib;};
-  files2 = import ./files/default.nix {inherit lib pkgs;};
+  fileLib = import ./files/default.nix {inherit lib pkgs;};
   own = config.ai.${name};
   # Nested priority wrappers travel with the definitions; the wrapper keeps an
   # option-wide `mkDefault`/`mkForce` from re-entering at ordinary priority.
@@ -26,16 +26,16 @@ in {
   imports = [../modules/common.nix];
 
   options.ai.${name} = {
-    activation2 = lib.mkOption {
+    activation = lib.mkOption {
       type = lib.types.attrsOf activation.entryType;
       default = {};
     };
-    files2 = lib.mkOption {
-      type = lib.types.attrsOf files2.entryType;
+    files = lib.mkOption {
+      type = lib.types.attrsOf fileLib.entryType;
       default = {};
     };
     legacyLedgers = lib.mkOption {
-      type = lib.types.listOf files2.legacyLedgerType;
+      type = lib.types.listOf fileLib.legacyLedgerType;
       default = [];
       internal = true;
       # Internal alone still lists the entry's sub-options in option docs.
@@ -49,18 +49,18 @@ in {
     # owner's state unless its producer sets `enable`; the defaults share the
     # forwarded priority so an option-wide default cannot drop the commands.
     {
-      ai.activation2 = lib.mkMerge [
-        (forward "activation2")
-        (lib.mkOverride options.ai.${name}.activation2.highestPrio
-          (lib.genAttrs (builtins.attrNames own.activation2) (_: {enable = lib.mkDefault enabled;})))
+      ai.activation = lib.mkMerge [
+        (forward "activation")
+        (lib.mkOverride options.ai.${name}.activation.highestPrio
+          (lib.genAttrs (builtins.attrNames own.activation) (_: {enable = lib.mkDefault enabled;})))
       ];
       ai.legacyLedgers = forward "legacyLedgers";
     }
     (lib.mkIf enabled {
-      ai.files2 = forward "files2";
+      ai.files = forward "files";
       # Every declared key is a claim, a disabled one included: its `enable =
       # false` would otherwise silently disable another runtime's entry.
-      ai.files2Owners = lib.genAttrs (lib.subtractLists shared (builtins.attrNames own.files2)) (_: [name]);
+      ai.filesOwners = lib.genAttrs (lib.subtractLists shared (builtins.attrNames own.files)) (_: [name]);
     })
   ];
 }

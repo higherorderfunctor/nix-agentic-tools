@@ -10,11 +10,11 @@ import subprocess
 import sys
 import tempfile
 
-spec = importlib.util.spec_from_file_location("files2_engine", sys.argv[1])
+spec = importlib.util.spec_from_file_location("files_engine", sys.argv[1])
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 data = json.loads(Path(sys.argv[2]).read_text())
-os.environ["FILES2_BASH"] = data["bash"]
+os.environ["FILES_BASH"] = data["bash"]
 
 with tempfile.TemporaryDirectory() as temporary:
     base = Path(temporary)
@@ -59,7 +59,7 @@ with tempfile.TemporaryDirectory() as temporary:
             root = base / f"{backend}-{disabled_first}"
             root.mkdir()
             old = root / "state"
-            state = old / "files2/ai.json"
+            state = old / "files/ai.json"
             os.environ.update(HOME=str(root), DEVENV_ROOT=str(root))
             os.chdir(root)
             for legacy in steps["disabled"]["legacyLedgers"]:
@@ -167,7 +167,7 @@ with tempfile.TemporaryDirectory() as temporary:
                 else:
                     raise AssertionError(f"{failure} renderer succeeded")
                 assert target.read_bytes() == before and state.read_bytes() == snapshot
-                assert not list(target.parent.glob(".files2-*"))
+                assert not list(target.parent.glob(".files-*"))
             for name in ("plain", "secret", "directory", "empty", "disabled"):
                 (root / "credential-url").write_text(data["plainUrl"])
                 activate(name)

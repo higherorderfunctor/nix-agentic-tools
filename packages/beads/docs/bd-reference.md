@@ -2,7 +2,7 @@
 
 # bd (beads) — tool reference
 
-> **Last verified:** 2026-10-03 — the recipe builds on this flake's own nixpkgs
+> **Last verified:** 2026-10-16 — the recipe builds on this flake's own nixpkgs
 > and the overlay re-exports that build. The repository package and disposable
 > contracts at stable Beads v1.3.1 and Dolt 2.4.0 were measured on 2026-10-01.
 > Historical session, server, recovery, and external-packager observations
@@ -155,7 +155,7 @@ quiesces the leased Dolt child before opening its data directory, publishes,
 then resumes the child before final validation and unlock. It performs
 module-owned initialization or exact existing-state verification, drains once at
 startup, then publishes on the bounded interval. Shell activation runs only
-`ai2:beads-prepare`, which creates and verifies contained runtime configuration
+`ai:beads-prepare`, which creates and verifies contained runtime configuration
 under the same lock and never publishes. Operators and agents do not run
 `bd init`; `beads-bootstrap` and the `beads:bootstrap` task are the explicit
 module-owned entry points.

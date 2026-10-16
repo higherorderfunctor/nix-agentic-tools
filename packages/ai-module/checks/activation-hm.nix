@@ -15,7 +15,7 @@
       modules = [
         harness.hmStubs
         ../modules/homeManager/default.nix
-        {ai.activation2 = definitions;}
+        {ai.activation = definitions;}
       ];
     }).config;
   commands = {
@@ -44,8 +44,8 @@
       backend = "hm";
       entries =
         (lib.evalModules {
-          modules = [../modules/common.nix {ai.activation2 = definitions;}];
-        }).config.ai.activation2;
+          modules = [../modules/common.nix {ai.activation = definitions;}];
+        }).config.ai.activation;
       secretNodes = ["sops-nix"];
     };
   errors = {
@@ -57,11 +57,11 @@
     };
     cycle = validate {
       a = {
-        beforeNodes.hm = ["ai2-b"];
+        beforeNodes.hm = ["ai-b"];
         command = "true";
       };
       b = {
-        beforeNodes.hm = ["ai2-a"];
+        beforeNodes.hm = ["ai-a"];
         command = "true";
       };
     };
@@ -79,7 +79,7 @@
     invalid = validate {"bad/name".command = "true";};
     nativeCycle = validate {
       a = {
-        afterNodes.hm = ["ai2-files-ready"];
+        afterNodes.hm = ["ai-files-ready"];
         before = ["files"];
         command = "true";
       };
@@ -87,33 +87,33 @@
     reserved = validate {
       a = {
         command = "true";
-        name.hm = "ai2-ready";
+        name.hm = "ai-ready";
       };
     };
     self = validate {
       a = {
         command = "true";
-        afterNodes.hm = ["ai2-a"];
+        afterNodes.hm = ["ai-a"];
       };
     };
   };
   failures =
-    lib.optional (builtins.attrNames graph != ["ai2-drain" "ai2-files-ready" "ai2-files2-prune" "ai2-ready" "ai2-write" "external-name"]) "gating"
-    ++ lib.optional (graph.ai2-write.after != ["linkGeneration"] || graph.ai2-write.before != ["ai2-ready"]) "default edges"
+    lib.optional (builtins.attrNames graph != ["ai-drain" "ai-files-prune" "ai-files-ready" "ai-ready" "ai-write" "external-name"]) "gating"
+    ++ lib.optional (graph.ai-write.after != ["linkGeneration"] || graph.ai-write.before != ["ai-ready"]) "default edges"
     ++ lib.optional (graph.external-name.after != ["external-provider"] || graph.external-name.before != ["checkLinkTargets"]) "native edges"
-    ++ lib.optional (graph.ai2-files-ready.after != ["linkGeneration"] || graph.ai2-files-ready.before != ["ai2-ready"]) "internal points"
-    ++ lib.optional (config.ai.activation2Order.secretNodes != []) "secret default"
-    ++ lib.optional (!lib.hasInfix "cycle" errors.cycle || !lib.hasInfix "ai2-a" errors.cycle || !lib.hasInfix "ai2-b" errors.cycle) "cycle"
-    ++ lib.optional (!lib.hasInfix "cycle" errors.abstractCycle || !lib.hasInfix "ai2-a" errors.abstractCycle) "abstract cycle"
-    ++ lib.optional (errors.duplicate != "ai.activation2: duplicate hm name shared") "duplicate"
-    ++ lib.optional (errors.empty != "ai.activation2.a: command must be nonempty") "empty command"
+    ++ lib.optional (graph.ai-files-ready.after != ["linkGeneration"] || graph.ai-files-ready.before != ["ai-ready"]) "internal points"
+    ++ lib.optional (config.ai.activationOrder.secretNodes != []) "secret default"
+    ++ lib.optional (!lib.hasInfix "cycle" errors.cycle || !lib.hasInfix "ai-a" errors.cycle || !lib.hasInfix "ai-b" errors.cycle) "cycle"
+    ++ lib.optional (!lib.hasInfix "cycle" errors.abstractCycle || !lib.hasInfix "ai-a" errors.abstractCycle) "abstract cycle"
+    ++ lib.optional (errors.duplicate != "ai.activation: duplicate hm name shared") "duplicate"
+    ++ lib.optional (errors.empty != "ai.activation.a: command must be nonempty") "empty command"
     ++ lib.optional (!lib.hasInfix "invalid entry name" errors.invalid) "invalid name"
-    ++ lib.optional (!lib.hasInfix "cycle" errors.nativeCycle || !lib.hasInfix "ai2-files-ready" errors.nativeCycle) "native cycle"
-    ++ lib.optional (errors.reserved != "ai.activation2: reserved hm name ai2-ready") "reserved"
-    ++ lib.optional (!lib.hasInfix "cycle ai2-a -> ai2-a" errors.self) "self edge";
+    ++ lib.optional (!lib.hasInfix "cycle" errors.nativeCycle || !lib.hasInfix "ai-files-ready" errors.nativeCycle) "native cycle"
+    ++ lib.optional (errors.reserved != "ai.activation: reserved hm name ai-ready") "reserved"
+    ++ lib.optional (!lib.hasInfix "cycle ai-a -> ai-a" errors.self) "self edge";
   fixture = pkgs.writeText "activation-hm.json" (builtins.toJSON {
-    drain = graph.ai2-drain.text;
-    write = graph.ai2-write.text;
+    drain = graph.ai-drain.text;
+    write = graph.ai-write.text;
   });
   shim = pkgs.writeText "activation-hm-run.sh" harness.hmRunShim;
 in {

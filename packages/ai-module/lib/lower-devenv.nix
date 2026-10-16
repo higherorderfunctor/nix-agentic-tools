@@ -36,33 +36,33 @@ in
     then throw issue
     else
       {
-        "ai2:files-linked" = {
+        "ai:files-linked" = {
           after = [
             (
               if nativeFiles
               then "devenv:files"
-              else if builtins.hasAttr "files2-guard" entries
-              then "ai2:files2-guard"
-              else "ai2:link-check"
+              else if builtins.hasAttr "files-guard" entries
+              then "ai:files-guard"
+              else "ai:link-check"
             )
           ];
-          before = ["ai2:files-ready"];
+          before = ["ai:files-ready"];
           exec = "";
         };
-        "ai2:files-ready" = {
-          after = ["ai2:files-linked"];
+        "ai:files-ready" = {
+          after = ["ai:files-linked"];
           before = ["devenv:enterShell"];
           exec = "";
         };
-        "ai2:link-check" = {
+        "ai:link-check" = {
           after = ["devenv:files:cleanup"];
           before = [
             (
-              if builtins.hasAttr "files2-guard" entries
-              then "ai2:files2-guard"
+              if builtins.hasAttr "files-guard" entries
+              then "ai:files-guard"
               else if nativeFiles
               then "devenv:files"
-              else "ai2:files-linked"
+              else "ai:files-linked"
             )
           ];
           exec = "";

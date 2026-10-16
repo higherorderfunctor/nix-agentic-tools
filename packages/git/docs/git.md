@@ -32,7 +32,7 @@
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | `packages/git/modules/`                          | `git.settings`: HM alias of `programs.git.settings`; devenv option + `git:config` task               |
 | `packages/git-{absorb,branchless,revise}/`       | `modules/options.nix`: `git.<section>.{enable,settings}` through the factory below                   |
-| `packages/git-branchless/modules/`               | `scopedSync`; devenv `ai2:git-branchless-init`; per-backend `test.jobs` checks                       |
+| `packages/git-branchless/modules/`               | `scopedSync`; devenv `ai:git-branchless-init`; per-backend `test.jobs` checks                        |
 | `lib/git-tool-settings/tool-module.nix`          | the factory: option tree + the ONE lowering into `git.settings` + package install                    |
 | `lib/git-tool-settings/ini-type.nix`             | Home Manager's `gitIniType`, shared by devenv's option and both HM stubs                             |
 | `lib/git-tool-settings/repo-config.{sh,nix}`     | `nix-agentic-tools-git` (`include`, `init`), run by the tasks and by `checks/git-config/runtime.nix` |
@@ -73,7 +73,7 @@ has not written a repository value, and `scopedSync` needs a re-run of
 
 `git.settings` (type `gitIniType`) → `toGitINI` → a store file. On every entry:
 
-1. `ai2:git-branchless-init` (when `git.branchless.enable`), before `git:config`
+1. `ai:git-branchless-init` (when `git.branchless.enable`), before `git:config`
    and `devenv:git-hooks:install`: `git -C "$DEVENV_ROOT" branchless init`, with
    `--main-branch` from the typed value, else the value `branchless/config`
    already records (init without it re-detects and overwrites). An unborn HEAD
@@ -90,9 +90,9 @@ has not written a repository value, and `scopedSync` needs a re-run of
    outside a repository that is a no-op. The path is relative, so it resolves
    from every linked worktree.
 
-The owners declare `ai.git.activation2.git-config` and
-`ai.git-branchless.activation2.git-branchless-init`; ai-module alone lowers
-these into native tasks. The config entry keeps `name.devenv = "git:config"` for
+The owners declare `ai.git.activation.git-config` and
+`ai.git-branchless.activation.git-branchless-init`; ai-module alone lowers these
+into native tasks. The config entry keeps `name.devenv = "git:config"` for
 dependency edges; branchless adds the hook-install edge only when enabled.
 
 Both hold `flock` on `<common>/.nix-agentic-tools-git.lock`.

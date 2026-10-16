@@ -77,7 +77,7 @@
     hasContext = normalizedHasContext;
     inherit generatedContent;
     generatedReplaced = generatedFiles.replaced {
-      inherit (cfg) files2;
+      inherit (cfg) files;
       generated = generatedContent;
       inherit (generatedArgs) staged;
     };
@@ -658,7 +658,7 @@
         '');
       };
 in {
-  # Layer 1: `ai.<runtime>.files2` forwards to `ai.files2` while enabled; the
+  # Layer 1: `ai.<runtime>.files` forwards to `ai.files` while enabled; the
   # shared AGENTS.md keys forward without a claim, since their composer owns
   # them.
   imports = [
@@ -783,7 +783,7 @@ in {
       packageInstallConfig
       customConfig
       sharedAgentsMdConfig
-      {ai.${appRecord.name}.files2 = generatedFiles.layer1 generatedArgs;}
+      {ai.${appRecord.name}.files = generatedFiles.layer1 generatedArgs;}
     ]))
     {
       ai.${appRecord.name}._generatedTree =
@@ -793,7 +793,7 @@ in {
             inherit backend config;
             inherit (cfg) checks;
             entries = generatedFiles.treeEntries {
-              inherit (config.ai) files2;
+              inherit (config.ai) files;
               inherit (generatedArgs) staged;
             };
             maxBytes = cfg._maxBytes;

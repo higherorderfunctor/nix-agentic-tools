@@ -120,7 +120,7 @@ in {
           inherit lib pkgs;
           inherit pendingFile;
         };
-        activation = ev.config.home.activation.ai2-glab-keyring-sync.text;
+        activation = ev.config.home.activation.ai-glab-keyring-sync.text;
         pathUnit = ev.config.systemd.user.paths.glab-keyring-sync;
         service = ev.config.systemd.user.services.glab-keyring-sync;
         wrapper = (builtins.head ev.config.home.packages).passthru.wrapperText;
@@ -249,7 +249,7 @@ in {
         (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots
         && builtins.elem
         "/home/test/.config/glab-cli"
-        devenv.ai.codex.files2.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots
+        devenv.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots
     );
 
     # Runtime test of the preflight, with a STUB standing in for glab so the

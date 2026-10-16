@@ -8,7 +8,7 @@
   pkgs,
   ...
 }: let
-  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   target = "matrix";
   tree = ./fixtures/tree;
   # Written independently of the walker; bin/tool is executable.
@@ -87,7 +87,7 @@
       inherit path;
       rendered =
         if cell.shape == "value"
-        then "files2-value.${cell.format}"
+        then "files-value.${cell.format}"
         else null;
     }) (leaves cell);
   summary = item: {
@@ -119,13 +119,13 @@
   };
   backends = import ./backends.nix {inherit harness lib pkgs;};
   evaluate = cell: let
-    config = backends.evaluate cell.backend {files2.${target} = declare cell;};
+    config = backends.evaluate cell.backend {files.${target} = declare cell;};
   in {
     inherit config;
     sink = backends.sinks.${cell.backend};
     planArgs = {
       inherit (cell) backend;
-      files = config.ai.files2;
+      files = config.ai.files;
       namespace = "ai";
     };
   };
@@ -136,14 +136,14 @@
     unlinked = !lib.any (secret: builtins.elem secret apply.after) sink.secrets;
     row = refusal cell;
     label = what: "${cell.backend}/${cell.format}/${cell.method}/${cell.shape}: ${what}";
-    planFile = pkgs.writeText "files2-ai-plan.json" (builtins.toJSON (files2.normalize planArgs));
+    planFile = pkgs.writeText "files-ai-plan.json" (builtins.toJSON (fileLib.normalize planArgs));
   in
     if row != null
     then
-      lib.optional (files2.validate planArgs != ''files2."${target}": ${row.message}'') (label "refusal message")
+      lib.optional (fileLib.validate planArgs != ''files."${target}": ${row.message}'') (label "refusal message")
       ++ lib.optional (builtins.tryEval (builtins.seq (builtins.attrNames (sink.native config)) (sink.command apply))).success (label "accepted")
     else
-      lib.optional (map summary (files2.normalize planArgs) != expectedPlan cell) (label "plan")
+      lib.optional (map summary (fileLib.normalize planArgs) != expectedPlan cell) (label "plan")
       ++ lib.optional (lib.mapAttrs (_: nativeSummary) (sink.native config) != expectedNative cell) (label "native sink")
       ++ lib.optional (!builtins.hasAttr (builtins.unsafeDiscardStringContext planFile.drvPath) (builtins.getContext (sink.command apply))) (label "engine plan")
       ++ lib.optional (
@@ -156,7 +156,7 @@
   # own parser; a non-json rendering must not also parse as JSON.
   rendered = builtins.listToAttrs (map (cell: {
     name = cell.format;
-    value = (builtins.head (files2.normalize (evaluate cell).planArgs)).content.rendered;
+    value = (builtins.head (fileLib.normalize (evaluate cell).planArgs)).content.rendered;
   }) (builtins.filter (cell: cell.shape == "value" && refusal cell == null) cells));
   decoder = pkgs.writeText "decode.py" ''
     import json, sys, tomllib, yaml

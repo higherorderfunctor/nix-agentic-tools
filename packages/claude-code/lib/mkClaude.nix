@@ -730,7 +730,7 @@ in
                   method = lib.mkDefault "rw";
                 };
               # Keep credential repair after the engine, even with no flags.
-              activation2.claude-config-mode = {
+              activation.claude-config-mode = {
                 after = ["materialized"];
                 command = ''
                   credential_file="$HOME/.claude.json"

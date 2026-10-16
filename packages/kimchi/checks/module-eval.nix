@@ -39,11 +39,11 @@
   in
     ownedDocument "kimchi" path evaluated;
   # Read the final structured values after staged defaults and overrides merge.
-  fileValue = path: evaluated: evaluated.config.ai.files2.${path}.content.value;
+  fileValue = path: evaluated: evaluated.config.ai.files.${path}.content.value;
   hmHarnessSettings = evaluated:
     fileValue "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated;
   projectHarnessSettings = evaluated:
-    if evaluated.config.ai.files2 ? ".config/kimchi/harness/settings.json"
+    if evaluated.config.ai.files ? ".config/kimchi/harness/settings.json"
     then fileValue ".config/kimchi/harness/settings.json" evaluated
     else {};
   # What Home Manager owns in the user config.json and harness settings.json
@@ -345,8 +345,8 @@ in {
               && builtins.hasContext file.source
               && !(file.recursive or false)
               && evaluated.config.ai.kimchi._generatedFiles ? ${path}
-              && evaluated.config.ai.files2.${path}.method == "symlink"
-              && evaluated.config.ai.files2Owners.${path} == ["kimchi"])
+              && evaluated.config.ai.files.${path}.method == "symlink"
+              && evaluated.config.ai.filesOwners.${path} == ["kimchi"])
             names;
           rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "${workflows}";}).config.ai.kimchi.extensions true);
         in
@@ -565,7 +565,7 @@ in {
           };
         };
       in
-        result.config.ai.files2.".config/kimchi/config.json".method
+        result.config.ai.files.".config/kimchi/config.json".method
         == "rw"
         && (hmConfigDocument result).value.telemetry.enabled == false
     );
@@ -575,7 +575,7 @@ in {
     module-kimchi-hm-owns-user-files = mkTest "kimchi-hm-owns-user-files" (
       let
         evaluated = evalHm {ai.kimchi.enable = true;};
-        plan = evaluated.config.ai.files2;
+        plan = evaluated.config.ai.files;
         devenv = evalDevenv {ai.kimchi.enable = true;};
       in
         (hmConfigDocument evaluated).value
@@ -588,7 +588,7 @@ in {
         && fileValue ".config/kimchi/harness/mcp.json" evaluated == {}
         && fileValue ".config/kimchi/harness/permissions.json" evaluated == {}
         && !(lib.any (lib.hasPrefix ".config/kimchi/harness/") (builtins.attrNames evaluated.config.home.file))
-        && devenv.config.ai.files2 == {}
+        && devenv.config.ai.files == {}
     );
 
     module-kimchi-hm-requires-region = mkTest "kimchi-hm-requires-region" (
@@ -655,7 +655,7 @@ in {
       in
         lib.all (item: lib.elem item evaluated.config.ai.legacyLedgers && lib.elem item disabled.config.ai.legacyLedgers) expected
         && evaluated.config.ai.kimchi.legacyLedgers == disabled.config.ai.kimchi.legacyLedgers
-        && disabled.config.ai.kimchi.files2 == {}
+        && disabled.config.ai.kimchi.files == {}
     );
 
     # native.harnessSettings render to the project harness settings.json, a
@@ -669,7 +669,7 @@ in {
           };
         };
       in
-        result.config.ai.files2.".config/kimchi/harness/settings.json".method
+        result.config.ai.files.".config/kimchi/harness/settings.json".method
         == "ro"
         && projectHarnessSettings result == {hideThinkingBlock = true;}
         && !(result.config.files ? ".config/kimchi/harness/settings.json")
@@ -844,7 +844,7 @@ in {
         && (fileValue ".kimchi/mcp.json" devenv).mcpServers.example.command == "hello"
         && !(devenv.config.files ? ".kimchi/mcp.json")
         && fileValue ".config/kimchi/harness/mcp.json" emptyHm == {}
-        && !(emptyDevenv.config.ai.files2 ? ".kimchi/mcp.json")
+        && !(emptyDevenv.config.ai.files ? ".kimchi/mcp.json")
     );
 
     # Kimchi 1.1.37 accepts a role value only as a provider/model string, or
@@ -906,7 +906,7 @@ in {
               // extra;
           };
       in
-        !((withPaths {}).config.ai.files2 ? ".kimchi/config.json")
+        !((withPaths {}).config.ai.files ? ".kimchi/config.json")
         && (fileValue ".kimchi/config.json" (withPaths {native.settings.skillPaths = [];})).skillPaths == []
         && (fileValue ".kimchi/config.json" (withPaths {native.settings.skillPaths = [".custom/skills"];})).skillPaths == [".custom/skills"]
     );
@@ -935,7 +935,7 @@ in {
       in
         failedAssertions shadowed
         == []
-        && !(shadowed.config.ai.files2 ? ".kimchi/config.json")
+        && !(shadowed.config.ai.files ? ".kimchi/config.json")
         && lib.any (lib.hasInfix "user scope: telemetry") (failedAssertions withEndpoint)
     );
 
@@ -983,7 +983,7 @@ in {
         == []
         && projectHarnessSettings shadowed == {hideThinkingBlock = true;}
         && failedAssertions resourcesOnly == []
-        && !(resourcesOnly.config.ai.files2 ? ".config/kimchi/harness/settings.json")
+        && !(resourcesOnly.config.ai.files ? ".config/kimchi/harness/settings.json")
         && builtins.length withFalse == 1
         && lib.hasInfix "sets extensions.memory to false" (builtins.head withFalse)
         && builtins.length withBad == 1
@@ -1017,11 +1017,11 @@ in {
         == false
         # Owner-only, so Kimchi's group/other read warning stays quiet.
         && files.".kimchi/config.json".mode == "0400"
-        && result.config.ai.files2.".kimchi/config.json".method == "ro"
+        && result.config.ai.files.".kimchi/config.json".method == "ro"
         && (fileValue ".kimchi/mcp.json" result).mcpServers.example.command == "hello"
         && !(result.config.files ? ".kimchi/mcp.json")
         && files ? ".kimchi/skills/example/SKILL.md"
-        && result.config.ai.files2Owners.".kimchi/skills/example" == ["kimchi"]
+        && result.config.ai.filesOwners.".kimchi/skills/example" == ["kimchi"]
         && files ? "AGENTS.md"
         && !(files ? "custom.md")
         && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))
@@ -1081,8 +1081,8 @@ in {
         hmHookPaths = lib.filter (lib.hasInfix "hooks") (builtins.attrNames hm.config.home.file);
       in
         devenv.config.files ? ".kimchi/hooks.json"
-        && devenv.config.ai.files2.".kimchi/hooks.json".method == "symlink"
-        && devenv.config.ai.files2.".kimchi/hooks.json".requires == ["${devenv.config.ai.kimchi._generatedTree}"]
+        && devenv.config.ai.files.".kimchi/hooks.json".method == "symlink"
+        && devenv.config.ai.files.".kimchi/hooks.json".requires == ["${devenv.config.ai.kimchi._generatedTree}"]
         && fileValue ".kimchi/hooks.json" devenv
         == {
           hooks = {
@@ -1165,7 +1165,7 @@ in {
         && fileValue ".kimchi/permissions.json" devenv == permissions
         && !(devenv.config.files ? ".kimchi/permissions.json")
         && fileValue ".config/kimchi/harness/permissions.json" emptyHm == {}
-        && !(emptyDevenv.config.ai.files2 ? ".kimchi/permissions.json")
+        && !(emptyDevenv.config.ai.files ? ".kimchi/permissions.json")
         && accepts {
           classifierMaxTotalMs = 1;
           classifierTimeoutMs = 1;
@@ -1191,7 +1191,7 @@ in {
             enable = true;
           };
         };
-        target = hm.config.ai.files2."custom/kimchi/harness/trust.json";
+        target = hm.config.ai.files."custom/kimchi/harness/trust.json";
         devenvWith = trust:
           evalDevenv {
             ai.kimchi = {
@@ -1219,7 +1219,7 @@ in {
         && builtins.any (lib.hasInfix "ai.kimchi.projectTrust is user scope") (failedAssertions rejected)
         && failedAssertions accepted == []
         # Devenv declares no trust file of any kind, even when accepted.
-        && !(lib.any (lib.hasSuffix "trust.json") (builtins.attrNames accepted.config.ai.files2))
+        && !(lib.any (lib.hasSuffix "trust.json") (builtins.attrNames accepted.config.ai.files))
         && !(lib.any (lib.hasSuffix "trust.json") (builtins.attrNames accepted.config.files))
     );
 
@@ -1246,7 +1246,7 @@ in {
         lib.all rejected ["always" "ask" "never"]
         && failedAssertions accepted == []
         && projectHarnessSettings accepted == {}
-        && !(accepted.config.ai.files2 ? ".config/kimchi/harness/settings.json")
+        && !(accepted.config.ai.files ? ".config/kimchi/harness/settings.json")
     );
 
     # Git tokens are secrets Kimchi reads only from the user config.json.
@@ -1262,7 +1262,7 @@ in {
             gitTokens."github.com".file = "/run/secrets/kimchi-github";
           };
         };
-        target = hm.config.ai.files2.".config/kimchi/config.json";
+        target = hm.config.ai.files.".config/kimchi/config.json";
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
@@ -1301,7 +1301,7 @@ in {
           == map (name: "${dir}/${name}") (builtins.attrNames expected)
           && lib.all (name: let
             path = "${dir}/${name}";
-            entry = evaluated.config.ai.files2.${path};
+            entry = evaluated.config.ai.files.${path};
           in
             entry.method
             == "ro"

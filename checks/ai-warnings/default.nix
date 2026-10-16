@@ -690,8 +690,8 @@ in {
         offMessage = messages: unit: file: remedy:
           lib.any (message:
             lib.hasInfix "${unit} is set but" message
-            # A layer-1 (`files2`) entry has `enable` of its own.
-            && lib.hasInfix "${file}${lib.optionalString (!lib.hasInfix ".files2." file) ".content"}.enable = false switches off" message
+            # A layer-1 (`files`) entry has `enable` of its own.
+            && lib.hasInfix "${file}${lib.optionalString (!lib.hasInfix ".files." file) ".content"}.enable = false switches off" message
             && lib.hasInfix remedy message)
           messages;
         # Shared context and rules warn when another runtime overrides the
@@ -705,15 +705,15 @@ in {
               };
             }
             (map (runtime: harness.setEnable runtime true) sharedRuntimes ++ [extra]));
-        sharedCodexOff = sharedWarnings {ai.codex.files2."AGENTS.md".enable = false;};
-        sharedOff = sharedWarnings {ai.kiro.files2."AGENTS.md".enable = false;};
-        sharedReplaced = sharedWarnings {ai.kiro.files2."AGENTS.md".content.text = "MINE";};
+        sharedCodexOff = sharedWarnings {ai.codex.files."AGENTS.md".enable = false;};
+        sharedOff = sharedWarnings {ai.kiro.files."AGENTS.md".enable = false;};
+        sharedReplaced = sharedWarnings {ai.kiro.files."AGENTS.md".content.text = "MINE";};
         # Codex's user AGENTS.md on Home Manager.
         hmCodexOff = evaluate "hm" {
           ai = {
             codex = {
               enable = true;
-              files2.".codex/AGENTS.md".enable = false;
+              files.".codex/AGENTS.md".enable = false;
               rules.local.text = "LOCAL";
             };
             rules.probe.text = "RULE";
@@ -723,7 +723,7 @@ in {
         steeringOff = evaluate "devenv" {
           ai.kiro = {
             cli.enable = true;
-            files2.".kiro/steering/scoped.md".enable = false;
+            files.".kiro/steering/scoped.md".enable = false;
             rules.scoped = {
               matcher = ["src/**"];
               text = "SCOPED";
@@ -734,7 +734,7 @@ in {
           ai = {
             claude = {
               enable = true;
-              files2.".claude/rules/probe.md".enable = false;
+              files.".claude/rules/probe.md".enable = false;
             };
             rules.probe.text = "RULE";
           };
@@ -744,7 +744,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files2."AGENTS.md".enable = false;
+              files."AGENTS.md".enable = false;
               normalized.context = lib.mkForce null;
               rules.probe.enable = false;
             };
@@ -764,7 +764,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files2."AGENTS.md".content.text = "MINE";
+              files."AGENTS.md".content.text = "MINE";
             };
             context.text = "CTX";
             rules.probe.text = "RULE";
@@ -774,7 +774,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files2.".codex/AGENTS.md".content.text = "MINE";
+              files.".codex/AGENTS.md".content.text = "MINE";
             };
             rules.probe.text = "RULE";
           };
@@ -783,7 +783,7 @@ in {
           ai = {
             claude = {
               enable = true;
-              files2.".claude/rules/probe.md".content.source = pkgs.writeText "mine" "MINE";
+              files.".claude/rules/probe.md".content.source = pkgs.writeText "mine" "MINE";
             };
             rules.probe.text = "RULE";
           };
@@ -793,7 +793,7 @@ in {
           ai = {
             claude = {
               enable = true;
-              files2.".claude/rules/probe.md".method = "symlink";
+              files.".claude/rules/probe.md".method = "symlink";
             };
             rules.probe.text = "RULE";
           };
@@ -821,13 +821,13 @@ in {
         nothing = evaluate "devenv" {
           ai.codex = {
             enable = true;
-            files2."AGENTS.md".enable = false;
+            files."AGENTS.md".enable = false;
           };
         };
         nothingReplaced = evaluate "devenv" {
           ai.codex = {
             enable = true;
-            files2."AGENTS.md".content.text = "MINE";
+            files."AGENTS.md".content.text = "MINE";
           };
         };
       in
@@ -835,28 +835,28 @@ in {
           contextRemedy = "${lib.showOption (lib.init (optionPaths.pool runtime "context") ++ ["normalized" "context"])} = lib.mkForce null";
           rulesRemedy = "${lib.showOption (optionPaths.pool runtime "rules" ++ ["probe" "enable"])} = false";
         in
-          offMessage sharedOff "ai.context" ''ai.kiro.files2."AGENTS.md"'' contextRemedy
-          && offMessage sharedCodexOff "ai.context" ''ai.codex.files2."AGENTS.md"'' contextRemedy
-          && replacedMessage sharedReplaced "ai.context" ''ai.kiro.files2."AGENTS.md"'' contextRemedy
+          offMessage sharedOff "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
+          && offMessage sharedCodexOff "ai.context" ''ai.codex.files."AGENTS.md"'' contextRemedy
+          && replacedMessage sharedReplaced "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
           # Copilot's rules have their own instruction files; only its context
           # shares AGENTS.md with the other three runtimes.
           && (
             if runtime == "copilot"
             then !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (sharedOff ++ sharedCodexOff ++ sharedReplaced))
             else
-              offMessage sharedOff "ai.rules.probe" ''ai.kiro.files2."AGENTS.md"'' rulesRemedy
-              && offMessage sharedCodexOff "ai.rules.probe" ''ai.codex.files2."AGENTS.md"'' rulesRemedy
-              && replacedMessage sharedReplaced "ai.rules.probe" ''ai.kiro.files2."AGENTS.md"'' rulesRemedy
+              offMessage sharedOff "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
+              && offMessage sharedCodexOff "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' rulesRemedy
+              && replacedMessage sharedReplaced "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
           ))
         sharedRuntimes
-        && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files2.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files2.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
-        && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files2.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
-        && offMessage claudeOff "ai.rules.probe" ''ai.claude.files2.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
-        && replacedMessage replaced "ai.rules.probe" ''ai.codex.files2."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && replacedMessage replaced "ai.context" ''ai.codex.files2."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
-        && replacedMessage hmCodexReplaced "ai.rules.probe" ''ai.codex.files2.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && replacedMessage claudeReplaced "ai.rules.probe" ''ai.claude.files2.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
+        && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
+        && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
+        && offMessage claudeOff "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
+        && replacedMessage replaced "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && replacedMessage replaced "ai.context" ''ai.codex.files."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
+        && replacedMessage hmCodexReplaced "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && replacedMessage claudeReplaced "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
         && !(contains "switches off" replaced)
         && !(contains "the file that carries it" withheld)
         && !(contains "the file that carries it" symlinked)

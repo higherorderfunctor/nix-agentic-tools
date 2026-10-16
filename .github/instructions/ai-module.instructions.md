@@ -7,7 +7,7 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-15 — runtime factories stage moved surfaces in
+> **Last verified:** 2026-10-16 — runtime factories stage moved surfaces in
 > `_generatedFiles` (every runtime surface included) and forward them through
 > the ai-module layer-1 helper over one generated tree, which every staged
 > entry's delivery requires; the shared AGENTS.md composer is the layer-1 owner
@@ -128,7 +128,7 @@ Copilot sets `pools = ["github"]` and reserves `launcher = ["cli"]`; it ships no
 package, so it has no launcher, and its root `enable` stays the switch.
 
 No runtime hands its files to an upstream `programs.<cli>` or devenv
-integration: every one delivers through `ai.<runtime>.files2`, so there is no
+integration: every one delivers through `ai.<runtime>.files`, so there is no
 second enable to flip or to override. Claude asserts the exclusion, because its
 upstream modules write the same files: `ai.claude.enable` beside Home Manager's
 `programs.claude-code.enable` or devenv's `claude.code.enable` fails evaluation.
@@ -188,13 +188,13 @@ notice. Module fixtures execute the rendered command for every runtime; this
 replaces the repository-only fail-hard `enterTest` loop.
 
 Commands that must release state while an owner is disabled use
-`activation2.<key>.runWhenDisabled = true` outside its product gate. Codex's
-Home Manager daemon selector does this. Every retired writer's ledger is
-forwarded unconditionally through `legacyLedgers`, so the engine imports and
-drains copies even when an owner is disabled at its first upgrade. The engine
-prunes before native link checks; ordinary product files and commands remain
-gated. Keep a configured directory unchanged for the activation that drains its
-old ledger, then change it in a later generation.
+`activation.<key>.runWhenDisabled = true` outside its product gate. Codex's Home
+Manager daemon selector does this. Every retired writer's ledger is forwarded
+unconditionally through `legacyLedgers`, so the engine imports and drains copies
+even when an owner is disabled at its first upgrade. The engine prunes before
+native link checks; ordinary product files and commands remain gated. Keep a
+configured directory unchanged for the activation that drains its old ledger,
+then change it in a later generation.
 
 ### Why there's no master switch
 
@@ -566,7 +566,7 @@ non-empty list for `fileMatch` content.
   indirection upstream, so an assertion rejects it on both backends on every
   typed route into an `[mcp_servers.<name>.oauth]` table: each server's `codex`
   block, `native.settings.mcp_servers`, and
-  `ai.codex.native.agents.<name>.mcp_servers`. Raw `ai.codex.files2` content and
+  `ai.codex.native.agents.<name>.mcp_servers`. Raw `ai.codex.files` content and
   raw `ai.codex.agents` TOML are not inspected. Direct
   `ai.codex.native.settings.mcp_servers` cannot be combined with either typed
   pool because their table ownership would be ambiguous. Credential-injecting
@@ -660,7 +660,7 @@ launcher pool (`ai.kiro.cli.environmentVariables`) or pool namespace
 A context or rule unit that resolves for a runtime but lands in a file whose
 final entry has `enable = false` warns too, root or per-runtime: the file option
 that switched it off is the consumer's own, and the drop used to be silent (this
-repository's Codex rules vanished behind `files2."AGENTS.md".enable = false`).
+repository's Codex rules vanished behind `files."AGENTS.md".enable = false`).
 The record's `contentTargets` callback names each unit's path from the same
 bindings its delivery uses; for a shared AGENTS.md key the final entry is the
 owner's and the message names the runtime whose public entry disabled it. Every
@@ -669,7 +669,7 @@ such warning has a per-runtime remedy, so it never repeats forever:
 `ai.<runtime>.normalized.context = lib.mkForce null` for context (root and
 runtime context compose, so `ai.<runtime>.context.enable = false` would not
 withhold the root part). A file REPLACED with the consumer's own bytes
-(`files2.<path>.content.text = …`, or a `source`) drops the same units and warns
+(`files.<path>.content.text = …`, or a `source`) drops the same units and warns
 the same way. `generatedFiles.nix` detects replacement from the selected content
 alternative and priority; Markdown and raw defaults are whole-content
 definitions, while structured values retain generated siblings. A sibling-only
@@ -710,7 +710,7 @@ instead — Codex reads both layers natively.
 
 Every runtime stages generated files in `ai.<runtime>._generatedFiles`: content,
 format, method and surface. The staging helper forwards them through
-`ai.<runtime>.files2` to the shared `ai.files2` plan, preserving priorities.
+`ai.<runtime>.files` to the shared `ai.files` plan, preserving priorities.
 Consumers override the final backend-root-relative path at layer 1. Entry-level
 `enable = false` suppresses any content form; empty text is legal. Structured
 values receive a default per leaf, so one consumer leaf preserves generated
@@ -735,8 +735,8 @@ stages one Markdown copy, guarded by the contributing runtime limits, and keeps
 its old ledger in `legacyLedgers`. Codex stages settings, agents, hooks, skills
 and user context as links, execpolicy as `ro` raw copies on both backends, and
 daemon settings as `ro` JSON on Home Manager only. Its ungated legacy
-declarations cover both deleted copy writers. `activation2.codex-daemon-select`
-runs while disabled; `activation2.codex-migrate-skill-links` runs before
+declarations cover both deleted copy writers. `activation.codex-daemon-select`
+runs while disabled; `activation.codex-migrate-skill-links` runs before
 `linkCheck` on both backends, with `after = []`.
 
 Every runtime factory imports the layer-1 helper. Only staged entries feed
@@ -935,8 +935,8 @@ ownership. The `rootPoolViolations` provenance guard in
 `checks/module-provenance/helpers.nix` enforces this by reading each root
 option's `definitionsWithLocations`. The declaring module is exempt, which lets
 `sharedOptions.nix` perform its root L1→L2 Dir reshape. So is
-`packages/ai-module/lib/runtime.nix`, for `ai.activation2`, `ai.files2`,
-`ai.files2Owners` and `ai.legacyLedgers` only: it re-publishes each owner's
+`packages/ai-module/lib/runtime.nix`, for `ai.activation`, `ai.files`,
+`ai.filesOwners` and `ai.legacyLedgers` only: it re-publishes each owner's
 layer-1 options at the root and sets `_file`, so its definitions report the
 helper instead of the importing owner.
 
@@ -952,7 +952,7 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-15 — every runtime stages its generated files;
+> **Last verified:** 2026-10-16 — every runtime stages its generated files;
 > layer-1 defaults preserve structured siblings and discarded-source laziness;
 > runtime surfaceSupport declarations own normalized backend reach; ai-module
 > alone validates and lowers the final entries after the old path removal.
@@ -1121,14 +1121,13 @@ the source remains visible. Consumers can retract that generated rule with
 feature flag remains the package-level gate.
 
 **Generated files use layer-1 defaults.** The staging helper contributes
-`ai.<runtime>.files2` content and method at `mkDefault`. Markdown and raw
-content receive a whole-content default, so replacement discards a composed
-source without reading it. Structured documents receive a default on every value
-leaf; a default on the whole document would drop generated siblings when a
-consumer extends one leaf. A consumer suppresses any content form with
-entry-level `enable = false`, and empty text is legal. Disabled owners forward
-no file claims; disabled entries still claim their path while their owner is
-enabled.
+`ai.<runtime>.files` content and method at `mkDefault`. Markdown and raw content
+receive a whole-content default, so replacement discards a composed source
+without reading it. Structured documents receive a default on every value leaf;
+a default on the whole document would drop generated siblings when a consumer
+extends one leaf. A consumer suppresses any content form with entry-level
+`enable = false`, and empty text is legal. Disabled owners forward no file
+claims; disabled entries still claim their path while their owner is enabled.
 
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool
@@ -1145,7 +1144,7 @@ and out of the package provenance guard.
   `ai.programs.<pkg>.runtimes.<runtime>` leaves are nullable scalars.
   `resolveOverride` interprets runtime null as **inherit**, not delete; a
   non-null runtime scalar wins.
-- `ai.<runtime>.files2` forwards final entries into `ai.files2`; it is not a
+- `ai.<runtime>.files` forwards final entries into `ai.files`; it is not a
   portable root pool. Ordinary module priorities merge fields, with content
   alternatives chosen by priority and structured values merged per leaf.
   Entry-level `enable = false` suppresses delivery.
@@ -1431,7 +1430,7 @@ which locked `/login` out; do not move them back.
                              ▼  routing + native rendering
 ┌────────────────────────────────────────────────────────────┐
 │ L4: Final runtime output map                               │
-│   ai.<cli>.files2 = attrsOf { content; ... }       │
+│   ai.<cli>.files = attrsOf { content; ... }       │
 │   - text/source default; structured leaves compose         │
 │   - sibling fields compose; enable suppresses entries       │
 └────────────────────────────────────────────────────────────┘
@@ -1463,7 +1462,7 @@ rather than a second path field: a runtime names exactly the groups it moves.
 ### Rules
 
 - **Artifact routing/rendering lives at L4; physical emission lives at L5.**
-  L1/L2/L2b are pure fanout — they never touch `ai.<runtime>.files2`,
+  L1/L2/L2b are pure fanout — they never touch `ai.<runtime>.files`,
   `home.file.*`, or devenv `files.*`. The one sidecar exception is managed MCP
   proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes and
   emits unique active systemd units, while only lowered client entries traverse
@@ -1498,9 +1497,8 @@ rather than a second path field: a runtime names exactly the groups it moves.
   and runtime state, so it uses `rw` on Home Manager only. Empty unpin
   declarations stage no document; the engine still retires previous keys. The
   legacy JSON ledger is declared while disabled too.
-  `activation2.claude-config-mode` runs after `materialized`, even with no
-  flags, stripping group and other access from regular files while Claude is
-  enabled.
+  `activation.claude-config-mode` runs after `materialized`, even with no flags,
+  stripping group and other access from regular files while Claude is enabled.
 - **The CLI's write primitive picks the method.** Codex's `config.toml` is a
   store symlink on both backends: every Codex config writer writes a temporary
   beside the link's target, so an in-app save fails and the link survives
@@ -1510,18 +1508,18 @@ rather than a second path field: a runtime names exactly the groups it moves.
   the `app-server-daemon` directory. Kiro and Kimchi rename too, so their
   settings are copies as well.
 - **Commands use layer 3.** Codex's skill-link migrator owns no ledger and uses
-  `activation2.codex-migrate-skill-links`, with `after = []` and
+  `activation.codex-migrate-skill-links`, with `after = []` and
   `before = ["linkCheck"]` on both backends. Home Manager's outer `run` makes
-  dry runs inert. Its daemon selector uses `activation2.codex-daemon-select` on
+  dry runs inert. Its daemon selector uses `activation.codex-daemon-select` on
   Home Manager, with `runWhenDisabled = true`. Directory skill sources keep
   `recursive = false` because Codex discovers directory symlinks.
 - **devenv guards native links after pruning.** The base emits one
-  `ai2:files2-guard` from the final native file map. It follows cleanup, prune
-  and commands positioned before `linkCheck`, then precedes native file
-  creation. It removes stale store-backed links and refuses foreign links or
-  real files at desired link paths. The engine retires copies before this check,
-  so a copy-to-link transition completes in one generation. With no native files
-  the graph uses its internal linked point instead of requiring a missing
+  `ai:files-guard` from the final native file map. It follows cleanup, prune and
+  commands positioned before `linkCheck`, then precedes native file creation. It
+  removes stale store-backed links and refuses foreign links or real files at
+  desired link paths. The engine retires copies before this check, so a
+  copy-to-link transition completes in one generation. With no native files the
+  graph uses its internal linked point instead of requiring a missing
   `devenv:files` task. A failed guard prevents dependent file creation and shell
   tasks from succeeding.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` is a
@@ -1689,7 +1687,7 @@ absence cells without policy edits.
 - managed MCP proxy ownership, validation, and systemd unit aggregation →
   `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
 - per-scope package ownership guard → `checks/module-provenance/helpers.nix`
-- L4 per-runtime routing/rendering into `ai.<runtime>.files2` →
+- L4 per-runtime routing/rendering into `ai.<runtime>.files` →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex and
@@ -1745,7 +1743,7 @@ absence cells without policy edits.
    lowers only some fields keeps it and warns for the rest.
 4. Add L4 routing/rendering into `ai.<runtime>._generatedFiles` in each
    supporting per-CLI factory's `config`. State content, format, method and
-   surface; commands use `ai.<runtime>.activation2`. Retired writers declare
+   surface; commands use `ai.<runtime>.activation`. Retired writers declare
    their `legacyLedgers` outside the enable gate.
 5. Let ai-module lower the entries; change its backend only when the delivery
    contract changes. Never write `home.file`, `home.activation`, `files` or

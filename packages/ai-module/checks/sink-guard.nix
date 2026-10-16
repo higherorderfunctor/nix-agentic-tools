@@ -7,9 +7,10 @@
 }: let
   nonWriters = {
     "lib/ai/app/generatedFiles.nix" = ["files = lib.mapAttrs (path: entry:"];
+    "lib/ai/app/sharedAgentsMd.nix" = ["files = lib.mkMerge [" "files = lib.mkOption {visible = false;};"];
     "lib/options-doc.nix" = ["enterTest = lib.mkOption {" "files = lib.mkOption {" "home = {" "tasks = lib.mkOption {"];
     "lib/testing/factory-harness.nix" = ["files = lib.mkOption {" "home = {"];
-    "lib/testing/module-harness.nix" = ["enterTest = lib.mkOption {" "files = config.ai.files2;" "files = lib.mkOption {" "home = {" "tasks = lib.mkOption {"];
+    "lib/testing/module-harness.nix" = ["enterTest = lib.mkOption {" "files = config.ai.files;" "files = lib.mkOption {" "home = {" "tasks = lib.mkOption {"];
     "packages/beads/modules/devenv/default.nix" = ["tasks ="];
     "packages/semble/modules/options.nix" = [''files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];''];
   };

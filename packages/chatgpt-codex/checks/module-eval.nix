@@ -15,9 +15,9 @@
         if evaluated.config ? home
         then "hm"
         else "devenv";
-      files = evaluated.config.ai.files2;
+      files = evaluated.config.ai.files;
       namespace = "ai";
-      owners = evaluated.config.ai.files2Owners;
+      owners = evaluated.config.ai.filesOwners;
     };
   targetAt = evaluated: path:
     lib.findFirst (target: target.path == path) null (engineTargets evaluated);
@@ -144,7 +144,7 @@ in {
         };
         hmRoots = (hmCodexSettings (evalHm settings)).sandbox_workspace_write.writable_roots;
         rootsWithEnvironment = environment:
-          (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.ai.codex.files2.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots;
+          (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots;
         devenvNoEnvironmentRoots = rootsWithEnvironment {};
         devenvHomeRoots = rootsWithEnvironment {HOME = "/home/test";};
         devenvXdgRoots = rootsWithEnvironment {
@@ -174,7 +174,7 @@ in {
           XDG_CACHE_HOME = "/tmp/xdg-cache";
         };
         evaluate = settings:
-          (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.ai.codex.files2.".codex/config.toml".content.value;
+          (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.ai.codex.files.".codex/config.toml".content.value;
         legacy = evaluate {
           ai.codex = {
             enable = true;
@@ -326,7 +326,7 @@ in {
               };
               devenv.root = root;
               git.root = root;
-            }).config.ai.codex.files2.".codex/config.toml".content.value;
+            }).config.ai.codex.files.".codex/config.toml".content.value;
         namedSettings = {
           default_permissions = "project-edit";
           permissions.project-edit.extends = ":workspace";
@@ -369,7 +369,7 @@ in {
               enable = true;
               native.settings.sandbox_mode = "workspace-write";
             };
-          }).config.ai.codex.files2.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots;
+          }).config.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots;
       in
         builtins.deepSeq roots (builtins.elem "/tmp/devenv-root/.git" roots)
     );
@@ -382,8 +382,8 @@ in {
       in
         !(hm.config.home.file ? ".agents/skills/example")
         && !(devenv.config.files ? ".agents/skills/example")
-        && !(hm.config.ai.files2 ? ".agents/skills/example")
-        && !(devenv.config.ai.files2 ? ".agents/skills/example")
+        && !(hm.config.ai.files ? ".agents/skills/example")
+        && !(devenv.config.ai.files ? ".agents/skills/example")
     );
 
     module-codex-skills-fanout = mkTest "codex-skills-fanout" (
@@ -401,8 +401,8 @@ in {
         fromGeneratedTree ".agents/skills/local" hm.config.home.file.".agents/skills/local"
         && (markdownInput hm ".agents/skills/local").source == "${../../claude-code/checks/fixtures/claude-skills/skill-b}"
         && !(hm.config.home.file.".agents/skills/local" ? recursive)
-        && hm.config.ai.files2Owners.".agents/skills/local" == ["codex"]
-        && hm.config.ai.codex.files2 ? ".agents/skills/local"
+        && hm.config.ai.filesOwners.".agents/skills/local" == ["codex"]
+        && hm.config.ai.codex.files ? ".agents/skills/local"
         && fromGeneratedTree ".agents/skills/shared" hm.config.home.file.".agents/skills/shared"
         && (markdownInput hm ".agents/skills/shared").source == "${../../claude-code/checks/fixtures/claude-skills/skill-a}"
         && !(hm.config.home.file.".agents/skills/shared" ? recursive)
@@ -410,16 +410,16 @@ in {
         && (markdownInput devenv ".agents/skills/local").source == "${../../claude-code/checks/fixtures/claude-skills/skill-b}"
         && fromGeneratedTree ".agents/skills/shared" devenv.config.files.".agents/skills/shared"
         && (markdownInput devenv ".agents/skills/shared").source == "${../../claude-code/checks/fixtures/claude-skills/skill-a}"
-        && hm.config.home.activation ? "ai2-codex-migrate-skill-links"
+        && hm.config.home.activation ? "ai-codex-migrate-skill-links"
         # It moves user directories, so under DRY_RUN it must only echo.
-        && lib.hasInfix "run /nix/store/" hm.config.home.activation."ai2-codex-migrate-skill-links".text
-        && !lib.hasInfix "run /nix/store/" devenv.config.tasks."ai2:codex-migrate-skill-links".exec
-        && devenv.config.tasks ? "ai2:codex-migrate-skill-links"
-        && devenv.config.tasks."ai2:codex-migrate-skill-links".after
+        && lib.hasInfix "run /nix/store/" hm.config.home.activation."ai-codex-migrate-skill-links".text
+        && !lib.hasInfix "run /nix/store/" devenv.config.tasks."ai:codex-migrate-skill-links".exec
+        && devenv.config.tasks ? "ai:codex-migrate-skill-links"
+        && devenv.config.tasks."ai:codex-migrate-skill-links".after
         == ["devenv:files:cleanup"]
-        && devenv.config.tasks."ai2:codex-migrate-skill-links".before == ["ai2:link-check"]
-        && hm.config.ai.codex.activation2.codex-migrate-skill-links.after == []
-        && hm.config.ai.codex.activation2.codex-migrate-skill-links.before == ["linkCheck"]
+        && devenv.config.tasks."ai:codex-migrate-skill-links".before == ["ai:link-check"]
+        && hm.config.ai.codex.activation.codex-migrate-skill-links.after == []
+        && hm.config.ai.codex.activation.codex-migrate-skill-links.before == ["linkCheck"]
     );
 
     module-codex-skillsdir-fanout = mkTest "codex-skillsdir-fanout" (
@@ -493,7 +493,7 @@ in {
       in
         hmCodexSettings hm
         == withHmDaemonDefault {}
-        && !(devenv.config.ai.codex.files2 ? ".codex/config.toml")
+        && !(devenv.config.ai.codex.files ? ".codex/config.toml")
         && !(devenv.config.files ? ".codex/config.toml")
     );
 
@@ -515,8 +515,8 @@ in {
         && devenv.config.files ? ".codex/config.toml"
         && unowned hm
         && unowned devenv
-        && hm.config.ai.codex.files2.".codex/config.toml".method == "symlink"
-        && devenv.config.ai.codex.files2.".codex/config.toml".method == "symlink"
+        && hm.config.ai.codex.files.".codex/config.toml".method == "symlink"
+        && devenv.config.ai.codex.files.".codex/config.toml".method == "symlink"
     );
 
     # Home Manager always owns the user config.toml, as a store symlink even
@@ -622,7 +622,7 @@ in {
       in
         (hmCodexSettings hm).mcp_servers
         == expected
-        && devenv.config.ai.codex.files2.".codex/config.toml".content.value.mcp_servers == expected
+        && devenv.config.ai.codex.files.".codex/config.toml".content.value.mcp_servers == expected
     );
 
     module-codex-mcp-freeform-rejects-non-toml = mkTest "codex-mcp-freeform-rejects-non-toml" (
@@ -651,7 +651,7 @@ in {
           };
         };
         hmServer = (hmCodexSettings (evalHm config)).mcp_servers.context7-mcp;
-        devenvServer = (evalDevenv config).config.ai.codex.files2.".codex/config.toml".content.value.mcp_servers.context7-mcp;
+        devenvServer = (evalDevenv config).config.ai.codex.files.".codex/config.toml".content.value.mcp_servers.context7-mcp;
         rendered = builtins.toJSON hmServer;
       in
         hmServer
@@ -690,7 +690,7 @@ in {
           };
         };
         hmServers = (hmCodexSettings (evalHm config)).mcp_servers;
-        devenvServers = (evalDevenv config).config.ai.codex.files2.".codex/config.toml".content.value.mcp_servers;
+        devenvServers = (evalDevenv config).config.ai.codex.files.".codex/config.toml".content.value.mcp_servers;
       in
         hmServers
         == devenvServers
@@ -753,7 +753,7 @@ in {
           personality = "pragmatic";
           web_search = "indexed";
         };
-        devenvSettings = devenv.config.ai.codex.files2.".codex/config.toml".content.value;
+        devenvSettings = devenv.config.ai.codex.files.".codex/config.toml".content.value;
       in
         hmCodexSettings hm
         == withHmDaemonDefault expected
@@ -786,7 +786,7 @@ in {
         hm = evalHm config;
         devenv = evalDevenv config;
         hmSettings = hmCodexSettings hm;
-        devenvSettings = devenv.config.ai.codex.files2.".codex/config.toml".content.value;
+        devenvSettings = devenv.config.ai.codex.files.".codex/config.toml".content.value;
         withoutBackendRoots = settings:
           settings
           // {
@@ -899,7 +899,7 @@ in {
         hm = evalHm config;
         devenv = evalDevenvWithGetEnv (name: {HOME = "/home/test";}.${name} or "") config;
         hmSettings = hmCodexSettings hm;
-        devenvSettings = devenv.config.ai.codex.files2.".codex/config.toml".content.value;
+        devenvSettings = devenv.config.ai.codex.files.".codex/config.toml".content.value;
         withoutBackendRoots = settings:
           settings
           // {
@@ -953,7 +953,7 @@ in {
           };
         };
         userSettings = hmCodexSettings user;
-        projectSettings = project.config.ai.codex.files2.".codex/config.toml".content.value;
+        projectSettings = project.config.ai.codex.files.".codex/config.toml".content.value;
         # Codex merges same-named permission tables by key and gives the project
         # file higher precedence. Model that documented artifact composition
         # explicitly instead of comparing two independent full configurations.
@@ -1197,12 +1197,12 @@ in {
               else result.config.tasks;
             applyName =
               if isHm
-              then "ai2-files2-apply"
-              else "ai2:files2-apply";
+              then "ai-files-apply"
+              else "ai:files-apply";
             pruneName =
               if isHm
-              then "ai2-files2-prune"
-              else "ai2:files2-prune";
+              then "ai-files-prune"
+              else "ai:files-prune";
           in
             lib.elem ledger result.config.ai.legacyLedgers
             && (graph ? ${applyName}) == (engineTargets result != [])
@@ -1219,7 +1219,7 @@ in {
     module-codex-daemon-hm-pins-package = mkTest "codex-daemon-hm-pins-package" (
       let
         hm = evalHm {ai.codex.enable = true;};
-        select = hm.config.home.activation."ai2-codex-daemon-select".text;
+        select = hm.config.home.activation."ai-codex-daemon-select".text;
         # A regex needle cannot carry store-path context.
         packageRoot = builtins.unsafeDiscardStringContext "${aiStubs.chatgpt-codex}/${aiStubs.chatgpt-codex.passthru.codexPackage.root}";
       in
@@ -1279,8 +1279,8 @@ in {
         };
         disabled = evalHm {ai.codex.pinDaemonToPackage = true;};
         releases = evaluated:
-          lib.hasSuffix " ''" evaluated.config.ai.codex.activation2.codex-daemon-select.command
-          && evaluated.config.home.activation ? ai2-codex-daemon-select;
+          lib.hasSuffix " ''" evaluated.config.ai.codex.activation.codex-daemon-select.command
+          && evaluated.config.home.activation ? ai-codex-daemon-select;
       in
         # Unpinned: the selection is released and the updater default goes,
         # while auto-start stays off; the two are independent. Home Manager
@@ -1294,7 +1294,7 @@ in {
         # copied settings, so neither can outlive the managed package.
         && releases disabled
         && daemonSettingsTarget disabled == null
-        && disabled.config.ai.codex.activation2.codex-daemon-select.runWhenDisabled
+        && disabled.config.ai.codex.activation.codex-daemon-select.runWhenDisabled
         && lib.elem {
           codec = "dir";
           ledger = "materialize/codex-daemon-settings.manifest";
@@ -1302,8 +1302,8 @@ in {
         }
         disabled.config.ai.legacyLedgers
         && engineTargets disabled == []
-        && !(disabled.config.home.activation ? "ai2-files2-apply")
-        && disabled.config.home.activation ? "ai2-files2-prune"
+        && !(disabled.config.home.activation ? "ai-files-apply")
+        && disabled.config.home.activation ? "ai-files-prune"
     );
 
     module-codex-daemon-hm-needs-package-layout = mkTest "codex-daemon-hm-needs-package-layout" (
@@ -1854,7 +1854,7 @@ in {
         == []
         && failed devenv == []
         && (hmCodexSettings hm).mcp_servers.remote == expected
-        && devenv.config.ai.codex.files2.".codex/config.toml".content.value.mcp_servers.remote == expected
+        && devenv.config.ai.codex.files.".codex/config.toml".content.value.mcp_servers.remote == expected
     );
 
     module-codex-agent-defaults-parity = mkTest "codex-agent-defaults-parity" (
@@ -1870,7 +1870,7 @@ in {
           };
         };
         hmAgents = (hmCodexSettings (evalHm config)).agents;
-        devenvAgents = (evalDevenv config).config.ai.codex.files2.".codex/config.toml".content.value.agents;
+        devenvAgents = (evalDevenv config).config.ai.codex.files.".codex/config.toml".content.value.agents;
       in
         hmAgents
         == devenvAgents
@@ -2012,7 +2012,7 @@ in {
         };
       };
       assert lib.all (assertion: assertion.assertion) hm.config.assertions;
-      assert !(devenv.config.ai.codex.files2 ? ".codex/config.toml");
+      assert !(devenv.config.ai.codex.files ? ".codex/config.toml");
       assert builtins.length devenvStateFailures == 1;
       assert hasLiteral "hooks.state has no effect in project" (lib.head devenvStateFailures).message;
         mkWrapperGrepTest {
@@ -2290,7 +2290,7 @@ in {
         ) {
           ai.codex = {
             enable = true;
-            files2.${
+            files.${
               if backend == "hm"
               then ".codex/AGENTS.md"
               else "AGENTS.md"
@@ -2309,8 +2309,8 @@ in {
             then ".codex/AGENTS.md"
             else "AGENTS.md";
         in
-          assert evaluated.config.ai.files2.${path}.content.text == text;
-          assert evaluated.config.ai.files2.${path}.format == "raw";
+          assert evaluated.config.ai.files.${path}.content.text == text;
+          assert evaluated.config.ai.files.${path}.format == "raw";
             (deliveredFiles
               evaluated.config).${
               path

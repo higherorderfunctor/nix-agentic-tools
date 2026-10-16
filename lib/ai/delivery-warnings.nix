@@ -145,8 +145,8 @@
       other = config.ai.${name} or {};
     in
       (other.enable or false)
-      && (other.files2 or {}) ? ${path}
-      && test other.files2.${path};
+      && (other.files or {}) ? ${path}
+      && test other.files.${path};
     candidates = builtins.attrNames (config.ai.internal.agentsMdTargets or {});
   in
     if builtins.elem path sharedTargets
@@ -159,8 +159,8 @@
     shared = builtins.elem path sharedTargets;
     entry =
       if shared
-      then config.ai.files2.${path}
-      else cfg.files2.${path};
+      then config.ai.files.${path}
+      else cfg.files.${path};
     contentReplaced =
       if shared
       then entry._contentPrio < (lib.mkDefault null).priority
@@ -170,7 +170,7 @@
       then !candidate.enable
       else candidate._contentPrio == entry._contentPrio)
     path;
-    option = suffix: lib.showOption (["ai"] ++ lib.optional (owner != null) owner ++ ["files2" path] ++ suffix);
+    option = suffix: lib.showOption (["ai"] ++ lib.optional (owner != null) owner ++ ["files" path] ++ suffix);
   in
     if !entry.enable
     then "${option ["enable"]} = false switches off `${path}`, the file that carries it"

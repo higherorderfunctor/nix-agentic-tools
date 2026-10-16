@@ -12,7 +12,7 @@
   in
     extracted.get (extracted.load {dir = ../extracted;}).aggregate;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) idempotentFlags kiroCliSettings kiroSteeringContent kiroWrappedDrvs renderKiroSecrets renderedMcpJson soleFork soleSame;
-  mcpFile = ev: ev.config.ai.kiro.files2."${ev.config.ai.kiro.configDir}/settings/mcp.json";
+  mcpFile = ev: ev.config.ai.kiro.files."${ev.config.ai.kiro.configDir}/settings/mcp.json";
   hookFiles = ev: let
     prefix = "${ev.config.ai.kiro.configDir}/hooks/";
   in
@@ -190,7 +190,7 @@ in {
         tree = result.options.ai.kiro;
       in
         lib.all (path: !lib.hasAttrByPath path tree && lib.hasAttrByPath (["cli"] ++ path) tree) moved
-        && lib.all (key: builtins.hasAttr key tree) ["activation2" "agents" "configDir" "context" "enable" "files2" "hooks" "mcpServers" "permissions" "rules" "skills"]
+        && lib.all (key: builtins.hasAttr key tree) ["activation" "agents" "configDir" "context" "enable" "files" "hooks" "mcpServers" "permissions" "rules" "skills"]
         && tree.cli ? enable
         && tree.enable.readOnly
         && !(builtins.tryEval (evaluate {ai.kiro = {package = null;};}).config).success;
@@ -318,7 +318,7 @@ in {
           then selected.config.ai.kiro.cli.native.settings.chat.enableC2s == null && selected.config.ai.kiro.cli.native.settings.chat.enableWorkflows == null
           else if backend == "hm"
           then setting == true && explicitFalse.config.ai.kiro.cli.native.settings.chat.${case.setting} == false
-          else setting == null && !(selected.config.ai.kiro.files2 ? ".kiro/settings/cli.json")
+          else setting == null && !(selected.config.ai.kiro.files ? ".kiro/settings/cli.json")
         )
         && lib.any (item: !item.assertion && lib.hasInfix "ai.kiro.cli.${name}.enable requires" item.message) requiresV3.config.assertions
         && lib.any (item:
@@ -805,7 +805,7 @@ in {
         script = unit.content.run;
       in
         !(result.config.home.file ? ".kiro/settings/mcp.json")
-        && result.config.ai.files2.".kiro/settings/mcp.json".method == "ro"
+        && result.config.ai.files.".kiro/settings/mcp.json".method == "ro"
         && lib.hasInfix ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' script
         && lib.hasInfix "/bin/envsubst '\${KIRO_MCP_JIRA_URL}'" script
         # The mode is DECLARED in the plan now, not an argument inside a
@@ -869,9 +869,9 @@ in {
       let
         evaluated = evalHm {ai.kiro.cli.enable = true;};
       in
-        evaluated.config.ai.files2.".kiro/settings/cli.json".method
+        evaluated.config.ai.files.".kiro/settings/cli.json".method
         == "ro"
-        && evaluated.config.ai.files2.".kiro/settings/cli.json".mode == null
+        && evaluated.config.ai.files.".kiro/settings/cli.json".mode == null
         && kiroCliSettings evaluated == {}
     );
 
@@ -886,7 +886,7 @@ in {
           };
         };
       in
-        result.config.ai.files2.".kiro/settings/cli.json".method
+        result.config.ai.files.".kiro/settings/cli.json".method
         == "ro"
         && (kiroCliSettings result)."chat.defaultModel" == "claude-sonnet-4"
     );
@@ -1740,7 +1740,7 @@ in {
       in
         target.method
         == "ro"
-        && result.config.ai.files2.".kiro/settings/mcp.json".method == "ro"
+        && result.config.ai.files.".kiro/settings/mcp.json".method == "ro"
         && target.content.run != null
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
@@ -1985,7 +1985,7 @@ in {
           ai.skills.stack-fix = src;
         };
       in
-        result.config.ai.files2Owners.".kiro/skills/stack-fix"
+        result.config.ai.filesOwners.".kiro/skills/stack-fix"
         == ["kiro"]
         && result.config.home.file.".kiro/skills/stack-fix/SKILL.md".source == "${src}/SKILL.md"
     );
@@ -2864,9 +2864,9 @@ in {
       in
         kiroCliSettings result
         == {"chat.enableTangentMode" = true;}
-        && result.config.ai.files2.".kiro/settings/cli.json".method == "ro"
+        && result.config.ai.files.".kiro/settings/cli.json".method == "ro"
         && !(result.config.files ? ".kiro/settings/cli.json")
-        && !((evalDevenv {ai.kiro.cli.enable = true;}).config.ai.files2 ? ".kiro/settings/cli.json")
+        && !((evalDevenv {ai.kiro.cli.enable = true;}).config.ai.files ? ".kiro/settings/cli.json")
     );
 
     # Devenv: Kiro context joins the shared repository-root AGENTS.md.
@@ -2995,7 +2995,7 @@ in {
         nameAsserts != [] && (builtins.head nameAsserts).assertion == false
     );
 
-    # ── Kiro steering through ai.kiro.files2 ─────────────────────────────
+    # ── Kiro steering through ai.kiro.files ─────────────────────────────
 
     # Two generators producing the same target with divergent whole entries at
     # the same priority must fail. A rule named "AGENTS" and the default context
@@ -3031,7 +3031,7 @@ in {
         in
           lib.elem legacy config.ai.kiro.legacyLedgers
           && lib.elem legacy config.ai.legacyLedgers
-          && (enable || config.ai.kiro.files2 == {})) [false true]) [evalHm evalDevenv]
+          && (enable || config.ai.kiro.files == {})) [false true]) [evalHm evalDevenv]
     );
 
     # Conditional steering is a link on Home Manager and a read-only copy on
@@ -3062,9 +3062,9 @@ in {
         == dv.config.ai.kiro._generatedFiles.".kiro/steering/enter-test.md".content.text
         && lib.hasInfix "CONTEXT-TOKEN." (markdownInput dv "AGENTS.md").text
         && !(dv.config.files ? ".kiro/steering/enter-test.md")
-        && dv.config.ai.files2.".kiro/steering/enter-test.md".method.devenv == "ro"
-        && dv.config.ai.files2.".kiro/steering/enter-test.md".mode == null
-        && (harness.ownPlan "kiro" "files2-apply" dv).targets != []
+        && dv.config.ai.files.".kiro/steering/enter-test.md".method.devenv == "ro"
+        && dv.config.ai.files.".kiro/steering/enter-test.md".mode == null
+        && (harness.ownPlan "kiro" "files-apply" dv).targets != []
     );
 
     # Engine prune precedes native link checks, with and without native files.
@@ -3078,7 +3078,7 @@ in {
           config
           ;
       in
-        lib.elem "ai2:link-check" config.tasks."ai2:files2-prune".before
+        lib.elem "ai:link-check" config.tasks."ai:files-prune".before
         && !(config.tasks ? "ai:kiro:materialize-steering")) [{} {"probe.txt".text = "probe";}]
     );
 
@@ -3094,7 +3094,7 @@ in {
               matcher = ["src/**"];
               text = "SYMLINK-RULE-TOKEN.";
             };
-            files2 = {
+            files = {
               ".kiro/steering/AGENTS.md".content.text = "CONSUMER-CONTEXT.";
               ".kiro/steering/symlinked.md".enable = false;
             };
@@ -3103,7 +3103,7 @@ in {
         hm = evalHm cfg;
         dv = evalDevenv cfg;
       in
-        hm.config.ai.files2.".kiro/steering/AGENTS.md".content.text
+        hm.config.ai.files.".kiro/steering/AGENTS.md".content.text
         == "CONSUMER-CONTEXT."
         && !(hm.config.home.file ? ".kiro/steering/symlinked.md")
         && fromGeneratedTree "AGENTS.md" (deliveredFiles dv.config)."AGENTS.md"

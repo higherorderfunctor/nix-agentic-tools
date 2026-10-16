@@ -1,8 +1,8 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-10-15 — Kiro steering uses engine copies; Codex skill
+> **Last verified:** 2026-10-16 — Kiro steering uses engine copies; Codex skill
 > discovery was re-probed on 0.161.0; skills are staged entries the ai-module
-> files engine walks. Codex declares its skill migration through activation2,
+> files engine walks. Codex declares its skill migration through activation,
 > before linkCheck on both backends. The repository's committed instruction
 > files are read-only copies the files engine writes, never `files.*` symlinks;
 > the generator's materializer and the AGENTS.md seed are gone. Kiro and Kimchi
@@ -101,7 +101,7 @@ createSymlinkScript = filename: fileOption: ''
 No recursion in this branch — one `ln -s` per entry. Upstream
 `src/modules/files.nix:115` updates with `ln -sf` without `-n`: an existing link
 to a directory is followed, so a changed target attempts to create a link inside
-the old read-only store directory and fails. ai-module's one `files2-guard`
+the old read-only store directory and fails. ai-module's one `files-guard`
 checks desired native destinations after engine pruning and pre-link commands,
 and before `devenv:files`. It accepts the desired store link, removes changed
 store links, and refuses regular files, directories, special files, non-store
@@ -189,10 +189,10 @@ the per-file inputs that make direnv reload after an edit.
 Codex is the exception. Its 0.161.0 scanner ignores a real skill directory
 containing symlinked leaves but discovers a symlinked skill directory. Codex
 therefore stages each directory with `recursive = false` for the files engine.
-`activation2.codex-migrate-skill-links` declares `after = []` and
+`activation.codex-migrate-skill-links` declares `after = []` and
 `before = ["linkCheck"]` on both backends. On devenv this becomes
-`ai2:codex-migrate-skill-links`, after `devenv:files:cleanup` and before
-`ai2:link-check`; on Home Manager it becomes `ai2-codex-migrate-skill-links`,
+`ai:codex-migrate-skill-links`, after `devenv:files:cleanup` and before
+`ai:link-check`; on Home Manager it becomes `ai-codex-migrate-skill-links`,
 before `checkLinkTargets` with no predecessors. Skill names are restricted at
 evaluation; the command validates the whole target set first, rejects non-store
 or non-directory content, and refuses symlinked `.agents` or `skills` parents

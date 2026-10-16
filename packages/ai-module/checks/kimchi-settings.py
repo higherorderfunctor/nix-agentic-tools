@@ -10,11 +10,11 @@ import subprocess
 import sys
 import tempfile
 
-spec = importlib.util.spec_from_file_location("files2_engine", sys.argv[1])
+spec = importlib.util.spec_from_file_location("files_engine", sys.argv[1])
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 data = json.loads(Path(sys.argv[2]).read_text())
-os.environ["FILES2_BASH"] = data["bash"]
+os.environ["FILES_BASH"] = data["bash"]
 
 def restored(actual, declared):
     for key, value in declared.items():
@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory() as temporary:
                 root.mkdir()
                 os.environ.update(HOME=str(root), DEVENV_ROOT=str(root))
                 os.chdir(root)
-                state, old = root / "state/files2/ai.json", root / "state"
+                state, old = root / "state/files/ai.json", root / "state"
                 config_path = root / steps["plain"]["configPath"]
                 harness = root / steps["plain"]["harnessDir"]
                 legacy = steps["disabled"]["legacyLedgers"]

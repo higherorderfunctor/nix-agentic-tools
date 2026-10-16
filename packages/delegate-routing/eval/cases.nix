@@ -35,10 +35,10 @@
         inherit path;
         sourcePath = toString (file.source or file.rendered);
       }
-      else if (config.ai.files2.${path}.content.run or null) != null
+      else if (config.ai.files.${path}.content.run or null) != null
       then {
         inherit path;
-        renderCommand = config.ai.files2.${path}.content.run;
+        renderCommand = config.ai.files.${path}.content.run;
         renderShell = lib.getExe pkgs.bash;
       }
       else throw "acceptance case ${id}: cannot capture delivered file ${path}")

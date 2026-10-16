@@ -37,7 +37,7 @@ def main():
             active["targetPath"]: targets,
             fixture["empty"]["planPath"]: empty_plan,
         }
-        ledger = state / "nix-agentic-tools/files2/ai.json"
+        ledger = state / "nix-agentic-tools/files/ai.json"
         run(bash, fixture["empty"]["prune"], root, state, {**replacements, fixture["python"]: "/missing"})
         assert fixture["python"] in fixture["empty"]["prune"] and not ledger.exists(), "prune without state started the engine"
         link = root / "links/a.txt"

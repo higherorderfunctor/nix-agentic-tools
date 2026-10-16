@@ -43,9 +43,9 @@
         inherit (config.ai.kimchi) legacyLedgers;
         plan = lib.filter (item: lib.hasPrefix "${agentsDir}/" item.path) (files.normalize {
           inherit backend;
-          files = config.ai.files2;
+          files = config.ai.files;
           namespace = "ai";
-          owners = config.ai.files2Owners;
+          owners = config.ai.filesOwners;
         });
         texts = lib.mapAttrs (_: entry: entry.content.text) config.ai.kimchi._generatedFiles;
       })
@@ -65,12 +65,12 @@ in {
             ai.kimchi = {
               agents.reviewer = content.text or content.source;
               enable = true;
-              files2.${path}.content = content;
+              files.${path}.content = content;
             };
           };
           inherit (evaluated) config;
           delivered = (deliveredFiles config).${path};
-          choice = config.ai.files2.${path}.content._choice;
+          choice = config.ai.files.${path}.content._choice;
         in
           delivered.${choice}
           == toString content.${choice}
@@ -135,14 +135,14 @@ in {
         moved = [agentPath extensionPath skillPath] ++ lib.optional (backend == "hm") contextPath;
         disabled = (backends.${backend} (lib.recursiveUpdate settings {ai.kimchi.enable = false;})).config;
         overridden = backends.${backend} (lib.recursiveUpdate settings {
-          ai.kimchi.files2 = {
+          ai.kimchi.files = {
             ${agentPath}.method = "symlink";
             ${contextPath}.content.text = "REPLACEMENT";
             ${extensionPath}.enable = false;
           };
         });
         suppressed = backends.${backend} (lib.recursiveUpdate settings {
-          ai.kimchi.files2.${contextPath}.enable = false;
+          ai.kimchi.files.${contextPath}.enable = false;
         });
         expectedLedger = {
           codec = "dir";
@@ -156,22 +156,22 @@ in {
       in
         lib.all (path:
           staged ? ${path}
-          && config.ai.kimchi.files2 ? ${path}
-          && config.ai.files2Owners.${path} == ["kimchi"]
-          && config.ai.files2.${path}.mode == null
-          && config.ai.files2.${path}.executable == null)
+          && config.ai.kimchi.files ? ${path}
+          && config.ai.filesOwners.${path} == ["kimchi"]
+          && config.ai.files.${path}.mode == null
+          && config.ai.files.${path}.executable == null)
         moved
         && lib.all (path: fromGeneratedTree path delivered.${path}) [agentPath contextPath extensionPath]
-        && config.ai.files2.${agentPath}.method == "ro"
-        && config.ai.files2.${agentPath}.format == "markdown"
-        && config.ai.files2.${extensionPath}.method == "symlink"
-        && config.ai.files2.${extensionPath}.format == "raw"
-        && config.ai.files2.${skillPath}.method == "symlink"
-        && config.ai.files2.${skillPath}.recursive
+        && config.ai.files.${agentPath}.method == "ro"
+        && config.ai.files.${agentPath}.format == "markdown"
+        && config.ai.files.${extensionPath}.method == "symlink"
+        && config.ai.files.${extensionPath}.format == "raw"
+        && config.ai.files.${skillPath}.method == "symlink"
+        && config.ai.files.${skillPath}.recursive
         && delivered.${"${skillPath}/SKILL.md"}.source == "${./fixtures/probe-skill}/SKILL.md"
         && delivered.${"${skillPath}/scripts/executable-probe"}.source == "${./fixtures/probe-skill}/scripts/executable-probe"
         && (markdownInput evaluated contextPath).text == "ROOT\n\nLOCAL"
-        && config.ai.files2.${contextPath}.method
+        && config.ai.files.${contextPath}.method
         == (
           if backend == "hm"
           then "symlink"
@@ -180,10 +180,10 @@ in {
         && lib.elem expectedLedger config.ai.kimchi.legacyLedgers
         && disabled.ai.kimchi.legacyLedgers == config.ai.kimchi.legacyLedgers
         && lib.elem expectedLedger disabled.ai.legacyLedgers
-        && disabled.ai.files2 == {}
-        && overridden.config.ai.files2.${agentPath}.method == "symlink"
+        && disabled.ai.files == {}
+        && overridden.config.ai.files.${agentPath}.method == "symlink"
         && !(deliveredFiles overridden.config ? ${extensionPath})
-        && overridden.config.ai.files2.${contextPath}.content.text == "REPLACEMENT"
+        && overridden.config.ai.files.${contextPath}.content.text == "REPLACEMENT"
         && !(deliveredFiles suppressed.config ? ${contextPath})
         && lib.all (assertion: assertion.assertion) config.assertions) (builtins.attrNames backends)
     );

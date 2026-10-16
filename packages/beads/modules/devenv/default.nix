@@ -84,7 +84,7 @@ in {
         beads-server.exec = "${lifecycleExe} server";
       };
 
-      ai.beads.activation2.beads-prepare.command = "${lifecycleExe} prepare";
+      ai.beads.activation.beads-prepare.command = "${lifecycleExe} prepare";
 
       # Manual lifecycle entry points remain native tasks.
       tasks =

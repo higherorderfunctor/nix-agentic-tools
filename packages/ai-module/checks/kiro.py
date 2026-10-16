@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 
-spec = importlib.util.spec_from_file_location("files2_engine", sys.argv[1])
+spec = importlib.util.spec_from_file_location("files_engine", sys.argv[1])
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 fixtures = json.loads(Path(sys.argv[2]).read_text())
@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory() as temporary:
             root, old = base / "root", base / "state"
             steering = root / ".kiro/steering"
             steering.mkdir(parents=True)
-            state = old / "files2/ai.json"
+            state = old / "files/ai.json"
             legacy = steps[0]["legacyLedgers"]
             ledger = old / next(item["ledger"] for item in legacy if item["path"] == ".kiro/steering")
             ledger.parent.mkdir(parents=True)

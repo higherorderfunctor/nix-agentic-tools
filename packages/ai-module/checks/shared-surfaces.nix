@@ -2,14 +2,14 @@
 # imports a production runtime: each runtime is a `runtimeModule` plus a skill
 # producer, and the root AGENTS.md composer is a plain layer-2 module. Context
 # arbitration (agreement, replacement, suppression) stays upstream in the
-# composer; files2 only sees its one emitted entry or none. Conflicting runtime
+# composer; files only sees its one emitted entry or none. Conflicting runtime
 # claims on one path are proven by runtime-forward.nix's "runtime collision".
 {
   lib,
   pkgs,
   ...
 }: let
-  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   runtimeModule = import ../lib/runtime.nix;
   skill = ./fixtures/skill;
   # Written independently of the walker: the fixture's leaves, nested dirs included.
@@ -41,14 +41,14 @@
   # Each runtime renders the shared skill pool under its own prefix at layer 1.
   producer = runtime: {
     imports = [(runtimeModule {inherit (runtime) enabled name;})];
-    ai.${runtime.name}.files2.${skillPath runtime} = {
+    ai.${runtime.name}.files.${skillPath runtime} = {
       content.source = skill;
       recursive = true;
     };
   };
   # The composer emits its already-arbitrated text once at layer 2, or nothing.
   composer = text: {
-    ai.files2."AGENTS.md" = {
+    ai.files."AGENTS.md" = {
       content.text = text;
       format = "markdown";
       method = "ro";
@@ -60,11 +60,11 @@
       modules = [../modules/common.nix] ++ map producer runtimes ++ modules;
     }).config;
   plan = backend: config:
-    files2.normalize {
+    fileLib.normalize {
       inherit backend;
-      files = config.ai.files2;
+      files = config.ai.files;
       namespace = "ai";
-      owners = config.ai.files2Owners;
+      owners = config.ai.filesOwners;
     };
   backends = ["devenv" "hm"];
   summary = item: {
@@ -90,8 +90,8 @@
         }
       ]);
   in
-    lib.optional (lib.any (path: lib.hasPrefix ".retired/" path) (builtins.attrNames config.ai.files2)) "disabled runtime reached layer 2"
-    ++ lib.optional (config.ai.files2Owners != lib.listToAttrs (map (runtime: lib.nameValuePair (skillPath runtime) [runtime.name]) enabled)) "owners"
+    lib.optional (lib.any (path: lib.hasPrefix ".retired/" path) (builtins.attrNames config.ai.files)) "disabled runtime reached layer 2"
+    ++ lib.optional (config.ai.filesOwners != lib.listToAttrs (map (runtime: lib.nameValuePair (skillPath runtime) [runtime.name]) enabled)) "owners"
     ++ lib.concatMap (backend: lib.optional (map summary (plan backend config) != expected) "${backend}: plan") backends;
   failures = check "A\nB";
 in {

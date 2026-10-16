@@ -53,7 +53,7 @@
       inherit
         (evaluate {
           ai = {
-            activation2Order.secretNodes = ["fixture-provider"];
+            activationOrder.secretNodes = ["fixture-provider"];
             kiro = {
               cli.enable = enabled;
               cli.native.settings = lib.optionalAttrs (lib.elem name ["helper" "plain" "private" "secret"]) {chat.enableTangentMode = true;};
@@ -73,9 +73,9 @@
         ;
       plan = files.normalize {
         inherit backend;
-        files = config.ai.files2;
+        files = config.ai.files;
         namespace = "ai";
-        owners = config.ai.files2Owners;
+        owners = config.ai.filesOwners;
       };
       expected =
         map (hook: ".kiro/hooks/${hook}.json") hookNames
@@ -88,20 +88,20 @@
         else config.tasks;
       applyName =
         if backend == "hm"
-        then "ai2-files2-apply"
-        else "ai2:files2-apply";
+        then "ai-files-apply"
+        else "ai:files-apply";
       apply = graph.${applyName};
       prune =
         graph.${
           if backend == "hm"
-          then "ai2-files2-prune"
-          else "ai2:files2-prune"
+          then "ai-files-prune"
+          else "ai:files-prune"
         };
       hasRun = lib.any (item: item.content ? run) plan;
     in
       assert config.ai.kiro.legacyLedgers == legacy ".kiro";
       assert lib.all (item: lib.elem item config.ai.legacyLedgers) (legacy ".kiro");
-      assert builtins.attrNames config.ai.kiro.files2 == lib.sort builtins.lessThan expected;
+      assert builtins.attrNames config.ai.kiro.files == lib.sort builtins.lessThan expected;
       assert lib.all (item:
         item.method
         == "ro"
@@ -122,7 +122,7 @@
       assert lib.elem (
         if backend == "hm"
         then "checkLinkTargets"
-        else "ai2:link-check"
+        else "ai:link-check"
       )
       prune.before;
       assert (graph ? ${applyName}) == (plan != []);
@@ -133,15 +133,15 @@
       || lib.elem (
         if backend == "hm"
         then "linkGeneration"
-        else "ai2:files-linked"
+        else "ai:files-linked"
       )
       apply.after;
       assert plan
       == []
       || lib.elem (
         if backend == "hm"
-        then "ai2-files-ready"
-        else "ai2:files-ready"
+        then "ai-files-ready"
+        else "ai:files-ready"
       )
       apply.before;
       assert lib.all (item: item.assertion) config.assertions; {
@@ -156,7 +156,7 @@
     customDisabled = (evaluate {ai.kiro.configDir = ".custom";}).config;
   in
     assert customDisabled.ai.kiro.legacyLedgers == legacy ".custom";
-    assert customDisabled.ai.kiro.files2 == {};
+    assert customDisabled.ai.kiro.files == {};
       lib.genAttrs ["directory" "disabled" "empty" "helper" "plain" "private" "secret"] generate);
   fixtureJson = builtins.toJSON {
     inherit fixture plainUrl;

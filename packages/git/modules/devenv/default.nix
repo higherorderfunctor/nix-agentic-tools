@@ -14,7 +14,7 @@
 # branchless/config and hand edits; keys it does not set fall through. When
 # the rendered attrset is empty the task removes the include instead.
 #
-# The task runs on every shell entry, after `ai2:git-branchless-init` when that
+# The task runs on every shell entry, after `ai:git-branchless-init` when that
 # exists (packages/git-branchless), because `git branchless init` appends its
 # own include on a fresh repository. Outside a repository, with nothing to
 # write, it does nothing.
@@ -66,7 +66,7 @@ in {
     '';
   };
 
-  config.ai.git.activation2.git-config = {
+  config.ai.git.activation.git-config = {
     name.devenv = "git:config";
     command = ''
       ${lib.getExe script} include "$DEVENV_ROOT"${lib.optionalString (config.git.settings != {}) " ${rendered}"}

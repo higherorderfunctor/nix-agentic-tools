@@ -44,8 +44,8 @@ state root, one external Dolt data directory, one contained `DOLT_ROOT_PATH`,
 and one repository lock. No state path, credential value, or generated
 credentials file is copied into the Nix store or source checkout.
 
-`ai.beads.activation2.beads-prepare` runs before shell entry, lowered to
-`ai2:beads-prepare`. No task depends on its former native name. Under the
+`ai.beads.activation.beads-prepare` runs before shell entry, lowered to
+`ai:beads-prepare`. No task depends on its former native name. Under the
 repository lock it creates and verifies only contained runtime configuration,
 including `metrics.disabled=true` in the contained Dolt root. It never
 initializes a database and never publishes. First database initialization is

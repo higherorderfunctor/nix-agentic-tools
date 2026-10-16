@@ -732,7 +732,7 @@ in
       "Each lands as one `<name>.md`: Home Manager writes `<configDir>/harness/agents/`, devenv a trusted project's `.kimchi/agents/`."
       "A normalized record renders to Kimchi frontmatter plus body."
       "Markdown here is Kimchi's own and is not translated, but it is built into the runtime's generated-file tree, where `ai.formatter` formats it, `ai.guards.parseCompare` protects its frontmatter, and `ai.checks.agents` checks it;"
-      "To deliver one agent file as written, replace its whole content with `ai.kimchi.files2.\"<path>\".content = { text = \"<original Markdown>\"; };` or `{ source = ./agent.md; }`; this bypasses the generated Markdown tree."
+      "To deliver one agent file as written, replace its whole content with `ai.kimchi.files.\"<path>\".content = { text = \"<original Markdown>\"; };` or `{ source = ./agent.md; }`; this bypasses the generated Markdown tree."
       "A record's Claude/Copilot `tools` list has no Kimchi reading: it is dropped with a warning naming this option as the remedy."
       "Each file is a read-only copy: Kimchi's /agents commands cannot edit a declared agent, and an agent they create beside it is left alone."
     ];

@@ -74,7 +74,7 @@ in {
       # unit remains dormant outside a graphical session, then consumes this
       # marker exactly once. The service removes it on EVERY exit, so a locked
       # or cancelled keyring cannot become a prompt loop.
-      ai.glab.activation2.glab-keyring-sync = {
+      ai.glab.activation.glab-keyring-sync = {
         after = ["files" "secrets"];
         command = ''
           ${pkgs.coreutils}/bin/mkdir -p -m 0700 ${lib.escapeShellArg keyringPendingDir}

@@ -334,7 +334,7 @@ in {
     # changes (token rotation). See mkRotationCheck above. Gated on
     # Linux (systemd user services) + at least one file-credentialed
     # service, so it is inert for stdio-only or credential-free setups.
-    ai.mcp-services.activation2.mcp-restart-on-secret-rotation = {
+    ai.mcp-services.activation.mcp-restart-on-secret-rotation = {
       after = ["files" "secrets"];
       enable = pkgs.stdenv.hostPlatform.isLinux && credentialedServiceFiles != {};
       command = rotationRestartScript;

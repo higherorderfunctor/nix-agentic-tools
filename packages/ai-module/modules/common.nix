@@ -5,14 +5,14 @@
   ...
 }: let
   activation = import ../lib/activation.nix {inherit lib;};
-  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
 in {
   options.ai = {
-    activation2 = lib.mkOption {
+    activation = lib.mkOption {
       type = lib.types.attrsOf activation.entryType;
       default = {};
     };
-    activation2Order.secretNodes = lib.mkOption {
+    activationOrder.secretNodes = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [];
     };
@@ -26,19 +26,19 @@ in {
         in their own formatter configuration.
       '';
     };
-    files2 = lib.mkOption {
-      type = lib.types.attrsOf files2.entryType;
+    files = lib.mkOption {
+      type = lib.types.attrsOf fileLib.entryType;
       default = {};
     };
     # Destination -> declaring runtimes; written by `runtimeModule` only.
-    files2Owners = lib.mkOption {
+    filesOwners = lib.mkOption {
       type = lib.types.attrsOf (lib.types.listOf lib.types.str);
       default = {};
       internal = true;
     };
     # Old ledgers to import; written by `runtimeModule` only.
     legacyLedgers = lib.mkOption {
-      type = lib.types.listOf files2.legacyLedgerType;
+      type = lib.types.listOf fileLib.legacyLedgerType;
       default = [];
       internal = true;
       # Internal alone still lists the entry's sub-options in option docs.
@@ -51,5 +51,5 @@ in {
       if entry.recursive
       then "${path}/**"
       else path)
-    (lib.filterAttrs (_path: entry: entry.enable) config.ai.files2);
+    (lib.filterAttrs (_path: entry: entry.enable) config.ai.files);
 }

@@ -8,7 +8,7 @@ import stat
 import sys
 import tempfile
 
-spec = importlib.util.spec_from_file_location("files2_engine", sys.argv[1])
+spec = importlib.util.spec_from_file_location("files_engine", sys.argv[1])
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 fixtures = json.loads(Path(sys.argv[2]).read_text())

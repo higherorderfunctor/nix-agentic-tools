@@ -10,9 +10,9 @@ import tempfile
 LEDGER = "ai-delivery-observed.json"
 # The option each observed path is reported under, by delivery path.
 OPTIONS = {
-    "moved.json": 'ai.codex.files2."moved.json"',
-    "new.md": 'ai.codex.files2."new.md"',
-    "tree/nested/deep/leaf.md": 'ai.files2."tree"',
+    "moved.json": 'ai.codex.files."moved.json"',
+    "new.md": 'ai.codex.files."new.md"',
+    "tree/nested/deep/leaf.md": 'ai.files."tree"',
 }
 
 

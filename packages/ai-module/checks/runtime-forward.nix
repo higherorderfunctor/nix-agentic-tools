@@ -3,15 +3,15 @@
   pkgs,
   ...
 }: let
-  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   runtimeModule = import ../lib/runtime.nix;
   path = "settings.json";
   source = ./fixtures/a/b/c.md;
   # A fragment is one definition of a files map; `at` places it in an option.
   entry = field: value: lib.setAttrByPath ([path] ++ field) value;
   at = option: fragment: lib.setAttrByPath option fragment;
-  direct = ["ai" "files2"];
-  runtime = ["ai" "sample" "files2"];
+  direct = ["ai" "files"];
+  runtime = ["ai" "sample" "files"];
   # A non-AI program module declares layer 2 directly beside every runtime.
   program = {
     config,
@@ -20,7 +20,7 @@
   }: {
     options.programs.sample.enable = lib.mkEnableOption "sample program";
     config = lib.mkIf config.programs.sample.enable {
-      ai.files2."program.txt".content.text = "program";
+      ai.files."program.txt".content.text = "program";
     };
   };
   evaluate = runtimes: modules:
@@ -33,11 +33,11 @@
     }).config;
   sample = evaluate {sample.enabled = true;};
   plan = config:
-    files2.normalize {
+    fileLib.normalize {
       backend = "hm";
-      files = config.ai.files2;
+      files = config.ai.files;
       namespace = "ai";
-      owners = config.ai.files2Owners;
+      owners = config.ai.filesOwners;
     };
   selected = config: lib.findFirst (item: item.path == path) null (plan config);
   # Compare only what a case states; `rendered` is a derivation of `value`.
@@ -167,12 +167,12 @@
       alpha.enabled = true;
       beta.enabled = beta;
     } [
-      {ai.alpha.files2.${path}.content.text = "same";}
-      {ai.beta.files2.${path}.content.text = "same";}
+      {ai.alpha.files.${path}.content.text = "same";}
+      {ai.beta.files.${path}.content.text = "same";}
     ];
   collision = twoRuntimes true;
   gated = twoRuntimes false;
-  collisionIssue = ''files2."${path}": runtime owners alpha and beta claim one destination'';
+  collisionIssue = ''files."${path}": runtime owners alpha and beta claim one destination'';
   # Commands and old ledgers forward in either owner state; a command's
   # `enable` follows the owner unless its producer sets it. `wrap` repeats the
   # commands under an option-wide default, which must not drop them.
@@ -185,7 +185,7 @@
     evaluate {sample = {inherit enabled;};} [
       {
         ai.sample = {
-          activation2 = wrap {
+          activation = wrap {
             forced = {
               command = "forced";
               enable = true;
@@ -196,12 +196,12 @@
               runWhenDisabled = true;
             };
           };
-          files2.${path}.content.text = "owned";
+          files.${path}.content.text = "owned";
           legacyLedgers = [ledger];
         };
       }
     ];
-  commands = config: lib.mapAttrs (_: entry: {inherit (entry) command enable runWhenDisabled;}) config.ai.activation2;
+  commands = config: lib.mapAttrs (_: entry: {inherit (entry) command enable runWhenDisabled;}) config.ai.activation;
   expectedCommands = enabled:
     lib.genAttrs ["forced" "plain" "release"] (key: {
       command = key;
@@ -223,7 +223,7 @@
   in
     lib.optional (commands config != expectedCommands enabled) "${state}: commands"
     ++ lib.optional (config.ai.legacyLedgers != [ledger]) "${state}: ledgers"
-    ++ lib.optional ((config.ai.files2 ? ${path}) != enabled) "${state}: files";
+    ++ lib.optional ((config.ai.files ? ${path}) != enabled) "${state}: files";
   # A shared key forwards with its priorities but only the composer claims it.
   sharedKey = "AGENTS.md";
   composed =
@@ -234,9 +234,9 @@
       };
       internal.enabled = true;
     } [
-      {ai.internal.files2.${sharedKey}.content.text = lib.mkDefault "composed";}
+      {ai.internal.files.${sharedKey}.content.text = lib.mkDefault "composed";}
       {
-        ai.alpha.files2 = {
+        ai.alpha.files = {
           ${path}.content.text = "alpha";
           ${sharedKey}.content.text = "replaced";
         };
@@ -245,15 +245,15 @@
   sharedEntry = lib.findFirst (item: item.path == sharedKey) null (plan composed);
   failures =
     lib.concatMap checkCase cases
-    ++ lib.optional (map (item: item.path) (plan disabled) != ["program.txt"] || disabled.ai.files2Owners != {}) "disabled runtime"
-    ++ lib.optional (gated.ai.files2Owners != {${path} = ["alpha"];} || (selected gated).content != {text = "same";}) "disabled runtime owner"
-    ++ lib.optional (files2.validateOwners collision.ai.files2Owners != collisionIssue || (builtins.tryEval (builtins.deepSeq (plan collision) true)).success) "runtime collision"
+    ++ lib.optional (map (item: item.path) (plan disabled) != ["program.txt"] || disabled.ai.filesOwners != {}) "disabled runtime"
+    ++ lib.optional (gated.ai.filesOwners != {${path} = ["alpha"];} || (selected gated).content != {text = "same";}) "disabled runtime owner"
+    ++ lib.optional (fileLib.validateOwners collision.ai.filesOwners != collisionIssue || (builtins.tryEval (builtins.deepSeq (plan collision) true)).success) "runtime collision"
     ++ lib.concatMap ownerCase (lib.cartesianProduct {
       enabled = [false true];
       wrap = [lib.id lib.mkDefault];
     })
     ++ lib.optional (
-      composed.ai.files2Owners
+      composed.ai.filesOwners
       != {
         ${path} = ["alpha"];
         ${sharedKey} = ["internal"];

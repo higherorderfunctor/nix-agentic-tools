@@ -1,5 +1,5 @@
 # Chunk 5b: generated generations executed end to end on both backends. Each
-# scenario is a list of steps; a step declares `ai.files2`, optionally acts on
+# scenario is a list of steps; a step declares `ai.files`, optionally acts on
 # the tree first (`edit` an owned copy, add a `native` key, `seed` identical
 # bytes) and names extra expectations. Every edit or native key precedes an
 # owned change, so the runner expects exactly those bytes backed up and no
@@ -13,7 +13,7 @@
   ...
 }: let
   backends = import ./backends.nix {inherit harness lib pkgs;};
-  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   methods = ["ro" "rw" "symlink"];
   # Text content keeps every plan free of build-time renderings, so the
   # runtime test needs no local build; `rw` parses it as declared keys.
@@ -83,12 +83,12 @@
     ];
   generate = backend: declared: let
     sink = backends.sinks.${backend};
-    config = backends.evaluate backend {files2 = declared.files;};
+    config = backends.evaluate backend {inherit (declared) files;};
     phases = sink.phases config;
     links = lib.mapAttrs (_: sink.target) (sink.native config);
-    plan = files2.normalize {
+    plan = fileLib.normalize {
       inherit backend;
-      files = config.ai.files2;
+      files = config.ai.files;
       namespace = "ai";
     };
     stored = name: value: {
@@ -103,7 +103,7 @@
     inherit links plan;
     # Generated JSON inputs, by store path; the runner substitutes identical
     # local copies so it can execute without building them.
-    replacements = [(stored "files2-ai-plan.json" plan)] ++ lib.optional (builtins.elem "guard" phases) (stored "files2-ai-native.json" links);
+    replacements = [(stored "files-ai-plan.json" plan)] ++ lib.optional (builtins.elem "guard" phases) (stored "files-ai-native.json" links);
   };
   fixtureJson = builtins.toJSON (lib.genAttrs (builtins.attrNames backends.sinks) (backend:
     builtins.listToAttrs (map (scenario: {

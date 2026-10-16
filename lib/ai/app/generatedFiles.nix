@@ -1,11 +1,11 @@
 # A runtime's generated files: its staged entries (`ai.<runtime>._generatedFiles`,
 # `S`), the one formatted, guarded and checked store tree their bytes enter,
-# and the layer-1 definitions (`ai.<runtime>.files2`, `R`) they become.
+# and the layer-1 definitions (`ai.<runtime>.files`, `R`) they become.
 {
   lib,
   pkgs,
 }: let
-  files2 = import ../../../packages/ai-module/lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../../../packages/ai-module/lib/files/default.nix {inherit lib pkgs;};
   generated = import ../../generated.nix {inherit lib;} pkgs;
   surfaces = ["agents" "context" "hooks" "mcpServers" "rules" "settings" "skills"];
   renderers = {
@@ -18,7 +18,7 @@
   # default at layer 1, so a stronger content definition (a consumer's
   # replacement) discards it before it is evaluated, as compiled context needs.
   whole = entry: builtins.elem entry.format ["markdown" "raw"];
-  replacedWhole = files2: path: entry: whole entry && files2.${path}._contentPrio < (lib.mkDefault null).priority;
+  replacedWhole = files: path: entry: whole entry && files.${path}._contentPrio < (lib.mkDefault null).priority;
   # The content `S` contributes to `R` per live path. Text and non-recursive
   # source become their formatted file in `tree`. A recursive source and `run`
   # pass as themselves: the engine walks a recursive source at evaluation,
@@ -68,20 +68,20 @@ in {
     description = "Byte limits on generated files, keyed by path, checked on the built file.";
   };
 
-  # Whether a staged path's final content (`files2.<path>`) is not the
+  # Whether a staged path's final content (`files.<path>`) is not the
   # generated one. A whole-content default is judged by priority alone, so the
   # discarded content stays unevaluated; a value document merges per leaf and
   # is replaced only by another alternative.
   replaced = {
-    files2,
+    files,
     generated,
     staged,
   }: path: let
-    entry = files2.${path};
+    entry = files.${path};
     choice = entry.content._choice;
   in
     if whole staged.${path}
-    then replacedWhole files2 path staged.${path}
+    then replacedWhole files path staged.${path}
     else choice != null && (!(generated.${path} ? ${choice}) || (choice != "value" && entry.content.${choice} != generated.${path}.${choice}));
 
   # `S` → `R`, every field at `mkDefault` so a consumer's `R` definition wins.
@@ -113,7 +113,7 @@ in {
 
   # `S`: the files engine entry plus the surface whose checks its bytes run.
   stagedOption = lib.mkOption {
-    type = lib.types.attrsOf (files2.entryType.substSubModules (files2.entryType.getSubModules
+    type = lib.types.attrsOf (fileLib.entryType.substSubModules (fileLib.entryType.getSubModules
       ++ [
         {
           options.surface = lib.mkOption {
@@ -165,15 +165,15 @@ in {
       };
 
   # The live staged entries with build-time bytes, as `tree` entries. One
-  # whose `files2` entry is switched off, or whose whole content `files2`
+  # whose `files` entry is switched off, or whose whole content `files`
   # replaced, is left out unevaluated.
   treeEntries = {
-    files2,
+    files,
     staged,
   }:
     lib.mapAttrs (_path: entry: {
       content.${entry.content._choice} = entry.content.${entry.content._choice};
       inherit (entry) format recursive surface;
     })
-    (lib.filterAttrs (path: entry: !(files2 ? ${path} && (!files2.${path}.enable || replacedWhole files2 path entry)) && builtins.elem entry.content._choice ["source" "text" "value"]) (live staged));
+    (lib.filterAttrs (path: entry: !(files ? ${path} && (!files.${path}.enable || replacedWhole files path entry)) && builtins.elem entry.content._choice ["source" "text" "value"]) (live staged));
 }

@@ -31,7 +31,7 @@ in {
         !ev.config.services.beads.enable
         && ev.config.packages == []
         && ev.config.processes == {}
-        && !(ev.config.tasks ? "ai2:beads-prepare")
+        && !(ev.config.tasks ? "ai:beads-prepare")
     );
 
     module-beads-devenv-wiring = mkTest "beads-devenv-wiring" (
@@ -52,7 +52,7 @@ in {
         && builtins.attrNames ev.config.processes == ["beads-publisher" "beads-server"]
         && builtins.filter (lib.hasPrefix "beads:") (builtins.attrNames ev.config.tasks)
         == ["beads:bootstrap" "beads:checkpoint" "beads:diagnostics" "beads:status"]
-        && ev.config.tasks."ai2:beads-prepare".before == ["devenv:enterShell"]
+        && ev.config.tasks."ai:beads-prepare".before == ["devenv:enterShell"]
         && lib.hasInfix " publisher" ev.config.processes.beads-publisher.exec
         && lib.hasInfix " server" ev.config.processes.beads-server.exec
     );

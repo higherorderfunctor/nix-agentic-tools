@@ -13,7 +13,7 @@
   generated =
     lib.mapAttrs (backend: sink: let
       prune = sink.entry (backends.evaluate backend {
-        files2."steering/kept.md".content.text = "linked\n";
+        files."steering/kept.md".content.text = "linked\n";
         legacyLedgers = [
           {
             codec = "dir";

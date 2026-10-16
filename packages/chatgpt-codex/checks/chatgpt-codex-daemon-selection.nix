@@ -60,9 +60,9 @@
       .home
       .activation;
   in
-    entries."ai2-files2-prune".text
-    + entries."ai2-files2-apply".text
-    + entries."ai2-codex-daemon-select".text;
+    entries."ai-files-prune".text
+    + entries."ai-files-apply".text
+    + entries."ai-codex-daemon-select".text;
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     chatgpt-codex-daemon-selection =

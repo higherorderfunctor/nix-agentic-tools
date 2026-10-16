@@ -32,22 +32,22 @@
     if entry.name.${backend} != null
     then entry.name.${backend}
     else if backend == "hm"
-    then "ai2-${key}"
-    else "ai2:${key}";
+    then "ai-${key}"
+    else "ai:${key}";
   pointNodes = backend: secretNodes: point:
     (
       if backend == "hm"
       then {
         files = ["linkGeneration"];
         linkCheck = ["checkLinkTargets"];
-        materialized = ["ai2-files-ready"];
+        materialized = ["ai-files-ready"];
         secrets = secretNodes;
-        shell = ["ai2-ready"];
+        shell = ["ai-ready"];
       }
       else {
-        files = ["ai2:files-linked"];
-        linkCheck = ["ai2:link-check"];
-        materialized = ["ai2:files-ready"];
+        files = ["ai:files-linked"];
+        linkCheck = ["ai:link-check"];
+        materialized = ["ai:files-ready"];
         secrets = secretNodes;
         shell = ["devenv:enterShell"];
       }
@@ -83,12 +83,12 @@
     secretNodes,
   }: let
     keys = builtins.attrNames entries;
-    hasGuard = builtins.hasAttr "files2-guard" entries;
+    hasGuard = builtins.hasAttr "files-guard" entries;
     names = map (key: nativeName backend key entries.${key}) keys;
     reserved =
       if backend == "hm"
-      then ["ai2-files-ready" "ai2-ready" "checkLinkTargets" "linkGeneration"] ++ secretNodes
-      else ["ai2:files-linked" "ai2:files-ready" "ai2:link-check" "devenv:enterShell" "devenv:files" "devenv:files:cleanup"] ++ secretNodes;
+      then ["ai-files-ready" "ai-ready" "checkLinkTargets" "linkGeneration"] ++ secretNodes
+      else ["ai:files-linked" "ai:files-ready" "ai:link-check" "devenv:enterShell" "devenv:files" "devenv:files:cleanup"] ++ secretNodes;
     invalid = lib.findFirst (key: builtins.match "[A-Za-z_][A-Za-z0-9_-]*" key == null) null keys;
     invalidDevenvName =
       lib.findFirst (key:
@@ -104,26 +104,26 @@
       if backend == "hm"
       then [
         (edge "checkLinkTargets" "linkGeneration")
-        (edge "linkGeneration" "ai2-files-ready")
-        (edge "ai2-files-ready" "ai2-ready")
+        (edge "linkGeneration" "ai-files-ready")
+        (edge "ai-files-ready" "ai-ready")
       ]
       else
         [
-          (edge "devenv:files:cleanup" "ai2:link-check")
+          (edge "devenv:files:cleanup" "ai:link-check")
         ]
         ++ (
           if hasGuard
-          then [(edge "ai2:link-check" "ai2:files2-guard")]
+          then [(edge "ai:link-check" "ai:files-guard")]
           else if nativeFiles
           then [
-            (edge "ai2:link-check" "devenv:files")
+            (edge "ai:link-check" "devenv:files")
           ]
-          else [(edge "ai2:link-check" "ai2:files-linked")]
+          else [(edge "ai:link-check" "ai:files-linked")]
         )
-        ++ lib.optional nativeFiles (edge "devenv:files" "ai2:files-linked")
+        ++ lib.optional nativeFiles (edge "devenv:files" "ai:files-linked")
         ++ [
-          (edge "ai2:files-linked" "ai2:files-ready")
-          (edge "ai2:files-ready" "devenv:enterShell")
+          (edge "ai:files-linked" "ai:files-ready")
+          (edge "ai:files-ready" "devenv:enterShell")
         ];
     entryEdges = lib.concatMap (key: let
       entry = entries.${key};
@@ -147,17 +147,17 @@
     cycle = lib.findFirst (found: found != null) null (map (node: cycleFrom adjacency [] node) nodes);
   in
     if invalid != null
-    then "ai.activation2: invalid entry name ${builtins.toJSON invalid}"
+    then "ai.activation: invalid entry name ${builtins.toJSON invalid}"
     else if invalidDevenvName != null
-    then "ai.activation2.${invalidDevenvName}: invalid devenv name ${builtins.toJSON (nativeName backend invalidDevenvName entries.${invalidDevenvName})}"
+    then "ai.activation.${invalidDevenvName}: invalid devenv name ${builtins.toJSON (nativeName backend invalidDevenvName entries.${invalidDevenvName})}"
     else if emptyCommand != null
-    then "ai.activation2.${emptyCommand}: command must be nonempty"
+    then "ai.activation.${emptyCommand}: command must be nonempty"
     else if duplicate != null
-    then "ai.activation2: duplicate ${backend} name ${duplicate}"
+    then "ai.activation: duplicate ${backend} name ${duplicate}"
     else if blocked != null
-    then "ai.activation2: reserved ${backend} name ${blocked}"
+    then "ai.activation: reserved ${backend} name ${blocked}"
     else if cycle != null
-    then "ai.activation2: cycle ${lib.concatStringsSep " -> " cycle}"
+    then "ai.activation: cycle ${lib.concatStringsSep " -> " cycle}"
     else null;
 in {
   inherit devenvAfter entryType nativeName pointNodes points validate;

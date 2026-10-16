@@ -89,13 +89,13 @@
         then harness.evalDevenvModules (case.modules ++ [{inherit (case) config;}])
         else evaluate case.backend case.config;
       inherit (evaluated) config;
-      entry = config.ai.${case.owner}.activation2.${case.key};
-      root = config.ai.activation2.${case.key};
+      entry = config.ai.${case.owner}.activation.${case.key};
+      root = config.ai.activation.${case.key};
       native =
         case.native or (
           if hm
-          then "ai2-${case.key}"
-          else "ai2:${case.key}"
+          then "ai-${case.key}"
+          else "ai:${case.key}"
         );
       graph =
         if hm
@@ -120,7 +120,7 @@
       && root.beforeNodes.devenv == (case.beforeNodes or [])
       && graph.${native}.after == lib.concatMap nodesFor expectedAfter
       && graph.${native}.before == lib.concatMap nodesFor ["shell"] ++ (case.beforeNodes or [])
-      && config.ai.${case.owner}.files2 == {}
+      && config.ai.${case.owner}.files == {}
       && (case.owner == "git" || !(builtins.hasAttr native disabledGraph))
       && (case.owner != "beads" || lib.all (task: !(task ? after) && !(task ? before)) (lib.attrValues (lib.filterAttrs (name: _: lib.hasPrefix "beads:" name) graph))));
 in {

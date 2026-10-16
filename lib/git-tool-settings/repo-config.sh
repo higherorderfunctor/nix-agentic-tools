@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Repository-local git configuration for the devenv `git.*` modules. The ONE
 # script behind the devenv tasks `git:config` (packages/git) and
-# `ai2:git-branchless-init` (packages/git-branchless), and the one the runtime
+# `ai:git-branchless-init` (packages/git-branchless), and the one the runtime
 # checks run (checks/git-config/runtime.nix), packaged by repo-config.nix.
 #
 #   include ROOT [RENDERED]

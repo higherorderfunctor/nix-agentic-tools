@@ -3,7 +3,7 @@
 > **Last verified:** 2026-10-16 — non-AI owners use the layer-1 helper; Claude
 > uses engine-backed `rw` ownership, Kiro stages settings and hooks and drains
 > all three legacy ledgers through the engine; Kimchi stages every surface and
-> drains all legacy ledgers, and Claude has an ordered activation2 mode command;
+> drains all legacy ledgers, and Claude has an ordered activation mode command;
 > Codex stages daemon JSON as `ro` and drains legacy ledgers even while
 > disabled; `mkSkillFiles` interpolates every skill source before the files
 > engine walks it; Kiro is gated by `ai.kiro.cli.enable`; factories read the
@@ -78,7 +78,7 @@ config = mkMerge [
 
 **No per-CLI block flips an upstream `programs.<cli>.enable`.** Every runtime
 installs its package through the shared backend transform and delivers its files
-through `ai.<runtime>.files2`, so a consumer sets the launcher switch once and
+through `ai.<runtime>.files`, so a consumer sets the launcher switch once and
 there is no second module to import, enable or keep in step.
 
 ### Assertion conventions
@@ -183,8 +183,8 @@ home.activation.<name> = lib.hm.dag.entryAfter ["linkGeneration"] (script);
 
 File application runs after `linkGeneration`, once Home Manager has linked the
 generation into the home directory. `writeBoundary` alone does not establish
-that ordering. ai-module supplies `files2-prune` before `checkLinkTargets` and
-`files2-apply` after linking; apply depends on prune. Prune clears a retiring
+that ordering. ai-module supplies `files-prune` before `checkLinkTargets` and
+`files-apply` after linking; apply depends on prune. Prune clears a retiring
 copy before a native link checks its destination. Producers state entries and
 abstract activation points rather than declaring writer bundles.
 
@@ -230,20 +230,21 @@ The engine JSON codec preserves leading full-line `//` comments. It tracks
 declared keys, restores changed leaves and retires removed leaves while keeping
 native keys. A document created by the engine is removed only when retirement
 leaves it empty; legacy-imported documents stay because their creation
-provenance is unknown. `files2-rw-runtime`, `ai-activation-settings-mode` and
-`ai-module-kimchi-settings` exercise these cases on real directories.
+provenance is unknown. `ai-module-files-rw-runtime`,
+`ai-activation-settings-mode` and `ai-module-kimchi-settings` exercise these
+cases on real directories.
 
 The files engine publishes each file atomically and saves ownership state for
 idempotent re-runs. It has no activation rollback or compare-and-swap retry for
 concurrent native writers; those are outside the engine MVP.
 
 A new `rw` document defaults to 0600; an existing one loses group/other access.
-Claude also declares `activation2.claude-config-mode` after `materialized`,
+Claude also declares `activation.claude-config-mode` after `materialized`,
 because its empty unpin map omits the document but still needs mode repair. The
 command skips symlinks and missing files. `ai-activation-settings-mode` executes
 the actual HM bodies with both nonempty and empty declarations.
 
-The merged `ai.files2` map is the eval-visible delivery plan. Checks read it
+The merged `ai.files` map is the eval-visible delivery plan. Checks read it
 directly or use the plan-aware `harness.ownedDocument` reader. Callers supply
 content, format and method; backend lowering owns the generated scripts and
 state. Reading a plan derivation back at evaluation would be
@@ -313,13 +314,13 @@ precedence over the stored keyring value.
 ### Files and activation through ai-module
 
 Owners import `packages/ai-module/lib/runtime.nix`, then state final content,
-format and method in `ai.<owner>.files2` or finite commands in
-`ai.<owner>.activation2`. Only ai-module writes native file and activation
-sinks. Semble's cache guard follows `materialized`; glab's keyring marker and
-MCP credential-rotation checks follow `files` and `secrets`. HM lowering wraps
-the whole command in `run`; child command bodies use ordinary external commands,
-not activation-shell functions. Package installs and systemd units keep their
-native configuration surfaces. `outOfStoreSymlink` is not used.
+format and method in `ai.<owner>.files` or finite commands in
+`ai.<owner>.activation`. Only ai-module writes native file and activation sinks.
+Semble's cache guard follows `materialized`; glab's keyring marker and MCP
+credential-rotation checks follow `files` and `secrets`. HM lowering wraps the
+whole command in `run`; child command bodies use ordinary external commands, not
+activation-shell functions. Package installs and systemd units keep their native
+configuration surfaces. `outOfStoreSymlink` is not used.
 
 ### Config parity rule (HM ↔ devenv)
 
@@ -352,7 +353,7 @@ facet-specific defaults or `defaultText`. Modules whose options reference
 `packages/semble` takes the pattern one step further: one program specification
 feeds the shared factory, and one shared runtime-fanout module is parameterized
 by package installation and cache location. Both backends declare cache
-invalidation through `ai.semble.activation2`, after `materialized`. Feature and
+invalidation through `ai.semble.activation`, after `materialized`. Feature and
 runtime selection therefore cannot drift between backends. Runtime selection
 contributes defaults to `ai.<runtime>.*` but deliberately does not set
 `ai.<runtime>.enable`; choosing an integration is not authority to enable the
