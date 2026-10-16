@@ -86,7 +86,17 @@
   # skill packages after row 8. This broader guard remains because a program's
   # implementation callback can still write the wrong pool level, and because
   # non-program package contributors remain valid.
+  #
+  # ── The one sanctioned root writer: layer-1 forwarding ──
+  #
+  # `packages/ai-module/lib/runtime.nix` re-publishes each owner's
+  # `ai.<owner>.{activation2,files2,legacyLedgers}` at the root and records its
+  # claims in `ai.files2Owners`. It sets `_file`, so its definitions report the
+  # helper rather than the importing owner, and only it matches the exemption;
+  # any other root option it wrote would still be reported.
   rootPoolSrcRoot = toString ../..;
+  forwardingHelper = toString ../../packages/ai-module/lib/runtime.nix;
+  forwardedOptions = ["activation2" "files2" "files2Owners" "legacyLedgers"];
 
   runtimePoolProbeConfig = {
     inherit (lib.foldl' lib.recursiveUpdate {} (map (runtime: setEnable runtime true) harnessNames)) ai;
@@ -119,7 +129,10 @@
       value,
     }: let
       declaredIn = map toString (value.declarations or []);
-      foreign = d: isOurs d.file && !(lib.elem (toString d.file) declaredIn);
+      foreign = d:
+        isOurs d.file
+        && !(lib.elem (toString d.file) declaredIn)
+        && !(lib.elem name forwardedOptions && toString d.file == forwardingHelper);
     in
       map (d: "ai.${name} <- ${toString d.file}")
       (lib.filter foreign (value.definitionsWithLocations or []));
@@ -251,5 +264,5 @@
       null negation can operate normally.
     '';
 in {
-  inherit normalizedPoolNames packageOwnerOf packagePoolClaims packagePoolCollisions packagePoolProbeConfigs packagePoolsClean rootPoolClean rootPoolProbeConfig rootPoolSrcRoot rootPoolViolations runtimePoolProbeConfig withEnabledProgramProbes;
+  inherit forwardedOptions forwardingHelper normalizedPoolNames packageOwnerOf packagePoolClaims packagePoolCollisions packagePoolProbeConfigs packagePoolsClean rootPoolClean rootPoolProbeConfig rootPoolSrcRoot rootPoolViolations runtimePoolProbeConfig withEnabledProgramProbes;
 }

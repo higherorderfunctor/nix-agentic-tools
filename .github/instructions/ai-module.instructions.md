@@ -7,13 +7,15 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-14 — option declarations supply policy surfaces and
-> keyed withdrawal; runtime declarations supply normalized policy gaps and the
-> warning suite generates coverage for every runtime, surface and backend; a
-> record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
-> is github.com Copilot with its pools under `ai.copilot.github`; explicit
-> normalized overrides warn for live explicit contributions on unavailable
-> backends, excluding empty or disabled contributions beside inherited folds.
+> **Last verified:** 2026-10-15 — the root-option provenance guard exempts the
+> ai-module layer-1 forwarding helper for its forwarded options; option
+> declarations supply policy surfaces and keyed withdrawal; runtime declarations
+> supply normalized policy gaps and the warning suite generates coverage for
+> every runtime, surface and backend; a record's `optionNamespaces` places
+> launcher and pool options, and `ai.copilot` is github.com Copilot with its
+> pools under `ai.copilot.github`; explicit normalized overrides warn for live
+> explicit contributions on unavailable backends, excluding empty or disabled
+> contributions beside inherited folds.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -1002,7 +1004,11 @@ but packages still do not write root values that fan out beyond their runtime
 ownership. The `rootPoolViolations` provenance guard in
 `checks/module-provenance/helpers.nix` enforces this by reading each root
 option's `definitionsWithLocations`. The declaring module is exempt, which lets
-`sharedOptions.nix` perform its root L1→L2 Dir reshape.
+`sharedOptions.nix` perform its root L1→L2 Dir reshape. So is
+`packages/ai-module/lib/runtime.nix`, for `ai.activation2`, `ai.files2`,
+`ai.files2Owners` and `ai.legacyLedgers` only: it re-publishes each owner's
+layer-1 options at the root and sets `_file`, so its definitions report the
+helper instead of the importing owner.
 
 Two consequences to know before changing it. Consumer override keys are
 `ai.<runtime>.skills.<name>` and `ai.<runtime>.rules.<name>`; package entries

@@ -57,6 +57,7 @@
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
+    ./packages/ai-module/modules/devenv
     ./packages/chatgpt-codex/modules/devenv
     ./packages/claude-code/modules/devenv
     ./packages/copilot-cli/modules/devenv

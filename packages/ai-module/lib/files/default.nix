@@ -74,6 +74,14 @@
       recursive = defaulted types.bool false;
     };
   };
+  # An `own.py` ledger the engine imports into its state once.
+  legacyLedgerType = types.submodule {
+    options = {
+      codec = mkOption {type = types.enum ["dir" "json"];};
+      ledger = mkOption {type = types.str;};
+      path = mkOption {type = types.str;};
+    };
+  };
   validPath = path:
     path
     != ""
@@ -285,5 +293,5 @@
     then null
     else error shared "runtime owners ${lib.concatStringsSep " and " (lib.sort lib.lessThan owners.${shared})} claim one destination";
 in {
-  inherit entryType normalize validate validateOwners;
+  inherit entryType legacyLedgerType normalize validate validateOwners;
 }

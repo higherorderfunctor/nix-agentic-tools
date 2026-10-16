@@ -25,5 +25,11 @@ in {
       default = {};
       internal = true;
     };
+    # Old ledgers to import; written by `runtimeModule` only.
+    legacyLedgers = lib.mkOption {
+      type = lib.types.listOf files2.legacyLedgerType;
+      default = [];
+      internal = true;
+    };
   };
 }
