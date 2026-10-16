@@ -1,42 +1,63 @@
 # External workflows
 
-> **Last verified:** 2026-10-16 — upstream selects the NAT pnpm major; build and
-> runtime use that derivation, with stamped metadata and noninteractive
-> generated dependency migration. Extension links stage in `_generatedFiles` and
-> reach both backends through the files layers, retaining package store context;
-> configured packages use project precedence and live outside auto-discovery.
+> **Last verified:** 2026-10-16 — every launcher call refuses target-package
+> configuration and filters pnpm environment names without case sensitivity.
+> Project dependencies use archives packed after fixup; packed PI retains every
+> Kimchi/NAT patch hunk. Extension links stage in `_generatedFiles` and reach
+> both backends through the files layers; configured packages use project
+> precedence and live outside auto-discovery.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
-in `workflows-sources.json`, independently of Kimchi's lock. Its owner-local
-update target and `updateScript` resolve the release tag to a commit, refresh
-the source hash and fix the pnpm dependency hash. The build reads upstream's
-`kimchiWorkflows.packageManager` (falling back to `packageManager`) from that
-pinned source and selects `pkgs.ai.generic.pnpm_<major>`. An unavailable major
-fails evaluation with the requested pin and missing attribute. The selected NAT
-derivation supplies `fetchPnpmDeps`, the build, and the runtime
-installer/verifier. Before generating distribution metadata, the build stamps
-both manifest package-manager fields to that derivation's exact version,
-together with the release version. TypeScript compilation then carries the same
-pin in source and compiled metadata. Metadata formatting uses `BIOME_BINARY` to
-select Nixpkgs' Biome instead of npm's unpatched Linux executable. Linux fixup
-uses `autoPatchelfHook` and the compiler runtime for Vitest's Rolldown and
-Lightning CSS native bindings in the installed runtime graph. TypeScript 7's
-Linux compiler is static and needs no ELF fixup. Darwin selects native Mach-O
-dependencies and does not use the Linux hook.
+in `workflows-sources.json`, independently of Kimchi's workflows dependency pin.
+Its owner-local update target and `updateScript` resolve the release tag to a
+commit, refresh the source hash and fix the pnpm dependency hash. Build,
+dependency fetcher and runtime use `pkgs.ai.generic.pnpm_10`. `postPatch`
+rejects a different upstream `kimchiWorkflows.packageManager` (falling back to
+`packageManager`) major with a named build error; selecting pnpm requires no
+evaluation-time read of fetched sources. The build stamps both package-manager
+fields to the supplied pnpm's exact version before generating source and
+compiled distribution metadata.
 
-The installed package has `package.json` with `pi.extensions`, `src/`, `dist/`,
-`bin/`, docs and examples. Its `node_modules` holds the locked runtime
-dependency closure, including TypeScript and Vitest because the workflow
-verification path uses them. The installation helper copies dependencies and
-their dependency/peer links once per physical package, without development
-dependencies or a network install. Packages named by pi’s literal
-`VIRTUAL_MODULES` keys are omitted from that graph: the extractor collapses
-subpaths to npm package names in `packages/kimchi/extracted/` under the
-`virtualPackages` key, read directly through `lib.extracted.get`. The installer
-checks every manifest extension entry exists inside the output and every
-`node_modules` symlink resolves inside it. The extension's root manifest retains
-its peer declarations and source entry. See the
-[pinned workflows manifest](https://github.com/getkimchi/kimchi-workflows/blob/7a6765ccc4aa417f38cecce1216dd8dcd3b9fab7/package.json).
+Every managed project dependency uses a `file:/nix/store/...tgz` spec. The
+framework archive comes from this extension's installed output; TypeScript
+7.0.2, Vitest 4.1.10 and `@types/node` 22.20.1 point at its copied runtime
+graph. PI and pi-tui 0.85.1 and typebox 1.3.7 come from the `toolchain`
+passthru. That derivation materializes Kimchi's frozen offline pnpm graph
+without building Kimchi's binary. It copies the packages pnpm materializes from
+Kimchi's patched source, including PI's upstream patches and NAT's package
+identity fix. The pristine `extractionSources` tarballs are
+declaration-extraction inputs, not workflow toolchain replacements. There is no
+separately maintained PI or typebox version pin.
+
+`install-runtime.mjs` copies each physical package once, retains its dependency
+links for direct store use, and rewrites the copied manifests' runtime
+dependency edges to store `file:` tarball specs. After Nix fixup has patched
+native binaries and shebangs, its pack mode creates one archive per physical
+package, excluding `node_modules`. The framework itself is packed too. Pnpm
+unpacks archives into its temporary writable store, so its unconditional bin
+chmod never operates on a read-only Nix store inode. Directory specs can retain
+those inodes on Darwin even with `package-import-method=copy`; that ineffective
+pin is removed. The generated `toolchain.json` supplies all seven managed
+archive specs from the same graph. Development dependencies and peer metadata
+become unnecessary after the resolved graph is closed; optional dependencies
+absent on the host platform are omitted. Native execution still uses Kimchi's
+virtual modules through jiti; the physical PI graph supplies project
+verification. The toolchain build reverse-checks every applicable
+`patchedDependencies` hunk against freshly unpacked archive content with zero
+fuzz; equal versions cannot conceal lost patches. Build-time checks compare
+supplied versions with Kimchi's manifest and the framework's peer/tooling
+ranges, and stamp distribution versions from those same supplied directories.
+The framework compiles and runs its focused checks against that PI toolchain.
+Upstream's wildcard PI peers accept the newer host; its old development pins are
+fixture selections, not compatibility ranges.
+
+The installed package includes `package.json` with `pi.extensions`, `src/`,
+`dist/`, `bin/`, docs and examples. The installer checks extension entries exist
+and copied dependency links remain in the output. The final package adds store
+links to its PI toolchain. Metadata formatting uses `BIOME_BINARY` to select
+Nixpkgs' Biome. Linux fixup uses `autoPatchelfHook` and the compiler runtime for
+Vitest's Rolldown and Lightning CSS bindings; Darwin selects native Mach-O
+dependencies. TypeScript's native compiler needs no Linux ELF fixup.
 
 The package always applies `step-thinking.patch`; there is one installed
 variant. `createAgentStep({ thinking: "high", ... })` accepts PI's native
@@ -50,40 +71,102 @@ level, not gateway enforcement.
 
 The supported host baseline is PI >=0.85.1, whose public setter does not persist
 defaults. Earlier setters write global preferences and are unsupported. The
-packaged host uses PI 0.85.1. The build runs generated API document checks,
-TypeScript checks, and the focused offline thinking regressions. These use
-scripted hosts and the upstream 0.84.1 development type declarations; they make
-no inference calls. The unchanged wildcard peer range does not enforce the host
-baseline: native virtual module aliases select the running harness's SDK. The
-opt-in docs skill links this installed package, including its patched source and
-generated authoring reference.
+packaged host and verification toolchain use PI 0.85.1. The build runs generated
+API document checks, TypeScript checks and focused thinking regressions without
+inference calls. The opt-in docs skill links the installed package, patched
+source and generated authoring reference.
 
-`native-preflight.patch` binds the central project workflow package's managed
-framework dependency to `file:<this installed output>`. Native run/resume
-preparation and local preflight therefore use the same patched API as the
-injected extension, instead of replacing it with upstream npm 0.0.9. The package
-substitutes its final output path during `postPatch`; no extra package variant,
-environment selector, or user configuration is required. Ordinary project
-preparation may still fetch its existing toolchain dependencies through pnpm.
-`pnpm-runtime.patch` replaces upstream's Corepack/PATH/npm fallback with the
-absolute store path of a Nix launcher for the selected pnpm. Node's version
-probe also uses an absolute store executable. The launcher puts NAT Node and the
-shell utilities used by pnpm's generated executable shims ahead of consumer
-PATH, covering API calls and printed retry/verification commands. The existing
-exported-overlay contract keeps this toolchain on NAT's nixpkgs unless the
-consumer explicitly sets `follows` (or uses an unsupported-platform fallback).
+`native-preflight.patch` binds the central workflow package's managed
+dependencies to the installed store closure. Native run/resume preparation,
+preflight and local verification therefore use the same patched framework API.
+`pnpm-runtime.patch` selects an absolute store pnpm launcher and Node probe. The
+launcher sets PATH to NAT Node and the shell utilities used by pnpm's executable
+shims, covering API calls and printed retry/verification commands. The exported
+overlay keeps this toolchain on NAT's nixpkgs unless a consumer sets `follows`
+or uses an unsupported-platform fallback. Upstream recovery messages remain
+untouched.
 
-The workflow install alone passes `--config.confirmModulesPurge=false`: pnpm can
-recreate incompatible generated `node_modules` without a TTY after an earlier
-pnpm major created them. This does not set global CI behavior or remove workflow
-source files. The offline package-manager regression runs production preparation
-with local fixture dependencies, hostile PATH tools, and an incompatible modules
-manifest; it checks the exact metadata pin, actual pnpm installation, Node-based
-verification, and preservation of a sibling user file.
+The workflow package directory belongs to Kimchi. The launcher rejects `.npmrc`,
+`.pnpmfile.cjs` and `pnpm-workspace.yaml` in its target directory before
+starting pnpm, naming the file. These are pnpm 10's automatic project inputs:
+[npm configuration](https://pnpm.io/10.x/npmrc),
+[installation hooks](https://pnpm.io/10.x/pnpmfile) and
+[workspace configuration](https://pnpm.io/10.x/cli/config). Custom hook paths
+and configuration dependencies require one of those refused config files or the
+already-refused manifest `pnpm` settings. The generated `package.json` remains
+the validated dependency/script input; `pnpm-lock.yaml` is generated
+installation state.
 
-The offline install check uses a scripted installer and the actual installed
-framework after runtime dependency pruning, then typechecks and evaluates a
-workflow declaring `thinking` without executing its agents.
+The guard has one implementation, shared by installation, the printed
+verification command and direct launcher calls. For the framework's calls, it
+resolves `--dir` relative to the caller's cwd, otherwise checks cwd. It respects
+the `run` script, `exec` and `--` child-argument boundaries. The version probe
+uses a neutral directory without a workspace file. Every launcher invocation
+prefixes `--ignore-workspace` before the caller's arguments; pnpm parses that
+global option for `install`, `run` and `exec`. Ancestor workspace YAML and its
+rc therefore cannot select a root manifest or provision Node.
+
+The Node launcher filters inherited environment names matching `npm_config_`,
+`pnpm_config_` and `PNPM_` without case sensitivity, including names Bash cannot
+represent as variables. It retains arbitrary other caller variables because
+workflow verification tests may read them (for example `CODE_REVIEW_BIN`). The
+shell clears Node's loader/path overrides before starting that launcher. Fresh
+temporary cache, config, data, state and pnpm-store directories prevent reads
+from user caches; the shell removes them on exit. The remaining settings each
+address an input that still exists:
+
+- `cache-dir` and `store-dir` select the temporary directories instead of user
+  caches. `globalconfig` and `userconfig` are `/dev/null`, refusing user/global
+  npm rc files; `XDG_CONFIG_HOME` isolates pnpm's separate global rc.
+- `enable-pre-post-scripts=false` and `ignore-scripts=true` refuse implicit
+  hooks and lifecycle scripts in the retained project manifest; explicit
+  verification scripts still run.
+- `manage-package-manager-versions=false` refuses another pnpm selected by a
+  manifest's `packageManager` when the launcher runs, including before a
+  manifest has been refreshed by preparation.
+- `offline=true` refuses registry resolution; `update-notifier=false` prevents
+  pnpm's independent update request, which offline mode does not suppress.
+- `script-shell` selects store Bash for manifest scripts instead of pnpm's host
+  shell default.
+- `use-node-version` pins the supplied Node version as defense in depth against
+  any configuration source that still selects Node; pnpm skips provisioning when
+  its current version matches.
+
+The former `ignore-pnpmfile`, `registry` and `verify-deps-before-run` pins
+remain redundant once project configuration, ancestor workspaces, user/global rc
+and inherited configuration variables are excluded.
+
+The project dependency graph is closed. Preparation rejects additional packages
+in dependency sections, `pnpm` graph/runtime configuration and Yarn
+`resolutions`, naming the offending package or setting. Managed development
+entries are refreshed from the supplied toolchain. This validation also refuses
+local paths and cached packages that offline mode alone would accept, and
+`pnpm.executionEnv`, which could provision another Node even in offline mode.
+
+The workflow install passes `--config.confirmModulesPurge=false` so pnpm
+recreates incompatible generated `node_modules` without a TTY after another
+major created them. The install-check regression calls production
+`prepareWorkflowPackage` in a fresh directory with hostile PATH binaries,
+offline explicitly disabled in its environment and user/global rc files that
+request a foreign Node and package-manager management. It refuses project config
+files at the launcher boundary, including `.npmrc` redirecting `lockfile-dir` to
+another manifest's local override, and workspace YAML selecting another Node. An
+ancestor workspace with that Node selection and a hostile rc file stays ignored
+during installation, the exact printed verification command and `exec`. It
+checks the effective production configuration, ignores a mixed-case
+`Npm_Config_use_node_version`, and records zero requests to a local
+registry/Node mirror. A `.npmrc` added after preparation is refused by the exact
+printed verification command. The test compares every imported regular file's
+device/inode against the reachable store graph and rejects project links into
+the store, covering Darwin's chmod precondition on Linux. Darwin execution
+remains a CI responsibility. It checks all seven managed specs, then runs the
+installed `kimchi-workflows verify` to typecheck and test imports of the
+framework, typebox and Kimchi's patched PI declarations (`showError`, `setModel`
+options and forced compaction). It repeats preparation and real verification
+after introducing a foreign pnpm layout, retaining authored files. Added
+dependencies, local paths, overrides, resolutions and runtime provisioning are
+rejected without network. The native preflight check separately exercises the
+installed thinking API through the host loader.
 
 Declare the package with:
 

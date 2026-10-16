@@ -7,25 +7,57 @@
   ...
 }: let
   inherit (pkgs) lib;
-  upstreamManifest = builtins.fromJSON (builtins.readFile "${src}/package.json");
-  requestedPnpm = upstreamManifest.kimchiWorkflows.packageManager or upstreamManifest.packageManager;
-  pnpmMatch = builtins.match "pnpm@([0-9]+)\\..*" requestedPnpm;
-  pnpmAttr = "pnpm_${builtins.head pnpmMatch}";
-  pnpm =
-    if pnpmMatch == null
-    then throw "kimchi-workflows: expected pnpm@<major>.<version>, got ${requestedPnpm}"
-    else if !(builtins.hasAttr pnpmAttr pkgs.ai.generic)
-    then throw "kimchi-workflows: ${requestedPnpm} requires unavailable pkgs.ai.generic.${pnpmAttr}"
-    else pkgs.ai.generic.${pnpmAttr};
+  pnpm = pkgs.ai.generic.pnpm_10;
+  kimchi = pkgs.ai.kimchi;
+  toolchainConfiguration = pkgs.writeText "kimchi-workflow-toolchain.json" (builtins.toJSON {
+    packages = ["@earendil-works/pi-coding-agent" "@earendil-works/pi-tui" "typebox"];
+    patchCommand = lib.getExe pkgs.patch;
+    patchedSource = kimchi.src;
+    tarCommand = lib.getExe pkgs.gnutar;
+  });
+  # Register after setup hooks: a postFixup body precedes autoPatchelf's hook.
+  packRuntime = configuration: ''
+    packRuntime() {
+      ${lib.getExe pkgs.nodejs} ${../../../../src/install-runtime.mjs} "$out" ${configuration} pack
+    }
+    postFixupHooks+=(packRuntime)
+  '';
+  # Materialize Kimchi's locked dependency graph without compiling its binary.
+  toolchain = pkgs.stdenv.mkDerivation {
+    pname = "kimchi-workflow-toolchain";
+    inherit (kimchi) pnpmDeps src version;
+    nativeBuildInputs =
+      [pkgs.nodejs kimchi.pnpmDeps.pnpm pkgs.pnpmConfigHook]
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.autoPatchelfHook];
+    buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.stdenv.cc.cc.lib];
+    dontBuild = true;
+    installPhase = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      runHook preInstall
+      mkdir -p "$out"
+      echo '{}' > "$out/package.json"
+      node ${../../../../src/install-runtime.mjs} "$out" ${toolchainConfiguration}
+      runHook postInstall
+    '';
+    preFixup = packRuntime toolchainConfiguration;
+  };
   runtimePnpm = pkgs.writeShellScriptBin "kimchi-workflows-pnpm" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    export PATH="${lib.makeBinPath [pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nodejs]}''${PATH:+:$PATH}"
-    exec ${lib.getExe pnpm} "$@"
+    export PATH="${lib.makeBinPath [pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nodejs]}"
+    unset NODE NODE_OPTIONS NODE_PATH
+    runtime_directory=$(${pkgs.coreutils}/bin/mktemp -d)
+    trap '${pkgs.coreutils}/bin/rm -rf "$runtime_directory"' EXIT
+    ${lib.getExe pkgs.nodejs} ${./launch-pnpm.mjs} \
+      ${lib.getExe pnpm} ${pkgs.bash}/bin/bash "$runtime_directory" "$@"
   '';
   inherit (extractedLib {inherit pkgs;}) get load;
   inherit (load {dir = ../../../../extracted;}) aggregate;
-  virtualPackages = pkgs.writeText "pi-virtual-packages.json" (builtins.toJSON (get aggregate "virtualPackages"));
+  virtualPackages = pkgs.writeText "pi-virtual-packages.json" (builtins.toJSON {
+    tarCommand = lib.getExe pkgs.gnutar;
+    virtualPackages = get aggregate "virtualPackages";
+  });
   sources = builtins.fromJSON (builtins.readFile ../../../../workflows-sources.json);
   sourcesFile = repoPath ../../../../workflows-sources.json;
   src = pkgs.fetchFromGitHub {
@@ -53,14 +85,16 @@ in
     postPatch = ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      node ${./stamp-toolchain.mjs} check-pnpm package.json '${pnpm.version}'
+      cp ${./nix-toolchain.test.ts} test/nix-toolchain.test.ts
       substituteInPlace src/host/workflow-package-manager.ts \
         --replace-fail '@node@' '${lib.getExe pkgs.nodejs}'
-      substituteInPlace src/host/workflow-package-manager.ts test/nix-package-manager.test.ts \
+      substituteInPlace src/host/workflow-package-manager.ts test/nix-toolchain.test.ts \
         --replace-fail '@pnpm@' '${lib.getExe runtimePnpm}'
-      substituteInPlace test/nix-package-manager.test.ts \
+      substituteInPlace test/nix-toolchain.test.ts \
         --replace-fail '@pnpmVersion@' '${pnpm.version}' \
         --replace-fail '@shell@' '${pkgs.bash}/bin/bash'
-      substituteInPlace src/host/workflow-package.ts test/nix-preflight.test.ts \
+      substituteInPlace src/host/workflow-package.ts test/nix-preflight.test.ts test/nix-toolchain.test.ts \
         --replace-fail '@workflowPackage@' "$out"
     '';
     pnpmDeps = pkgs.fetchPnpmDeps {
@@ -83,6 +117,7 @@ in
       runHook preBuild
       # Upstream leaves version=0.0.0 in git and stamps it at publication.
       # Run the same metadata generator for our release identity.
+      node ${./stamp-toolchain.mjs} stamp package.json '${toolchain}' '${kimchi.extractionSources.kimchi}'
       node --input-type=module <<'JS'
       import fs from 'node:fs';
       const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -101,13 +136,13 @@ in
       runHook preCheck
       pnpm run docs:check
       pnpm run typecheck
-      pnpm exec vitest run test/thinking.test.ts test/nix-package-manager.test.ts
+      pnpm exec vitest run test/thinking.test.ts
       runHook postCheck
     '';
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
-      pnpm exec vitest run test/nix-preflight.test.ts
+      pnpm exec vitest run test/nix-preflight.test.ts test/nix-toolchain.test.ts
       runHook postInstallCheck
     '';
     installPhase = ''
@@ -115,10 +150,12 @@ in
       ${pkgs.coreutils}/bin/mkdir -p "$out"
       ${pkgs.coreutils}/bin/cp -r bin dist docs examples src package.json README.md LICENSE NOTICE "$out/"
       node ${../../../../src/install-runtime.mjs} "$out" ${virtualPackages}
+      node ${./stamp-toolchain.mjs} installed "$out" '${toolchain}'
       runHook postInstall
     '';
+    preFixup = packRuntime virtualPackages;
     passthru = {
-      inherit fixPnpmDepsHash;
+      inherit fixPnpmDepsHash toolchain;
       sourceRev = sources.rev;
       updateScript = packageLib.mkUpdateScript {
         inherit pkgs sourcesFile;

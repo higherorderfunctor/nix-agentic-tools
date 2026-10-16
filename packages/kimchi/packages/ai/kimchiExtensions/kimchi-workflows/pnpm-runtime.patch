@@ -37,20 +37,6 @@
  	)
  }
  
-@@ -193,11 +193,11 @@
- }
- 
- function nodeRecovery(): string {
--	return "Install or update Node.js from https://nodejs.org/en/download, then run: node --version"
-+	return "Update or rebuild the Nix kimchi-workflows package."
- }
- 
- function pnpmRecovery(): string {
--	return `Install it with: npm install --global ${distribution.packageManager}`
-+	return nodeRecovery()
- }
- 
- async function runPackageManagerProbe(
 @@ -211,7 +200,7 @@
  		abortError: () => new Error("workflow package manager probe aborted"),
  		outputLimit: OUTPUT_LIMIT,
@@ -60,6 +46,8 @@
  	// Keep the process cwd for version-manager shims (e.g. asdf's .tool-versions), while directing
  	// pnpm to a neutral workspace. Its --version parser discards version-switching configuration flags.
  	const directory = await mkdtemp(path.join(tmpdir(), "kimchi-package-manager-probe-"))
+@@ -220,1 +209,0 @@
+-		await writeFile(path.join(directory, "pnpm-workspace.yaml"), "packages: []\n", "utf8")
 --- a/src/host/workflow-package.ts
 +++ b/src/host/workflow-package.ts
 @@ -227,7 +227,7 @@
@@ -71,71 +59,3 @@
  }
  
  function installCommand(directory: string, packageManager: WorkflowPackageManagerCommand | undefined): string {
---- /dev/null
-+++ b/test/nix-package-manager.test.ts
-@@ -0,0 +1,65 @@
-+import { execFileSync } from "node:child_process"
-+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
-+import { tmpdir } from "node:os"
-+import path from "node:path"
-+import { expect, it } from "vitest"
-+import { distribution } from "../src/host/distribution.ts"
-+import { prepareWorkflowPackage } from "../src/host/workflow-package.ts"
-+import { resolveWorkflowPackageManager, runWorkflowPackageManager } from "../src/host/workflow-package-manager.ts"
-+
-+it("uses Nix pnpm and Node despite wrong PATH tools and recreates incompatible modules offline", async () => {
-+	const root = await mkdtemp(path.join(tmpdir(), "nix-workflow-pnpm-"))
-+	const originalPath = process.env.PATH
-+	try {
-+		const wrongBin = path.join(root, "wrong-bin")
-+		await mkdir(wrongBin)
-+		for (const name of ["corepack", "node", "npm", "pnpm"]) {
-+			const file = path.join(wrongBin, name)
-+			await writeFile(file, "#!@shell@\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nexit 99\n")
-+			await chmod(file, 0o755)
-+		}
-+		process.env.PATH = wrongBin
-+		const manager = await resolveWorkflowPackageManager()
-+		expect(manager).toEqual({ command: "@pnpm@", args: [] })
-+		expect(distribution.packageManager).toBe("pnpm@@pnpmVersion@")
-+		const manifest = JSON.parse(await readFile("package.json", "utf8"))
-+		expect(manifest.packageManager).toBe(distribution.packageManager)
-+		expect(manifest.kimchiWorkflows.packageManager).toBe(distribution.packageManager)
-+
-+		// Local packages keep the production install path fully offline, including its managed toolchain.
-+		const overrides: Record<string, string> = {}
-+		for (const [index, name] of [distribution.name, "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui", "@types/node", "typebox", "typescript", "vitest"].entries()) {
-+			const directory = path.join(root, `dependency-${index}`)
-+			await mkdir(directory)
-+			await writeFile(path.join(directory, "package.json"), JSON.stringify({ name, version: "1.0.0", bin: name === distribution.name ? { "kimchi-workflows": "cli.mjs" } : undefined }))
-+			await writeFile(path.join(directory, "cli.mjs"), '#!/usr/bin/env node\nconsole.log("nix-node-verifier")\n')
-+			overrides[name] = `file:${directory}`
-+		}
-+		const directory = path.join(root, "workflows")
-+		await mkdir(path.join(directory, "node_modules"), { recursive: true })
-+		await writeFile(path.join(directory, "package.json"), JSON.stringify({ pnpm: { overrides }, scripts: { "verify:workflow": "kimchi-workflows verify" } }))
-+		await writeFile(path.join(directory, "node_modules/.modules.yaml"), "layoutVersion: 0\npackageManager: pnpm@12.0.0\nstoreDir: /incompatible-store\nvirtualStoreDir: .pnpm\n")
-+		await writeFile(path.join(directory, ".npmrc"), "offline=true\n")
-+		await writeFile(path.join(directory, "keep.txt"), "user file")
-+		const prepared = await prepareWorkflowPackage({ directory })
-+		expect(prepared.installed).toBe(true)
-+		expect(prepared.verifyCommand).toContain("@pnpm@")
-+		expect(JSON.parse(await readFile(prepared.manifestPath, "utf8")).packageManager).toBe(distribution.packageManager)
-+		expect(await readFile(path.join(directory, "keep.txt"), "utf8")).toBe("user file")
-+		expect(await readFile(path.join(directory, "node_modules/.modules.yaml"), "utf8")).not.toContain("layoutVersion: 0")
-+		const verified = await runWorkflowPackageManager(manager, ["run", "verify:workflow"], {
-+			cwd: directory,
-+			timeoutMs: 10_000,
-+			timeoutError: () => new Error("offline verifier timed out"),
-+			outputLimit: 4096,
-+		})
-+		expect(verified.code, JSON.stringify(verified)).toBe(0)
-+		expect(verified.stdout).toContain("nix-node-verifier")
-+		const manual = execFileSync("@shell@", ["-c", prepared.verifyCommand.replace("<workflow.ts>", "entry.ts").replace("<workflow.test.ts>", "entry.test.ts")], { cwd: directory, encoding: "utf8" })
-+		expect(manual).toContain("nix-node-verifier")
-+	} finally {
-+		if (originalPath === undefined) delete process.env.PATH
-+		else process.env.PATH = originalPath
-+		await rm(root, { recursive: true, force: true })
-+	}
-+}, 30_000)
