@@ -186,7 +186,7 @@ in {
         hmConfig.ai.claude._generatedFiles ? ".claude/CLAUDE.md"
         && hmConfig.ai.claude._generatedFiles ? ".claude/rules/scoped.md"
         && hmConfig.ai.codex.files ? ".codex/AGENTS.md"
-        && hmConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
+        && hmConfig.ai.kimchi._generatedFiles ? ".config/kimchi/harness/AGENTS.md"
         && hmConfig.ai.kiro._generatedFiles ? ".kiro/steering/AGENTS.md"
         && hmConfig.ai.kiro._generatedFiles ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.claude._generatedFiles ? ".claude/CLAUDE.md"
@@ -742,7 +742,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
+              files2.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
             };
           };
         };
@@ -752,7 +752,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files."AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
+              files2."AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
             };
           };
         };
@@ -761,8 +761,9 @@ in {
         == "CLAUDE-REPLACEMENT"
         && claudeText devenvClaude == "CLAUDE-REPLACEMENT"
         && lib.all claudeOff [evalHm evalDevenv]
-        && markdownOf hmKimchi.config ".config/kimchi/harness/AGENTS.md" == "KIMCHI-REPLACEMENT"
-        && markdownOf devenvKimchi.config "AGENTS.md" == "KIMCHI-REPLACEMENT"
+        && builtins.isString (toString (deliveredFiles hmKimchi.config).".config/kimchi/harness/AGENTS.md".source)
+        && hmKimchi.config.ai.files2.".config/kimchi/harness/AGENTS.md".content.text == "KIMCHI-REPLACEMENT"
+        && (deliveredFiles devenvKimchi.config)."AGENTS.md".text == "KIMCHI-REPLACEMENT"
     );
 
     module-ai-checks-routes-files-by-surface = let

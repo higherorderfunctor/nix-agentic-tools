@@ -9,8 +9,9 @@
 > Claude stages every surface, including HM `.claude.json` as `rw`; the files
 > engine writes its rules copies on devenv; staged Markdown and raw entries are
 > whole-content defaults; Kiro stages every surface, with hooks, settings and
-> steering legacy ledgers declared outside its enable gate; hand rows are
-> confined to the policy-only permissions surface.
+> steering legacy ledgers declared outside its enable gate; Kimchi stages
+> agents, context, extensions and skills, with its agents legacy ledger ungated;
+> hand rows are confined to the policy-only permissions surface.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -123,7 +124,8 @@ rather than a second path field: a runtime names exactly the groups it moves.
   Markdown and raw entries get the same whole-content default at layer 1, and a
   runtime's generated tree leaves out one a stronger content definition
   replaced, judged by `_contentPrio` alone, so Claude's composed context stays
-  unread when a consumer replaces it.
+  unread when a consumer replaces it. Kimchi's staged Home Manager context
+  follows the same rule; devenv uses the shared composer.
 - **Structured documents contribute ordinary leaves.** Codex settings use
   `content.value` at ordinary priority. Adding one leaf keeps generated
   siblings; defaulting the whole content would silently drop them. Text and

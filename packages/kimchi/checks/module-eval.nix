@@ -139,8 +139,8 @@
   };
   hmAgentsDir = ".config/kimchi/harness/agents";
   devenvAgentsDir = ".kimchi/agents";
-  hmAgentUnits = dirUnits "kimchiAgents" hmAgentsDir;
-  devenvAgentUnits = dirUnits "ai:kimchi:agents" devenvAgentsDir;
+  agentFiles = dir: evaluated:
+    lib.filterAttrs (path: _: lib.hasPrefix "${dir}/" path) (deliveredFiles evaluated.config);
   failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
   # The Home Manager settings-copies writer as a runnable script: its prune
   # entry and then its write entry, with home-manager's `run` helper in scope.
@@ -369,7 +369,11 @@ in {
             in
               fromGeneratedTree path file
               && builtins.hasContext file.source
-              && !(file.recursive or false))
+              && !(file.recursive or false)
+              && evaluated.config.ai.kimchi._generatedFiles ? ${path}
+              && evaluated.config.ai.files2.${path}.method == "symlink"
+              && evaluated.config.ai.files2Owners.${path} == ["kimchi"]
+              && !(evaluated.config.ai.kimchi.files ? ${path}))
             names;
           rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "${workflows}";}).config.ai.kimchi.extensions true);
         in
@@ -1471,15 +1475,8 @@ in {
         echo PASS > "$out"
       '';
 
-    # Kimchi reads `<agentDir>/agents/*.md` and a trusted project's
-    # `.kimchi/agents/*.md`. Each agent is a read-only copy in a real
-    # directory, never a store symlink: no home.file or devenv files entry, a
-    # dir ledger, the reconciler's default mode. A portable record renders
-    # without `name:` (the filename is the name); native
-    # Markdown is not translated, so it is the Markdown tree's input as
-    # written, and the tree's formatter and check then process it. An empty
-    # declaration still emits the writer, so removing the last agent
-    # retracts it.
+    # Agents use engine-owned read-only copies; native source bytes still
+    # enter the formatted tree, and empty declarations retire owned copies.
     module-kimchi-agents = mkTest "kimchi-agents" (
       let
         hm = evalHm agentConfig;
@@ -1488,14 +1485,20 @@ in {
           "native.md" = nativeAgent;
           "reviewer.md" = "---\ndescription: \"Reviews code\"\n---\n\nBODY\n";
         };
-        # Each agent is a writable copy of its file in the Markdown tree.
-        delivers = evaluated: dir: units:
-          lib.attrNames units
-          == lib.attrNames expected
-          && lib.all (name:
-            !(units.${name} ? mode)
-            && fromGeneratedTree "${dir}/${name}" {source = units.${name}.store;}
-            && (markdownInput evaluated "${dir}/${name}").text == expected.${name})
+        delivers = evaluated: dir:
+          builtins.attrNames (agentFiles dir evaluated)
+          == map (name: "${dir}/${name}") (builtins.attrNames expected)
+          && lib.all (name: let
+            path = "${dir}/${name}";
+            entry = evaluated.config.ai.files2.${path};
+          in
+            entry.method
+            == "ro"
+            && entry.mode == null
+            && entry.executable == null
+            && fromGeneratedTree path (agentFiles dir evaluated).${path}
+            && (markdownInput evaluated path).text == expected.${name}
+            && !(evaluated.config.ai.kimchi.files ? ${path}))
           (lib.attrNames expected);
         emptyHm = evalHm {ai.kimchi.enable = true;};
         emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
@@ -1525,17 +1528,19 @@ in {
           ["agent-one.md" "store-string.md"];
         underAgents = prefix: lib.filter (lib.hasPrefix prefix);
       in
-        delivers hm hmAgentsDir (hmAgentUnits hm)
-        && delivers devenv devenvAgentsDir (devenvAgentUnits devenv)
+        delivers hm hmAgentsDir
+        && delivers devenv devenvAgentsDir
         && failedAssertions hm == []
         && failedAssertions devenv == []
-        && hm.config.home.activation ? kimchiAgents
-        && hm.config.home.activation ? kimchiAgentsPrune
-        && devenv.config.tasks ? "ai:kimchi:agents"
+        && !(hm.config.home.activation ? kimchiAgents)
+        && !(hm.config.home.activation ? kimchiAgentsPrune)
+        && !(devenv.config.tasks ? "ai:kimchi:agents")
+        && !(hm.config.ai.kimchi.activation ? kimchiAgents)
+        && !(devenv.config.ai.kimchi.activation ? kimchiAgents)
         && underAgents ".config/kimchi/harness/agents" (builtins.attrNames hm.config.home.file) == []
         && underAgents ".kimchi/agents" (builtins.attrNames devenv.config.files) == []
-        && hmAgentUnits emptyHm == {}
-        && devenvAgentUnits emptyDevenv == {}
+        && agentFiles hmAgentsDir emptyHm == {}
+        && agentFiles devenvAgentsDir emptyDevenv == {}
         && (markdownInput fromDir "${devenvAgentsDir}/agent-one.md").source == ../../claude-code/checks/fixtures/claude-agents/agent-one.md
         && deliveredAsSource (evalHm stringConfig) hmAgentsDir
         && deliveredAsSource (evalDevenv stringConfig) devenvAgentsDir
@@ -1589,75 +1594,6 @@ in {
           }
         ]
     );
-
-    # The delivery itself, executed: the real HM prune and write entries and
-    # the real devenv task, against scratch roots. The agent lands as a
-    # read-only real file; a file renamed over it is backed up and replaced by
-    # the declaration on the next run, a file Kimchi created beside it
-    # survives, and an empty declaration removes only the owned file.
-    module-kimchi-agents-runtime = let
-      script = backend: evaluated:
-        pkgs.writeShellScript "kimchi-agents-${backend}" ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          ${
-            # The hm branch is HM activation entry text and needs
-            # home-manager's `run` helper in scope; the devenv task's `.exec`
-            # defines no such helper and must not get one.
-            if backend == "hm"
-            then harness.hmRunShim + evaluated.config.home.activation.kimchiAgentsPrune.text + "\n" + evaluated.config.home.activation.kimchiAgents.text
-            else evaluated.config.tasks."ai:kimchi:agents".exec
-          }
-        '';
-      run = backend: let
-        evaluate =
-          if backend == "hm"
-          then evalHm
-          else evalDevenv;
-        dir =
-          if backend == "hm"
-          then ".config/kimchi/harness/agents"
-          else ".kimchi/agents";
-        declared = script backend (evaluate agentConfig);
-        empty = script backend (evaluate {ai.kimchi.enable = true;});
-        expected = pkgs.writeText "kimchi-reviewer.md" (markdownInput (evalHm agentConfig) "${hmAgentsDir}/reviewer.md").text;
-      in ''
-        export HOME="$TMPDIR/${backend}-home"
-        export XDG_STATE_HOME="$TMPDIR/${backend}-state"
-        export DEVENV_ROOT="$HOME"
-        export DEVENV_STATE="$XDG_STATE_HOME"
-        mkdir -p "$HOME"
-        agent="$HOME/${dir}/reviewer.md"
-
-        ${declared}
-        [ -f "$agent" ] && [ ! -L "$agent" ] || fail '${backend}: agent is not a real file'
-        [ ! -L "$HOME/${dir}" ] || fail '${backend}: agents directory is a symlink'
-        [ "$(stat -c %a "$agent")" = 444 ] || fail '${backend}: agent is not read-only'
-        if printf 'edit\n' > "$agent" 2>/dev/null; then fail '${backend}: agent accepted an in-place write'; fi
-        cmp ${expected} "$agent" || fail '${backend}: agent content'
-
-        # A replacement renamed over the copy, and a Create beside it.
-        printf -- '---\nenabled: false\n' > "$TMPDIR/replacement.md"
-        mv -f "$TMPDIR/replacement.md" "$agent"
-        printf 'created\n' > "$HOME/${dir}/created.md"
-
-        ${declared}
-        cmp ${expected} "$agent" || fail '${backend}: the declaration was not restored'
-        ls "$XDG_STATE_HOME"/nix-agentic-tools/materialize/kimchi-agents-*.bak/reviewer.md.* >/dev/null \
-          || fail '${backend}: the edit was not backed up'
-        [ "$(cat "$HOME/${dir}/created.md")" = created ] || fail '${backend}: a Kimchi-created agent changed'
-
-        ${empty}
-        [ ! -e "$agent" ] || fail '${backend}: an empty declaration kept the agent'
-        [ "$(cat "$HOME/${dir}/created.md")" = created ] || fail '${backend}: retraction touched an unowned agent'
-      '';
-    in
-      pkgs.runCommand "module-test-kimchi-agents-runtime" {} ''
-        fail() { echo "FAIL: kimchi-agents-runtime: $1" >&2; exit 1; }
-        ${run "hm"}
-        ${run "devenv"}
-        echo PASS > "$out"
-      '';
 
     module-kimchi-devenv-exact-cwd-guard = let
       guardedPackages = [
