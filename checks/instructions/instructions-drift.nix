@@ -48,17 +48,13 @@
     # contain structured files whose CI-only configuration changes its store
     # path while these Markdown bytes remain identical.
     instructionPlans = evaluated:
-      map (target:
-        lib.mapAttrs (address: _:
-          harness.markdownInput evaluated (
-            if target.path == "."
-            then address
-            else "${target.path}/${address}"
-          ))
-        target.units) (
-        (harness.ownPlan "internal" "ai:agents-md:materialize" evaluated).targets
-        ++ (harness.ownPlan "copilot" "ai:copilot:materialize-instructions" evaluated).targets
-      );
+      map (target: harness.markdownInput evaluated target.path) (composed evaluated).targets
+      ++ map (target:
+        lib.mapAttrs (address: _: harness.markdownInput evaluated "${target.path}/${address}")
+        target.units)
+      (harness.ownPlan "copilot" "ai:copilot:materialize-instructions" evaluated).targets;
+    # The shared AGENTS.md composer's files, as the files engine writes them.
+    composed = harness.ownPlan "internal" "files2-apply";
     failedAssertions = map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) repo.config.assertions);
     # Dev skills stay in the root pool until their program migration. Pin the
     # declared gaps they request rather than suppressing those real warnings.
@@ -80,7 +76,7 @@
       if builtins.length targets != 1
       then throw "instructions-drift: expected one ${runtime} target at ${path}, found ${toString (builtins.length targets)}"
       else lib.mapAttrs (address: unit: unit.store or (pkgs.writeText address unit.text)) (builtins.head targets).units;
-    agentsMd = unitsAt "internal" "ai:agents-md:materialize" ".";
+    agentsMd = (lib.findFirst (target: target.path == "AGENTS.md") (throw "instructions-drift: the composer writes no AGENTS.md") (composed repo).targets).content.source;
     copilotInstructions = pkgs.linkFarm "expected-github-instructions" (unitsAt "copilot" "ai:copilot:materialize-instructions" ".github/instructions");
 
     # Each entry: the tracked path, and the file to compare it against.
@@ -89,7 +85,7 @@
       {
         label = "AGENTS.md";
         tracked = ../../AGENTS.md;
-        generated = agentsMd."AGENTS.md";
+        generated = agentsMd;
         regenerate = "generate:all";
       }
       {
@@ -158,7 +154,7 @@
 
         ${builtins.concatStringsSep "\n" (map compareOne files)}
 
-        agentsMd=${agentsMd."AGENTS.md"}
+        agentsMd=${agentsMd}
         ${lib.concatMapStrings endsInWindow windowNeedles}
 
         # The Copilot instruction files are compared as a TREE rather than

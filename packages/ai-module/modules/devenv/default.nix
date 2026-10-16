@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }: let
@@ -88,14 +89,21 @@
     };
 in {
   imports = [../common.nix];
-  config = {
-    files = files.native;
-    tasks = assert lib.assertMsg (duplicate == null) "ai.activation2.${duplicate}: reserved generated entry";
-    assert lib.assertMsg (copyOverride == null) "ai.files2.\"${copyOverride}\": native copyMode override refused";
-      import ../../lib/lower-devenv.nix {inherit lib;} {
-        entries = generated // config.ai.activation2;
-        inherit nativeFiles;
-        secretNodes = config.ai.activation2Order.secretNodes;
-      };
-  };
+  config = lib.mkMerge [
+    {
+      files = files.native;
+      tasks = assert lib.assertMsg (duplicate == null) "ai.activation2.${duplicate}: reserved generated entry";
+      assert lib.assertMsg (copyOverride == null) "ai.files2.\"${copyOverride}\": native copyMode override refused";
+        import ../../lib/lower-devenv.nix {inherit lib;} {
+          entries = generated // config.ai.activation2;
+          inherit nativeFiles;
+          secretNodes = config.ai.activation2Order.secretNodes;
+        };
+    }
+    # Repository formatting never rewrites a delivered file. A backend without
+    # treefmt has nothing to exclude.
+    (lib.optionalAttrs (options ? treefmt) {
+      treefmt.config.settings.global.excludes = lib.mkIf config.treefmt.enable (lib.mkAfter config.ai.deliveredPaths);
+    })
+  ];
 }

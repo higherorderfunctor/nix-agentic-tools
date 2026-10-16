@@ -5,6 +5,7 @@
 > declarations, with no writer matrix; `poolOptions` covers `agentsDir` and
 > `environmentVariables` only; `optionNamespaces` places launcher and pool
 > options; the devenv file observer lives in ai-module and reads the files plan;
+> the shared AGENTS.md composer reaches the files plan as the owner `internal`;
 > hand rows are confined to the policy-only permissions surface.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
@@ -376,9 +377,9 @@ absence cells without policy edits.
   whose final file is switched off or replaced (no `content._generated`);
   `checkRecord.nix` rejects a stray field.
 - L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
-  single-owner map → `lib/ai/app/sharedAgentsMd.nix`, which lowers that map
-  through the devenv adapter as the pseudo-runtime `internal` (a read-only copy
-  by default, written by `ai:agents-md:materialize`)
+  single-owner map → `lib/ai/app/sharedAgentsMd.nix`, which stages the winner
+  and forwards it through the ai-module layer-1 helper as the owner `internal`
+  (a read-only copy by default, written by the files engine)
 - B7 public file-option declaration and runtime enable gate →
   `lib/ai/app/mkBackendTransform.nix`
 - L5 generic backend lowering → `lib/ai/deliver.nix` (the router) and

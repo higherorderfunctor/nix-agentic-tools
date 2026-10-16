@@ -138,13 +138,14 @@ in {
     };
 
     # Instruction, repo-document and devenv.yaml projections: devenv:files
-    # writes the gitignored ones (Claude rules, Kiro steering, …); the ai:*
-    # writers the committed instruction files (AGENTS.md, .github/). Syncing
-    # devenv.lock needs network access, so it stays outside this aggregate.
+    # writes the gitignored ones (Claude rules, Kiro steering, …); the files
+    # engine (done by ai2:files-ready) and the Copilot writer the committed
+    # instruction files (AGENTS.md, .github/). Syncing devenv.lock needs
+    # network access, so it stays outside this aggregate.
     "generate:all" = {
       description = "Generate instructions, repo documents and devenv.yaml";
       after = [
-        "ai:agents-md:materialize"
+        "ai2:files-ready"
         "ai:copilot:materialize-instructions"
         "devenv:files"
         "generate:devenv-yaml"

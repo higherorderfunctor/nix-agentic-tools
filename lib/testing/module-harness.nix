@@ -456,8 +456,8 @@
   # entries for symlinks (devenv `files`, Home Manager `home.file`), plus each
   # unit of an owned writer's directory plan for a read-only copy, as `{text}`
   # or `{source}` plus its `mode`, plus each `ro`/`rw` entry of `ai.files2`
-  # as its normalized content plus its `method` and `mode`. The shared
-  # AGENTS.md owner (`ai.internal`) is a writer like any runtime. Read it where
+  # as its normalized content plus its `method` and `mode`; the shared
+  # AGENTS.md composer (`ai.internal`) is one of those. Read it where
   # a check asks what reaches the tree rather than how: a file that moves from
   # a symlink to a copy stays where the check looks. Takes the evaluated
   # `config`.
@@ -477,7 +477,7 @@
     copies = lib.concatMap (plans:
       lib.concatMap (record: lib.concatMap copiesOf record.plan.targets)
       (builtins.attrValues plans))
-    (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) (harnessNames ++ ["internal"]));
+    (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) harnessNames);
     engine = map (item: lib.nameValuePair item.path (item.content // {inherit (item) method;} // lib.optionalAttrs (item.mode != null) {inherit (item) mode;})) (engineEntries config);
   in
     builtins.listToAttrs (copies ++ engine) // (config.files or config.home.file);

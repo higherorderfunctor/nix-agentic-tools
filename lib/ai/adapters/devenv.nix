@@ -8,11 +8,7 @@
 }: let
   deliver = import ../deliver.nix {inherit lib pkgs;};
 in
-  args @ {
-    manageTreefmt ? false,
-    options,
-    ...
-  }: let
+  args @ {options, ...}: let
     delivery = deliver {
       inherit (args) cfg config runtime;
       backend = "devenv";
@@ -62,12 +58,6 @@ in
       (lib.optionalAttrs (options ? tasks) {inherit tasks;})
       (lib.optionalAttrs (options ? enterTest) {
         enterTest = lib.mkIf (delivery.owned.enterTest != "") delivery.owned.enterTest;
-      })
-      # This is the one devenv option the delivery adapter writes outside the
-      # four file/task sink paths. The shared `internal` adapter call owns the
-      # append so the same complete delivered-path list is contributed once.
-      (lib.optionalAttrs (manageTreefmt && options ? treefmt) {
-        treefmt.config.settings.global.excludes = lib.mkIf args.config.treefmt.enable (lib.mkAfter args.config.ai.deliveredPaths);
       })
       {
         assertions = lib.optional (!(options ? tasks) && tasks != {}) {

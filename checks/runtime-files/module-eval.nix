@@ -305,7 +305,7 @@ in {
         in
           (builtins.tryEval "${(deliveredFiles evaluated.config)."AGENTS.md".source}").success
           && fromGeneratedTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
-          && (markdownInput evaluated "AGENTS.md").source == file;
+          && toString (markdownInput evaluated "AGENTS.md").source == toString file;
       in
         replaced.config.ai.internal.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
