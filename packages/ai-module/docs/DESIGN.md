@@ -261,8 +261,8 @@ explicitly as `{ version = 0; files = ...; }` with the same payload schema as
 v1; v0 → v1 changes only the version. Missing state starts at v1.
 Missing/unknown versions and malformed payloads fail before filesystem mutation.
 Loading the migrated state again is a no-op. PR 3 adds legacy-manifest import as
-a migration step; v0 here does not pretend to parse historical TSV or ownership
-JSON.
+a separate step after loading, not a state version ([PR 3 plan](CUTOVER.md),
+section 2.2); v0 does not parse historical TSV or ownership JSON.
 
 ## Ledger coverage
 

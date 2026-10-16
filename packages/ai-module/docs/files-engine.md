@@ -125,6 +125,11 @@ version 1 and is not written until something is owned. A second load of version
 payloads are refused before destination mutation; future migrations append to
 the ordered chain.
 
+Both phases also import the old `own.py` ledgers named by `--legacy-plan` (found
+under `--legacy-state`) into this state once, before any retirement or write,
+then delete each ledger. That import is not a state version; see the
+[PR 3 plan](CUTOVER.md), section 2.2.
+
 ## Backend lowering and order
 
 [The ai-module design](DESIGN.md#backend-graph-and-execution) defines the
@@ -139,24 +144,25 @@ backend.
 
 Python is used for path-safe filesystem operations, document parsing, hashing,
 atomic writes, and cross-format merge. It is one executable with `--plan`,
-`--root`, `--state`, and `--phase prune|apply`; backend shells supply roots and
-call it, setting `FILES2_BASH` for `run` content. A lock serializes runs for a
-namespace. It validates both plan and persisted state on entry, rejects
-absolute/traversal paths, walks each existing parent with `lstat` (never follows
-a symlink), and refuses non-regular copy destinations. It creates missing real
-parent directories but removes no parent directory: unrelated siblings survive.
-It writes the backup before a destructive change, mutates one destination, then
-atomically replaces the state file. There is no journal or rollback. If a
-process stops between the file change and state write, one destination may
-differ from the recorded image. A later run applies the ordinary overwrite rule
-when the document still parses under its recorded format. A stopped `rw` format
-conversion may leave new-format bytes with the old format in state; parsing then
-fails closed and requires operator repair. A new `rw` file published before its
-state update can be adopted on rerun, but its `created` provenance is lost, so
-retirement keeps the emptied file. Prune never renders `content.run`. A desired
-path's parents are checked after retirement of obsolete owned paths, so an owned
-file can become a directory parent; unmanaged files and remaining symlinked
-parents are still refused.
+`--root`, `--state`, `--phase prune|apply`, and for the one-time legacy import
+`--legacy-plan` / `--legacy-state` (always passed together); backend shells
+supply roots and call it, setting `FILES2_BASH` for `run` content. A lock
+serializes runs for a namespace. It validates both plan and persisted state on
+entry, rejects absolute/traversal paths, walks each existing parent with `lstat`
+(never follows a symlink), and refuses non-regular copy destinations. It creates
+missing real parent directories but removes no parent directory: unrelated
+siblings survive. It writes the backup before a destructive change, mutates one
+destination, then atomically replaces the state file. There is no journal or
+rollback. If a process stops between the file change and state write, one
+destination may differ from the recorded image. A later run applies the ordinary
+overwrite rule when the document still parses under its recorded format. A
+stopped `rw` format conversion may leave new-format bytes with the old format in
+state; parsing then fails closed and requires operator repair. A new `rw` file
+published before its state update can be adopted on rerun, but its `created`
+provenance is lost, so retirement keeps the emptied file. Prune never renders
+`content.run`. A desired path's parents are checked after retirement of obsolete
+owned paths, so an owned file can become a directory parent; unmanaged files and
+remaining symlinked parents are still refused.
 
 One engine mutation function applies the overwrite rule to every owned path:
 `current == desired` → retain the current file without backup;

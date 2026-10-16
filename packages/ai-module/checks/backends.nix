@@ -36,7 +36,7 @@
       target = item: "${item.source}";
     };
   };
-  evaluate = backend: files: let
+  evaluate = backend: ai: let
     sink = sinks.${backend};
   in
     (lib.evalModules {
@@ -48,7 +48,7 @@
         sink.stubs
         sink.module
         {ai.activation2Order.secretNodes = ["vault:ready"];}
-        {ai.files2 = files;}
+        {inherit ai;}
       ];
     }).config;
 in {

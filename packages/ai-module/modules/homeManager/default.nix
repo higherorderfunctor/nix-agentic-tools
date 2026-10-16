@@ -8,7 +8,7 @@
     backend = "hm";
     inherit config;
     root = "$HOME";
-    state = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/files2/ai.json";
+    stateRoot = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools";
   };
   duplicate = files.duplicate ["files2-apply" "files2-prune"];
   generated =
