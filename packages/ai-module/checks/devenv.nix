@@ -38,6 +38,14 @@
       method = "ro";
     };
   } {};
+  # The directory symlink `link` is delivered as one link, not walked into.
+  linkedStore = "${./fixtures}";
+  linked = evaluate {
+    linked = {
+      content.source = linkedStore;
+      recursive = true;
+    };
+  } {};
   empty = evaluate {} {};
   nativeOnly = evaluate {} {external.source = ../docs/DESIGN.md;};
   cleanup =
@@ -100,6 +108,7 @@
     ++ check empty [] ["ai2:files2-prune"] "ai2:files-linked" "ai2:link-check" null
     ++ check nativeOnly ["external"] ["ai2:files2-prune"] "devenv:files" "devenv:files" null
     ++ lib.optional (active.tasks."ai2:files2-guard".after != ["ai2:link-check"] || active.tasks."ai2:files2-guard".before != ["ai2:files-linked" "devenv:files"]) "guard edges"
+    ++ lib.optional (lib.mapAttrs (_: item: "${item.source}") (lib.filterAttrs (name: _: lib.hasPrefix "linked/link" name) linked.files) != {"linked/link" = "${linkedStore}/link";} || !linked.files ? "linked/a/b/c.md") "directory symlink leaf"
     ++ lib.concatMap (case: lib.optional case.result.success "native ${case.copyMode} override for ${case.method}") overrideCases;
   fixtureJson = builtins.toJSON {
     active = {

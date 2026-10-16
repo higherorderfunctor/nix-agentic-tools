@@ -189,16 +189,16 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-10-14 — Codex skill discovery was re-probed on
-> 0.161.0; Claude's skills are `ai.*` delivery entries. The repository's
-> instruction files are `ai.*`'s own read-only copies (`own`), never `files.*`
-> symlinks; the generator's materializer and the AGENTS.md seed are gone. Kiro
-> and Kimchi settings and Codex daemon settings are owned copies; Copilot writes
-> repository instructions and agent profiles only; skills declare a copy gap.
-> Recursive leaf links target one source-tree store root while retaining
-> per-file input contexts. The symlink guard uses devenv's final file target,
-> follows its own runtime's writers before file creation, and reports every
-> conflict before failing.
+> **Last verified:** 2026-10-15 — Codex skill discovery was re-probed on
+> 0.161.0; skills are staged entries the ai-module files engine walks. The
+> repository's instruction files are `ai.*`'s own read-only copies (`own`),
+> never `files.*` symlinks; the generator's materializer and the AGENTS.md seed
+> are gone. Kiro and Kimchi settings and Codex daemon settings are owned copies;
+> Copilot writes repository instructions and agent profiles only; skills declare
+> a copy gap. Recursive leaf links target one source-tree store root while
+> retaining per-file input contexts. The symlink guard uses devenv's final file
+> target, follows its own runtime's writers before file creation, and reports
+> every conflict before failing.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -378,6 +378,8 @@ devenv backend. A factory therefore declares the tree ONCE, with a directory
 source, and each backend expands it its own way — this walk, or Home Manager's
 native recursion. It replaced three hand-written copies of the same recursion
 (the skill helper, its devenv twin, and kiro's inline agents-directory walker).
+Skills no longer take it: `mkSkillFiles` stages them, and the ai-module files
+engine walks them on both backends (`dev/fragments/ai-skills`).
 
 The walk separates traversal identity from target identity. It traverses the
 original source, interpolates that directory once, and points every native leaf
@@ -404,10 +406,11 @@ HM's `home.file.<name>` submodule has a `recursive` field
 (`home-manager/modules/files.nix`). When `source` is a directory and
 `recursive = true`, HM's activation script walks the directory and creates
 per-file symlinks inside a real subdirectory at `<name>`, with state tracking
-per file. Our delivery entries use it for Layout B consumers, Claude's skills
-included: the adapter passes `recursive` straight through to `home.file`. Codex
-deliberately uses a non-recursive Home Manager source instead, producing the
-same whole-directory link as devenv.
+per file. Our old-path delivery entries use it for Layout B consumers: the
+adapter passes `recursive` straight through to `home.file`. Skills no longer do;
+they arrive as per-leaf files-engine links on Home Manager too. Codex
+deliberately uses a non-recursive source instead, producing the same
+whole-directory link as devenv.
 
 devenv chose a simpler, flatter model without recursive support. Not a bug; a
 deliberate design difference. The user-space walker restores parity at the cost

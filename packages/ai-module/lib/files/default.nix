@@ -72,6 +72,14 @@
       };
       mode = nullable (types.strMatching "0?[0-7]{3}");
       recursive = defaulted types.bool false;
+      # Derivations built before the entry is delivered, never read: a
+      # generated tree whose checks gate an entry that does not point into it.
+      requires = mkOption {
+        type = types.listOf types.package;
+        default = [];
+        internal = true;
+        visible = false;
+      };
     };
   };
   # An `own.py` ledger the engine imports into its state once.
@@ -125,7 +133,10 @@
     if builtins.isString method
     then method
     else method.${backend};
-  walk = target: source: let
+  # A symlink is never followed: it is one leaf, so a directory symlink is
+  # delivered as one link, as Home Manager's recursive link and the old devenv
+  # walk did. `ro` copies file bytes, and a directory symlink has none to copy.
+  walk = method: target: source: let
     entries = builtins.readDir source;
     visit = name: let
       child = source + "/${name}";
@@ -133,20 +144,15 @@
       kind = entries.${name};
     in
       if kind == "directory"
-      then walk leaf child
-      else if kind == "symlink" && isDirectory child
-      then [
-        {
-          path = leaf;
-          source = child;
-          error = error target ''recursive source contains a directory symlink at "${leaf}"'';
-        }
-      ]
+      then walk method leaf child
       else [
-        {
-          path = leaf;
-          source = child;
-        }
+        ({
+            path = leaf;
+            source = child;
+          }
+          // lib.optionalAttrs (method == "ro" && kind == "symlink" && isDirectory child) {
+            error = error target ''recursive ro source contains a directory symlink at "${leaf}"'';
+          })
       ];
   in
     lib.concatMap visit (builtins.attrNames entries);
@@ -203,21 +209,27 @@
       if !entry.enable || problem != null
       then []
       else if entry.recursive
-      then walk path source
+      then walk method path source
       else [{inherit path source;}];
+    # The delivered content carries `requires`' string context after the walk,
+    # since `readDir` would build it at evaluation.
+    pin = content:
+      if entry.requires == []
+      then content
+      else "${content}${lib.concatMapStrings (drv: builtins.substring 0 0 "${drv}") entry.requires}";
     plan = leaf: {
       inherit (entry) executable format mode;
       inherit method;
       inherit (leaf) path;
       content =
         if entry.recursive
-        then {inherit (leaf) source;}
+        then {source = pin leaf.source;}
         else if choice == "value"
         then {
           value = entry.content.value;
-          rendered = renderValue entry.format entry.content.value;
+          rendered = pin (renderValue entry.format entry.content.value);
         }
-        else {"${choice}" = entry.content.${choice};};
+        else {"${choice}" = pin entry.content.${choice};};
       inherit (entry) recursive;
     };
   in

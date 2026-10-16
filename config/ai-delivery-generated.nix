@@ -1040,11 +1040,11 @@
       primitive = "ownPathDeclarative";
       pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
       surface = "skills";
-      target = "$HOME/.claude/skills/<name>";
+      target = "$HOME/.claude/skills/<name>/<leaf>";
       writerAttr = [
         "home"
         "file"
-        ".claude/skills/probe"
+        ".claude/skills/probe/SKILL.md"
       ];
     }
     {
@@ -1090,11 +1090,11 @@
       primitive = "ownPathDeclarative";
       pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
       surface = "skills";
-      target = "$HOME/.config/kimchi/harness/skills/<name>";
+      target = "$HOME/.config/kimchi/harness/skills/<name>/<leaf>";
       writerAttr = [
         "home"
         "file"
-        ".config/kimchi/harness/skills/probe"
+        ".config/kimchi/harness/skills/probe/SKILL.md"
       ];
     }
     {
@@ -1115,11 +1115,11 @@
       primitive = "ownPathDeclarative";
       pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
       surface = "skills";
-      target = "$HOME/.kiro/skills/<name>";
+      target = "$HOME/.kiro/skills/<name>/<leaf>";
       writerAttr = [
         "home"
         "file"
-        ".kiro/skills/probe"
+        ".kiro/skills/probe/SKILL.md"
       ];
     }
   ];

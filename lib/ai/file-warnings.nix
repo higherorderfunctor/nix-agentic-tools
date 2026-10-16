@@ -89,6 +89,8 @@
       ++ ["ai.${runtime}.files.${builtins.toJSON name}"];
     names =
       builtins.attrNames (cfg.files or {})
+      # Staged entries (skills) are the runtime's own files too.
+      ++ builtins.attrNames (cfg._generatedFiles or {})
       ++ map (entry: entry.target) (lib.filter (entry: !(templated entry)) targets);
   in
     lib.optionalAttrs (cfg.enable or false) (lib.genAttrs (lib.unique names) options);

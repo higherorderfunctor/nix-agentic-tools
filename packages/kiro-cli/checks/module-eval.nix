@@ -2275,16 +2275,20 @@ in {
         customFile != null && agentsFile == null
     );
 
-    # HM: skills fanout via the delivery entries `mkSkillFiles` writes.
+    # HM: skills fanout via the staged entries `mkSkillFiles` writes, one link
+    # per leaf of the skill tree.
     module-kiro-hm-writes-skills = mkTest "kiro-hm-writes-skills" (
       let
+        src = ../../stacked-workflows/skills/stack-fix;
         result = evalHm {
           ai.kiro.cli.enable = true;
-          ai.skills.stack-fix = ../../stacked-workflows/skills/stack-fix;
+          ai.skills.stack-fix = src;
         };
-        skillEntry = result.config.home.file.".kiro/skills/stack-fix" or null;
       in
-        skillEntry != null
+        result.config.ai.files2Owners.".kiro/skills/stack-fix"
+        == ["kiro"]
+        && !(result.config.ai.kiro.files ? ".kiro/skills/stack-fix")
+        && result.config.home.file.".kiro/skills/stack-fix/SKILL.md".source == "${src}/SKILL.md"
     );
 
     # HM: setting env vars PRODUCES a wrapper. Renamed from

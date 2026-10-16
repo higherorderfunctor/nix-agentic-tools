@@ -7,59 +7,41 @@
 in {
   # ── File entry builders ──────────────────────────────────────────────
 
-  # One skill tree as DELIVERY entries, for every runtime and both backends.
+  # One skill tree as STAGED entries (`ai.<runtime>._generatedFiles`), for
+  # every runtime and both backends; layer 1 and the files engine deliver them.
   #
-  # A directory skill is one entry with a directory source: Home Manager
-  # expands it natively and the router walks it for devenv, which is the single
-  # walk that replaced three hand-written ones. A single-file skill becomes its
-  # own `SKILL.md`.
+  # A directory skill is one entry with a directory source, which the engine
+  # walks into one link per leaf on both backends. A single-file skill becomes
+  # its own `SKILL.md`.
   #
   # `recursive = false` with a directory source is Codex's shape, and it is a
   # measured consumer fact rather than a preference: Codex discovers a skill
   # when the skill DIRECTORY is itself a symlink, and not when the backend
   # creates a real directory of symlinked leaves.
   #
-  # `executable = null` is load-bearing everywhere: a skill tree may ship a
-  # script, and stating a mode here would clear its executable bit at link
-  # time.
-  #
   # `builtins.readFileType` rather than `lib.isPath`, because a skill that
   # comes from a package is an interpolated STRING, and treating that as a
-  # single file writes the path itself as the file's content.
+  # single file writes the path itself as the file's content. The source is
+  # always interpolated: a path-typed tree then enters the store once, so a
+  # relative symlink between two of its leaves still resolves.
   mkSkillFiles = {
     configDir,
     recursive ? true,
     skills,
   }:
     lib.mapAttrs' (
-      name: source:
+      name: source: let
+        entry = {
+          content.source = "${source}";
+          surface = "skills";
+        };
+      in
         if (builtins.readFileType source) == "directory"
-        then
-          lib.nameValuePair "${configDir}/skills/${name}" {
-            content = {
-              _generated = true;
-              _surface = "skills";
-              inherit source;
-            };
-            executable = null;
-            inherit recursive;
-          }
+        then lib.nameValuePair "${configDir}/skills/${name}" (entry // {inherit recursive;})
         else
           assert lib.assertMsg recursive
           "mkSkillFiles: skill '${name}' must resolve to a directory";
-            lib.nameValuePair "${configDir}/skills/${name}/SKILL.md" {
-              # ALWAYS `source`, never a path-vs-string test. A skill that
-              # comes from a package is an interpolated STRING holding a store
-              # path, and routing that to `text` writes the PATH as the file's
-              # body — the same bug the directory branch above avoids,
-              # reached through the single-file branch instead.
-              content = {
-                _generated = true;
-                _surface = "skills";
-                inherit source;
-              };
-              executable = null;
-            }
+            lib.nameValuePair "${configDir}/skills/${name}/SKILL.md" entry
     )
     skills;
 

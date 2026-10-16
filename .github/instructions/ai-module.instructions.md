@@ -8,16 +8,17 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-15 — runtime factories stage moved surfaces in
-> `_generatedFiles` and forward them through the ai-module layer-1 helper over
-> one generated tree; the root-option provenance guard exempts the ai-module
-> layer-1 forwarding helper for its forwarded options; option declarations
-> supply policy surfaces and keyed withdrawal; runtime declarations supply
-> normalized policy gaps and the warning suite generates coverage for every
-> runtime, surface and backend; a record's `optionNamespaces` places launcher
-> and pool options, and `ai.copilot` is github.com Copilot with its pools under
-> `ai.copilot.github`; explicit normalized overrides warn for live explicit
-> contributions on unavailable backends, excluding empty or disabled
-> contributions beside inherited folds.
+> `_generatedFiles` (skills first) and forward them through the ai-module
+> layer-1 helper over one generated tree, which every staged entry's delivery
+> requires; the root-option provenance guard exempts the ai-module layer-1
+> forwarding helper for its forwarded options; option declarations supply policy
+> surfaces and keyed withdrawal; runtime declarations supply normalized policy
+> gaps and the warning suite generates coverage for every runtime, surface and
+> backend; a record's `optionNamespaces` places launcher and pool options, and
+> `ai.copilot` is github.com Copilot with its pools under `ai.copilot.github`;
+> explicit normalized overrides warn for live explicit contributions on
+> unavailable backends, excluding empty or disabled contributions beside
+> inherited folds.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -813,9 +814,8 @@ match without a backup, so a `git pull` of a committed copy is silent.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
 files use `content.run` in an owned writer, and runtime state keeps its typed
-lifecycle owners. Skills go through the map now: one entry per tree, expanded by
-Home Manager natively and walked by the router for devenv. Kiro steering links
-on Home Manager (live 2.18.1 spikes confirmed startup discovery and same-session
+lifecycle owners. Skills are staged entries (below). Kiro steering links on Home
+Manager (live 2.18.1 spikes confirmed startup discovery and same-session
 replacement reload) and is a read-only copy on devenv, claimed by the
 `ai:kiro:materialize-steering` directory ledger; Kiro hooks stay real-file
 reconciled (`lib/ai/own.nix`, a `dir` target) because the v3 scan keeps only
@@ -829,10 +829,18 @@ internal `ai.<runtime>._generatedFiles` (the files engine entry plus `surface`).
 `lib/ai/app/generatedFiles.nix` builds the runtime's one generated tree from its
 staged and old live entries (the router calls it) and gives layer 1 each staged
 entry at `mkDefault`: text and non-recursive source as the tree file, a value
-per leaf, a recursive source or `run` as itself. An assertion refuses a
-destination live in `ai.<runtime>.files` that is also enabled in `ai.files2` or
-live in the staged entries; a staged path counts even with its `ai.files2` entry
-switched off, because the old file would still carry the staged bytes.
+per leaf, a recursive source or `run` as itself. Every staged entry also gets
+`requires = [tree]`: the engine adds the tree's string context to each delivered
+leaf after its walk, so the tree's guards, checks and byte limits gate a
+recursive source or a value too. The context cannot ride on the walked source:
+`readDir` builds every derivation in a string's context, so the tree would build
+at evaluation. An assertion refuses a destination live in `ai.<runtime>.files`
+that is also enabled in `ai.files2` or live in the staged entries; a staged path
+counts even with its `ai.files2` entry switched off, because the old file would
+still carry the staged bytes. Skills are the first moved surface: `mkSkillFiles`
+stages one entry per tree, which the files engine walks into per-leaf links on
+both backends, and `ai.deliveredPaths` lists enabled `ai.files2` keys so
+devenv's treefmt still skips them.
 
 ### Documentation parity is capability parity
 

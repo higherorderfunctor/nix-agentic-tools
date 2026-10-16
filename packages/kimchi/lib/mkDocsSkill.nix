@@ -1,4 +1,3 @@
-# cspell:ignore lndir
 # Builds the opt-in `kimchi-docs` skill directory.
 #
 # Shape: `{ SKILL.md, snapshot -> <kimchi-docs>, workflows -> <workflowsPackage> }`.
@@ -18,9 +17,9 @@
 #      compared heuristically.
 #
 # The link target is an ABSOLUTE store path, so it survives every materialization
-# route: Home Manager's `recursive = true` (lndir walks through it),
-# `mkDevenvSkillEntries` (`builtins.readDir` reports `symlink`, so the walk emits
-# ONE entry for it rather than 52), and Codex's whole-directory link.
+# route: the files engine's recursive walk (`builtins.readDir` reports
+# `symlink`, so it emits ONE link leaf rather than 52) on both backends, and
+# Codex's whole-directory link.
 #
 # `search` selects the search directions spliced into SKILL.md. It is resolved by
 # the caller from the semble integration actually delivered to that runtime; see

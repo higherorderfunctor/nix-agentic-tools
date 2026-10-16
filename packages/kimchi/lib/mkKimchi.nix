@@ -739,10 +739,10 @@
           };
         })
 
-      # harness/skills/ — one entry per skill tree; Home Manager expands the
-      # directory and the router expands it for devenv.
+      # harness/skills/ — one staged entry per skill tree; the files engine
+      # expands the directory on both backends.
       (lib.mkIf (mergedSkills != {}) {
-        ai.kimchi.files = helpers.mkSkillFiles {
+        ai.kimchi._generatedFiles = helpers.mkSkillFiles {
           configDir = mcpAndSkillsDir;
           skills = mergedSkills;
         };

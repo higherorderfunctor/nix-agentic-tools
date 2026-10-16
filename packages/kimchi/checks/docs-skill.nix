@@ -8,7 +8,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) deliveredFiles evalDevenv evalHm mkTest;
   workflowsPackage = pkgs.ai.kimchiExtensions.kimchi-workflows;
 
   # Home Manager delivers the skill to the user harness; devenv delivers it to
@@ -27,9 +27,13 @@
   hmOn = evalHm enable;
   devenvOn = evalDevenv enable;
 
-  devenvSkillKeys = result:
-    lib.filter (name: lib.hasPrefix "${devenvSkillDir}/" name)
-    (builtins.attrNames result.config.files);
+  # What each backend delivers at or under a skill directory. The directory
+  # key itself is included so that a whole-directory delivery is caught. The
+  # skill lands as these leaves: SKILL.md, and the snapshot and workflows
+  # directory symlinks as ONE link each, never walked into.
+  skillKeys = dir: result: lib.filter (n: n == dir || lib.hasPrefix "${dir}/" n) (builtins.attrNames (deliveredFiles result.config));
+  skillLeaves = dir: map (name: "${dir}/${name}") ["SKILL.md" "snapshot" "workflows"];
+  hmLeaf = name: (deliveredFiles hmOn.config)."${skillDir}/${name}".source;
 
   # Deliver the skill to Claude under three semble shapes and read the SKILL.md
   # each one produced. Built rather than evaluated: reading a derivation's
@@ -53,44 +57,47 @@
   };
 in {
   checks = {
-    # Asserts: the skill delivered by the module still resolves to the packaged
-    # snapshot AND that snapshot is readable through it, page contents included.
+    # Asserts: the skill leaves delivered by the module still resolve to the
+    # packaged snapshot AND that snapshot is readable through them, page
+    # contents included.
     kimchi-docs-skill-snapshot = pkgs.runCommand "kimchi-docs-skill-snapshot" {} ''
       # Full strict mode is required here: stdenv does not set every flag (#909).
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
 
-      skill=${hmOn.config.home.file.${skillDir}.source}
+      skill_md=${hmLeaf "SKILL.md"}
+      snapshot=${hmLeaf "snapshot"}
+      workflows=${hmLeaf "workflows"}
 
       require() {
         if ! eval "$2"; then
           printf 'kimchi-docs skill: %s\n' "$1" >&2
-          printf '  skill directory: %s\n' "$skill" >&2
+          printf '  delivered leaves: %s %s %s\n' "$skill_md" "$snapshot" "$workflows" >&2
           exit 1
         fi
       }
 
-      require "SKILL.md is missing or empty" '[ -s "$skill/SKILL.md" ]'
+      require "SKILL.md is missing or empty" '[ -s "$skill_md" ]'
       require "SKILL.md has lost its name: kimchi-docs frontmatter, so no runtime will match it" \
-        "grep -qx 'name: \"kimchi-docs\"' \"\$skill/SKILL.md\""
+        "grep -qx 'name: \"kimchi-docs\"' \"\$skill_md\""
       require "the snapshot link does not point at the packaged docs.kimchi-docs derivation (${pkgs.docs.kimchi-docs})" \
-        '[ "$(readlink "$skill/snapshot")" = ${pkgs.docs.kimchi-docs} ]'
+        '[ "$(readlink "$snapshot")" = ${pkgs.docs.kimchi-docs} ]'
       require "the workflows link does not point at the patched installed workflows package" \
-        '[ "$(readlink "$skill/workflows")" = ${workflowsPackage} ]'
-      require "the workflows README is unreadable through the skill" '[ -s "$skill/workflows/README.md" ]'
-      require "SKILL.md omits the workflows source directions" 'grep -q workflows/src "$skill/SKILL.md"'
-      for index in snapshot/llms.txt snapshot/docs/llms.txt; do
-        require "the index $index is unreadable through the skill" '[ -s "$skill/$index" ]'
-        require "the index $index does not name docs.kimchi.dev, so it is not the upstream index" \
-          'grep -q docs.kimchi.dev "$skill/$index"'
+        '[ "$(readlink "$workflows")" = ${workflowsPackage} ]'
+      require "the workflows README is unreadable through the skill" '[ -s "$workflows/README.md" ]'
+      require "SKILL.md omits the workflows source directions" 'grep -q workflows/src "$skill_md"'
+      for index in llms.txt docs/llms.txt; do
+        require "the index snapshot/$index is unreadable through the skill" '[ -s "$snapshot/$index" ]'
+        require "the index snapshot/$index does not name docs.kimchi.dev, so it is not the upstream index" \
+          'grep -q docs.kimchi.dev "$snapshot/$index"'
       done
       require "the documentation page snapshot/docs/kimchi-cli.md is unreadable through the skill" \
-        '[ -s "$skill/snapshot/docs/kimchi-cli.md" ]'
+        '[ -s "$snapshot/docs/kimchi-cli.md" ]'
 
-      pages="$(find -L "$skill/snapshot/docs" -name '*.md' -type f | wc -l)"
+      pages="$(find -L "$snapshot/docs" -name '*.md' -type f | wc -l)"
       if [ "$pages" -lt 40 ]; then
         printf 'kimchi-docs skill: only %s documentation pages are reachable at %s\n' \
-          "$pages" "$skill/snapshot/docs" >&2
+          "$pages" "$snapshot/docs" >&2
         printf '  expected at least 40; the snapshot shrank or the skill stopped pointing at it\n' >&2
         exit 1
       fi
@@ -148,20 +155,19 @@ in {
     module-kimchi-docs-skill-opt-in = mkTest "kimchi-docs-skill-opt-in" (
       !(hmOff.config.ai.kimchi.skills ? kimchi-docs)
       && !(hmOff.config.ai.claude.skills ? kimchi-docs)
-      && !(hmOff.config.home.file ? ${skillDir})
-      && devenvSkillKeys devenvOff == []
+      && skillKeys skillDir hmOff == []
+      && skillKeys devenvSkillDir devenvOff == []
     );
 
     # Asserts: enabling it mounts the skill in every runtime's pool and
-    # materializes it on both backends — and that snapshot and workflows each
-    # stay ONE devenv entry (the symlink), not one per source file.
+    # materializes it on both backends as the same leaves — snapshot and
+    # workflows each stay ONE entry (the symlink), not one per source file.
     module-kimchi-docs-skill-delivered = mkTest "kimchi-docs-skill-delivered" (
       hmOn.config.ai.kimchi.skills
       ? kimchi-docs
       && hmOn.config.ai.claude.skills ? kimchi-docs
-      && hmOn.config.home.file.${skillDir}.recursive
-      && lib.sort lib.lessThan (devenvSkillKeys devenvOn)
-      == ["${devenvSkillDir}/SKILL.md" "${devenvSkillDir}/snapshot" "${devenvSkillDir}/workflows"]
+      && skillKeys skillDir hmOn == skillLeaves skillDir
+      && skillKeys devenvSkillDir devenvOn == skillLeaves devenvSkillDir
     );
 
     # Asserts: a per-runtime `false` suppresses exactly that runtime.

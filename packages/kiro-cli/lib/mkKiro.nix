@@ -1874,11 +1874,11 @@ in
                   facts.symlinkReadable = false;
                   ledger = "materialize/kiro-hooks.manifest";
                 }) (lib.filterAttrs (name: _unit: hookNameSafe name) (mkHookUnits cfg)))
-              (helpers.mkSkillFiles {
-                inherit (cfg) configDir;
-                skills = mergedSkills;
-              })
             ];
+            ai.kiro._generatedFiles = helpers.mkSkillFiles {
+              inherit (cfg) configDir;
+              skills = mergedSkills;
+            };
           }
         ]
         ++ steeringEmitters);

@@ -1049,6 +1049,8 @@ in {
         && (fileValue ".kimchi/mcp.json" result).mcpServers.example.command == "hello"
         && !(result.config.files ? ".kimchi/mcp.json")
         && files ? ".kimchi/skills/example/SKILL.md"
+        && result.config.ai.files2Owners.".kimchi/skills/example" == ["kimchi"]
+        && !(result.config.ai.kimchi.files ? ".kimchi/skills/example")
         && files ? "AGENTS.md"
         && !(files ? "custom.md")
         && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))

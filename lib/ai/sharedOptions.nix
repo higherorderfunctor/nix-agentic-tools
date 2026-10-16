@@ -155,13 +155,13 @@
     '';
   };
   sandboxSafeSshCommand = lib.getExe sandboxSafeSsh;
-  livePaths = files:
+  livePaths = isLive: files:
     lib.mapAttrsToList
     (path: entry:
       if entry.recursive
       then "${path}/**"
       else path)
-    (lib.filterAttrs (_path: runtimeFiles.isLive) files);
+    (lib.filterAttrs (_path: isLive) files);
   # One registration declares every shared fanout surface and supplies the
   # decompose step with its names. Adding a declaration here automatically
   # warns for every enabled runtime whose surfaceSupport omits it.
@@ -640,9 +640,11 @@ in {
           lib.concatMap
           (name:
             lib.optionals (lib.attrByPath ["ai" name "enable"] false config)
-            (livePaths (lib.attrByPath ["ai" name "files"] {} config)))
+            (livePaths runtimeFiles.isLive (lib.attrByPath ["ai" name "files"] {} config)))
           harnessNames
-          ++ livePaths (config.ai.internal.files or {})
+          ++ livePaths runtimeFiles.isLive (config.ai.internal.files or {})
+          # The layers' plan: enabled runtimes forward their staged entries here.
+          ++ livePaths (entry: entry.enable) (config.ai.files2 or {})
         );
         rules = lib.mkIf (config.ai.rulesDir != null) (
           lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)

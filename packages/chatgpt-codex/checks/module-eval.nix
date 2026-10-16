@@ -377,6 +377,8 @@ in {
       in
         !(hm.config.home.file ? ".agents/skills/example")
         && !(devenv.config.files ? ".agents/skills/example")
+        && !(hm.config.ai.files2 ? ".agents/skills/example")
+        && !(devenv.config.ai.files2 ? ".agents/skills/example")
     );
 
     module-codex-skills-fanout = mkTest "codex-skills-fanout" (
@@ -392,15 +394,17 @@ in {
         devenv = evalDevenv config;
       in
         fromGeneratedTree ".agents/skills/local" hm.config.home.file.".agents/skills/local"
-        && (markdownInput hm ".agents/skills/local").source == ../../claude-code/checks/fixtures/claude-skills/skill-b
+        && (markdownInput hm ".agents/skills/local").source == "${../../claude-code/checks/fixtures/claude-skills/skill-b}"
         && !(hm.config.home.file.".agents/skills/local" ? recursive)
+        && hm.config.ai.files2Owners.".agents/skills/local" == ["codex"]
+        && !(hm.config.ai.codex.files ? ".agents/skills/local")
         && fromGeneratedTree ".agents/skills/shared" hm.config.home.file.".agents/skills/shared"
-        && (markdownInput hm ".agents/skills/shared").source == ../../claude-code/checks/fixtures/claude-skills/skill-a
+        && (markdownInput hm ".agents/skills/shared").source == "${../../claude-code/checks/fixtures/claude-skills/skill-a}"
         && !(hm.config.home.file.".agents/skills/shared" ? recursive)
         && fromGeneratedTree ".agents/skills/local" devenv.config.files.".agents/skills/local"
-        && (markdownInput devenv ".agents/skills/local").source == ../../claude-code/checks/fixtures/claude-skills/skill-b
+        && (markdownInput devenv ".agents/skills/local").source == "${../../claude-code/checks/fixtures/claude-skills/skill-b}"
         && fromGeneratedTree ".agents/skills/shared" devenv.config.files.".agents/skills/shared"
-        && (markdownInput devenv ".agents/skills/shared").source == ../../claude-code/checks/fixtures/claude-skills/skill-a
+        && (markdownInput devenv ".agents/skills/shared").source == "${../../claude-code/checks/fixtures/claude-skills/skill-a}"
         && hm.config.home.activation ? codexMigrateSkillLinks
         # It moves user directories, so under DRY_RUN it must only echo.
         && lib.hasInfix "run /nix/store/" hm.config.home.activation.codexMigrateSkillLinks.text
@@ -472,7 +476,7 @@ in {
         };
       in
         fromGeneratedTree ".agents/skills/duplicate" evaluated.config.home.file.".agents/skills/duplicate"
-        && (markdownInput evaluated ".agents/skills/duplicate").source == ../../claude-code/checks/fixtures/claude-skills/skill-b
+        && (markdownInput evaluated ".agents/skills/duplicate").source == "${../../claude-code/checks/fixtures/claude-skills/skill-b}"
     );
 
     module-codex-default-model-effort-parity = mkTest "codex-default-model-effort-parity" (

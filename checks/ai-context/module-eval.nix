@@ -374,7 +374,7 @@ in {
         };
         files = result.config.home.file;
       in
-        files ? ".claude/skills/skill-a" && files ? ".claude/skills/skill-b"
+        files ? ".claude/skills/skill-a/SKILL.md" && files ? ".claude/skills/skill-b/SKILL.md"
     );
 
     # The accepted arms force the delivered file map, never `home.packages`:
