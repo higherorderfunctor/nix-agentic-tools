@@ -1453,8 +1453,10 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 > hooks, settings and steering legacy ledgers declared outside its enable gate;
 > Kimchi stages every surface, with every legacy ledger ungated; Codex stages
 > every surface and declares both copy ledgers while disabled; hand rows are
-> confined to the policy-only permissions surface; backend lowering and
-> validation live only in ai-module.
+> confined to the policy-only permissions surface; Claude's
+> `native.unpinLaunchEffort` is declared for Home Manager only, so delivery
+> facts carry no supplement rows; backend lowering and validation live only in
+> ai-module.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1739,9 +1741,10 @@ Gaps requiring keyed entries, effective scalar selection, predicates or dynamic
 reasons remain record-only diagnostics. Hand rows state native-only absences on
 the policy-only permissions surface; a hand row on a shared surface fails naming
 the cell, because it would replace the row derived from the runtime record.
-Input associations are consumer facts. Claude's `unpinLaunchEffort` remains a
-native-only supplement because normalized record gaps cannot address that
-separate option or its explicit-priority gate.
+Input associations are consumer facts. An option only Home Manager can write is
+declared under the record's `hm.options` instead of warning through a row:
+Claude's `native.unpinLaunchEffort` does not exist on devenv, so setting it
+there is an unknown-option error.
 
 Where a delivered file lands, and how, is the files plan's business, not these
 facts'. Adding a shared surface or dropping runtime support creates absence

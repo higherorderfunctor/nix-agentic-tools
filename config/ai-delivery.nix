@@ -69,8 +69,7 @@
   assemble = row: let
     cell = key row;
     children =
-      (facts.supplements.${cell} or [])
-      ++ staticGaps row
+      staticGaps row
       ++ lib.optional (row.primitive != "notApplicable" && supportAbsences ? ${cell}) supportAbsences.${cell};
   in
     row

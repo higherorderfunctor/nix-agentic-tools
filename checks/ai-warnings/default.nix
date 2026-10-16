@@ -122,15 +122,12 @@
         then ["args" "package" "settings"]
         else ["settings"]
       )) [false true]
-    ++ map (surface: {
-      runtime = "claude";
-      path = ["ai" "claude" surface];
-      value =
-        if surface == "unpinLaunchEffort"
-        then {probe = true;}
-        else {probe = pkgs.emptyDirectory;};
-    }) ["plugins" "unpinLaunchEffort"]
     ++ [
+      {
+        runtime = "claude";
+        path = ["ai" "claude" "plugins"];
+        value.probe = pkgs.emptyDirectory;
+      }
       {
         runtime = "kiro";
         path = ["ai" "rules" "probe"];

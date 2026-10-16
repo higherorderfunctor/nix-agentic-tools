@@ -32,17 +32,16 @@
         checks.skills = "exit 7";
         claude = {
           enable = true;
-          # Only the skill: the devenv settings link is built from the tree too,
-          # and a non-empty unpin map stages Home Manager's `.claude.json`.
+          # Only the skill: the devenv settings link is built from the tree too.
           files.".claude/settings.json".enable = false;
           skills.probe = ./fixtures/probe-skill;
-          unpinLaunchEffort = {};
         };
       };
       delivered = [".claude/skills/probe/SKILL.md" ".claude/skills/probe/references/nested.md" ".claude/skills/probe/scripts/executable-probe"];
       evaluate = {
         devenv = harness.evalDevenv;
-        hm = harness.evalHm;
+        # A non-empty unpin map stages Home Manager's `.claude.json`.
+        hm = config: harness.evalHm (lib.recursiveUpdate config {ai.claude.native.unpinLaunchEffort = {};});
       };
       runtime = "claude";
       surface = "skills";

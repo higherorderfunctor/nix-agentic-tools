@@ -27,8 +27,9 @@ in
             {
               claude = {
                 hookScripts.probe = "true";
-                native.settings.model = "probe";
-                unpinLaunchEffort.probe = true;
+                native =
+                  {settings.model = "probe";}
+                  // lib.optionalAttrs (mode == "hm") {unpinLaunchEffort.probe = true;};
               };
               codex = {
                 native.settings.model = "probe";
