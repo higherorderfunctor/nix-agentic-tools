@@ -176,7 +176,7 @@ in {
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     ${pkgs.python3.withPackages (ps: [ps.pyyaml ps.tomlkit])}/bin/python3 -I ${./kiro-settings.py} \
-      ${../lib/files}/engine.py ${pkgs.writeText "kiro-settings.json" fixtureJson} ${../../delegate-routing/eval/suite.py}
+      ${../lib/files}/engine.py ${pkgs.writeText "kiro-settings.json" fixtureJson} ${../../delegate-routing/eval}/suite.py
     ${pkgs.coreutils}/bin/touch "$out"
   '';
 }
