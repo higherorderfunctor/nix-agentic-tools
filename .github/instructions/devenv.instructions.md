@@ -191,14 +191,15 @@ this paragraph would rot the next time one is added.)
 
 > **Last verified:** 2026-10-15 — Codex skill discovery was re-probed on
 > 0.161.0; skills are staged entries the ai-module files engine walks. The
-> repository's instruction files are `ai.*`'s own read-only copies (`own`),
-> never `files.*` symlinks; the generator's materializer and the AGENTS.md seed
-> are gone. Kiro and Kimchi settings and Codex daemon settings are owned copies;
-> Copilot writes repository instructions and agent profiles only; skills declare
-> a copy gap. Recursive leaf links target one source-tree store root while
-> retaining per-file input contexts. The symlink guard uses devenv's final file
-> target, follows its own runtime's writers before file creation, and reports
-> every conflict before failing.
+> repository's committed instruction files are read-only copies the files engine
+> writes, never `files.*` symlinks; the generator's materializer and the
+> AGENTS.md seed are gone. Kiro and Kimchi settings and Codex daemon settings
+> are owned copies; Copilot writes repository instructions only; its agents and
+> skills declare gaps. A copy differing only in mode is reset without a backup.
+> Recursive leaf links target one source-tree store root while retaining
+> per-file input contexts. The symlink guard uses devenv's final file target,
+> follows its own runtime's writers before file creation, and reports every
+> conflict before failing.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -427,24 +428,27 @@ the user-space walker is a viable fix while waiting for upstream.
 
 This repository's instruction files are written by `ai.*` (configured in
 `dev/ai.nix`) like any consumer's. On devenv the committed ones (AGENTS.md,
-`.github/instructions/*`) and Claude's and Kiro's project rule files are
-read-only COPIES written by `lib/ai/own.py` through a directory ledger each, on
-every `devenv shell`, `direnv reload`, `devenv up`, `devenv reload` and manual
-`devenv test`, after `devenv:files:cleanup` and before `devenv:enterShell`.
-Claude's `.claude/CLAUDE.md` stays a store link (its project context loader
-follows one; its scoped-rule loader does not).
+`.github/instructions/*`) are read-only COPIES the ai-module files engine
+writes, and Claude's and Kiro's project rule files are read-only COPIES written
+by `lib/ai/own.py` through a directory ledger each, on every `devenv shell`,
+`direnv reload`, `devenv up`, `devenv reload` and manual `devenv test`, after
+`devenv:files:cleanup` and before `devenv:enterShell`. Claude's
+`.claude/CLAUDE.md` stays a store link (its project context loader follows one;
+its scoped-rule loader does not).
 
 Why copies rather than `files.*` symlinks:
 
 - **A tracked file cannot be a symlink.** A store symlink commits as mode
   `120000` holding an absolute `/nix/store` path, meaningless in any other clone
   and on github.com.
-- **A ledger claims only what it wrote.** A developer's own steering or
+- **Each writer claims only what it wrote.** A developer's own steering or
   instruction file beside the generated ones survives every reload; a retired
   rule's copy is removed.
-- **`own` is idempotent and quiet.** Unchanged bytes keep the mtime, and a file
-  whose bytes already match (a `git pull` of the committed copy) is adopted
-  without a backup; different bytes are backed up once before replacement.
+- **Both writers are idempotent.** An unchanged file keeps its mtime, and
+  different bytes are backed up once before replacement. `own` adopts a file
+  whose bytes already match (a `git pull` of the committed copy) without a
+  backup; so does the files engine, which also resets a copy a checkout rewrote
+  at another mode, without a backup when only the mode differs.
 
 `devenv`'s own `files.<name>.copyMode = "copy"` was considered and rejected: it
 `rm -rf`s and re-`cp`s unconditionally on every entry (a read race plus mtime

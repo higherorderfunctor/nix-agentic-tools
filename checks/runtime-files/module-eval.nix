@@ -180,7 +180,7 @@ in {
         && devenvConfig.ai.claude.files ? ".claude/CLAUDE.md"
         && devenvConfig.ai.claude.files ? ".claude/rules/scoped.md"
         && devenvConfig.ai.internal.agentsMdTargets.copilot == "AGENTS.md"
-        && devenvConfig.ai.copilot.files ? ".github/instructions/scoped.instructions.md"
+        && devenvConfig.ai.copilot._generatedFiles ? ".github/instructions/scoped.instructions.md"
         && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
         && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"

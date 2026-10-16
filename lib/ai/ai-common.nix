@@ -225,6 +225,29 @@
     if value == null
     then ""
     else value.text;
+  # Each rule rendered through a runtime's transformer, with the rule's matcher
+  # as its `paths` and its resolved text, keyed by the path `path` gives its
+  # name. `context` is the transformer's render context for a rule name.
+  renderRules = {
+    context ? _: {},
+    path,
+    rules,
+    runtime,
+    transformer,
+  }:
+    lib.mapAttrs' (name: rule: let
+      inclusion = resolveInclusion {inherit name rule runtime;};
+    in
+      lib.nameValuePair (path name) (fragments.mkRenderer transformer (context name) (rule
+        // {
+          inherit inclusion name;
+          paths =
+            if inclusion == "fileMatch"
+            then rule.matcher
+            else null;
+          text = readContent rule;
+        })))
+    rules;
 in {
   # ── Markdown content records ───────────────────────────────────────
   # Context and rules share one text-source record. The type resolves source
@@ -273,41 +296,24 @@ in {
     format = lib.mkDefault "markdown";
   };
 
-  # One file entry per rule, rendered through a runtime's transformer with the
-  # rule's matcher as its `paths` and its resolved text; the generated text is
-  # a default on `content`. `context` is the transformer's render context for
-  # a rule name, and `fields` the runtime's own ones (writer, ledger, facts).
-  mkRuleFiles = {
-    context ? _: {},
-    fields ? {},
-    path,
-    rules,
-    runtime,
-    transformer,
-  }:
-    lib.mapAttrs' (name: rule: let
-      inclusion = resolveInclusion {inherit name rule runtime;};
-      rendered = fragments.mkRenderer transformer (context name) (rule
-        // {
-          inherit inclusion name;
-          paths =
-            if inclusion == "fileMatch"
-            then rule.matcher
-            else null;
-          text = readContent rule;
-        });
-    in
-      lib.nameValuePair (path name) ({
-          content = lib.mkDefault {
-            _generated = true;
-            _surface = "rules";
-            enable = true;
-            text = rendered;
-          };
-          format = lib.mkDefault "markdown";
-        }
-        // fields))
-    rules;
+  inherit renderRules;
+
+  # One old-path file entry per rendered rule (`renderRules`); the generated
+  # text is a default on `content`, and `fields` are the runtime's own ones
+  # (writer, ledger, facts).
+  mkRuleFiles = {fields ? {}, ...} @ args:
+    lib.mapAttrs (_path: text:
+      {
+        content = lib.mkDefault {
+          _generated = true;
+          _surface = "rules";
+          enable = true;
+          inherit text;
+        };
+        format = lib.mkDefault "markdown";
+      }
+      // fields)
+    (renderRules (builtins.removeAttrs args ["fields"]));
 
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags

@@ -47,8 +47,8 @@
 #
 # Widening those to five would newly fan semble into ai.copilot.github.* and
 # ai.kimchi.*. The `semble-umbrella-fanout` test in `packages/semble/checks/module-eval.nix`
-# asserts directly against the COPILOT half (`!(cfg.ai.copilot.github.agents ?
-# semble-search)` and the matching `rules` assertion), so that arm fails loudly;
+# asserts directly against the COPILOT half (`cfg.ai.copilot.github.rules ==
+# {}`), so that arm fails loudly;
 # the kimchi arm has no such assertion and would simply start emitting. Ask if a list
 # means "every runtime" or "the runtimes this feature supports" before pointing
 # it here.

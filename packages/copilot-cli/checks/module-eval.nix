@@ -6,9 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree markdownInput mkTest ownPlan;
-  agentFixtures = ../../claude-code/checks/fixtures/claude-agents;
-  agentOne = builtins.readFile "${agentFixtures}/agent-one.md";
+  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree markdownInput mkTest ownPlan setEnable;
   skillFixture = ../../claude-code/checks/fixtures/claude-skills/skill-a;
   # One of every surface github.com reads, each carrying its own token.
   populated = {
@@ -17,11 +15,6 @@
       copilot = {
         enable = true;
         github = {
-          agents.reviewer = {
-            description = "Reviews the change";
-            instructions.text = "REVIEWER-BODY";
-            tools = ["read" "search"];
-          };
           context.text = "COPILOT-CONTEXT";
           rules.security = {
             matcher = ["**/*.ts"];
@@ -32,10 +25,31 @@
       skills.example = skillFixture;
     };
   };
-  writerTargets = evaluated: let
-    inherit (ownPlan "copilot" "ai:copilot:materialize-instructions" evaluated) targets;
+  # The files engine's copies Copilot claims, by path.
+  copies = evaluated: lib.listToAttrs (map (target: lib.nameValuePair target.path target) (ownPlan "copilot" "files2-apply" evaluated).targets);
+  claims = evaluated: lib.filterAttrs (_path: owners: builtins.elem "copilot" owners) evaluated.config.ai.files2Owners;
+  # The old writer's ledgers, one per directory under `projectDir`, are
+  # Copilot's and reach the engine's root list.
+  declaresLedgers = projectDir: evaluated: let
+    expected =
+      map (dir: {
+        codec = "dir";
+        ledger = "materialize/${dir.ledger}.manifest";
+        path = "${projectDir}/${dir.path}";
+      }) [
+        {
+          ledger = "copilot-github-agents";
+          path = "agents";
+        }
+        {
+          ledger = "copilot-instructions";
+          path = "instructions";
+        }
+      ];
   in
-    lib.listToAttrs (map (target: lib.nameValuePair target.path target) targets);
+    evaluated.config.ai.copilot.legacyLedgers
+    == expected
+    && lib.all (ledger: builtins.elem ledger evaluated.config.ai.legacyLedgers) expected;
 in {
   checks = {
     module-copilot-default-disabled = mkTest "copilot-default-disabled" (
@@ -69,9 +83,9 @@ in {
       let
         options = (evalDevenv {}).options.ai.copilot;
       in
-        lib.all (pool: options.github ? ${pool} && !(options ? ${pool})) ["agents" "agentsDir" "context" "rules" "rulesDir"]
+        lib.all (pool: options.github ? ${pool} && !(options ? ${pool})) ["context" "rules" "rulesDir"]
         && options.github.normalized ? context
-        && lib.all (pool: !(options.github ? ${pool})) ["environmentVariables" "mcpServers" "settings" "shell" "skills" "skillsDir"]
+        && lib.all (pool: !(options.github ? ${pool})) ["agents" "agentsDir" "environmentVariables" "mcpServers" "settings" "shell" "skills" "skillsDir"]
     );
 
     # Home Manager has no repository: it writes nothing and warns for every
@@ -83,8 +97,9 @@ in {
         warns = path: lib.any (lib.hasPrefix "${path} is set but hm does not deliver it to copilot") warnings;
       in
         lib.all (path: !(lib.hasPrefix ".copilot" path) && !(lib.hasPrefix ".github" path)) (builtins.attrNames result.config.home.file)
-        && result.config.ai.copilot.files == {}
-        && lib.all warns ["ai.context" "ai.copilot.github.agents" "ai.copilot.github.context" "ai.copilot.github.rules" "ai.skills"]
+        && result.config.ai.copilot._generatedFiles == {}
+        && result.config.ai.copilot.legacyLedgers == []
+        && lib.all warns ["ai.context" "ai.copilot.github.context" "ai.copilot.github.rules" "ai.skills"]
     );
 
     # `projectDir` keeps one type and default in both trees, but only devenv
@@ -102,12 +117,10 @@ in {
           !assertion.assertion
           && lib.hasInfix "project-local" assertion.message)
         hm.config.assertions
-        && lib.all (path: fromGeneratedTree path files.${path}) [
-          ".custom-github/agents/reviewer.md"
-          ".custom-github/instructions/security.instructions.md"
-        ]
+        && fromGeneratedTree ".custom-github/instructions/security.instructions.md" files.".custom-github/instructions/security.instructions.md"
         && files ? "AGENTS.md"
         && !(files ? ".github/instructions/security.instructions.md")
+        && declaresLedgers ".custom-github" devenv
     );
 
     # The context joins the repository AGENTS.md through its one owner,
@@ -133,65 +146,82 @@ in {
         && !(lib.hasInfix "SECURITY-RULE" (markdownInput result "AGENTS.md").text)
     );
 
-    # An agent profile carries the frontmatter github.com reads.
-    module-copilot-devenv-agent-profile = mkTest "copilot-devenv-agent-profile" (
+    # github.com code review never reads .github/agents: a root agent warns
+    # with that reason and nothing lands under `<projectDir>/agents`.
+    module-copilot-devenv-agents-gap = mkTest "copilot-devenv-agents-gap" (
       let
-        result = evalDevenv populated;
-        inherit (markdownInput result ".github/agents/reviewer.md") text;
-      in
-        fromGeneratedTree ".github/agents/reviewer.md" (deliveredFiles result.config).".github/agents/reviewer.md"
-        && lib.hasInfix "name: \"reviewer\"" text
-        && lib.hasInfix "description: \"Reviews the change\"" text
-        && lib.hasInfix "tools: \"read, search\"" text
-        && lib.hasInfix "REVIEWER-BODY" text
-    );
-
-    # A raw agent is a native file, delivered as its own bytes whether it is
-    # a path, a store-path string or an agentsDir entry.
-    module-copilot-devenv-raw-agents = mkTest "copilot-devenv-raw-agents" (
-      let
-        result = evalDevenv {
-          ai.copilot = {
-            enable = true;
-            github = {
-              agents = {
-                path = "${agentFixtures}/agent-two.md";
-                store-string = "${agentFixtures}/agent-one.md";
-              };
-              agentsDir = {
-                path = agentFixtures;
-                filter = name: name == "agent-one.md";
-              };
-            };
+        result = evalDevenv (lib.recursiveUpdate populated {
+          ai.agents.reviewer = {
+            description = "Reviews the change";
+            instructions.text = "REVIEWER-BODY";
           };
-        };
-        files = deliveredFiles result.config;
-        delivered = path: expected: fromGeneratedTree path files.${path} && (markdownInput result path).text == expected;
+        });
       in
-        delivered ".github/agents/store-string.md" agentOne
-        && delivered ".github/agents/agent-one.md" agentOne
-        && delivered ".github/agents/path.md" (builtins.readFile "${agentFixtures}/agent-two.md")
+        builtins.elem "ai.agents is set but devenv does not deliver it to copilot (reason: github.com code review never reads .github/agents.)" result.config.warnings
+        && !(lib.any (lib.hasPrefix ".github/agents") (builtins.attrNames (deliveredFiles result.config)))
     );
 
     # github.com reads the COMMITTED tree, where a store symlink dangles, so
-    # instruction files and agent profiles are read-only copies, each
-    # directory claimed by its ledger. The writer survives both N→0 and a
-    # disable, emitting empty targets that retract the copies.
+    # instruction files are read-only Markdown copies from Copilot's
+    # generated tree, at the engine's default mode. A consumer's layer-1
+    # method wins. N→0 and a disable claim nothing, and the old writer's
+    # ledgers, agents included, are declared either way, so its copies drain.
     module-copilot-devenv-copies = mkTest "copilot-devenv-copies" (
       let
         enabled = evalDevenv populated;
+        linked = evalDevenv (lib.recursiveUpdate populated {ai.copilot.files2.".github/instructions/security.instructions.md".method = "symlink";});
         disabled = evalDevenv (lib.recursiveUpdate populated {ai.copilot.enable = false;});
         empty = evalDevenv {ai.copilot.enable = true;};
-        targets = writerTargets enabled;
+        targets = copies enabled;
+        copied = path:
+          targets.${path}.method
+          == "ro"
+          && targets.${path}.format == "markdown"
+          && targets.${path}.mode == null
+          && targets.${path}.executable == null
+          && targets.${path}.content.source == "${enabled.config.ai.copilot._generatedTree}/${path}";
       in
-        !(enabled.config.files ? ".github/instructions/security.instructions.md")
-        && !(enabled.config.files ? ".github/agents/reviewer.md")
-        && targets.".github/instructions".ledger == "materialize/copilot-instructions.manifest"
-        && targets.".github/instructions".units ? "security.instructions.md"
-        && targets.".github/agents".ledger == "materialize/copilot-github-agents.manifest"
-        && targets.".github/agents".units ? "reviewer.md"
-        && lib.all (target: target.units == {}) (builtins.attrValues (writerTargets disabled))
-        && lib.all (target: target.units == {}) (builtins.attrValues (writerTargets empty))
+        builtins.attrNames targets
+        == [".github/instructions/security.instructions.md"]
+        && lib.all (path: copied path && !(enabled.config.files ? ${path})) (builtins.attrNames targets)
+        && linked.config.ai.files2.".github/instructions/security.instructions.md".method == "symlink"
+        && linked.config.files ? ".github/instructions/security.instructions.md"
+        && claims disabled == {}
+        && claims empty == {}
+        && lib.all (declaresLedgers ".github") [disabled empty enabled]
+    );
+
+    # Ported from module-delivery-normalized-keyed-pools-extend, for the keyed
+    # pools Copilot supports: an ordinary normalized definition extends the
+    # inherited and local keys, and `mkForce` replaces the pool.
+    module-copilot-normalized-keyed-pools-extend = mkTest "copilot-normalized-keyed-pools-extend" (
+      let
+        optionPaths = import ../../../lib/ai/option-paths.nix {inherit lib;};
+        # Copilot's keyed pools; Codex's are ported with Codex.
+        samples.rules.text = "probe";
+      in
+        lib.all (
+          evaluate:
+            lib.all (
+              pool: let
+                poolPath = optionPaths.pool "copilot" pool;
+                normalizedPath = lib.init poolPath ++ ["normalized" pool];
+                base = lib.recursiveUpdate (setEnable "copilot" true) (lib.recursiveUpdate
+                  {ai.${pool}.inherited = samples.${pool};}
+                  (lib.setAttrByPath (poolPath ++ ["local"]) samples.${pool}));
+                original = lib.getAttrFromPath normalizedPath (evaluate base).config;
+                extension.extra = original.inherited;
+                result = value: (evaluate (lib.recursiveUpdate base (lib.setAttrByPath normalizedPath value))).config;
+                extended = result extension;
+                forced = result (lib.mkForce extension);
+              in
+                builtins.attrNames (lib.getAttrFromPath normalizedPath extended)
+                == ["extra" "inherited" "local"]
+                && (lib.getAttrFromPath normalizedPath extended).inherited == original.inherited
+                && builtins.attrNames (lib.getAttrFromPath normalizedPath forced) == ["extra"]
+                && lib.all (assertion: assertion.assertion) (extended.assertions ++ forced.assertions)
+            ) (builtins.attrNames samples)
+        ) [evalHm evalDevenv]
     );
   };
 }

@@ -30,11 +30,11 @@ are bugs unless marked N/A with rationale.
 
 ### Per-Surface Notes
 
-**Agents** -- `ai.agents` fans to Claude, and to github.com Copilot's
-`.github/agents/` on devenv only; its portable records also reach Codex and
-Kimchi. Claude agents are `ai.agents` / `ai.claude.agents`, each rendered to
-`.claude/agents/<name>.md`. Kiro is not fanned out: its agents are a typed
-record lowered to its own v3 agent JSON, with a different tool vocabulary
+**Agents** -- `ai.agents` fans to Claude; its portable records also reach Codex
+and Kimchi. github.com Copilot warns instead, because code review never reads
+`.github/agents`. Claude agents are `ai.agents` / `ai.claude.agents`, each
+rendered to `.claude/agents/<name>.md`. Kiro is not fanned out: its agents are a
+typed record lowered to its own v3 agent JSON, with a different tool vocabulary
 (capability tags rather than Claude/Copilot tool names), so configure them
 per-CLI.
 

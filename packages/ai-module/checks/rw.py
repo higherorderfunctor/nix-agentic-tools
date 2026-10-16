@@ -188,12 +188,56 @@ for native in (False, True):
         requested = plan("json", {"owned": 1})
         requested[0]["mode"] = "0600"
         run(requested, root, state)
-        backups = list(state.parent.glob("*.bak"))
-        assert len(backups) == 1 and backups[0].read_bytes() == original
-        assert stat.S_IMODE(backups[0].stat().st_mode) == 0o644
+        assert list(state.parent.glob("*.bak")) == []
+        assert target.read_bytes() == original
         assert stat.S_IMODE(target.stat().st_mode) == 0o600
+        assert state_data(state)["files"]["nested/settings"]["mode"] == 0o600
         assert document(target, "json") == {"owned": 1, **({"native": 2} if native else {})}
-print("PASS: external permission change backed up before explicit mode")
+print("PASS: external permission change reset to the explicit mode without a backup")
+
+with tempfile.TemporaryDirectory() as temporary:
+    root = Path(temporary) / "root"
+    root.mkdir()
+    state = Path(temporary) / "state" / "runtime.json"
+    target = root / "nested/settings"
+    wanted = plan("json", {"owned": 1}, "ro")
+    desired = engine.codecs.serialize("json", {"owned": 1})
+    # A git checkout of a committed copy: the desired bytes at 0644, unowned.
+    target.parent.mkdir()
+    target.write_bytes(desired)
+    target.chmod(0o644)
+    run(wanted, root, state)
+    assert list(state.parent.glob("*.bak")) == []
+    assert target.read_bytes() == desired and stat.S_IMODE(target.stat().st_mode) == 0o444
+    recorded = state_data(state)["files"]["nested/settings"]
+    assert (recorded["digest"], recorded["mode"], recorded["created"]) == (engine.digest(desired), 0o444, False)
+    # A pull rewrites the owned copy at 0644 with the same bytes.
+    target.chmod(0o644)
+    run(wanted, root, state)
+    assert list(state.parent.glob("*.bak")) == []
+    assert stat.S_IMODE(target.stat().st_mode) == 0o444
+    # The same bytes behind a symlink are another type: refused, kept as is.
+    source = Path(temporary) / "same-bytes"
+    source.write_bytes(desired)
+    target.unlink()
+    target.symlink_to(source)
+    try:
+        run(wanted, root, state)
+    except ValueError as error:
+        assert "non-regular destination refused" in str(error)
+    else:
+        raise AssertionError("symlink with identical bytes adopted")
+    assert target.is_symlink() and list(state.parent.glob("*.bak")) == []
+    # Different bytes at a different mode still back up the full image.
+    target.unlink()
+    target.write_bytes(b'{ "owned" : 1 }\n')
+    target.chmod(0o644)
+    run(wanted, root, state)
+    backups = list(state.parent.glob("*.bak"))
+    assert len(backups) == 1 and backups[0].read_bytes() == b'{ "owned" : 1 }\n'
+    assert stat.S_IMODE(backups[0].stat().st_mode) == 0o644
+    assert target.read_bytes() == desired and stat.S_IMODE(target.stat().st_mode) == 0o444
+print("PASS: permission-only drift resets the mode; type or byte drift does not")
 
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary) / "root"
@@ -224,6 +268,9 @@ mutation_cases = (
     ("rw-mode", plan("json", {"owned": 1}), plan("json", {"owned": 1}), "apply"),
     ("rw-replace", plan("json", {"owned": 1}), plan("json", {"owned": 2}), "apply"),
 )
+# Divergences whose desired bytes equal the file's; an unchanged rw key keeps
+# the local formatting, so rw-mode's "bytes" case differs in mode only.
+SAME_BYTES = {("ro-create", "mode"), ("ro-mode", "mode"), ("rw-create", "mode"), ("rw-mode", "bytes"), ("rw-mode", "mode")}
 for name, initial, wanted, phase in mutation_cases:
     for divergence in ("bytes", "mode"):
         with tempfile.TemporaryDirectory() as temporary:
@@ -248,11 +295,17 @@ for name, initial, wanted, phase in mutation_cases:
             before = target.read_bytes(), stat.S_IMODE(target.stat().st_mode)
             run(wanted, root, state, phase)
             backups = list(state.parent.glob("*.bak"))
+            if (name, divergence) in SAME_BYTES:
+                # Only permission bits differ from the desired image.
+                assert backups == [], (name, backups)
+                assert target.read_bytes() == before[0]
+                assert stat.S_IMODE(target.stat().st_mode) == int(wanted[0]["mode"] or "0444", 8)
+                continue
             assert len(backups) == 1, (name, divergence, backups)
             assert backups[0].read_bytes() == before[0]
             assert stat.S_IMODE(backups[0].stat().st_mode) == before[1]
             assert target.exists() == (not name.endswith("delete"))
-print("PASS: full-image backups for create, replace, delete, format, and mode mutations")
+print("PASS: full-image backups for create, replace, delete, format, and mode mutations unless only permissions differ")
 
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary) / "root"

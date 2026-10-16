@@ -11,13 +11,14 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 > `_generatedFiles` (skills first) and forward them through the ai-module
 > layer-1 helper over one generated tree, which every staged entry's delivery
 > requires; the shared AGENTS.md composer is the layer-1 owner `internal` and
-> the ai-module devenv module writes the treefmt excludes; the root-option
-> provenance guard exempts the ai-module layer-1 forwarding helper for its
-> forwarded options; option declarations supply policy surfaces and keyed
-> withdrawal; runtime declarations supply normalized policy gaps and the warning
-> suite generates coverage for every runtime, surface and backend; a record's
-> `optionNamespaces` places launcher and pool options, and `ai.copilot` is
-> github.com Copilot with its pools under `ai.copilot.github`; explicit
+> the ai-module devenv module writes the treefmt excludes; Copilot stages its
+> instructions, declares an agents gap and keeps both old ledgers; the
+> root-option provenance guard exempts the ai-module layer-1 forwarding helper
+> for its forwarded options; option declarations supply policy surfaces and
+> keyed withdrawal; runtime declarations supply normalized policy gaps and the
+> warning suite generates coverage for every runtime, surface and backend; a
+> record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
+> is github.com Copilot with its pools under `ai.copilot.github`; explicit
 > normalized overrides warn for live explicit contributions on unavailable
 > backends, excluding empty or disabled contributions beside inherited folds.
 >
@@ -406,7 +407,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Kimchi, and Kiro use
   their established native directories. github.com Copilot warns: committed
-  store links dangle, and directory ledgers cannot copy recursive skill trees.
+  store links dangle, and the module does not copy skill trees.
 - `ai.agents` — only the normalized
   `{ description, instructions = { text | source; }; tools?; }` record; a string
   or path is a type error there (a path is coerced to a thrown message, because
@@ -436,24 +437,22 @@ enabled ecosystem whose native model preserves the option's semantics):
   type built from `pkgs.formats.*` forces the factory's `pkgs` while modules are
   still importing.
 
-  Without the native layer (Claude, Copilot, Kimchi) the normalized pool keeps
-  raw entries and the runtime renders the record directly: Claude/Copilot
-  frontmatter plus body, passing raw scalar data to the shared emitter; Kimchi
-  Markdown omits `name:`. The shared renderer returns text, and treefmt formats
-  the complete file; `parseCompare` compares parsed frontmatter values. `tools`
-  uses Claude and Copilot's tool names and renders a non-empty value as their
-  frontmatter allowlist; `null` and `[]` both omit it. Codex, Kimchi and Kiro
-  drop it, and the record's `surfaceSupport.agents` gap warns at the path that
-  set it, naming the native remedy (Kimchi Markdown;
-  `ai.kiro.native.agents.<name>.tools` and `permissions`); a native `tools` on
-  the same agent silences it. Claude writes `.claude/agents/<name>.md` on both
-  backends through `agent.renderFile`. A path-like raw entry — a Nix path, a
-  store-path string such as a flake input's `"${src}/a.md"`, or a derivation,
-  i.e. Home Manager's `isPathLike` — stays a file `source` (`agent.fileContent`,
-  which tests `agent.isPathLike`) for Claude, Codex, Kimchi and Kiro, and is
-  read into text by `renderCopilot` for Copilot, whose devenv profiles land at
-  `.github/agents/<name>.md` with `name:`; an `agentsDir` given as a store-path
-  string yields store-string entries (any other absolute string becomes a path
+  Without the native layer (Claude, Kimchi) the normalized pool keeps raw
+  entries and the runtime renders the record directly: Claude frontmatter plus
+  body, passing raw scalar data to the shared emitter; Kimchi Markdown omits
+  `name:`. The shared renderer returns text, and treefmt formats the complete
+  file; `parseCompare` compares parsed frontmatter values. `tools` uses Claude's
+  tool names and renders a non-empty value as its frontmatter allowlist; `null`
+  and `[]` both omit it. Codex, Kimchi and Kiro drop it, and the record's
+  `surfaceSupport.agents` gap warns at the path that set it, naming the native
+  remedy (Kimchi Markdown; `ai.kiro.native.agents.<name>.tools` and
+  `permissions`); a native `tools` on the same agent silences it. Claude writes
+  `.claude/agents/<name>.md` on both backends through `agent.renderFile`. A
+  path-like raw entry — a Nix path, a store-path string such as a flake input's
+  `"${src}/a.md"`, or a derivation, i.e. Home Manager's `isPathLike` — stays a
+  file `source` (`agent.fileContent`, which tests `agent.isPathLike`) for
+  Claude, Codex, Kimchi and Kiro; an `agentsDir` given as a store-path string
+  yields store-string entries (any other absolute string becomes a path
   literal), so every writer must test `isPathLike`, never `builtins.isPath`.
   Kiro keeps a raw `.md` path's suffix and writes everything else as `.json`.
   Kimchi's agent files are the one Markdown surface a harness rewrites (the
@@ -794,28 +793,31 @@ enabled, it appends the read-only `ai.deliveredPaths` inventory (enabled
 `ai.files2` keys, recursive ones as `<key>/**`, plus the old path's live
 entries) to `treefmt.config.settings.global.excludes`. Home Manager has no
 repository treefmt surface and writes no equivalent. Claude context/rules, Codex
-user AGENTS.md, Copilot's repository instructions and agent profiles, Kimchi
-harness AGENTS.md, and Kiro Home Manager context/steering all use the runtime
-maps. Repository-local Codex/Copilot/Kimchi/Kiro AGENTS.md retains one
-divergence-checking owner, the composer in `lib/ai/app/sharedAgentsMd.nix`,
-which is the layer-1 owner `internal`. Old-path public entries for a shared
-target arbitrate in its hidden `ai.internal.files`: equal entries deduplicate,
-divergence fails, an ordinary entry replaces the generated default, and
-`content.enable = false` suppresses it. The winner becomes the composer's staged
-entry, is formatted and byte-checked in its one tree, and reaches `ai.files2` as
-the path's single claim. It is a read-only copy unless the winning entry states
-`symlink`, because a committed AGENTS.md that is a store symlink dangles
-everywhere else. A runtime's `files2` entry for the path forwards unclaimed and
-arbitrates there by module priority. The composer claims every shared target,
-with `method` defaulting to `ro` and `enable` following whether any definition
-supplies content, so a runtime's entry alone still lands as a copy. The old
-writer's `materialize/agents-md.manifest` ledger is the composer's
-`legacyLedgers` entry. Copilot's devenv instruction files and agent profiles are
-copies for the same reason (github.com reads the committed tree), and Kiro's
-devenv steering is a copy so a developer's own steering beside it survives: each
-directory ledger claims only the files its writer wrote. `own` adopts a file
-whose bytes already match without a backup, so a `git pull` of a committed copy
-is silent.
+user AGENTS.md, Copilot's repository instructions, Kimchi harness AGENTS.md, and
+Kiro Home Manager context/steering all use the runtime maps. Repository-local
+Codex/Copilot/Kimchi/Kiro AGENTS.md retains one divergence-checking owner, the
+composer in `lib/ai/app/sharedAgentsMd.nix`, which is the layer-1 owner
+`internal`. Old-path public entries for a shared target arbitrate in its hidden
+`ai.internal.files`: equal entries deduplicate, divergence fails, an ordinary
+entry replaces the generated default, and `content.enable = false` suppresses
+it. The winner becomes the composer's staged entry, is formatted and
+byte-checked in its one tree, and reaches `ai.files2` as the path's single
+claim. It is a read-only copy unless the winning entry states `symlink`, because
+a committed AGENTS.md that is a store symlink dangles everywhere else. A
+runtime's `files2` entry for the path forwards unclaimed and arbitrates there by
+module priority. The composer claims every shared target, with `method`
+defaulting to `ro` and `enable` following whether any definition supplies
+content, so a runtime's entry alone still lands as a copy. The old writer's
+`materialize/agents-md.manifest` ledger is the composer's `legacyLedgers` entry.
+Copilot's devenv instruction files are staged `ro` copies for the same reason
+(github.com reads the committed tree), its old writer's two directory ledgers
+its `legacyLedgers`; the agents ledger outlives its writer so the profiles it
+left retire on upgrade. Kiro's devenv steering is a copy so a developer's own
+steering beside it survives: its directory ledger claims only the files its
+writer wrote. For Kiro's copies, `own` adopts a file whose bytes already match
+without a backup, so a `git pull` of a committed copy is silent; the
+engine-owned copies above adopt identical bytes too, resetting a mode a checkout
+changed without a backup.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
 files use `content.run` in an owned writer, and runtime state keeps its typed

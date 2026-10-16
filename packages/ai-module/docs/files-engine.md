@@ -168,7 +168,10 @@ owned paths, so an owned file can become a directory parent; unmanaged files and
 remaining symlinked parents are still refused.
 
 One engine mutation function applies the overwrite rule to every owned path:
-`current == desired` → retain the current file without backup;
+`current == desired` → retain the current file without backup; a regular file
+whose bytes equal the desired file's and whose permissions alone differ →
+restore the desired mode without backup, since a git checkout rewrites a
+committed copy at `0644` and a backup would preserve nothing;
 `current == last installed` or `current` absent → mutate without backup;
 otherwise back up, then mutate. It compares full file images, including bytes,
 permissions, and type, for writes, removal, mode changes, and format conversion.
