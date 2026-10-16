@@ -83,7 +83,7 @@
   };
   hm = (harness.evalHm (lib.recursiveUpdate declaration {home.homeDirectory = homePlaceholder;})).config;
   devenv = (harness.evalDevenv (lib.recursiveUpdate declaration {devenv.root = rootPlaceholder;})).config;
-  hmState = hm.ai.codex.files.".codex/config.toml".content.value.hooks.state;
+  hmState = hm.ai.codex.files2.".codex/config.toml".content.value.hooks.state;
   expected = pkgs.writeText "codex-hook-trust-expected.json" (builtins.toJSON {
     hm = hmState;
     handlers = builtins.length (builtins.attrNames hmState);

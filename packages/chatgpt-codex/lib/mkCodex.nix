@@ -181,6 +181,8 @@
       then content
       else
         pkgs.runCommand "codex-skill-${builtins.hashString "sha256" name}" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
           ${pkgs.coreutils}/bin/mkdir -p "$out"
           ${pkgs.coreutils}/bin/cp "${content}" "$out/SKILL.md"
         '')
@@ -698,7 +700,6 @@
   # read-only copies on both backends, claimed file by file: Codex writes its
   # own `rules/default.rules` beside them, which a directory claim would delete.
   execpolicyLedger = "materialize/codex-execpolicy.manifest";
-  execpolicyWriter = "materialize-codex-execpolicy-write";
   # Project config has a fixed native root; configDir customizes the user
   # layer only. Keep agents, hooks and execpolicy beside their config.
   nativeDirFor = backend: cfg:
@@ -712,30 +713,6 @@
     if backend == "hm"
     then "${cfg.configDir}/${cfg.context.filename}"
     else cfg.context.filename;
-  # The copies are ledger-owned, and nothing but this writer retracts them.
-  # Declared outside the enable gate, and whether or not any rule is, so both
-  # N→0 and the generation that DISABLES Codex drain what the previous one
-  # wrote: an `allow` policy must not outlive its declaration for a codex
-  # still on PATH. While disabled the adapter hands the writer no files, so it
-  # only removes what the ledger recorded.
-  codexExecpolicyWriterConfig = {
-    backend,
-    cfg,
-    ...
-  }: {
-    ai.codex.activation.${execpolicyWriter} = {
-      entry = {
-        devenv = "ai:codex:materialize-execpolicy";
-        hm = execpolicyWriter;
-      };
-      ledgers.${execpolicyLedger} = {
-        codec = "dir";
-        path = "${nativeDirFor backend cfg}/rules";
-      };
-      pruneEntry.hm = "materialize-codex-execpolicy-prune";
-      runWhenDisabled = true;
-    };
-  };
   # Home Manager owns the user-scope daemon state under the Codex home: which
   # package the shared daemon runs (daemonSelect.nix) and the daemon's
   # settings.json. devenv writes neither; see its assertions.
@@ -745,7 +722,7 @@
   # `native.daemonSettings`. Codex saves it by writing a temporary and
   # renaming it over the path (settings.rs, rust-v0.157.1), which replaces a
   # store symlink with a real file and fails the next switch's link check. So
-  # it is a read-only copy in a directory ledger that claims only that file,
+  # it is a read-only engine copy that claims only that file,
   # beside the lock and pid files the daemon keeps there: an in-app change
   # lasts until the next activation, which backs it up and restores the
   # declaration. The pin's `updater.autoUpdateEnabled = false` is the second
@@ -753,13 +730,10 @@
   # on every updater tick (update_loop.rs), so it also retires an updater left
   # running by an earlier upstream selection.
   #
-  # Both writers run while disabled, so the generation that disables Codex or
-  # the pin releases a store selection before GC can leave it dangling, and
-  # the one that disables Codex retracts the copy.
-  daemonSelectWriter = "codexDaemonSelect";
+  # The selector runs while disabled to release its store selection before GC.
+  # Ungated legacy declarations let the engine retract old settings copies.
   daemonSettingsFile = cfg: "${cfg.configDir}/app-server-daemon/settings.json";
   daemonSettingsManifest = "materialize/codex-daemon-settings.manifest";
-  daemonSettingsWriter = "materialize-codex-daemon-settings";
   # Only the layout the selector can release: a package whose complete Codex
   # package sits anywhere else would be pinned and then never unpinned.
   hasDaemonLayout = cfg:
@@ -769,51 +743,19 @@
   # `pinDaemonToPackage` is Home Manager-only; `or false` keeps this callable
   # from a devenv `cfg`, which has no such attribute at all.
   isDaemonPinned = cfg: cfg.enable && (cfg.pinDaemonToPackage or false) && hasDaemonLayout cfg;
-  codexDaemonWriterConfig = {
-    backend,
-    cfg,
-    ...
-  }:
-    lib.optionalAttrs (backend == "hm") {
-      ai.codex.activation = {
-        ${daemonSelectWriter} = {
-          # The router supplies strict mode, the scoped subshell and the final
-          # newline, so the command ends at its last character.
-          command = ''run ${lib.getExe daemonSelect} "$HOME"/${lib.escapeShellArg cfg.configDir} ${lib.escapeShellArg (
-              lib.optionalString (isDaemonPinned cfg) "${cfg.package}/${cfg.package.passthru.codexPackage.root}"
-            )}'';
-          runWhenDisabled = true;
-        };
-        ${daemonSettingsWriter} = {
-          ledgers.${daemonSettingsManifest} = {
-            codec = "dir";
-            path = dirOf (daemonSettingsFile cfg);
-          };
-          pruneEntry = "${daemonSettingsWriter}-prune";
-          runWhenDisabled = true;
-        };
-      };
-    };
   mkExecpolicyEntries = prefix:
     lib.mapAttrs' (name: content:
       lib.nameValuePair "${prefix}/rules/${name}.rules" {
-        entry = execpolicyWriter;
-        facts.symlinkReadable = false;
-        ledger = execpolicyLedger;
+        format = "raw";
+        method = "ro";
+        surface = "settings";
         # Every path-like value is a `source`, valid or not: `text` is a
         # string, so a directory or missing path typed as text fails eval
         # before mkExecpolicyAssertions can name what is wrong with it.
-        content = lib.mkDefault (
-          {
-            _generated = true;
-            _surface = "settings";
-          }
-          // (
-            if isExecpolicyPathLike content
-            then {source = content;}
-            else {text = content;}
-          )
-        );
+        content =
+          if isExecpolicyPathLike content
+          then {source = content;}
+          else {text = content;};
         # Source files retain their mode; inline policy is non-executable.
         executable =
           if isExecpolicyPathLike content
@@ -958,12 +900,9 @@
     dropUnset = lib.filterAttrs (field: value: !(builtins.elem field codexAgentRequiredFields && value == null));
     entry = name: content:
       lib.nameValuePair "${prefix}/agents/${name}.toml" {
-        content = lib.mkDefault ({
-            _generated = true;
-            _surface = "agents";
-          }
-          // content);
-        format = lib.mkDefault "toml";
+        inherit content;
+        surface = "agents";
+        format = "toml";
         executable = null;
       };
   in
@@ -1297,11 +1236,35 @@ in
       context = agentsMdPath backend cfg;
       rules = lib.mapAttrs (_name: _rule: agentsMdPath backend cfg) mergedRules;
     };
-    migrationConfig = args:
-      lib.mkMerge [
-        (codexDaemonWriterConfig args)
-        (codexExecpolicyWriterConfig args)
-      ];
+    migrationConfig = {
+      backend,
+      cfg,
+      ...
+    }: {
+      ai.codex = {
+        legacyLedgers =
+          lib.optional (backend == "hm") {
+            codec = "dir";
+            ledger = daemonSettingsManifest;
+            path = dirOf (daemonSettingsFile cfg);
+          }
+          ++ [
+            {
+              codec = "dir";
+              ledger = execpolicyLedger;
+              path = "${nativeDirFor backend cfg}/rules";
+            }
+          ];
+        activation2 = lib.optionalAttrs (backend == "hm") {
+          codex-daemon-select = {
+            command = ''${lib.getExe daemonSelect} "$HOME"/${lib.escapeShellArg cfg.configDir} ${lib.escapeShellArg (
+                lib.optionalString (isDaemonPinned cfg) "${cfg.package}/${cfg.package.passthru.codexPackage.root}"
+              )}'';
+            runWhenDisabled = true;
+          };
+        };
+      };
+    };
     # Every rule, scope-prefixed or indexed, under Codex's size limit.
     sharedAgentsMd = {
       cfg,
@@ -1504,63 +1467,47 @@ in
             ];
         }
         {
-          ai.codex.files = lib.mkMerge [
+          ai.codex._generatedFiles = lib.mkMerge [
             (mkAgentEntries nativeDir {inherit nativeAgents rawAgents;})
             (mkExecpolicyEntries nativeDir cfg.execpolicyRules)
             (lib.mkIf (effectiveHooks != {}) {
               "${nativeDir}/hooks.json" = {
-                content = lib.mkDefault {
-                  _generated = true;
-                  _surface = "hooks";
-                  source = jsonFormat.generate (
-                    if isHm
-                    then "codex-hooks.json"
-                    else "codex-project-hooks.json"
-                  ) {hooks = renderHooks effectiveHooks;};
-                };
-                format = lib.mkDefault "json";
+                content.source = jsonFormat.generate (
+                  if isHm
+                  then "codex-hooks.json"
+                  else "codex-project-hooks.json"
+                ) {hooks = renderHooks effectiveHooks;};
+                surface = "hooks";
+                format = "json";
                 executable = null;
               };
             })
+            # Codex discovers a skill when the skill DIRECTORY is itself a
+            # symlink, and not when the backend creates a real directory of
+            # symlinked leaves — a measured consumer fact, and the whole reason
+            # this runtime delivers a directory source with `recursive` off.
+            # `normalizeCodexSkills` wraps single-file skills into directories.
+            (helpers.mkSkillFiles {
+              configDir = ".agents";
+              recursive = false;
+              skills = codexSkills;
+            })
           ];
-          # Codex discovers a skill when the skill DIRECTORY is itself a
-          # symlink, and not when the backend creates a real directory of
-          # symlinked leaves — a measured consumer fact, and the whole reason
-          # this runtime delivers a directory source with `recursive` off.
-          # `normalizeCodexSkills` wraps single-file skills into directories.
-          ai.codex._generatedFiles = helpers.mkSkillFiles {
-            configDir = ".agents";
-            recursive = false;
-            skills = codexSkills;
-          };
         }
         {
-          ai.codex.activation.codexMigrateSkillLinks = lib.mkIf (mergedSkills != {}) (
-            {
-              # The router supplies strict mode and the scoped subshell. End
-              # each command at its last character: it also supplies a newline.
-              command =
-                if isHm
-                then ''
-                  nat_codex_skill_targets=()
-                  for nat_codex_skill_name in ${lib.escapeShellArgs codexSkillNames}; do
-                    nat_codex_skill_targets+=("$HOME/.agents/skills/$nat_codex_skill_name")
-                  done
-                  run ${lib.getExe skillLinkMigrator} "${skillBackupRoot}" "''${nat_codex_skill_targets[@]}"''
-                else ''exec ${lib.getExe skillLinkMigrator} ${lib.escapeShellArg skillBackupRoot} ${lib.escapeShellArgs codexSkillTargets}'';
-              entry = {
-                devenv = "ai:codex:migrate-skill-links";
-                hm = "codexMigrateSkillLinks";
-              };
-            }
-            # HM must move old directories before its collision check, without
-            # waiting for link generation. devenv uses the default file/shell
-            # edges, including the adapter's conditional devenv:files edge.
-            // lib.optionalAttrs isHm {
-              after = [];
-              before = ["linkCheck"];
-            }
-          );
+          ai.codex.activation2.codex-migrate-skill-links = lib.mkIf (mergedSkills != {}) {
+            after = [];
+            before = ["linkCheck"];
+            command =
+              if isHm
+              then ''
+                nat_codex_skill_targets=()
+                for nat_codex_skill_name in ${lib.escapeShellArgs codexSkillNames}; do
+                  nat_codex_skill_targets+=("$HOME/.agents/skills/$nat_codex_skill_name")
+                done
+                ${lib.getExe skillLinkMigrator} "${skillBackupRoot}" "''${nat_codex_skill_targets[@]}"''
+              else ''exec ${lib.getExe skillLinkMigrator} ${lib.escapeShellArg skillBackupRoot} ${lib.escapeShellArgs codexSkillTargets}'';
+          };
         }
 
         {
@@ -1574,29 +1521,21 @@ in
           # document keeps the generated siblings. Home Manager always owns the
           # user file; devenv writes the project file only when something is
           # declared.
-          ai.codex.files.${configFile} = lib.mkIf (isHm || settings != {}) {
-            content = {
-              _generated = true;
-              _surface = "settings";
-              value = settings;
-            };
+          ai.codex._generatedFiles.${configFile} = lib.mkIf (isHm || settings != {}) {
+            content.value = settings;
             format = "toml";
+            surface = "settings";
           };
         }
 
         (lib.optionalAttrs isHm (lib.mkMerge [
           {
-            # See `daemonSettingsWriter`.
-            ai.codex.files.${daemonSettingsFile cfg} = {
-              content = {
-                _generated = true;
-                _surface = "settings";
-                value = cfg.native.daemonSettings;
-              };
-              entry = daemonSettingsWriter;
+            # Codex replaces this file on save; restore its declared bytes.
+            ai.codex._generatedFiles.${daemonSettingsFile cfg} = {
+              content.value = cfg.native.daemonSettings;
               format = "json";
-              ledger = daemonSettingsManifest;
-              method = "copy-ro";
+              method = "ro";
+              surface = "settings";
             };
             ai.codex.native.daemonSettings = lib.mkIf cfg.pinDaemonToPackage {
               updater.autoUpdateEnabled = lib.mkDefault false;
@@ -1612,9 +1551,9 @@ in
             ai.codex.native.settings.features.daemon_auto_start = lib.mkDefault false;
           }
           {
-            # Codex silently drops whatever is past this. Keyed by path, so
-            # the file checked is whichever one wins at `.codex/AGENTS.md`,
-            # a consumer's replacement included. On devenv the shared
+            # Codex silently drops whatever is past this. Generated content
+            # is checked at its final path; consumer replacements bypass the
+            # generated tree's checks. On devenv the shared
             # AGENTS.md owner carries the limit (`sharedAgentsMd`).
             ai.codex._maxBytes.${agentsMdTarget} = {
               bytes = cfg.projectDocMaxBytes;
@@ -1622,33 +1561,15 @@ in
             };
           }
           (lib.mkIf hasAgentsMdContent {
-            # The ONE generated entry whose priority stays on the whole entry
-            # rather than moving onto `content`. Deciding between enabled and
-            # empty generated content reads the COMPOSED body, and the body may
-            # come from a store source a consumer has already replaced. The
-            # `mkDefault` wrapper lets priority filtering discard that source
-            # unread. A consumer defining only a sibling field therefore must
-            # also restate content; validation diagnoses an empty survivor.
-            ai.codex.files.${agentsMdTarget} = lib.mkDefault (
-              if agentsMd == ""
-              then {
-                content = {
-                  _generated = true;
-                  _surface = "context";
-                  enable = false;
-                  text = agentsMd;
-                };
-                format = "markdown";
-              }
-              else {
-                content = {
-                  _generated = true;
-                  _surface = "context";
-                  enable = true;
-                  text = agentsMd;
-                };
-                format = "markdown";
-              }
+            # The staging helper forwards Markdown as one whole-content
+            # default, so a replacement discards the composed source unread.
+            ai.codex._generatedFiles.${agentsMdTarget} = {
+              content.text = agentsMd;
+              format = "markdown";
+              surface = "context";
+            };
+            ai.codex.files2.${agentsMdTarget}.enable = lib.mkDefault (
+              config.ai.files2.${agentsMdTarget}._contentPrio < (lib.mkDefault null).priority || agentsMd != ""
             );
           })
         ]))

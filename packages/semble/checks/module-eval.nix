@@ -84,7 +84,7 @@ in {
         ["/consumer-cache" "/home/test/.cache/nix" "/home/test/.cache/semble"]
         && builtins.length (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots == 3
         && builtins.all
-        (root: builtins.elem root devenv.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots)
+        (root: builtins.elem root devenv.ai.codex.files2.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots)
         ["/consumer-cache" "/tmp/devenv-root/.git" "/tmp/devenv-state/semble-cache"]
         # Both backends make their selected cache authoritative through the
         # launcher wrapper. Never through the surrounding shell: that would
@@ -94,8 +94,8 @@ in {
         && readOnly.ai.codex.native.settings.sandbox_workspace_write == null
         && noCodex.ai.codex.native.settings.sandbox_workspace_write == null
         && profileOnly.ai.codex.native.settings.sandbox_workspace_write == null
-        && profileOnly.ai.codex.files.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "write"
-        && profileDenied.ai.codex.files.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "deny"
+        && profileOnly.ai.codex.files2.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "write"
+        && profileDenied.ai.codex.files2.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "deny"
         && builtins.all (assertion: assertion.assertion) profileOnly.assertions
         && builtins.all (assertion: assertion.assertion) profileDenied.assertions
     );

@@ -191,16 +191,17 @@ this paragraph would rot the next time one is added.)
 
 > **Last verified:** 2026-10-15 — Kiro steering uses engine copies; Codex skill
 > discovery was re-probed on 0.161.0; skills are staged entries the ai-module
-> files engine walks. The repository's committed instruction files are read-only
-> copies the files engine writes, never `files.*` symlinks; the generator's
-> materializer and the AGENTS.md seed are gone. Kiro and Kimchi settings and
-> Codex daemon settings are owned copies; Copilot writes repository instructions
-> only; its agents and skills declare gaps; the files engine writes Claude's
-> project rules. Identical copy bytes with changed permissions are corrected
-> without a backup. Recursive leaf links target one source-tree store root while
-> retaining per-file input contexts. The symlink guard uses devenv's final file
-> target, follows its own runtime's writers before file creation, and reports
-> every conflict before failing.
+> files engine walks. Codex declares its skill migration through activation2,
+> before linkCheck on both backends. The repository's committed instruction
+> files are read-only copies the files engine writes, never `files.*` symlinks;
+> the generator's materializer and the AGENTS.md seed are gone. Kiro and Kimchi
+> settings and Codex daemon settings are owned copies; Copilot writes repository
+> instructions only; its agents and skills declare gaps; the files engine writes
+> Claude's project rules. Identical copy bytes with changed permissions are
+> corrected without a backup. Recursive leaf links target one source-tree store
+> root while retaining per-file input contexts. The symlink guard uses devenv's
+> final file target, follows its own runtime's writers before file creation, and
+> reports every conflict before failing.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -392,14 +393,17 @@ the per-file inputs that make direnv reload after an edit.
 
 Codex is the exception. Its 0.161.0 scanner ignores a real skill directory
 containing symlinked leaves but discovers a symlinked skill directory. Codex
-therefore declares `recursive = false` with a directory source, which maps
-directly onto devenv's identity behavior. The `ai:codex:migrate-skill-links`
-task runs after `devenv:files:cleanup` and before `devenv:files`. It validates
-the whole target set first, rejects unsafe names and non-store or non-directory
-content, and refuses symlinked `.agents` or `skills` parents before moving each
-legacy tree intact under the devenv state directory. Existing store-backed
-top-level links are unlinked so devenv cannot follow them while updating the
-target. The backup preserves even empty directories for recovery; unexpected
+therefore stages each directory with `recursive = false` for the files engine.
+`activation2.codex-migrate-skill-links` declares `after = []` and
+`before = ["linkCheck"]` on both backends. On devenv this becomes
+`ai2:codex-migrate-skill-links`, after `devenv:files:cleanup` and before
+`ai2:link-check`; on Home Manager it becomes `ai2-codex-migrate-skill-links`,
+before `checkLinkTargets` with no predecessors. Skill names are restricted at
+evaluation; the command validates the whole target set first, rejects non-store
+or non-directory content, and refuses symlinked `.agents` or `skills` parents
+before moving each legacy tree intact under the backend's state directory.
+Existing store-backed top-level links are unlinked for replacement by the files
+engine. The backup preserves even empty directories for recovery; unexpected
 content fails the migration loudly before anything changes.
 
 ### How HM produces Layout B

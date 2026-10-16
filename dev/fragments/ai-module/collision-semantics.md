@@ -1,7 +1,8 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-14 — runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics; five keyed pools.
+> **Last verified:** 2026-10-15 — every runtime stages its generated files;
+> layer-1 defaults preserve structured siblings and discarded-source laziness;
+> runtime surfaceSupport declarations own normalized backend reach.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -166,28 +167,15 @@ the source remains visible. Consumers can retract that generated rule with
 `ai.<runtime>.rules.semble.enable = false`; its runtime `cli.instructions`
 feature flag remains the package-level gate.
 
-**`ai.<runtime>.files` is another exception, and the reason is worth knowing
-before copying either shape.** A generated FILE entry defaults its `content`
-option and leaves every sibling at ordinary priority, because `filterOverrides`
-runs before a type merges: a whole-entry `mkDefault` is discarded outright by a
-consumer who sets only `method` or a fact, and the survivor has no bytes at all.
-Two consequences follow.
-
-- The map has no nullable entry branch. A consumer suppresses a generated file —
-  text, source, `run` or `value` alike — with `content.enable = false`, so
-  ordinary submodule priority arbitration remains available and the final record
-  stays inspectable.
-- An entry whose content decision reads its own rendered body cannot move its
-  priority down at all: the module system forces the entry's shape long before
-  it knows whether the definition survives, so the read would build a source the
-  consumer already replaced. The two composed AGENTS.md writers (`mkCodex.nix`,
-  `lib/ai/app/sharedAgentsMd.nix`) keep whole-entry `mkDefault` and say so at
-  the site.
-
-Structured documents instead contribute ordinary `content.value` leaves (or
-per-leaf defaults). A default on the whole content or value drops every
-generated leaf when a consumer adds one, silently retiring previously owned
-siblings.
+**Generated files use layer-1 defaults.** The staging helper contributes
+`ai.<runtime>.files2` content and method at `mkDefault`. Markdown and raw
+content receive a whole-content default, so replacement discards a composed
+source without reading it. Structured documents receive a default on every value
+leaf; a default on the whole document would drop generated siblings when a
+consumer extends one leaf. A consumer suppresses any content form with
+entry-level `enable = false`, and empty text is legal. Disabled owners forward
+no file claims; disabled entries still claim their path while their owner is
+enabled.
 
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool
