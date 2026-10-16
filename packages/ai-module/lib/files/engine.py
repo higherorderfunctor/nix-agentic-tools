@@ -161,7 +161,7 @@ def desired_data(item):
         source_mode = 0o444
     elif "run" in content:
         script = "set -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + content["run"]
-        payload = subprocess.run([os.environ["FILES2_BASH"], "-c", script], check=True, capture_output=True).stdout
+        payload = subprocess.run([os.environ["FILES2_BASH"], "-c", script], check=True, stdout=subprocess.PIPE).stdout
         source_mode = 0o444
     else:
         raise ValueError(f"unsupported ro content at {item['path']}")

@@ -8,6 +8,7 @@
     ./generated-files.nix
     ./generated-tree-gates.nix
     ./hm.nix
+    ./kimchi-settings.nix
     ./kimchi.nix
     ./kiro-settings.nix
     ./kiro.nix

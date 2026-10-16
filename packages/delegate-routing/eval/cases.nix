@@ -35,22 +35,13 @@
         inherit path;
         sourcePath = toString (file.source or file.rendered);
       }
-      else let
-        owner = lib.findFirst (name: (config.ai.${name}.files.${path}.content.run or null) != null) null harness.harnessNames;
-      in
-        if (config.ai.files2.${path}.content.run or null) != null
-        then {
-          inherit path;
-          renderCommand = config.ai.files2.${path}.content.run;
-          renderShell = lib.getExe pkgs.bash;
-        }
-        else if owner == null
-        then throw "acceptance case ${id}: cannot capture delivered file ${path}"
-        else {
-          inherit path;
-          renderCommand = config.ai.${owner}.files.${path}.content.run;
-          renderShell = lib.getExe pkgs.bash;
-        })
+      else if (config.ai.files2.${path}.content.run or null) != null
+      then {
+        inherit path;
+        renderCommand = config.ai.files2.${path}.content.run;
+        renderShell = lib.getExe pkgs.bash;
+      }
+      else throw "acceptance case ${id}: cannot capture delivered file ${path}")
     (harness.deliveredFiles config);
     # The delegate techniques the delivered skill offers, by runtime. The
     # runner classifies logged tool calls and shell commands by these names.

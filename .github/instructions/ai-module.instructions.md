@@ -8,23 +8,22 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-15 — runtime factories stage moved surfaces in
-> `_generatedFiles` (every Kiro surface and Kimchi agents, context, extensions
-> and skills included) and forward them through the ai-module layer-1 helper
-> over one generated tree, which every staged entry's delivery requires; the
-> shared AGENTS.md composer is the layer-1 owner `internal` and the ai-module
-> devenv module writes the treefmt excludes; Copilot stages its instructions,
-> declares an agents gap and keeps both old ledgers, and Claude every surface
-> including HM `.claude.json` with both legacy ledgers; the root-option
-> provenance guard exempts the ai-module layer-1 forwarding helper for its
-> forwarded options; option declarations supply policy surfaces and keyed
-> withdrawal; runtime declarations supply normalized policy gaps and the warning
-> suite generates coverage for every runtime, surface and backend; a record's
-> `optionNamespaces` places launcher and pool options, and `ai.copilot` is
-> github.com Copilot with its pools under `ai.copilot.github`; explicit
-> normalized overrides warn for live explicit contributions on unavailable
-> backends, excluding empty or disabled contributions beside inherited folds;
-> the coexistence assertion counts a switched-off staged path for its layer-1
-> entry and engine state, not for tree bytes.
+> `_generatedFiles` (every Kiro and Kimchi surface included) and forward them
+> through the ai-module layer-1 helper over one generated tree, which every
+> staged entry's delivery requires; the shared AGENTS.md composer is the layer-1
+> owner `internal` and the ai-module devenv module writes the treefmt excludes;
+> Copilot stages its instructions, declares an agents gap and keeps both old
+> ledgers, and Claude every surface including HM `.claude.json` with both legacy
+> ledgers; the root-option provenance guard exempts the ai-module layer-1
+> forwarding helper for its forwarded options; option declarations supply policy
+> surfaces and keyed withdrawal; runtime declarations supply normalized policy
+> gaps and the warning suite generates coverage for every runtime, surface and
+> backend; a record's `optionNamespaces` places launcher and pool options, and
+> `ai.copilot` is github.com Copilot with its pools under `ai.copilot.github`;
+> explicit normalized overrides warn for live explicit contributions on
+> unavailable backends, excluding empty or disabled contributions beside
+> inherited folds; the coexistence assertion counts a switched-off staged path
+> for its layer-1 entry and engine state, not for tree bytes.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -195,8 +194,8 @@ and only writers with that explicit opt-in; ordinary command and owned writers
 remain gated. An opted-in owned writer therefore receives empty targets, so
 ordinary retraction removes only what the previous generation's ledger recorded
 and then drops the ledger. It cannot emit product files while disabled. The
-remaining caller is Codex's execpolicy writer. Kiro declares its hooks, settings
-and steering ledgers unconditionally in `legacyLedgers`, so the files engine
+remaining caller is Codex's execpolicy writer. Kiro and Kimchi declare every
+retired writer ledger unconditionally in `legacyLedgers`, so the files engine
 drains them even when Kiro is disabled on the first upgrade. A ledger-owned copy
 outlives a disable unless its writer opts in, because Home Manager's generation
 diff and `devenv:files:cleanup` only remove links. On Home Manager a directory
@@ -1489,9 +1488,9 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 > Claude stages every surface, including HM `.claude.json` as `rw`; the files
 > engine writes its rules copies on devenv; staged Markdown and raw entries are
 > whole-content defaults; Kiro stages every surface, with hooks, settings and
-> steering legacy ledgers declared outside its enable gate; Kimchi stages
-> agents, context, extensions and skills, with its agents legacy ledger ungated;
-> hand rows are confined to the policy-only permissions surface.
+> steering legacy ledgers declared outside its enable gate; Kimchi stages every
+> surface, with every legacy ledger ungated; hand rows are confined to the
+> policy-only permissions surface.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1664,10 +1663,11 @@ rather than a second path field: a runtime names exactly the groups it moves.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` is a
   writable state file with Nix-owned leaves. The files engine restores declared
   keys on activation and retains native keys. Its legacy ledger name remains a
-  literal upgrade contract. Kimchi still uses `helpers.mkReconciledDocument`
-  until its migration. Kimchi's `config.json` is fully Nix-owned and lands in
-  the same directory copy writer as its other settings. A replaced copy is
-  restored at switch.
+  literal upgrade contract. Kimchi stages user `config.json` and harness
+  `settings.json` as `rw` too; native keys survive while declared keys return.
+  Its git-token branch retains `ro` mode 0400 with an activation-time renderer,
+  as does trust with the read-only default mode. Engine apply follows secret
+  providers; all old Kimchi ledgers are ungated legacy declarations.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON ledger, even without a claimant.

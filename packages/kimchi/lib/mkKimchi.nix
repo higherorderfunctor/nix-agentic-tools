@@ -423,40 +423,23 @@
     userScopeOnlyHarnessSettings = lib.intersectLists sidecar.userScopeHarnessKeys (builtins.attrNames filteredProjectHarnessSettings);
     userScopeConfigSettings = lib.intersectLists sidecar.userScopeConfigKeys (builtins.attrNames filteredProjectSettings);
     fixedEnvironmentVariables = builtins.attrNames (builtins.intersectAttrs sidecar.fixedEnvironmentVariables (lib.filterAttrs (_: value: value != null) mergedEnvironmentVariables));
-    # One directory ledger per directory the settings copies land in, keyed
-    # by that directory: own refuses two live targets on one path.
-    filesLedger = dir: "materialize/kimchi-files-${builtins.hashString "sha256" dir}.manifest";
-    # A read-only copy owned by the `kimchiFiles` writer, in the directory
-    # ledger of the directory it lands in. Home Manager owns every user-global
-    # file whatever is declared; devenv claims a project file only when
-    # something is declared.
+    # Home Manager declares every user file; project copies exist only for
+    # nonempty declarations. The engine owns copies and writable documents.
     settingsCopy = surface: path: fields:
       lib.nameValuePair path (lib.mkIf (!isDevenv || (fields.content.value or {}) != {}) ({
-          content =
-            (fields.content or {})
-            // {
-              _generated = true;
-              _surface = surface;
-            };
-          entry = "kimchiFiles";
           format = "json";
-          ledger = filesLedger (dirOf path);
-          method = "copy-ro";
+          method = "ro";
+          inherit surface;
         }
-        // builtins.removeAttrs fields ["content"]));
-    sharedSettings = path: value:
-      helpers.mkReconciledDocument {
-        content = {
-          _generated = true;
-          _surface = "settings";
-          inherit value;
-        };
+        // fields));
+    sharedSettings = path: value: {
+      ai.kimchi._generatedFiles.${path} = {
+        content = {inherit value;};
         format = "json";
-        ledger = "materialize/kimchi-shared-${builtins.hashString "sha256" path}.json";
-        inherit path;
-        runtime = "kimchi";
-        writer = "kimchiFiles";
+        method = "rw";
+        surface = "settings";
       };
+    };
     relativeTrustKeys = builtins.filter (key: !(lib.hasPrefix "/" key)) (builtins.attrNames cfg.projectTrust);
     # Git tokens are secrets with no environment input: Kimchi reads them only
     # from the user config.json (src/extensions/teleport/provisioning/
@@ -550,23 +533,6 @@
               '';
             }
           ];
-        # Read-only settings copies keep one directory ledger per directory;
-        # shared documents add their own JSON ledgers. Empty directory ledgers
-        # retract retired copies. The directories stay writable for runtime
-        # state and locks.
-        ai.kimchi.activation.kimchiFiles = {
-          after = ["secrets"];
-          entry = {
-            devenv = "ai:kimchi:files";
-            hm = "kimchiFiles";
-          };
-          ledgers = lib.listToAttrs (map (dir:
-            lib.nameValuePair (filesLedger dir) {
-              codec = "dir";
-              path = dir;
-            }) (lib.unique ([harness mcpAndSkillsDir permissionsDir] ++ lib.optional (!isDevenv) cfg.configDir)));
-          pruneEntry = "kimchiFilesPrune";
-        };
       }
 
       # pi resolves package sources relative to the scope's harness directory.
@@ -605,7 +571,7 @@
       # activation or shell entry backs a replaced file up and restores the
       # declaration, so in-app changes do not persist.
       {
-        ai.kimchi.files = lib.listToAttrs (
+        ai.kimchi._generatedFiles = lib.listToAttrs (
           lib.optional isDevenv (settingsCopy "settings" "${harness}/settings.json" {content.value = filteredProjectHarnessSettings;})
           ++ [
             (settingsCopy "mcpServers" "${mcpAndSkillsDir}/mcp.json" {
@@ -694,20 +660,17 @@
       # .kimchi/hooks.json — devenv only, because Kimchi reads lifecycle hooks
       # from a trusted project's .kimchi/ and has no user-scope file
       # (src/extensions/kimchi-hooks/definition.ts:25-37). Kimchi never writes
-      # it, so it takes the default facts and lands as a symlink. Home Manager
+      # it, so it uses the default symlink method. Home Manager
       # declares nothing here; its policy row warns instead. The bash-hook
       # directory is not this surface: those scripts filter the bash tool only.
       (let
         projectHooks = projectHooksFor {inherit cfg topHooks;};
       in
         lib.mkIf (isDevenv && hasHookHandlers projectHooks) {
-          ai.kimchi.files.".kimchi/hooks.json" = {
-            content = {
-              _generated = true;
-              _surface = "hooks";
-              value.hooks = sharedHooks.render projectHooks;
-            };
+          ai.kimchi._generatedFiles.".kimchi/hooks.json" = {
+            content.value.hooks = sharedHooks.render projectHooks;
             format = "json";
+            surface = "hooks";
           };
         })
 
@@ -931,18 +894,33 @@ in
       isDevenv = backend == "devenv";
       agentsDir = agentsDirectory backend cfg;
     in {
-      ai.kimchi.legacyLedgers = [
-        {
+      ai.kimchi.legacyLedgers =
+        [
+          {
+            codec = "dir";
+            # HM historically hashed configDir; devenv hashed the destination.
+            ledger = "materialize/kimchi-agents-${builtins.hashString "sha256" (
+              if isDevenv
+              then agentsDir
+              else cfg.configDir
+            )}.manifest";
+            path = agentsDir;
+          }
+        ]
+        ++ map (path: {
           codec = "dir";
-          # HM historically hashed configDir; devenv hashed the destination.
-          ledger = "materialize/kimchi-agents-${builtins.hashString "sha256" (
-            if isDevenv
-            then agentsDir
-            else cfg.configDir
-          )}.manifest";
-          path = agentsDir;
-        }
-      ];
+          ledger = "materialize/kimchi-files-${builtins.hashString "sha256" path}.manifest";
+          inherit path;
+        }) (lib.unique (
+          if isDevenv
+          then [projectHarnessDir projectDir]
+          else [cfg.configDir (userHarnessDir cfg) userPermissionsDir]
+        ))
+        ++ lib.optionals (!isDevenv) (map (path: {
+          codec = "json";
+          ledger = "materialize/kimchi-shared-${builtins.hashString "sha256" path}.json";
+          inherit path;
+        }) ["${cfg.configDir}/config.json" "${userHarnessDir cfg}/settings.json"]);
     };
     # context.filename names the Home Manager harness file; devenv always
     # contributes context and rule units at the fixed repository key.

@@ -763,6 +763,8 @@ in {
         && lib.all claudeOff [evalHm evalDevenv]
         && builtins.isString (toString (deliveredFiles hmKimchi.config).".config/kimchi/harness/AGENTS.md".source)
         && hmKimchi.config.ai.files2.".config/kimchi/harness/AGENTS.md".content.text == "KIMCHI-REPLACEMENT"
+        && hmKimchi.config.ai.files2.".config/kimchi/harness/AGENTS.md".method == "symlink"
+        && devenvKimchi.config.ai.files2."AGENTS.md".method == "ro"
         && (deliveredFiles devenvKimchi.config)."AGENTS.md".text == "KIMCHI-REPLACEMENT"
     );
 

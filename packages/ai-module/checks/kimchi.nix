@@ -178,8 +178,8 @@ in {
           then "symlink"
           else "ro"
         )
-        && config.ai.kimchi.legacyLedgers == [expectedLedger]
-        && disabled.ai.kimchi.legacyLedgers == [expectedLedger]
+        && lib.elem expectedLedger config.ai.kimchi.legacyLedgers
+        && disabled.ai.kimchi.legacyLedgers == config.ai.kimchi.legacyLedgers
         && lib.elem expectedLedger disabled.ai.legacyLedgers
         && disabled.ai.files2 == {}
         && overridden.config.ai.files2.${agentPath}.method == "symlink"

@@ -1,6 +1,6 @@
 # Shared helpers for AI CLI modules (copilot-cli, kiro-cli, devenv).
 #
-# Provides skill delivery entries, reconciled documents, and the `own` bundle
+# Provides skill delivery entries and the `own` bundle
 # builder that records reconciliation plans.
 {lib}: let
   own = import ./own.nix {inherit lib;};
@@ -94,36 +94,4 @@ in {
     else
       record
       // {inherit (owned.config) enterTest tasks;};
-
-  # One harness-written state document: the writer owning its ledger plus the
-  # file entry claiming it. Both are emitted for empty content so the ledger
-  # can retract retired leaves. `content` never states `enable`.
-  mkReconciledDocument = {
-    content,
-    format,
-    ledger,
-    path,
-    runtime,
-    writer,
-  }: {
-    ai.${runtime} = {
-      activation.${writer}.ledgers.${ledger} = {
-        codec = format;
-        inherit path;
-      };
-      files.${path} = {
-        inherit content format ledger;
-        entry = writer;
-        facts.harnessWrites = true;
-      };
-    };
-  };
-
-  # NOTE: Kiro hook files used to be written here by `mkHooksActivationScript`,
-  # whose prune (`rm -f "$HOOKS_DIR"/*.json`) lived INSIDE the caller's
-  # `mkIf (hooks != {})` gate: taking the hook surface from N to zero never
-  # emitted the entry, so the prune never ran and every previously written hook
-  # kept firing forever. They ride `own` now, whose ledger prunes
-  # unconditionally and claims only the files it wrote. Kiro steering uses the
-  # ordinary runtime-files symlink sink.
 }
