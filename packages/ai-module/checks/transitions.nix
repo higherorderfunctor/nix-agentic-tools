@@ -1,4 +1,4 @@
-# Chunk 5b: generated generations executed end to end on both backends. Each
+# Generated generations executed end to end on both backends. Each
 # scenario is a list of steps; a step declares `ai.files`, optionally acts on
 # the tree first (`edit` an owned copy, add a `native` key, `seed` identical
 # bytes) and names extra expectations. Every edit or native key precedes an

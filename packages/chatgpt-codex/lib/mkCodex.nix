@@ -1127,11 +1127,10 @@ in
         type = lib.types.ints.positive;
         default = codexProjectDocMaxBytes;
         description = ''
-          Maximum byte size of the Codex AGENTS.md, generated or a replacement
-          you supply. The build of the delivery tree (formatted when a type is
-          selected, or measured without formatting when it is `raw`, including
-          a replacement that states no `format`) fails before Codex
-          can silently truncate content beyond this limit. A value
+          Maximum byte size of the generated Codex AGENTS.md. The build of the
+          generated tree fails before Codex can silently truncate content
+          beyond this limit. A replacement you supply lands verbatim and is not
+          measured at build time; the launcher warning below still covers it. A value
           other than Codex's own default (32768) is also written to Codex's
           `project_doc_max_bytes` at default priority, so Codex reads as much
           as this limit admits. On devenv that key lands in the project's

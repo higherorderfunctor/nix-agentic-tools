@@ -18,9 +18,10 @@ settings). The HM and devenv modules are thin shims that apply `hmTransform` /
 
 Its record-level `config`, `kimchiDelivery`, serves both backends with the
 merged pools supplied by `mkBackendTransform.nix`. Every surface stages content,
-format and method in `ai.kimchi._generatedFiles`; the shared router forwards
-them through `ai.kimchi.files` to `ai.files`. One record-level `installPackage`
-likewise serves both, adding the exact-cwd guard on devenv only.
+format and method in `ai.kimchi._generatedFiles`; the ai-module layer-1 helper
+forwards them through `ai.kimchi.files` to `ai.files`. One record-level
+`installPackage` likewise serves both, adding the exact-cwd guard on devenv
+only.
 
 The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings` and
 `ai.kimchi.native.harnessSettings`. The closed `ai.kimchi.settings` submodule is
@@ -475,16 +476,15 @@ Kimchi 1.1.37 loads `<agentDir>/agents/*.md` and a trusted project's
 write those same files: Edit, Disable and Enable `writeFileSync` in place, and
 Create and Eject add new ones (`src/extensions/agents/index.ts:2556-2874`). Each
 agent stages `method = "ro"`, forwarded at `mkDefault`, and takes the engine's
-read-only mode: one real file per agent in a real directory. The old agents
-writer is deleted. Ungated `migrationConfig` declares its directory ledger in
-`ai.kimchi.legacyLedgers`, retaining HM's hash of `configDir` and devenv's hash
-of `.kimchi/agents`, so an owner disabled at first upgrade still drains old
-copies. An in-place edit of a declared agent fails; a file renamed over one is
-backed up and replaced at the next activation; a file Kimchi created is an
-unowned sibling and is never touched. To turn a declared agent off, set it to
-null. Locked by `module-kimchi-agents` and `ai-module-kimchi-agents`, which
-executes the engine on evaluated plans for both backends and default and custom
-directories.
+read-only mode: one real file per agent in a real directory. Ungated
+`migrationConfig` declares its directory ledger in `ai.kimchi.legacyLedgers`,
+retaining HM's hash of `configDir` and devenv's hash of `.kimchi/agents`, so an
+owner disabled at first upgrade still drains old copies. An in-place edit of a
+declared agent fails; a file renamed over one is backed up and replaced at the
+next activation; a file Kimchi created is an unowned sibling and is never
+touched. To turn a declared agent off, set it to null. Locked by
+`module-kimchi-agents` and `ai-module-kimchi-agents`, which executes the engine
+on evaluated plans for both backends and default and custom directories.
 
 `/agents` Edit, Disable and Enable cannot change a declared read-only agent;
 Kimchi surfaces the failed in-place write. Create and Eject can still add an

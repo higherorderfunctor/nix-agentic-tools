@@ -62,6 +62,7 @@ for it. When several entries match, their guidance composes.
     - `packages/kiro-cli/modules/**`
     - `packages/semble/modules/common.nix`
   - Read:
+    - [`packages/ai-module/docs/contract.md`](packages/ai-module/docs/contract.md)
     - [`dev/fragments/ai-module/ai-module-fanout.md`](dev/fragments/ai-module/ai-module-fanout.md)
     - [`dev/fragments/ai-module/collision-semantics.md`](dev/fragments/ai-module/collision-semantics.md)
     - [`dev/fragments/ai-module/dir-helpers.md`](dev/fragments/ai-module/dir-helpers.md)
@@ -117,6 +118,7 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`dev/fragments/devenv/ci-lean-closure.md`](dev/fragments/devenv/ci-lean-closure.md)
     - [`dev/fragments/devenv/files-internals.md`](dev/fragments/devenv/files-internals.md)
+    - [`packages/ai-module/docs/contract.md`](packages/ai-module/docs/contract.md)
 - **`extracted`**
   - Match:
     - `checks/extracted/**`
@@ -192,6 +194,7 @@ for it. When several entries match, their guidance composes.
     - `packages/*/modules/homeManager/**`
   - Read:
     - [`dev/fragments/hm-modules/module-conventions.md`](dev/fragments/hm-modules/module-conventions.md)
+    - [`packages/ai-module/docs/contract.md`](packages/ai-module/docs/contract.md)
 - **`ifd`**
   - Match:
     - `.github/actions/warm-ifd/**`
@@ -564,19 +567,20 @@ The header is a review obligation, not a gate.
 Where it applies depends on whether the shell owns its own process or is spliced
 into someone else's:
 
-| Site                                       | Rule                                                                                                                |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `home.activation` bodies                   | SCOPE IT — wrap the body in a subshell; entries concatenate, so a bare header persists into home-manager's own code |
-| `shellHook` / devenv `enterShell`          | DO NOT ADD — `eval`'d into the calling shell; `set -e` arms the user's interactive session                          |
-| stdenv phase bodies                        | REQUIRED in the first custom phase body; later phases inherit it — but see the `nounset` exception below            |
-| `runCommand` bodies                        | REQUIRED inside the body — add the full header; `setup.sh` leaves `-u`, `-E`, and `-T` disabled                     |
-| devenv `tasks.<name>.exec`                 | REQUIRED — rendered as a standalone script                                                                          |
-| shell EMITTED by a heredoc                 | REQUIRED inside the emitted script                                                                                  |
-| standalone `*.sh`, CI `run:` blocks        | REQUIRED                                                                                                            |
-| `writeShellApplication`                    | SPLIT — see below; `bashOptions` alone never suffices                                                               |
-| `writeShellScript` / `writeShellScriptBin` | REQUIRED — nixpkgs never lints these                                                                                |
-| heredocs carrying JSON, config or prose    | does not apply — not shell                                                                                          |
-| pre-commit / git-hook `entry` strings      | cannot be expressed — an argv, not a script; move the logic into a `writeShellApplication`                          |
+| Site                                                      | Rule                                                                                                                  |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `home.activation` bodies                                  | SCOPE IT — wrap the body in a subshell; entries concatenate, so a bare header persists into home-manager's own code   |
+| `ai.<owner>.activation` commands, `content.run` renderers | ADDED FOR YOU — ai-module runs each in its own `bash` or subshell with the full header; `exit` ends only that command |
+| `shellHook` / devenv `enterShell`                         | DO NOT ADD — `eval`'d into the calling shell; `set -e` arms the user's interactive session                            |
+| stdenv phase bodies                                       | REQUIRED in the first custom phase body; later phases inherit it — but see the `nounset` exception below              |
+| `runCommand` bodies                                       | REQUIRED inside the body — add the full header; `setup.sh` leaves `-u`, `-E`, and `-T` disabled                       |
+| devenv `tasks.<name>.exec`                                | REQUIRED — rendered as a standalone script                                                                            |
+| shell EMITTED by a heredoc                                | REQUIRED inside the emitted script                                                                                    |
+| standalone `*.sh`, CI `run:` blocks                       | REQUIRED                                                                                                              |
+| `writeShellApplication`                                   | SPLIT — see below; `bashOptions` alone never suffices                                                                 |
+| `writeShellScript` / `writeShellScriptBin`                | REQUIRED — nixpkgs never lints these                                                                                  |
+| heredocs carrying JSON, config or prose                   | does not apply — not shell                                                                                            |
+| pre-commit / git-hook `entry` strings                     | cannot be expressed — an argv, not a script; move the logic into a `writeShellApplication`                            |
 
 Probes of `runCommand`, `buildPhase`, and `installPhase` all start with
 `errexit`, `pipefail`, and `inherit_errexit` enabled, but with `errtrace`,
@@ -1515,8 +1519,10 @@ coding standard for which sites that leaves unchecked.
 
 ## Project Overview
 
-> **Last verified:** 2026-10-11 — owner-local `extracted/` directories hold
-> declared facts and measured raws; owner checks expose their regeneration.
+> **Last verified:** 2026-10-16 — owner-local `extracted/` directories hold
+> declared facts and measured raws; owner checks expose their regeneration; the
+> files and activation layers and the files engine live in
+> `packages/ai-module/`.
 
 nix-agentic-tools is a Nix flake monorepo providing:
 
@@ -1551,7 +1557,8 @@ packages/<owner>/
   extracted/            Declared facts and measured raws (when needed)
   docs/, patches/, src/ Documentation and build support files
   fragments/, skills/  Published content (when applicable)
-lib/                    Shared composition, AI module engines, packaging helpers
+packages/ai-module/     Files and activation layers and the files engine
+lib/                    Shared composition, AI fanout and factories, packaging helpers
 lib/testing/            Shared test harnesses with discovered backend imports
 checks/<concern>/       Native workspace checks and cross-owner integration
 config/                 Workspace policy and shared option declarations/data

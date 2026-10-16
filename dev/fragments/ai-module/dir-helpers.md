@@ -38,7 +38,7 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
 
 ### Polymorphic input
 
-Per the refactor plan §3.5 — every Dir option is either:
+Every Dir option is either:
 
 - A bare Nix path literal, or a path-like string or derivation (a flake input's
   `"${src}/agents"`), or

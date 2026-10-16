@@ -1,7 +1,9 @@
 ## Project Overview
 
-> **Last verified:** 2026-10-11 — owner-local `extracted/` directories hold
-> declared facts and measured raws; owner checks expose their regeneration.
+> **Last verified:** 2026-10-16 — owner-local `extracted/` directories hold
+> declared facts and measured raws; owner checks expose their regeneration; the
+> files and activation layers and the files engine live in
+> `packages/ai-module/`.
 
 nix-agentic-tools is a Nix flake monorepo providing:
 
@@ -36,7 +38,8 @@ packages/<owner>/
   extracted/            Declared facts and measured raws (when needed)
   docs/, patches/, src/ Documentation and build support files
   fragments/, skills/  Published content (when applicable)
-lib/                    Shared composition, AI module engines, packaging helpers
+packages/ai-module/     Files and activation layers and the files engine
+lib/                    Shared composition, AI fanout and factories, packaging helpers
 lib/testing/            Shared test harnesses with discovered backend imports
 checks/<concern>/       Native workspace checks and cross-owner integration
 config/                 Workspace policy and shared option declarations/data

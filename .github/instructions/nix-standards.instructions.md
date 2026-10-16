@@ -16,10 +16,11 @@ Per-platform binary packages store versions and hashes in a
 
 ### Shell Wrappers: Absolute Paths Required
 
-> **Last verified:** 2026-10-02 — source paths and ownership guidance follow
+> **Last verified:** 2026-10-16 — source paths and ownership guidance follow
 > native package assembly; generated Markdown, JSON, TOML and YAML are formatted
 > and checked in `lib/generated.nix`'s `mkTree`; standalone scripts use
-> `lib/strict-shell-application.nix`.
+> `lib/strict-shell-application.nix`; `dev/tasks/generate.nix` has one writer,
+> `copy_out`.
 >
 > Full lineage:
 > `git show 6d2fbeef:dev/fragments/nix-standards/nix-standards.md`.
@@ -200,24 +201,11 @@ resolves to the source — aborts with `are the same file`, which is fatal under
 `cp --remove-destination`, which is banned above; either way only the
 working-tree entry is removed, never anything under `/nix/store`.
 
-`dev/tasks/generate.nix` has two writers, and new code should reuse one rather
-than open-coding `cp`:
-
-- `sync_file` / `sync_dir` — for the generated instruction files. Skips the
-  write entirely when `cmp` says the content is unchanged (no mtime churn on
-  every shell entry), writes through `mktemp` + `mv` so a concurrent reader
-  never sees a partial file, and prunes generated files whose fragment was
-  renamed away.
-- `copy_out` — the simple unlink-then-copy, for one-shot outputs.
-
-Both `chmod` the result: store files are `0444` and the copy inherits that,
-which otherwise leaves a read-only file in the tree.
-
-One trap worth naming: **`cmp` ships in `diffutils`, not `coreutils`.**
-Interpolating `${pkgs.coreutils}/bin/cmp` yields a path that does not exist, and
-because the call sits in an `if` condition a missing binary is merely a false
-branch — `errexit` never fires, and every file is rewritten on every entry
-instead of being skipped. Silent, and only visible as churn.
+`dev/tasks/generate.nix` has one writer, `copy_out`, an unlink-then-copy for
+one-shot outputs; new code should reuse it rather than open-coding `cp`. It
+`chmod`s the result: store files are `0444` and the copy inherits that, which
+otherwise leaves a read-only file in the tree. The generated instruction files
+never pass through it: the ai-module files engine writes them as owned copies.
 
 ### overrideAttrs: Preserve passthru
 

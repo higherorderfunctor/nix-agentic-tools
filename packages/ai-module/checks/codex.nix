@@ -141,7 +141,7 @@
           enable = false;
         }
       ]));
-  # L038: an ordinary Codex path has one owner; a disabled competing owner
+  # An ordinary Codex path has one owner; a disabled competing owner
   # forwards nothing, whereas a disabled entry of a live owner still claims it.
   collision = enabled: entryEnabled: let
     evaluated = harness.evalHmModules [

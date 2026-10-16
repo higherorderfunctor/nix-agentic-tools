@@ -46,8 +46,8 @@ through `optionNamespaces.pools = ["github"]`. Only devenv writes:
 reads the PR's head branch, so a PR that regenerates these files is reviewed
 with its own copies.
 
-- **Context** contributes `{key = "AGENTS.md";}` to `sharedAgentsMd`, with Codex
-  and Kiro; contributions to one key must agree byte for byte.
+- **Context** contributes `{key = "AGENTS.md";}` to `sharedAgentsMd`, with
+  Codex, Kimchi and Kiro; contributions to one key must agree byte for byte.
 - **Rules**: the matcher becomes the comma-joined `applyTo` and `null` becomes
   `"**"` (`lib/ai/transformers/copilot.nix`). Code review loads every file whose
   globs match a changed file, so a `**` rule rides on every review.

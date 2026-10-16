@@ -1,7 +1,7 @@
-# PR 3 chunk 2: the engine imports legacy ownership ledgers (PR 3 plan, section 2.2).
-# legacy.py runs the import cases on the engine itself, then executes each
-# backend's generated prune: an L136-shaped steering copy now declared as a
-# link, and a unit nothing declares any more, both retire before the backend
+# The engine imports legacy ownership ledgers (files-engine.md, "Legacy
+# ownership import"). legacy.py runs the import cases on the engine itself,
+# then executes each backend's generated prune: a Kiro steering copy now
+# declared as a link, and a unit nothing declares any more, both retire before the backend
 # links anything.
 {
   harness,

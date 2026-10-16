@@ -64,7 +64,8 @@ _: {
       ];
       sources = ["host-config-merge"];
     };
-    # ai-module: fanout semantics and per-CLI enable-as-sole-gate.
+    # ai-module: the files and activation layer contract, fanout semantics and
+    # per-CLI enable-as-sole-gate.
     # Post-factory, the fanout logic lives in each per-package factory
     # (packages/*/lib/mk*.nix + packages/*/modules/) and the shared
     # options barrel (lib/ai/sharedOptions.nix).
@@ -98,7 +99,8 @@ _: {
         # The runtime registry that file and sharedOptions.nix share.
         "lib/ai/runtimes.nix"
         "lib/ai/sharedOptions.nix"
-        # The store tree the router delivers generated static files from.
+        # The store tree each runtime's generated files are formatted, guarded
+        # and checked in.
         "lib/generated.nix"
         "lib/generated-guard.py"
         "lib/markdown/**"
@@ -125,7 +127,13 @@ _: {
         # instead, which is a 37-line MCP defaults record.
         "packages/semble/modules/common.nix"
       ];
+      # The layer contract first; the dev fragments follow, sorted.
       sources = [
+        {
+          dir = "ai-module";
+          location = "package";
+          name = "contract";
+        }
         "ai-module-fanout"
         "collision-semantics"
         "dir-helpers"
@@ -165,7 +173,15 @@ _: {
         "lib/ai/hm-helpers.nix"
         "packages/*/modules/devenv/**"
       ];
-      sources = ["ci-lean-closure" "files-internals"];
+      sources = [
+        "ci-lean-closure"
+        "files-internals"
+        {
+          dir = "ai-module";
+          location = "package";
+          name = "contract";
+        }
+      ];
     };
     extracted = {
       scopes = [
@@ -258,7 +274,14 @@ _: {
       scopes = [
         "packages/*/modules/homeManager/**"
       ];
-      sources = ["module-conventions"];
+      sources = [
+        "module-conventions"
+        {
+          dir = "ai-module";
+          location = "package";
+          name = "contract";
+        }
+      ];
     };
     # ifd: import-from-derivation eval cost and the warm-ifd composite that
     # pays it down. Split out of `overlays` because the fragment asserts a

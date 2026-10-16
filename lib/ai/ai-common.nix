@@ -298,23 +298,6 @@ in {
 
   inherit renderRules;
 
-  # One old-path file entry per rendered rule (`renderRules`); the generated
-  # text is a default on `content`, and `fields` are the runtime's own ones
-  # (writer, ledger, facts).
-  mkRuleFiles = {fields ? {}, ...} @ args:
-    lib.mapAttrs (_path: text:
-      {
-        content = lib.mkDefault {
-          _generated = true;
-          _surface = "rules";
-          enable = true;
-          inherit text;
-        };
-        format = lib.mkDefault "markdown";
-      }
-      // fields)
-    (renderRules (builtins.removeAttrs args ["fields"]));
-
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags
   # cannot outlive it.

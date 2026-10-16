@@ -46,6 +46,8 @@ packages/
       lspServers/agnix-lsp/package.nix
       mcpServers/agnix-mcp/package.nix
     registry.nix
+  ai-module/                        Files and activation layers, files engine
+    lib/, modules/, docs/, checks.nix, checks/
   delegate-routing/
     packages/delegate-routing-content/package.nix
     modules/, lib/, checks.nix, checks/
@@ -66,7 +68,7 @@ checks/
   markdown/, packaging/, shell/     Repository and shared machinery checks
   <concern>/default.nix              Discovered workspace check module
 lib/
-  ai/                               Shared AI module engine
+  ai/                               Shared AI options, factories, transformers
   facets/                           Discovery and native composition
   testing/                          Shared harnesses and check option schema
   packaging.nix                     Shared build/update helpers
