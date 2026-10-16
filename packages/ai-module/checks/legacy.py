@@ -69,7 +69,8 @@ def tree(temporary, name):
 
 
 def owned(state):
-    return json.loads(state.read_text())["files"]
+    # The engine removes its state once it owns nothing.
+    return json.loads(state.read_text())["files"] if state.exists() else {}
 
 
 def backups(state):
