@@ -7,9 +7,10 @@ applyTo: "packages/beads/**"
 
 # Beads devenv lifecycle
 
-> **Last verified:** 2026-08-24 — the Beads overlay owns and updates the nested
-> Dolt derivation exposed as `passthru.dolt`, so the lifecycle no longer depends
-> on whatever Dolt version nixpkgs happens to ship.
+> **Last verified:** 2026-10-16 — automatic prepare uses layer-1 activation;
+> manual tasks remain native; the Beads overlay owns and updates the nested Dolt
+> derivation exposed as `passthru.dolt`, so the lifecycle no longer depends on
+> whatever Dolt version nixpkgs happens to ship.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show db6df0dd:packages/beads/docs/beads-lifecycle.md`.
@@ -43,15 +44,16 @@ state root, one external Dolt data directory, one contained `DOLT_ROOT_PATH`,
 and one repository lock. No state path, credential value, or generated
 credentials file is copied into the Nix store or source checkout.
 
-`beads:prepare` runs before shell entry. Under the repository lock it creates
-and verifies only contained runtime configuration, including
-`metrics.disabled=true` in the contained Dolt root. It never initializes a
-database and never publishes. First database initialization is performed by the
-module's bootstrap entry, normally when the publisher process starts after the
-Dolt process. It runs pinned `bd init` from a neutral non-Git directory only
-when `refs/dolt/data` is absent, or pinned `bd bootstrap` only when the local
-database is absent and the ref exists. An existing database is verified in
-place; it is never bootstrapped again.
+`ai.beads.activation2.beads-prepare` runs before shell entry, lowered to
+`ai2:beads-prepare`. No task depends on its former native name. Under the
+repository lock it creates and verifies only contained runtime configuration,
+including `metrics.disabled=true` in the contained Dolt root. It never
+initializes a database and never publishes. First database initialization is
+performed by the module's bootstrap entry, normally when the publisher process
+starts after the Dolt process. It runs pinned `bd init` from a neutral non-Git
+directory only when `refs/dolt/data` is absent, or pinned `bd bootstrap` only
+when the local database is absent and the ref exists. An existing database is
+verified in place; it is never bootstrapped again.
 
 ## Serialized checkpoint protocol
 

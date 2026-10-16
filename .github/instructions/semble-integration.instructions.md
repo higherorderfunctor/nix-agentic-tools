@@ -7,9 +7,10 @@ applyTo: "packages/semble/**"
 
 # Semble integrations
 
-> **Last verified:** 2026-10-15 — Semble uses measured-once extracted facts, one
-> unforked `extracted.json`; grouped dependency updates respect the pinned
-> release requirements.
+> **Last verified:** 2026-10-16 — cache invalidation uses layer-1 activation on
+> both backends; Semble uses measured-once extracted facts, one unforked
+> `extracted.json`; grouped dependency updates respect the pinned release
+> requirements.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -248,13 +249,16 @@ does not add these launchers.
 
 Both backends record the underlying Semble package store path in its assigned
 cache directory. A single active config keeps the established cache root;
-multiple configs use stable config-keyed directories below `variants/`. Home
-Manager activation checks the user-global cache family; devenv shell entry
-checks only that project's relocated cache family. A missing or changed package
-stamp clears the indexes in that variant directory before recording the new
-identity. Grammar and mapping changes leave the package stamp unchanged and
-invalidate indexes through their runtime fingerprint. Savings data and the
-separate upstream bundled-grammar extraction cache are left alone.
+multiple configs use stable config-keyed directories below `variants/`. The
+shared module declares `ai.semble.activation2.semble-cache-guard` after
+`materialized`, lowered to `ai2-semble-cache-guard` on Home Manager and
+`ai2:semble-cache-guard` on devenv. Home Manager activation checks the
+user-global cache family; devenv shell entry checks only that project's
+relocated cache family. A missing or changed package stamp clears the indexes in
+that variant directory before recording the new identity. Grammar and mapping
+changes leave the package stamp unchanged and invalidate indexes through their
+runtime fingerprint. Savings data and the separate upstream bundled-grammar
+extraction cache are left alone.
 
 The devenv relocation is unconditional: a project-local index is the point, and
 nothing about it is Codex-specific. Until 2026-08-10 it read otherwise, because

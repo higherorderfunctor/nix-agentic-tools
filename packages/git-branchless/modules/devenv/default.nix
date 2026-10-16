@@ -1,7 +1,7 @@
 # `git.branchless.*` on devenv: repository-local git configuration
 # (../options.nix declares the tree), plus `git branchless init`.
 #
-# `git:branchless-init` runs lib/git-tool-settings/repo-config.sh `init` on
+# `ai2:git-branchless-init` runs lib/git-tool-settings/repo-config.sh `init` on
 # every shell entry while `git.branchless.enable` is true: before
 # `git:config` (packages/git), because a first init appends its own include
 # and NAT's must end up after it, and before devenv installs Git hooks, so
@@ -26,6 +26,10 @@
   gitHooksEnabled = lib.attrByPath ["git-hooks" "enable"] false config;
 in {
   imports = [
+    (import ../../../ai-module/lib/runtime.nix {
+      enabled = cfg.enable;
+      name = "git-branchless";
+    })
     (import ../options.nix {
       inherit lib;
       backend = "devenv";
@@ -52,20 +56,15 @@ in {
       '';
     }
 
-    (lib.mkIf cfg.enable {
-      tasks = {
-        "git:branchless-init" = {
-          description = "Initialize git-branchless before devenv installs Git hooks";
-          before = ["devenv:enterShell" "git:config"] ++ lib.optional gitHooksEnabled "devenv:git-hooks:install";
-          exec = ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            if ! ${lib.getExe script} init "$DEVENV_ROOT" ${lib.getExe config.ai.internal.packages.gitTools.git-branchless}${lib.optionalString (cfg.settings.core.mainBranch != null) " ${lib.escapeShellArg cfg.settings.core.mainBranch}"}; then
-              : # Keep dependent configuration and hook-install tasks runnable.
-            fi
-          '';
-        };
+    {
+      ai.git-branchless.activation2.git-branchless-init = {
+        beforeNodes.devenv = ["git:config"] ++ lib.optional gitHooksEnabled "devenv:git-hooks:install";
+        command = ''
+          if ! ${lib.getExe script} init "$DEVENV_ROOT" ${lib.getExe config.ai.internal.packages.gitTools.git-branchless}${lib.optionalString (cfg.settings.core.mainBranch != null) " ${lib.escapeShellArg cfg.settings.core.mainBranch}"}; then
+            : # Keep dependent configuration and hook-install tasks runnable.
+          fi
+        '';
       };
-    })
+    }
   ];
 }

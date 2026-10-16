@@ -7,16 +7,17 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-15 — Claude uses engine-backed `rw` ownership, Kiro
-> stages settings and hooks and drains all three legacy ledgers through the
-> engine; Kimchi stages every surface and drains all legacy ledgers, and Claude
-> has an ordered activation2 mode command; Codex stages daemon JSON as `ro` and
-> drains legacy ledgers even while disabled; `mkSkillFiles` interpolates every
-> skill source before the files engine walks it; Kiro is gated by
-> `ai.kiro.cli.enable`; factories read the derived, read-only `ai.kiro.enable`;
-> `ai.copilot` is github.com Copilot, with pools under `ai.copilot.github` and
-> no launcher. ai-module supplies the sole file writer and its ordered prune and
-> apply entries; legacy ledgers remain available for upgrades.
+> **Last verified:** 2026-10-16 — non-AI owners use the layer-1 helper; Claude
+> uses engine-backed `rw` ownership, Kiro stages settings and hooks and drains
+> all three legacy ledgers through the engine; Kimchi stages every surface and
+> drains all legacy ledgers, and Claude has an ordered activation2 mode command;
+> Codex stages daemon JSON as `ro` and drains legacy ledgers even while
+> disabled; `mkSkillFiles` interpolates every skill source before the files
+> engine walks it; Kiro is gated by `ai.kiro.cli.enable`; factories read the
+> derived, read-only `ai.kiro.enable`; `ai.copilot` is github.com Copilot, with
+> pools under `ai.copilot.github` and no launcher. ai-module supplies the sole
+> file writer and its ordered prune and apply entries; legacy ledgers remain
+> available for upgrades.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -316,31 +317,26 @@ cancellation fails before the sops/helper token is read. The ordinary wrapper
 also omits `GITLAB_TOKEN` in this mode because environment credentials take
 precedence over the stored keyring value.
 
-### home.file vs home.activation vs outOfStoreSymlink
+### Files and activation through ai-module
 
-**`home.file` with `source =`** — immutable store-backed content. Used for
-skills directory symlinks and static config files. If the content is already in
-the store (a derivation output, a file inside the flake), this is the right
-tool.
-
-**`home.file` with `text =`** — content built at eval time from Nix data. Used
-for transformed rules (e.g., the `fragments-ai` transforms emit strings that
-become `home.file.".claude/rules/<name>.md".text`).
-
-**`home.activation`** — stateful operations that need runtime info: reading sops
-files, computing fingerprints, merging runtime-mutable config files, resetting
-cached state.
-
-**`outOfStoreSymlink`** is NOT used in this repo's modules.
+Owners import `packages/ai-module/lib/runtime.nix`, then state final content,
+format and method in `ai.<owner>.files2` or finite commands in
+`ai.<owner>.activation2`. Only ai-module writes native file and activation
+sinks. Semble's cache guard follows `materialized`; glab's keyring marker and
+MCP credential-rotation checks follow `files` and `secrets`. HM lowering wraps
+the whole command in `run`; child command bodies use ordinary external commands,
+not activation-shell functions. Package installs and systemd units keep their
+native configuration surfaces. `outOfStoreSymlink` is not used.
 
 ### Config parity rule (HM ↔ devenv)
 
-**Every option on an HM module under `modules/<subdir>/` MUST have a matching
-option on the corresponding devenv module under `modules/devenv/<subdir>.nix`**
-— same types, same semantics, same fanout behavior. If you add an option to one,
-add it to the other in the same commit. `checks/modules/options-doc.nix`
-enforces exact flattened option-name and type parity across the full generated
-`ai.*` trees; module-eval tests cover backend-specific lowering and diagnostics.
+**Every shared configuration option on an HM module under `modules/<subdir>/`
+MUST have a matching option on the corresponding devenv module under
+`modules/devenv/<subdir>.nix`** — same types, same semantics, same fanout
+behavior. If you add an option to one, add it to the other in the same commit.
+`checks/modules/options-doc.nix` enforces exact flattened option-name and type
+parity across the full generated `ai.*` trees; module-eval tests cover
+backend-specific lowering and diagnostics.
 
 **Shared types live in `lib/`.** Both HM and devenv modules import types from
 `lib/ai/ai-common.nix` (such as `ruleModule`) so the surfaces stay in sync by
@@ -362,8 +358,8 @@ facet-specific defaults or `defaultText`. Modules whose options reference
 
 `packages/semble` takes the pattern one step further: one program specification
 feeds the shared factory, and one shared runtime-fanout module is parameterized
-by the package installation and activation sinks (`home.packages` plus
-`home.activation` versus devenv `packages` plus `enterShell`). Feature and
+by package installation and cache location. Both backends declare cache
+invalidation through `ai.semble.activation2`, after `materialized`. Feature and
 runtime selection therefore cannot drift between backends. Runtime selection
 contributes defaults to `ai.<runtime>.*` but deliberately does not set
 `ai.<runtime>.enable`; choosing an integration is not authority to enable the
@@ -407,7 +403,10 @@ that do not use either module's activation guard.
 
 **Intentional differences** exist and are NOT parity gaps:
 
-- Activation scripts are HM-only (devenv lifecycle is different)
+- Non-AI layer-1 lifecycle namespaces exist on their native backend: `ai.glab`
+  and `ai.mcp-services` on HM; `ai.beads`, `ai.git` and `ai.git-branchless` on
+  devenv. Option docs retain them and check their presence explicitly outside
+  shared runtime and pool parity.
 - HM uses `home.file` / `home.activation`; devenv uses `files.*` / `tasks.*`
   with `enterTest` verification (per-project writable tree, not home dir)
 - glab's `keyringSync` declaration exists in both facets, but devenv rejects

@@ -6,13 +6,5 @@ import ../common.nix {
   # through devenv's `env` attrset, which would export it into the project
   # shell and hand it to the developer's own session too.
   cacheLocation = {config, ...}: "${config.devenv.state}/semble-cache";
-  installCacheInvalidation = {
-    cacheGuard,
-    lib,
-  }: {
-    enterShell = ''
-      ${lib.getExe cacheGuard}
-    '';
-  };
   installPackages = packages: {inherit packages;};
 }

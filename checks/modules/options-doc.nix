@@ -5,7 +5,7 @@
 # and devenv option references. Building both renderings here gives that code a
 # live owner and catches five easy-to-miss regressions:
 #
-#   1. either backend adds, removes, or retypes any `ai.*` option without the
+#   1. either backend adds, removes, or retypes a shared `ai.*` option without the
 #      matching change in the other backend;
 #   2. Codex loses one of the reviewed top-level surfaces completed by the
 #      configuration-parity roadmap; and
@@ -21,14 +21,10 @@
 # tripped it; a bare `jq --exit-status` or `grep -q` would fail the build with
 # an empty log.
 #
-# Exact option-tree parity is appropriate here even where runtime behavior
-# differs. Backend-specific boundaries are represented by assertions/defaults,
-# not by deleting the option from either backend; that keeps discovery and
-# diagnostics consistent. Two Codex options have genuinely different scopes:
-# Home Manager's `pinDaemonToPackage` selects a user daemon that devenv bypasses
-# with `--no-daemon`; devenv's `trustProjectForSession` trusts its runtime project
-# root, while Home Manager declares persistent trust in user config instead.
-# The parity diff excludes these two leaves on their respective backends.
+# Shared runtime and pool APIs have exact option-tree parity. Non-AI owners'
+# helper namespaces follow their native lifecycle backend; docs still expose
+# them, and presence guards below keep those explicit exclusions honest.
+# Codex's daemon selection and session trust remain backend-specific leaves.
 {
   lib,
   pkgs,
@@ -44,6 +40,24 @@
     # here ever mentioned it. Adding it is a strict tightening — both assertions
     # were measured passing before the substitution.
     runtimes = import ../../lib/ai/runtimes.nix;
+    localOwners = {
+      devenv = ["beads" "git" "git-branchless"];
+      hm = ["glab" "mcp-services"];
+    };
+    comparable = backend: let
+      excluded =
+        map (owner: "ai.${owner}.") localOwners.${backend}
+        ++ [
+          "ai.codex.${
+            if backend == "hm"
+            then "pinDaemonToPackage"
+            else "trustProjectForSession"
+          }"
+        ];
+    in ''
+      with_entries(select(.key | startswith("ai.")))
+      | with_entries(select(.key as $key | all(${builtins.toJSON excluded}[]; . as $prefix | $key | startswith($prefix) | not)))
+    '';
     devenvJson = "${docs.devenvOptionsDoc.optionsJSON}/share/doc/nixos/options.json";
     hmJson = "${docs.hmOptionsDoc.optionsJSON}/share/doc/nixos/options.json";
     expectedCodexRoots = pkgs.writeText "expected-codex-option-roots" (
@@ -185,30 +199,30 @@
       # but accepts a different value shape in one backend. Defaults and
       # descriptions may intentionally differ with lifecycle/scope, so they are
       # documented and behavior-tested rather than mechanically equated here.
-      "$jq" -r '
-        keys[]
-        | select(startswith("ai."))
-      ' "${hmJson}" | "$sort" -u > hm-ai-options
-      "$jq" -r '
-        keys[]
-        | select(startswith("ai."))
-      ' "${devenvJson}" | "$sort" -u > devenv-ai-options
-      # Exclude only the two intentional backend-specific leaves above.
-      "$grep" -v '^ai\.codex\.pinDaemonToPackage$' hm-ai-options > hm-ai-options-comparable
-      "$grep" -v '^ai\.codex\.trustProjectForSession$' devenv-ai-options > devenv-ai-options-comparable
+      ${lib.concatMapStringsSep "\n" (backend: let
+        doc =
+          if backend == "hm"
+          then hmJson
+          else devenvJson;
+      in ''
+        "$jq" -S '${comparable backend} | map_values({type: .type})' "${doc}" > ${backend}-ai-types.json
+        "$jq" -r 'keys[]' ${backend}-ai-types.json > ${backend}-ai-options-comparable
+      '') ["devenv" "hm"]}
       "$diff" -u hm-ai-options-comparable devenv-ai-options-comparable
-
-      "$jq" -S '
-        with_entries(select(.key | startswith("ai.")))
-        | map_values({ type: .type })
-        | del(."ai.codex.pinDaemonToPackage")
-      ' "${hmJson}" > hm-ai-types.json
-      "$jq" -S '
-        with_entries(select(.key | startswith("ai.")))
-        | map_values({ type: .type })
-        | del(."ai.codex.trustProjectForSession")
-      ' "${devenvJson}" > devenv-ai-types.json
       "$diff" -u hm-ai-types.json devenv-ai-types.json
+
+      ${lib.concatMapStringsSep "\n" (backend: let
+        own =
+          if backend == "hm"
+          then hmJsonDoc
+          else devenvJsonDoc;
+        other =
+          if backend == "hm"
+          then devenvJsonDoc
+          else hmJsonDoc;
+        names = lib.concatMap (owner: ["ai.${owner}.activation2.<name>.command" "ai.${owner}.files2.<name>.enable"]) localOwners.${backend};
+      in
+        guardEach "require_key" [own] [] names + "\n" + guardEach "forbid_key" [other] [] names) ["devenv" "hm"]}
 
       "$jq" -r '
         keys[]
@@ -252,7 +266,7 @@
 
       # The successful check output is also the requested machine-readable parity
       # report: one complete, sorted contract shared by both backends.
-      cp hm-ai-options "$out"
+      cp hm-ai-options-comparable "$out"
     '';
   };
 }

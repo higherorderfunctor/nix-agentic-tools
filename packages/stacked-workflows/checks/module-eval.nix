@@ -136,7 +136,7 @@ in {
         == {}
         && !hm.config.git.branchless.enable
         && devenv.config.git.settings == {}
-        && !(devenv.config.tasks ? "git:branchless-init")
+        && !(devenv.config.tasks ? "ai2:git-branchless-init")
         && hm.config.ai.codex.skills ? stack-fix
     );
 
@@ -280,12 +280,12 @@ in {
           ai.programs.stacked-workflows.enable = true;
           stacked-workflows.gitPreset = "minimal";
         })
-        ? "git:branchless-init"
+        ? "ai2:git-branchless-init"
         && !((tasksOf {
           ai.programs.stacked-workflows.enable = true;
           stacked-workflows.gitPreset = "none";
         })
-        ? "git:branchless-init")
+        ? "ai2:git-branchless-init")
         && (tasksOf {stacked-workflows.gitPreset = "none";}) ? "git:config"
     );
 

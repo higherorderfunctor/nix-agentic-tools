@@ -15,6 +15,7 @@
     ./kiro.nix
     ./legacy.nix
     ./matrix.nix
+    ./non-ai.nix
     ./observer.nix
     ./runtime.nix
     ./runtime-forward.nix

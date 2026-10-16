@@ -28,7 +28,13 @@
     then lib.getExe' lifecycle.lifecycle "beads-lifecycle"
     else null;
 in {
-  imports = [(import ../options.nix {inherit lib;})];
+  imports = [
+    (import ../options.nix {inherit lib;})
+    (import ../../../ai-module/lib/runtime.nix {
+      enabled = cfg.enable;
+      name = "beads";
+    })
+  ];
 
   config = lib.mkMerge [
     {
@@ -78,29 +84,19 @@ in {
         beads-server.exec = "${lifecycleExe} server";
       };
 
-      tasks = {
-        "beads:bootstrap" = {
-          description = "Initialize or verify the contained Beads ledger";
-          exec = "${lifecycleExe} bootstrap";
+      ai.beads.activation2.beads-prepare.command = "${lifecycleExe} prepare";
+
+      # Manual lifecycle entry points remain native tasks.
+      tasks =
+        lib.mapAttrs (task: description: {
+          inherit description;
+          exec = "${lifecycleExe} ${lib.removePrefix "beads:" task}";
+        }) {
+          "beads:bootstrap" = "Initialize or verify the contained Beads ledger";
+          "beads:checkpoint" = "Validate the clean local ledger checkpoint";
+          "beads:diagnostics" = "Inspect Beads lifecycle versions and invariants";
+          "beads:status" = "Report contained Beads lifecycle status";
         };
-        "beads:checkpoint" = {
-          description = "Validate the clean local ledger checkpoint";
-          exec = "${lifecycleExe} checkpoint";
-        };
-        "beads:diagnostics" = {
-          description = "Inspect Beads lifecycle versions and invariants";
-          exec = "${lifecycleExe} diagnostics";
-        };
-        "beads:prepare" = {
-          description = "Materialize contained runtime state without publishing";
-          before = ["devenv:enterShell"];
-          exec = "${lifecycleExe} prepare";
-        };
-        "beads:status" = {
-          description = "Report contained Beads lifecycle status";
-          exec = "${lifecycleExe} status";
-        };
-      };
     })
   ];
 }

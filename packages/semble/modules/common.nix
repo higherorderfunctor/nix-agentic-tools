@@ -1,6 +1,5 @@
 {
   cacheLocation,
-  installCacheInvalidation,
   installPackages,
 }: {
   config,
@@ -254,7 +253,13 @@
   in
     lib.mapAttrsToList (message: runtimes: "ai.programs.semble (${lib.concatStringsSep ", " runtimes}): ${message}") byMessage;
 in {
-  imports = [program.module];
+  imports = [
+    program.module
+    (import ../../ai-module/lib/runtime.nix {
+      enabled = integrationActive && config.ai.programs.semble.install;
+      name = "semble";
+    })
+  ];
 
   # Portable-only leaves extend the plain program option tree without
   # generating per-runtime overrides.
@@ -306,9 +311,12 @@ in {
       (lib.mkIf (integrationActive && config.ai.programs.semble.install)
         (lib.mkMerge [
           (installPackages [installedPackage])
-          (installCacheInvalidation {
-            inherit cacheGuard lib;
-          })
+          {
+            ai.semble.activation2.semble-cache-guard = {
+              after = ["materialized"];
+              command = lib.getExe cacheGuard;
+            };
+          }
         ]))
       # Uniform across backends now that the location is a plain value rather
       # than a round-trip through the shell environment.
