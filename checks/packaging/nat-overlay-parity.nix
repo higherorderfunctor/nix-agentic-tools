@@ -200,9 +200,9 @@
     ]
     ++ lib.optionals (backend == "devenv") [
       {
-        name = "devenv git:branchless-init";
+        name = "devenv ai2:git-branchless-init";
         path = ["gitTools" "git-branchless"];
-        read = config: config.tasks."git:branchless-init".exec;
+        read = config: config.tasks."ai2:git-branchless-init".exec;
         match = "contains";
       }
       {

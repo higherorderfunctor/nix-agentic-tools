@@ -14,7 +14,7 @@
 # branchless/config and hand edits; keys it does not set fall through. When
 # the rendered attrset is empty the task removes the include instead.
 #
-# The task runs on every shell entry, after `git:branchless-init` when that
+# The task runs on every shell entry, after `ai2:git-branchless-init` when that
 # exists (packages/git-branchless), because `git branchless init` appends its
 # own include on a fresh repository. Outside a repository, with nothing to
 # write, it does nothing.
@@ -29,6 +29,13 @@
   script = import ../../../../lib/git-tool-settings/repo-config.nix {inherit pkgs;};
   rendered = pkgs.writeText "nix-agentic-tools.gitconfig" (lib.generators.toGitINI config.git.settings);
 in {
+  imports = [
+    (import ../../../ai-module/lib/runtime.nix {
+      enabled = true;
+      name = "git";
+    })
+  ];
+
   options.git.settings = lib.mkOption {
     type = import ../../../../lib/git-tool-settings/ini-type.nix {inherit lib;};
     default = {};
@@ -59,12 +66,9 @@ in {
     '';
   };
 
-  config.tasks."git:config" = {
-    description = "Keep the nix-agentic-tools git configuration included last in the common repository config";
-    before = ["devenv:enterShell"];
-    exec = ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
+  config.ai.git.activation2.git-config = {
+    name.devenv = "git:config";
+    command = ''
       ${lib.getExe script} include "$DEVENV_ROOT"${lib.optionalString (config.git.settings != {}) " ${rendered}"}
     '';
   };

@@ -7,9 +7,10 @@ applyTo: "checks/git-config/**,lib/git-tool-settings/ini-type.nix,lib/git-tool-s
 
 # The `git.*` option root: typed git configuration on both backends
 
-> **Last verified:** 2026-09-29 — `git.settings` plus `git.branchless`,
-> `git.absorb` and `git.revise` on Home Manager and devenv; resilient branchless
-> init keeps config and hook tasks runnable.
+> **Last verified:** 2026-10-16 — layer-1 commands lower through ai-module;
+> `git.settings` plus `git.branchless`, `git.absorb` and `git.revise` on Home
+> Manager and devenv; resilient branchless init keeps config and hook tasks
+> runnable.
 >
 > **Settled — do not relitigate.**
 >
@@ -38,7 +39,7 @@ applyTo: "checks/git-config/**,lib/git-tool-settings/ini-type.nix,lib/git-tool-s
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | `packages/git/modules/`                          | `git.settings`: HM alias of `programs.git.settings`; devenv option + `git:config` task               |
 | `packages/git-{absorb,branchless,revise}/`       | `modules/options.nix`: `git.<section>.{enable,settings}` through the factory below                   |
-| `packages/git-branchless/modules/`               | `scopedSync`; devenv `git:branchless-init`; per-backend `test.jobs` checks                           |
+| `packages/git-branchless/modules/`               | `scopedSync`; devenv `ai2:git-branchless-init`; per-backend `test.jobs` checks                       |
 | `lib/git-tool-settings/tool-module.nix`          | the factory: option tree + the ONE lowering into `git.settings` + package install                    |
 | `lib/git-tool-settings/ini-type.nix`             | Home Manager's `gitIniType`, shared by devenv's option and both HM stubs                             |
 | `lib/git-tool-settings/repo-config.{sh,nix}`     | `nix-agentic-tools-git` (`include`, `init`), run by the tasks and by `checks/git-config/runtime.nix` |
@@ -79,8 +80,8 @@ has not written a repository value, and `scopedSync` needs a re-run of
 
 `git.settings` (type `gitIniType`) → `toGitINI` → a store file. On every entry:
 
-1. `git:branchless-init` (when `git.branchless.enable`), before `git:config` and
-   `devenv:git-hooks:install`: `git -C "$DEVENV_ROOT" branchless init`, with
+1. `ai2:git-branchless-init` (when `git.branchless.enable`), before `git:config`
+   and `devenv:git-hooks:install`: `git -C "$DEVENV_ROOT" branchless init`, with
    `--main-branch` from the typed value, else the value `branchless/config`
    already records (init without it re-detects and overwrites). An unborn HEAD
    and a linked worktree with a bare primary use the primary symbolic HEAD as
@@ -95,6 +96,11 @@ has not written a repository value, and `scopedSync` needs a re-run of
    losing a write. Empty `git.settings` removes the include and the file;
    outside a repository that is a no-op. The path is relative, so it resolves
    from every linked worktree.
+
+The owners declare `ai.git.activation2.git-config` and
+`ai.git-branchless.activation2.git-branchless-init`; ai-module alone lowers
+these into native tasks. The config entry keeps `name.devenv = "git:config"` for
+dependency edges; branchless adds the hook-install edge only when enabled.
 
 Both hold `flock` on `<common>/.nix-agentic-tools-git.lock`.
 

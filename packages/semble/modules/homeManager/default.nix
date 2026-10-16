@@ -5,15 +5,5 @@ import ../common.nix {
   # platformdirs and uses ~/Library/Caches on Darwin, which would make the
   # activation guard clear a different cache than the installed package uses.
   cacheLocation = {config, ...}: "${config.xdg.cacheHome}/semble";
-  installCacheInvalidation = {
-    cacheGuard,
-    lib,
-  }: {
-    home.activation.sembleCacheGuard = lib.hm.dag.entryAfter ["linkGeneration"] ''
-      (
-      run ${lib.getExe cacheGuard}
-      )
-    '';
-  };
   installPackages = packages: {home.packages = packages;};
 }

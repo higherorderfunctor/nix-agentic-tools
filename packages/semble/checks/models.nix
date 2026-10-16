@@ -582,7 +582,7 @@ in {
       semble=${routedPackage}/bin/semble
       cache=${routedCacheHome}/semble
       # Record the package so the later guard run sees a change.
-      ${routed.config.home.activation.sembleCacheGuard.text}
+      ${routed.config.home.activation.ai2-semble-cache-guard.text}
 
       check no "$semble" search alpha repo
       expect_indexes "$cache" "index-code-config@${hash codeConfigModel} " "a plain search (defaultContent)"
@@ -606,11 +606,11 @@ in {
       printf 'stale\n' > "$cache/.nix-package"
       (
       export DRY_RUN=1
-      ${routed.config.home.activation.sembleCacheGuard.text}
+      ${routed.config.home.activation.ai2-semble-cache-guard.text}
       )
       expect_indexes "$cache" "index-code-config-docs@${hash fallbackModel} index-code-config@${hash codeConfigModel} index-docs@${hash docsModel} index@${hash fallbackModel} " "a dry-run cache guard"
       ${pkgs.gnugrep}/bin/grep -Fx stale "$cache/.nix-package"
-      ${routed.config.home.activation.sembleCacheGuard.text}
+      ${routed.config.home.activation.ai2-semble-cache-guard.text}
       expect_indexes "$cache" "" "the cache guard"
 
       # ── No models: a default model alone never warns ──

@@ -11,7 +11,7 @@
 # GIT_CONFIG_GLOBAL, `git -c` and GIT_CONFIG_*.
 #
 # `enter <config> ROOT` runs what a devenv shell entry runs for that module
-# configuration, in devenv's order: `git:branchless-init` (when
+# configuration, in devenv's order: `ai2:git-branchless-init` (when
 # git.branchless.enable), then `git:config`, then a hook installer when the
 # fixture supplies one. `checks/git-config/module-eval.nix` asserts the real
 # order in the task graph.
@@ -45,7 +45,7 @@
     lib.concatMapStrings (name:
       lib.optionalString (tasks ? ${name}) ''
         DEVENV_ROOT="$root" ${lib.getExe pkgs.bash} -c ${lib.escapeShellArg tasks.${name}.exec}
-      '') ["git:branchless-init" "git:config" "devenv:git-hooks:install"];
+      '') ["ai2:git-branchless-init" "git:config" "devenv:git-hooks:install"];
 
   # Repository-local settings every observation below reads through a
   # different program: git itself, git-branchless and git-absorb.

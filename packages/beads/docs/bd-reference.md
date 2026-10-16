@@ -155,7 +155,7 @@ quiesces the leased Dolt child before opening its data directory, publishes,
 then resumes the child before final validation and unlock. It performs
 module-owned initialization or exact existing-state verification, drains once at
 startup, then publishes on the bounded interval. Shell activation runs only
-`beads:prepare`, which creates and verifies contained runtime configuration
+`ai2:beads-prepare`, which creates and verifies contained runtime configuration
 under the same lock and never publishes. Operators and agents do not run
 `bd init`; `beads-bootstrap` and the `beads:bootstrap` task are the explicit
 module-owned entry points.

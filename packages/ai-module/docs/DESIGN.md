@@ -49,8 +49,12 @@ commands and drains its old ledgers. Each forwarded command gets
 `enable` overrides it. Keys listed in `shared` forward without a claim in
 `ai.files2Owners`, which leaves their composer the single claimant. Checks
 install synthetic runtime modules in PR 2; PR 3 installs the helper in runtime
-owners. Shared skills, rules and other surfaces produce entries here; their
-rendering stays above this layer.
+owners. Non-AI owners use the same helper. Semble exposes it on both backends;
+glab and mcp-services expose it on Home Manager; beads, git and git-branchless
+expose it on devenv. These lifecycle namespaces remain visible in option docs,
+with explicit backend presence checks outside shared API parity. Shared skills,
+rules and other surfaces produce entries here; their rendering stays above this
+layer.
 
 Keys are **backend-root-relative final paths**, just like layer 2. There is no
 implicit prefix added by forwarding. A runtime producer computes its configured
@@ -318,8 +322,8 @@ Command ordering details: L012 uses `after = ["files"]` and
 L032 adds `secrets` before link-check. L106 retains
 `name.devenv = "git:config"`; L107 orders before that and conditionally before
 `devenv:git-hooks:install`. L109/L147 use `after = ["files" "secrets"]`.
-L155/L169 use `after = ["materialized"]`. L168 clears abstract defaults and uses
-`beforeNodes.devenv = ["devenv:files:cleanup"]`. L195 uses
+L155/L156/L169 use `after = ["materialized"]`. L168 clears abstract defaults and
+uses `beforeNodes.devenv = ["devenv:files:cleanup"]`. L195 uses
 `afterNodes.devenv = ["devenv:git-hooks:install"]`. These are finite commands;
 none needs a new file method or service scheduler.
 

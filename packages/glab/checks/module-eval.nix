@@ -120,7 +120,7 @@ in {
           inherit lib pkgs;
           inherit pendingFile;
         };
-        activation = ev.config.home.activation.glabKeyringSync.text;
+        activation = ev.config.home.activation.ai2-glab-keyring-sync.text;
         pathUnit = ev.config.systemd.user.paths.glab-keyring-sync;
         service = ev.config.systemd.user.services.glab-keyring-sync;
         wrapper = (builtins.head ev.config.home.packages).passthru.wrapperText;

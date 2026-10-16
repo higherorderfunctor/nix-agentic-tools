@@ -385,9 +385,9 @@ in {
             pattern = "flake.lock";
           }
         ]
-        && hm.home.activation ? sembleCacheGuard
-        && lib.hasInfix "semble-cache-guard" hm.home.activation.sembleCacheGuard.text
-        && lib.hasInfix "semble-cache-guard" devenv.enterShell
+        && hm.home.activation ? ai2-semble-cache-guard
+        && lib.hasInfix "semble-cache-guard" hm.home.activation.ai2-semble-cache-guard.text
+        && lib.hasInfix "semble-cache-guard" devenv.tasks."ai2:semble-cache-guard".exec
         && lib.hasSuffix "/bin/semble-mcp" devenv.ai.codex.mcpServers.semble.command
     );
 
@@ -737,8 +737,8 @@ in {
         hm = (evalHm {}).config;
         devenv = (evalDevenv {}).config;
       in
-        !(hm.home.activation ? sembleCacheGuard)
-        && devenv.enterShell == ""
+        !(hm.home.activation ? ai2-semble-cache-guard)
+        && !(devenv.tasks ? "ai2:semble-cache-guard")
     );
 
     # `install = false` drops the launchers and cache guard on both backends
@@ -767,10 +767,10 @@ in {
         && isSemble (sembleOnly devenvOn.packages devenvOff.packages)
         && sembleOnly hmOff.home.packages hmOn.home.packages == []
         && sembleOnly devenvOff.packages devenvOn.packages == []
-        && hmOn.home.activation ? sembleCacheGuard
-        && !(hmOff.home.activation ? sembleCacheGuard)
-        && !(lib.hasInfix "semble-cache-guard" devenvOff.enterShell)
-        && lib.hasInfix "semble-cache-guard" devenvOn.enterShell
+        && hmOn.home.activation ? ai2-semble-cache-guard
+        && !(hmOff.home.activation ? ai2-semble-cache-guard)
+        && !(devenvOff.tasks ? "ai2:semble-cache-guard")
+        && lib.hasInfix "semble-cache-guard" devenvOn.tasks."ai2:semble-cache-guard".exec
         && markdownText hmOff ".codex/AGENTS.md" == markdownText hmOn ".codex/AGENTS.md"
         && markdownText devenvOff "AGENTS.md" == markdownText devenvOn "AGENTS.md"
         && fromGeneratedTree "AGENTS.md" (deliveredFiles devenvOff)."AGENTS.md"
@@ -821,7 +821,7 @@ in {
             package = sembleStub;
           };
           xdg.cacheHome = cacheHome;
-        }).config.home.activation.sembleCacheGuard.text;
+        }).config.home.activation.ai2-semble-cache-guard.text;
     in
       pkgs.runCommand "module-test-semble-cache-guard-runtime" {} ''
         set -euETo pipefail
