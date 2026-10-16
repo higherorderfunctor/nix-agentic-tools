@@ -722,20 +722,27 @@ the link targets.
 
 # External workflows
 
-> **Last verified:** 2026-10-11 — the installer reads the `virtualPackages`
-> aggregate fact directly from `packages/kimchi/extracted/`.
+> **Last verified:** 2026-10-15 — upstream selects the NAT pnpm major; build and
+> runtime use that derivation, with stamped metadata and noninteractive
+> generated dependency migration.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's lock. Its owner-local
 update target and `updateScript` resolve the release tag to a commit, refresh
-the source hash and fix the pnpm dependency hash. The build uses
-`pkgs.ai.generic.pnpm_10`, stamps upstream's placeholder version, generates
-distribution metadata, and compiles TypeScript. Metadata formatting uses
-`BIOME_BINARY` to select Nixpkgs' Biome instead of npm's unpatched Linux
-executable. Linux fixup uses `autoPatchelfHook` and the compiler runtime for
-Vitest's Rolldown and Lightning CSS native bindings in the installed runtime
-graph. TypeScript 7's Linux compiler is static and needs no ELF fixup. Darwin
-selects native Mach-O dependencies and does not use the Linux hook.
+the source hash and fix the pnpm dependency hash. The build reads upstream's
+`kimchiWorkflows.packageManager` (falling back to `packageManager`) from that
+pinned source and selects `pkgs.ai.generic.pnpm_<major>`. An unavailable major
+fails evaluation with the requested pin and missing attribute. The selected NAT
+derivation supplies `fetchPnpmDeps`, the build, and the runtime
+installer/verifier. Before generating distribution metadata, the build stamps
+both manifest package-manager fields to that derivation's exact version,
+together with the release version. TypeScript compilation then carries the same
+pin in source and compiled metadata. Metadata formatting uses `BIOME_BINARY` to
+select Nixpkgs' Biome instead of npm's unpatched Linux executable. Linux fixup
+uses `autoPatchelfHook` and the compiler runtime for Vitest's Rolldown and
+Lightning CSS native bindings in the installed runtime graph. TypeScript 7's
+Linux compiler is static and needs no ELF fixup. Darwin selects native Mach-O
+dependencies and does not use the Linux hook.
 
 The installed package has `package.json` with `pi.extensions`, `src/`, `dist/`,
 `bin/`, docs and examples. Its `node_modules` holds the locked runtime
@@ -778,6 +785,22 @@ injected extension, instead of replacing it with upstream npm 0.0.9. The package
 substitutes its final output path during `postPatch`; no extra package variant,
 environment selector, or user configuration is required. Ordinary project
 preparation may still fetch its existing toolchain dependencies through pnpm.
+`pnpm-runtime.patch` replaces upstream's Corepack/PATH/npm fallback with the
+absolute store path of a Nix launcher for the selected pnpm. Node's version
+probe also uses an absolute store executable. The launcher puts NAT Node and the
+shell utilities used by pnpm's generated executable shims ahead of consumer
+PATH, covering API calls and printed retry/verification commands. The existing
+exported-overlay contract keeps this toolchain on NAT's nixpkgs unless the
+consumer explicitly sets `follows` (or uses an unsupported-platform fallback).
+
+The workflow install alone passes `--config.confirmModulesPurge=false`: pnpm can
+recreate incompatible generated `node_modules` without a TTY after an earlier
+pnpm major created them. This does not set global CI behavior or remove workflow
+source files. The offline package-manager regression runs production preparation
+with local fixture dependencies, hostile PATH tools, and an incompatible modules
+manifest; it checks the exact metadata pin, actual pnpm installation, Node-based
+verification, and preservation of a sibling user file.
+
 The offline install check uses a scripted installer and the actual installed
 framework after runtime dependency pruning, then typechecks and evaluates a
 workflow declaring `thinking` without executing its agents.
