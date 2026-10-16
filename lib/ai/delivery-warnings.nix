@@ -97,9 +97,7 @@
     map (path: message path (row.deliveryGap or row.reason))
     (builtins.filter (path:
       !(normalizedPath path)
-      && present path (get path)
-      && (!(row.warnOnlyExplicit or false)
-        || (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500)) (row.inputOptions or [])))
+      && present path (get path)) (row.inputOptions or [])))
   gapRows;
   entries = pool:
     lib.optionals (supports pool) (

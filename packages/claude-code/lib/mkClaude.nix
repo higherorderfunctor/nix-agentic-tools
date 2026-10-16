@@ -194,6 +194,36 @@
         else staged "context" "markdown" (agent.fileContent value)
       ))
     values;
+  # Declared per backend below: a backend's `native` options replace the shared
+  # ones whole, and Home Manager's also carry `unpinLaunchEffort`.
+  nativeSettingsOption = lib.mkOption {
+    type = lib.types.submodule {
+      freeformType = (pkgs.formats.json {}).type;
+      # Generated from the packaged binary's own settings schema, merged
+      # with the hand-authored exceptions — see nativeOptions.nix.
+      inherit (nativeFileSurface) options;
+    };
+    default = {};
+    description = ''
+      Claude's settings.json, as typed options plus a freeform
+      passthrough. Every key the packaged binary's own settings schema
+      declares (extracted into the drift-checked
+      packages/claude-code/extracted/, settings.paths) gets a typed option
+      automatically; a short hand-authored list overrides the generated
+      type where the schema is not the surface we want (`attribution.*`
+      accepts a bool, `model` is a soft enum, `tui` carries a
+      read-only-store caveat). Null typed keys are filtered out before
+      the document is written, so an option left at its default writes
+      nothing.
+
+      The freeform catch-all still accepts a key newer than this
+      package's schema. Unrecognized keys warn with spelling suggestions;
+      `allowUnrecognizedSettings` suppresses selected warnings. The `ultracode`
+      key is intentionally NOT a hand-authored option (see
+      ultracodeOnLaunch) but is declared by the binary and so is typed
+      like any other.
+    '';
+  };
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -248,34 +278,6 @@ in
           }
         '';
       };
-      native.settings = lib.mkOption {
-        type = lib.types.submodule {
-          freeformType = (pkgs.formats.json {}).type;
-          # Generated from the packaged binary's own settings schema, merged
-          # with the hand-authored exceptions — see nativeOptions.nix.
-          inherit (nativeFileSurface) options;
-        };
-        default = {};
-        description = ''
-          Claude's settings.json, as typed options plus a freeform
-          passthrough. Every key the packaged binary's own settings schema
-          declares (extracted into the drift-checked
-          packages/claude-code/extracted/, settings.paths) gets a typed option
-          automatically; a short hand-authored list overrides the generated
-          type where the schema is not the surface we want (`attribution.*`
-          accepts a bool, `model` is a soft enum, `tui` carries a
-          read-only-store caveat). Null typed keys are filtered out before
-          the document is written, so an option left at its default writes
-          nothing.
-
-          The freeform catch-all still accepts a key newer than this
-          package's schema. Unrecognized keys warn with spelling suggestions;
-          `allowUnrecognizedSettings` suppresses selected warnings. The `ultracode`
-          key is intentionally NOT a hand-authored option (see
-          ultracodeOnLaunch) but is declared by the binary and so is typed
-          like any other.
-        '';
-      };
       allowUnrecognizedSettings = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [];
@@ -309,22 +311,6 @@ in
           Opaque leaf containers such as `env` accept arbitrary children. Maps
           accept arbitrary entry names while declared fields below each entry
           remain checked; lists inspect their declared element shape.
-        '';
-      };
-      unpinLaunchEffort = lib.mkOption {
-        type = lib.types.attrsOf lib.types.bool;
-        default = lib.genAttrs (claudeFact "launchEffortPins") (_: true);
-        defaultText =
-          lib.literalExpression
-          ''lib.genAttrs (claudeFact "launchEffortPins") (_: true)'';
-        description = ''
-          Per-model "acknowledge launch-default effort" flags merged into
-          ~/.claude.json (HM only) so settings.effortLevel is honored instead of
-          a newly-shipped model's launch-default effort pin. Keys are
-          auto-derived from the packaged binary
-          (packages/claude-code/extracted/, launchEffortPins). Set a key false to
-          deliberately
-          leave that model pinned.
         '';
       };
       ultracodeOnLaunch = lib.mkEnableOption ''
@@ -724,9 +710,9 @@ in
           {
             ai.claude = {
               _generatedFiles.".claude.json" =
-                staged "settings" "json" {value = cfg.unpinLaunchEffort;}
+                staged "settings" "json" {value = cfg.native.unpinLaunchEffort;}
                 // {
-                  enable = cfg.unpinLaunchEffort != {};
+                  enable = cfg.native.unpinLaunchEffort != {};
                   method = lib.mkDefault "rw";
                 };
               # Keep credential repair after the engine, even with no flags.
@@ -746,6 +732,27 @@ in
           ai.claude._generatedFiles.".mcp.json" = staged "mcpServers" "json" {value.mcpServers = renderedServers;};
         }))
       ];
+    devenv.options.native.settings = nativeSettingsOption;
+    # Home Manager only: devenv never writes HOME, so on devenv the option
+    # does not exist and setting it is an unknown-option evaluation error.
+    hm.options.native = {
+      settings = nativeSettingsOption;
+      unpinLaunchEffort = lib.mkOption {
+        type = lib.types.attrsOf lib.types.bool;
+        default = lib.genAttrs (claudeFact "launchEffortPins") (_: true);
+        defaultText =
+          lib.literalExpression
+          ''lib.genAttrs (claudeFact "launchEffortPins") (_: true)'';
+        description = ''
+          Per-model "acknowledge launch-default effort" flags merged into
+          ~/.claude.json so settings.effortLevel is honored instead of a
+          newly-shipped model's launch-default effort pin. Keys are
+          auto-derived from the packaged binary
+          (packages/claude-code/extracted/, launchEffortPins). Set a key false
+          to deliberately leave that model pinned. Home Manager only.
+        '';
+      };
+    };
     hm.migrationConfig = _: {
       ai.claude.legacyLedgers = [
         {

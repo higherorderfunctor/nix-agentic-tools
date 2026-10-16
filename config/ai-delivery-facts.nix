@@ -48,14 +48,4 @@ in {
   # writes the file (Kiro's native hooks and `cli.json`): the row delivers
   # and the root request warns as a child, so the native options stay quiet.
   nativeWriters = ["hooks/kiro/devenv" "hooks/kiro/hm" "settings/kiro/devenv" "settings/kiro/hm"];
-  # Diagnostic-only children for inputs the primary row cannot consume.
-  supplements = {
-    "settings/claude/devenv" = [
-      ((absent "unpinLaunchEffort is an explicit HM-only global ~/.claude.json operation; devenv does not mutate HOME.")
-        // {
-          inputOptions = [["ai" "claude" "unpinLaunchEffort"]];
-          warnOnlyExplicit = true;
-        })
-    ];
-  };
 }

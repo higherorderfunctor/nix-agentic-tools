@@ -28,7 +28,7 @@
         ai = {
           claude = {
             inherit enable;
-            unpinLaunchEffort = lib.mkForce settings;
+            native.unpinLaunchEffort = lib.mkForce settings;
           };
           gitSshConfigWorkaround = false;
         };

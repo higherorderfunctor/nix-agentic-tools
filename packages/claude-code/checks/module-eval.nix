@@ -857,7 +857,7 @@ in {
         let
           result = evalHm {
             ai.claude.enable = true;
-            ai.claude.unpinLaunchEffort = lib.mkForce {};
+            ai.claude.native.unpinLaunchEffort = lib.mkForce {};
           };
         in
           result.config.home.activation ? ai-files-prune
@@ -872,7 +872,7 @@ in {
         let
           result = evalHm {
             ai.claude.enable = true;
-            ai.claude.unpinLaunchEffort.unpinOpus48LaunchEffort = false;
+            ai.claude.native.unpinLaunchEffort.unpinOpus48LaunchEffort = false;
           };
         in
           (unpinDocument result).value.unpinOpus48LaunchEffort == false

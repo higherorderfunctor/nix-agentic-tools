@@ -24,7 +24,8 @@
 # Shared runtime and pool APIs have exact option-tree parity. Non-AI owners'
 # helper namespaces follow their native lifecycle backend; docs still expose
 # them, and presence guards below keep those explicit exclusions honest.
-# Codex's daemon selection and session trust remain backend-specific leaves.
+# Claude's launch-effort unpin and Codex's daemon selection and session trust
+# remain backend-specific leaves.
 {
   lib,
   pkgs,
@@ -44,16 +45,12 @@
       devenv = ["beads" "git" "git-branchless"];
       hm = ["glab" "mcp-services"];
     };
+    backendOnly = {
+      devenv = ["ai.codex.trustProjectForSession"];
+      hm = ["ai.claude.native.unpinLaunchEffort" "ai.codex.pinDaemonToPackage"];
+    };
     comparable = backend: let
-      excluded =
-        map (owner: "ai.${owner}.") localOwners.${backend}
-        ++ [
-          "ai.codex.${
-            if backend == "hm"
-            then "pinDaemonToPackage"
-            else "trustProjectForSession"
-          }"
-        ];
+      excluded = map (owner: "ai.${owner}.") localOwners.${backend} ++ backendOnly.${backend};
     in ''
       with_entries(select(.key | startswith("ai.")))
       | with_entries(select(.key as $key | all(${builtins.toJSON excluded}[]; . as $prefix | $key | startswith($prefix) | not)))
