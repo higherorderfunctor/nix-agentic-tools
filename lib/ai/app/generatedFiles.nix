@@ -1,16 +1,18 @@
 # A runtime's generated files: its staged entries (`ai.<runtime>._generatedFiles`,
 # `S`), the one formatted, guarded and checked store tree their bytes enter,
-# and the layer-1 definitions (`ai.<runtime>.files2`, `R`) they become. While
-# the old path coexists, its router (`deliver.nix`) builds that tree with its
-# own entries added, so a runtime still has exactly one.
+# and the layer-1 definitions (`ai.<runtime>.files2`, `R`) they become.
 {
   lib,
   pkgs,
 }: let
   files2 = import ../../../packages/ai-module/lib/files/default.nix {inherit lib pkgs;};
-  formats = import ../formats.nix {inherit lib pkgs;};
   generated = import ../../generated.nix {inherit lib;} pkgs;
-  inherit (import ../delivery-options.nix {inherit lib;}) surfaces;
+  surfaces = ["agents" "context" "hooks" "mcpServers" "rules" "settings" "skills"];
+  renderers = {
+    json = _name: value: {text = builtins.toJSON value;};
+    toml = name: value: {source = (pkgs.formats.toml {}).generate name value;};
+    yaml = name: value: {source = (pkgs.formats.yaml {}).generate name value;};
+  };
   live = lib.filterAttrs (_path: entry: entry.enable);
   # A staged entry in a format that cannot carry `value` is one whole-content
   # default at layer 1, so a stronger content definition (a consumer's
@@ -37,7 +39,34 @@
       else {${choice} = entry.content.${choice};})
     (live staged);
 in {
-  inherit content;
+  inherit content surfaces;
+
+  generatedTreeOption = lib.mkOption {
+    type = lib.types.nullOr lib.types.raw;
+    readOnly = true;
+    internal = true;
+    visible = false;
+    description = "The generated-tree derivation this runtime delivers, exposed for module checks.";
+  };
+
+  maxBytesOption = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options = {
+        bytes = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "The largest size, in bytes, the reader takes whole.";
+        };
+        hint = lib.mkOption {
+          type = lib.types.str;
+          description = "What to do about a file past the limit; ends the build failure message.";
+        };
+      };
+    });
+    default = {};
+    internal = true;
+    visible = false;
+    description = "Byte limits on generated files, keyed by path, checked on the built file.";
+  };
 
   # Whether a staged path's final content (`files2.<path>`) is not the
   # generated one. A whole-content default is judged by priority alone, so the
@@ -54,24 +83,6 @@ in {
     if whole staged.${path}
     then replacedWhole files2 path staged.${path}
     else choice != null && (!(generated.${path} ? ${choice}) || (choice != "value" && entry.content.${choice} != generated.${path}.${choice}));
-
-  # Transitional, until the old path is deleted: a destination is live on one
-  # delivery path, never on both, so `own.py` and the engine never own it
-  # together. A live staged path counts even when its `R` entry is switched
-  # off: the tree leaves its bytes out, but it keeps its layer-1 `R` entry and
-  # the engine's state, so the engine would still own the destination.
-  disjoint = {
-    files2,
-    old,
-    option,
-    staged,
-  }: let
-    liveStaged = live staged;
-    both = builtins.filter (path: lib.attrByPath [path "enable"] false files2 || liveStaged ? ${path}) (builtins.attrNames old);
-  in {
-    assertion = both == [];
-    message = "${option} and ai.files2 (directly or through the runtime's generated files) both deliver ${lib.concatStringsSep ", " both}; keep one.";
-  };
 
   # `S` → `R`, every field at `mkDefault` so a consumer's `R` definition wins.
   # A value gets one default per leaf, so a consumer leaf merges with its
@@ -136,12 +147,7 @@ in {
         files = lib.mapAttrs (path: entry:
           (
             if entry.content ? value
-            then
-              formats.render {
-                inherit path;
-                inherit (entry) format;
-                inherit (entry.content) value;
-              }
+            then renderers.${entry.format} ("ai-generated-" + lib.replaceStrings ["/"] ["-"] path) entry.content.value
             else entry.content
           )
           // {

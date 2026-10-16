@@ -166,7 +166,6 @@ in {
           entry = config.ai.files2.${target};
         in
           config.ai.kiro.files2 ? ${target}
-          && !(config.ai.kiro.files ? ${target})
           && entry.executable == null
           && entry.mode == null
           && fromGeneratedTree target delivered.${target})

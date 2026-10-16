@@ -680,7 +680,7 @@ in {
       in
         valid.instanceUrl == null && !(valid ? assertions) && !invalid.success
     );
-    # A context or rule unit whose file is switched off (`content.enable =
+    # A context or rule unit whose file is switched off (`enable =
     # false`) or replaced with the consumer's own bytes warns, naming the
     # unit, the file option that dropped it and a per-runtime way to withhold
     # it; the warning is what makes the drop visible. Withholding the unit or

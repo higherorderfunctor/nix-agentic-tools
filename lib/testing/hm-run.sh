@@ -1,9 +1,9 @@
 # shellcheck shell=bash
 # Transcription of home-manager's `run` helper (lib/bash/home-manager.sh),
-# which every activation script gets in its preamble. `lib/ai/own.nix` routes
+# which every activation script gets in its preamble. The ai-module lowering routes
 # each HM entry's one mutating command through `run` so DRY_RUN echoes it
 # instead of executing it — that is the only thing that keeps
-# `home-manager switch --dry-run` from writing runtime settings and ledgers
+# `home-manager switch --dry-run` from writing runtime settings and ownership state
 # for real. Runtime checks execute an entry's `.text` under a plain bash with
 # no such preamble, so they must source this definition first, or the entry
 # fails with "run: command not found". Never "fix" that by dropping `run`

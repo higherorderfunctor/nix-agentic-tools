@@ -21,19 +21,16 @@
   duplicate = files.duplicate ["files2-apply" "files2-guard" "files2-inspect" "files2-prune" "files2-snapshot"];
   nativeFiles = builtins.attrNames config.files != [];
   # The observer's ownership: each plan path named by the option that declares
-  # it (its layer-1 claim, else `ai.files2`), plus the old path's live paths
-  # until chunk 12 removes it. Exact paths only; a `<dir>/**` entry is skipped.
+  # it (its layer-1 claim, else `ai.files2`). Recursive entries use their
+  # expanded leaf paths.
   enabledKeys = builtins.filter (key: config.ai.files2.${key}.enable) (builtins.attrNames config.ai.files2);
   optionFor = path: let
     key = lib.findFirst (key: key == path || lib.hasPrefix "${key}/" path) path enabledKeys;
     claim = config.ai.files2Owners.${key} or [];
   in "ai.${lib.concatMapStrings (owner: "${owner}.") claim}files2.${builtins.toJSON key}";
-  owned =
-    lib.genAttrs (builtins.filter (path: !lib.hasSuffix "/**" path) (config.ai.deliveredPaths or [])) (path: "ai.*.files.${builtins.toJSON path}")
-    // lib.genAttrs (map (item: item.path) files.plan) optionFor;
+  owned = lib.genAttrs (map (item: item.path) files.plan) optionFor;
   observed = pkgs.writeText "files2-ai-observed.json" (builtins.toJSON {
     current = builtins.attrNames config.files ++ builtins.attrNames owned;
-    # A consumer `copyMode` on an old-path link is a deliberate copy.
     links = lib.mapAttrs (name: file: {
       option = owned.${name};
       source = "${file.file}";

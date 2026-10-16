@@ -177,8 +177,8 @@ devenv's previous link list into `$DEVENV_STATE/ai-delivery-observed.json`.
 devenv hides a passing task's output. It warns for an owned link that is absent
 or replaced by a file, a directory or a stale link, and for a remembered path no
 longer delivered that is still on disk. Ownership is the normalized plan, each
-path named by its `ai.files2Owners` claim or else `ai.files2`, plus the live
-`ai.deliveredPaths`.
+path named by its `ai.files2Owners` claim or else `ai.files2`. Native links come
+from the backend file map; the observer has no legacy delivered-path branch.
 
 ### Layer 3: generic activation
 
@@ -220,7 +220,7 @@ Each backend lowering function maps the same graph once. HM uses
 `lib.hm.dag.entryBetween before after`; devenv emits `{ after; before; exec; }`
 tasks. Native file sinks and activation sinks are single literal attributes
 whose values contain the computed maps; do not create option-derived module
-fragments while collecting definitions (`lib/ai/adapters/hm.nix:29`).
+fragments while collecting definitions (`packages/ai-module/lib/lower-hm.nix`).
 
 `A → B` means B depends on A. Every abstract point resolves to the following
 node(s) for both `before` and `after` references:

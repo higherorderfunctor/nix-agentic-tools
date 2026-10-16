@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv evalHm fromGeneratedTree harnessNames markdownInput mkTest setEnable;
+  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv evalHm fromGeneratedTree harnessNames mkTest setEnable;
   # A delivered Markdown file's text, from the evaluated `config`.
   markdownOf = config: path:
     if fromGeneratedTree path (deliveredFiles config).${path}
@@ -20,7 +20,7 @@ in {
         hm = evalHm {};
         devenv = evalDevenv {};
         optionType = evaluated: runtime:
-          (lib.getAttrFromPath ["ai" runtime "files"] evaluated.options).type.description;
+          (lib.getAttrFromPath ["ai" runtime "files2"] evaluated.options).type.description;
       in
         lib.all (runtime: optionType hm runtime == optionType devenv runtime) harnessNames
     );
@@ -32,7 +32,7 @@ in {
           sourceTarget = "literal/${runtime}.source";
           config = lib.recursiveUpdate (setEnable runtime true) {
             ai.${runtime} = {
-              files = {
+              files2 = {
                 ${textTarget} = {
                   content.text = "${runtime}-TEXT";
                   executable = true;
@@ -44,18 +44,16 @@ in {
           hm = evalHm config;
           devenv = evalDevenv config;
         in
-          fromGeneratedTree textTarget (deliveredFiles hm.config).${textTarget}
-          && fromGeneratedTree textTarget (deliveredFiles devenv.config).${textTarget}
-          && fromGeneratedTree sourceTarget (deliveredFiles hm.config).${sourceTarget}
-          && fromGeneratedTree sourceTarget (deliveredFiles devenv.config).${sourceTarget}
-          && (markdownInput hm textTarget).text == "${runtime}-TEXT"
-          && (markdownInput devenv textTarget).text == "${runtime}-TEXT"
-          && (markdownInput hm sourceTarget).source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
-          && (markdownInput devenv sourceTarget).source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
-          && (deliveredFiles hm.config).${textTarget}.executable
-          && (deliveredFiles devenv.config).${textTarget}.executable
-          && !((deliveredFiles hm.config).${sourceTarget} ? text)
-          && !((deliveredFiles devenv.config).${sourceTarget} ? text);
+          lib.all (evaluated: let
+            files = deliveredFiles evaluated.config;
+          in
+            evaluated.config.ai.files2.${textTarget}.content.text
+            == "${runtime}-TEXT"
+            && evaluated.config.ai.files2.${sourceTarget}.content.source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
+            && files.${textTarget}.executable
+            && toString files.${textTarget}.source == toString (pkgs.writeText "files2-link" "${runtime}-TEXT")
+            && toString files.${sourceTarget}.source == toString ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
+            && !(files.${sourceTarget} ? text)) [hm devenv];
       in
         lib.all checkRuntime harnessNames
     );
@@ -90,10 +88,13 @@ in {
         rejected = target: let
           attempt = builtins.tryEval (let
             evaluated = evalHm {
-              ai.claude.files.${target}.content.text = "invalid";
+              ai.claude = {
+                enable = true;
+                files2.${target}.content.text = "invalid";
+              };
             };
           in
-            builtins.deepSeq evaluated.config.ai.claude.files true);
+            builtins.deepSeq evaluated.config.home.file true);
         in
           !attempt.success;
       in
@@ -104,22 +105,25 @@ in {
       let
         disabled =
           (evalHm {
-            ai.claude.files."literal/disabled".content.enable = false;
-          }).config.ai.claude.files."literal/disabled";
+            ai.claude.files2."literal/disabled".enable = false;
+          }).config.ai.claude.files2."literal/disabled";
         rejected = entry: let
           attempt = builtins.tryEval (let
             evaluated = evalHm {
-              ai.claude.files."literal/invalid" = entry;
+              ai.claude = {
+                enable = true;
+                files2."literal/invalid" = entry;
+              };
             };
           in
-            builtins.deepSeq evaluated.config.ai.claude.files true);
+            builtins.deepSeq evaluated.config.home.file true);
         in
           !attempt.success;
       in
         # An explicit enable flag is the disabled shape, not a null sentinel.
-        !disabled.content.enable
+        !disabled.enable
         # Equal-priority text and source are rejected by the shared
-        # priority-aware text-source type.
+        # content selection.
         && rejected {
           content = {
             source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
@@ -127,7 +131,7 @@ in {
           };
         }
         # Delivery-specific alternatives remain exclusive with text/source and
-        # with each other after the attrTag representation is removed.
+        # with each other.
         && rejected {
           content = {
             run = "printf probe";
@@ -198,8 +202,8 @@ in {
         && devenvConfig.ai.copilot._generatedFiles ? ".github/instructions/scoped.instructions.md"
         && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
         && devenvConfig.ai.kiro._generatedFiles ? ".kiro/steering/scoped.md"
-        && devenvConfig.ai.internal.files ? "AGENTS.md"
-        && devenvConfig.ai.internal.files."AGENTS.md".content.text == markdownOf devenvConfig "AGENTS.md"
+        && devenvConfig.ai.internal._generatedFiles ? "AGENTS.md"
+        && devenvConfig.ai.internal._generatedFiles."AGENTS.md".content.text == markdownOf devenvConfig "AGENTS.md"
     );
 
     module-runtime-files-shared-agentsmd-arbitration = mkTest "runtime-files-shared-agentsmd-arbitration" (
@@ -437,7 +441,7 @@ in {
       "runtime-files-byte-limit-follows-final-entry: a fixture fails its assertions";
       assert lib.assertMsg (markdownOf hmReplacement.config ".codex/AGENTS.md" == "short" && markdownOf devenvReplacement.config "AGENTS.md" == "short")
       "runtime-files-byte-limit-follows-final-entry: the replacement does not reach the final entry";
-      assert lib.assertMsg (hmReplacement.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 8 && devenvReplacement.config.ai.internal._maxBytes."AGENTS.md".bytes == 8)
+      assert lib.assertMsg (hmReplacement.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 8 && devenvReplacement.config.ai.internal.agentsMd."AGENTS.md".maxBytes == 8)
       "runtime-files-byte-limit-follows-final-entry: the replacement's path lost its limit";
       assert devenvFile.text == "short";
       assert lib.assertMsg (!(hmDisabled.config.home.file ? ".codex/AGENTS.md") && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md"))
@@ -573,51 +577,6 @@ in {
       in
         delivered (evalHm config)
         && delivered (evalDevenv config)
-    );
-
-    # Empty inline text is not content. An entry left with nothing else is
-    # rejected rather than silently written as nothing; `enable = false` is
-    # the deliberate way to keep an entry that delivers nothing.
-    module-runtime-files-empty-text-rejected = mkTest "runtime-files-empty-text-rejected" (
-      let
-        attempt = evaluate: runtime: target: content:
-          builtins.tryEval (builtins.deepSeq
-            (lib.getAttrFromPath ["ai" runtime "files"]
-              (evaluate {
-                ai.${runtime} = {
-                  enable = true;
-                  files.${target}.content = content;
-                };
-              }).config)
-            true);
-        rejected = evaluate: runtime: target: content:
-          !(attempt evaluate runtime target content).success;
-        disabled = evalDevenv {
-          ai.codex = {
-            enable = true;
-            files."AGENTS.md".content = {
-              enable = false;
-              text = "";
-            };
-          };
-        };
-      in
-        rejected evalHm "claude" "literal/empty.md" {text = "";}
-        && rejected evalDevenv "claude" "literal/empty.md" {text = "";}
-        && rejected evalHm "claude" "literal/empty.md" {text = lib.mkDefault "";}
-        && rejected evalDevenv "codex" "AGENTS.md" {text = "";}
-        # Control: the same entry with content evaluates. Under layer 1 the
-        # empty text is a file too.
-        && (attempt evalHm "claude" "literal/empty.md" {text = "PRESENT";}).success
-        && lib.all (text:
-          (deliveredFiles
-            (evalHm {
-              ai.claude = {
-                enable = true;
-                files2."literal/empty.md".content = {inherit text;};
-              };
-            }).config) ? "literal/empty.md") ["PRESENT" ""]
-        && !((deliveredFiles disabled.config) ? "AGENTS.md")
     );
 
     # L078: entry enable suppresses structured values and run content.
@@ -849,8 +808,8 @@ in {
           lib.mapAttrsToList
           (path: _: "${runtime}/${mode}/${path}")
           (lib.filterAttrs
-            (_: entry: entry.content._generated && entry.content._surface == null)
-            evaluated.config.ai.${runtime}.files);
+            (_: entry: entry.surface == null)
+            evaluated.config.ai.${runtime}._generatedFiles);
         failures = lib.concatMap (runtime: missing "devenv" runtime ++ missing "hm" runtime) harnessNames;
       in
         if failures == []

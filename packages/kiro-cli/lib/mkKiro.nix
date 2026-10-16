@@ -648,7 +648,7 @@
   # Shared assertion set for both backends: mutually exclusive inline/dir
   # pairs, hook file-name charset, package composition, and native option
   # guards.
-  # Steering entry shape/path validation now belongs to runtime-files.nix.
+  # Steering entry shape/path validation belongs to the files engine.
   mkAssertions = cfg: let
     # Assertion evaluation must not call a missing custom-package rollout
     # function before the dedicated assertion below can report that shape.

@@ -1,7 +1,7 @@
 # Shared backend transformer body. `lib.ai.app.hmTransform` and
 # `devenvTransform` both select it in app/default.nix; the `backend` argument
 # is the only thing that differs. One module owns the pool fold, the public
-# normalized options, package installation and delivery lowering, and the
+# normalized options, package installation and generated-file staging, and the
 # runtime supplies one delivery callback shared by both backends.
 #
 # Input record shape: see mkRuntime.nix, which owns it. `checkRecord.nix`
@@ -26,15 +26,9 @@
   options,
   ...
 }: let
-  adapters = import ../adapters {
-    inherit lib;
-    inherit (appRecord) pkgs;
-  };
   agent = import ../agent.nix {inherit lib;};
   aiCommon = import ../ai-common.nix {inherit lib;};
   aiTypes = import ../types.nix {inherit lib;};
-  deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
-  deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
   generatedFiles = import ./generatedFiles.nix {
     inherit lib;
@@ -42,7 +36,6 @@
   };
   hooks = import ../hooks.nix {inherit lib;};
   pathProvenanceNotice = import ../runtime-path-provenance-notice.nix appRecord.pkgs;
-  runtimeFiles = import ../runtime-files.nix {inherit lib;};
   runtimeModule = import ../../../packages/ai-module/lib/runtime.nix;
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
@@ -604,7 +597,7 @@
   });
   migrationConfig = migrationConfigFn callbackArgs;
   # Repository AGENTS.md targets have one cross-runtime owner. Public file
-  # entries for those paths arbitrate inside sharedAgentsMd.nix;
+  # entries for those paths arbitrate with the composer at layer 2;
   # letting their ordinary sinks lower the same target independently would
   # bypass whole-entry replacement and explicit disable at B7.
   sharedAgentsMdTargets =
@@ -614,10 +607,8 @@
         lib.attrByPath ["ai" "internal" "agentsMd"] {} config
       )
     else [];
-  runtimeSinkFiles = builtins.removeAttrs cfg.files sharedAgentsMdTargets;
   # `S` → `R`: the staged entries become layer-1 definitions over the
-  # runtime's one generated tree (the adapter builds it while the old path
-  # coexists). `S` is read only while the runtime is enabled.
+  # runtime's one generated tree. Disabled runtimes never read `S`.
   generatedArgs = {
     staged = cfg._generatedFiles;
     tree = cfg._generatedTree;
@@ -681,24 +672,9 @@ in {
   options.ai.${appRecord.name} = lib.recursiveUpdate (
     {
       _generatedFiles = generatedFiles.stagedOption;
-      _generatedTree = deliveryOptions.generatedTreeOption;
-      _maxBytes = deliveryOptions.maxBytesOption;
-      _ownPlans = deliveryOptions.ownPlansOption;
-      activation = lib.mkOption {
-        type = deliveryOptions.writerMapType;
-        default = {};
-        description = ''
-          The writers that materialize ${appRecord.name}'s owned files, keyed
-          by a name of your choosing. Each one declares the literal activation
-          entry or devenv task it becomes, where it sits in that backend's
-          ordering, and every ledger it has ever owned — so a surface that
-          drops to zero files still emits the writer that retracts what the
-          previous generation wrote. A writer that owns no files at all
-          declares a `command` instead. Writers run only while the runtime is
-          enabled, unless declared outside that gate with `runWhenDisabled`.
-        '';
-      };
-      checks = lib.genAttrs deliveryOptions.surfaces (surface:
+      _generatedTree = generatedFiles.generatedTreeOption;
+      _maxBytes = generatedFiles.maxBytesOption;
+      checks = lib.genAttrs generatedFiles.surfaces (surface:
         lib.mkOption {
           type = lib.types.lines;
           default = config.ai.checks.${surface};
@@ -711,50 +687,6 @@ in {
             `${appRecord.name}` and target-relative paths in `"$@"`.
           '';
         });
-      files = lib.mkOption {
-        type = deliveryOptions.fileMapType;
-        default = {};
-        apply = runtimeFiles.validateFiles appRecord.name;
-        description = ''
-          Final static files owned by ${appRecord.name}, keyed by a path relative
-          to the active backend root (HOME for Home Manager, project root for
-          devenv), and described rather than lowered: each entry says what
-          bytes it carries, the consumer facts that decide how it lands, and
-          which writer owns it if it is not a symlink. Setting
-          `content.enable = false` omits the file whatever supplies its bytes,
-          while retaining the record for inspection and later overrides. A
-          context or rule that would land in a file switched off this way is
-          reported as a warning naming a per-runtime way to withhold it.
-
-          Generated `content.text` and `content.source` are contributed at
-          `mkDefault` priority with every sibling field at ordinary priority,
-          so a consumer can replace the bytes, change the method, or do one
-          without the other. A `content.value` document is contributed at
-          ordinary priority or one `mkDefault` per leaf instead: a default on
-          the whole value, or on the whole content, is discarded outright by a
-          consumer's single leaf. See the `content` option's own description.
-        '';
-      };
-      methodFor = lib.mkOption {
-        type = lib.types.functionTo (lib.types.enum deliveryMethod.methods);
-        default = deliveryMethod.byRule;
-        defaultText = lib.literalExpression "lib.ai.deliveryMethod.byRule";
-        description = ''
-          Resolves how a file lands for every entry of
-          `ai.${appRecord.name}.files` that states no `method` of its own. It
-          receives `{backend, path, facts, default}`, where `default` is the
-          standard rule, so a replacement can override one case and DELEGATE
-          the rest rather than restating the rule. Replacing it never means
-          reimplementing ownership, deletion or pruning: those live below it,
-          in the router and the reconciler, which this function never names.
-          Replace it rather than add to it, with `lib.mkForce`; composing a
-          per-file exception is what `method` on the entry is for. Two
-          definitions are not a merge error in themselves — `functionTo`
-          merges the RESULTS, so two that agree are fine — but two that
-          disagree fail where the ROUTER calls the function rather than where
-          they were written.
-        '';
-      };
       internal = lib.mkOption {
         type = lib.types.submodule {
           options._integration_writable_roots = lib.mkOption {
@@ -853,34 +785,21 @@ in {
       sharedAgentsMdConfig
       {ai.${appRecord.name}.files2 = generatedFiles.layer1 generatedArgs;}
     ]))
-    (lib.optionalAttrs (options ? assertions) {
-      assertions = [
-        (generatedFiles.disjoint {
-          inherit (config.ai) files2;
-          old = lib.optionalAttrs cfg.enable (lib.filterAttrs (_path: runtimeFiles.isLive) runtimeSinkFiles);
-          option = "ai.${appRecord.name}.files";
-          inherit (generatedArgs) staged;
-        })
-      ];
-    })
-    # Lower once, including retirement writers declared by migrationConfig.
-    # Disabling a runtime removes every file claim and every ordinary writer;
-    # only explicit runWhenDisabled writers can drain prior ownership.
-    # Keep the selection inside VALUES so collecting module keys never forces
-    # the file or writer definitions it is still collecting.
-    (adapters.${backend} {
-      cfg =
-        cfg
-        // {
-          _generatedFiles = lib.optionalAttrs cfg.enable cfg._generatedFiles;
-          activation = lib.filterAttrs (_name: writer: cfg.enable || writer.runWhenDisabled) cfg.activation;
-          files =
-            if cfg.enable
-            then runtimeSinkFiles
-            else {};
-        };
-      inherit config options;
-      runtime = appRecord.name;
-    })
+    {
+      ai.${appRecord.name}._generatedTree =
+        if cfg.enable
+        then
+          generatedFiles.tree {
+            inherit backend config;
+            inherit (cfg) checks;
+            entries = generatedFiles.treeEntries {
+              inherit (config.ai) files2;
+              inherit (generatedArgs) staged;
+            };
+            maxBytes = cfg._maxBytes;
+            runtime = appRecord.name;
+          }
+        else null;
+    }
   ];
 }

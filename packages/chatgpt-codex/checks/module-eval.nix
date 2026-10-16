@@ -2332,10 +2332,6 @@ in {
     # The internal tree is built with that limit and fails past it.
     module-codex-shared-byte-limit-covers-kiro-only-content = let
       hint = "Trim the contributing context or rules, replace the final file, or raise the runtime's document-size limit.";
-      limit."AGENTS.md" = {
-        bytes = 16;
-        inherit hint;
-      };
       oversized = evalDevenv {
         ai = {
           codex = {
@@ -2352,8 +2348,8 @@ in {
       tree = deliveredTree oversized "AGENTS.md";
       failure = pkgs.testers.testBuildFailure tree;
     in
-      assert lib.assertMsg (oversized.config.ai.internal._maxBytes == limit)
-      "codex-shared-byte-limit-covers-kiro-only-content: ai.internal._maxBytes is not Codex's limit on AGENTS.md";
+      assert lib.assertMsg (oversized.config.ai.internal.agentsMd."AGENTS.md".maxBytes == 16)
+      "codex-shared-byte-limit-covers-kiro-only-content: shared AGENTS.md does not carry Codex's byte limit";
       assert lib.assertMsg (fromGeneratedTree "AGENTS.md" (deliveredFiles oversized.config)."AGENTS.md")
       "codex-shared-byte-limit-covers-kiro-only-content: AGENTS.md is not delivered from a tree carrying its limit";
       assert lib.assertMsg (!((deliveredFiles empty.config) ? "AGENTS.md"))

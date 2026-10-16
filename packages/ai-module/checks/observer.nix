@@ -1,22 +1,15 @@
 # PR 3 chunk 4: the devenv observer (L168, L169). Its graph edges are asserted
 # here; observer.py executes the generated snapshot and inspect tasks on real
-# directories for an engine path, an old path and an unclaimed recursive one.
+# directories for layer-1 entries and an unclaimed recursive entry.
 {
   harness,
   lib,
   pkgs,
   ...
 }: let
-  shared = {
-    ai.codex = {
-      enable = true;
-      files."seeded".content.text = "seeded";
-    };
-    files."seeded".copyMode = "seed";
-  };
-  # `before` declares every observed path; `after` retires them all, hands
-  # `probe` to the consumer and turns the `moved.json` link into an owned
-  # engine copy, neither of which is a removal.
+  shared = {ai.codex.enable = true;};
+  # `after` retires the observed links and turns `moved.json` into an owned
+  # engine copy. An unclaimed consumer link stays outside observation.
   configs = {
     after = lib.recursiveUpdate shared {
       ai.files2."moved.json" = {
@@ -24,12 +17,11 @@
         format = "json";
         method = "rw";
       };
-      files."probe".text = "consumer";
+      files."consumer.md".text = "consumer";
     };
     before = lib.recursiveUpdate shared {
       ai.codex = {
-        files = lib.genAttrs ["moved.json" "old.md" "probe"] (name: {content.text = name;});
-        files2."new.md".content.text = "new";
+        files2 = lib.genAttrs ["moved.json" "new.md"] (name: {content.text = name;});
       };
       ai.files2.tree = {
         content.source = ./fixtures/tree;

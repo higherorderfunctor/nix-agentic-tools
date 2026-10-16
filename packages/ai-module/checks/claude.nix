@@ -49,7 +49,6 @@
       mode = config.home.activation.ai2-claude-config-mode.text or "";
     };
   in
-    assert enabled.ai.claude.files == {} && enabled.ai.claude.activation == {};
     assert if settings == {}
     then !(enabled.ai.files2 ? ".claude.json")
     else enabled.ai.files2.".claude.json".method == "rw" && enabled.ai.files2.".claude.json".content.value == settings;

@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-15 — every runtime stages its generated files;
 > layer-1 defaults preserve structured siblings and discarded-source laziness;
-> runtime surfaceSupport declarations own normalized backend reach.
+> runtime surfaceSupport declarations own normalized backend reach; ai-module
+> alone validates and lowers the final entries after the old path removal.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -17,27 +18,27 @@ This matrix is the authoritative cross-runtime merge and fanout contract. Any
 change to one of these boundaries must update the corresponding row in the same
 commit.
 
-| ID  | Boundary                                          | Unit    | Behavior                                                                                                                                          |
-| --- | ------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0  | root pool → runtime lacking that pool             | pool    | Warn for a non-empty request and lower to the neutral value; the per-runtime option does not exist.                                               |
-| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                              |
-| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
-| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
-| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                    |
-| B4  | `ai.programs.<pkg>` ↔ `runtimes.<runtime>`        | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
-| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
-| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
-| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
-| B6a | normalized rule trigger → native inclusion        | field   | The first supported `inclusion` entry wins; `fileMatch` consumes `matcher` and lowers to native scope or Codex routing prose.                     |
-| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses the file with `content.enable = false`. |
-| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                    |
-| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                            |
-| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                                                |
+| ID  | Boundary                                          | Unit    | Behavior                                                                                                                      |
+| --- | ------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| B0  | root pool → runtime lacking that pool             | pool    | Warn for a non-empty request and lower to the neutral value; the per-runtime option does not exist.                           |
+| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                          |
+| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.           |
+| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                |
+| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                |
+| B4  | `ai.programs.<pkg>` ↔ `runtimes.<runtime>`        | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                         |
+| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                         |
+| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                             |
+| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                             |
+| B6a | normalized rule trigger → native inclusion        | field   | The first supported `inclusion` entry wins; `fileMatch` consumes `matcher` and lowers to native scope or Codex routing prose. |
+| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults content and metadata; a consumer replaces bytes or fields, or suppresses the entry with `enable = false`.  |
+| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                |
+| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                        |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                            |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit used to be
 the complete rendered native file; it is now the delivery entry's fields, and
-its text/source content uses the same explicit enable gate as authored prose.
-That does not change the nullable-scalar inheritance contract in B4 or B5.
+its entry-level enable gate suppresses every content form. That does not change
+the nullable-scalar inheritance contract in B4 or B5.
 
 ### Keyed-pool rule
 
@@ -192,9 +193,10 @@ and out of the package provenance guard.
   `ai.programs.<pkg>.runtimes.<runtime>` leaves are nullable scalars.
   `resolveOverride` interprets runtime null as **inherit**, not delete; a
   non-null runtime scalar wins.
-- `ai.<runtime>.files` is a final per-runtime output registry, not a portable
-  root pool. Priority chooses one atomic nullable entry per backend-relative
-  path; repeated text never concatenates. There is no root `ai.files` fanout.
+- `ai.<runtime>.files2` forwards final entries into `ai.files2`; it is not a
+  portable root pool. Ordinary module priorities merge fields, with content
+  alternatives chosen by priority and structured values merged per leaf.
+  Entry-level `enable = false` suppresses delivery.
 
 Do not generalize keyed-pool tombstones to these surfaces without redesigning
 and testing their distinct composition contracts.
@@ -228,37 +230,23 @@ until priority arbitration selects it.
 `lib/ai/app/default.nix` selects `mkBackendTransform.nix` once per backend; pool
 logic lives only in that shared body.
 
-B7's type lives in `lib/ai/delivery-options.nix`; `lib/ai/runtime-files.nix`
-owns path and content validation, enable filtering, and the shape one entry
-takes in a native sink; `lib/ai/deliver.nix` and the two adapters own the
-lowering. Package callbacks may render entries into the runtime map but must not
-read that map to define normalized inputs; keeping the edge one-way is what
-makes the module fixed point evaluable.
+B7 uses the files engine entry type in
+`packages/ai-module/lib/files/default.nix`. The layer-1 helper
+`packages/ai-module/lib/runtime.nix` forwards entries and records owner claims;
+backend lowering lives under `packages/ai-module`. Package callbacks stage
+entries but must not read the final map to define normalized inputs: that
+one-way edge keeps the module fixed point evaluable.
 
-Runtime delivery options, including downstream app records, define the path
-claim inventory. Two enabled runtimes claiming the same live file path fail
-evaluation on both backends, even if their bytes match. Disabled entries (the
-same `runtimeFiles.isLive` rule the router uses) and disabled runtimes do not
-participate. A shared repository context target is the sole exception: each
-claimant's record declares that target as the `key` its `sharedAgentsMd`
-callback returns, which the builder publishes in `ai.internal.agentsMdTargets`
-(not `context.filename`, which for Kimchi names the Home Manager harness file
-while devenv always writes `AGENTS.md`), and all claimants must select the same
-method. The aggregate's native owner uses `symlink`; a public override cannot
-silently select an owned-file method.
-
-Repository-local `AGENTS.md` is the shared-target exception, not a B7 exception.
-`sharedAgentsMd.nix` admits applicable public entries from enabled runtimes
-discovered from their delivery options into its hidden final map before the one
-native sink; a disabled runtime's declared map remains inert. The generated
-composition is a lazy default there, so ordinary replacements and disabled
-records arbitrate at B7 without reading discarded source-backed generator
-content; equal runtime entries deduplicate and divergent ones fail. Byte limits
-are keyed by path and checked on the surviving final entry's BUILT file in the
-tree that delivers it (formatted for a selected type, or measured without
-formatting when it is `raw`, as a replacement that states no `format` is),
-inline or store-backed alike; nothing is measured at eval, so a store-backed
-`source` stays lazy without IFD.
+Two owners claiming the same path fail evaluation even when their bytes match. A
+disabled runtime forwards no entries or claims. A declared disabled entry still
+claims its path, allowing the engine to retire its state. Shared repository
+context keys are the exception: the composer owns them as `internal`, and
+participating runtime entries forward without claims. The composer stages its
+composition as a lazy `ro` Markdown default. Ordinary replacements or
+`enable = false` discard composed sources unread; agreeing runtime definitions
+merge and divergent definitions conflict. Generated byte limits inspect built
+tree files; consumer layer-1 and layer-2 replacements bypass that tree and its
+checks.
 
 ### Adding a normalized pool
 

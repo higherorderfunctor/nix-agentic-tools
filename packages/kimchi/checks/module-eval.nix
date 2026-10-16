@@ -153,12 +153,12 @@
           else null;
         rejectedAttempt = builtins.tryEval (builtins.deepSeq (checkModuleAssertions rejected) true);
         hmAcceptedAttempt = builtins.tryEval (builtins.deepSeq
-          (evalHm {
+          (hmHarnessSettings (evalHm {
             ai.kimchi = {
               enable = true;
               native.harnessSettings = lib.setAttrByPath [key] (userScopeOnlyHarnessSettingValue key);
             };
-          }).config.ai.files2
+          }))
           true);
         acceptedAttempt = builtins.tryEval (builtins.deepSeq (checkModuleAssertions (evalDevenv {
             ai.kimchi = {
@@ -346,8 +346,7 @@ in {
               && !(file.recursive or false)
               && evaluated.config.ai.kimchi._generatedFiles ? ${path}
               && evaluated.config.ai.files2.${path}.method == "symlink"
-              && evaluated.config.ai.files2Owners.${path} == ["kimchi"]
-              && !(evaluated.config.ai.kimchi.files ? ${path}))
+              && evaluated.config.ai.files2Owners.${path} == ["kimchi"])
             names;
           rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "${workflows}";}).config.ai.kimchi.extensions true);
         in
@@ -590,10 +589,6 @@ in {
         && fileValue ".config/kimchi/harness/permissions.json" evaluated == {}
         && !(lib.any (lib.hasPrefix ".config/kimchi/harness/") (builtins.attrNames evaluated.config.home.file))
         && devenv.config.ai.files2 == {}
-        && evaluated.config.ai.kimchi.files == {}
-        && evaluated.config.ai.kimchi.activation == {}
-        && devenv.config.ai.kimchi.files == {}
-        && devenv.config.ai.kimchi.activation == {}
     );
 
     module-kimchi-hm-requires-region = mkTest "kimchi-hm-requires-region" (
@@ -1027,7 +1022,6 @@ in {
         && !(result.config.files ? ".kimchi/mcp.json")
         && files ? ".kimchi/skills/example/SKILL.md"
         && result.config.ai.files2Owners.".kimchi/skills/example" == ["kimchi"]
-        && !(result.config.ai.kimchi.files ? ".kimchi/skills/example")
         && files ? "AGENTS.md"
         && !(files ? "custom.md")
         && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))
@@ -1314,8 +1308,7 @@ in {
             && entry.mode == null
             && entry.executable == null
             && fromGeneratedTree path (agentFiles dir evaluated).${path}
-            && (markdownInput evaluated path).text == expected.${name}
-            && !(evaluated.config.ai.kimchi.files ? ${path}))
+            && (markdownInput evaluated path).text == expected.${name})
           (lib.attrNames expected);
         emptyHm = evalHm {ai.kimchi.enable = true;};
         emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
@@ -1352,8 +1345,6 @@ in {
         && !(hm.config.home.activation ? kimchiAgents)
         && !(hm.config.home.activation ? kimchiAgentsPrune)
         && !(devenv.config.tasks ? "ai:kimchi:agents")
-        && !(hm.config.ai.kimchi.activation ? kimchiAgents)
-        && !(devenv.config.ai.kimchi.activation ? kimchiAgents)
         && underAgents ".config/kimchi/harness/agents" (builtins.attrNames hm.config.home.file) == []
         && underAgents ".kimchi/agents" (builtins.attrNames devenv.config.files) == []
         && agentFiles hmAgentsDir emptyHm == {}
