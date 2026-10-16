@@ -14,8 +14,8 @@
   aiTypes = import ./types.nix {inherit lib;};
   deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
   formats = import ./formats.nix {inherit lib pkgs;};
+  generatedFiles = import ./app/generatedFiles.nix {inherit lib pkgs;};
   helpers = import ./hm-helpers.nix {inherit lib;};
-  generated = import ../generated.nix {inherit lib;} pkgs;
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
 
   # The methods this layer delivers today. The assertion below is an
@@ -68,10 +68,10 @@ in
     # Disabled records are not files; everything below sees live entries only.
     live = lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files;
 
-    # Every build-time whole file enters one store tree per invocation.
-    # Runtime-rendered `run` files have no bytes in this build sandbox, and
-    # shared entries are reconciled leaves rather than whole files.
-    limits = cfg._maxBytes;
+    # Every build-time whole file enters the runtime's one store tree
+    # (generatedFiles.nix), beside its staged entries. Runtime-rendered `run`
+    # files have no bytes in this build sandbox, and shared entries are
+    # reconciled leaves rather than whole files.
     resolvedMethod = path: entry:
       deliveryMethod.resolve {
         inherit backend entry path;
@@ -79,42 +79,23 @@ in
       };
     treeEntries = lib.filterAttrs (path: entry: entry.content.run == null && resolvedMethod path entry != "shared") live;
     treefmt = config.ai.internal.formatter;
-    guards = config.ai.guards;
-    mkTree = kind: entries: processing:
-      generated.mkTree ({
-          name = "ai-${backend}-${runtime}-${kind}";
-          files = lib.mapAttrs (path: entry:
-            (
-              aiTypes.textSourceFile (
-                if entry.content.value != null
-                then
-                  formats.render {
-                    inherit path;
-                    inherit (entry) format;
-                    inherit (entry.content) value;
-                  }
-                else entry.content
-              )
-            )
-            // {
-              surface = entry.content._surface;
-              type =
-                if entry.recursive
-                then "raw"
-                else entry.format;
-            })
-          entries;
-          maxBytes = lib.filterAttrs (path: _limit: entries ? ${path}) limits;
-          inherit guards runtime treefmt;
-        }
-        // processing);
-    tree =
-      if treeEntries == {}
-      then null
-      else
-        mkTree "generated" treeEntries {
-          inherit (cfg) checks;
-        };
+    tree = generatedFiles.tree {
+      inherit backend config runtime;
+      inherit (cfg) checks;
+      entries =
+        lib.mapAttrs (_path: entry: {
+          content =
+            if entry.content.value != null
+            then {inherit (entry.content) value;}
+            else aiTypes.textSourceFile entry.content;
+          inherit (entry) format recursive;
+          surface = entry.content._surface;
+        })
+        treeEntries
+        # The shared AGENTS.md composer stages nothing.
+        // generatedFiles.treeEntries (cfg._generatedFiles or {});
+      maxBytes = cfg._maxBytes;
+    };
     treeOf = path:
       if treeEntries ? ${path}
       then tree

@@ -14,6 +14,7 @@
   aiBase = import ../ai {inherit lib;};
   aiTypes = import ../ai/types.nix {inherit lib;};
   deliveryMethod = import ../ai/deliveryMethod.nix {inherit lib;};
+  files2 = import ../../packages/ai-module/lib/files/default.nix {inherit lib pkgs;};
   # The runtime registry, shared with lib/ai/sharedOptions.nix and
   # checks/modules/options-doc.nix. Importing it rather than restating the five names
   # is what makes the tests below GROW when a sixth runtime lands: a hardcoded
@@ -354,6 +355,22 @@
   # escapes its separator, so this is a true literal search. Use it whenever
   # the needle is shell syntax rather than prose.
   hasLiteral = needle: hay: builtins.length (lib.splitString needle hay) > 1;
+  # The `ro`/`rw` entries of the normalized `ai.files2` plan, the ones the
+  # engine writes; `claimedBy` keeps those under a key the runtime's layer 1
+  # claims (a recursive key claims its leaves).
+  engineEntries = config:
+    lib.filter (item: item.method != "symlink") (files2.normalize {
+      backend =
+        if config ? home
+        then "hm"
+        else "devenv";
+      files = config.ai.files2;
+      namespace = "ai";
+      owners = config.ai.files2Owners;
+    });
+  claimedBy = runtime: config: item:
+    lib.any (key: item.path == key || lib.hasPrefix "${key}/" item.path)
+    (builtins.attrNames (lib.filterAttrs (_path: owners: lib.elem runtime owners) config.ai.files2Owners));
   # The `own` plan ONE writer applies, as recorded by `helpers.mkOwnBundle`:
   # `bash` plus the ordered targets, with each target's codec, path, ledger and
   # units. The plan FILE is a derivation, so reading it back would be
@@ -364,11 +381,23 @@
   #
   # It THROWS on an absent entry rather than defaulting to `{}`: a renamed or
   # dropped writer must fail a check, never satisfy one with an empty plan.
-  ownPlan = runtime: entry: evaluated:
-    (lib.attrByPath ["ai" runtime "_ownPlans" entry]
-      (throw "module-test: config.ai.${runtime}._ownPlans.\"${entry}\" is missing")
-      evaluated.config)
-    .plan;
+  #
+  # The entry `files2-apply` names the files engine, which writes every `ro`
+  # and `rw` entry of `ai.files2`: its `targets` are the normalized plan
+  # entries under the runtime's layer-1 claims, each `{path; method; content;
+  # format; mode; ...}`.
+  ownPlan = runtime: entry: evaluated: let
+    targets = lib.filter (claimedBy runtime evaluated.config) (engineEntries evaluated.config);
+  in
+    if entry != "files2-apply"
+    then
+      (lib.attrByPath ["ai" runtime "_ownPlans" entry]
+        (throw "module-test: config.ai.${runtime}._ownPlans.\"${entry}\" is missing")
+        evaluated.config)
+      .plan
+    else if targets == []
+    then throw "module-test: ai.${runtime} claims no ro or rw entry of ai.files2"
+    else {inherit targets;};
   # What one writer's plan will assert into one runtime-writable document:
   # `{ledger, value}`, found by the document PATH rather than by the writer's
   # entry name, because that is the identity a settings check cares about.
@@ -377,7 +406,9 @@
   # `builtins.toJSON value`, and `builtins.fromJSON` refuses a string that
   # refers to a store path — so it is read from the same record's `declared`
   # map, which the `mkOwnBundle` caller fills from the value it serialized.
+  # An `rw` entry of `ai.files2` the runtime claims has no ledger: `{value}`.
   ownedDocument = runtime: path: evaluated: let
+    engine = lib.findFirst (item: item.path == path && item.method == "rw" && claimedBy runtime evaluated.config item) null (engineEntries evaluated.config);
     plans =
       lib.attrByPath ["ai" runtime "_ownPlans"]
       (throw "module-test: config.ai.${runtime}._ownPlans is missing")
@@ -391,7 +422,9 @@
       })
       (lib.filter (target: target.codec != "dir" && target.path == path) record.plan.targets)) (lib.attrValues plans);
   in
-    if lib.length hits == 1
+    if engine != null
+    then {inherit (engine.content) value;}
+    else if lib.length hits == 1
     then lib.head hits
     else throw "module-test: expected exactly one ai.${runtime} document plan for \"${path}\", found ${toString (lib.length hits)}";
   # A Claude JSON document as delivered on either backend: the value its
@@ -422,10 +455,12 @@
   # Every file a backend delivers, whichever writer lands it: the native sink
   # entries for symlinks (devenv `files`, Home Manager `home.file`), plus each
   # unit of an owned writer's directory plan for a read-only copy, as `{text}`
-  # or `{source}` plus its `mode`. The shared AGENTS.md owner (`ai.internal`)
-  # is a writer like any runtime. Read it where a check asks what reaches the
-  # tree rather than how: a file that moves from a symlink to a copy stays
-  # where the check looks. Takes the evaluated `config`.
+  # or `{source}` plus its `mode`, plus each `ro`/`rw` entry of `ai.files2`
+  # as its normalized content plus its `method` and `mode`. The shared
+  # AGENTS.md owner (`ai.internal`) is a writer like any runtime. Read it where
+  # a check asks what reaches the tree rather than how: a file that moves from
+  # a symlink to a copy stays where the check looks. Takes the evaluated
+  # `config`.
   deliveredFiles = config: let
     copiesOf = target:
       lib.optionals (target.codec == "dir") (lib.mapAttrsToList (address: unit: {
@@ -443,8 +478,9 @@
       lib.concatMap (record: lib.concatMap copiesOf record.plan.targets)
       (builtins.attrValues plans))
     (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) (harnessNames ++ ["internal"]));
+    engine = map (item: lib.nameValuePair item.path (item.content // {inherit (item) method;} // lib.optionalAttrs (item.mode != null) {inherit (item) mode;})) (engineEntries config);
   in
-    builtins.listToAttrs copies // (config.files or config.home.file);
+    builtins.listToAttrs (copies ++ engine) // (config.files or config.home.file);
   # The actual generated-tree derivation that supplies a delivered file. The
   # source equality keeps this tied to the sink rather than merely selecting a
   # same-runtime tree with a copied build recipe.
@@ -467,10 +503,16 @@
   # `deliveredFiles` / `home.file`. Found by the final entry: the shared
   # AGENTS.md owner (`ai.internal`) wins; otherwise exactly one enabled runtime
   # must carry the path. Every live build-time entry is in the tree, whatever
-  # its format; `run` content and `shared` document leaves are not. Takes the
-  # evaluated module (`evalHm …`, `evalDevenv …`).
+  # its format; `run` content and `shared` document leaves are not. A path a
+  # runtime's layer 1 claims is read from that runtime's staged entry
+  # (`_generatedFiles`), the input of the same tree. Takes the evaluated module
+  # (`evalHm …`, `evalDevenv …`).
   markdownInput = evaluated: path: let
     inherit (evaluated) config;
+    claims = config.ai.files2Owners.${path} or [];
+    staged =
+      config.ai.${lib.head claims}._generatedFiles.${path}
+      or (throw "module-test: \"${path}\" is not a staged generated entry of ai.${lib.head claims}");
     owners =
       lib.filter (runtime: (config.ai.${runtime}.enable or false) && (config.ai.${runtime}.files or {}) ? ${path})
       harnessNames;
@@ -491,7 +533,12 @@
       methodFor = cfg.methodFor or deliveryMethod.byRule;
     };
   in
-    if !entry.content.enable
+    if claims != []
+    then
+      if staged.enable && builtins.elem staged.content._choice ["source" "text"]
+      then {${staged.content._choice} = staged.content.${staged.content._choice};}
+      else throw "module-test: \"${path}\" is not a live staged text or source entry"
+    else if !entry.content.enable
     then throw "module-test: \"${path}\" is not a live generated tree entry (disabled)"
     else if entry.content.run != null
     then throw "module-test: \"${path}\" is not a live generated tree entry (`run` content)"

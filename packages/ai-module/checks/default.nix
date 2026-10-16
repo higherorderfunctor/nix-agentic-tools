@@ -4,6 +4,7 @@
     ./activation-hm.nix
     ./devenv.nix
     ./eval.nix
+    ./generated-files.nix
     ./hm.nix
     ./legacy.nix
     ./matrix.nix

@@ -30,6 +30,8 @@ in {
       type = lib.types.listOf files2.legacyLedgerType;
       default = [];
       internal = true;
+      # Internal alone still lists the entry's sub-options in option docs.
+      visible = false;
     };
   };
 }

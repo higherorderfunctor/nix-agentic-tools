@@ -17,6 +17,8 @@
   contentTargets ? {},
   sharedTargets ? [],
   hasContext ? false,
+  # Per staged path, the content `ai.<runtime>._generatedFiles` gives layer 1.
+  generatedContent ? {},
 }: let
   aiCommon = import ./ai-common.nix {inherit lib;};
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
@@ -166,12 +168,28 @@
     if builtins.elem path sharedTargets
     then lib.findFirst overrides runtime (lib.sort lib.lessThan candidates)
     else runtime;
+  # A staged path is carried by its final layer-1 entry: switched off by its
+  # `enable`, replaced when its winning content is not the generated one. A
+  # consumer value leaf merges with the generated document; it never replaces it.
+  generatedDropReason = path: let
+    entry = cfg.files2.${path};
+    choice = entry.content._choice;
+    generated = generatedContent.${path};
+    option = suffix: lib.showOption (["ai" runtime "files2" path] ++ suffix);
+  in
+    if !entry.enable
+    then "${option ["enable"]} = false switches off `${path}`, the file that carries it"
+    else if choice != null && (!(generated ? ${choice}) || (choice != "value" && entry.content.${choice} != generated.${choice}))
+    then "${option ["content"]} replaces `${path}`, the file that carries it, with its own bytes"
+    else null;
   # The reason a unit's file does not carry it, or null when it does.
   dropReason = path: let
     entry = finalEntry path;
-    option = test: tail: lib.showOption (["ai" (overridingRuntime test path) "files" path] ++ tail);
+    option = test: suffix: lib.showOption (["ai" (overridingRuntime test path) "files" path] ++ suffix);
   in
-    if entry == null
+    if generatedContent ? ${path}
+    then generatedDropReason path
+    else if entry == null
     then null
     else if switchedOff entry
     then "${option switchedOff ["content" "enable"]} = false switches off `${path}`, the file that carries it"
