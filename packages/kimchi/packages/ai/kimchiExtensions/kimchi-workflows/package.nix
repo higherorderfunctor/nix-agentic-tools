@@ -7,12 +7,34 @@
   ...
 }: let
   inherit (pkgs) lib;
-  pnpm = pkgs.ai.generic.pnpm_10;
+  upstreamManifest = builtins.fromJSON (builtins.readFile "${src}/package.json");
+  requestedPnpm = upstreamManifest.kimchiWorkflows.packageManager or upstreamManifest.packageManager;
+  pnpmMatch = builtins.match "pnpm@([0-9]+)\\..*" requestedPnpm;
+  pnpmAttr = "pnpm_${builtins.head pnpmMatch}";
+  pnpm =
+    if pnpmMatch == null
+    then throw "kimchi-workflows: expected pnpm@<major>.<version>, got ${requestedPnpm}"
+    else if !(builtins.hasAttr pnpmAttr pkgs.ai.generic)
+    then throw "kimchi-workflows: ${requestedPnpm} requires unavailable pkgs.ai.generic.${pnpmAttr}"
+    else pkgs.ai.generic.${pnpmAttr};
+  runtimePnpm = pkgs.writeShellScriptBin "kimchi-workflows-pnpm" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    export PATH="${lib.makeBinPath [pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nodejs]}''${PATH:+:$PATH}"
+    exec ${lib.getExe pnpm} "$@"
+  '';
   inherit (extractedLib {inherit pkgs;}) get load;
   inherit (load {dir = ../../../../extracted;}) aggregate;
   virtualPackages = pkgs.writeText "pi-virtual-packages.json" (builtins.toJSON (get aggregate "virtualPackages"));
   sources = builtins.fromJSON (builtins.readFile ../../../../workflows-sources.json);
   sourcesFile = repoPath ../../../../workflows-sources.json;
+  src = pkgs.fetchFromGitHub {
+    owner = "getkimchi";
+    repo = "kimchi-workflows";
+    name = "${versionedName}-source";
+    inherit (sources) rev;
+    hash = sources.srcHash;
+  };
   versionedName = "kimchi-workflows-${sources.version}-${builtins.substring 0 7 sources.rev}";
   fixPnpmDepsHash = packageLib.mkHashFix {
     attr = "kimchi-workflows";
@@ -25,17 +47,19 @@ in
   pkgs.stdenv.mkDerivation (finalAttrs: {
     pname = "kimchi-workflows";
     inherit (sources) version;
-    src = pkgs.fetchFromGitHub {
-      owner = "getkimchi";
-      repo = "kimchi-workflows";
-      name = "${versionedName}-source";
-      inherit (sources) rev;
-      hash = sources.srcHash;
-    };
-    patches = [./native-preflight.patch ./step-thinking.patch];
+    inherit src;
+    patches = [./native-preflight.patch ./pnpm-runtime.patch ./step-thinking.patch];
+    patchFlags = ["-p1" "--fuzz=0"];
     postPatch = ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      substituteInPlace src/host/workflow-package-manager.ts \
+        --replace-fail '@node@' '${lib.getExe pkgs.nodejs}'
+      substituteInPlace src/host/workflow-package-manager.ts test/nix-package-manager.test.ts \
+        --replace-fail '@pnpm@' '${lib.getExe runtimePnpm}'
+      substituteInPlace test/nix-package-manager.test.ts \
+        --replace-fail '@pnpmVersion@' '${pnpm.version}' \
+        --replace-fail '@shell@' '${pkgs.bash}/bin/bash'
       substituteInPlace src/host/workflow-package.ts test/nix-preflight.test.ts \
         --replace-fail '@workflowPackage@' "$out"
     '';
@@ -64,6 +88,8 @@ in
       const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
       manifest.version = '${finalAttrs.version}';
       manifest.nixSourceRev = '${sources.rev}';
+      manifest.packageManager = 'pnpm@${pnpm.version}';
+      manifest.kimchiWorkflows.packageManager = manifest.packageManager;
       fs.writeFileSync('package.json', JSON.stringify(manifest, null, 2) + '\n');
       JS
       pnpm run dist:metadata
@@ -75,7 +101,7 @@ in
       runHook preCheck
       pnpm run docs:check
       pnpm run typecheck
-      pnpm exec vitest run test/thinking.test.ts
+      pnpm exec vitest run test/thinking.test.ts test/nix-package-manager.test.ts
       runHook postCheck
     '';
     doInstallCheck = true;
