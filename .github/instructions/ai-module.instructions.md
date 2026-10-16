@@ -8,23 +8,22 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-15 — runtime factories stage moved surfaces in
-> `_generatedFiles` (Kiro context, steering, agents, skills and permissions
-> included) and forward them through the ai-module layer-1 helper over one
-> generated tree, which every staged entry's delivery requires; the shared
-> AGENTS.md composer is the layer-1 owner `internal` and the ai-module devenv
-> module writes the treefmt excludes; Copilot stages its instructions, declares
-> an agents gap and keeps both old ledgers, and Claude every surface including
-> HM `.claude.json` with both legacy ledgers; the root-option provenance guard
-> exempts the ai-module layer-1 forwarding helper for its forwarded options;
-> option declarations supply policy surfaces and keyed withdrawal; runtime
-> declarations supply normalized policy gaps and the warning suite generates
-> coverage for every runtime, surface and backend; a record's `optionNamespaces`
-> places launcher and pool options, and `ai.copilot` is github.com Copilot with
-> its pools under `ai.copilot.github`; explicit normalized overrides warn for
-> live explicit contributions on unavailable backends, excluding empty or
-> disabled contributions beside inherited folds; the coexistence assertion
-> counts a switched-off staged path for its layer-1 entry and engine state, not
-> for tree bytes.
+> `_generatedFiles` (every Kiro surface included) and forward them through the
+> ai-module layer-1 helper over one generated tree, which every staged entry's
+> delivery requires; the shared AGENTS.md composer is the layer-1 owner
+> `internal` and the ai-module devenv module writes the treefmt excludes;
+> Copilot stages its instructions, declares an agents gap and keeps both old
+> ledgers, and Claude every surface including HM `.claude.json` with both legacy
+> ledgers; the root-option provenance guard exempts the ai-module layer-1
+> forwarding helper for its forwarded options; option declarations supply policy
+> surfaces and keyed withdrawal; runtime declarations supply normalized policy
+> gaps and the warning suite generates coverage for every runtime, surface and
+> backend; a record's `optionNamespaces` places launcher and pool options, and
+> `ai.copilot` is github.com Copilot with its pools under `ai.copilot.github`;
+> explicit normalized overrides warn for live explicit contributions on
+> unavailable backends, excluding empty or disabled contributions beside
+> inherited folds; the coexistence assertion counts a switched-off staged path
+> for its layer-1 entry and engine state, not for tree bytes.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -195,12 +194,12 @@ and only writers with that explicit opt-in; ordinary command and owned writers
 remain gated. An opted-in owned writer therefore receives empty targets, so
 ordinary retraction removes only what the previous generation's ledger recorded
 and then drops the ledger. It cannot emit product files while disabled. The
-remaining caller is Codex's execpolicy writer. Kiro declares its steering ledger
-unconditionally in `legacyLedgers`, so the files engine drains it even when Kiro
-is disabled on the first upgrade. A ledger-owned copy outlives a disable unless
-its writer opts in, because Home Manager's generation diff and
-`devenv:files:cleanup` only remove links. On Home Manager a directory writer is
-a PAIR of entries: the prune phase deletes the real files before
+remaining caller is Codex's execpolicy writer. Kiro declares its hooks, settings
+and steering ledgers unconditionally in `legacyLedgers`, so the files engine
+drains them even when Kiro is disabled on the first upgrade. A ledger-owned copy
+outlives a disable unless its writer opts in, because Home Manager's generation
+diff and `devenv:files:cleanup` only remove links. On Home Manager a directory
+writer is a PAIR of entries: the prune phase deletes the real files before
 `checkLinkTargets`, the write phase unlinks the drained ledger. Kiro's legacy
 declaration and Codex's Home Manager writer derive the target from the current
 `configDir`, so a custom directory must remain unchanged for the generation that
@@ -1488,8 +1487,8 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 > the shared AGENTS.md composer reaches the files plan as the owner `internal`;
 > Claude stages every surface, including HM `.claude.json` as `rw`; the files
 > engine writes its rules copies on devenv; staged Markdown and raw entries are
-> whole-content defaults; Kiro stages context, steering, agents and permissions
-> beside its skills, with an ungated steering legacy ledger; hand rows are
+> whole-content defaults; Kiro stages every surface, with hooks, settings and
+> steering legacy ledgers declared outside its enable gate; hand rows are
 > confined to the policy-only permissions surface.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
@@ -1676,20 +1675,22 @@ rather than a second path field: a runtime names exactly the groups it moves.
   directory ledger. A document claimant's path and format must exactly match its
   JSON ledger: the ledger controls the actual destination and codec, so a
   mismatch would redirect output or silently change its ownership semantics.
-- **Kiro's settings files are read-only copies from one writer.** `kiroMcpJson`
-  owns `cli.json` and `mcp.json` through one directory ledger,
-  `materialize/kiro-settings.manifest`. Kiro's own writers rename a temporary
-  over either file, which replaces a symlink and a 0444 copy alike. A copy is
-  still the right method: the next activation or shell entry backs the in-app
-  file up and restores the declaration, while a symlink would block Home
-  Manager's link check or be skipped by devenv. Home Manager always claims both
-  user-global files (`{}` and an empty server map); devenv claims a project file
-  only when something is declared. `mcp.json` is 0400 with a URL secret,
-  otherwise 0444. Only this writer waits for secrets. The devenv renderer keeps
-  its project-root anchor for relative secret readers. Hooks state
-  `facts.symlinkReadable = false` because the v3 scan keeps only `isFile()`
-  entries, and their writer survives N→0. Permissions remain HM-only because
-  Kiro never reads them from project `.kiro/`.
+- **Kiro stages settings and hooks as read-only copies.** `cli.json` carries a
+  JSON value and `mcp.json` a `run` renderer through S → R → F. Kiro's own
+  writers rename a temporary over either file, which replaces a symlink and a
+  0444 copy alike. A copy is still the right method: the next activation or
+  shell entry backs the in-app file up and restores the declaration, while a
+  symlink would block Home Manager's link check or be skipped by devenv. Home
+  Manager always claims both user-global files (`{}` and an empty server map);
+  devenv claims a project file only when something is declared. `mcp.json` is
+  0400 with a URL secret, otherwise 0444. Engine apply waits for the secrets
+  point whenever the plan contains a renderer: HM includes `sops-nix`, and
+  devenv uses registered `secretNodes`. The renderer exports its backend root
+  and keeps devenv's project-root anchor for relative secret readers. Hooks
+  state `method = "ro"` because the v3 scan keeps only `isFile()` entries; the
+  engine retires them at N→0. Hooks, settings and steering ledgers are ungated
+  upgrade declarations. Permissions remain HM-only because Kiro never reads them
+  from project `.kiro/`.
 - **Claude project rules are read-only copies on devenv.** Claude's scoped-rule
   (`paths:`) loader passes `includeExternal: false` at Project scope, with no
   setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into
@@ -1709,13 +1710,13 @@ rather than a second path field: a runtime names exactly the groups it moves.
   with `runWhenDisabled = true`, so both N→0 and disabling Codex retract the
   copies; an `allow` policy must not outlive its declaration.
 - **Retirement can survive disable explicitly.** Kiro's `migrationConfig`
-  declares its steering `legacyLedgers` outside the enable gate. The engine
-  imports and retires those copies before native links. Codex's remaining
-  execpolicy writer uses `runWhenDisabled = true`. The adapter strips every file
-  claim and ordinary writer while disabled; the opted-in writer keeps both HM
-  phases or the existing devenv task. A directory ledger's unit basenames must
-  be unique; the router rejects collisions before a claimant can disappear into
-  the attribute map.
+  declares its hooks, settings and steering `legacyLedgers` outside the enable
+  gate. The engine imports and retires those copies before native links. Codex's
+  remaining execpolicy writer uses `runWhenDisabled = true`. The adapter strips
+  every file claim and ordinary writer while disabled; the opted-in writer keeps
+  both HM phases or the existing devenv task. A directory ledger's unit
+  basenames must be unique; the router rejects collisions before a claimant can
+  disappear into the attribute map.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use

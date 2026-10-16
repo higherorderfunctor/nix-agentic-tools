@@ -576,9 +576,7 @@
     cfg.hooksJson
     // lib.mapAttrs (_fileKey: envelope: builtins.toJSON envelope) (kiroTypedHookFiles cfg.hooks);
 
-  # A hook file name is a unit address in `.kiro/hooks`, and `own` already
-  # refuses one that is empty, dot-prefixed or path-separated. This charset is
-  # tighter on purpose and stays an ASSERTION rather than `own`'s throw: it is
+  # Hook names use a tighter charset than engine paths. Keep an ASSERTION: it is
   # the diagnostic a consumer gets for a `hooksDir` full of files Kiro's own
   # loader would choke on, and a named assertion names the option while a
   # throw from inside a plan does not. Require a leading alphanumeric then
@@ -598,7 +596,7 @@
   # something Kiro never loaded AND the old whole-dir prune never removed: nested
   # subdirectories are not recursed, non-`.json` entries (a README, a
   # `.gitkeep`) are not copied, and the installed mode is the
-  # materializer's read-only 0444 rather than 0644. The `.json` filter is
+  # engine's read-only 0444 rather than 0644. The `.json` filter is
   # also what keeps a `.gitkeep` from tripping the copy-mode name regex,
   # which bars leading dots.
   hooksDirEntries = dir:
@@ -610,11 +608,9 @@
     )
     (builtins.readDir dir);
 
-  # Lower whichever hook surface is set — inline (`hooks`/`hooksJson`) or the
-  # external `hooksDir` — into ONE unit set, so the two share a ledger and a
-  # consumer flipping between them prunes the previous surface's files instead
-  # of orphaning them. The two are mutually exclusive (see `mkAssertions`), so
-  # the branch never has to merge them.
+  # Lower inline hooks or hooksDir into one staged set, so switching surfaces
+  # retires the previous files. The two are mutually exclusive (see
+  # `mkAssertions`), so the branch never has to merge them.
   #
   # Delivery defaults to REAL files at the module's declared mode: the v3
   # engine's hook scan keeps only
@@ -628,10 +624,19 @@
         lib.nameValuePair "${name}.json" {text = content;})
       (mkAllHookFiles cfg);
 
-  # The engine imports old steering copies before native links are checked,
-  # including when Kiro is disabled on the first upgrade.
+  # Import every old copy ledger even when Kiro is disabled at first upgrade.
   kiroMigrationConfig = {cfg, ...}: {
     ai.kiro.legacyLedgers = [
+      {
+        codec = "dir";
+        ledger = "materialize/kiro-hooks.manifest";
+        path = hookTargetDir cfg;
+      }
+      {
+        codec = "dir";
+        ledger = "materialize/kiro-settings.manifest";
+        path = "${cfg.configDir}/settings";
+      }
       {
         codec = "dir";
         ledger = "materialize/kiro-steering.manifest";
@@ -996,13 +1001,10 @@
   # `cd "$DEVENV_ROOT"` the devenv materialize task used to run: a relative
   # credential `file`/`helper` path resolved against the PROJECT root there,
   # while under Home Manager it has always resolved against the activation's
-  # cwd. `own` never `cd`s, so the anchor moves to the renderer that needs it
-  # and the two backends keep the behavior each one had. NOTE:
-  # a credential url reads its secret at ACTIVATION, so a consumer wiring
-  # sops-nix/agenix must order this after the secret provider (P2). That
-  # ordering is still the consumer's to get right, but getting it WRONG is no
-  # longer silent: an unreadable or empty secret now fails activation loudly
-  # instead of writing `"url": ""` and leaving the server to fail at runtime.
+  # cwd. The renderer exports its root itself; the files engine only supplies
+  # the backend environment. Engine apply follows the secrets point (including
+  # sops-nix on HM); other providers register their native node there. An
+  # unreadable or empty secret fails activation loudly instead of writing `"url": ""` and leaving the server to fail at runtime.
   mkMcpJsonScript = {
     anchorRoot ? false,
     targetExpr,
@@ -1076,6 +1078,11 @@
     aiCommon.scopedActivation ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      export NAT_OWN_ROOT="${
+        if anchorRoot
+        then "$DEVENV_ROOT"
+        else "$HOME"
+      }"
       ${lib.optionalString anchorRoot ''
         cd "$NAT_OWN_ROOT"
       ''}TARGET="${targetExpr}"
@@ -1735,40 +1742,7 @@ in
               }).warnings;
           })
           {
-            # Writer identities survive empty declarations: N→0 must retract
-            # earlier files, including when the final hook disappears.
-            ai.kiro.activation = {
-              kiroMcpJson = {
-                # URL credentials are read at activation, unlike launcher header
-                # secrets. Only this writer waits for the HM secret provider.
-                after = ["secrets"];
-                entry = {
-                  devenv = "ai:kiro:materialize-mcp";
-                  hm = "kiroMcpJson";
-                };
-                # cli.json and mcp.json. The directory stays writable because
-                # Kiro keeps state beside them (feed_state.json, cli.json.lock).
-                ledgers."materialize/kiro-settings.manifest" = {
-                  codec = "dir";
-                  path = settingsDir;
-                };
-                pruneEntry.hm = "materialize-kiro-settings-prune";
-              };
-              materialize-kiro-hooks-write = {
-                entry = {
-                  devenv = "ai:kiro:materialize-hooks";
-                  hm = "materialize-kiro-hooks-write";
-                };
-                ledgers."materialize/kiro-hooks.manifest" = {
-                  codec = "dir";
-                  path = hookTargetDir cfg;
-                };
-                pruneEntry.hm = "materialize-kiro-hooks-prune";
-              };
-            };
-          }
-          {
-            ai.kiro.files = lib.mkMerge [
+            ai.kiro._generatedFiles = lib.mkMerge [
               {
                 # Every key Kiro writes into cli.json is configuration (model,
                 # effort, toggles, UI preferences), so the file is Nix's
@@ -1780,60 +1754,40 @@ in
                 # always owns the user-global file; devenv takes the project
                 # file only when something is declared.
                 "${settingsDir}/cli.json" = lib.mkIf (isHm || flatSettings != {}) {
-                  content = {
-                    _generated = true;
-                    _surface = "settings";
-                    value = flatSettings;
-                  };
-                  entry = "kiroMcpJson";
+                  content.value = flatSettings;
                   format = "json";
-                  ledger = "materialize/kiro-settings.manifest";
-                  method = "copy-ro";
+                  method = "ro";
+                  surface = "settings";
                 };
                 # Kiro's engine only reads mcp.json; `kiro-cli mcp add` and hand
                 # edits are its writers. Same ownership rule as cli.json. A URL
                 # secret keeps the file owner-only.
                 "${settingsDir}/mcp.json" = lib.mkIf (isHm || kiroSecrets.servers != {}) {
-                  content = lib.mkDefault {
-                    _generated = true;
-                    _surface = "mcpServers";
-                    run = mcpRender;
-                  };
-                  entry = "kiroMcpJson";
+                  content.run = mcpRender;
                   format = "json";
-                  ledger = "materialize/kiro-settings.manifest";
-                  method = "copy-ro";
+                  method = "ro";
                   mode =
                     if hasUrlSecret
                     then "0400"
                     else "0444";
+                  surface = "mcpServers";
                 };
               }
               # Kiro v3's hook scan keeps only entry.isFile() (Kiro#9787), so
-              # hooks need real copies. The ledger claims individual files;
+              # hooks need real copies. The engine claims individual files;
               # unrelated hand-placed hooks survive, including at N→0.
               # Filter unsafe names so mkAssertions retains the option-level
               # diagnostic before the final file map validates its paths.
               (lib.mapAttrs' (name: unit:
                 lib.nameValuePair "${hookTargetDir cfg}/${name}" {
-                  format = lib.mkDefault "json";
-                  content = lib.mkDefault (
-                    {
-                      _generated = true;
-                      _surface = "hooks";
-                    }
-                    // (
-                      if unit ? store
-                      then {source = unit.store;}
-                      else {inherit (unit) text;}
-                    )
-                  );
-                  entry = "materialize-kiro-hooks-write";
-                  facts.symlinkReadable = false;
-                  ledger = "materialize/kiro-hooks.manifest";
+                  content =
+                    if unit ? store
+                    then {source = unit.store;}
+                    else {inherit (unit) text;};
+                  format = "json";
+                  method = "ro";
+                  surface = "hooks";
                 }) (lib.filterAttrs (name: _unit: hookNameSafe name) (mkHookUnits cfg)))
-            ];
-            ai.kiro._generatedFiles = lib.mkMerge [
               (helpers.mkSkillFiles {
                 inherit (cfg) configDir;
                 skills = mergedSkills;

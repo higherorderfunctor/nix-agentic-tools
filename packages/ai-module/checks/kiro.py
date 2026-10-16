@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory() as temporary:
             steering.mkdir(parents=True)
             state = old / "files2/ai.json"
             legacy = steps[0]["legacyLedgers"]
-            ledger = old / legacy[0]["ledger"]
+            ledger = old / next(item["ledger"] for item in legacy if item["path"] == ".kiro/steering")
             ledger.parent.mkdir(parents=True)
             (steering / "managed.md").write_text("old\n")
             (steering / "unmanaged.md").write_text("keep\n")

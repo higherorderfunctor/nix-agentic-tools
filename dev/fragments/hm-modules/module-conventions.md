@@ -1,12 +1,13 @@
 ## HM Module Conventions
 
 > **Last verified:** 2026-10-15 — Claude uses engine-backed `rw` ownership, Kiro
-> drains its steering legacy ledger through the engine; Kimchi retains legacy
-> ledgers, and Claude has an ordered activation2 mode command; `mkSkillFiles`
-> interpolates every skill source before the files engine walks it; no check
-> gates the N-to-zero writer defect; Kiro is gated by `ai.kiro.cli.enable`;
-> factories read the derived, read-only `ai.kiro.enable`; `ai.copilot` is
-> github.com Copilot, with pools under `ai.copilot.github` and no launcher.
+> stages settings and hooks and drains all three legacy ledgers through the
+> engine; Kimchi retains legacy ledgers, and Claude has an ordered activation2
+> mode command; `mkSkillFiles` interpolates every skill source before the files
+> engine walks it; no check gates the N-to-zero writer defect; Kiro is gated by
+> `ai.kiro.cli.enable`; factories read the derived, read-only `ai.kiro.enable`;
+> `ai.copilot` is github.com Copilot, with pools under `ai.copilot.github` and
+> no launcher.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -295,17 +296,20 @@ layer as the worked example: that option and its devenv `CODEX_HOME`
 materializer were removed 2026-09-19 as unreachable dead code (see the Settled
 bullet in `dev/fragments/ai-module/ai-module-fanout.md`).
 
-**Every HM settings writer is unconditional.** Kiro's `kiroMcpJson`, kimchi's
-`kimchiFiles` and codex's `materialize-codex-daemon-settings` are emitted while
-the ecosystem is enabled, whatever the declaration says. An empty declaration is
-not "nothing to do", it is the RETRACTION path: empty settings plus no prior
-ledger is a strict no-op, while empty settings plus a prior ledger must run so a
-later generation retracts the leaves it used to own without erasing native
-state. A `mkIf (cfg.native.settings != {})` around one of these writers is the
-N-to-zero defect. The check that evaluated every imperative writer under a
-populated AND an empty declaration was retired with the generated writer matrix,
-so review catches it until the runtime moves to the files engine, which retires
-an undeclared copy itself.
+**Every remaining HM settings writer is unconditional.** Kimchi's `kimchiFiles`
+and Codex's `materialize-codex-daemon-settings` are emitted while the ecosystem
+is enabled, whatever the declaration says. An empty declaration is not "nothing
+to do", it is the RETRACTION path: empty settings plus no prior ledger is a
+strict no-op, while empty settings plus a prior ledger must run so a later
+generation retracts the leaves it used to own without erasing native state. A
+`mkIf (cfg.native.settings != {})` around one of these writers is the N-to-zero
+defect. The check that evaluated every imperative writer under a populated AND
+an empty declaration was retired with the generated writer matrix, so review
+catches it until the runtime moves to the files engine, which retires an
+undeclared copy itself. Kiro already stages both settings files as `ro`: Home
+Manager owns even empty values, while devenv emits only declared project
+settings. Its hook copies retire through the same engine, and all three old
+ledgers stay declared while Kiro is disabled.
 
 Devenv-side writes are otherwise unconditional (always write the file when
 `enable = true`): devenv files are project-local symlinks, not home-dir writes.

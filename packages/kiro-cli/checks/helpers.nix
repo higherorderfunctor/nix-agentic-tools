@@ -4,7 +4,7 @@
   harness,
   ...
 }: let
-  inherit (harness) mcpLib ownPlan;
+  inherit (harness) mcpLib;
 
   # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
   idempotentFlags = import ../../../lib/idempotentFlags.nix {inherit lib;};
@@ -42,58 +42,9 @@
     lib.mapAttrs' (target: entry:
       lib.nameValuePair (lib.removePrefix prefix target) entry.content)
     (lib.filterAttrs (target: _entry: lib.hasPrefix prefix target) evaluated.config.ai.kiro._generatedFiles);
-  requireBody = path: ev: let
-    label = "Kiro check requires config.${lib.showOption path}";
-    body = lib.attrByPath path (throw "${label}: attribute is missing") ev.config;
-  in
-    if builtins.isString body && builtins.match "[[:space:]]*" body == null
-    then body
-    else throw "${label}: script body is empty or not a string";
-
-  dvHookTaskExec = requireBody ["tasks" "ai:kiro:materialize-hooks" "exec"];
-  # A plan is DATA, so the units, their modes, the ledger and the target
-  # directory are all readable here — an `own` body is one command and names
-  # none of them. `harness.ownPlan` throws on an absent writer, so a renamed
-  # entry fails the check rather than satisfying it with an empty plan.
-  planTarget = path: plan: let
-    hits = lib.filter (target: target.path == path) plan.targets;
-  in
-    if lib.length hits == 1
-    then lib.head hits
-    else throw "Kiro check requires exactly one own target for '${path}', found ${toString (lib.length hits)}";
-  hookTargetOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/hooks" (ownPlan "kiro" entry ev);
-  hmHookTarget = hookTargetOf "materialize-kiro-hooks-write";
-  dvHookTarget = hookTargetOf "ai:kiro:materialize-hooks";
-  # The settings directory target, whose whole-file units are cli.json and
-  # mcp.json, so a check can read the mode, the render command, the declared
-  # bytes and the ledger of either.
-  mcpDirOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/settings" (ownPlan "kiro" entry ev);
-  hmMcpDirTarget = mcpDirOf "kiroMcpJson";
-  dvMcpDirTarget = mcpDirOf "ai:kiro:materialize-mcp";
-  # cli.json's declared settings, before its generated tree renders the bytes.
-  cliSettingsOf = ev:
-    ev.config.ai.kiro.files."${ev.config.ai.kiro.configDir}/settings/cli.json".content.value;
-  hmCliSettings = cliSettingsOf;
-  dvCliSettings = cliSettingsOf;
-  # The `--plan` argument out of an emitted body. `own` passes exactly one, so
-  # this is the IDENTITY of the plan a phase applies: two entries that resolve
-  # to the same store path cannot disagree about what is owned, which is what
-  # the HM prune/write pair needs. The quotes are optional on purpose —
-  # `lib.escapeShellArg` leaves a plain store path unquoted — so strip them if
-  # they are there. The body embeds store paths, whose context the split
-  # helpers reject, so discard it; the bytes are unchanged.
-  ownPlanArg = body: let
-    parts = lib.splitString "--plan " (builtins.unsafeDiscardStringContext body);
-    unquote = token: lib.removeSuffix "'" (lib.removePrefix "'" token);
-  in
-    if lib.length parts != 2
-    then throw "Kiro check requires exactly one --plan argument in an own body"
-    else unquote (builtins.head (lib.splitString " " (builtins.elemAt parts 1)));
-  dvMcpTaskExec = requireBody ["tasks" "ai:kiro:materialize-mcp" "exec"];
-  hmHookPruneScript = requireBody ["home" "activation" "materialize-kiro-hooks-prune" "text"];
-  hmHookWriteScript = requireBody ["home" "activation" "materialize-kiro-hooks-write" "text"];
-  hmMcpPruneScript = requireBody ["home" "activation" "materialize-kiro-settings-prune" "text"];
-  hmMcpWriteScript = requireBody ["home" "activation" "kiroMcpJson" "text"];
+  # Read the live layer-1 value before the generated tree renders it.
+  kiroCliSettings = ev:
+    ev.config.ai.kiro.files2."${ev.config.ai.kiro.configDir}/settings/cli.json".content.value;
 in {
-  inherit dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit idempotentFlags kiroCliSettings kiroSteeringContent kiroWrappedDrvs renderKiroSecrets renderedMcpJson soleFork soleSame;
 }
