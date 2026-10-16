@@ -12,7 +12,7 @@
 }: let
   mcpLib = import ../mcp.nix {inherit lib;};
   aiBase = import ../ai {inherit lib;};
-  files2 = import ../../packages/ai-module/lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../../packages/ai-module/lib/files/default.nix {inherit lib pkgs;};
   # The runtime registry, shared with lib/ai/sharedOptions.nix and
   # checks/modules/options-doc.nix. Importing it rather than restating the five names
   # is what makes the tests below GROW when a sixth runtime lands: a hardcoded
@@ -353,31 +353,31 @@
   # escapes its separator, so this is a true literal search. Use it whenever
   # the needle is shell syntax rather than prose.
   hasLiteral = needle: hay: builtins.length (lib.splitString needle hay) > 1;
-  # The `ro`/`rw` entries of the normalized `ai.files2` plan, the ones the
+  # The `ro`/`rw` entries of the normalized `ai.files` plan, the ones the
   # engine writes; `claimedBy` keeps those under a key the runtime's layer 1
   # claims (a recursive key claims its leaves).
   engineEntries = config:
-    lib.filter (item: item.method != "symlink") (files2.normalize {
+    lib.filter (item: item.method != "symlink") (fileLib.normalize {
       backend =
         if config ? home
         then "hm"
         else "devenv";
-      files = config.ai.files2;
+      files = config.ai.files;
       namespace = "ai";
-      owners = config.ai.files2Owners;
+      owners = config.ai.filesOwners;
     });
   claimedBy = runtime: config: item:
     lib.any (key: item.path == key || lib.hasPrefix "${key}/" item.path)
-    (builtins.attrNames (lib.filterAttrs (_path: owners: lib.elem runtime owners) config.ai.files2Owners));
+    (builtins.attrNames (lib.filterAttrs (_path: owners: lib.elem runtime owners) config.ai.filesOwners));
   # The engine's normalized `ro`/`rw` entries claimed by one runtime.
   # Keep the explicit phase argument so a stale writer name fails its check.
   ownPlan = runtime: entry: evaluated: let
     targets = lib.filter (claimedBy runtime evaluated.config) (engineEntries evaluated.config);
   in
-    if entry != "files2-apply"
-    then throw "module-test: expected the files2-apply engine phase, got ${entry}"
+    if entry != "files-apply"
+    then throw "module-test: expected the files-apply engine phase, got ${entry}"
     else if targets == []
-    then throw "module-test: ai.${runtime} claims no ro or rw entry of ai.files2"
+    then throw "module-test: ai.${runtime} claims no ro or rw entry of ai.files"
     else {inherit targets;};
   # A runtime's writable document, found by the final root-relative path.
   ownedDocument = runtime: path: evaluated: let
@@ -387,7 +387,7 @@
     then {inherit (entry.content) value;}
     else throw "module-test: ai.${runtime} claims no rw document at \"${path}\"";
   # A Claude JSON document as delivered on either backend: the value of its
-  # layer-1 entry (`ai.claude.files2`), `{}` when none is declared. Throws when
+  # layer-1 entry (`ai.claude.files`), `{}` when none is declared. Throws when
   # an entry is declared but the backend's symlink sink does not carry it, so a
   # value can never pass for a file nothing writes.
   claudeDocument = path: evaluated: let
@@ -396,13 +396,13 @@
       if config ? home
       then config.home.file
       else config.files;
-    entry = config.ai.claude.files2.${path} or null;
+    entry = config.ai.claude.files.${path} or null;
   in
     if entry == null
     then {}
     else if sink ? ${path}
     then entry.content.value
-    else throw "module-test: ai.claude.files2.\"${path}\" is declared but not delivered";
+    else throw "module-test: ai.claude.files.\"${path}\" is declared but not delivered";
   claudeSettings = claudeDocument ".claude/settings.json";
   # Where Claude's MCP servers land: the project .mcp.json on devenv, the
   # personal plugin's .mcp.json on Home Manager.
@@ -444,7 +444,7 @@
   # (`evalHm …`, `evalDevenv …`).
   markdownInput = evaluated: path: let
     inherit (evaluated) config;
-    claims = config.ai.files2Owners.${path} or [];
+    claims = config.ai.filesOwners.${path} or [];
     staged =
       config.ai.${lib.head claims}._generatedFiles.${path}
       or (throw "module-test: \"${path}\" is not a staged generated entry of ai.${lib.head claims}");

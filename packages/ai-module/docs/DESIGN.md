@@ -6,26 +6,26 @@ verdicts. Row IDs below refer to `private/files-redesign/ledger.md` (223 rows).
 Those private inputs are review evidence, not dependencies of the package.
 
 `ai-module` is the base for every repository module, including non-AI programs.
-The three layers are `ai.<runtime>.files2` → `ai.files2` → `ai.activation2`.
-Native links branch from layer 2 to the backend's file primitive. PR 3 migrates
+The three layers are `ai.<runtime>.files` → `ai.files` → `ai.activation`. Native
+links branch from layer 2 to the backend's file primitive. PR 3 migrates
 callers, removes superseded delivery code, and drops the `2` suffixes. PR 2 adds
 options alongside existing ones and exercises them only in checks.
 
 ## Owner and move
 
-| Destination under `packages/ai-module/`                         | Responsibility and source                                                                                                                                                                                  |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `checks.nix`, `checks/`                                         | Move `lib/files2/checks/` here; the entry imports its check modules. Remove the forwarding `checks/files2/default.nix`. Preserve existing check names during the move.                                     |
-| `docs/DESIGN.md`                                                | This layer contract and coverage.                                                                                                                                                                          |
-| `docs/files-engine.md`                                          | Move `lib/files2/DESIGN.md` here, retaining its file schema, refusal messages, codec rules, state and transition tables. Replace its standalone module/backend sections with a link here.                  |
-| `lib/activation.nix`                                            | Activation entry type and graph validation.                                                                                                                                                                |
-| `lib/default.nix`                                               | Export the owner library under `aiModule`: file types/normalization and the runtime registration helper.                                                                                                   |
-| `lib/files/`                                                    | Move `lib/files2/{default.nix,engine.py,files2_codecs.py}` here; `guard.py` prepares native devenv links. Split normalization from backend delivery as the later chunks replace the old lowering function. |
-| `lib/lower-devenv.nix`, `lib/lower-hm.nix`                      | One lowering function per backend; each receives the complete normalized file plan and activation graph.                                                                                                   |
-| `modules/common.nix`                                            | Declare generic options and generate file-engine activation entries; shared by both backends.                                                                                                              |
-| `modules/devenv/default.nix`, `modules/homeManager/default.nix` | Import common declarations and call the corresponding lowering function once.                                                                                                                              |
+| Destination under `packages/ai-module/`                         | Responsibility and source                                                                                                                                                                                |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checks.nix`, `checks/`                                         | Move `lib/files/checks/` here; the entry imports its check modules. Remove the forwarding `checks/files/default.nix`. Use the final `ai-module-files-*` check names.                                     |
+| `docs/DESIGN.md`                                                | This layer contract and coverage.                                                                                                                                                                        |
+| `docs/files-engine.md`                                          | Move `lib/files/DESIGN.md` here, retaining its file schema, refusal messages, codec rules, state and transition tables. Replace its standalone module/backend sections with a link here.                 |
+| `lib/activation.nix`                                            | Activation entry type and graph validation.                                                                                                                                                              |
+| `lib/default.nix`                                               | Export the owner library under `aiModule`: file types/normalization and the runtime registration helper.                                                                                                 |
+| `lib/files/`                                                    | Move `lib/files/{default.nix,engine.py,files_codecs.py}` here; `guard.py` prepares native devenv links. Split normalization from backend delivery as the later chunks replace the old lowering function. |
+| `lib/lower-devenv.nix`, `lib/lower-hm.nix`                      | One lowering function per backend; each receives the complete normalized file plan and activation graph.                                                                                                 |
+| `modules/common.nix`                                            | Declare generic options and generate file-engine activation entries; shared by both backends.                                                                                                            |
+| `modules/devenv/default.nix`, `modules/homeManager/default.nix` | Import common declarations and call the corresponding lowering function once.                                                                                                                            |
 
-Delete `lib/files2/` after its contents move; no forwarding shim and no import
+Delete `lib/files/` after its contents move; no forwarding shim and no import
 from `lib/ai/`. `lib/facets.nix:196` discovers owner libraries, `:212` discovers
 backend module directories, and `:275` discovers `checks.nix`; no central owner
 list is added. This follows `docs/repository-layout.md`. The existing empty
@@ -36,18 +36,18 @@ drain old ownership. Removing the base module itself cannot drain anything.
 
 ### Layer 1: runtime file overrides
 
-`runtimeModule { name; enabled; shared ? []; }` declares `ai.<name>.files2`, an
+`runtimeModule { name; enabled; shared ? []; }` declares `ai.<name>.files`, an
 `attrsOf fileEntry`, default `{}`. `name` is the stable runtime identifier;
 `enabled` is the owning module's existing boolean. These are constructor inputs,
 not another runtime enable option. The helper also declares
-`ai.<name>.activation2` (layer 3) and the internal `ai.<name>.legacyLedgers`
+`ai.<name>.activation` (layer 3) and the internal `ai.<name>.legacyLedgers`
 (`listOf { codec = enum ["dir" "json"]; ledger; path; }`), both forwarded
-outside the `enabled` gate into `ai.activation2` and the internal root
+outside the `enabled` gate into `ai.activation` and the internal root
 `ai.legacyLedgers`, so a disabled owner still runs its `runWhenDisabled`
 commands and drains its old ledgers. Each forwarded command gets
 `enable = mkDefault enabled` at the forwarded priority; a producer that sets
 `enable` overrides it. Keys listed in `shared` forward without a claim in
-`ai.files2Owners`, which leaves their composer the single claimant. Checks
+`ai.filesOwners`, which leaves their composer the single claimant. Checks
 install synthetic runtime modules in PR 2; PR 3 installs the helper in runtime
 owners. Non-AI owners use the same helper. Semble exposes it on both backends;
 glab and mcp-services expose it on Home Manager; beads, git and git-branchless
@@ -84,7 +84,7 @@ outside the active root are refused by the file contract.
 | Generated surface       | Default text/source and method use `mkDefault`; structured defaults apply per leaf so a consumer leaf preserves siblings. A deliberately whole-entry default remains whole-entry, as with compiled context.                                                                            |
 | Runtime override        | Ordinary definitions override defaults; `mkForce` works normally. Select the winning content alternative before evaluating a discarded source. Disabled entries require no content.                                                                                                    |
 | Layer 1 → 2             | Forward surviving module definitions with their priority wrappers, not a merged value reintroduced at ordinary priority. Reuse the file entry type. Forward nothing from a disabled runtime; do not publish a false tombstone that disables another producer.                          |
-| Direct layer-2 override | Uses ordinary Nix priorities against forwarded definitions. Equal-priority incompatible scalar/content alternatives fail; equal structured leaves merge. There is no hidden runtime precedence over `ai.files2`.                                                                       |
+| Direct layer-2 override | Uses ordinary Nix priorities against forwarded definitions. Equal-priority incompatible scalar/content alternatives fail; equal structured leaves merge. There is no hidden runtime precedence over `ai.files`.                                                                        |
 | Shared destination      | Distinct live runtime owners cannot independently claim one path. Shared `AGENTS.md` composition/arbitration stays upstream and emits exactly one layer-2 entry, retaining agreeing claims, replacement and suppression semantics. Ordinary cross-runtime collisions name both owners. |
 
 Forwarding uses the module system's alias primitive
@@ -97,35 +97,35 @@ equal-priority conflict. Forwarded definitions report the helper module's
 location, not the producer's; no fixture needs the producer location, so no
 custom forwarder exists. The helper sets `_file` to its own path, so every
 forwarded root definition reports `lib/runtime.nix`; the module-provenance guard
-exempts exactly that file for `activation2`, `files2`, `files2Owners` and
+exempts exactly that file for `activation`, `files`, `filesOwners` and
 `legacyLedgers`. Content selection examines only the highest-priority defined
 alternative, so a discarded source is never evaluated.
 
 The helper also records each declared key, including one with `enable = false`,
-in the internal `ai.files2Owners.<path>` list; a disabled entry would otherwise
+in the internal `ai.filesOwners.<path>` list; a disabled entry would otherwise
 override another runtime's entry unseen. Normalization fails with
-`files2."<path>": runtime owners <a> and <b> claim one destination` when a path
+`files."<path>": runtime owners <a> and <b> claim one destination` when a path
 has two runtime claims. Overlapping (ancestor/descendant) paths from distinct
 runtimes fail through the expanded-destination overlap check, which names the
 paths, not the owners.
 
 ### Layer 2: generic files
 
-`ai.files2` is `attrsOf fileEntry`, default `{}`. It serves runtimes and
-ordinary program modules equally. `fileEntry` is the moved engine design's
-schema: content alternatives `run/source/text/value` default null; `enable`
-defaults true; `executable` and `mode` default null; `format` defaults `raw`;
-`method` defaults `symlink`; `recursive` defaults false. Two internal fields are
-added. `_contentPrio` is read-only: the strongest priority of any `content`
-definition, read without evaluating one, so a runtime's generated tree can leave
-out a whole-content default a consumer replaced. `requires` is a list of
-derivations, default `[]`. The engine appends their string context to each
-delivered leaf after the recursive walk, so the backends build them before
-delivery and evaluation never reads them; a runtime's generated files require
-its generated tree, whose guards, surface checks and byte limits then gate a
-recursive source or a value that does not point into it. Types, priority
-arbitration and all refused combinations remain in the engine document. A
-backend-specific method still requires both `devenv` and `hm` fields.
+`ai.files` is `attrsOf fileEntry`, default `{}`. It serves runtimes and ordinary
+program modules equally. `fileEntry` is the moved engine design's schema:
+content alternatives `run/source/text/value` default null; `enable` defaults
+true; `executable` and `mode` default null; `format` defaults `raw`; `method`
+defaults `symlink`; `recursive` defaults false. Two internal fields are added.
+`_contentPrio` is read-only: the strongest priority of any `content` definition,
+read without evaluating one, so a runtime's generated tree can leave out a
+whole-content default a consumer replaced. `requires` is a list of derivations,
+default `[]`. The engine appends their string context to each delivered leaf
+after the recursive walk, so the backends build them before delivery and
+evaluation never reads them; a runtime's generated files require its generated
+tree, whose guards, surface checks and byte limits then gate a recursive source
+or a value that does not point into it. Types, priority arbitration and all
+refused combinations remain in the engine document. A backend-specific method
+still requires both `devenv` and `hm` fields.
 
 Normalize the complete map once, after merging and runtime gating, then check
 expanded destination collisions. Symlinks lower to `home.file` or devenv
@@ -135,27 +135,31 @@ There is no native-copy escape hatch for an entry owned by this map: a native
 `files.<path>.copyMode` other than `symlink` on any enabled normalized
 destination, including `ro` and `rw`, fails evaluation with that path named.
 
-One stable namespace, `ai`, owns the unified copy plan. Keep the engine state
-layout: HM uses
-`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/files2/ai.json`; devenv
-uses `$DEVENV_STATE/nix-agentic-tools/files2/ai.json`. Roots are `$HOME` and
+One stable namespace, `ai`, owns the unified copy plan. The final engine state
+layout is: HM uses
+`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/files/ai.json`; devenv
+uses `$DEVENV_STATE/nix-agentic-tools/files/ai.json`. Roots are `$HOME` and
 `$DEVENV_ROOT`, respectively. Neither namespace nor engine task names are
 per-file options. The same root must not be activated concurrently through two
-independent backend states.
+independent backend states. Before creating the final state directory or taking
+its namespace lock, the legacy step moves the previous state directory only when
+it exists and the final directory does not. When both exist, the final state
+wins and the previous directory stays untouched; when neither exists, the move
+creates nothing ([PR 3 plan](CUTOVER.md), section 5).
 
-Layer 2 generates `files2-prune` internally on every activation, including with
+Layer 2 generates `files-prune` internally on every activation, including with
 an empty map, so removing the last file still drains it. For an empty map only,
 its command exits before Python starts when the engine state file is absent,
 which the engine guarantees whenever nothing is owned, so a consumer that
 declares no files pays one shell test per activation. A nonempty map always
 starts the engine in prune, whose parent check refuses a symlinked parent before
-HM's native linking. `files2-apply` is generated only for a nonempty plan.
+HM's native linking. `files-apply` is generated only for a nonempty plan.
 Backend lowering validates and lowers their union with the caller's
-`ai.activation2` graph; the generated entries are not option definitions that a
+`ai.activation` graph; the generated entries are not option definitions that a
 whole-option priority override can remove. A caller key colliding with a
 reserved name fails evaluation, whether or not that entry is emitted: both
-backends reserve `files2-apply` and `files2-prune`, and devenv also reserves
-`files2-guard`, `files2-inspect` and `files2-snapshot`. Generated entries have
+backends reserve `files-apply` and `files-prune`, and devenv also reserves
+`files-guard`, `files-inspect` and `files-snapshot`. Generated entries have
 `runWhenDisabled = true`. Prune has `after = []; before = ["linkCheck"];`; apply
 has `after = ["files"]` plus `"secrets"` when any enabled entry uses
 `content.run`. Apply also depends directly on prune and, when emitted, the
@@ -174,19 +178,19 @@ retract their own removed links.
 Devenv also generates the observer pair (L168, L169), which never deletes and
 never fails the shell. Both entries remain emitted with an empty plan:
 inspection must still report retained paths from its ledger, and snapshot
-precedes the always-present cleanup task. `files2-snapshot` clears both abstract
+precedes the always-present cleanup task. `files-snapshot` clears both abstract
 defaults and runs before `devenv:files:cleanup`: it copies the owned paths of
 devenv's previous link list into `$DEVENV_STATE/ai-delivery-observed.json`.
-`files2-inspect` runs after `materialized` with devenv `showOutput`, because
+`files-inspect` runs after `materialized` with devenv `showOutput`, because
 devenv hides a passing task's output. It warns for an owned link that is absent
 or replaced by a file, a directory or a stale link, and for a remembered path no
 longer delivered that is still on disk. Ownership is the normalized plan, each
-path named by its `ai.files2Owners` claim or else `ai.files2`. Native links come
+path named by its `ai.filesOwners` claim or else `ai.files`. Native links come
 from the backend file map; the observer has no legacy delivered-path branch.
 
 ### Layer 3: generic activation
 
-`ai.activation2` is `attrsOf activationEntry`, default `{}`. Its key is the
+`ai.activation` is `attrsOf activationEntry`, default `{}`. Its key is the
 logical name; use a nonempty identifier without slashes. A command can exist
 without any file. Entries must remain declared outside their owner's enable gate
 when disabled execution is required.
@@ -203,7 +207,7 @@ when disabled execution is required.
 | `runWhenDisabled` | `bool`, `false`                                                  | Keep retirement and daemon release running when the owner turns off.                                   |
 
 `point` is the enum `["files" "linkCheck" "materialized" "secrets" "shell"]`.
-Native names default to `ai2-<key>` on HM and `ai2:<key>` on devenv. A resolved
+Native names default to `ai-<key>` on HM and `ai:<key>` on devenv. A resolved
 devenv name must have two or more nonempty colon-separated parts containing only
 ASCII letters, digits, underscores and hyphens. Invalid names fail with the
 entry named. Duplicate resolved names, reserved names, self-edges and cycles
@@ -211,7 +215,7 @@ also fail with the entry names. Native node strings are trusted integration
 edges, not guessed optional tasks; callers add conditional edges only when their
 provider exists.
 
-`ai.activation2Order.secretNodes` is `listOf str`, default `[]`. The HM lowering
+`ai.activationOrder.secretNodes` is `listOf str`, default `[]`. The HM lowering
 always adds `sops-nix` (its DAG tolerates a missing dependency; a module in this
 repo may not define root `ai.*` defaults); devenv has no standard provider.
 Integrations can register additional native preparation nodes once, outside
@@ -229,33 +233,33 @@ fragments while collecting definitions (`packages/ai-module/lib/lower-hm.nix`).
 `A → B` means B depends on A. Every abstract point resolves to the following
 node(s) for both `before` and `after` references:
 
-| Point          | HM node(s)                            | devenv node(s)               |
-| -------------- | ------------------------------------- | ---------------------------- |
-| `files`        | `linkGeneration`                      | Internal `ai2:files-linked`. |
-| `linkCheck`    | `checkLinkTargets`                    | Internal `ai2:link-check`.   |
-| `materialized` | Internal `ai2-files-ready`.           | Internal `ai2:files-ready`.  |
-| `secrets`      | Registered `secretNodes`.             | Registered `secretNodes`.    |
-| `shell`        | Internal completion node `ai2-ready`. | `devenv:enterShell`.         |
+| Point          | HM node(s)                           | devenv node(s)              |
+| -------------- | ------------------------------------ | --------------------------- |
+| `files`        | `linkGeneration`                     | Internal `ai:files-linked`. |
+| `linkCheck`    | `checkLinkTargets`                   | Internal `ai:link-check`.   |
+| `materialized` | Internal `ai-files-ready`.           | Internal `ai:files-ready`.  |
+| `secrets`      | Registered `secretNodes`.            | Registered `secretNodes`.   |
+| `shell`        | Internal completion node `ai-ready`. | `devenv:enterShell`.        |
 
 The internal point nodes are empty DAG/task entries, not caller commands. HM
-adds `linkGeneration → ai2-files-ready → ai2-ready`; apply also precedes
-`ai2-files-ready`. HM has no shell-entry phase: `shell` means the completion of
+adds `linkGeneration → ai-files-ready → ai-ready`; apply also precedes
+`ai-files-ready`. HM has no shell-entry phase: `shell` means the completion of
 this activation graph. Ordinary activation entries still run during HM switch.
 
 Devenv adds this exact chain when the **final native `config.files`** is
 nonempty:
 
 ```text
-devenv:files:cleanup → ai2:link-check → ai2:files2-guard
-  → devenv:files → ai2:files-linked → ai2:files2-apply
-  → ai2:files-ready → devenv:enterShell
+devenv:files:cleanup → ai:link-check → ai:files-guard
+  → devenv:files → ai:files-linked → ai:files-apply
+  → ai:files-ready → devenv:enterShell
 ```
 
 With no native file task, replace `guard → devenv:files → files-linked` with
 `guard → files-linked`. Without a guard, `link-check` precedes the next node of
 the chain directly. Retain direct `prune → apply` and `guard → apply` edges
 whenever both ends are emitted, and `provider → apply` edges for run content.
-Prune and every command with `before = ["linkCheck"]` precede `ai2:link-check`,
+Prune and every command with `before = ["linkCheck"]` precede `ai:link-check`,
 so guard runs after all such commands. They also follow `devenv:files:cleanup`
 unless explicitly positioned before cleanup with a native edge. Cleanup exists
 even at zero files; never manufacture a missing `devenv:files` task. A
@@ -263,14 +267,14 @@ declaration requiring before link-check must clear `after = ["files"]`;
 contradictory ordering is an error.
 
 The same HM chain is prune/pre-link commands → `checkLinkTargets` →
-`linkGeneration` → apply → `ai2-files-ready` → `ai2-ready`. Secret providers
-also precede apply when required. A command such as Claude's conditional mode
-repair can select `after = ["materialized"]` to run after owned writes.
+`linkGeneration` → apply → `ai-files-ready` → `ai-ready`. Secret providers also
+precede apply when required. A command such as Claude's conditional mode repair
+can select `after = ["materialized"]` to run after owned writes.
 
 Generated commands use a scoped subshell, full strict mode, and absolute store
 paths for external tools. HM invokes the resulting script through `run`, so a
 dry run cannot mutate files or execute a secret renderer. Devenv tasks execute
-the script directly. The engine gets `FILES2_BASH`; `content.run` receives the
+the script directly. The engine gets `FILES_BASH`; `content.run` receives the
 backend environment and any provider environment. Existing renderer-specific
 root exports stay inside the renderer body. No activation entry exports into a
 later entry's shell. Devenv failure verification belongs to the backend check
@@ -287,7 +291,7 @@ rollback, pending journal or crash recovery is added; mutation and state commit
 remain per file.
 
 Only ownership integration and state loading change. Replace the standalone
-`files2` module/HM lowering function with the layers above. Under the existing
+`files` module/HM lowering function with the layers above. Under the existing
 state lock, load a versioned document, apply an ordered migration chain,
 validate the result, then atomically save before reconciliation. PR 2 defines v0
 explicitly as `{ version = 0; files = ...; }` with the same payload schema as
@@ -299,8 +303,8 @@ section 2.2); v0 does not parse historical TSV or ownership JSON.
 
 ## Ledger coverage
 
-Declaration sketches use `R` for `ai.<runtime>.files2`, `F` for `ai.files2`, and
-`A` for `ai.activation2`. R receives final root-relative paths. This is a
+Declaration sketches use `R` for `ai.<runtime>.files`, `F` for `ai.files`, and
+`A` for `ai.activation`. R receives final root-relative paths. This is a
 source-level mapping, not a claim of executed equivalence. IDs are exhaustive
 within these groups; gaps and exclusions follow separately.
 
@@ -357,19 +361,19 @@ requires content changes beyond that budget, split those changes into the next
 chunk. Every chunk must evaluate its named check before handoff; CI builds and
 executes it. No local package builds are required.
 
-| Chunk | Deliverable                                                                         | Own checks                                                                                                                                             |
-| ----- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0     | This design only.                                                                   | Format, spelling, exhaustive ledger disposition; adversarial design review.                                                                            |
-| 1a    | Move engine, codecs, checks and engine document; owner discovery; delete old paths. | Existing `files2-eval`, `files2-hm`, `files2-ro-runtime`, `files2-rw-runtime` evaluate at relocated paths; CI reruns unchanged behavior.               |
-| 1b    | Versioned migration chain.                                                          | v0 → v1, repeat load, missing state, rejected versions/payloads; execute engine tests.                                                                 |
-| 2a    | Activation schema and HM lowering.                                                  | Command-only DAG, dry-run, names, native edges, disabled drain and cycle errors.                                                                       |
-| 2b    | Devenv activation lowering and provider points.                                     | Exact edges with/without native files; direct secret edge; execute command success/failure.                                                            |
-| 3a    | Generic file map over activation; replace old HM lowering function.                 | Real HM native generation plus engine phases, N→0, disabled owner and dry-run; execute renderer after provider without consumer `secretNodes`.         |
-| 3b    | Devenv native files, guard and copy phases.                                         | Execute stale/foreign-link guards, native cleanup, copies and empty-plan drain; reject native-copy override.                                           |
-| 4a    | Runtime helper and priority-preserving forwarding.                                  | Synthetic non-AI and runtime owners, disabled gating, scalar/value/content priorities, lazy discarded source and destination collisions.               |
-| 4b    | Shared-surface producer fixtures.                                                   | Skills reach R then F per runtime prefix; one composed shared target reaches F once or not at all; conflicts are 4a. No production runtime imports.    |
-| 5a    | Generated fixture matrix.                                                           | `method × format × shape × backend`; valid plans/sinks/edges, impossible cells assert the exact named error from the engine contract.                  |
-| 5b    | Generated transitions and end-to-end activation fixtures.                           | All six directed method switches changing only method, format-only switches, retirement, backups, adoption and preserved native keys on both backends. |
+| Chunk | Deliverable                                                                         | Own checks                                                                                                                                                                   |
+| ----- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | This design only.                                                                   | Format, spelling, exhaustive ledger disposition; adversarial design review.                                                                                                  |
+| 1a    | Move engine, codecs, checks and engine document; owner discovery; delete old paths. | Existing `ai-module-files-eval`, `ai-module-files-hm`, `ai-module-files-ro-runtime`, `ai-module-files-rw-runtime` evaluate at relocated paths; CI reruns unchanged behavior. |
+| 1b    | Versioned migration chain.                                                          | v0 → v1, repeat load, missing state, rejected versions/payloads; execute engine tests.                                                                                       |
+| 2a    | Activation schema and HM lowering.                                                  | Command-only DAG, dry-run, names, native edges, disabled drain and cycle errors.                                                                                             |
+| 2b    | Devenv activation lowering and provider points.                                     | Exact edges with/without native files; direct secret edge; execute command success/failure.                                                                                  |
+| 3a    | Generic file map over activation; replace old HM lowering function.                 | Real HM native generation plus engine phases, N→0, disabled owner and dry-run; execute renderer after provider without consumer `secretNodes`.                               |
+| 3b    | Devenv native files, guard and copy phases.                                         | Execute stale/foreign-link guards, native cleanup, copies and empty-plan drain; reject native-copy override.                                                                 |
+| 4a    | Runtime helper and priority-preserving forwarding.                                  | Synthetic non-AI and runtime owners, disabled gating, scalar/value/content priorities, lazy discarded source and destination collisions.                                     |
+| 4b    | Shared-surface producer fixtures.                                                   | Skills reach R then F per runtime prefix; one composed shared target reaches F once or not at all; conflicts are 4a. No production runtime imports.                          |
+| 5a    | Generated fixture matrix.                                                           | `method × format × shape × backend`; valid plans/sinks/edges, impossible cells assert the exact named error from the engine contract.                                        |
+| 5b    | Generated transitions and end-to-end activation fixtures.                           | All six directed method switches changing only method, format-only switches, retirement, backups, adoption and preserved native keys on both backends.                       |
 
 Matrix lists are backend `["devenv" "hm"]`, format
 `["json" "markdown" "raw" "toml" "yaml"]`, method `["ro" "rw" "symlink"]`, shape

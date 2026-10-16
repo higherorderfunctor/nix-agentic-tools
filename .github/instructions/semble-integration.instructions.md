@@ -250,9 +250,9 @@ does not add these launchers.
 Both backends record the underlying Semble package store path in its assigned
 cache directory. A single active config keeps the established cache root;
 multiple configs use stable config-keyed directories below `variants/`. The
-shared module declares `ai.semble.activation2.semble-cache-guard` after
-`materialized`, lowered to `ai2-semble-cache-guard` on Home Manager and
-`ai2:semble-cache-guard` on devenv. Home Manager activation checks the
+shared module declares `ai.semble.activation.semble-cache-guard` after
+`materialized`, lowered to `ai-semble-cache-guard` on Home Manager and
+`ai:semble-cache-guard` on devenv. Home Manager activation checks the
 user-global cache family; devenv shell entry checks only that project's
 relocated cache family. A missing or changed package stamp clears the indexes in
 that variant directory before recording the new identity. Grammar and mapping

@@ -5,8 +5,9 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location("files2_engine", sys.argv[1])
+spec = importlib.util.spec_from_file_location("files_engine", sys.argv[1])
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 
@@ -65,3 +66,49 @@ with tempfile.TemporaryDirectory() as temporary:
             raise AssertionError(f"{name} accepted")
         assert state.read_bytes() == before and owned.read_text() == "old"
     print(f"PASS: {len(malformed)} malformed states refused before destination mutation")
+
+
+for previous_exists, current_exists in ((True, False), (True, True), (False, False)):
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary) / "root"
+        root.mkdir()
+        legacy = Path(temporary) / "state"
+        previous = legacy / "files2"
+        current = legacy / "files"
+        if previous_exists:
+            engine.reconcile(plan("previous"), root, previous / "ai.json", "apply")
+            (previous / "preserved.bak").write_bytes(b"backup")
+            previous_state = (previous / "ai.json").read_bytes()
+        if current_exists:
+            engine.reconcile(plan("current"), root, current / "ai.json", "apply")
+        expected = "current" if current_exists else "previous"
+        desired = plan(expected) if previous_exists or current_exists else []
+        original_lock = engine.fcntl.flock
+        original_mkdir = Path.mkdir
+
+        def before_mkdir(path, *args, **kwargs):
+            if path == current:
+                # Before namespace creation, migration either moved everything
+                # or left the absent pair untouched.
+                assert previous.exists() == (previous_exists and current_exists)
+                assert current.exists() == (previous_exists or current_exists)
+            return original_mkdir(path, *args, **kwargs)
+
+        def before_lock(stream, operation):
+            assert previous.exists() == (previous_exists and current_exists)
+            if previous_exists and not current_exists:
+                assert (current / "ai.json").read_bytes() == previous_state
+                assert (current / "preserved.bak").read_bytes() == b"backup"
+            return original_lock(stream, operation)
+
+        with patch.object(Path, "mkdir", before_mkdir), patch.object(engine.fcntl, "flock", before_lock):
+            engine.reconcile(desired, root, current / "ai.json", "apply", legacy_state=legacy)
+        assert (current / "ai.json").exists() == bool(desired)
+        if desired:
+            assert sorted(json.loads((current / "ai.json").read_text())["files"]) == ["owned"]
+            assert (root / "owned").read_text() == expected
+        if previous_exists:
+            retained = previous if current_exists else current
+            assert (retained / "ai.json").read_bytes() == previous_state
+            assert (retained / "preserved.bak").read_bytes() == b"backup"
+        print(f"PASS: legacy state move previous={previous_exists}, current={current_exists}, disk and state preserved before lock")

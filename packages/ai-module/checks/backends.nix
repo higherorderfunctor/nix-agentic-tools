@@ -20,7 +20,7 @@
       inherit lib;
       module = ../modules/devenv/default.nix;
       native = config: config.files;
-      prefix = "ai2:files2-";
+      prefix = "ai:files-";
       secrets = ["vault:ready"];
       stubs = harness.devenvStubs;
       target = item: "${item.file}";
@@ -31,7 +31,7 @@
       lib = import ./dag-lib.nix lib;
       module = ../modules/homeManager/default.nix;
       native = config: config.home.file;
-      prefix = "ai2-files2-";
+      prefix = "ai-files-";
       secrets = ["sops-nix" "vault:ready"];
       stubs = harness.hmStubs;
       target = item: "${item.source}";
@@ -48,7 +48,7 @@
       modules = [
         sink.stubs
         sink.module
-        {ai.activation2Order.secretNodes = ["vault:ready"];}
+        {ai.activationOrder.secretNodes = ["vault:ready"];}
         {inherit ai;}
       ];
     }).config;

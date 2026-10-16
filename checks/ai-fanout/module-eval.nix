@@ -314,7 +314,7 @@ in {
         == "xhigh"
         && ((hmCodexSettings hm).model_reasoning_effort or null) == "xhigh"
         && ((claudeSettings devenv).effortLevel or null) == "xhigh"
-        && (devenv.config.ai.codex.files2.".codex/config.toml".content.value.model_reasoning_effort or null) == "xhigh"
+        && (devenv.config.ai.codex.files.".codex/config.toml".content.value.model_reasoning_effort or null) == "xhigh"
     );
 
     module-runtime-reasoning-effort-overrides-root-only-for-that-runtime = mkTest "runtime-reasoning-effort-overrides-root-only-for-that-runtime" (
@@ -334,7 +334,7 @@ in {
         == "low"
         && ((hmCodexSettings hm).model_reasoning_effort or null) == "high"
         && ((claudeSettings devenv).effortLevel or null) == "low"
-        && (devenv.config.ai.codex.files2.".codex/config.toml".content.value.model_reasoning_effort or null) == "high"
+        && (devenv.config.ai.codex.files.".codex/config.toml".content.value.model_reasoning_effort or null) == "high"
     );
 
     module-runtime-settings-exist-for-capable-harnesses = mkTest "runtime-settings-exist-for-capable-harnesses" (
@@ -384,7 +384,7 @@ in {
         == "medium"
         && hmCodexSettings hm == withHmDaemonDefault {}
         && ((claudeSettings devenv).effortLevel or null) == "medium"
-        && !(devenv.config.ai.codex.files2 ? ".codex/config.toml")
+        && !(devenv.config.ai.codex.files ? ".codex/config.toml")
     );
 
     module-shared-hooks-reject-non-portable-event = mkTest "shared-hooks-reject-non-portable-event" (!(builtins.tryEval (

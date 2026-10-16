@@ -90,13 +90,13 @@
   # ── The one sanctioned root writer: layer-1 forwarding ──
   #
   # `packages/ai-module/lib/runtime.nix` re-publishes each owner's
-  # `ai.<owner>.{activation2,files2,legacyLedgers}` at the root and records its
-  # claims in `ai.files2Owners`. It sets `_file`, so its definitions report the
+  # `ai.<owner>.{activation,files,legacyLedgers}` at the root and records its
+  # claims in `ai.filesOwners`. It sets `_file`, so its definitions report the
   # helper rather than the importing owner, and only it matches the exemption;
   # any other root option it wrote would still be reported.
   rootPoolSrcRoot = toString ../..;
   forwardingHelper = toString ../../packages/ai-module/lib/runtime.nix;
-  forwardedOptions = ["activation2" "files2" "files2Owners" "legacyLedgers"];
+  forwardedOptions = ["activation" "files" "filesOwners" "legacyLedgers"];
 
   runtimePoolProbeConfig = {
     inherit (lib.foldl' lib.recursiveUpdate {} (map (runtime: setEnable runtime true) harnessNames)) ai;

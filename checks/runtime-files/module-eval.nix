@@ -11,7 +11,7 @@
   markdownOf = config: path:
     if fromGeneratedTree path (deliveredFiles config).${path}
     then deliveredMarkdown {inherit config;} path
-    else config.ai.files2.${path}.content.text;
+    else config.ai.files.${path}.content.text;
 in {
   checks = {
     # ── A5a: final per-runtime literal file registry ────────────────────
@@ -20,7 +20,7 @@ in {
         hm = evalHm {};
         devenv = evalDevenv {};
         optionType = evaluated: runtime:
-          (lib.getAttrFromPath ["ai" runtime "files2"] evaluated.options).type.description;
+          (lib.getAttrFromPath ["ai" runtime "files"] evaluated.options).type.description;
       in
         lib.all (runtime: optionType hm runtime == optionType devenv runtime) harnessNames
     );
@@ -32,7 +32,7 @@ in {
           sourceTarget = "literal/${runtime}.source";
           config = lib.recursiveUpdate (setEnable runtime true) {
             ai.${runtime} = {
-              files2 = {
+              files = {
                 ${textTarget} = {
                   content.text = "${runtime}-TEXT";
                   executable = true;
@@ -47,11 +47,11 @@ in {
           lib.all (evaluated: let
             files = deliveredFiles evaluated.config;
           in
-            evaluated.config.ai.files2.${textTarget}.content.text
+            evaluated.config.ai.files.${textTarget}.content.text
             == "${runtime}-TEXT"
-            && evaluated.config.ai.files2.${sourceTarget}.content.source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
+            && evaluated.config.ai.files.${sourceTarget}.content.source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
             && files.${textTarget}.executable
-            && toString files.${textTarget}.source == toString (pkgs.writeText "files2-link" "${runtime}-TEXT")
+            && toString files.${textTarget}.source == toString (pkgs.writeText "files-link" "${runtime}-TEXT")
             && toString files.${sourceTarget}.source == toString ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
             && !(files.${sourceTarget} ? text)) [hm devenv];
       in
@@ -63,20 +63,20 @@ in {
     module-runtime-files-disabled-runtime-does-not-emit = mkTest "runtime-files-disabled-runtime-does-not-emit" (
       let
         target = "literal/disabled.txt";
-        config.ai.claude.files2.${target}.content.text = "DECLARED-BUT-DISABLED";
+        config.ai.claude.files.${target}.content.text = "DECLARED-BUT-DISABLED";
         hm = (evalHm config).config;
         devenv = (evalDevenv config).config;
         switchedOff = evaluate:
           (evaluate {
             ai.claude = {
               enable = true;
-              files2."literal/disabled".enable = false;
+              files."literal/disabled".enable = false;
             };
           }).config;
       in
-        hm.ai.claude.files2.${target}.content.text
+        hm.ai.claude.files.${target}.content.text
         == "DECLARED-BUT-DISABLED"
-        && !(hm.ai.files2 ? ${target})
+        && !(hm.ai.files ? ${target})
         && !(hm.home.file ? ${target})
         && !(devenv.files ? ${target})
         && !((switchedOff evalHm).home.file ? "literal/disabled")
@@ -90,7 +90,7 @@ in {
             evaluated = evalHm {
               ai.claude = {
                 enable = true;
-                files2.${target}.content.text = "invalid";
+                files.${target}.content.text = "invalid";
               };
             };
           in
@@ -105,14 +105,14 @@ in {
       let
         disabled =
           (evalHm {
-            ai.claude.files2."literal/disabled".enable = false;
-          }).config.ai.claude.files2."literal/disabled";
+            ai.claude.files."literal/disabled".enable = false;
+          }).config.ai.claude.files."literal/disabled";
         rejected = entry: let
           attempt = builtins.tryEval (let
             evaluated = evalHm {
               ai.claude = {
                 enable = true;
-                files2."literal/invalid" = entry;
+                files."literal/invalid" = entry;
               };
             };
           in
@@ -156,13 +156,13 @@ in {
         config.ai.claude = {
           enable = true;
           context.text = "GENERATED-CONTEXT";
-          files2.${target}.enable = false;
+          files.${target}.enable = false;
         };
         hm = (evalHm config).config;
         devenv = (evalDevenv config).config;
       in
-        !hm.ai.files2.${target}.enable
-        && !devenv.ai.files2.${target}.enable
+        !hm.ai.files.${target}.enable
+        && !devenv.ai.files.${target}.enable
         && !(hm.home.file ? ${target})
         && !(devenv.files ? ${target})
     );
@@ -217,28 +217,28 @@ in {
           };
         };
         replaced = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files2."AGENTS.md".content.text = "CONSUMER-REPLACEMENT";
+          ai.codex.files."AGENTS.md".content.text = "CONSUMER-REPLACEMENT";
         });
         suppressed = evalDevenv (lib.recursiveUpdate base {
-          ai.kiro.files2."AGENTS.md".enable = false;
+          ai.kiro.files."AGENTS.md".enable = false;
         });
         deduplicated = evalDevenv (lib.recursiveUpdate base {
           ai = {
-            codex.files2."AGENTS.md".content.text = "SHARED-CONSUMER";
-            kimchi.files2."AGENTS.md".content.text = "SHARED-CONSUMER";
-            kiro.files2."AGENTS.md".content.text = "SHARED-CONSUMER";
+            codex.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+            kimchi.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+            kiro.files."AGENTS.md".content.text = "SHARED-CONSUMER";
           };
         });
         divergent = builtins.tryEval (let
           evaluated = evalDevenv (lib.recursiveUpdate base {
             ai = {
-              codex.files2."AGENTS.md".content.text = "OTHER-CONSUMER";
-              kimchi.files2."AGENTS.md".content.text = "KIMCHI-CONSUMER";
-              kiro.files2."AGENTS.md".content.text = "OTHER-CONSUMER";
+              codex.files."AGENTS.md".content.text = "OTHER-CONSUMER";
+              kimchi.files."AGENTS.md".content.text = "KIMCHI-CONSUMER";
+              kiro.files."AGENTS.md".content.text = "OTHER-CONSUMER";
             };
           });
         in
-          builtins.deepSeq evaluated.config.ai.files2."AGENTS.md" true);
+          builtins.deepSeq evaluated.config.ai.files."AGENTS.md" true);
         # The consumerOnly* cases have NO generated context, so Kimchi never
         # registers its generated shared target. A consumer-authored final
         # AGENTS.md must still arbitrate with Codex's, land alone, suppress,
@@ -247,11 +247,11 @@ in {
           ai = {
             codex = {
               enable = true;
-              files2."AGENTS.md".content.text = "CONSUMER-ONLY";
+              files."AGENTS.md".content.text = "CONSUMER-ONLY";
             };
             kimchi = {
               enable = true;
-              files2."AGENTS.md".content.text = "CONSUMER-ONLY";
+              files."AGENTS.md".content.text = "CONSUMER-ONLY";
             };
           };
         };
@@ -259,7 +259,7 @@ in {
           ai.kimchi = {
             enable = true;
             context.filename = "custom.md";
-            files2."AGENTS.md".content.text = "KIMCHI-CONSUMER-ONLY";
+            files."AGENTS.md".content.text = "KIMCHI-CONSUMER-ONLY";
           };
         };
         # Generated Kimchi context beside a custom (Home Manager) filename. The
@@ -273,14 +273,14 @@ in {
               filename = "custom.md";
               text = "KIMCHI-GENERATED";
             };
-            files2."AGENTS.md".content.text = "KIMCHI-CONTEXT-OVERRIDE";
+            files."AGENTS.md".content.text = "KIMCHI-CONTEXT-OVERRIDE";
           };
         };
         consumerOnlySuppressed = evalDevenv {
           ai.kimchi = {
             enable = true;
             context.filename = "custom.md";
-            files2."AGENTS.md".enable = false;
+            files."AGENTS.md".enable = false;
           };
         };
         # Identical to consumerOnly except Kimchi suppresses instead of
@@ -292,19 +292,19 @@ in {
           ai = {
             codex = {
               enable = true;
-              files2."AGENTS.md" = {
+              files."AGENTS.md" = {
                 enable = true;
                 content.text = "CONSUMER-ONLY";
               };
             };
             kimchi = {
               enable = true;
-              files2."AGENTS.md".enable = false;
+              files."AGENTS.md".enable = false;
             };
           };
         };
         consumerOnlyDivergent = builtins.tryEval (builtins.deepSeq (deliveredFiles consumerOnlyDivergentEval.config)."AGENTS.md" true);
-        consumerOnlyDivergentCause = !(builtins.tryEval consumerOnlyDivergentEval.config.ai.files2."AGENTS.md".enable).success;
+        consumerOnlyDivergentCause = !(builtins.tryEval consumerOnlyDivergentEval.config.ai.files."AGENTS.md".enable).success;
         # A source-backed consumer AGENTS.md beside generated context. Only the
         # shared owner may lower it: when a runtime's ordinary sink lowers the
         # same target too (the runtime missing from mkBackendTransform's
@@ -314,18 +314,18 @@ in {
         sourced = runtime: let
           file = pkgs.writeText "${runtime}-agents.md" "SOURCED-${runtime}";
           evaluated = evalDevenv (lib.recursiveUpdate base {
-            ai.${runtime}.files2."AGENTS.md".content.source = file;
+            ai.${runtime}.files."AGENTS.md".content.source = file;
           });
         in
           (builtins.tryEval "${(deliveredFiles evaluated.config)."AGENTS.md".source}").success
           && (deliveredFiles evaluated.config)."AGENTS.md".source == toString file;
       in
-        replaced.config.ai.files2."AGENTS.md".content.text
+        replaced.config.ai.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
         && markdownOf replaced.config "AGENTS.md" == "CONSUMER-REPLACEMENT"
-        && !suppressed.config.ai.files2."AGENTS.md".enable
+        && !suppressed.config.ai.files."AGENTS.md".enable
         && !((deliveredFiles suppressed.config) ? "AGENTS.md")
-        && deduplicated.config.ai.files2."AGENTS.md".content.text == "SHARED-CONSUMER"
+        && deduplicated.config.ai.files."AGENTS.md".content.text == "SHARED-CONSUMER"
         && !divergent.success
         && markdownOf consumerOnly.config "AGENTS.md" == "CONSUMER-ONLY"
         && markdownOf kimchiConsumerOnly.config "AGENTS.md" == "KIMCHI-CONSUMER-ONLY"
@@ -349,7 +349,7 @@ in {
           evalDevenv (lib.recursiveUpdate (setEnable activeRuntime true) {
             ai = {
               context.text = "ACTIVE-SHARED-CONTEXT";
-              ${dormantRuntime}.files2."AGENTS.md" = entry;
+              ${dormantRuntime}.files."AGENTS.md" = entry;
             };
           });
         evaluations = [
@@ -401,7 +401,7 @@ in {
         ai.codex = {
           context.text = oversized;
           enable = true;
-          files2.".codex/AGENTS.md".content.text = "short";
+          files.".codex/AGENTS.md".content.text = "short";
           projectDocMaxBytes = 8;
         };
       };
@@ -409,7 +409,7 @@ in {
         ai.codex = {
           context.text = oversized;
           enable = true;
-          files2.".codex/AGENTS.md".enable = false;
+          files.".codex/AGENTS.md".enable = false;
           projectDocMaxBytes = 8;
         };
       };
@@ -417,7 +417,7 @@ in {
         ai = {
           codex = {
             enable = true;
-            files2."AGENTS.md".content.text = "short";
+            files."AGENTS.md".content.text = "short";
             projectDocMaxBytes = 8;
           };
           context.text = oversized;
@@ -427,7 +427,7 @@ in {
         ai = {
           codex = {
             enable = true;
-            files2."AGENTS.md".enable = false;
+            files."AGENTS.md".enable = false;
             projectDocMaxBytes = 8;
           };
           context.text = oversized;
@@ -464,7 +464,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files2.".codex/AGENTS.md".content.text = "HM-REPLACEMENT";
+              files.".codex/AGENTS.md".content.text = "HM-REPLACEMENT";
             };
           };
         };
@@ -474,7 +474,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files2.".codex/AGENTS.md".enable = false;
+              files.".codex/AGENTS.md".enable = false;
             };
           };
         };
@@ -484,7 +484,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files2."AGENTS.md".content.text = "DEVENV-REPLACEMENT";
+              files."AGENTS.md".content.text = "DEVENV-REPLACEMENT";
             };
           };
         };
@@ -494,7 +494,7 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files2."AGENTS.md".enable = false;
+              files."AGENTS.md".enable = false;
             };
           };
         };
@@ -504,7 +504,7 @@ in {
             kiro = {
               context.text = "RUNTIME-CONTEXT";
               cli.enable = true;
-              files2.".kiro/steering/AGENTS.md".enable = false;
+              files.".kiro/steering/AGENTS.md".enable = false;
             };
           };
         };
@@ -514,7 +514,7 @@ in {
             kiro = {
               context.text = "RUNTIME-CONTEXT";
               cli.enable = true;
-              files2."AGENTS.md".enable = false;
+              files."AGENTS.md".enable = false;
             };
           };
         };
@@ -564,7 +564,7 @@ in {
         source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
         config.ai.claude = {
           enable = true;
-          files2 = {
+          files = {
             "literal/default-source.md".content.source = lib.mkDefault source;
             "literal/default-text.md".content.text = lib.mkDefault "DEFAULT-TEXT";
           };
@@ -573,7 +573,7 @@ in {
           (deliveredFiles evaluated.config)."literal/default-source.md".source
           == source
           && deliveredFiles evaluated.config ? "literal/default-text.md"
-          && evaluated.config.ai.files2."literal/default-text.md".content.text == "DEFAULT-TEXT";
+          && evaluated.config.ai.files."literal/default-text.md".content.text == "DEFAULT-TEXT";
       in
         delivered (evalHm config)
         && delivered (evalDevenv config)
@@ -588,7 +588,7 @@ in {
               ((evaluate {
                 ai.kiro = {
                   cli.enable = true;
-                  files2.".kiro/probe.json" = {
+                  files.".kiro/probe.json" = {
                     inherit content;
                     enable = lib.mkForce enable;
                     format = "json";
@@ -601,7 +601,7 @@ in {
               }))
               config
               ;
-            entry = config.ai.files2.".kiro/probe.json";
+            entry = config.ai.files.".kiro/probe.json";
             delivered = deliveredFiles config;
           in
             entry.enable == enable && (delivered ? ".kiro/probe.json") == enable)
@@ -620,7 +620,7 @@ in {
           ai = {
             codex = {
               enable = true;
-              files2."AGENTS.md".content.source = source;
+              files."AGENTS.md".content.source = source;
               projectDocMaxBytes = 8;
             };
             context.text = "SHARED-CONTEXT";
@@ -642,7 +642,7 @@ in {
             claude = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files2.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
+              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
             };
           };
         };
@@ -652,7 +652,7 @@ in {
             claude = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files2.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
+              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
             };
           };
         };
@@ -660,7 +660,7 @@ in {
         # instantiating it instantiates the tree it requires.
         claudeText = evaluated:
           builtins.seq (toString (deliveredFiles evaluated.config).".claude/CLAUDE.md".source)
-          evaluated.config.ai.files2.".claude/CLAUDE.md".content.text;
+          evaluated.config.ai.files.".claude/CLAUDE.md".content.text;
         # Switched off at layer 1, the context stays out of the tree too.
         claudeOff = evaluate: let
           evaluated = evaluate {
@@ -669,7 +669,7 @@ in {
               claude = {
                 context.text = "RUNTIME-CONTEXT";
                 enable = true;
-                files2.".claude/CLAUDE.md".enable = false;
+                files.".claude/CLAUDE.md".enable = false;
                 rules.probe.text = "probe";
               };
             };
@@ -683,7 +683,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files2.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
+              files.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
             };
           };
         };
@@ -693,7 +693,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files2."AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
+              files."AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
             };
           };
         };
@@ -703,9 +703,9 @@ in {
         && claudeText devenvClaude == "CLAUDE-REPLACEMENT"
         && lib.all claudeOff [evalHm evalDevenv]
         && builtins.isString (toString (deliveredFiles hmKimchi.config).".config/kimchi/harness/AGENTS.md".source)
-        && hmKimchi.config.ai.files2.".config/kimchi/harness/AGENTS.md".content.text == "KIMCHI-REPLACEMENT"
-        && hmKimchi.config.ai.files2.".config/kimchi/harness/AGENTS.md".method == "symlink"
-        && devenvKimchi.config.ai.files2."AGENTS.md".method == "ro"
+        && hmKimchi.config.ai.files.".config/kimchi/harness/AGENTS.md".content.text == "KIMCHI-REPLACEMENT"
+        && hmKimchi.config.ai.files.".config/kimchi/harness/AGENTS.md".method == "symlink"
+        && devenvKimchi.config.ai.files."AGENTS.md".method == "ro"
         && (deliveredFiles devenvKimchi.config)."AGENTS.md".text == "KIMCHI-REPLACEMENT"
     );
 

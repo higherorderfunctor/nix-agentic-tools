@@ -33,7 +33,7 @@ class Home:
         if use_xdg:
             self.environment["XDG_STATE_HOME"] = str(state)
         self.old = state / "nix-agentic-tools"
-        self.state = self.old / "files2/ai.json"
+        self.state = self.old / "files/ai.json"
         self.ledger = self.old / DATA["legacy"]["ledger"]
         self.directory = directory
 
@@ -126,7 +126,7 @@ def generations(directory, mode, use_xdg):
     home.activate(2)
     assert snapshot(home.document) == before
     assert stat.S_IMODE(home.state.parent.stat().st_mode) == 0o700
-    assert not list(home.root.glob(".files2-*"))
+    assert not list(home.root.glob(".files-*"))
 
 
 def adoption(directory, existing_directory, use_xdg):

@@ -205,7 +205,7 @@ in {
             settings.credentials.file = "/run/secrets/gh-token";
           };
         };
-        activation = result.config.home.activation.ai2-mcp-restart-on-secret-rotation or null;
+        activation = result.config.home.activation.ai-mcp-restart-on-secret-rotation or null;
       in
         !pkgs.stdenv.hostPlatform.isLinux
         || (
@@ -234,7 +234,7 @@ in {
           *) exit 1 ;;
         esac
       '';
-      text = lib.replaceStrings ["${pkgs.systemd}/bin/systemctl"] ["${systemctl}"] (result.config.home.activation.ai2-mcp-restart-on-secret-rotation.text or "");
+      text = lib.replaceStrings ["${pkgs.systemd}/bin/systemctl"] ["${systemctl}"] (result.config.home.activation.ai-mcp-restart-on-secret-rotation.text or "");
     in
       if !pkgs.stdenv.hostPlatform.isLinux
       then mkTest "mcp-services-rotation-dry-run-routed" true
@@ -280,7 +280,7 @@ in {
           };
         };
       in
-        !(result.config.home.activation ? ai2-mcp-restart-on-secret-rotation)
+        !(result.config.home.activation ? ai-mcp-restart-on-secret-rotation)
     );
 
     # No credentialed services -> no rotation activation entry (inert).
@@ -288,7 +288,7 @@ in {
       let
         result = evalHm {};
       in
-        !(result.config.home.activation ? ai2-mcp-restart-on-secret-rotation)
+        !(result.config.home.activation ? ai-mcp-restart-on-secret-rotation)
     );
 
     # Bridge servers run mcp-proxy, whose own --host default IS loopback — so

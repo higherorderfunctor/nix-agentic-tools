@@ -357,7 +357,7 @@ override file.
    7dad0b8.
 3. **Per-CLI factories.**
    - **Claude:** context → `.claude/<context.filename>` (HM
-     `~/.claude/CLAUDE.md`) through `ai.claude.files2`; rules emit to
+     `~/.claude/CLAUDE.md`) through `ai.claude.files`; rules emit to
      `.claude/rules/<name>.md` via `claudeTransformer`. Shipped 8f0c16b,
      7dad0b8.
    - **Kiro:** context → HM `<configDir>/steering/AGENTS.md` or devenv repo-root

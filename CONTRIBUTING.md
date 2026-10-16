@@ -42,11 +42,11 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-> **Last verified:** 2026-10-15 — repo documents and agent files are built by
+> **Last verified:** 2026-10-16 — repo documents and agent files are built by
 > `mkTree` with the evaluated `ai.formatter` treefmt config and the named
 > guards; scoped rules rely on the normalized matcher-derived `fileMatch`
 > trigger default. `generate:all` writes instruction and repo-document
-> projections plus devenv.yaml, waiting on `ai2:files-ready` for AGENTS.md, the
+> projections plus devenv.yaml, waiting on `ai:files-ready` for AGENTS.md, the
 > `.github/` instruction files and Claude's and Kiro's rules; devenv.lock
 > requires a separate network update; the generator produces content only;
 > `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file
@@ -127,7 +127,7 @@ devenv tasks run --mode before generate:all  # instructions, repo docs, devenv.y
 ```
 
 `generate:all` orders the projection writers whose files are committed:
-`ai2:files-ready`, by which the files engine has written AGENTS.md, the
+`ai:files-ready`, by which the files engine has written AGENTS.md, the
 `.github/` instruction files and the gitignored Claude and Kiro rules; then
 `devenv:files` for the other gitignored links, `generate:devenv-yaml`, and
 `generate:repo`. It is not a second writer. The aggregate form requires

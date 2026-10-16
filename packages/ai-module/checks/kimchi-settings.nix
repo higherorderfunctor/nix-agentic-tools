@@ -33,11 +33,11 @@
         inherit
           (evaluate {
             ai = {
-              activation2Order.secretNodes = ["fixture-provider"];
+              activationOrder.secretNodes = ["fixture-provider"];
               kimchi = {
                 inherit configDir;
                 enable = enabled;
-                files2 = lib.optionalAttrs (!isHm && name == "run") {
+                files = lib.optionalAttrs (!isHm && name == "run") {
                   ".kimchi/config.json".content = lib.mkForce {
                     run = ''
                       set -euETo pipefail
@@ -72,9 +72,9 @@
           ;
         plan = files.normalize {
           inherit backend;
-          files = config.ai.files2;
+          files = config.ai.files;
           namespace = "ai";
-          owners = config.ai.files2Owners;
+          owners = config.ai.filesOwners;
         };
         copies = lib.filter (item: item.method != "symlink") plan;
         graph =
@@ -83,14 +83,14 @@
           else config.tasks;
         applyName =
           if isHm
-          then "ai2-files2-apply"
-          else "ai2:files2-apply";
+          then "ai-files-apply"
+          else "ai:files-apply";
         apply = graph.${applyName};
         prune =
           graph.${
             if isHm
-            then "ai2-files2-prune"
-            else "ai2:files2-prune"
+            then "ai-files-prune"
+            else "ai:files-prune"
           };
         expected =
           if !enabled
@@ -136,8 +136,8 @@
           }) [configPath "${harnessDir}/settings.json"]);
         hasRun = lib.any (item: item.content ? run) copies;
       in
-        assert builtins.attrNames config.ai.kimchi.files2 == lib.sort builtins.lessThan expected;
-        assert lib.all (path: config.ai.files2Owners.${path} == ["kimchi"]) expected;
+        assert builtins.attrNames config.ai.kimchi.files == lib.sort builtins.lessThan expected;
+        assert lib.all (path: config.ai.filesOwners.${path} == ["kimchi"]) expected;
         assert lib.all (item:
           item.format
           == "json"
@@ -158,7 +158,7 @@
         assert lib.elem (
           if isHm
           then "checkLinkTargets"
-          else "ai2:link-check"
+          else "ai:link-check"
         )
         prune.before;
         assert (graph ? ${applyName}) == (plan != []);
@@ -169,7 +169,7 @@
         || lib.elem (
           if isHm
           then "linkGeneration"
-          else "ai2:files-linked"
+          else "ai:files-linked"
         )
         apply.after;
         assert config.ai.kimchi.legacyLedgers == expectedLegacy;
@@ -178,9 +178,9 @@
         || isHm
         || !declared
         || (
-          config.ai.files2.".kimchi/hooks.json".method
+          config.ai.files.".kimchi/hooks.json".method
           == "symlink"
-          && config.ai.files2.".kimchi/hooks.json".content.value
+          && config.ai.files.".kimchi/hooks.json".content.value
           == {
             hooks.TurnStart = [
               {
@@ -201,7 +201,7 @@
           template = let
             value =
               if name == "plain"
-              then config.ai.files2.${configPath}.content.value
+              then config.ai.files.${configPath}.content.value
               else steps.plain.template.value;
           in {
             inherit value;

@@ -95,7 +95,7 @@ a directory link under the harness: Home Manager delivers
 `<configDir>/harness/extensions/<key>` and devenv delivers
 `<project>/.config/kimchi/harness/extensions/<key>`. Each link stages in
 `ai.kimchi._generatedFiles` with `method = "symlink"` and reaches both backends
-through `ai.kimchi.files2` and `ai.files2`, retaining each package's store
+through `ai.kimchi.files` and `ai.files`, retaining each package's store
 context. The shared `lib.ai.linkDirectory pkgs name source` builder supplies a
 tiny directory of absolute top-level links into the package, so generated-tree
 delivery copies only links and leaves the dependency payload in its original

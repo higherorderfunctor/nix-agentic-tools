@@ -104,10 +104,10 @@ def scenario(bash, shim, backend, steps, directory):
     environment = {key: value for key, value in os.environ.items() if key not in ("DRY_RUN", "XDG_STATE_HOME")}
     if backend == "hm":
         environment["HOME"] = str(root)
-        state = root / ".local/state/nix-agentic-tools/files2"
+        state = root / ".local/state/nix-agentic-tools/files"
     else:
         environment.update(DEVENV_ROOT=str(root), DEVENV_STATE=str(directory / "state"))
-        state = directory / "state/nix-agentic-tools/files2"
+        state = directory / "state/nix-agentic-tools/files"
     previous, linked, native = {}, {}, {}
     for index, step in enumerate(steps):
         step["plan"] = {item["path"]: item for item in step["plan"]}

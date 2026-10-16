@@ -251,7 +251,7 @@ in {
           }
         ];
         inherit (evaluated.config) tasks;
-        init = tasks."ai2:git-branchless-init";
+        init = tasks."ai:git-branchless-init";
         rendered = pkgs.writeText "nix-agentic-tools.gitconfig" (lib.generators.toGitINI evaluated.config.git.settings);
       in
         lib.sort lib.lessThan init.before
@@ -259,7 +259,7 @@ in {
         && tasks."git:config".before == ["devenv:enterShell"]
         && contains "init \"$DEVENV_ROOT\" ${lib.getExe pkgs.ai.gitTools.git-branchless} trunk" init.exec
         && contains "include \"$DEVENV_ROOT\" ${rendered}" tasks."git:config".exec
-        && !((evalDevenv {}).config.tasks ? "ai2:git-branchless-init")
+        && !((evalDevenv {}).config.tasks ? "ai:git-branchless-init")
     );
 
     # The task bodies are standalone Bash, which is how devenv runs them.
@@ -279,7 +279,7 @@ in {
       pkgs.runCommand "module-git-devenv-task-shellcheck" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        ${lib.getExe pkgs.shellcheck} ${script "ai2:git-branchless-init"} ${script "git:config"}
+        ${lib.getExe pkgs.shellcheck} ${script "ai:git-branchless-init"} ${script "git:config"}
         touch "$out"
       '';
   };

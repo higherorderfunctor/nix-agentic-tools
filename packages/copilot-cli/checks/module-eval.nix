@@ -26,8 +26,8 @@
     };
   };
   # The files engine's copies Copilot claims, by path.
-  copies = evaluated: lib.listToAttrs (map (target: lib.nameValuePair target.path target) (ownPlan "copilot" "files2-apply" evaluated).targets);
-  claims = evaluated: lib.filterAttrs (_path: owners: builtins.elem "copilot" owners) evaluated.config.ai.files2Owners;
+  copies = evaluated: lib.listToAttrs (map (target: lib.nameValuePair target.path target) (ownPlan "copilot" "files-apply" evaluated).targets);
+  claims = evaluated: lib.filterAttrs (_path: owners: builtins.elem "copilot" owners) evaluated.config.ai.filesOwners;
   # The old writer's ledgers, one per directory under `projectDir`, are
   # Copilot's and reach the engine's root list.
   declaresLedgers = projectDir: evaluated: let
@@ -169,7 +169,7 @@ in {
     module-copilot-devenv-copies = mkTest "copilot-devenv-copies" (
       let
         enabled = evalDevenv populated;
-        linked = evalDevenv (lib.recursiveUpdate populated {ai.copilot.files2.".github/instructions/security.instructions.md".method = "symlink";});
+        linked = evalDevenv (lib.recursiveUpdate populated {ai.copilot.files.".github/instructions/security.instructions.md".method = "symlink";});
         disabled = evalDevenv (lib.recursiveUpdate populated {ai.copilot.enable = false;});
         empty = evalDevenv {ai.copilot.enable = true;};
         targets = copies enabled;
@@ -184,7 +184,7 @@ in {
         builtins.attrNames targets
         == [".github/instructions/security.instructions.md"]
         && lib.all (path: copied path && !(enabled.config.files ? ${path})) (builtins.attrNames targets)
-        && linked.config.ai.files2.".github/instructions/security.instructions.md".method == "symlink"
+        && linked.config.ai.files.".github/instructions/security.instructions.md".method == "symlink"
         && linked.config.files ? ".github/instructions/security.instructions.md"
         && claims disabled == {}
         && claims empty == {}

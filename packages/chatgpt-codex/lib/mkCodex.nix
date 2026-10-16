@@ -1255,7 +1255,7 @@ in
               path = "${nativeDirFor backend cfg}/rules";
             }
           ];
-        activation2 = lib.optionalAttrs (backend == "hm") {
+        activation = lib.optionalAttrs (backend == "hm") {
           codex-daemon-select = {
             command = ''${lib.getExe daemonSelect} "$HOME"/${lib.escapeShellArg cfg.configDir} ${lib.escapeShellArg (
                 lib.optionalString (isDaemonPinned cfg) "${cfg.package}/${cfg.package.passthru.codexPackage.root}"
@@ -1495,7 +1495,7 @@ in
           ];
         }
         {
-          ai.codex.activation2.codex-migrate-skill-links = lib.mkIf (mergedSkills != {}) {
+          ai.codex.activation.codex-migrate-skill-links = lib.mkIf (mergedSkills != {}) {
             after = [];
             before = ["linkCheck"];
             command =
@@ -1568,8 +1568,8 @@ in
               format = "markdown";
               surface = "context";
             };
-            ai.codex.files2.${agentsMdTarget}.enable = lib.mkDefault (
-              config.ai.files2.${agentsMdTarget}._contentPrio < (lib.mkDefault null).priority || agentsMd != ""
+            ai.codex.files.${agentsMdTarget}.enable = lib.mkDefault (
+              config.ai.files.${agentsMdTarget}._contentPrio < (lib.mkDefault null).priority || agentsMd != ""
             );
           })
         ]))

@@ -1,4 +1,4 @@
-"""Execute document merge cases for every files2 codec."""
+"""Execute document merge cases for every files codec."""
 
 import importlib.util
 import json
@@ -7,7 +7,7 @@ import stat
 import sys
 import tempfile
 
-spec = importlib.util.spec_from_file_location("files2_engine", sys.argv[1])
+spec = importlib.util.spec_from_file_location("files_engine", sys.argv[1])
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 formats = engine.codecs.FORMATS

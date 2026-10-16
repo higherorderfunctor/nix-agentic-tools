@@ -1,6 +1,6 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-15 — only runtimes with launcher packages enter the
+> **Last verified:** 2026-10-16 — only runtimes with launcher packages enter the
 > wrapper closure; github.com Copilot has none. The CI matrix reads
 > `ciPackages`; the repo shell applies `buildOverlay`. Kimchi source builds
 > require fresh closure measurements; old binary-release figures are not current
@@ -21,7 +21,7 @@ operator-chosen diagnostic cost, not an automatic merge-path cost. The required
 previously justified the runtime workflow:
 
 - `instructions-drift` compares the committed instruction files with what the
-  repository's `ai.*` entries deliver; `files2-ro-runtime` and
+  repository's `ai.*` entries deliver; `ai-module-files-ro-runtime` and
   `ai-module-transitions` prove copy type, mode, idempotence, adoption and
   retirement;
 - `isolate-prek-hooks` executes the exact shared-hook rewriter in primary and

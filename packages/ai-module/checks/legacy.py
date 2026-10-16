@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 
-spec = importlib.util.spec_from_file_location("files2_engine", sys.argv[1])
+spec = importlib.util.spec_from_file_location("files_engine", sys.argv[1])
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 
@@ -20,7 +20,7 @@ DOC = {"codec": "json", "ledger": "materialize/doc.json", "path": "doc.json"}
 LEDGERS = [SECOND, DOC, DIR]
 DOCUMENT = b'// header\n{"a": {"b": 1}, "native": 2}\n'
 # The node each backend's native link step starts from; prune must precede it.
-LINK_STEP = {"devenv": "ai2:link-check", "hm": "checkLinkTargets"}
+LINK_STEP = {"devenv": "ai:link-check", "hm": "checkLinkTargets"}
 
 
 def sha(data):
@@ -65,7 +65,7 @@ def tree(temporary, name):
     old = Path(temporary) / name / "state"
     root.mkdir(parents=True)
     seed(root, old)
-    return root, old, old / "files2/ai.json"
+    return root, old, old / "files/ai.json"
 
 
 def owned(state):
@@ -192,7 +192,7 @@ def generated(fixture, bash, shim):
                                     capture_output=True, text=True)
             assert result.returncode == 0, result.stderr
             assert list((root / "steering").iterdir()) == [], backend
-            assert owned(old / "files2/ai.json") == {} and backups(old / "files2/ai.json") == []
+            assert owned(old / "files/ai.json") == {} and backups(old / "files/ai.json") == []
             assert not (old / ledger["ledger"]).exists(), backend
     print(f"PASS: {len(fixture)} generated prunes import and retire old copies before linking")
 

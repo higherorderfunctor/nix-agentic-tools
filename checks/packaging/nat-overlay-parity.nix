@@ -200,9 +200,9 @@
     ]
     ++ lib.optionals (backend == "devenv") [
       {
-        name = "devenv ai2:git-branchless-init";
+        name = "devenv ai:git-branchless-init";
         path = ["gitTools" "git-branchless"];
-        read = config: config.tasks."ai2:git-branchless-init".exec;
+        read = config: config.tasks."ai:git-branchless-init".exec;
         match = "contains";
       }
       {
@@ -223,7 +223,7 @@
     lib.foldl' lib.recursiveUpdate {
       ai.claude = {
         enable = true;
-        files2.".claude/settings.json".enable = false;
+        files.".claude/settings.json".enable = false;
         rules.heading.text = "#   Heading";
       };
       ai.programs = lib.genAttrs ["delegate-routing" "kimchi-docs" "stacked-workflows"] (_: {enable = true;});

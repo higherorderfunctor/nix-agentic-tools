@@ -1,10 +1,10 @@
 {pkgs, ...}: let
   python = pkgs.python3.withPackages (ps: [ps.pyyaml ps.tomlkit]);
 in {
-  checks.files2-state-runtime = pkgs.runCommandLocal "files2-state-runtime" {} ''
+  checks.ai-module-files-state-runtime = pkgs.runCommandLocal "ai-module-files-state-runtime" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     ${python}/bin/python3 -I ${./state.py} ${../lib/files}/engine.py
-    printf 'PASS: files2 state runtime\n' > "$out"
+    printf 'PASS: files state runtime\n' > "$out"
   '';
 }

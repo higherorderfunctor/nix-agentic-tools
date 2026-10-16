@@ -1,10 +1,10 @@
-# files2 design
+# files design
 
 ## Boundary and caller schema
 
 The file schema and engine rules below remain the contract for the moved
 implementation. [The ai-module design](DESIGN.md) defines its owner, generic
-options and backend lowering. The generic `ai.files2` option owns the map;
+options and backend lowering. The generic `ai.files` option owns the map;
 runtime producers forward their entries through the layer-1 helper.
 
 | Option           | Nix type                                                                                   | Default     | Meaning                                                                                                           |
@@ -37,7 +37,7 @@ definition. An enabled entry needs one winner; disabled entries need no content.
 retire previously declared keys. `run` needs no per-file ordering switch: the
 backend supplies its provider edge.
 
-All validation is forced when normalizing a module's `files2` map, before
+All validation is forced when normalizing a module's `files` map, before
 building a plan. For each enabled entry this includes every declared option
 except discarded content alternatives, and both fields of a backend-specific
 `method`, even when only one backend's plan is requested. Store-path strings
@@ -45,35 +45,35 @@ under `content.source` must start with a Nix store object path
 (`/nix/store/<32-character hash>-<name>`) and may name a child within it only
 when no child segment is `.` or `..`; Nix path values remain valid. Invalid
 source strings fail the option type check, which names
-`files2."<path>".content.source`. Message templates below are exact; `<path>`,
+`files."<path>".content.source`. Message templates below are exact; `<path>`,
 `<method>`, and `<format>` are interpolated with the offending values. Errors
 from Nix's enum or `strMatching` type checker name the option path for malformed
 enum and mode strings.
 
-| Refused input                                                                                           | Evaluation error                                                                                              |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Empty, absolute, repeated slash, `.` or `..` target segment                                             | `files2."<path>": target must be a normalized relative path without empty, . or .. segments`                  |
-| Enabled entry with no non-null content field                                                            | `files2."<path>": set one of content.text, content.source, content.value, content.run`                        |
-| Two non-null content fields at the winning priority                                                     | `files2."<path>": content alternatives tie at priority <priority>: <fields>`                                  |
-| `content.value` with markdown/raw                                                                       | `files2."<path>": content.value requires json, toml or yaml format`                                           |
-| `method = rw` with markdown/raw                                                                         | `files2."<path>": rw requires json, toml or yaml format`                                                      |
-| `recursive` without a directory source                                                                  | `files2."<path>": recursive requires content.source to be a directory`                                        |
-| `recursive` with `rw`                                                                                   | `files2."<path>": rw cannot be recursive`                                                                     |
-| `content.run` with symlink                                                                              | `files2."<path>": content.run requires ro or rw method`                                                       |
-| `mode` with symlink                                                                                     | `files2."<path>": mode requires ro or rw method`                                                              |
-| `mode` and non-null `executable` together                                                               | `files2."<path>": mode and executable cannot both be set`                                                     |
-| `ro` mode without owner read permission                                                                 | `files2."<path>": ro mode must grant owner read permission`                                                   |
-| Expanded leaf duplicates another leaf or explicit target, or a directory target contains another target | `files2."<path>": destination overlaps "<other>"`                                                             |
-| Two or more runtimes declare one destination at layer 1 (an `enable = false` entry counts as a claim)   | `files2."<path>": runtime owners <a> and <b> claim one destination` (all owners, sorted, joined with " and ") |
-| Recursive `ro` source with a symlink that resolves to a directory (a copy has no file bytes for it)     | `files2."<path>": recursive ro source contains a directory symlink at "<leaf>"`                               |
+| Refused input                                                                                           | Evaluation error                                                                                             |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Empty, absolute, repeated slash, `.` or `..` target segment                                             | `files."<path>": target must be a normalized relative path without empty, . or .. segments`                  |
+| Enabled entry with no non-null content field                                                            | `files."<path>": set one of content.text, content.source, content.value, content.run`                        |
+| Two non-null content fields at the winning priority                                                     | `files."<path>": content alternatives tie at priority <priority>: <fields>`                                  |
+| `content.value` with markdown/raw                                                                       | `files."<path>": content.value requires json, toml or yaml format`                                           |
+| `method = rw` with markdown/raw                                                                         | `files."<path>": rw requires json, toml or yaml format`                                                      |
+| `recursive` without a directory source                                                                  | `files."<path>": recursive requires content.source to be a directory`                                        |
+| `recursive` with `rw`                                                                                   | `files."<path>": rw cannot be recursive`                                                                     |
+| `content.run` with symlink                                                                              | `files."<path>": content.run requires ro or rw method`                                                       |
+| `mode` with symlink                                                                                     | `files."<path>": mode requires ro or rw method`                                                              |
+| `mode` and non-null `executable` together                                                               | `files."<path>": mode and executable cannot both be set`                                                     |
+| `ro` mode without owner read permission                                                                 | `files."<path>": ro mode must grant owner read permission`                                                   |
+| Expanded leaf duplicates another leaf or explicit target, or a directory target contains another target | `files."<path>": destination overlaps "<other>"`                                                             |
+| Two or more runtimes declare one destination at layer 1 (an `enable = false` entry counts as a claim)   | `files."<path>": runtime owners <a> and <b> claim one destination` (all owners, sorted, joined with " and ") |
+| Recursive `ro` source with a symlink that resolves to a directory (a copy has no file bytes for it)     | `files."<path>": recursive ro source contains a directory symlink at "<leaf>"`                               |
 
 For `rw`, text/source/run bytes must decode as the selected codec's root map;
 failure is a runtime error naming the path and codec, before changing disk.
 `content.value` must be JSON-compatible Nix data for all three codecs;
 unsupported values fail evaluation with
-`files2."<path>": content.value must contain only null, booleans, numbers, strings, lists and string-keyed maps`.
+`files."<path>": content.value must contain only null, booleans, numbers, strings, lists and string-keyed maps`.
 TOML additionally rejects nulls with
-`files2."<path>": TOML cannot represent null at "<key path>"`. Empty maps are
+`files."<path>": TOML cannot represent null at "<key path>"`. Empty maps are
 allowed. YAML documents containing anchors or aliases fail at runtime with an
 error naming the file path before the document or state is changed. A raw or
 markdown source can use `symlink` or `ro`; its tag does not imply a formatter.
@@ -109,12 +109,12 @@ activation to drain; module registration is therefore a documented integration
 invariant, not an extra file option.
 
 State lives at
-`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/files2/ai.json` for HM
-and `$DEVENV_STATE/nix-agentic-tools/files2/ai.json` for devenv. The base fixes
+`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/files/ai.json` for HM
+and `$DEVENV_STATE/nix-agentic-tools/files/ai.json` for devenv. The base fixes
 the namespace to `ai`. Schema version 1:
 `{ "version": 1, "files": { "relative/path": { "method": "ro|rw", "format": "...", "digest": "sha256 hex", "mode": "actual octal mode", "created": false, "keys": {"/nested/key": "sha256 of canonical value"} } } }`.
 `digest` is the last installed whole-file byte digest for `ro` and `rw`; `rw`
-also uses JSON Pointer encoded `keys`. `created` records whether files2 first
+also uses JSON Pointer encoded `keys`. `created` records whether files first
 made a copy, for both `ro` and `rw`. Native links have no state entry. Entries
 are keyed by complete relative path, never basename or directory ledger. A run
 that ends owning nothing deletes the state file instead of saving empty `files`,
@@ -136,13 +136,16 @@ the ordered chain.
 
 Both phases also import legacy ownership ledgers named by `--legacy-plan` (found
 under `--legacy-state`) into this state once, before any retirement or write,
-then delete each ledger. That import is not a state version; see the
-[PR 3 plan](CUTOVER.md), section 2.2.
+then delete each ledger. Before creating the final state directory or taking the
+namespace lock, the engine also moves the previous state directory when only
+that directory exists; both-present and neither-present cases leave it untouched
+([PR 3 plan](CUTOVER.md), section 5). That import is not a state version; see
+the [PR 3 plan](CUTOVER.md), section 2.2.
 
 ## Backend lowering and order
 
 [The ai-module design](DESIGN.md#backend-graph-and-execution) defines the
-backend graph and delivery phases. Both backends lower through `ai.files2` and
+backend graph and delivery phases. Both backends lower through `ai.files` and
 the shared activation graph. The engine never records, validates or retires
 native symlinks. A backend removes its old native link before apply writes a
 `ro` or `rw` copy; apply refuses any link still at that path. Prune retires an
@@ -155,7 +158,7 @@ Python is used for path-safe filesystem operations, document parsing, hashing,
 atomic writes, and cross-format merge. It is one executable with `--plan`,
 `--root`, `--state`, `--phase prune|apply`, and for the one-time legacy import
 `--legacy-plan` / `--legacy-state` (always passed together); backend shells
-supply roots and call it, setting `FILES2_BASH` for `run` content. A lock
+supply roots and call it, setting `FILES_BASH` for `run` content. A lock
 serializes runs for a namespace. It validates both plan and persisted state on
 entry, rejects absolute/traversal paths, walks each existing parent with `lstat`
 (never follows a symlink), and refuses non-regular copy destinations. It creates
@@ -198,7 +201,7 @@ switch to `ro` or `symlink` at that path is refused naming the path. For
 `ro → rw`, prune retains the old regular file; apply parses it with the old
 structured codec, or with the target codec when the old format is keyless, then
 merges declared keys while retaining all others. Ownership transfers from
-whole-file `ro` to key-owned `rw`; `created` carries forward whether files2
+whole-file `ro` to key-owned `rw`; `created` carries forward whether files
 originally created the `ro` file. Apply makes the transferred copy writable:
 target `mode` wins; otherwise use `0700` for `executable = true`, `0600` for
 `false`, or `0600` plus the previous execute bits for `null`. `symlink` to a
@@ -283,10 +286,10 @@ before draining it.
 The table groups current declarations by **materialization need**, not by
 runtime name. Every entry below uses only file fields from the schema; the
 namespace is fixed by the base. `method = { devenv = ...; hm = ...; }` is a file
-switch, not backend-specific writer code. These are proposed files2
-declarations, not a migration in this project.
+switch, not backend-specific writer code. These are proposed files declarations,
+not a migration in this project.
 
-| Current need and evidence                                                                                                                                                                                                                                                                | files2 declaration                                                                                                                                                                   |
+| Current need and evidence                                                                                                                                                                                                                                                                | files declaration                                                                                                                                                                    |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Native context, agents, commands, output styles, hooks, rules, and shared AGENTS.md use text/source links: `packages/claude-code/lib/mkClaude.nix:699-752`, `lib/ai/app/sharedAgentsMd.nix:279-292`.                                                                                     | `content.text` or `content.source`; `format = "markdown"` for prose; `method = "symlink"`; hook scripts set `executable = true`.                                                     |
 | Structured settings render to JSON/TOML/YAML native links: `packages/claude-code/lib/mkClaude.nix:680-689`, `packages/chatgpt-codex/lib/mkCodex.nix:1567-1584`, `packages/kiro-cli/lib/mkKiro.nix:1833-1842`.                                                                            | `content.value = settings; format = "json"` (or `"toml"`/`"yaml"`); `method = "symlink"`.                                                                                            |
@@ -297,7 +300,7 @@ declarations, not a migration in this project.
 | Harness-written settings merge declared keys, including empty-retirement: `packages/claude-code/lib/mkClaude.nix:784-795`, `packages/kimchi/lib/mkKimchi.nix:455-466`, `:669-672`.                                                                                                       | `method = "rw"; format = "json"; content.value = declaredMap`; an empty map retires previous keys. TOML and YAML use the same switch and codec interface.                            |
 | Credential documents need owner-only permissions: `lib/ai/hm-helpers.nix:150-175`, `packages/claude-code/lib/mkClaude.nix:798-805`.                                                                                                                                                      | `method = "rw"; format = "json"; mode = "0600"` imposes permissions on both new and existing regular documents.                                                                      |
 | Secret-dependent renderers run at activation after provider: `packages/kiro-cli/lib/mkKiro.nix:1757-1763`, `:1813-1827`; `packages/kimchi/lib/mkKimchi.nix:578-589`, `:659-665`.                                                                                                         | `content.run = renderBody; method = "ro"; format = "json"; mode = "0400"` when needed. The HM `sops-nix` edge is automatic.                                                          |
-| N→0 and disabled drain formerly require identities and ledgers outside the enabled file map: `packages/claude-code/lib/mkClaude.nix:170-188`, `packages/copilot-cli/lib/mkCopilot.nix:28-68`, `packages/kiro-cli/lib/mkKiro.nix:650-660`.                                                | Empty `files2 = {}` or `enable = false`; the library's stable state and always-installed backend module retire recorded paths.                                                       |
+| N→0 and disabled drain formerly require identities and ledgers outside the enabled file map: `packages/claude-code/lib/mkClaude.nix:170-188`, `packages/copilot-cli/lib/mkCopilot.nix:28-68`, `packages/kiro-cli/lib/mkKiro.nix:650-660`.                                                | Empty `files = {}` or `enable = false`; the library's stable state and always-installed backend module retire recorded paths.                                                        |
 | Unmanaged sibling preservation, modified-copy backup, and identical adoption are current engine contracts: `packages/ai-module/lib/files/engine.py` (`mutate`, `reconcile_ro`, `reconcile_rw`, `retire_rw`).                                                                             | No extra declaration; these are the `ro`/`rw` engine rules above.                                                                                                                    |
 
 Callers state `method = "rw"` for shared state or select a backend-specific
@@ -305,7 +308,7 @@ method for reader constraints. Secret ordering derives from `content.run`. No
 materialization need found in these call sites requires a caller to name a
 writer, ledger, activation entry, task, or state path. Bespoke migration
 commands such as `packages/chatgpt-codex/lib/mkCodex.nix:1538-1563` are outside
-file materialization: files2 handles future method switches for its own state,
+file materialization: files handles future method switches for its own state,
 not historical layouts it never owned.
 
 ## Tests and chunk sequence

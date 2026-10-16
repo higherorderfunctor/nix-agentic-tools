@@ -126,20 +126,20 @@
     if kind == "null"
     then "/${lib.concatStringsSep "/" prefix}"
     else lib.findFirst (path: path != null) null nested;
-  error = path: message: ''files2."${path}": ${message}'';
+  error = path: message: ''files."${path}": ${message}'';
   renderValue = format: value:
     if format == "json"
-    then pkgs.writeText "files2-value.json" (builtins.toJSON value)
+    then pkgs.writeText "files-value.json" (builtins.toJSON value)
     else let
       python = pkgs.python3.withPackages (ps: [ps.pyyaml ps.tomlkit]);
     in
-      pkgs.runCommandLocal "files2-value.${format}" {
+      pkgs.runCommandLocal "files-value.${format}" {
         input = builtins.toJSON value;
         passAsFile = ["input"];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        ${python}/bin/python3 -I ${./files2_codecs.py} ${format} < "$inputPath" > "$out"
+        ${python}/bin/python3 -I ${./files_codecs.py} ${format} < "$inputPath" > "$out"
       '';
   resolveMethod = backend: method:
     if builtins.isString method
@@ -290,7 +290,7 @@
     firstIssue = lib.findFirst (issue: issue != null) null (lib.concatMap (item: [item.issue item.leafIssue]) inspected);
   in
     if !validPath namespace || lib.hasInfix "/" namespace
-    then "files2: namespace must be one normalized path segment"
+    then "files: namespace must be one normalized path segment"
     else if firstIssue != null
     then firstIssue
     else overlaps [] sorted;

@@ -1,11 +1,12 @@
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-10-15 — `mkSkillFiles` stages skills in
-> `ai.<runtime>._generatedFiles`, and the files engine walks each tree into
-> per-leaf links on both backends; runtime surfaceSupport declarations own
-> normalized backend reach and nested delivery diagnostics; package skills and
-> rules require the backend and follow its reach; Copilot declares a skill gap
-> because the module does not copy skill trees.
+> **Last verified:** 2026-10-16 — final file and activation names;
+> `mkSkillFiles` stages skills in `ai.<runtime>._generatedFiles`, and the files
+> engine walks each tree into per-leaf links on both backends; runtime
+> surfaceSupport declarations own normalized backend reach and nested delivery
+> diagnostics; package skills and rules require the backend and follow its
+> reach; Copilot declares a skill gap because the module does not copy skill
+> trees.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -62,9 +63,9 @@ replace them without following the old link.
 
 - Call `helpers.mkSkillFiles`, which writes STAGED entries into
   `ai.<runtime>._generatedFiles` for both backends; the runtime factory forwards
-  them to `ai.<runtime>.files2` and the files engine. `recursive = true` is
+  them to `ai.<runtime>.files` and the files engine. `recursive = true` is
   Layout B, and `recursive = false` with a directory source is Codex's Layout A.
-  A consumer's own `ai.<runtime>.files2.<path>` beats the staged default.
+  A consumer's own `ai.<runtime>.files.<path>` beats the staged default.
 - Do not add a second writer for a native skills path.
 - Keep module-eval coverage for both root and per-runtime skill contributions.
 

@@ -5,15 +5,15 @@
   pkgs,
   ...
 }: let
-  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   evaluate = files: native:
     (lib.evalModules {
       specialArgs = {inherit pkgs;};
       modules = [
         harness.devenvStubs
         ../modules/devenv/default.nix
-        {ai.activation2Order.secretNodes = ["vault:ready"];}
-        {ai.files2 = files;}
+        {ai.activationOrder.secretNodes = ["vault:ready"];}
+        {ai.files = files;}
         {files = native;}
       ];
     }).config;
@@ -67,9 +67,9 @@
         }
       ];
     }).config.tasks."devenv:files:cleanup".exec;
-  plan = files2.normalize {
+  plan = fileLib.normalize {
     backend = "devenv";
-    files = active.ai.files2;
+    files = active.ai.files;
     namespace = "ai";
   };
   targets = lib.mapAttrs (_: item: "${item.file}") active.files;
@@ -97,45 +97,45 @@
     inherit (config) tasks;
   in
     lib.optional (builtins.attrNames config.files != expectedFiles) "native files"
-    ++ lib.optional (builtins.filter (lib.hasPrefix "ai2:files2-") (builtins.attrNames tasks) != lib.sort builtins.lessThan (emitted ++ ["ai2:files2-inspect" "ai2:files2-snapshot"])) "emitted entries"
-    ++ lib.optional (tasks."ai2:link-check".before != [linkCheckTo]) "link check target"
-    ++ lib.optional (tasks."ai2:files-linked".after != [linkedFrom]) "files linked"
-    ++ lib.optional ((tasks."ai2:files2-apply".after or null) != applyAfter) "apply dependencies"
-    ++ lib.optional (tasks."ai2:files2-prune".before != ["ai2:link-check"]) "prune edge";
+    ++ lib.optional (builtins.filter (lib.hasPrefix "ai:files-") (builtins.attrNames tasks) != lib.sort builtins.lessThan (emitted ++ ["ai:files-inspect" "ai:files-linked" "ai:files-ready" "ai:files-snapshot"])) "emitted entries"
+    ++ lib.optional (tasks."ai:link-check".before != [linkCheckTo]) "link check target"
+    ++ lib.optional (tasks."ai:files-linked".after != [linkedFrom]) "files linked"
+    ++ lib.optional ((tasks."ai:files-apply".after or null) != applyAfter) "apply dependencies"
+    ++ lib.optional (tasks."ai:files-prune".before != ["ai:link-check"]) "prune edge";
   failures =
-    check active ["links/a.txt" "tree/b/c.md"] ["ai2:files2-apply" "ai2:files2-guard" "ai2:files2-prune"] "ai2:files2-guard" "devenv:files" ["ai2:files-linked" "vault:ready" "ai2:files2-guard" "ai2:files2-prune"]
-    ++ check copyOnly [] ["ai2:files2-apply" "ai2:files2-prune"] "ai2:files-linked" "ai2:link-check" ["ai2:files-linked" "ai2:files2-prune"]
-    ++ check empty [] ["ai2:files2-prune"] "ai2:files-linked" "ai2:link-check" null
-    ++ check nativeOnly ["external"] ["ai2:files2-prune"] "devenv:files" "devenv:files" null
-    ++ lib.optional (active.tasks."ai2:files2-guard".after != ["ai2:link-check"] || active.tasks."ai2:files2-guard".before != ["ai2:files-linked" "devenv:files"]) "guard edges"
+    check active ["links/a.txt" "tree/b/c.md"] ["ai:files-apply" "ai:files-guard" "ai:files-prune"] "ai:files-guard" "devenv:files" ["ai:files-linked" "vault:ready" "ai:files-guard" "ai:files-prune"]
+    ++ check copyOnly [] ["ai:files-apply" "ai:files-prune"] "ai:files-linked" "ai:link-check" ["ai:files-linked" "ai:files-prune"]
+    ++ check empty [] ["ai:files-prune"] "ai:files-linked" "ai:link-check" null
+    ++ check nativeOnly ["external"] ["ai:files-prune"] "devenv:files" "devenv:files" null
+    ++ lib.optional (active.tasks."ai:files-guard".after != ["ai:link-check"] || active.tasks."ai:files-guard".before != ["ai:files-linked" "devenv:files"]) "guard edges"
     ++ lib.optional (lib.mapAttrs (_: item: "${item.source}") (lib.filterAttrs (name: _: lib.hasPrefix "linked/link" name) linked.files) != {"linked/link" = "${linkedStore}/link";} || !linked.files ? "linked/a/b/c.md") "directory symlink leaf"
     ++ lib.concatMap (case: lib.optional case.result.success "native ${case.copyMode} override for ${case.method}") overrideCases;
   fixtureJson = builtins.toJSON {
     active = {
-      apply = active.tasks."ai2:files2-apply".exec;
-      guard = active.tasks."ai2:files2-guard".exec;
+      apply = active.tasks."ai:files-apply".exec;
+      guard = active.tasks."ai:files-guard".exec;
       links = targets;
       inherit plan;
-      planPath = "${pkgs.writeText "files2-ai-plan.json" (builtins.toJSON plan)}";
-      prune = active.tasks."ai2:files2-prune".exec;
-      targetPath = "${pkgs.writeText "files2-ai-native.json" (builtins.toJSON targets)}";
+      planPath = "${pkgs.writeText "files-ai-plan.json" (builtins.toJSON plan)}";
+      prune = active.tasks."ai:files-prune".exec;
+      targetPath = "${pkgs.writeText "files-ai-native.json" (builtins.toJSON targets)}";
     };
     empty = {
-      planPath = "${pkgs.writeText "files2-ai-plan.json" "[]"}";
-      prune = empty.tasks."ai2:files2-prune".exec;
+      planPath = "${pkgs.writeText "files-ai-plan.json" "[]"}";
+      prune = empty.tasks."ai:files-prune".exec;
     };
     inherit cleanup;
     python = "${python}";
   };
-  fixture = pkgs.writeText "files2-devenv.json" fixtureJson;
+  fixture = pkgs.writeText "ai-module-files-devenv.json" fixtureJson;
 in {
-  checks.files2-devenv = assert lib.assertMsg (failures == []) "files2 devenv: ${lib.concatStringsSep ", " failures}";
-    pkgs.runCommandLocal "files2-devenv" {
+  checks.ai-module-files-devenv = assert lib.assertMsg (failures == []) "files devenv: ${lib.concatStringsSep ", " failures}";
+    pkgs.runCommandLocal "ai-module-files-devenv" {
       passthru = {inherit fixtureJson;};
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       ${python}/bin/python3 -I ${./devenv.py} ${fixture} ${pkgs.bash}/bin/bash
-      ${pkgs.coreutils}/bin/printf 'PASS: files2 devenv\n' > "$out"
+      ${pkgs.coreutils}/bin/printf 'PASS: files devenv\n' > "$out"
     '';
 }

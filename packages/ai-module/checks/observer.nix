@@ -12,7 +12,7 @@
   # engine copy. An unclaimed consumer link stays outside observation.
   configs = {
     after = lib.recursiveUpdate shared {
-      ai.files2."moved.json" = {
+      ai.files."moved.json" = {
         content.value.moved = true;
         format = "json";
         method = "rw";
@@ -21,9 +21,9 @@
     };
     before = lib.recursiveUpdate shared {
       ai.codex = {
-        files2 = lib.genAttrs ["moved.json" "new.md"] (name: {content.text = name;});
+        files = lib.genAttrs ["moved.json" "new.md"] (name: {content.text = name;});
       };
-      ai.files2.tree = {
+      ai.files.tree = {
         content.source = ./fixtures/tree;
         recursive = true;
       };
@@ -34,21 +34,21 @@
   evaluated = lib.mapAttrs (_: config: (harness.evalDevenv config).config) configs;
   edges = task: {inherit (task) after before;};
   failures =
-    lib.optional (edges evaluated.before.tasks."ai2:files2-snapshot"
+    lib.optional (edges evaluated.before.tasks."ai:files-snapshot"
       != {
         after = [];
         before = ["devenv:files:cleanup"];
       }) "snapshot precedes cleanup"
-    ++ lib.optional (edges evaluated.before.tasks."ai2:files2-inspect"
+    ++ lib.optional (edges evaluated.before.tasks."ai:files-inspect"
       != {
-        after = ["ai2:files-ready"];
+        after = ["ai:files-ready"];
         before = ["devenv:enterShell"];
       }) "inspect follows materialized"
-    ++ lib.optional (!(evaluated.before.tasks."ai2:files2-inspect".showOutput or false)) "inspect output shown";
+    ++ lib.optional (!(evaluated.before.tasks."ai:files-inspect".showOutput or false)) "inspect output shown";
   fixture = builtins.toJSON (lib.mapAttrs (_: config: {
-      inspect = config.tasks."ai2:files2-inspect".exec;
+      inspect = config.tasks."ai:files-inspect".exec;
       links = lib.mapAttrs (_: file: "${file.file}") (lib.filterAttrs (_: file: file.copyMode == "symlink") config.files);
-      snapshot = config.tasks."ai2:files2-snapshot".exec;
+      snapshot = config.tasks."ai:files-snapshot".exec;
     })
     evaluated);
 in {

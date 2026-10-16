@@ -3,27 +3,27 @@
   pkgs,
   ...
 }: let
-  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   tree = ./fixtures/a;
   storeTree = "${tree}";
   linkedTree = ./fixtures;
   file = ./fixtures/a/b/c.md;
   text = {content.text = "hello";};
-  evaluate = definitions: (lib.evalModules {modules = [../modules/common.nix {ai.files2 = definitions;}];}).config.ai.files2;
+  evaluate = definitions: (lib.evalModules {modules = [../modules/common.nix {ai.files = definitions;}];}).config.ai.files;
   plan = backend: files:
-    files2.normalize {
+    fileLib.normalize {
       inherit backend files;
       namespace = "fixture";
     };
   inspect = files:
-    files2.validate {
+    fileLib.validate {
       backend = "hm";
       inherit files;
       namespace = "fixture";
     };
   single = path: value: evaluate {"${path}" = value;};
   bad = path: value: issue: {inherit path value issue;};
-  named = path: issue: ''files2."${path}": ${issue}'';
+  named = path: issue: ''files."${path}": ${issue}'';
   pathIssue = "target must be a normalized relative path without empty, . or .. segments";
   cases =
     map (path: bad path text pathIssue) ["" "/absolute" "a//b" "a/./b" "a/../b"]
@@ -116,7 +116,7 @@
   # A derivation source must normalize without being built: this one cannot
   # build, so any import-from-derivation fails the whole check.
   neverBuilt = derivation {
-    name = "files2-never-built";
+    name = "files-never-built";
     inherit (pkgs.stdenv.hostPlatform) system;
     builder = "/bin/false";
   };
@@ -147,10 +147,10 @@
     lib.optional (result != builtins.elemAt collisionExpected index || (builtins.tryEval (plan "hm" files)).success) "collision")
   collisionFiles;
   priority = default: explicit: expected: let
-    files = (lib.evalModules {modules = [../modules/common.nix {ai.files2.choice.content = lib.mkDefault default;} {ai.files2.choice.content = explicit;}];}).config.ai.files2;
+    files = (lib.evalModules {modules = [../modules/common.nix {ai.files.choice.content = lib.mkDefault default;} {ai.files.choice.content = explicit;}];}).config.ai.files;
   in
     builtins.elem expected (builtins.attrNames (builtins.head (plan "hm" files)).content);
-  merged = (lib.evalModules {modules = [../modules/common.nix {ai.files2.value.content.value.a.x = 1;} {ai.files2.value.content.value.a.y = 2;}];}).config.ai.files2;
+  merged = (lib.evalModules {modules = [../modules/common.nix {ai.files.value.content.value.a.x = 1;} {ai.files.value.content.value.a.y = 2;}];}).config.ai.files;
   tie = inspect (single "tie" {
     content = {
       source = file;
@@ -197,10 +197,10 @@
     ++ lib.concatMap (backend: lib.optional (map (leaf: [leaf.path leaf.content.source]) (linkLeaves backend) != [["linked/link" "${linkedStore}/link"]]) "${backend} directory symlink leaf") ["devenv" "hm"]
     ++ lib.optional (plan "hm" (single "off" {enable = false;}) != []) "disabled";
 in {
-  checks.files2-eval = assert lib.assertMsg (failures == []) "files2 eval fixtures failed: ${lib.concatStringsSep ", " failures}";
-    pkgs.runCommandLocal "files2-eval" {} ''
+  checks.ai-module-files-eval = assert lib.assertMsg (failures == []) "files eval fixtures failed: ${lib.concatStringsSep ", " failures}";
+    pkgs.runCommandLocal "ai-module-files-eval" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      printf 'PASS: files2 schema, recursive normalization, priority, and ${toString (builtins.length cases + builtins.length typeCases)} refusals\n' > "$out"
+      printf 'PASS: files schema, recursive normalization, priority, and ${toString (builtins.length cases + builtins.length typeCases)} refusals\n' > "$out"
     '';
 }

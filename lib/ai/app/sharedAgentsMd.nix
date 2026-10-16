@@ -5,10 +5,10 @@
 #
 # The composer is the layer-1 owner `internal`: the composition becomes its
 # staged entry (`ai.internal._generatedFiles`), is formatted and byte-checked in
-# its one tree, and reaches `ai.files2` as the single claim on the path. The
+# its one tree, and reaches `ai.files` as the single claim on the path. The
 # result is a read-only copy by default, not a store symlink: a committed
 # AGENTS.md that links into /nix/store dangles on every other machine and on
-# github.com. A runtime's own `files2` entry for the path forwards unclaimed
+# github.com. A runtime's own `files` entry for the path forwards unclaimed
 # and arbitrates by module priority. An entry that states its own `method`
 # keeps it.
 {
@@ -120,7 +120,7 @@
     checks = lib.genAttrs generatedFiles.surfaces (surface: config.ai.checks.${surface});
     inherit config;
     entries = generatedFiles.treeEntries {
-      inherit (config.ai) files2;
+      inherit (config.ai) files;
       inherit staged;
     };
     maxBytes = limits;
@@ -139,7 +139,7 @@ in {
     _generatedTree = generatedFiles.generatedTreeOption;
     # The helper declares the composer's layer-1 options; they stay out of the
     # option reference like the rest of `ai.internal`.
-    activation2 = lib.mkOption {visible = false;};
+    activation = lib.mkOption {visible = false;};
     agentsMd = lib.mkOption {
       type = lib.types.attrsOf fileType;
       default = {};
@@ -158,7 +158,7 @@ in {
         instead of inferring the key from a runtime option.
       '';
     };
-    files2 = lib.mkOption {visible = false;};
+    files = lib.mkOption {visible = false;};
   };
 
   config = lib.mkMerge [
@@ -176,7 +176,7 @@ in {
           })
           generatedRendered;
         _generatedTree = tree;
-        files2 = lib.mkMerge [
+        files = lib.mkMerge [
           (generatedFiles.layer1 {inherit staged tree;})
           # Every shared target is the composer's claim, so a runtime's
           # entry alone still lands as a read-only copy, and only when some
@@ -184,11 +184,11 @@ in {
           # (and the tree it points into) stays unevaluated.
           (lib.mapAttrs (filename: _: {
               enable = lib.mkDefault (
-                if config.ai.files2.${filename}._contentPrio < (lib.mkDefault null).priority
+                if config.ai.files.${filename}._contentPrio < (lib.mkDefault null).priority
                 then true
                 else if generatedRendered ? ${filename}
                 then generatedRendered.${filename} != ""
-                else config.ai.files2.${filename}._contentPrio < (lib.mkOptionDefault null).priority
+                else config.ai.files.${filename}._contentPrio < (lib.mkOptionDefault null).priority
               );
               method = lib.mkIf (!staged ? ${filename}) (lib.mkDefault "ro");
             })

@@ -29,9 +29,9 @@
       inherit (evaluated) config;
       plan = lib.filter (item: item.method != "symlink" && lib.hasPrefix ".kiro/steering/" item.path) (files.normalize {
         inherit backend;
-        files = config.ai.files2;
+        files = config.ai.files;
         namespace = "ai";
-        owners = config.ai.files2Owners;
+        owners = config.ai.filesOwners;
       });
     in {
       inherit (config.ai.kiro) legacyLedgers;
@@ -163,19 +163,19 @@ in {
         == lib.sort builtins.lessThan (map (path: prefix + path) paths)
         && lib.all (path: let
           target = prefix + path;
-          entry = config.ai.files2.${target};
+          entry = config.ai.files.${target};
         in
-          config.ai.kiro.files2 ? ${target}
+          config.ai.kiro.files ? ${target}
           && entry.executable == null
           && entry.mode == null
           && fromGeneratedTree target delivered.${target})
         (lib.subtractLists ["settings/cli.json" "settings/mcp.json"] paths)
-        && config.ai.files2.".kiro/steering/scoped.md".method
+        && config.ai.files.".kiro/steering/scoped.md".method
         == {
           devenv = "ro";
           hm = "symlink";
         }
-        && lib.all (path: config.ai.files2.${prefix + path}.method == "symlink") (lib.subtractLists ["settings/cli.json" "settings/mcp.json" "steering/scoped.md"] paths)
+        && lib.all (path: config.ai.files.${prefix + path}.method == "symlink") (lib.subtractLists ["settings/cli.json" "settings/mcp.json" "steering/scoped.md"] paths)
         && (markdownInput evaluated ".kiro/skills/single/SKILL.md").source == "${skill}"
         && lib.all (assertion: assertion.assertion) config.assertions) (builtins.attrNames backends)
     );

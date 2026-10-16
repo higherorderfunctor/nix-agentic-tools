@@ -35,7 +35,7 @@ in
     then throw issue
     else
       {
-        "ai2-files-ready" = hmLib.hm.dag.entryBetween ["ai2-ready"] ["linkGeneration"] "";
-        "ai2-ready" = hmLib.hm.dag.entryAfter ["ai2-files-ready"] "";
+        "ai-files-ready" = hmLib.hm.dag.entryBetween ["ai-ready"] ["linkGeneration"] "";
+        "ai-ready" = hmLib.hm.dag.entryAfter ["ai-files-ready"] "";
       }
       // builtins.listToAttrs (lib.mapAttrsToList lower active)

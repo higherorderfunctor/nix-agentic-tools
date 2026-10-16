@@ -5,9 +5,9 @@
 # still be reported.
 {
   config.ai = {
-    activation2.direct.command = "true";
-    files2."direct.txt".content.text = "direct";
-    files2Owners."direct.txt" = ["direct"];
+    activation.direct.command = "true";
+    files."direct.txt".content.text = "direct";
+    filesOwners."direct.txt" = ["direct"];
     legacyLedgers = [
       {
         codec = "dir";

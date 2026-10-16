@@ -1,6 +1,6 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-15 — every runtime stages its generated files;
+> **Last verified:** 2026-10-16 — every runtime stages its generated files;
 > layer-1 defaults preserve structured siblings and discarded-source laziness;
 > runtime surfaceSupport declarations own normalized backend reach; ai-module
 > alone validates and lowers the final entries after the old path removal.
@@ -169,14 +169,13 @@ the source remains visible. Consumers can retract that generated rule with
 feature flag remains the package-level gate.
 
 **Generated files use layer-1 defaults.** The staging helper contributes
-`ai.<runtime>.files2` content and method at `mkDefault`. Markdown and raw
-content receive a whole-content default, so replacement discards a composed
-source without reading it. Structured documents receive a default on every value
-leaf; a default on the whole document would drop generated siblings when a
-consumer extends one leaf. A consumer suppresses any content form with
-entry-level `enable = false`, and empty text is legal. Disabled owners forward
-no file claims; disabled entries still claim their path while their owner is
-enabled.
+`ai.<runtime>.files` content and method at `mkDefault`. Markdown and raw content
+receive a whole-content default, so replacement discards a composed source
+without reading it. Structured documents receive a default on every value leaf;
+a default on the whole document would drop generated siblings when a consumer
+extends one leaf. A consumer suppresses any content form with entry-level
+`enable = false`, and empty text is legal. Disabled owners forward no file
+claims; disabled entries still claim their path while their owner is enabled.
 
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool
@@ -193,7 +192,7 @@ and out of the package provenance guard.
   `ai.programs.<pkg>.runtimes.<runtime>` leaves are nullable scalars.
   `resolveOverride` interprets runtime null as **inherit**, not delete; a
   non-null runtime scalar wins.
-- `ai.<runtime>.files2` forwards final entries into `ai.files2`; it is not a
+- `ai.<runtime>.files` forwards final entries into `ai.files`; it is not a
   portable root pool. Ordinary module priorities merge fields, with content
   alternatives chosen by priority and structured values merged per leaf.
   Entry-level `enable = false` suppresses delivery.

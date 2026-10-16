@@ -3,7 +3,7 @@
   pkgs,
   ...
 }: let
-  files2 = import ../lib/files/default.nix {inherit lib pkgs;};
+  fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   copy = value: {
     "nested/file.txt" = {
       content.text = value;
@@ -43,7 +43,7 @@
       run = {
         "nested/file.txt" = {
           content.run = ''
-            printf 'run\n' >> "$FILES2_RUN_LOG"
+            printf 'run\n' >> "$FILES_RUN_LOG"
             printf declared
           '';
           method = "ro";
@@ -67,18 +67,18 @@
       };
     }) ["0400" "0500"]);
   normalize = backend: files:
-    files2.normalize {
+    fileLib.normalize {
       inherit backend;
-      files = (lib.evalModules {modules = [../modules/common.nix {ai.files2 = files;}];}).config.ai.files2;
+      files = (lib.evalModules {modules = [../modules/common.nix {ai.files = files;}];}).config.ai.files;
       namespace = "runtime";
     };
   fixtures = lib.genAttrs ["devenv" "hm"] (backend: lib.mapAttrs (_: normalize backend) definitions);
-  plan = pkgs.writeText "files2-ro-plans.json" (builtins.toJSON fixtures);
+  plan = pkgs.writeText "files-ro-plans.json" (builtins.toJSON fixtures);
 in {
-  checks.files2-ro-runtime = pkgs.runCommandLocal "files2-ro-runtime" {} ''
+  checks.ai-module-files-ro-runtime = pkgs.runCommandLocal "ai-module-files-ro-runtime" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    FILES2_BASH=${pkgs.bash}/bin/bash ${pkgs.python3}/bin/python3 -I ${./runtime.py} ${../lib/files}/engine.py ${plan}
-    printf 'PASS: files2 ro runtime\n' > "$out"
+    FILES_BASH=${pkgs.bash}/bin/bash ${pkgs.python3}/bin/python3 -I ${./runtime.py} ${../lib/files}/engine.py ${plan}
+    printf 'PASS: files ro runtime\n' > "$out"
   '';
 }

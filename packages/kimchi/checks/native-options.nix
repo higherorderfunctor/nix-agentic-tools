@@ -88,7 +88,7 @@
   failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
   # The user harness settings.json Home Manager copies, decoded.
   hmHarnessSettings = evaluated:
-    evaluated.config.ai.files2."${evaluated.config.ai.kimchi.configDir}/harness/settings.json".content.value;
+    evaluated.config.ai.files."${evaluated.config.ai.kimchi.configDir}/harness/settings.json".content.value;
   hmHarness = harnessSettings:
     hmHarnessSettings (evalHm {
       ai.kimchi = {

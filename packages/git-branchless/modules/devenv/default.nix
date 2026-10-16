@@ -1,7 +1,7 @@
 # `git.branchless.*` on devenv: repository-local git configuration
 # (../options.nix declares the tree), plus `git branchless init`.
 #
-# `ai2:git-branchless-init` runs lib/git-tool-settings/repo-config.sh `init` on
+# `ai:git-branchless-init` runs lib/git-tool-settings/repo-config.sh `init` on
 # every shell entry while `git.branchless.enable` is true: before
 # `git:config` (packages/git), because a first init appends its own include
 # and NAT's must end up after it, and before devenv installs Git hooks, so
@@ -57,7 +57,7 @@ in {
     }
 
     {
-      ai.git-branchless.activation2.git-branchless-init = {
+      ai.git-branchless.activation.git-branchless-init = {
         beforeNodes.devenv = ["git:config"] ++ lib.optional gitHooksEnabled "devenv:git-hooks:install";
         command = ''
           if ! ${lib.getExe script} init "$DEVENV_ROOT" ${lib.getExe config.ai.internal.packages.gitTools.git-branchless}${lib.optionalString (cfg.settings.core.mainBranch != null) " ${lib.escapeShellArg cfg.settings.core.mainBranch}"}; then

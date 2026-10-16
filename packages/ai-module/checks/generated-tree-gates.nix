@@ -34,7 +34,7 @@
           enable = true;
           # Only the skill: the devenv settings link is built from the tree too,
           # and a non-empty unpin map stages Home Manager's `.claude.json`.
-          files2.".claude/settings.json".enable = false;
+          files.".claude/settings.json".enable = false;
           skills.probe = ./fixtures/probe-skill;
           unpinLaunchEffort = {};
         };

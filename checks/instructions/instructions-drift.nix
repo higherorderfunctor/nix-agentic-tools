@@ -49,9 +49,9 @@
     # path while these Markdown bytes remain identical.
     instructionPlans = evaluated:
       map (target: harness.markdownInput evaluated target.path)
-      ((composed evaluated).targets ++ (harness.ownPlan "copilot" "files2-apply" evaluated).targets);
+      ((composed evaluated).targets ++ (harness.ownPlan "copilot" "files-apply" evaluated).targets);
     # The shared AGENTS.md composer's files, as the files engine writes them.
-    composed = harness.ownPlan "internal" "files2-apply";
+    composed = harness.ownPlan "internal" "files-apply";
     failedAssertions = map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) repo.config.assertions);
     # Dev skills stay in the root pool until their program migration. Pin the
     # declared gaps they request rather than suppressing those real warnings.
@@ -71,7 +71,7 @@
     copilotInstructions = pkgs.linkFarm "expected-github-instructions" (map (target: {
       name = lib.removePrefix ".github/instructions/" target.path;
       path = target.content.source;
-    }) (lib.filter (target: lib.hasPrefix ".github/instructions/" target.path) (harness.ownPlan "copilot" "files2-apply" repo).targets));
+    }) (lib.filter (target: lib.hasPrefix ".github/instructions/" target.path) (harness.ownPlan "copilot" "files-apply" repo).targets));
 
     # Each entry: the tracked path, and the file to compare it against.
     # `regenerate` is the task the failure message names.

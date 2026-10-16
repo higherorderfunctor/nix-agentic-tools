@@ -312,7 +312,7 @@ in {
         (lib.mkMerge [
           (installPackages [installedPackage])
           {
-            ai.semble.activation2.semble-cache-guard = {
+            ai.semble.activation.semble-cache-guard = {
               after = ["materialized"];
               command = lib.getExe cacheGuard;
             };

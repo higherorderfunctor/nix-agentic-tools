@@ -75,7 +75,7 @@ which locked `/login` out; do not move them back.
                              ▼  routing + native rendering
 ┌────────────────────────────────────────────────────────────┐
 │ L4: Final runtime output map                               │
-│   ai.<cli>.files2 = attrsOf { content; ... }       │
+│   ai.<cli>.files = attrsOf { content; ... }       │
 │   - text/source default; structured leaves compose         │
 │   - sibling fields compose; enable suppresses entries       │
 └────────────────────────────────────────────────────────────┘
@@ -107,7 +107,7 @@ rather than a second path field: a runtime names exactly the groups it moves.
 ### Rules
 
 - **Artifact routing/rendering lives at L4; physical emission lives at L5.**
-  L1/L2/L2b are pure fanout — they never touch `ai.<runtime>.files2`,
+  L1/L2/L2b are pure fanout — they never touch `ai.<runtime>.files`,
   `home.file.*`, or devenv `files.*`. The one sidecar exception is managed MCP
   proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes and
   emits unique active systemd units, while only lowered client entries traverse
@@ -142,9 +142,8 @@ rather than a second path field: a runtime names exactly the groups it moves.
   and runtime state, so it uses `rw` on Home Manager only. Empty unpin
   declarations stage no document; the engine still retires previous keys. The
   legacy JSON ledger is declared while disabled too.
-  `activation2.claude-config-mode` runs after `materialized`, even with no
-  flags, stripping group and other access from regular files while Claude is
-  enabled.
+  `activation.claude-config-mode` runs after `materialized`, even with no flags,
+  stripping group and other access from regular files while Claude is enabled.
 - **The CLI's write primitive picks the method.** Codex's `config.toml` is a
   store symlink on both backends: every Codex config writer writes a temporary
   beside the link's target, so an in-app save fails and the link survives
@@ -154,18 +153,18 @@ rather than a second path field: a runtime names exactly the groups it moves.
   the `app-server-daemon` directory. Kiro and Kimchi rename too, so their
   settings are copies as well.
 - **Commands use layer 3.** Codex's skill-link migrator owns no ledger and uses
-  `activation2.codex-migrate-skill-links`, with `after = []` and
+  `activation.codex-migrate-skill-links`, with `after = []` and
   `before = ["linkCheck"]` on both backends. Home Manager's outer `run` makes
-  dry runs inert. Its daemon selector uses `activation2.codex-daemon-select` on
+  dry runs inert. Its daemon selector uses `activation.codex-daemon-select` on
   Home Manager, with `runWhenDisabled = true`. Directory skill sources keep
   `recursive = false` because Codex discovers directory symlinks.
 - **devenv guards native links after pruning.** The base emits one
-  `ai2:files2-guard` from the final native file map. It follows cleanup, prune
-  and commands positioned before `linkCheck`, then precedes native file
-  creation. It removes stale store-backed links and refuses foreign links or
-  real files at desired link paths. The engine retires copies before this check,
-  so a copy-to-link transition completes in one generation. With no native files
-  the graph uses its internal linked point instead of requiring a missing
+  `ai:files-guard` from the final native file map. It follows cleanup, prune and
+  commands positioned before `linkCheck`, then precedes native file creation. It
+  removes stale store-backed links and refuses foreign links or real files at
+  desired link paths. The engine retires copies before this check, so a
+  copy-to-link transition completes in one generation. With no native files the
+  graph uses its internal linked point instead of requiring a missing
   `devenv:files` task. A failed guard prevents dependent file creation and shell
   tasks from succeeding.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` is a
@@ -333,7 +332,7 @@ absence cells without policy edits.
 - managed MCP proxy ownership, validation, and systemd unit aggregation →
   `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
 - per-scope package ownership guard → `checks/module-provenance/helpers.nix`
-- L4 per-runtime routing/rendering into `ai.<runtime>.files2` →
+- L4 per-runtime routing/rendering into `ai.<runtime>.files` →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex and
@@ -389,7 +388,7 @@ absence cells without policy edits.
    lowers only some fields keeps it and warns for the rest.
 4. Add L4 routing/rendering into `ai.<runtime>._generatedFiles` in each
    supporting per-CLI factory's `config`. State content, format, method and
-   surface; commands use `ai.<runtime>.activation2`. Retired writers declare
+   surface; commands use `ai.<runtime>.activation`. Retired writers declare
    their `legacyLedgers` outside the enable gate.
 5. Let ai-module lower the entries; change its backend only when the delivery
    contract changes. Never write `home.file`, `home.activation`, `files` or

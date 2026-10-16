@@ -16,20 +16,20 @@
       value = "${config.files.${item.path}.file}";
     })
     files.links);
-  targetFile = pkgs.writeText "files2-ai-native.json" (builtins.toJSON nativeTargets);
+  targetFile = pkgs.writeText "files-ai-native.json" (builtins.toJSON nativeTargets);
   copyOverride = lib.findFirst (path: builtins.hasAttr path config.files && config.files.${path}.copyMode != "symlink") null (map (item: item.path) files.plan);
-  duplicate = files.duplicate ["files2-apply" "files2-guard" "files2-inspect" "files2-prune" "files2-snapshot"];
+  duplicate = files.duplicate ["files-apply" "files-guard" "files-inspect" "files-prune" "files-snapshot"];
   nativeFiles = builtins.attrNames config.files != [];
   # The observer's ownership: each plan path named by the option that declares
-  # it (its layer-1 claim, else `ai.files2`). Recursive entries use their
+  # it (its layer-1 claim, else `ai.files`). Recursive entries use their
   # expanded leaf paths.
-  enabledKeys = builtins.filter (key: config.ai.files2.${key}.enable) (builtins.attrNames config.ai.files2);
+  enabledKeys = builtins.filter (key: config.ai.files.${key}.enable) (builtins.attrNames config.ai.files);
   optionFor = path: let
     key = lib.findFirst (key: key == path || lib.hasPrefix "${key}/" path) path enabledKeys;
-    claim = config.ai.files2Owners.${key} or [];
-  in "ai.${lib.concatMapStrings (owner: "${owner}.") claim}files2.${builtins.toJSON key}";
+    claim = config.ai.filesOwners.${key} or [];
+  in "ai.${lib.concatMapStrings (owner: "${owner}.") claim}files.${builtins.toJSON key}";
   owned = lib.genAttrs (map (item: item.path) files.plan) optionFor;
-  observed = pkgs.writeText "files2-ai-observed.json" (builtins.toJSON {
+  observed = pkgs.writeText "files-ai-observed.json" (builtins.toJSON {
     current = builtins.attrNames config.files ++ builtins.attrNames owned;
     links = lib.mapAttrs (name: file: {
       option = owned.${name};
@@ -44,15 +44,15 @@
   generated =
     {
       # Reports what devenv did not deliver; devenv hides a passing task's output.
-      files2-inspect = files.generatedEntry {
+      files-inspect = files.generatedEntry {
         after = ["materialized"];
         before = ["shell"];
         command = observe "inspect";
         showOutput = true;
       };
-      files2-prune = files.prune;
+      files-prune = files.prune;
       # Reads devenv's previous link list before its cleanup rewrites it.
-      files2-snapshot = files.generatedEntry {
+      files-snapshot = files.generatedEntry {
         after = [];
         before = [];
         beforeNodes = {
@@ -63,10 +63,10 @@
       };
     }
     // lib.optionalAttrs (files.plan != []) {
-      files2-apply = files.generatedEntry {
+      files-apply = files.generatedEntry {
         after = ["files"] ++ lib.optionals files.usesRun ["secrets"];
         afterNodes = {
-          devenv = lib.optional guarded "ai2:files2-guard" ++ ["ai2:files2-prune"];
+          devenv = lib.optional guarded "ai:files-guard" ++ ["ai:files-prune"];
           hm = [];
         };
         before = ["materialized"];
@@ -74,7 +74,7 @@
       };
     }
     // lib.optionalAttrs guarded {
-      files2-guard = files.generatedEntry {
+      files-guard = files.generatedEntry {
         after = ["linkCheck"];
         before = ["files"];
         beforeNodes = {
@@ -89,12 +89,12 @@ in {
   config = lib.mkMerge [
     {
       files = files.native;
-      tasks = assert lib.assertMsg (duplicate == null) "ai.activation2.${duplicate}: reserved generated entry";
-      assert lib.assertMsg (copyOverride == null) "ai.files2.\"${copyOverride}\": native copyMode override refused";
+      tasks = assert lib.assertMsg (duplicate == null) "ai.activation.${duplicate}: reserved generated entry";
+      assert lib.assertMsg (copyOverride == null) "ai.files.\"${copyOverride}\": native copyMode override refused";
         import ../../lib/lower-devenv.nix {inherit lib;} {
-          entries = generated // config.ai.activation2;
+          entries = generated // config.ai.activation;
           inherit nativeFiles;
-          secretNodes = config.ai.activation2Order.secretNodes;
+          secretNodes = config.ai.activationOrder.secretNodes;
         };
     }
     # Repository formatting never rewrites a delivered file. A backend without

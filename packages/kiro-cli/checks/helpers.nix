@@ -44,7 +44,7 @@
     (lib.filterAttrs (target: _entry: lib.hasPrefix prefix target) evaluated.config.ai.kiro._generatedFiles);
   # Read the live layer-1 value before the generated tree renders it.
   kiroCliSettings = ev:
-    ev.config.ai.kiro.files2."${ev.config.ai.kiro.configDir}/settings/cli.json".content.value;
+    ev.config.ai.kiro.files."${ev.config.ai.kiro.configDir}/settings/cli.json".content.value;
 in {
   inherit idempotentFlags kiroCliSettings kiroSteeringContent kiroWrappedDrvs renderKiroSecrets renderedMcpJson soleFork soleSame;
 }

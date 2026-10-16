@@ -1,6 +1,6 @@
 # The shared repository AGENTS.md on devenv, through every repository module.
 # Its composer (`ai.internal`) is the path's one claimant; a runtime's
-# `files2."AGENTS.md"` forwards unclaimed and arbitrates by module priority:
+# `files."AGENTS.md"` forwards unclaimed and arbitrates by module priority:
 # agreeing definitions merge, an ordinary one replaces the composition,
 # `enable = false` suppresses it, divergent ones at one priority fail, and a
 # dormant runtime's entry is ignored. A replacing source is never read during
@@ -91,7 +91,7 @@
     inherit
       (harness.evalDevenv (lib.foldl' lib.recursiveUpdate (lib.optionalAttrs (context != null) {ai.context.text = context;}) (
         map (runtime: harness.setEnable runtime true) enabled
-        ++ lib.mapAttrsToList (runtime: entry: {ai.${runtime}.files2.${path} = entry;}) defs
+        ++ lib.mapAttrsToList (runtime: entry: {ai.${runtime}.files.${path} = entry;}) defs
       )))
       config
       ;
@@ -100,7 +100,7 @@
       if expect == "composed"
       then {source = "${config.ai.internal._generatedTree}/${path}";}
       else expect;
-    shape = lib.optional (config.ai.files2Owners.${path} or [] != ["internal"]) "claimant";
+    shape = lib.optional (config.ai.filesOwners.${path} or [] != ["internal"]) "claimant";
     outcome =
       if expect == "fails"
       then lib.optional (builtins.tryEval (builtins.deepSeq delivered.${path} true)).success "evaluates"
@@ -108,7 +108,7 @@
       then lib.optional (delivered ? ${path} || builtins.elem path config.ai.deliveredPaths) "delivered" ++ shape
       else
         lib.optional (delivered.${path} or null != wanted // {method = "ro";}) "content"
-        ++ lib.optional (config.ai.files2.${path}.format != "markdown") "format"
+        ++ lib.optional (config.ai.files.${path}.format != "markdown") "format"
         ++ lib.optional (!builtins.elem path config.ai.deliveredPaths) "delivered paths"
         ++ shape;
   in
@@ -124,7 +124,7 @@
     harness.evalDevenv {
       ai.claude = {
         enable = true;
-        files2 = {
+        files = {
           ".claude/hooks/raw-probe".content.source = ../../../dev/scripts/update-report.sh;
           ".claude/settings.json".enable = false;
         };

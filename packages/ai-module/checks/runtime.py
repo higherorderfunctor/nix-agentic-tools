@@ -1,4 +1,4 @@
-"""Execute the files2 engine on normalized plans and real directories."""
+"""Execute the files engine on normalized plans and real directories."""
 
 import importlib.util
 import json
@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 
-spec = importlib.util.spec_from_file_location("files2_engine", sys.argv[1])
+spec = importlib.util.spec_from_file_location("files_engine", sys.argv[1])
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 fixtures = json.loads(Path(sys.argv[2]).read_text())
@@ -66,11 +66,11 @@ for backend, plans in sorted(fixtures.items()):
             assert (written_root / "a").read_text() == "declared"
             assert list(json.loads(written_state.read_text())["files"]) == ["a"]
             run_log = Path(persistence) / "run.log"
-            os.environ["FILES2_RUN_LOG"] = str(run_log)
+            os.environ["FILES_RUN_LOG"] = str(run_log)
             try:
                 engine.reconcile(plans["run"], written_root, written_state, "apply")
             finally:
-                del os.environ["FILES2_RUN_LOG"]
+                del os.environ["FILES_RUN_LOG"]
             assert run_log.read_text() == "run\n"
             assert (written_root / "nested/file.txt").read_text() == "declared"
         with tempfile.TemporaryDirectory() as ownership:

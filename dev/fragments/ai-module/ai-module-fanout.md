@@ -1,6 +1,6 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-15 — runtime factories stage moved surfaces in
+> **Last verified:** 2026-10-16 — runtime factories stage moved surfaces in
 > `_generatedFiles` (every runtime surface included) and forward them through
 > the ai-module layer-1 helper over one generated tree, which every staged
 > entry's delivery requires; the shared AGENTS.md composer is the layer-1 owner
@@ -121,7 +121,7 @@ Copilot sets `pools = ["github"]` and reserves `launcher = ["cli"]`; it ships no
 package, so it has no launcher, and its root `enable` stays the switch.
 
 No runtime hands its files to an upstream `programs.<cli>` or devenv
-integration: every one delivers through `ai.<runtime>.files2`, so there is no
+integration: every one delivers through `ai.<runtime>.files`, so there is no
 second enable to flip or to override. Claude asserts the exclusion, because its
 upstream modules write the same files: `ai.claude.enable` beside Home Manager's
 `programs.claude-code.enable` or devenv's `claude.code.enable` fails evaluation.
@@ -181,13 +181,13 @@ notice. Module fixtures execute the rendered command for every runtime; this
 replaces the repository-only fail-hard `enterTest` loop.
 
 Commands that must release state while an owner is disabled use
-`activation2.<key>.runWhenDisabled = true` outside its product gate. Codex's
-Home Manager daemon selector does this. Every retired writer's ledger is
-forwarded unconditionally through `legacyLedgers`, so the engine imports and
-drains copies even when an owner is disabled at its first upgrade. The engine
-prunes before native link checks; ordinary product files and commands remain
-gated. Keep a configured directory unchanged for the activation that drains its
-old ledger, then change it in a later generation.
+`activation.<key>.runWhenDisabled = true` outside its product gate. Codex's Home
+Manager daemon selector does this. Every retired writer's ledger is forwarded
+unconditionally through `legacyLedgers`, so the engine imports and drains copies
+even when an owner is disabled at its first upgrade. The engine prunes before
+native link checks; ordinary product files and commands remain gated. Keep a
+configured directory unchanged for the activation that drains its old ledger,
+then change it in a later generation.
 
 ### Why there's no master switch
 
@@ -559,7 +559,7 @@ non-empty list for `fileMatch` content.
   indirection upstream, so an assertion rejects it on both backends on every
   typed route into an `[mcp_servers.<name>.oauth]` table: each server's `codex`
   block, `native.settings.mcp_servers`, and
-  `ai.codex.native.agents.<name>.mcp_servers`. Raw `ai.codex.files2` content and
+  `ai.codex.native.agents.<name>.mcp_servers`. Raw `ai.codex.files` content and
   raw `ai.codex.agents` TOML are not inspected. Direct
   `ai.codex.native.settings.mcp_servers` cannot be combined with either typed
   pool because their table ownership would be ambiguous. Credential-injecting
@@ -653,7 +653,7 @@ launcher pool (`ai.kiro.cli.environmentVariables`) or pool namespace
 A context or rule unit that resolves for a runtime but lands in a file whose
 final entry has `enable = false` warns too, root or per-runtime: the file option
 that switched it off is the consumer's own, and the drop used to be silent (this
-repository's Codex rules vanished behind `files2."AGENTS.md".enable = false`).
+repository's Codex rules vanished behind `files."AGENTS.md".enable = false`).
 The record's `contentTargets` callback names each unit's path from the same
 bindings its delivery uses; for a shared AGENTS.md key the final entry is the
 owner's and the message names the runtime whose public entry disabled it. Every
@@ -662,7 +662,7 @@ such warning has a per-runtime remedy, so it never repeats forever:
 `ai.<runtime>.normalized.context = lib.mkForce null` for context (root and
 runtime context compose, so `ai.<runtime>.context.enable = false` would not
 withhold the root part). A file REPLACED with the consumer's own bytes
-(`files2.<path>.content.text = …`, or a `source`) drops the same units and warns
+(`files.<path>.content.text = …`, or a `source`) drops the same units and warns
 the same way. `generatedFiles.nix` detects replacement from the selected content
 alternative and priority; Markdown and raw defaults are whole-content
 definitions, while structured values retain generated siblings. A sibling-only
@@ -703,7 +703,7 @@ instead — Codex reads both layers natively.
 
 Every runtime stages generated files in `ai.<runtime>._generatedFiles`: content,
 format, method and surface. The staging helper forwards them through
-`ai.<runtime>.files2` to the shared `ai.files2` plan, preserving priorities.
+`ai.<runtime>.files` to the shared `ai.files` plan, preserving priorities.
 Consumers override the final backend-root-relative path at layer 1. Entry-level
 `enable = false` suppresses any content form; empty text is legal. Structured
 values receive a default per leaf, so one consumer leaf preserves generated
@@ -728,8 +728,8 @@ stages one Markdown copy, guarded by the contributing runtime limits, and keeps
 its old ledger in `legacyLedgers`. Codex stages settings, agents, hooks, skills
 and user context as links, execpolicy as `ro` raw copies on both backends, and
 daemon settings as `ro` JSON on Home Manager only. Its ungated legacy
-declarations cover both deleted copy writers. `activation2.codex-daemon-select`
-runs while disabled; `activation2.codex-migrate-skill-links` runs before
+declarations cover both deleted copy writers. `activation.codex-daemon-select`
+runs while disabled; `activation.codex-migrate-skill-links` runs before
 `linkCheck` on both backends, with `after = []`.
 
 Every runtime factory imports the layer-1 helper. Only staged entries feed
@@ -928,8 +928,8 @@ ownership. The `rootPoolViolations` provenance guard in
 `checks/module-provenance/helpers.nix` enforces this by reading each root
 option's `definitionsWithLocations`. The declaring module is exempt, which lets
 `sharedOptions.nix` perform its root L1→L2 Dir reshape. So is
-`packages/ai-module/lib/runtime.nix`, for `ai.activation2`, `ai.files2`,
-`ai.files2Owners` and `ai.legacyLedgers` only: it re-publishes each owner's
+`packages/ai-module/lib/runtime.nix`, for `ai.activation`, `ai.files`,
+`ai.filesOwners` and `ai.legacyLedgers` only: it re-publishes each owner's
 layer-1 options at the root and sets `_file`, so its definitions report the
 helper instead of the importing owner.
 

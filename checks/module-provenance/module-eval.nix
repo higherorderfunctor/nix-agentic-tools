@@ -250,8 +250,8 @@ in {
           })
           {
             ai.probe = {
-              activation2.probe.command = "true";
-              files2."probe.txt".content.text = "probe";
+              activation.probe.command = "true";
+              files."probe.txt".content.text = "probe";
               legacyLedgers = [
                 {
                   codec = "dir";

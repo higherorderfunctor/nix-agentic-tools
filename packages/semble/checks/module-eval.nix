@@ -84,7 +84,7 @@ in {
         ["/consumer-cache" "/home/test/.cache/nix" "/home/test/.cache/semble"]
         && builtins.length (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots == 3
         && builtins.all
-        (root: builtins.elem root devenv.ai.codex.files2.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots)
+        (root: builtins.elem root devenv.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots)
         ["/consumer-cache" "/tmp/devenv-root/.git" "/tmp/devenv-state/semble-cache"]
         # Both backends make their selected cache authoritative through the
         # launcher wrapper. Never through the surrounding shell: that would
@@ -94,8 +94,8 @@ in {
         && readOnly.ai.codex.native.settings.sandbox_workspace_write == null
         && noCodex.ai.codex.native.settings.sandbox_workspace_write == null
         && profileOnly.ai.codex.native.settings.sandbox_workspace_write == null
-        && profileOnly.ai.codex.files2.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "write"
-        && profileDenied.ai.codex.files2.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "deny"
+        && profileOnly.ai.codex.files.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "write"
+        && profileDenied.ai.codex.files.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "deny"
         && builtins.all (assertion: assertion.assertion) profileOnly.assertions
         && builtins.all (assertion: assertion.assertion) profileDenied.assertions
     );
@@ -385,9 +385,9 @@ in {
             pattern = "flake.lock";
           }
         ]
-        && hm.home.activation ? ai2-semble-cache-guard
-        && lib.hasInfix "semble-cache-guard" hm.home.activation.ai2-semble-cache-guard.text
-        && lib.hasInfix "semble-cache-guard" devenv.tasks."ai2:semble-cache-guard".exec
+        && hm.home.activation ? ai-semble-cache-guard
+        && lib.hasInfix "semble-cache-guard" hm.home.activation.ai-semble-cache-guard.text
+        && lib.hasInfix "semble-cache-guard" devenv.tasks."ai:semble-cache-guard".exec
         && lib.hasSuffix "/bin/semble-mcp" devenv.ai.codex.mcpServers.semble.command
     );
 
@@ -737,8 +737,8 @@ in {
         hm = (evalHm {}).config;
         devenv = (evalDevenv {}).config;
       in
-        !(hm.home.activation ? ai2-semble-cache-guard)
-        && !(devenv.tasks ? "ai2:semble-cache-guard")
+        !(hm.home.activation ? ai-semble-cache-guard)
+        && !(devenv.tasks ? "ai:semble-cache-guard")
     );
 
     # `install = false` drops the launchers and cache guard on both backends
@@ -767,10 +767,10 @@ in {
         && isSemble (sembleOnly devenvOn.packages devenvOff.packages)
         && sembleOnly hmOff.home.packages hmOn.home.packages == []
         && sembleOnly devenvOff.packages devenvOn.packages == []
-        && hmOn.home.activation ? ai2-semble-cache-guard
-        && !(hmOff.home.activation ? ai2-semble-cache-guard)
-        && !(devenvOff.tasks ? "ai2:semble-cache-guard")
-        && lib.hasInfix "semble-cache-guard" devenvOn.tasks."ai2:semble-cache-guard".exec
+        && hmOn.home.activation ? ai-semble-cache-guard
+        && !(hmOff.home.activation ? ai-semble-cache-guard)
+        && !(devenvOff.tasks ? "ai:semble-cache-guard")
+        && lib.hasInfix "semble-cache-guard" devenvOn.tasks."ai:semble-cache-guard".exec
         && markdownText hmOff ".codex/AGENTS.md" == markdownText hmOn ".codex/AGENTS.md"
         && markdownText devenvOff "AGENTS.md" == markdownText devenvOn "AGENTS.md"
         && fromGeneratedTree "AGENTS.md" (deliveredFiles devenvOff)."AGENTS.md"
@@ -821,7 +821,7 @@ in {
             package = sembleStub;
           };
           xdg.cacheHome = cacheHome;
-        }).config.home.activation.ai2-semble-cache-guard.text;
+        }).config.home.activation.ai-semble-cache-guard.text;
     in
       pkgs.runCommand "module-test-semble-cache-guard-runtime" {} ''
         set -euETo pipefail

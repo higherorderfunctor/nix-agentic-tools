@@ -1,4 +1,4 @@
-# What both backend modules derive from `ai.files2`: one normalized plan, the
+# What both backend modules derive from `ai.files`: one normalized plan, the
 # native link map, the engine invocation and the generated activation entries.
 {
   lib,
@@ -10,19 +10,19 @@
   # Parent of the engine state and of the legacy ownership ledgers it imports.
   stateRoot,
 }: let
-  files2 = import ./default.nix {inherit lib pkgs;};
+  fileLib = import ./default.nix {inherit lib pkgs;};
   python = pkgs.python3.withPackages (ps: [ps.pyyaml ps.tomlkit]);
-  plan = files2.normalize {
+  plan = fileLib.normalize {
     inherit backend;
-    files = config.ai.files2;
+    files = config.ai.files;
     namespace = "ai";
-    owners = config.ai.files2Owners;
+    owners = config.ai.filesOwners;
   };
-  planFile = pkgs.writeText "files2-ai-plan.json" (builtins.toJSON plan);
+  planFile = pkgs.writeText "files-ai-plan.json" (builtins.toJSON plan);
   links = builtins.filter (item: item.method == "symlink") plan;
-  sourceOf = item: item.content.source or (item.content.rendered or (pkgs.writeText "files2-link" item.content.text));
+  sourceOf = item: item.content.source or (item.content.rendered or (pkgs.writeText "files-link" item.content.text));
   # Generated entries are added by the lowering, never defined into the
-  # `ai.activation2` option, so no caller priority can remove them.
+  # `ai.activation` option, so no caller priority can remove them.
   generatedEntry = attrs:
     {
       afterNodes = {
@@ -42,10 +42,10 @@
     }
     // attrs;
   phase = name: ''
-    export FILES2_BASH=${pkgs.bash}/bin/bash
+    export FILES_BASH=${pkgs.bash}/bin/bash
     ${python}/bin/python3 -I ${./.}/engine.py \
       --plan ${planFile} --root "${root}" \
-      --state "${stateRoot}/files2/ai.json" \
+      --state "${stateRoot}/files/ai.json" \
       --legacy-plan ${lib.escapeShellArg (builtins.toJSON config.ai.legacyLedgers)} \
       --legacy-state "${stateRoot}" \
       --phase ${name}
@@ -61,7 +61,7 @@ in {
     links);
   usesRun = builtins.any (item: item.content ? run) plan;
   # A caller key on a reserved generated name is refused, not merged.
-  duplicate = reserved: lib.findFirst (name: builtins.hasAttr name config.ai.activation2) null reserved;
+  duplicate = reserved: lib.findFirst (name: builtins.hasAttr name config.ai.activation) null reserved;
   # Always emitted so removing the last file still drains (N->0). The engine
   # deletes its state once nothing is owned, and each old ledger once it is
   # imported, so for an empty map neither file existing means nothing to
@@ -72,7 +72,7 @@ in {
     before = ["linkCheck"];
     command =
       lib.optionalString (plan == []) ''
-        [ -e "${stateRoot}/files2/ai.json" ]${lib.concatMapStrings (ledger: " || [ -e \"${stateRoot}\"/${lib.escapeShellArg ledger.ledger} ]") config.ai.legacyLedgers} || exit 0
+        [ -e "${stateRoot}/files/ai.json" ]${lib.concatMapStrings (ledger: " || [ -e \"${stateRoot}\"/${lib.escapeShellArg ledger.ledger} ]") config.ai.legacyLedgers} || exit 0
       ''
       + phase "prune";
   };

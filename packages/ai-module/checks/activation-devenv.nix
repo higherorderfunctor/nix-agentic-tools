@@ -8,7 +8,7 @@
   entries = hasNative: {
     apply = {
       after = ["files" "secrets"];
-      afterNodes.devenv = ["ai2:guard" "ai2:prune"];
+      afterNodes.devenv = ["ai:guard" "ai:prune"];
       before = ["materialized"];
       command = ''${pkgs.coreutils}/bin/printf applied > "$DEVENV_ROOT/applied"'';
     };
@@ -56,7 +56,7 @@
       modules = [
         harness.devenvStubs
         ../modules/devenv/default.nix
-        {ai.activation2 = entries hasNative;}
+        {ai.activation = entries hasNative;}
         (lib.optionalAttrs hasNative {files.native.source = ../docs/DESIGN.md;})
       ];
     }).config;
@@ -68,27 +68,27 @@
     config,
     hasNative,
   }: let
-    # No files2 link emits no guard, so link-check reaches the next anchor.
+    # No files link emits no guard, so link-check reaches the next anchor.
     linkedFrom =
       if hasNative
       then "devenv:files"
-      else "ai2:link-check";
+      else "ai:link-check";
     linkTo =
       if hasNative
       then "devenv:files"
-      else "ai2:files-linked";
+      else "ai:files-linked";
     inherit (config) tasks;
   in
-    lib.optional (config.ai.activation2Order.secretNodes != []) "default secret nodes"
-    ++ lib.optional (tasks."ai2:link-check".after != ["devenv:files:cleanup"] || tasks."ai2:link-check".before != [linkTo]) "link check"
-    ++ lib.optional (tasks."ai2:files-linked".after != [linkedFrom] || tasks."ai2:files-linked".before != ["ai2:files-ready"]) "files linked"
-    ++ lib.optional (tasks."ai2:files-ready".after != ["ai2:files-linked"] || tasks."ai2:files-ready".before != ["devenv:enterShell"]) "files ready"
-    ++ lib.optional (tasks."ai2:guard".after != ["ai2:link-check"] || tasks."ai2:guard".before != ["ai2:files-linked"] ++ lib.optional hasNative "devenv:files") "guard edges"
-    ++ lib.optional (tasks."ai2:prune".after != ["devenv:files:cleanup"] || tasks."ai2:prune".before != ["ai2:link-check"]) "prune drain"
-    ++ lib.optional (tasks."ai2:preLink".after != ["devenv:files:cleanup"] || tasks."ai2:preLink".before != ["ai2:link-check"]) "pre-link cleanup"
-    ++ lib.optional (tasks."ai2:beforeCleanup".after != [] || tasks."ai2:beforeCleanup".before != ["ai2:link-check" "devenv:files:cleanup"]) "before-cleanup exception"
-    ++ lib.optional (tasks."ai2:apply".after != ["ai2:files-linked" "ai2:guard" "ai2:prune"] || tasks."ai2:apply".before != ["ai2:files-ready"]) "apply edges"
-    ++ lib.optional (builtins.hasAttr "ai2:disabled" tasks || !(builtins.hasAttr "external:success" tasks)) "enable and name"
+    lib.optional (config.ai.activationOrder.secretNodes != []) "default secret nodes"
+    ++ lib.optional (tasks."ai:link-check".after != ["devenv:files:cleanup"] || tasks."ai:link-check".before != [linkTo]) "link check"
+    ++ lib.optional (tasks."ai:files-linked".after != [linkedFrom] || tasks."ai:files-linked".before != ["ai:files-ready"]) "files linked"
+    ++ lib.optional (tasks."ai:files-ready".after != ["ai:files-linked"] || tasks."ai:files-ready".before != ["devenv:enterShell"]) "files ready"
+    ++ lib.optional (tasks."ai:guard".after != ["ai:link-check"] || tasks."ai:guard".before != ["ai:files-linked"] ++ lib.optional hasNative "devenv:files") "guard edges"
+    ++ lib.optional (tasks."ai:prune".after != ["devenv:files:cleanup"] || tasks."ai:prune".before != ["ai:link-check"]) "prune drain"
+    ++ lib.optional (tasks."ai:preLink".after != ["devenv:files:cleanup"] || tasks."ai:preLink".before != ["ai:link-check"]) "pre-link cleanup"
+    ++ lib.optional (tasks."ai:beforeCleanup".after != [] || tasks."ai:beforeCleanup".before != ["ai:link-check" "devenv:files:cleanup"]) "before-cleanup exception"
+    ++ lib.optional (tasks."ai:apply".after != ["ai:files-linked" "ai:guard" "ai:prune"] || tasks."ai:apply".before != ["ai:files-ready"]) "apply edges"
+    ++ lib.optional (builtins.hasAttr "ai:disabled" tasks || !(builtins.hasAttr "external:success" tasks)) "enable and name"
     ++ lib.optional (!hasNative && lib.any (task: lib.elem "devenv:files" (task.after ++ task.before)) (builtins.attrValues tasks)) "missing native task edge";
   provider = evaluate false;
   withProvider =
@@ -97,8 +97,8 @@
       modules = [
         harness.devenvStubs
         ../modules/devenv/default.nix
-        {ai.activation2Order.secretNodes = ["vault:ready"];}
-        {ai.activation2 = entries false;}
+        {ai.activationOrder.secretNodes = ["vault:ready"];}
+        {ai.activation = entries false;}
       ];
     }).config.tasks;
   validate = definitions:
@@ -106,8 +106,8 @@
       backend = "devenv";
       entries =
         (lib.evalModules {
-          modules = [../modules/common.nix {ai.activation2 = definitions;}];
-        }).config.ai.activation2;
+          modules = [../modules/common.nix {ai.activation = definitions;}];
+        }).config.ai.activation;
       nativeFiles = false;
       secretNodes = [];
     };
@@ -121,7 +121,7 @@
     a = {
       after = [];
       before = ["linkCheck"];
-      beforeNodes.devenv = ["ai2:x"];
+      beforeNodes.devenv = ["ai:x"];
       command = "true";
     };
     x = {
@@ -133,12 +133,12 @@
   };
   failures =
     lib.concatMap check cases
-    ++ lib.optional (invalidName != ''ai.activation2.named: invalid devenv name "external-success"'') "invalid devenv name"
+    ++ lib.optional (invalidName != ''ai.activation.named: invalid devenv name "external-success"'') "invalid devenv name"
     ++ lib.optional (!lib.hasInfix "cycle" cleanupCycle || !lib.hasInfix "devenv:files:cleanup" cleanupCycle) "cleanup cycle"
-    ++ lib.optional (withProvider."ai2:apply".after != ["ai2:files-linked" "vault:ready" "ai2:guard" "ai2:prune"]) "provider edge";
+    ++ lib.optional (withProvider."ai:apply".after != ["ai:files-linked" "vault:ready" "ai:guard" "ai:prune"]) "provider edge";
   fixtureJson = builtins.toJSON {
-    failure = provider.tasks."ai2:failure".exec;
-    prune = provider.tasks."ai2:prune".exec;
+    failure = provider.tasks."ai:failure".exec;
+    prune = provider.tasks."ai:prune".exec;
     success = provider.tasks."external:success".exec;
   };
   fixture = pkgs.writeText "activation-devenv.json" fixtureJson;
