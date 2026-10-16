@@ -9,6 +9,7 @@ production consumer imports it yet.
 
 | Option           | Nix type                                                                                   | Default     | Meaning                                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| `_contentPrio`   | `int`, internal, read-only                                                                 | computed    | The strongest `content` definition priority, read without evaluating content.                                     |
 | `enable`         | `bool`                                                                                     | `true`      | Suppress this entry while retaining its previous ownership for retirement.                                        |
 | `content.text`   | `nullOr str`                                                                               | `null`      | Literal UTF-8 bytes, including `""`.                                                                              |
 | `content.source` | `nullOr path` **or** store-path string                                                     | `null`      | File or directory to read; strings are paths, never literal content.                                              |

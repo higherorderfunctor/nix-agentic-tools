@@ -9,6 +9,16 @@
   inherit (harness) claudeMcpPath claudeMcpServers claudeSettings deliveredMarkdown evalDevenv evalDevenvModules evalHm evalHmModules fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg claudeSettingsWarnings handlerCommands hasGuardHook;
   unpinDocument = ownedDocument "claude" ".claude.json";
+  # The old devenv rules writer's ledger is Claude's and reaches the engine's
+  # root list.
+  declaresRulesLedger = evaluated: let
+    ledger = {
+      codec = "dir";
+      ledger = "materialize/claude-rules.manifest";
+      path = ".claude/rules";
+    };
+  in
+    evaluated.config.ai.claude.legacyLedgers == [ledger] && builtins.elem ledger evaluated.config.ai.legacyLedgers;
   # A contract both backends deliver alike, stated once and evaluated on each:
   # `eval` evaluates a configuration (`evalModules` a list of modules), `files`
   # reads its symlink sink, `mcpPath` is where Claude's MCP servers land, and
@@ -319,8 +329,9 @@
         }))
 
       # Settings and MCP servers are configuration: Nix owns each whole file
-      # and the backend links it read-only. No writer reconciles either, so an
-      # in-app change does not persist, and disabling Claude drops the link.
+      # and the backend links it read-only. The engine copies neither and no
+      # writer reconciles either, so an in-app change does not persist, and
+      # disabling Claude drops the link.
       (perBackend "settings-and-mcp-are-read-only-links" (arm: let
         cfg = enable: {
           ai.claude = {
@@ -337,7 +348,7 @@
         paths = [".claude/settings.json" arm.mcpPath];
       in
         lib.all (path: (arm.files on.config) ? ${path} && !((arm.files off.config) ? ${path})) paths
-        && lib.all (path: on.config.ai.claude.files.${path}.facts.harnessWrites != true) paths
+        && lib.all (path: on.config.ai.files2.${path}.method == "symlink") paths
         && lib.all (writer: writer.ledgers == {} || lib.all (ledger: !(lib.elem ledger.path paths)) (lib.attrValues writer.ledgers))
         (lib.attrValues on.config.ai.claude.activation)))
 
@@ -440,7 +451,7 @@ in {
           && lib.hasInfix "Claude-specific rule." rule
       );
 
-      # Claude HM emits context and each keyed rule through ai.claude.files before
+      # Claude HM stages context and each keyed rule as generated files before
       # the generic backend sink.
       module-claude-hm-context-and-rules = mkTest "claude-hm-context-and-rules" (
         let
@@ -467,19 +478,19 @@ in {
           ruleFile = (markdownInput evaluated ".claude/rules/named-rule.md").text;
         in
           fromGeneratedTree ".claude/CLAUDE.md" files.".claude/CLAUDE.md"
-          && aggregate == evaluated.config.ai.claude.files.".claude/CLAUDE.md".content.text
           && aggregate == "CONTEXT-BASELINE-TOKEN."
           && fromGeneratedTree ".claude/rules/named-rule.md" files.".claude/rules/named-rule.md"
-          && ruleFile == evaluated.config.ai.claude.files.".claude/rules/named-rule.md".content.text
           && lib.hasInfix "NAMED-RULE-BODY-TOKEN." ruleFile
           && files ? ".claude/rules/unnamed.md"
       );
 
       # Claude devenv writes context to `.claude/CLAUDE.md` and keeps every rule in
       # its own native file, without duplicating rule bodies into the context file.
+      # N→0 and a disable claim no rule, and the old rules writer's ledger is
+      # declared either way, so the copies it wrote drain.
       module-claude-devenv-context-and-rules = mkTest "claude-devenv-context-and-rules" (
         let
-          evaluated = evalDevenv {
+          cfg = {
             ai = {
               claude = {
                 enable = true;
@@ -497,18 +508,33 @@ in {
               };
             };
           };
+          evaluated = evalDevenv cfg;
+          emptied = evalDevenv {ai.claude.enable = true;};
+          disabled = evalDevenv (lib.recursiveUpdate cfg {ai.claude.enable = false;});
+          claimsNoRule = result: !(lib.any (lib.hasPrefix ".claude/rules/") (builtins.attrNames result.config.ai.files2Owners));
           composed = (markdownInput evaluated ".claude/CLAUDE.md").text;
           # Project rules are read-only copies, not links: see mkClaude's rules
-          # entry. The copy writer's plan names the file in the generated tree.
-          rules = (lib.head (ownPlan "claude" "ai:claude:materialize-rules" evaluated).targets).units;
+          # entry. The engine copies each one's file in the generated tree.
+          rules = lib.listToAttrs (map (target: lib.nameValuePair target.path target) (ownPlan "claude" "files2-apply" evaluated).targets);
+          copied = path:
+            rules.${path}.method
+            == "ro"
+            && rules.${path}.format == "markdown"
+            && rules.${path}.mode == null
+            && rules.${path}.content.source == "${evaluated.config.ai.claude._generatedTree}/${path}";
         in
           fromGeneratedTree ".claude/CLAUDE.md" evaluated.config.files.".claude/CLAUDE.md"
           && lib.hasInfix "CONTEXT-BASELINE-TOKEN." composed
           && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." composed)
           && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." composed)
-          && fromGeneratedTree ".claude/rules/named-rule.md" {source = rules."named-rule.md".store;}
+          && copied ".claude/rules/named-rule.md"
           && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (markdownInput evaluated ".claude/rules/named-rule.md").text
-          && rules ? "unnamed.md"
+          && copied ".claude/rules/unnamed.md"
+          && builtins.attrNames rules == [".claude/rules/named-rule.md" ".claude/rules/unnamed.md"]
+          && !(evaluated.config.files ? ".claude/rules/named-rule.md")
+          && claimsNoRule emptied
+          && claimsNoRule disabled
+          && lib.all declaresRulesLedger [disabled emptied evaluated (evalDevenv {})]
       );
 
       # Both direct Claude backends deliver built Markdown. A long paragraph
@@ -609,7 +635,6 @@ in {
           && entry.method == "symlink"
           && result.config.home.file.".claude/skills/stack-fix/SKILL.md".source == "${src}/SKILL.md"
           && !(result.config.home.file ? ".claude/skills/stack-fix")
-          && !(result.config.ai.claude.files ? ".claude/skills/stack-fix")
       );
 
       # A consumer's layer-1 entry beats a staged skill: text replaces a
@@ -672,6 +697,76 @@ in {
           && handlerCommands settings.hooks.PreToolUse == ["true"]
       );
 
+      # Every Claude surface is staged, so none stays on `ai.claude.files`
+      # except Home Manager's `.claude.json`. Each lands where it did: links in
+      # the backend's sink, devenv rules as engine copies.
+      module-claude-surfaces-are-staged = mkTest "claude-surfaces-are-staged" (
+        let
+          cfg = {
+            ai = {
+              claude = {
+                agents.probe = "probe agent";
+                commands.probe = "probe command";
+                enable = true;
+                hookScripts.probe = "probe script";
+                native.settings.effortLevel = "low";
+                outputStyles.probe = "probe style";
+              };
+              context.text = "probe context";
+              mcpServers.probe.command = "probe";
+              rules.probe.text = "probe rule";
+              skills.probe = ./fixtures/claude-skills/skill-a;
+            };
+          };
+          hm = (evalHm (lib.recursiveUpdate cfg {ai.claude.plugins.my-plugin = ../../stacked-workflows/skills/stack-fix;})).config;
+          devenv = (evalDevenv cfg).config;
+          shared = [".claude/CLAUDE.md" ".claude/agents/probe.md" ".claude/commands/probe.md" ".claude/hooks/probe" ".claude/output-styles/probe.md" ".claude/rules/probe.md" ".claude/settings.json" ".claude/skills/probe"];
+          hmStaged = shared ++ [".claude/skills/home-manager/.claude-plugin/plugin.json" ".claude/skills/home-manager/.mcp.json" ".claude/skills/my-plugin"];
+          devenvStaged = shared ++ [".mcp.json"];
+          linked = files: lib.all (path: files ? ${path} || lib.any (lib.hasPrefix "${path}/") (builtins.attrNames files));
+        in
+          builtins.attrNames hm.ai.claude.files
+          == [".claude.json"]
+          && devenv.ai.claude.files == {}
+          && builtins.attrNames hm.ai.claude._generatedFiles == lib.sort lib.lessThan hmStaged
+          && builtins.attrNames devenv.ai.claude._generatedFiles == lib.sort lib.lessThan devenvStaged
+          && linked hm.home.file hmStaged
+          && linked devenv.files (lib.remove ".claude/rules/probe.md" devenvStaged)
+          && hm.home.file.".claude/hooks/probe".executable
+          && devenv.files.".claude/hooks/probe".executable
+      );
+
+      # Ported from module-delivery-normalized-agent-source-crosses-alone: the
+      # normalized pools copy text-source records, and only the winning arm may
+      # cross. A `text` beside a winning `source` lands at the same priority,
+      # which the record rejects, and computing that priority reads the source.
+      module-claude-normalized-agent-source-crosses-alone = mkTest "claude-normalized-agent-source-crosses-alone" (
+        let
+          source = ./fixtures/claude-skills/skill-a/SKILL.md;
+        in
+          lib.all (evaluate: let
+            inherit
+              ((evaluate {
+                  ai = {
+                    agents.probe = {
+                      description = "probe";
+                      instructions.source = source;
+                    };
+                    claude.enable = true;
+                  };
+                })
+                .config
+                .ai
+                .claude
+                .normalized
+                .agents
+                .probe)
+              instructions
+              ;
+          in
+            instructions._sourceWins && instructions.source == source) [evalHm evalDevenv]
+      );
+
       # The personal plugin's manifest names it `hm`, which is the MCP tool
       # namespace (`mcp__plugin_hm_<server>__<tool>`) consumers may have pinned.
       # No manifest at all when the plugin carries no MCP servers.
@@ -685,7 +780,7 @@ in {
             }).config;
           bare = (evalHm {ai.claude.enable = true;}).config;
         in
-          withServers.ai.claude.files.${manifest}.content.value
+          withServers.ai.claude.files2.${manifest}.content.value
           == {name = "hm";}
           && !(bare.home.file ? ${manifest})
       );
@@ -924,7 +1019,7 @@ in {
           file = result.config.home.file.".claude/skills/my-plugin" or {};
         in
           fromGeneratedTree ".claude/skills/my-plugin" file
-          && (markdownInput result ".claude/skills/my-plugin").source.name == "claude-code-plugin-my-plugin"
+          && lib.hasSuffix "-claude-code-plugin-my-plugin" (markdownInput result ".claude/skills/my-plugin").source
           && !(file.recursive or false)
       );
 

@@ -234,7 +234,10 @@
     backend = "devenv";
     checks = lib.genAttrs deliveryOptions.surfaces (surface: config.ai.checks.${surface});
     inherit config;
-    entries = generatedFiles.treeEntries staged;
+    entries = generatedFiles.treeEntries {
+      inherit (config.ai) files2;
+      inherit staged;
+    };
     maxBytes = config.ai.internal._maxBytes;
     runtime = "internal";
   };
@@ -297,9 +300,10 @@ in {
               (generatedFiles.layer1 {inherit staged tree;})
               # Every shared target is the composer's claim, so a runtime's
               # entry alone still lands as a read-only copy, and only when some
-              # definition supplies content.
+              # definition supplies content. Read by priority, so the content
+              # (and the tree it points into) stays unevaluated.
               (lib.mapAttrs (filename: _: {
-                  enable = lib.mkDefault (config.ai.files2.${filename}.content._choice != null);
+                  enable = lib.mkDefault (config.ai.files2.${filename}._contentPrio < (lib.mkOptionDefault null).priority);
                   method = lib.mkIf (!staged ? ${filename}) (lib.mkDefault "ro");
                 })
                 config.ai.internal.agentsMd)

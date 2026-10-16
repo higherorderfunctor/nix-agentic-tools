@@ -17,6 +17,7 @@
   in
     extracted.get (extracted.load {dir = ../extracted;}).aggregate;
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   openKeys = import ../../../lib/open-keys {inherit lib;};
 
   # The `native.settings` option surface: one option per path in the packaged
@@ -165,28 +166,13 @@
       }
     ];
 
-  # Devenv's project rules are ledger-owned copies (see the rules entries
-  # below), which nothing but their writer retracts. Declared outside the
-  # enable gate so the shell that DISABLES Claude still drains the copies the
-  # previous one wrote: while disabled the adapter hands the writer no files,
-  # so it only removes what the ledger recorded. Home Manager links its rules,
-  # and its generation diff retracts them.
-  rulesLedger = "materialize/claude-rules.manifest";
-  # Where each unit lands, shared by the emitters below and `contentTargets`,
-  # so the disabled-file warning names the path the emitter really wrote.
+  # Where each unit lands, shared by the staged entries below and
+  # `contentTargets`, so the disabled-file warning names the path really staged.
   contextPath = cfg: ".claude/${cfg.context.filename}";
   rulePath = name: ".claude/rules/${name}.md";
-  rulesWriter = "materialize-claude-rules";
-  claudeRulesWriterConfig = _: {
-    ai.claude.activation.${rulesWriter} = {
-      entry = "ai:claude:materialize-rules";
-      ledgers.${rulesLedger} = {
-        codec = "dir";
-        path = ".claude/rules";
-      };
-      runWhenDisabled = true;
-    };
-  };
+  # One staged file (`ai.claude._generatedFiles`): its bytes, the codec they
+  # are formatted with, and the surface whose checks they run.
+  staged = surface: format: content: {inherit content format surface;};
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   pluginLib = import ./plugin.nix {inherit lib pkgs;};
 
@@ -201,24 +187,12 @@
   # value (path, store string, derivation) is linked as a `source`, anything
   # else is the file's text.
   markdownFiles = dir: values:
-    lib.mapAttrs' (name: value: let
-      content =
+    lib.mapAttrs' (name: value:
+      lib.nameValuePair ".claude/${dir}/${name}.md" (
         if dir == "agents"
-        then agent.renderFile true name value
-        else agent.fileContent value;
-    in
-      lib.nameValuePair ".claude/${dir}/${name}.md" {
-        content = lib.mkDefault ({
-            _generated = true;
-            _surface =
-              if dir == "agents"
-              then "agents"
-              else "context";
-            enable = true;
-          }
-          // content);
-        format = lib.mkDefault "markdown";
-      })
+        then staged "agents" "markdown" (agent.renderFile true name value)
+        else staged "context" "markdown" (agent.fileContent value)
+      ))
     values;
 in
   lib.ai.app.mkRuntime {
@@ -601,17 +575,11 @@ in
       # Its manifest only when it carries something to load.
       personalPluginEntries = lib.optionalAttrs (personalPluginFiles != {}) (
         lib.mapAttrs' (file: value:
-          lib.nameValuePair ".claude/skills/${personalPlugin}/${file}" {
-            content = {
-              _generated = true;
-              _surface =
-                if file == ".mcp.json"
-                then "mcpServers"
-                else "settings";
-              inherit value;
-            };
-            format = "json";
-          }) (personalPluginFiles // {".claude-plugin/plugin.json" = {name = personalPluginManifest;};})
+          lib.nameValuePair ".claude/skills/${personalPlugin}/${file}" (staged (
+            if file == ".mcp.json"
+            then "mcpServers"
+            else "settings"
+          ) "json" {inherit value;})) (personalPluginFiles // {".claude-plugin/plugin.json" = {name = personalPluginManifest;};})
       );
       marketplaceEntry = source: {
         source = {
@@ -679,13 +647,8 @@ in
         # unrecognized-key guard never sees it, and it is added only to a
         # non-empty document so it never makes an empty declaration write one.
         (lib.mkIf (settingsDocument != {}) {
-          ai.claude.files.".claude/settings.json" = {
-            content = {
-              _generated = true;
-              _surface = "settings";
-              value = {"$schema" = "https://json.schemastore.org/claude-code-settings.json";} // settingsDocument;
-            };
-            format = "json";
+          ai.claude._generatedFiles.".claude/settings.json" = staged "settings" "json" {
+            value = {"$schema" = "https://json.schemastore.org/claude-code-settings.json";} // settingsDocument;
           };
         })
         # Claude registers a marketplace it does not know from
@@ -697,8 +660,7 @@ in
             lib.mapAttrs (_: source: lib.mkDefault (marketplaceEntry source)) cfg.marketplaces;
         }
         (lib.mkIf hasMergedContext {
-          ai.claude.files.${contextPath cfg} =
-            aiCommon.contentFileEntry mergedContext;
+          ai.claude._generatedFiles.${contextPath cfg} = staged "context" "markdown" (aiTypes.textSourceFile mergedContext);
         })
         # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
         # Each entry becomes one file, translated through claudeTransformer
@@ -709,49 +671,35 @@ in
         # scoped-rule (`paths:`) loader passes `includeExternal: false` at
         # Project scope with no setting to change it (claude-code 2.1.280).
         # User scope passes true, so Home Manager's `~/.claude/rules` links
-        # load. Hence the per-backend fact: devenv copies read-only, HM links.
-        # The directory ledger claims individual files, so a hand-placed rule
-        # survives. Its writer is `claudeRulesWriterConfig`, declared whether
-        # or not a rule is and whether or not Claude is enabled, so both N→0
-        # and a disable retract the copies.
+        # load. Hence devenv copies read-only and HM links. The engine owns
+        # each copy alone, so a hand-placed rule survives.
         {
-          ai.claude.files = aiCommon.mkRuleFiles {
-            context = name: {package = name;};
-            fields = {
-              entry = rulesWriter;
-              facts.symlinkReadable = {
-                devenv = false;
-                hm = true;
-              };
-              ledger = rulesLedger;
-            };
-            path = rulePath;
-            rules = mergedRules;
-            runtime = "claude";
-            transformer = lib.ai.transformers.claude.claudeTransformer;
-          };
-        }
-        # Agents, commands and output styles: one Markdown link each.
-        {ai.claude.files = markdownFiles "agents" mergedAgents;}
-        {ai.claude.files = markdownFiles "commands" cfg.commands;}
-        {ai.claude.files = markdownFiles "output-styles" cfg.outputStyles;}
-        {
-          ai.claude.files = lib.mapAttrs' (name: body:
-            lib.nameValuePair ".claude/hooks/${name}" {
-              content = lib.mkDefault {
-                _generated = true;
-                _surface = "hooks";
-                text = body;
-              };
-              executable = true;
+          ai.claude._generatedFiles =
+            lib.mapAttrs (_path: text:
+              staged "rules" "markdown" {inherit text;}
+              // {
+                method = {
+                  devenv = "ro";
+                  hm = "symlink";
+                };
+              }) (aiCommon.renderRules {
+              context = name: {package = name;};
+              path = rulePath;
+              rules = mergedRules;
+              runtime = "claude";
+              transformer = lib.ai.transformers.claude.claudeTransformer;
             })
-          cfg.hookScripts;
-        }
-        {
-          ai.claude._generatedFiles = helpers.mkSkillFiles {
-            configDir = ".claude";
-            skills = mergedSkills;
-          };
+            # Agents, commands and output styles: one Markdown link each.
+            // markdownFiles "agents" mergedAgents
+            // markdownFiles "commands" cfg.commands
+            // markdownFiles "output-styles" cfg.outputStyles
+            // lib.mapAttrs' (name: body:
+              lib.nameValuePair ".claude/hooks/${name}" (staged "hooks" "raw" {text = body;} // {executable = true;}))
+            cfg.hookScripts
+            // helpers.mkSkillFiles {
+              configDir = ".claude";
+              skills = mergedSkills;
+            };
         }
 
         (lib.optionalAttrs isHm (lib.mkMerge [
@@ -769,14 +717,12 @@ in
               }
             ];
           }
-          {ai.claude.files = personalPluginEntries;}
           {
-            ai.claude.files = lib.mapAttrs' (name: plugin:
-              lib.nameValuePair ".claude/skills/${name}" {
-                content.source = pluginLib.mkPluginEntry name plugin;
-                executable = null;
-              })
-            cfg.plugins;
+            ai.claude._generatedFiles =
+              personalPluginEntries
+              // lib.mapAttrs' (name: plugin:
+                lib.nameValuePair ".claude/skills/${name}" {content.source = pluginLib.mkPluginEntry name plugin;})
+              cfg.plugins;
           }
           # Claude writes native state (including OAuth tokens) here. Own
           # only the unpin leaves. This user-global operation never runs from
@@ -805,17 +751,21 @@ in
         ]))
         # The project's .mcp.json, as read-only as its settings.json.
         (lib.optionalAttrs (!isHm) (lib.mkIf (mergedServers != {}) {
-          ai.claude.files.".mcp.json" = {
-            content = {
-              _generated = true;
-              _surface = "mcpServers";
-              value.mcpServers = renderedServers;
-            };
-            format = "json";
-          };
+          ai.claude._generatedFiles.".mcp.json" = staged "mcpServers" "json" {value.mcpServers = renderedServers;};
         }))
       ];
-    devenv.migrationConfig = claudeRulesWriterConfig;
+    # The old devenv rules writer's ledger, declared while Claude is disabled
+    # too, so the project copies it wrote drain on a disable as well as on
+    # N→0. Home Manager linked its rules.
+    devenv.migrationConfig = _: {
+      ai.claude.legacyLedgers = [
+        {
+          codec = "dir";
+          ledger = "materialize/claude-rules.manifest";
+          path = ".claude/rules";
+        }
+      ];
+    };
     contentTargets = {
       cfg,
       mergedRules,

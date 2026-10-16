@@ -6,7 +6,9 @@
 > `environmentVariables` only; `optionNamespaces` places launcher and pool
 > options; the devenv file observer lives in ai-module and reads the files plan;
 > the shared AGENTS.md composer reaches the files plan as the owner `internal`;
-> hand rows are confined to the policy-only permissions surface.
+> Claude stages every surface but `.claude.json`, whose rules copies the files
+> engine writes on devenv; staged Markdown and raw entries are whole-content
+> defaults; hand rows are confined to the policy-only permissions surface.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -115,29 +117,34 @@ rather than a second path field: a runtime names exactly the groups it moves.
   harness directory.
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
-  that read until priority arbitration keeps replaced store sources lazy.
+  that read until priority arbitration keeps replaced store sources lazy. Staged
+  Markdown and raw entries get the same whole-content default at layer 1, and a
+  runtime's generated tree leaves out one a stronger content definition
+  replaced, judged by `_contentPrio` alone, so Claude's composed context stays
+  unread when a consumer replaces it.
 - **Structured documents contribute ordinary leaves.** Codex settings use
   `content.value` at ordinary priority. Adding one leaf keeps generated
   siblings; defaulting the whole content would silently drop them. Text and
   source content retain their whole-content defaults.
 - **Claude delivers its own files.** Agents, commands, output styles, hook
-  scripts, skills, plugins, `.claude/settings.json` and the MCP files are
-  ordinary `ai.claude.files` entries, like every other runtime's. All of them
-  reach both backends except consumer plugins and the MCP personal plugin (its
-  manifest and `.mcp.json`), which are Home Manager only because a plugin is
-  user-scope; devenv writes MCP servers to the project `.mcp.json` instead.
-  Nothing is handed to an upstream Home Manager or devenv Claude module.
-  Settings and MCP servers are configuration, so `.claude/settings.json` and the
-  devenv `.mcp.json` are Nix-owned read-only links rather than reconciled
-  documents, and an in-app change such as `/tui` does not persist. Every
-  settings contribution goes through `ai.claude.native.settings`, so one entry
-  carries the whole document. Claude's user-global `.claude.json` is the
-  exception: it holds OAuth tokens and runtime state, so it claims the existing
-  JSON ledger under `claudeUnpinLaunchEffort`; its writer survives empty
-  declarations and remains Home Manager only. That writer keeps whatever mode it
-  finds, whether or not it rewrites the file, so an ungated `claudeConfigMode`
-  command writer is the only thing that narrows the token-bearing file to
-  owner-only, on every activation.
+  scripts, skills, plugins, rules, context, `.claude/settings.json` and the MCP
+  files are staged entries (`ai.claude._generatedFiles`) that reach the backends
+  through the files layers; nothing but `.claude.json` stays on
+  `ai.claude.files`. All of them reach both backends except consumer plugins and
+  the MCP personal plugin (its manifest and `.mcp.json`), which are Home Manager
+  only because a plugin is user-scope; devenv writes MCP servers to the project
+  `.mcp.json` instead. Nothing is handed to an upstream Home Manager or devenv
+  Claude module. Settings and MCP servers are configuration, so
+  `.claude/settings.json` and the devenv `.mcp.json` are Nix-owned read-only
+  links rather than reconciled documents, and an in-app change such as `/tui`
+  does not persist. Every settings contribution goes through
+  `ai.claude.native.settings`, so one entry carries the whole document. Claude's
+  user-global `.claude.json` is the exception: it holds OAuth tokens and runtime
+  state, so it claims the existing JSON ledger under `claudeUnpinLaunchEffort`;
+  its writer survives empty declarations and remains Home Manager only. That
+  writer keeps whatever mode it finds, whether or not it rewrites the file, so
+  an ungated `claudeConfigMode` command writer is the only thing that narrows
+  the token-bearing file to owner-only, on every activation.
 - **The CLI's write primitive picks the method.** Codex's `config.toml` is a
   store symlink on both backends: every Codex config writer writes a temporary
   beside the link's target, so an in-app save fails and the link survives
@@ -204,12 +211,12 @@ rather than a second path field: a runtime names exactly the groups it moves.
 - **Claude project rules are read-only copies on devenv.** Claude's scoped-rule
   (`paths:`) loader passes `includeExternal: false` at Project scope, with no
   setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into
-  the store is never read. User scope passes true. The rules entry therefore
-  states `facts.symlinkReadable = {devenv = false; hm = true;}`: devenv resolves
-  `copy-ro` through the `ai:claude:materialize-rules` directory ledger, while
-  Home Manager keeps its link. The writer is declared on devenv only, from
-  `migrationConfig` with `runWhenDisabled = true`, so both N→0 and disabling
-  Claude retract the copies.
+  the store is never read. User scope passes true. Each staged rule therefore
+  states `method = {devenv = "ro"; hm = "symlink";}`: the files engine copies it
+  on devenv, while Home Manager keeps its link. The old writer's
+  `materialize/claude-rules.manifest` is declared as a legacy ledger from the
+  devenv `migrationConfig`, so the copies it wrote drain on N→0 and on a disable
+  alike.
 - **Codex execpolicy rules are read-only copies on both backends.** Codex keeps
   a `rules/*.rules` entry only when `DirEntry::file_type().is_file()`, which
   does not follow symlinks, so a linked rule is skipped silently (codex
@@ -221,11 +228,11 @@ rather than a second path field: a runtime names exactly the groups it moves.
   copies; an `allow` policy must not outlive its declaration.
 - **Retirement can survive disable explicitly.** Kiro's `migrationConfig`
   declares its unclaimed steering ledger with `runWhenDisabled = true`, and the
-  Claude rules and Codex execpolicy writers declare theirs the same way. The
-  adapter strips every file claim and ordinary writer while disabled; the
-  opted-in writer keeps both HM phases or the existing devenv task. A directory
-  ledger's unit basenames must be unique; the router rejects collisions before a
-  claimant can disappear into the attribute map.
+  Codex execpolicy writer declares its own the same way. The adapter strips
+  every file claim and ordinary writer while disabled; the opted-in writer keeps
+  both HM phases or the existing devenv task. A directory ledger's unit
+  basenames must be unique; the router rejects collisions before a claimant can
+  disappear into the attribute map.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use

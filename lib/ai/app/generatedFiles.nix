@@ -12,6 +12,11 @@
   generated = import ../../generated.nix {inherit lib;} pkgs;
   inherit (import ../delivery-options.nix {inherit lib;}) surfaces;
   live = lib.filterAttrs (_path: entry: entry.enable);
+  # A staged entry in a format that cannot carry `value` is one whole-content
+  # default at layer 1, so a stronger content definition (a consumer's
+  # replacement) discards it before it is evaluated, as compiled context needs.
+  whole = entry: builtins.elem entry.format ["markdown" "raw"];
+  replacedWhole = files2: path: entry: whole entry && files2.${path}._contentPrio < (lib.mkDefault null).priority;
   # The content `S` contributes to `R` per live path. Text and non-recursive
   # source become their formatted file in `tree`. A recursive source and `run`
   # pass as themselves: the engine walks a recursive source at evaluation,
@@ -34,10 +39,27 @@
 in {
   inherit content;
 
+  # Whether a staged path's final content (`files2.<path>`) is not the
+  # generated one. A whole-content default is judged by priority alone, so the
+  # discarded content stays unevaluated; a value document merges per leaf and
+  # is replaced only by another alternative.
+  replaced = {
+    files2,
+    generated,
+    staged,
+  }: path: let
+    entry = files2.${path};
+    choice = entry.content._choice;
+  in
+    if whole staged.${path}
+    then replacedWhole files2 path staged.${path}
+    else choice != null && (!(generated.${path} ? ${choice}) || (choice != "value" && entry.content.${choice} != generated.${path}.${choice}));
+
   # Transitional, until the old path is deleted: a destination is live on one
   # delivery path, never on both, so `own.py` and the engine never own it
   # together. A live staged path counts even when its `R` entry is switched
-  # off: the old path's file would still carry the staged bytes from the tree.
+  # off: the tree leaves its bytes out, but it keeps its layer-1 `R` entry and
+  # the engine's state, so the engine would still own the destination.
   disjoint = {
     files2,
     old,
@@ -58,11 +80,15 @@ in {
     generatedContent = content args;
   in
     lib.mapAttrs (path: entry: {
-      content = lib.mapAttrs (choice: value:
-        if choice == "value"
-        then lib.mapAttrsRecursive (_leaf: lib.mkDefault) value
-        else lib.mkDefault value)
-      generatedContent.${path};
+      content =
+        if whole entry
+        then lib.mkDefault generatedContent.${path}
+        else
+          lib.mapAttrs (choice: value:
+            if choice == "value"
+            then lib.mapAttrsRecursive (_leaf: lib.mkDefault) value
+            else lib.mkDefault value)
+          generatedContent.${path};
       executable = lib.mkDefault entry.executable;
       format = lib.mkDefault entry.format;
       method = lib.mkDefault entry.method;
@@ -132,11 +158,16 @@ in {
         treefmt = config.ai.internal.formatter;
       };
 
-  # The live staged entries with build-time bytes, as `tree` entries.
-  treeEntries = staged:
+  # The live staged entries with build-time bytes, as `tree` entries. One
+  # whose `files2` entry is switched off, or whose whole content `files2`
+  # replaced, is left out unevaluated.
+  treeEntries = {
+    files2,
+    staged,
+  }:
     lib.mapAttrs (_path: entry: {
       content.${entry.content._choice} = entry.content.${entry.content._choice};
       inherit (entry) format recursive surface;
     })
-    (lib.filterAttrs (_path: entry: builtins.elem entry.content._choice ["source" "text" "value"]) (live staged));
+    (lib.filterAttrs (path: entry: !(files2 ? ${path} && (!files2.${path}.enable || replacedWhole files2 path entry)) && builtins.elem entry.content._choice ["source" "text" "value"]) (live staged));
 }

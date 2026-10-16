@@ -57,17 +57,29 @@ in {
         lib.all checkRuntime harnessNames
     );
 
+    # A disabled runtime emits nothing it declares, and an enabled runtime's
+    # entry switched off with `enable = false` needs no content.
     module-runtime-files-disabled-runtime-does-not-emit = mkTest "runtime-files-disabled-runtime-does-not-emit" (
       let
         target = "literal/disabled.txt";
-        config.ai.claude.files.${target}.content.text = "DECLARED-BUT-DISABLED";
+        config.ai.claude.files2.${target}.content.text = "DECLARED-BUT-DISABLED";
         hm = (evalHm config).config;
         devenv = (evalDevenv config).config;
+        switchedOff = evaluate:
+          (evaluate {
+            ai.claude = {
+              enable = true;
+              files2."literal/disabled".enable = false;
+            };
+          }).config;
       in
-        hm.ai.claude.files.${target}.content.text
+        hm.ai.claude.files2.${target}.content.text
         == "DECLARED-BUT-DISABLED"
+        && !(hm.ai.files2 ? ${target})
         && !(hm.home.file ? ${target})
         && !(devenv.files ? ${target})
+        && !((switchedOff evalHm).home.file ? "literal/disabled")
+        && !((deliveredFiles (switchedOff evalDevenv)) ? "literal/disabled")
     );
 
     module-runtime-files-invalid-targets-rejected = mkTest "runtime-files-invalid-targets-rejected" (
@@ -137,13 +149,13 @@ in {
         config.ai.claude = {
           enable = true;
           context.text = "GENERATED-CONTEXT";
-          files.${target}.content.enable = false;
+          files2.${target}.enable = false;
         };
         hm = (evalHm config).config;
         devenv = (evalDevenv config).config;
       in
-        !hm.ai.claude.files.${target}.content.enable
-        && !devenv.ai.claude.files.${target}.content.enable
+        !hm.ai.files2.${target}.enable
+        && !devenv.ai.files2.${target}.enable
         && !(hm.home.file ? ${target})
         && !(devenv.files ? ${target})
     );
@@ -171,14 +183,14 @@ in {
         hmConfig = hm.config;
         devenvConfig = devenv.config;
       in
-        hmConfig.ai.claude.files ? ".claude/CLAUDE.md"
-        && hmConfig.ai.claude.files ? ".claude/rules/scoped.md"
+        hmConfig.ai.claude._generatedFiles ? ".claude/CLAUDE.md"
+        && hmConfig.ai.claude._generatedFiles ? ".claude/rules/scoped.md"
         && hmConfig.ai.codex.files ? ".codex/AGENTS.md"
         && hmConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
         && hmConfig.ai.kiro.files ? ".kiro/steering/AGENTS.md"
         && hmConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
-        && devenvConfig.ai.claude.files ? ".claude/CLAUDE.md"
-        && devenvConfig.ai.claude.files ? ".claude/rules/scoped.md"
+        && devenvConfig.ai.claude._generatedFiles ? ".claude/CLAUDE.md"
+        && devenvConfig.ai.claude._generatedFiles ? ".claude/rules/scoped.md"
         && devenvConfig.ai.internal.agentsMdTargets.copilot == "AGENTS.md"
         && devenvConfig.ai.copilot._generatedFiles ? ".github/instructions/scoped.instructions.md"
         && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
@@ -546,22 +558,23 @@ in {
 
     # Content at `mkDefault` is still content: the leaf-default idiom a
     # downstream module uses for an overridable file must deliver it, not
-    # leave a record that nothing writes and nothing reports.
+    # leave a record that nothing writes and nothing reports. A layer-1 entry
+    # lands as its own bytes, outside the generated tree.
     module-runtime-files-default-priority-content-delivers = mkTest "runtime-files-default-priority-content-delivers" (
       let
         source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
         config.ai.claude = {
           enable = true;
-          files = {
+          files2 = {
             "literal/default-source.md".content.source = lib.mkDefault source;
             "literal/default-text.md".content.text = lib.mkDefault "DEFAULT-TEXT";
           };
         };
         delivered = evaluated:
-          fromGeneratedTree "literal/default-source.md" (deliveredFiles evaluated.config)."literal/default-source.md"
-          && fromGeneratedTree "literal/default-text.md" (deliveredFiles evaluated.config)."literal/default-text.md"
-          && (markdownInput evaluated "literal/default-source.md").source == source
-          && (markdownInput evaluated "literal/default-text.md").text == "DEFAULT-TEXT";
+          (deliveredFiles evaluated.config)."literal/default-source.md".source
+          == source
+          && deliveredFiles evaluated.config ? "literal/default-text.md"
+          && evaluated.config.ai.files2."literal/default-text.md".content.text == "DEFAULT-TEXT";
       in
         delivered (evalHm config)
         && delivered (evalDevenv config)
@@ -598,8 +611,17 @@ in {
         && rejected evalDevenv "claude" "literal/empty.md" {text = "";}
         && rejected evalHm "claude" "literal/empty.md" {text = lib.mkDefault "";}
         && rejected evalDevenv "codex" "AGENTS.md" {text = "";}
-        # Control: the same entry with content evaluates.
+        # Control: the same entry with content evaluates. Under layer 1 the
+        # empty text is a file too.
         && (attempt evalHm "claude" "literal/empty.md" {text = "PRESENT";}).success
+        && lib.all (text:
+          (deliveredFiles
+            (evalHm {
+              ai.claude = {
+                enable = true;
+                files2."literal/empty.md".content = {inherit text;};
+              };
+            }).config) ? "literal/empty.md") ["PRESENT" ""]
         && !((deliveredFiles disabled.config) ? "AGENTS.md")
     );
 
@@ -687,7 +709,7 @@ in {
             claude = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
+              files2.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
             };
           };
         };
@@ -697,10 +719,31 @@ in {
             claude = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
+              files2.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
             };
           };
         };
+        # A layer-1 replacement lands as its own bytes, outside the tree, and
+        # instantiating it instantiates the tree it requires.
+        claudeText = evaluated:
+          builtins.seq (toString (deliveredFiles evaluated.config).".claude/CLAUDE.md".source)
+          evaluated.config.ai.files2.".claude/CLAUDE.md".content.text;
+        # Switched off at layer 1, the context stays out of the tree too.
+        claudeOff = evaluate: let
+          evaluated = evaluate {
+            ai = {
+              context = {inherit source;};
+              claude = {
+                context.text = "RUNTIME-CONTEXT";
+                enable = true;
+                files2.".claude/CLAUDE.md".enable = false;
+                rules.probe.text = "probe";
+              };
+            };
+          };
+        in
+          !(deliveredFiles evaluated.config ? ".claude/CLAUDE.md")
+          && builtins.isString evaluated.config.ai.claude._generatedTree.drvPath;
         hmKimchi = evalHm {
           ai = {
             context = {inherit source;};
@@ -722,9 +765,10 @@ in {
           };
         };
       in
-        markdownOf hmClaude.config ".claude/CLAUDE.md"
+        claudeText hmClaude
         == "CLAUDE-REPLACEMENT"
-        && markdownOf devenvClaude.config ".claude/CLAUDE.md" == "CLAUDE-REPLACEMENT"
+        && claudeText devenvClaude == "CLAUDE-REPLACEMENT"
+        && lib.all claudeOff [evalHm evalDevenv]
         && markdownOf hmKimchi.config ".config/kimchi/harness/AGENTS.md" == "KIMCHI-REPLACEMENT"
         && markdownOf devenvKimchi.config "AGENTS.md" == "KIMCHI-REPLACEMENT"
     );

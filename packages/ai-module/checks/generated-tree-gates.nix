@@ -32,8 +32,8 @@
         checks.skills = "exit 7";
         claude = {
           enable = true;
-          # The devenv settings copy is old-path delivery, built from the tree.
-          files.".claude/settings.json".content.enable = false;
+          # Only the skill: the devenv settings link is built from the tree too.
+          files2.".claude/settings.json".enable = false;
           skills.probe = ./fixtures/probe-skill;
         };
       };

@@ -83,6 +83,11 @@
     sharedTargets = sharedAgentsMdTargets;
     hasContext = normalizedHasContext;
     inherit generatedContent;
+    generatedReplaced = generatedFiles.replaced {
+      inherit (cfg) files2;
+      generated = generatedContent;
+      inherit (generatedArgs) staged;
+    };
   };
   supportedSurfaces = builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) (appRecord.surfaceSupport or {}));
   supportsPool = poolName: builtins.elem poolName supportedSurfaces;

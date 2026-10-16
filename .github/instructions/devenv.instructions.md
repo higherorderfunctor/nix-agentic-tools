@@ -195,11 +195,11 @@ this paragraph would rot the next time one is added.)
 > writes, never `files.*` symlinks; the generator's materializer and the
 > AGENTS.md seed are gone. Kiro and Kimchi settings and Codex daemon settings
 > are owned copies; Copilot writes repository instructions only; its agents and
-> skills declare gaps. A copy differing only in mode is reset without a backup.
-> Recursive leaf links target one source-tree store root while retaining
-> per-file input contexts. The symlink guard uses devenv's final file target,
-> follows its own runtime's writers before file creation, and reports every
-> conflict before failing.
+> skills declare gaps; the files engine writes Claude's project rules. A copy
+> differing only in mode is reset without a backup. Recursive leaf links target
+> one source-tree store root while retaining per-file input contexts. The
+> symlink guard uses devenv's final file target, follows its own runtime's
+> writers before file creation, and reports every conflict before failing.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -428,13 +428,13 @@ the user-space walker is a viable fix while waiting for upstream.
 
 This repository's instruction files are written by `ai.*` (configured in
 `dev/ai.nix`) like any consumer's. On devenv the committed ones (AGENTS.md,
-`.github/instructions/*`) are read-only COPIES the ai-module files engine
-writes, and Claude's and Kiro's project rule files are read-only COPIES written
-by `lib/ai/own.py` through a directory ledger each, on every `devenv shell`,
-`direnv reload`, `devenv up`, `devenv reload` and manual `devenv test`, after
-`devenv:files:cleanup` and before `devenv:enterShell`. Claude's
-`.claude/CLAUDE.md` stays a store link (its project context loader follows one;
-its scoped-rule loader does not).
+`.github/instructions/*`) and Claude's project rules are read-only COPIES the
+ai-module files engine writes, and Kiro's project rule files are read-only
+COPIES written by `lib/ai/own.py` through a directory ledger, on every
+`devenv shell`, `direnv reload`, `devenv up`, `devenv reload` and manual
+`devenv test`, after `devenv:files:cleanup` and before `devenv:enterShell`.
+Claude's `.claude/CLAUDE.md` stays a store link (its project context loader
+follows one; its scoped-rule loader does not).
 
 Why copies rather than `files.*` symlinks:
 

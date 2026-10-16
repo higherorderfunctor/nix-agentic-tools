@@ -93,7 +93,10 @@ in
         })
         treeEntries
         # The shared AGENTS.md composer stages nothing.
-        // generatedFiles.treeEntries (cfg._generatedFiles or {});
+        // generatedFiles.treeEntries {
+          inherit (config.ai) files2;
+          staged = cfg._generatedFiles or {};
+        };
       maxBytes = cfg._maxBytes;
     };
     treeOf = path:

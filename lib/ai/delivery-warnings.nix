@@ -17,8 +17,10 @@
   contentTargets ? {},
   sharedTargets ? [],
   hasContext ? false,
-  # Per staged path, the content `ai.<runtime>._generatedFiles` gives layer 1.
+  # Per staged path, the content `ai.<runtime>._generatedFiles` gives layer 1,
+  # and whether its final layer-1 content replaced it.
   generatedContent ? {},
+  generatedReplaced ? _path: false,
 }: let
   aiCommon = import ./ai-common.nix {inherit lib;};
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
@@ -172,14 +174,11 @@
   # `enable`, replaced when its winning content is not the generated one. A
   # consumer value leaf merges with the generated document; it never replaces it.
   generatedDropReason = path: let
-    entry = cfg.files2.${path};
-    choice = entry.content._choice;
-    generated = generatedContent.${path};
     option = suffix: lib.showOption (["ai" runtime "files2" path] ++ suffix);
   in
-    if !entry.enable
+    if !cfg.files2.${path}.enable
     then "${option ["enable"]} = false switches off `${path}`, the file that carries it"
-    else if choice != null && (!(generated ? ${choice}) || (choice != "value" && entry.content.${choice} != generated.${choice}))
+    else if generatedReplaced path
     then "${option ["content"]} replaces `${path}`, the file that carries it, with its own bytes"
     else null;
   # The reason a unit's file does not carry it, or null when it does.
