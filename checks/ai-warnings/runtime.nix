@@ -4,67 +4,10 @@
   pkgs,
   ...
 }: let
-  enabled = harness.evalDevenv {
-    ai.codex = {
-      # Not the default AGENTS.md: the observer's fallback for a runtime that
-      # publishes no ai.internal.agentsMdTargets entry, which would otherwise
-      # pass for Codex without the entry.
-      context = {
-        filename = "CODEX.md";
-        text = "codex probe";
-      };
-      enable = true;
-      files."probe".content.text = "probe";
-      native.settings.model = "probe";
-    };
-    ai.kiro = {
-      agents.probe = {
-        description = "probe";
-        instructions.text = "probe";
-      };
-      cli.enable = true;
-      configDir = ".custom-kiro";
-      # A second shared-owner key. Codex contributes AGENTS.md, Kiro this one;
-      # each must be attributed to the runtime whose context it is.
-      context = {
-        filename = "KIRO.md";
-        text = "kiro probe";
-      };
-    };
-    # Consumer-declared, inside a runtime's own config directory. The delivery
-    # manifest must not claim it.
-    files.".custom-kiro/consumer-owned.md".text = "consumer";
-  };
   featureWarning = declaration:
     (harness.evalDevenv {
       ai.kiro.cli = {enable = true;} // declaration;
     }).config.enterShell;
-  # Kimchi's context.filename names the Home Manager harness file only; devenv
-  # always writes the project-root AGENTS.md. Evaluated alone so no other
-  # runtime's AGENTS.md writer can stand in for Kimchi's.
-  kimchi = harness.evalDevenv {
-    ai.kimchi = {
-      context = {
-        filename = "custom.md";
-        text = "kimchi probe";
-      };
-      enable = true;
-    };
-  };
-  # Codex, Kimchi and Kiro all write the project-root AGENTS.md by default, and
-  # Codex publishes its key even with no content. Codex sorts first, so a
-  # first-wins manifest named only ai.codex.* for Kimchi's text.
-  sharedAgentsMd = harness.evalDevenv {
-    ai.codex.enable = true;
-    ai.kimchi = {
-      context.text = "kimchi only";
-      enable = true;
-    };
-  };
-  # The shell-entry report and the retired-path snapshot, in one file, so a
-  # check can read both manifests they are handed.
-  observer = name: evaluated:
-    pkgs.writeText name (evaluated.config.enterShell + "\n" + evaluated.config.tasks."ai:delivery:observe-retired".exec);
   stubBin = pkgs.writeShellScript "kiro-warning-stub" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -100,18 +43,13 @@ in {
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       ${pkgs.python3}/bin/python ${./runtime.py} \
-        ${../../lib/ai/file-warnings.py} \
+        ${../../packages/kiro-cli/lib/global-feature-notice.py} \
         ${../../packages/claude-code/lib/memory-collision-guard.sh} \
-        ${wrappers} \
-        ${observer "warning-observer-shell" enabled} \
-        ${observer "kimchi-warning-observer-shell" kimchi} \
-        ${observer "shared-agents-md-observer-shell" sharedAgentsMd}
+        ${wrappers}
       touch "$out"
     '';
-  checks.ai-warnings-files-wired = harness.mkTest "ai-warnings-files-wired" (
-    lib.hasInfix "file-warnings.py" enabled.config.enterShell
-    && enabled.config.tasks."ai:delivery:observe-retired".before == ["devenv:files:cleanup"]
-    && lib.hasInfix "workflows" (featureWarning {
+  checks.ai-warnings-kiro-feature-wired = harness.mkTest "ai-warnings-kiro-feature-wired" (
+    lib.hasInfix "workflows" (featureWarning {
       workflows.enable = true;
       v3 = true;
     })

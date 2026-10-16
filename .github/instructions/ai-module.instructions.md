@@ -1472,10 +1472,11 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-14 — delivery policy derives shared surfaces, keyed
+> **Last verified:** 2026-10-15 — delivery policy derives shared surfaces, keyed
 > withdrawal and normalized gaps from option and runtime declarations;
 > `poolOptions` covers `agentsDir` and `environmentVariables` only;
-> `optionNamespaces` places launcher and pool options.
+> `optionNamespaces` places launcher and pool options; the devenv file observer
+> lives in ai-module and reads the files plan, not the matrix.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1832,15 +1833,10 @@ Regenerate the data with
 `nix build .#checks.x86_64-linux.ai-delivery-generated.generated --no-link --print-out-paths`,
 copy the printed output to `config/ai-delivery-generated.nix`, then run
 `treefmt config/ai-delivery-generated.nix`. The `ai-delivery-generated` check
-regenerates and requires byte identity. `file-warnings.nix` continues rebasing
-the matrix's default directories onto consumer configuration; neither warning
-reader imports an evaluator. The matrix's project `AGENTS.md` writer is rebased
-onto the key the runtime's record declares in `sharedAgentsMd`, which the
-builder publishes in `ai.internal.agentsMdTargets`, never onto
-`context.filename`: Kimchi's names its Home Manager harness file, while its
-devenv factory always writes the project-root `AGENTS.md`. Codex, Kimchi and
-Kiro all default to that one path, so the manifest folds every writer's options
-per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
+regenerates and requires byte identity. The devenv file observer no longer reads
+the matrix: ai-module's `files2-snapshot` and `files2-inspect` tasks take
+ownership from the files plan, its `ai.files2Owners` claims and
+`ai.deliveredPaths`.
 
 ### Layer location map
 

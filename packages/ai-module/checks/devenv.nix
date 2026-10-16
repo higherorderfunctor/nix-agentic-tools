@@ -97,7 +97,7 @@
     inherit (config) tasks;
   in
     lib.optional (builtins.attrNames config.files != expectedFiles) "native files"
-    ++ lib.optional (builtins.filter (lib.hasPrefix "ai2:files2-") (builtins.attrNames tasks) != emitted) "emitted entries"
+    ++ lib.optional (builtins.filter (lib.hasPrefix "ai2:files2-") (builtins.attrNames tasks) != lib.sort builtins.lessThan (emitted ++ ["ai2:files2-inspect" "ai2:files2-snapshot"])) "emitted entries"
     ++ lib.optional (tasks."ai2:link-check".before != [linkCheckTo]) "link check target"
     ++ lib.optional (tasks."ai2:files-linked".after != [linkedFrom]) "files linked"
     ++ lib.optional ((tasks."ai2:files2-apply".after or null) != applyAfter) "apply dependencies"

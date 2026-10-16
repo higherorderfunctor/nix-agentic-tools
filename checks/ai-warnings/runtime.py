@@ -2,7 +2,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -18,74 +17,6 @@ def run(argv, *, env=None, stdin="", warning=None, output=None):
     if output is not None:
         assert output in result.stdout, result.stdout
     return result
-
-
-def files(script, root):
-    project, state = root / "project", root / "state"
-    project.mkdir()
-    desired = root / "desired.json"
-    spec = {"mode": "symlink", "option": "ai.codex.files.\"probe\"", "source": "/nix/store/probe"}
-    desired.write_text(json.dumps({"probe": spec}))
-    argv = [sys.executable, script, str(project), str(state), str(desired)]
-    target = project / "probe"
-    for kind in ["absent", "file", "directory", "stale-link"]:
-        if kind == "file":
-            target.write_text("user content")
-        elif kind == "directory":
-            target.mkdir()
-        elif kind == "stale-link":
-            target.symlink_to("/nix/store/old")
-        run(argv, warning='ai.codex.files."probe" is set but devenv did not deliver')
-        if target.is_dir():
-            target.rmdir()
-        else:
-            target.unlink(missing_ok=True)
-    target.symlink_to("/nix/store/probe")
-    run(argv)
-    target.unlink()
-    target.write_text("user edit")
-    desired.write_text("{}")
-    for _ in range(2):
-        run(argv, warning='ai.codex.files."probe" was removed but devenv retained')
-        assert target.read_text() == "user edit"
-    target.unlink()
-    run(argv)
-    run(argv)
-    # Still declared by a different owner: this is not a removal.
-    target.write_text("other owner")
-    (state / "ai-delivery-observed.json").write_text(json.dumps({"probe": spec}))
-    current = root / "current.json"
-    current.write_text('["probe"]')
-    run(argv + [str(current)])
-    target.unlink()
-    # Bootstrap from upstream's old ledger and ignore unrelated files. The map
-    # is EXACT: a consumer file that merely sits under a runtime's config
-    # directory is theirs, and claiming it reported a removal of an ai.* option
-    # that never wrote the file.
-    owned = root / "owned.json"
-    (project / ".kiro").mkdir()
-    (project / ".kiro/consumer-owned").write_text("mine")
-    (state / "files.json").write_text(json.dumps({"managedFiles": [".kiro/consumer-owned"]}))
-    owned.write_text(json.dumps({".kiro": "ai.kiro.files"}))
-    run([sys.executable, script, "snapshot", str(state), str(owned)])
-    run(argv)
-    (state / "files.json").write_text(json.dumps({"managedFiles": [".kiro/old", ".kiro/consumer-owned", "unrelated"]}))
-    owned.write_text(json.dumps({".kiro/old": "ai.kiro.files"}))
-    (project / ".kiro/old").write_text("retired")
-    run([sys.executable, script, "snapshot", str(state), str(owned)])
-    result = run(argv, warning="ai.kiro.files was removed but devenv retained")
-    assert "unrelated" not in result.stderr
-    assert "consumer-owned" not in result.stderr
-    # Explicit copy/seed mode is intentional and stays quiet.
-    (project / ".kiro/old").unlink()
-    (project / ".kiro/consumer-owned").unlink()
-    desired.write_text(json.dumps({"probe": spec | {"mode": "seed"}}))
-    run(argv)
-    for invalid in ["bad json", "[]", '{"old":{}}']:
-        if invalid.startswith('{'):
-            (project / "old").write_text("retired")
-        (state / "ai-delivery-observed.json").write_text(invalid)
-        run(argv, warning="ai.*.files delivery inspection failed")
 
 
 def guard(script, root):
@@ -124,7 +55,7 @@ def credentials(manifest):
 def global_feature_notices(script, root):
     for feature, setting in [("codeToSpec", "chat.enableC2s"), ("workflows", "chat.enableWorkflows")]:
         config = root / feature
-        argv = [sys.executable, script, "global-feature", str(config), feature, setting]
+        argv = [sys.executable, script, str(config), feature, setting]
         needle = f"ai.kiro.cli.{feature}.enable"
         run(argv, warning=needle)
         settings = config / "settings/cli.json"
@@ -137,68 +68,9 @@ def global_feature_notices(script, root):
         run(argv)
 
 
-def manifest(script, suffix="-ai-delivery-files.json"):
-    words = shlex.split(Path(script).read_text().replace("\\\n", ""))
-    path = next(word for word in words if word.endswith(suffix))
-    return json.loads(Path(path).read_text())
-
-
-def owned(script):
-    """Path -> the consumer options that write it, as the snapshot sees it."""
-    return manifest(script, "-ai-delivery-owned.json")
-
-
-def current(script):
-    """Every path delivered this generation: symlinks and owned copies."""
-    return manifest(script, "-ai-delivery-current-files.json")
-
-
-def wiring(script):
-    desired = manifest(script)
-    assert "ai.kiro.agents" in desired[".custom-kiro/agents/probe.json"]["option"]
-    assert "ai.codex.native.settings" in desired[".codex/config.toml"]["option"]
-    assert 'ai.codex.files."probe"' in desired["probe"]["option"]
-    # A shared AGENTS.md key is an owned COPY: never a symlink the report
-    # inspects, always a current path the retirement report skips.
-    names = owned(script)
-    assert "KIRO.md" not in desired and "CODEX.md" not in desired, desired
-    assert {"KIRO.md", "CODEX.md"} <= set(current(script)), current(script)
-    # A shared AGENTS.md owner key belongs to the runtime whose context names
-    # it, never to whichever runtime sorts first.
-    assert "ai.kiro." in names["KIRO.md"], names["KIRO.md"]
-    assert "ai.codex." not in names["KIRO.md"], names["KIRO.md"]
-    assert "ai.codex." in names.get("CODEX.md", ""), names
-    # Provenance is exact: a consumer file under a runtime config directory is
-    # not an ai.* delivery and must not be observed as one.
-    assert ".custom-kiro/consumer-owned.md" not in desired
-    assert ".custom-kiro/consumer-owned.md" not in names
-
-
-def kimchi_wiring(script):
-    # Kimchi's devenv context lands in the project-root AGENTS.md whatever its
-    # (Home Manager) context.filename says; the manifest must follow the file
-    # actually written, not the option.
-    names = owned(script)
-    assert "ai.kimchi." in names.get("AGENTS.md", ""), names
-    assert "AGENTS.md" in current(script)
-
-
-def shared_agents_md_wiring(script):
-    # Several runtimes write the one project-root AGENTS.md. The manifest names
-    # every writer's options, so the runtime that actually supplied the text is
-    # among them even when an empty one sorts first.
-    option = owned(script).get("AGENTS.md", "")
-    assert "ai.kimchi." in option, option
-    assert "ai.codex." in option, option
-
-
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
-    files(sys.argv[1], root)
     guard(sys.argv[2], root / "guard")
     credentials(sys.argv[3])
     global_feature_notices(sys.argv[1], root / "global-feature-notices")
-    wiring(sys.argv[4])
-    kimchi_wiring(sys.argv[5])
-    shared_agents_md_wiring(sys.argv[6])
-print("PASS: file observations and optional hook warnings have firing and silent controls")
+print("PASS: Kiro feature notices and optional hook warnings have firing and silent controls")

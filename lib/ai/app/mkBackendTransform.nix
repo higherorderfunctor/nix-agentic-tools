@@ -567,7 +567,7 @@
   # owner (sharedAgentsMd.nix) on devenv: its merged context plus the rules,
   # index entries and limit its record's `sharedAgentsMd` callback returns, each runtime
   # keeping its own rule policy. The key is published whether or not it has
-  # content, for observers such as file-warnings.nix. A limit is published
+  # content, for observers such as delivery-warnings.nix. A limit is published
   # with it too, because the runtime reads the file whoever wrote it.
   sharedAgentsMdConfig = lib.optionalAttrs (backend == "devenv" && appRecord ? sharedAgentsMd) (let
     # Read by field, so a stray one is rejected rather than dropped.

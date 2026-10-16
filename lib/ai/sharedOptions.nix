@@ -401,7 +401,7 @@
     };
   };
 in {
-  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
+  imports = [./app/sharedAgentsMd.nix];
 
   options.ai =
     sharedSurfaceOptions

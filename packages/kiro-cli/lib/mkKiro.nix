@@ -1727,7 +1727,7 @@ in
           (lib.optionalAttrs (!isHm && options ? enterShell) {
             enterShell = lib.concatStrings (lib.mapAttrsToList (name: setting:
               lib.optionalString (cfg.cli.${name}.enable && needsGlobalNotice setting) ''
-                ${pkgs.python3}/bin/python ${../../../lib/ai/file-warnings.py} global-feature "''${KIRO_HOME:-$HOME/.kiro}" \
+                ${pkgs.python3}/bin/python ${./global-feature-notice.py} "''${KIRO_HOME:-$HOME/.kiro}" \
                   ${lib.escapeShellArg name} ${lib.escapeShellArg "chat.${setting}"}
               '')
             featureSettingImplications);
