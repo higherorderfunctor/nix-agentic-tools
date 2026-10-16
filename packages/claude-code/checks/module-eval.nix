@@ -853,16 +853,18 @@ in {
           && document.value.unpinOpus48LaunchEffort
       );
 
-      # Emptied flag map: the writer is still emitted, declaring zero leaves, so
-      # the prior generation's flags are retired rather than left behind.
-      module-claude-hm-unpin-empty-emits-writer = mkTest "claude-hm-unpin-empty-emits-writer" (
+      # An empty flag map delivers no files. Prune still retires the prior
+      # generation's flags; no apply pass is needed.
+      module-claude-hm-unpin-empty-emits-prune = mkTest "claude-hm-unpin-empty-emits-prune" (
         let
           result = evalHm {
             ai.claude.enable = true;
             ai.claude.unpinLaunchEffort = lib.mkForce {};
           };
         in
-          result.config.home.activation ? ai2-files2-apply
+          result.config.home.activation ? ai2-files2-prune
+          && !(result.config.home.activation ? ai2-files2-apply)
+          && result.config.ai.files2 == {}
           && result.config.ai.claude._generatedFiles.".claude.json".content.value == {}
           && !(result.config.ai.files2 ? ".claude.json")
       );

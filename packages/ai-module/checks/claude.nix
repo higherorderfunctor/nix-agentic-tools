@@ -45,7 +45,7 @@
     in {
       inherit plan;
       planFile = "${pkgs.writeText "files2-ai-plan.json" (builtins.toJSON plan)}";
-      scripts = map (key: config.home.activation.${key}.text) ["ai2-files2-prune" "ai2-files2-apply"];
+      scripts = map (key: config.home.activation.${key}.text) (builtins.filter (key: config.home.activation ? ${key}) ["ai2-files2-prune" "ai2-files2-apply"]);
       mode = config.home.activation.ai2-claude-config-mode.text or "";
     };
   in
@@ -60,7 +60,12 @@
     # writer.after). Materialized keeps that edge and adds apply -> mode.
     assert enabled.ai.claude.activation2.claude-config-mode.after == ["materialized"];
     assert enabled.home.activation.ai2-claude-config-mode.after == ["ai2-files-ready"];
-    assert builtins.elem "ai2-files-ready" enabled.home.activation.ai2-files2-apply.before; {
+    # An empty flag map has no plan: prune retires prior flags without apply.
+    assert disabled.home.activation ? ai2-files2-prune && !(disabled.home.activation ? ai2-files2-apply);
+    assert enabled.home.activation ? ai2-files2-prune;
+    assert if settings == {}
+    then !(enabled.home.activation ? ai2-files2-apply)
+    else builtins.elem "ai2-files-ready" enabled.home.activation.ai2-files2-apply.before; {
       inherit settings;
       disabled = generate disabled;
       enabled = generate enabled;

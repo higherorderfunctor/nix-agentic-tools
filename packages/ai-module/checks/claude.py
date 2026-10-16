@@ -72,6 +72,7 @@ class Home:
     def check(self, declared, created=True):
         assert self.read() == {**NATIVE, **declared}, self.read()
         assert self.document.read_text().startswith(HEADER)
+        assert stat.S_IMODE(self.state.stat().st_mode) == 0o600
         record = self.records()[DOCUMENT]
         assert record["method"] == "rw" and record["format"] == "json" and record["created"] == created
         assert record["keys"] == {f"/{key}": hashlib.sha256(json.dumps(["bool", value], separators=(",", ":")).encode()).hexdigest() for key, value in declared.items()}
@@ -81,16 +82,16 @@ class Home:
 def generations(directory, mode, use_xdg):
     home = Home(directory, use_xdg)
     home.activate(2)
-    assert not home.document.exists() and home.records() == {}
+    assert not home.document.exists() and not home.state.exists()
     home.document.write_text("externally managed, not JSON\n")
     home.document.chmod(mode)
     before = snapshot(home.document)
     home.activate(2)
-    assert snapshot(home.document)[0] == before[0] and home.records() == {}
+    assert snapshot(home.document)[0] == before[0] and not home.state.exists()
     assert stat.S_IMODE(home.document.stat().st_mode) == mode & 0o700
     home.document.unlink()
     home.activate(dry=True)
-    assert not home.document.exists() and home.records() == {}
+    assert not home.document.exists() and not home.state.exists()
     home.activate()
     assert home.read() == DATA["fixture"][0]["settings"] and stat.S_IMODE(home.document.stat().st_mode) == 0o600
     home.write({**NATIVE, "first": False, "second": False}, mode)
@@ -120,11 +121,10 @@ def generations(directory, mode, use_xdg):
     assert (snapshot(home.document), snapshot(home.state)[:2]) == damaged
     home.state.write_bytes(before[1][0])
     home.activate(2)
-    assert home.read() == NATIVE and home.records() == {}
+    assert home.read() == NATIVE and not home.state.exists()
     before = snapshot(home.document)
     home.activate(2)
     assert snapshot(home.document) == before
-    assert stat.S_IMODE(home.state.stat().st_mode) == 0o600
     assert stat.S_IMODE(home.state.parent.stat().st_mode) == 0o700
     assert not list(home.root.glob(".files2-*"))
 
@@ -160,7 +160,7 @@ def legacy(directory, disabled):
     home.activate(disabled=disabled)
     assert not home.ledger.exists()
     if disabled:
-        assert home.read() == NATIVE and home.records() == {}
+        assert home.read() == NATIVE and not home.state.exists()
         assert stat.S_IMODE(home.document.stat().st_mode) == 0o644
     else:
         home.check(DATA["fixture"][0]["settings"], created=False)
@@ -171,7 +171,7 @@ def legacy(directory, disabled):
         home.activate()
         assert not home.ledger.exists() and snapshot(home.state)[:2] == before
         home.activate(disabled=True)
-        assert home.read() == NATIVE and home.records() == {}
+        assert home.read() == NATIVE and not home.state.exists()
     print(f"PASS: legacy import once and disabled drain ({disabled})")
 
 
@@ -203,5 +203,5 @@ with tempfile.TemporaryDirectory() as temporary:
     linked.chmod(0o644)
     home.document.symlink_to(linked)
     home.activate(2)
-    assert stat.S_IMODE(linked.stat().st_mode) == 0o644 and home.records() == {}
+    assert stat.S_IMODE(linked.stat().st_mode) == 0o644 and not home.state.exists()
     print("PASS: mode repair skips missing files and symlinks")
