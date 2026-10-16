@@ -2,7 +2,9 @@
 
 > **Last verified:** 2026-10-16 — every surface uses the files layers; shared
 > documents use `rw`, renderers execute after secrets, and every legacy ledger
-> drains even while Kimchi is disabled.
+> drains even while Kimchi is disabled. pnpm owns the local-package identity
+> fix; named packages use project precedence across harness scopes and npm
+> installs, delivered under `packages/` outside PI auto-discovery.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -623,15 +625,28 @@ ai.kimchi.extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
 ```
 
 Each key stages a directory link through `ai.kimchi._generatedFiles` and the
-files layers: `<configDir>/harness/extensions/<key>` on Home Manager and
-`<project>/.config/kimchi/harness/extensions/<key>` on devenv. The link retains
-the package closure's string context. Sorted relative names populate
-`native.harnessSettings.packages` and merge with consumer package entries. Pi
-reads each package's `pi.extensions` manifest. Removing a key withdraws its link
-and package entry. Devenv requires approval and launch from the project root.
-Kimchi discovers the package in its Plugins tab; the user-scope resource toggle
-disables its extensions, including project packages. See the source citations
-and smoke contract in [external workflows](kimchi-workflows.md).
+files layers: `<configDir>/harness/packages/<key>` on Home Manager and
+`<project>/.config/kimchi/harness/packages/<key>` on devenv. The link retains
+the package closure's string context. This keeps packages outside PI's
+`extensions/`, `skills/`, `prompts/`, `themes/` and `.agents/skills/`
+auto-discovery roots, so configured-package loading is the only route. Sorted
+relative names populate `native.harnessSettings.packages` and merge with
+consumer package entries. Pi reads each package's `pi.extensions` manifest.
+Removing a key withdraws its link and package entry. Devenv requires approval
+and launch from the project root. Kimchi discovers the package in its Plugins
+tab; the user-scope resource toggle disables its extensions, including project
+packages. The source move renames `plugins.package.extensions-<key>` toggles to
+`plugins.package.packages-<key>`; consumers must migrate declared or saved
+toggle keys. Existing links at the old path retire through Home Manager
+generation cleanup or devenv's `files.json` cleanup, including when the map
+becomes empty. See the source citations and smoke contract in
+[external workflows](kimchi-workflows.md).
+
+Named local packages share their npm identity across harness directories. Pi
+keeps the project entry over the user entry instead of loading the same
+extension twice. Unnamed/unreadable packages keep path identity; explicit
+autoload deltas keep their user base. The dependency-owned patch and offline
+regression contract are described in [external workflows](kimchi-workflows.md).
 
 Kimchi's source patch removes the workflows static import, managed factory
 entry, and resource definition. Its locked package may still be fetched, but

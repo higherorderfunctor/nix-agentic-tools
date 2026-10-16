@@ -1,0 +1,32 @@
+Named local packages are the same package across harness directories and npm
+installs. Let PI's existing project precedence and autoload delta handling use
+the manifest name; unreadable or unnamed sources retain their path identity.
+
+diff --git a/dist/core/package-manager.js b/dist/core/package-manager.js
+--- a/dist/core/package-manager.js
++++ b/dist/core/package-manager.js
+@@ -1376,11 +1376,19 @@
+             // Use host/path for identity to normalize SSH and HTTPS
+             return `git:${parsed.host}/${parsed.path}`;
+         }
+-        if (scope) {
+-            const baseDir = this.getBaseDirForScope(scope);
+-            return `local:${this.resolvePathFromBase(parsed.path, baseDir)}`;
+-        }
+-        return `local:${this.resolvePath(parsed.path)}`;
++        const resolved = scope
++            ? this.resolvePathFromBase(parsed.path, this.getBaseDirForScope(scope))
++            : this.resolvePath(parsed.path);
++        try {
++            const manifest = JSON.parse(stripBom(readFileSync(join(resolved, "package.json"), "utf-8")));
++            if (typeof manifest?.name === "string" && manifest.name.length > 0) {
++                return `npm:${manifest.name}`;
++            }
++        }
++        catch {
++            // Missing, unreadable, or invalid manifests keep the path identity.
++        }
++        return `local:${resolved}`;
+     }
+     /**
+      * Dedupe packages: if same package identity appears in both global and project,

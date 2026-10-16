@@ -299,7 +299,7 @@ in {
         in {
           inherit (backend) name;
           inherit settings;
-          extension = files."${workflowsHarness}/extensions/workflows".source;
+          extension = files."${workflowsHarness}/packages/workflows".source;
         })
         backends;
     in
@@ -333,12 +333,13 @@ in {
             inherit workflows;
           };
           extensionFiles = evaluated:
-            lib.filterAttrs (path: _: lib.hasPrefix "${workflowsHarness}/extensions/" path) (deliveredFiles evaluated.config);
+            lib.filterAttrs (path: _: lib.hasPrefix "${workflowsHarness}/packages/" path) (deliveredFiles evaluated.config);
           checkLinks = evaluated: names:
             builtins.attrNames (extensionFiles evaluated)
-            == map (name: "${workflowsHarness}/extensions/${name}") names
+            == map (name: "${workflowsHarness}/packages/${name}") names
+            && !(lib.any (lib.hasPrefix "${workflowsHarness}/extensions/") (builtins.attrNames (deliveredFiles evaluated.config)))
             && lib.all (name: let
-              path = "${workflowsHarness}/extensions/${name}";
+              path = "${workflowsHarness}/packages/${name}";
               file = (extensionFiles evaluated).${path};
             in
               fromGeneratedTree path file
@@ -355,8 +356,8 @@ in {
           && !((settings empty) ? packages)
           && checkLinks one ["workflows"]
           && checkLinks two ["another" "workflows"]
-          && (settings one).packages == ["extensions/workflows"]
-          && lib.sort builtins.lessThan (settings two).packages == ["/consumer/package" "extensions/another" "extensions/workflows"]
+          && (settings one).packages == ["packages/workflows"]
+          && lib.sort builtins.lessThan (settings two).packages == ["/consumer/package" "packages/another" "packages/workflows"]
           && !rejected.success;
       in
         lib.all checkBackend backends

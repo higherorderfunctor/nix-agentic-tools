@@ -1,1 +1,1 @@
-{ "packages": ["extensions/workflows"] }
+{ "packages": ["packages/workflows"] }

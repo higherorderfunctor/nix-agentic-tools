@@ -57,8 +57,8 @@ try:
         os.umask(old_umask); old_umask = None
     settings = {}
     if sc.get("workflows"):
-        (harness / "extensions").mkdir(); (harness / "extensions/workflows").symlink_to(WF, target_is_directory=True)
-        settings["packages"] = ["extensions/workflows"]
+        (harness / "packages").mkdir(); (harness / "packages/workflows").symlink_to(WF, target_is_directory=True)
+        settings["packages"] = ["packages/workflows"]
     settings.update(sc.get("settings", {}))
     if settings: (harness / "settings.json").write_text(json.dumps(settings))
     for rel, txt in sc.get("files", {}).items():

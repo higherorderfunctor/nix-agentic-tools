@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-16 — upstream selects the NAT pnpm major; build and
 > runtime use that derivation, with stamped metadata and noninteractive
 > generated dependency migration. Extension links stage in `_generatedFiles` and
-> reach both backends through the files layers, retaining package store context.
+> reach both backends through the files layers, retaining package store context;
+> configured packages use project precedence and live outside auto-discovery.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's lock. Its owner-local
@@ -92,24 +93,32 @@ ai.kimchi.extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
 
 `extensions` is a free-form map of derivations, empty by default. Each key names
 a directory link under the harness: Home Manager delivers
-`<configDir>/harness/extensions/<key>` and devenv delivers
-`<project>/.config/kimchi/harness/extensions/<key>`. Each link stages in
+`<configDir>/harness/packages/<key>` and devenv delivers
+`<project>/.config/kimchi/harness/packages/<key>`. Each link stages in
 `ai.kimchi._generatedFiles` with `method = "symlink"` and reaches both backends
 through `ai.kimchi.files` and `ai.files`, retaining each package's store
 context. The shared `lib.ai.linkDirectory pkgs name source` builder supplies a
 tiny directory of absolute top-level links into the package, so generated-tree
 delivery copies only links and leaves the dependency payload in its original
 store path. Harness settings load those links through
-`packages = [ "extensions/<key>" ];`, sorted by key, alongside raw
+`packages = [ "packages/<key>" ];`, sorted by key, alongside raw
 `native.harnessSettings.packages` entries. Under Home Manager, a non-empty
 `extensions` map or any `native.harnessSettings.packages` declaration owns the
 whole harness `packages` list, replacing packages added with `kimchi install` on
 activation; declare those packages in `native.harnessSettings.packages`. Pi
 reads the package manifest's `pi.extensions`; Nix carries no extension entry
-metadata. Removing a key withdraws its link and settings entry. Delivery
-requires `ai.kimchi.enable`. Devenv's project settings engage the existing
-exact-cwd launcher guard and load only in a trusted project: pi drops untrusted
-project settings (`dist/core/settings-manager.js:189`), and Home Manager's
+metadata. Removing a key withdraws its link and settings entry. The `packages/`
+directory is outside all PI auto-discovery roots: harness `extensions/`,
+`skills/`, `prompts/` and `themes/`, plus user and ancestor `.agents/skills/`.
+The configured package is therefore the only load path. Previous
+`extensions/<key>` links retire through the existing backend state: Home
+Manager's generation cleanup removes links absent from the new `home-files`
+tree; devenv's `files.json` cleanup removes retired store symlinks before
+creating the new entries. This covers both a rename and removing all extension
+declarations; neither needs a new migration writer. Delivery requires
+`ai.kimchi.enable`. Devenv's project settings engage the existing exact-cwd
+launcher guard and load only in a trusted project: pi drops untrusted project
+settings (`dist/core/settings-manager.js:189`), and Home Manager's
 `defaultProjectTrust = "never"` never prompts. Trust the root with
 `ai.kimchi.projectTrust."<abs dir>" = true` (or `--approve` per session). Kimchi
 still lists an untrusted project package as an enabled Plugins row, because its
@@ -119,13 +128,29 @@ discovery builds settings with trust defaulted on
 Pi 0.85.1 resolves local package sources from its agent directory for user scope
 and `<cwd>/<CONFIG_DIR_NAME>` for project scope
 (`dist/core/package-manager.js:981-993,1048-1062,1785-1799`). Its path resolver
-normalizes paths without resolving symlinks (`dist/utils/paths.js:82-86`).
-Kimchi 1.5.1 discovers a Plugins row from each configured package
-(`src/resources/package-resources.ts:19-31,85-94`). Its disable filter matches
-both package paths and the original metadata source string before extension
-loading (`src/extensions/pi-package-lookup/native-compat.ts:151-159,277-284`),
-so the directory link preserves the package toggle. Resource overrides remain
-user scope even for project packages (`src/resources/store.ts:9-12,37-44`): Home
+normalizes paths without resolving symlinks (`dist/utils/paths.js:82-86`). NAT's
+`package-identity.patch` gives a local directory with a non-empty string
+`package.json.name` the identity `npm:<name>`. Pi's existing deduplication then
+keeps the project entry over the user entry, including a user npm installation
+of that name. This removes duplicate configured-package loads that can consume
+the workflow step's one-use output-tool handoff twice. Top-level extension
+auto-discovery remains separate and deduplicates by real path, which is why
+package links must stay outside its roots. Missing, unreadable, invalid or
+unnamed manifests retain their absolute path identity; npm and git identities
+are unchanged. Pi's explicit project `autoload = false` delta still keeps its
+user base. Install/remove matching and Plugins row IDs remain based on source
+strings/paths. Moving the delivery source changes each resource id from
+`plugins.package.extensions-<key>` to `plugins.package.packages-<key>` (Kimchi
+lowercases and replaces non-alphanumeric runs with `-`). Consumers must rename
+any corresponding `native.harnessSettings.resources` keys or saved user toggles;
+old toggle keys no longer match. For workflows the new id is
+`plugins.package.packages-workflows`. Kimchi discovers a Plugins row from each
+configured package (`src/resources/package-resources.ts:19-31,85-94`). Its
+disable filter matches both package paths and the original metadata source
+string before extension loading
+(`src/extensions/pi-package-lookup/native-compat.ts:151-159,277-284`), so the
+directory link preserves the package toggle. Resource overrides remain user
+scope even for project packages (`src/resources/store.ts:9-12,37-44`): Home
 Manager can declare the row's id under `native.harnessSettings.resources`;
 devenv cannot disable a user resource.
 
@@ -140,10 +165,23 @@ only filters factories passed to it; the definition describes the menu/toggle.
 After removal it cannot control anything, so leaving it would expose a dead
 switch. Pi's package loader reads the manifest and Kimchi discovers the package
 resource row independently. Other Kimchi extensions and dependencies keep their
-upstream behavior; the original lockfile is left intact.
+upstream behavior. Before dependency fetching, `applyPatches` appends the
+identity fix to upstream's existing PI patch and replaces that patch's SHA-256
+throughout the lockfile, including peer references. Both pnpm consumers use that
+same source. Pnpm applies the fix wherever it materializes PI; it does not
+replace registry tarballs or re-resolve dependencies. A missing old hash fails
+the source preparation, and an incompatible identity hunk fails installation.
 
 CI builds both packages on Linux and Darwin through package discovery. Checks:
 
+- `kimchi-package-identity` materializes the production source with the exact
+  build pnpm and frozen offline configure hook, without compiling Kimchi. The
+  pristine PI control must fail. With module-rendered Home Manager and devenv
+  links/settings, both same-target and different-target payloads must resolve
+  exactly one extension in the full set, from the project with its package
+  source. Package exclusions must leave no enabled extension. The installed
+  class must also select the project over npm, keep both unnamed packages, and
+  preserve delta bases, trust checks, source persistence, listing and updates.
 - `kimchi-workflows-source` runs the same exact substitutions on the two source
   files and rejects leftover registrations, without compiling Kimchi.
 - `module-kimchi-external-workflows` checks both backends: empty delivery, one

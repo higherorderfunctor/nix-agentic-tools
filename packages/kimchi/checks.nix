@@ -5,6 +5,7 @@
     ./checks/kimchi-extracted.nix
     ./checks/module-eval.nix
     ./checks/native-options.nix
+    ./checks/package-identity.nix
     ./checks/workflows-source.nix
   ];
   testing.homeManagerAiPackages.kimchi = pkgs.writeShellScriptBin "kimchi" ''

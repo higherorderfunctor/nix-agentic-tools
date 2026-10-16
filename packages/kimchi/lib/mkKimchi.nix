@@ -28,6 +28,9 @@
   # That fixed project namespace is independent of ai.kimchi.configDir, which
   # selects the Home Manager output root.
   projectHarnessDir = ".config/kimchi/harness";
+  # PI auto-discovers extensions, skills, prompts and themes, plus .agents/skills.
+  # Packages must load only through settings so identity and plugin toggles apply.
+  packagesDir = "packages";
   # The project directory for Kimchi's own files.
   projectDir = ".kimchi";
   projectContextFilename = "AGENTS.md";
@@ -539,11 +542,11 @@
       # Kimchi filters disabled packages by metadata.source before loading them,
       # so the stable source name also works for a directory of package links.
       (lib.mkIf (cfg.extensions != {}) {
-        ai.kimchi.native.harnessSettings.packages = map (name: "extensions/${name}") (builtins.attrNames cfg.extensions);
+        ai.kimchi.native.harnessSettings.packages = map (name: "${packagesDir}/${name}") (builtins.attrNames cfg.extensions);
       })
       {
         ai.kimchi._generatedFiles = lib.mapAttrs' (name: extension:
-          lib.nameValuePair "${harness}/extensions/${name}" {
+          lib.nameValuePair "${harness}/${packagesDir}/${name}" {
             content.source = lib.ai.linkDirectory pkgs "kimchi-extension-${lib.strings.sanitizeDerivationName name}" extension;
             format = "raw";
             method = "symlink";
