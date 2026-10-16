@@ -27,7 +27,7 @@
       tools = lib.mkOption {
         type = lib.types.nullOr (lib.types.listOf lib.types.str);
         default = null;
-        description = "Optional Claude/Copilot tool allowlist. Runtimes without a matching field or with a different tool vocabulary do not lower it: Codex, Kimchi and Kiro drop it with a warning. Codex has no equivalent field; for Kimchi and Kiro the warning names the native form (native Markdown at `ai.kimchi.agents.<name>`, or `ai.kiro.native.agents.<name>.tools`).";
+        description = "Optional Claude tool allowlist. Runtimes without a matching field or with a different tool vocabulary do not lower it: Codex, Kimchi and Kiro drop it with a warning. Codex has no equivalent field; for Kimchi and Kiro the warning names the native form (native Markdown at `ai.kimchi.agents.<name>`, or `ai.kiro.native.agents.<name>.tools`).";
       };
     };
   };
@@ -102,7 +102,7 @@
 
   # Kiro's `prompt` is a text source itself, so the one-arm record passes
   # through. `tools` is not lowered: Kiro takes capability tags, not the
-  # Claude/Copilot tool names this record carries.
+  # Claude tool names this record carries.
   renderKiro = _: value: {
     inherit (value) description;
     prompt = value.instructions;
@@ -128,17 +128,4 @@ in {
       includeName = false;
       inherit name value;
     };
-
-  # A file entry is read, not rendered: `isPathLike` rather than
-  # `builtins.isPath`, so a store-path string (a flake input's
-  # `"${src}/agent.md"`, or any entry of an `agentsDir` given as a string)
-  # delivers the file's contents instead of its path as the body.
-  renderCopilot = name: value:
-    if !isSemantic value && isPathLike value
-    then builtins.readFile value
-    else
-      renderMarkdown {
-        includeName = false;
-        inherit name value;
-      };
 }

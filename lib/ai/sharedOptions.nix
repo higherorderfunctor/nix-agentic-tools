@@ -187,7 +187,7 @@
         `tools`) are added there. Kiro and Codex have that layer today; the
         other runtimes render the normalized record directly.
 
-        `tools` names Claude/Copilot tools. Claude and Copilot render it;
+        `tools` names Claude tools. Claude renders it;
         Codex, Kimchi and Kiro drop it with a warning, because they have no
         matching field or use a different tool vocabulary. Codex has no tool
         allowlist; for Kimchi and Kiro, set the native guardrail instead
@@ -196,8 +196,6 @@
         file:
         - Claude  → ~/.claude/agents/<name>.md (HM) or
                     .claude/agents/<name>.md (devenv)
-        - Copilot → .github/agents/<name>.md (devenv only; Home Manager
-                    warns, since github.com reads the repository)
         - Codex   → ~/.codex/agents/<name>.toml (HM) or
                     .codex/agents/<name>.toml (devenv)
         - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or

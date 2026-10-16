@@ -667,10 +667,7 @@ in {
             rules.removed.enable = false;
             skills.removed = null;
           };
-          copilot.github = {
-            agents.removed = null;
-            rules.removed.enable = false;
-          };
+          copilot.github.rules.removed.enable = false;
           kimchi.environmentVariables.removed = null;
           kiro = {
             cli.environmentVariables.removed = null;
@@ -684,7 +681,6 @@ in {
           == null
           && evaluated.config.ai.claude.mcpServers.removed == null
           && evaluated.config.ai.codex.environmentVariables.removed == null
-          && evaluated.config.ai.copilot.github.agents.removed == null
           && evaluated.config.ai.kimchi.environmentVariables.removed == null
           && evaluated.config.ai.kiro.skills.removed == null
           && !evaluated.config.ai.rules.removed.enable

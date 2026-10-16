@@ -5,11 +5,12 @@
 > repository's committed instruction files are read-only copies the files engine
 > writes, never `files.*` symlinks; the generator's materializer and the
 > AGENTS.md seed are gone. Kiro and Kimchi settings and Codex daemon settings
-> are owned copies; Copilot writes repository instructions and agent profiles
-> only; skills declare a copy gap. Recursive leaf links target one source-tree
-> store root while retaining per-file input contexts. The symlink guard uses
-> devenv's final file target, follows its own runtime's writers before file
-> creation, and reports every conflict before failing.
+> are owned copies; Copilot writes repository instructions only; its agents and
+> skills declare gaps. A copy differing only in mode is reset without a backup.
+> Recursive leaf links target one source-tree store root while retaining
+> per-file input contexts. The symlink guard uses devenv's final file target,
+> follows its own runtime's writers before file creation, and reports every
+> conflict before failing.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -257,8 +258,8 @@ Why copies rather than `files.*` symlinks:
 - **Both writers are idempotent.** An unchanged file keeps its mtime, and
   different bytes are backed up once before replacement. `own` adopts a file
   whose bytes already match (a `git pull` of the committed copy) without a
-  backup; the files engine adopts only an identical image, bytes and mode, so a
-  copy a checkout rewrote at another mode is backed up once and reset.
+  backup; so does the files engine, which also resets a copy a checkout rewrote
+  at another mode, without a backup when only the mode differs.
 
 `devenv`'s own `files.<name>.copyMode = "copy"` was considered and rejected: it
 `rm -rf`s and re-`cp`s unconditionally on every entry (a read race plus mtime

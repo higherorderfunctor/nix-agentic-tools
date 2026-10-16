@@ -2,9 +2,9 @@
 # that read a repository's committed tree.
 #
 # One record carries two option namespaces. `ai.copilot.github` holds the
-# pools github.com reads: context (the shared AGENTS.md), rules
-# (`.github/instructions/`) and agents (`.github/agents/`). Skills declare
-# the recursive-copy gap below. `ai.copilot.cli` is reserved for the Copilot CLI's
+# pools github.com reads: context (the shared AGENTS.md) and rules
+# (`.github/instructions/`). Agents and skills declare gaps below.
+# `ai.copilot.cli` is reserved for the Copilot CLI's
 # launcher, which this module does not ship: the record has no package, so
 # the launcher namespace declares nothing and `ai.copilot.enable` is the
 # switch. The copilot-cli package itself stays in `packages/`.
@@ -26,13 +26,6 @@
   homeManagerReason = surface: "github.com Copilot reads ${surface} from a repository's committed tree, and Home Manager has no repository to write. Configure it through the devenv module. See ${docs "reference/custom-instructions-support"}.";
   # Where each unit lands, shared by the staged entries and `contentTargets`.
   instructionPath = cfg: name: "${cfg.github.projectDir}/instructions/${name}.instructions.md";
-  # github.com reads the COMMITTED tree, where a store symlink dangles, so
-  # instruction files and agent profiles are read-only copies.
-  copy = surface: content: {
-    inherit content surface;
-    format = "markdown";
-    method = "ro";
-  };
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -62,11 +55,10 @@ in
       the rule's scopes; Home Manager declares the option and warns when it is
       non-empty.
     '';
-    agentsDescriptionSuffix = "Devenv writes each to `<projectDir>/agents/<name>.md` with the `name`, `description` and `tools` frontmatter github.com reads; a raw native file carries its own, `model` included.";
     surfaceSupport = {
       agents = {
-        backends = ["devenv"];
-        reason = homeManagerReason "custom agent profiles";
+        backends = [];
+        reason = "github.com code review never reads .github/agents.";
       };
       context = {
         backends = ["devenv"];
@@ -82,7 +74,7 @@ in
       };
       mcpServers = {
         backends = [];
-        reason = "github.com Copilot takes MCP servers from the repository's Copilot settings on github.com, not from a file; the only file-borne MCP is `mcp-servers` inside a custom agent profile, which a raw ai.copilot.github.agents file can carry. See ${docs "how-tos/use-copilot-agents/cloud-agent/extend-cloud-agent-with-mcp"}.";
+        reason = "github.com Copilot takes MCP servers from the repository's Copilot settings on github.com, not from a file; the only file-borne MCP is `mcp-servers` inside a custom agent profile, which this module does not write. See ${docs "how-tos/use-copilot-agents/cloud-agent/extend-cloud-agent-with-mcp"}.";
       };
       rules = {
         backends = ["devenv"];
@@ -105,15 +97,14 @@ in
       type = lib.types.str;
       default = ".github";
       description = ''
-        Directory github.com Copilot reads instructions and agents
-        from, relative to the devenv root. Home Manager has no project root
+        Directory github.com Copilot reads instructions from,
+        relative to the devenv root. Home Manager has no project root
         and rejects overrides.
       '';
     };
     config = {
       backend,
       cfg,
-      mergedAgents,
       mergedRules,
       ...
     }:
@@ -133,17 +124,15 @@ in
           ];
         })
         (lib.optionalAttrs (backend == "devenv") {
-          # One profile per agent. github.com names a profile by its filename
-          # minus `.md` or `.agent.md`; `name` in the frontmatter wins.
+          # github.com reads the COMMITTED tree, where a store symlink
+          # dangles, so instruction files are read-only copies.
           ai.copilot._generatedFiles =
-            lib.mapAttrs' (name: agent:
-              lib.nameValuePair "${cfg.github.projectDir}/agents/${name}.md" (copy "agents" (
-                if lib.ai.agent.isSemantic agent
-                then lib.ai.agent.renderFile true name agent
-                else {text = lib.ai.agent.renderCopilot name agent;}
-              )))
-            mergedAgents
-            // lib.mapAttrs (_path: text: copy "rules" {inherit text;}) (aiCommon.renderRules {
+            lib.mapAttrs (_path: text: {
+              content = {inherit text;};
+              format = "markdown";
+              method = "ro";
+              surface = "rules";
+            }) (aiCommon.renderRules {
               path = instructionPath cfg;
               rules = mergedRules;
               runtime = "copilot";
@@ -165,7 +154,9 @@ in
         rules = lib.mapAttrs (name: _rule: instructionPath cfg name) mergedRules;
       };
     # The old writer's directory ledgers, declared while Copilot is disabled
-    # too, so the copies it wrote drain on a disable as well as on N→0.
+    # too, so the copies it wrote drain on a disable as well as on N→0. The
+    # agents ledger outlives its surface: it retires the profiles the old
+    # writer left in `<projectDir>/agents` on the first upgrade.
     migrationConfig = {
       backend,
       cfg,

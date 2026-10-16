@@ -554,7 +554,7 @@
     | Generated files | N/A | `ai.formatter`, `ai.guards.<name>`, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
     | Skills | Copy native directories | `ai.skills.*` (Claude + Codex + Kimchi + Kiro) | Same; github.com Copilot warns because committed store links dangle |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Kimchi) | Same; Kimchi's lands in its project harness settings (see below). Kiro has only per-model native effort |
-    | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Kimchi + Kiro) | Same, plus github.com Copilot's `.github/agents/`; project-native paths |
+    | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Kimchi + Kiro) | Same; project-native paths. github.com Copilot warns because code review never reads `.github/agents` |
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
     | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. github.com Copilot is explicitly excluded |
@@ -614,18 +614,17 @@
 
     `ai.copilot` configures github.com Copilot: the cloud agent and code review
     read a repository's committed tree. Its pools live under
-    `ai.copilot.github`, and only devenv writes them. Instructions and agent
-    profiles land as read-only copies, since a committed store link dangles on
-    github.com:
+    `ai.copilot.github`, and only devenv writes them. Instructions land as
+    read-only copies, since a committed store link dangles on github.com:
 
     | Pool | devenv delivery |
     | ---- | --------------- |
     | Context | root `AGENTS.md`, shared with Codex and Kiro |
     | Rules | `.github/instructions/<name>.instructions.md`, `applyTo` from the rule's scopes |
-    | Agents | `.github/agents/<name>.md` with `name`, `description` and `tools` |
 
-    Skills warn on both backends: committed store links dangle and the module
-    does not copy skill trees. Commit real files under `.github/skills`.
+    Agents warn on both backends: github.com code review never reads
+    `.github/agents`. Skills warn on both backends: committed store links
+    dangle and the module does not copy skill trees. Commit real files under `.github/skills`.
     Home Manager has no repository, so a value set there warns. Environment
     variables, hooks, MCP servers, settings and the shell warn on both
     backends, each with the reason and a link to GitHub's documentation:

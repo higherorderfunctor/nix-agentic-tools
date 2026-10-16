@@ -7,6 +7,8 @@
     inherit reason;
     primitive = "notApplicable";
   };
+  # A surface declared `backends = []` has no per-runtime pool option.
+  declaresPool = surface: ecosystem: (optionPaths.records.${ecosystem}.surfaceSupport.${surface} or {backends = [];}).backends != [];
   inputOptions = surface: ecosystem:
     if surface == "permissions"
     then
@@ -17,25 +19,26 @@
       else []
     else if surface == "settings" && optionPaths.hasNativeSettings ecosystem
     then [(optionPaths.nativeSettings ecosystem)] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "native" "harnessSettings"]
-    # Every agents runtime has `agentsDir`; Codex and Kiro also take native
+    # Every agents pool has `agentsDir`; Codex and Kiro also take native
     # records, which alone can produce a file (a native-only agent). The
     # ai-warnings-delivery check holds this list to the records'
     # `agentNativeType`.
     else if surface == "agents"
     then
-      [["ai" "agents"] (optionPaths.pool ecosystem "agents") (optionPaths.pool ecosystem "agentsDir")]
+      [["ai" "agents"]]
+      ++ lib.optionals (declaresPool surface ecosystem) [(optionPaths.pool ecosystem "agents") (optionPaths.pool ecosystem "agentsDir")]
       ++ lib.optional (builtins.elem ecosystem ["codex" "kiro"]) ["ai" ecosystem "native" "agents"]
     else if ecosystem == "kiro" && surface == "hooks"
     then [["ai" "kiro" "hooks"] ["ai" "kiro" "hooksDir"] ["ai" "kiro" "hooksJson"]]
     else
       [["ai" surface]]
-      ++ lib.optional (builtins.elem surface (builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) optionPaths.records.${ecosystem}.surfaceSupport))) (optionPaths.pool ecosystem surface);
+      ++ lib.optional (declaresPool surface ecosystem) (optionPaths.pool ecosystem surface);
 in {
   inherit absent inputOptions;
   # Absences on the policy-only permissions surface, which no runtime record
   # declares.
   hand = let
-    copilot = absent "github.com Copilot reads no permissions file; a custom agent profile's `tools` list, which ai.copilot.github.agents writes, is the only tool restriction a repository file carries. See https://docs.github.com/en/copilot/reference/custom-agents-configuration.";
+    copilot = absent "github.com Copilot reads no permissions file; a custom agent profile's `tools` list is the only tool restriction a repository file carries, and this module writes no agent profile. See https://docs.github.com/en/copilot/reference/custom-agents-configuration.";
   in {
     "permissions/copilot/devenv" = copilot;
     "permissions/copilot/hm" = copilot;

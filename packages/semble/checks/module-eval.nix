@@ -197,7 +197,6 @@ in {
         && lib.all (runtime: cfg.ai.${runtime}.rules == {}) ["claude" "codex" "kiro"]
         && lib.all (runtime: !(cfg.ai.${runtime}.agents ? semble-search)) ["claude" "codex" "kiro"]
         && !(cfg.ai.kiro.native.agents ? semble-search)
-        && !(cfg.ai.copilot.github.agents ? semble-search)
         && cfg.ai.copilot.github.rules == {}
     );
 

@@ -219,6 +219,11 @@ def mutate(root, state_path, state, relative, after, next_entry=None, payload=No
     installed = installed_image(state["files"].get(relative))
     if current["type"] not in ("file", "absent") and current != installed:
         raise ValueError(f"owned destination changed type: {relative}")
+    if after["type"] == current["type"] == "file" and after["digest"] == current["digest"] and after != current:
+        # Only permission bits differ, so a backup would preserve nothing:
+        # git rewrites a committed copy at 0644 with the same bytes.
+        os.chmod(destination, after["mode"])
+        current = after
     if current == after:
         finish(state_path, state, relative, next_entry)
         return True
