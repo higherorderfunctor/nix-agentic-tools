@@ -9,9 +9,9 @@
 > Claude stages every surface, including HM `.claude.json` as `rw`; the files
 > engine writes its rules copies on devenv; staged Markdown and raw entries are
 > whole-content defaults; Kiro stages every surface, with hooks, settings and
-> steering legacy ledgers declared outside its enable gate; Kimchi stages
-> agents, context, extensions and skills, with its agents legacy ledger ungated;
-> hand rows are confined to the policy-only permissions surface.
+> steering legacy ledgers declared outside its enable gate; Kimchi stages every
+> surface, with every legacy ledger ungated; hand rows are confined to the
+> policy-only permissions surface.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -184,10 +184,11 @@ rather than a second path field: a runtime names exactly the groups it moves.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` is a
   writable state file with Nix-owned leaves. The files engine restores declared
   keys on activation and retains native keys. Its legacy ledger name remains a
-  literal upgrade contract. Kimchi still uses `helpers.mkReconciledDocument`
-  until its migration. Kimchi's `config.json` is fully Nix-owned and lands in
-  the same directory copy writer as its other settings. A replaced copy is
-  restored at switch.
+  literal upgrade contract. Kimchi stages user `config.json` and harness
+  `settings.json` as `rw` too; native keys survive while declared keys return.
+  Its git-token branch retains `ro` mode 0400 with an activation-time renderer,
+  as does trust with the read-only default mode. Engine apply follows secret
+  providers; all old Kimchi ledgers are ungated legacy declarations.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON ledger, even without a claimant.

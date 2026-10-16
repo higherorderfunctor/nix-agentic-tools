@@ -7,7 +7,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
+  inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownedDocument;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
   workflowsHarness = ".config/kimchi/harness";
@@ -38,24 +38,12 @@
     path = "${evaluated.config.ai.kimchi.configDir}/config.json";
   in
     ownedDocument "kimchi" path evaluated;
-  # The units one writer owns in one directory, read from the plan it applies.
-  dirTarget = entry: dir: evaluated:
-    lib.head (lib.filter (target: target.codec == "dir" && target.path == dir)
-      (ownPlan "kimchi" entry evaluated).targets);
-  dirUnits = entry: dir: evaluated: (dirTarget entry dir evaluated).units;
-  hmFiles = dirUnits "kimchiFiles";
-  devenvFiles = dirUnits "ai:kimchi:files";
-  # A settings copy's declared JSON, before its generated tree renders bytes.
-  fileValue = path: evaluated: evaluated.config.ai.kimchi.files.${path}.content.value;
+  # Read the final structured values after staged defaults and overrides merge.
+  fileValue = path: evaluated: evaluated.config.ai.files2.${path}.content.value;
   hmHarnessSettings = evaluated:
-    (ownedDocument "kimchi" "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated).value;
-  projectFiles = devenvFiles ".kimchi";
-  # devenv claims the copy only when something is declared, so an undeclared
-  # harness settings.json is absent from the directory's units entirely.
-  projectHarnessSettings = evaluated: let
-    units = devenvFiles ".config/kimchi/harness" evaluated;
-  in
-    if units ? "settings.json"
+    fileValue "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated;
+  projectHarnessSettings = evaluated:
+    if evaluated.config.ai.files2 ? ".config/kimchi/harness/settings.json"
     then fileValue ".config/kimchi/harness/settings.json" evaluated
     else {};
   # What Home Manager owns in the user config.json and harness settings.json
@@ -142,19 +130,6 @@
   agentFiles = dir: evaluated:
     lib.filterAttrs (path: _: lib.hasPrefix "${dir}/" path) (deliveredFiles evaluated.config);
   failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
-  # The Home Manager settings-copies writer as a runnable script: its prune
-  # entry and then its write entry, with home-manager's `run` helper in scope.
-  hmFilesWriter = config: let
-    inherit ((evalHm config).config.home) activation;
-  in
-    pkgs.writeShellScript "kimchi-files-hm" ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      ${harness.hmRunShim}
-      ${activation.kimchiFilesPrune.text}
-      ${activation.kimchiFiles.text}
-    '';
-
   checkModuleAssertions = evaluated: let
     failed = builtins.filter (entry: !entry.assertion) evaluated.config.assertions;
   in
@@ -183,7 +158,7 @@
               enable = true;
               native.harnessSettings = lib.setAttrByPath [key] (userScopeOnlyHarnessSettingValue key);
             };
-          }).config.home.activation.kimchiFiles
+          }).config.ai.files2
           true);
         acceptedAttempt = builtins.tryEval (builtins.deepSeq (checkModuleAssertions (evalDevenv {
             ai.kimchi = {
@@ -319,9 +294,8 @@ in {
             if backend.name == "global"
             then
               pkgs.writeText "kimchi-workflows-global-settings.json"
-              (lib.head (lib.filter (target: target.path == settingsPath)
-                  (ownPlan "kimchi" "kimchiFiles" backend.one).targets)).units.text
-            else files.${settingsPath}.source;
+              (builtins.toJSON (fileValue settingsPath backend.one))
+            else files.${settingsPath}.rendered;
         in {
           inherit (backend) name;
           inherit settings;
@@ -592,39 +566,34 @@ in {
           };
         };
       in
-        result.config.home.activation ? kimchiFiles
+        result.config.ai.files2.".config/kimchi/config.json".method
+        == "rw"
         && (hmConfigDocument result).value.telemetry.enabled == false
     );
 
-    # Home Manager owns declared leaves in config.json and settings.json, and
-    # keeps the other harness files as read-only copies. Devenv, with nothing
-    # declared, keeps its writer and both directory ledgers and claims no file.
+    # Home Manager shares its two writable documents; remaining JSON copies
+    # stay read-only. Empty devenv declarations deliver no project file.
     module-kimchi-hm-owns-user-files = mkTest "kimchi-hm-owns-user-files" (
       let
         evaluated = evalHm {ai.kimchi.enable = true;};
-        activation = evaluated.config.home.activation;
-        units = hmFiles ".config/kimchi/harness" evaluated;
+        plan = evaluated.config.ai.files2;
         devenv = evalDevenv {ai.kimchi.enable = true;};
-        devenvTargets = (ownPlan "kimchi" "ai:kimchi:files" devenv).targets;
       in
-        lib.hasInfix "--phase all" activation.kimchiFiles.text
-        && lib.hasInfix "--phase prune" activation.kimchiFilesPrune.text
-        && lib.hasPrefix "materialize/kimchi-shared-" (hmConfigDocument evaluated).ledger
-        && (hmConfigDocument evaluated).value == userConfigDefaults
-        && evaluated.config.ai.kimchi.files.".config/kimchi/config.json".facts.harnessWrites
-        && evaluated.config.ai.kimchi.files.".config/kimchi/config.json".mode == null
-        && evaluated.config.ai.kimchi.files.".config/kimchi/harness/settings.json".facts.harnessWrites
-        && evaluated.config.ai.kimchi.files.".config/kimchi/harness/settings.json".mode == null
-        && builtins.attrNames units == ["mcp.json" "permissions.json" "trust.json"]
+        (hmConfigDocument evaluated).value
+        == userConfigDefaults
+        && lib.all (path: plan.${path}.method == "rw" && plan.${path}.mode == null)
+        [".config/kimchi/config.json" ".config/kimchi/harness/settings.json"]
         && hmHarnessSettings evaluated == userHarnessDefaults
+        && lib.all (name: let entry = plan.${".config/kimchi/harness/${name}.json"}; in entry.method == "ro" && entry.mode == null)
+        ["mcp" "permissions" "trust"]
         && fileValue ".config/kimchi/harness/mcp.json" evaluated == {}
         && fileValue ".config/kimchi/harness/permissions.json" evaluated == {}
-        # Every remaining copy takes the reconciler's read-only default mode.
-        && lib.all (unit: !(unit ? mode)) (builtins.attrValues units)
         && !(lib.any (lib.hasPrefix ".config/kimchi/harness/") (builtins.attrNames evaluated.config.home.file))
-        && devenv.config.tasks ? "ai:kimchi:files"
-        && builtins.sort builtins.lessThan (map (target: target.path) devenvTargets) == [".config/kimchi/harness" ".kimchi"]
-        && lib.all (target: target.units == {}) devenvTargets
+        && devenv.config.ai.files2 == {}
+        && evaluated.config.ai.kimchi.files == {}
+        && evaluated.config.ai.kimchi.activation == {}
+        && devenv.config.ai.kimchi.files == {}
+        && devenv.config.ai.kimchi.activation == {}
     );
 
     module-kimchi-hm-requires-region = mkTest "kimchi-hm-requires-region" (
@@ -666,9 +635,7 @@ in {
         && !(hmHarnessSettings evaluated ? quietStartup)
     );
 
-    # Upgrade contract: generations before project-path delivery keyed the HM
-    # config ledger by configDir. Shared documents key their ledgers by path;
-    # read-only copies retain one directory ledger per directory.
+    # Legacy identity is stable even before the first enabled generation.
     module-kimchi-hm-ledger-identity = mkTest "kimchi-hm-ledger-identity" (
       let
         configDir = "custom/kimchi";
@@ -678,16 +645,22 @@ in {
             enable = true;
           };
         };
-        ledgerOf = dir: (dirTarget "kimchiFiles" dir evaluated).ledger;
+        disabled = evalHm {ai.kimchi = {inherit configDir;};};
+        expected =
+          map (path: {
+            codec = "json";
+            ledger = "materialize/kimchi-shared-${builtins.hashString "sha256" path}.json";
+            inherit path;
+          }) ["${configDir}/config.json" "${configDir}/harness/settings.json"]
+          ++ map (path: {
+            codec = "dir";
+            ledger = "materialize/kimchi-files-${builtins.hashString "sha256" path}.manifest";
+            inherit path;
+          }) [configDir "${configDir}/harness" ".config/kimchi/harness"];
       in
-        (hmConfigDocument evaluated).ledger
-        == "materialize/kimchi-shared-${builtins.hashString "sha256" "${configDir}/config.json"}.json"
-        && (ownedDocument "kimchi" "${configDir}/harness/settings.json" evaluated).ledger
-        == "materialize/kimchi-shared-${builtins.hashString "sha256" "${configDir}/harness/settings.json"}.json"
-        && builtins.attrNames (hmFiles "custom/kimchi/harness" evaluated) == ["mcp.json" "trust.json"]
-        && builtins.attrNames (hmFiles ".config/kimchi/harness" evaluated) == ["permissions.json"]
-        && ledgerOf "custom/kimchi/harness" == "materialize/kimchi-files-${builtins.hashString "sha256" "custom/kimchi/harness"}.manifest"
-        && ledgerOf ".config/kimchi/harness" == "materialize/kimchi-files-${builtins.hashString "sha256" ".config/kimchi/harness"}.manifest"
+        lib.all (item: lib.elem item evaluated.config.ai.legacyLedgers && lib.elem item disabled.config.ai.legacyLedgers) expected
+        && evaluated.config.ai.kimchi.legacyLedgers == disabled.config.ai.kimchi.legacyLedgers
+        && disabled.config.ai.kimchi.files2 == {}
     );
 
     # native.harnessSettings render to the project harness settings.json, a
@@ -701,8 +674,8 @@ in {
           };
         };
       in
-        result.config.tasks
-        ? "ai:kimchi:files"
+        result.config.ai.files2.".config/kimchi/harness/settings.json".method
+        == "ro"
         && projectHarnessSettings result == {hideThinkingBlock = true;}
         && !(result.config.files ? ".config/kimchi/harness/settings.json")
     );
@@ -876,7 +849,7 @@ in {
         && (fileValue ".kimchi/mcp.json" devenv).mcpServers.example.command == "hello"
         && !(devenv.config.files ? ".kimchi/mcp.json")
         && fileValue ".config/kimchi/harness/mcp.json" emptyHm == {}
-        && !((projectFiles emptyDevenv) ? "mcp.json")
+        && !(emptyDevenv.config.ai.files2 ? ".kimchi/mcp.json")
     );
 
     # Kimchi 1.1.37 accepts a role value only as a provider/model string, or
@@ -938,7 +911,7 @@ in {
               // extra;
           };
       in
-        !((withPaths {}).config.ai.kimchi.files ? ".kimchi/config.json")
+        !((withPaths {}).config.ai.files2 ? ".kimchi/config.json")
         && (fileValue ".kimchi/config.json" (withPaths {native.settings.skillPaths = [];})).skillPaths == []
         && (fileValue ".kimchi/config.json" (withPaths {native.settings.skillPaths = [".custom/skills"];})).skillPaths == [".custom/skills"]
     );
@@ -967,7 +940,7 @@ in {
       in
         failedAssertions shadowed
         == []
-        && !((projectFiles shadowed) ? "config.json")
+        && !(shadowed.config.ai.files2 ? ".kimchi/config.json")
         && lib.any (lib.hasInfix "user scope: telemetry") (failedAssertions withEndpoint)
     );
 
@@ -1015,7 +988,7 @@ in {
         == []
         && projectHarnessSettings shadowed == {hideThinkingBlock = true;}
         && failedAssertions resourcesOnly == []
-        && !((devenvFiles ".config/kimchi/harness" resourcesOnly) ? "settings.json")
+        && !(resourcesOnly.config.ai.files2 ? ".config/kimchi/harness/settings.json")
         && builtins.length withFalse == 1
         && lib.hasInfix "sets extensions.memory to false" (builtins.head withFalse)
         && builtins.length withBad == 1
@@ -1049,7 +1022,7 @@ in {
         == false
         # Owner-only, so Kimchi's group/other read warning stays quiet.
         && files.".kimchi/config.json".mode == "0400"
-        && result.config.tasks ? "ai:kimchi:files"
+        && result.config.ai.files2.".kimchi/config.json".method == "ro"
         && (fileValue ".kimchi/mcp.json" result).mcpServers.example.command == "hello"
         && !(result.config.files ? ".kimchi/mcp.json")
         && files ? ".kimchi/skills/example/SKILL.md"
@@ -1113,7 +1086,9 @@ in {
         hmHookWarning = path: hookWarning "hm" path policy.definitions.hooks.kimchi.hm.reason;
         hmHookPaths = lib.filter (lib.hasInfix "hooks") (builtins.attrNames hm.config.home.file);
       in
-        fromGeneratedTree ".kimchi/hooks.json" devenv.config.files.".kimchi/hooks.json"
+        devenv.config.files ? ".kimchi/hooks.json"
+        && devenv.config.ai.files2.".kimchi/hooks.json".method == "symlink"
+        && devenv.config.ai.files2.".kimchi/hooks.json".requires == ["${devenv.config.ai.kimchi._generatedTree}"]
         && fileValue ".kimchi/hooks.json" devenv
         == {
           hooks = {
@@ -1196,7 +1171,7 @@ in {
         && fileValue ".kimchi/permissions.json" devenv == permissions
         && !(devenv.config.files ? ".kimchi/permissions.json")
         && fileValue ".config/kimchi/harness/permissions.json" emptyHm == {}
-        && !((projectFiles emptyDevenv) ? "permissions.json")
+        && !(emptyDevenv.config.ai.files2 ? ".kimchi/permissions.json")
         && accepts {
           classifierMaxTotalMs = 1;
           classifierTimeoutMs = 1;
@@ -1209,7 +1184,7 @@ in {
 
     # ai.kimchi.projectTrust mirrors trust.json, which ACP consults because it
     # ignores `--approve`. Home Manager owns it as a read-only copy of the
-    # `kimchiFiles` writer, which follows configDir like harness settings;
+    # staged renderer, which follows configDir like harness settings;
     # devenv rejects the option by name rather than dropping it, and each arm
     # has a control that isolates the one input under test.
     module-kimchi-project-trust = mkTest "kimchi-project-trust" (
@@ -1222,7 +1197,7 @@ in {
             enable = true;
           };
         };
-        target = dirTarget "kimchiFiles" "custom/kimchi/harness" hm;
+        target = hm.config.ai.files2."custom/kimchi/harness/trust.json";
         devenvWith = trust:
           evalDevenv {
             ai.kimchi = {
@@ -1240,17 +1215,17 @@ in {
             };
           });
       in
-        lib.hasPrefix "materialize/kimchi-files-" target.ledger
-        && lib.hasInfix "project-trust.py" target.units."trust.json".run
-        && !(target.units."trust.json" ? mode)
+        target.method
+        == "ro"
+        && lib.hasInfix "project-trust.py" target.content.run
+        && target.mode == null
         && !(hm.config.home.file ? "custom/kimchi/harness/trust.json")
         && hmFailures projectTrust == []
         && builtins.any (lib.hasInfix "must be absolute paths") (hmFailures {"srv/projects" = true;})
         && builtins.any (lib.hasInfix "ai.kimchi.projectTrust is user scope") (failedAssertions rejected)
         && failedAssertions accepted == []
         # Devenv declares no trust file of any kind, even when accepted.
-        && !(lib.any (target: lib.any (lib.hasSuffix "trust.json") ([target.path] ++ builtins.attrNames target.units))
-          (lib.concatMap (record: record.plan.targets) (lib.attrValues accepted.config.ai.kimchi._ownPlans)))
+        && !(lib.any (lib.hasSuffix "trust.json") (builtins.attrNames accepted.config.ai.files2))
         && !(lib.any (lib.hasSuffix "trust.json") (builtins.attrNames accepted.config.files))
     );
 
@@ -1277,7 +1252,7 @@ in {
         lib.all rejected ["always" "ask" "never"]
         && failedAssertions accepted == []
         && projectHarnessSettings accepted == {}
-        && !(projectFiles accepted ? "settings.json")
+        && !(accepted.config.ai.files2 ? ".config/kimchi/harness/settings.json")
     );
 
     # Git tokens are secrets Kimchi reads only from the user config.json.
@@ -1293,7 +1268,7 @@ in {
             gitTokens."github.com".file = "/run/secrets/kimchi-github";
           };
         };
-        target = dirTarget "kimchiFiles" hm.config.ai.kimchi.configDir hm;
+        target = hm.config.ai.files2.".config/kimchi/config.json";
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
@@ -1301,13 +1276,11 @@ in {
           };
         };
       in
-        target.path
-        == ".config/kimchi"
-        && hm.config.ai.kimchi.files.".config/kimchi/config.json".method == "copy-ro"
-        && hm.config.ai.kimchi.files.".config/kimchi/config.json".mode == "0400"
-        && lib.hasInfix ''cat "/run/secrets/kimchi-github"'' target.units."config.json".run
-        && lib.hasInfix ''"github.com": env.kimchi_git_token_0'' target.units."config.json".run
-        && lib.elem "sops-nix" hm.config.home.activation.kimchiFiles.after
+        target.method
+        == "ro"
+        && target.mode == "0400"
+        && lib.hasInfix ''cat "/run/secrets/kimchi-github"'' target.content.run
+        && lib.hasInfix ''"github.com": env.kimchi_git_token_0'' target.content.run
         && builtins.any (lib.hasInfix "ai.kimchi.gitTokens is user scope") (failedAssertions rejected)
         && !(builtins.tryEval (builtins.deepSeq
           (evalHm {
@@ -1318,162 +1291,6 @@ in {
           }).config.ai.kimchi.native.settings
           true)).success
     );
-
-    # Runs the real Home Manager writer. A key reached through a symlink must
-    # land under its realpath, the only key pi 0.85.1 ever looks up
-    # (findNearestTrustEntry); a missing tail is still declared; and two keys
-    # resolving to one directory with different answers fail the writer
-    # without touching the file.
-    module-kimchi-project-trust-runtime = let
-      fixture = pkgs.runCommand "kimchi-project-trust-fixture" {} ''
-        mkdir -p "$out/real/project"
-        ln -s real "$out/link"
-      '';
-      # An attribute name cannot carry string context. The runCommand below
-      # interpolates `fixture` itself, which keeps it in the check's closure.
-      under = relative: builtins.unsafeDiscardStringContext "${fixture}/${relative}";
-      writer = projectTrust:
-        hmFilesWriter {
-          ai.kimchi = {
-            enable = true;
-            inherit projectTrust;
-          };
-        };
-      declared = writer {
-        ${under "link/project"} = true;
-        "/nonexistent/kimchi-project" = false;
-      };
-      conflicting = writer {
-        ${under "link/project"} = true;
-        ${under "real/project"} = false;
-      };
-    in
-      pkgs.runCommand "module-test-kimchi-project-trust-runtime" {nativeBuildInputs = [pkgs.jq];} ''
-        fail() { echo "FAIL: kimchi-project-trust-runtime: $1" >&2; exit 1; }
-        export HOME="$TMPDIR/home"
-        export XDG_STATE_HOME="$TMPDIR/state"
-        trust="$HOME/.config/kimchi/harness/trust.json"
-
-        ${declared}
-        jq -e --arg real '${fixture}/real/project' '.[$real] == true' "$trust" >/dev/null \
-          || fail "the symlinked key did not land under its realpath: $(cat "$trust")"
-        jq -e --arg link '${fixture}/link/project' 'has($link) | not' "$trust" >/dev/null \
-          || fail "the literal symlinked key was written, which Kimchi never matches"
-        jq -e '.["/nonexistent/kimchi-project"] == false' "$trust" >/dev/null \
-          || fail 'a declared path that does not exist yet was dropped'
-
-        cp "$trust" "$TMPDIR/before-conflict"
-        if ${conflicting} 2>"$TMPDIR/conflict.err"; then
-          fail 'two keys resolving to one directory with different decisions were accepted'
-        fi
-        grep -q 'declare different decisions' "$TMPDIR/conflict.err" \
-          || fail "the conflict did not name its cause: $(cat "$TMPDIR/conflict.err")"
-        cmp "$TMPDIR/before-conflict" "$trust" || fail 'a failed render changed trust.json'
-        echo PASS > "$out"
-      '';
-
-    # The settings writers, executed against a scratch HOME. A file an earlier generation reconciled
-    # (a declared server plus one Kimchi migrated in) is adopted: backed up
-    # once and replaced by the declaration, 0444. A later in-app edit renames a
-    # new file over the copy, as Kimchi's writers do; the next run backs it up
-    # and restores the declaration. trust.json holds the declared decisions
-    # only. Runtime-owned leaves survive in the two shared Home Manager
-    # documents, while declared leaves return to their Nix values. Devenv's
-    # project config.json remains owner-only.
-    module-kimchi-files-runtime = let
-      server = {
-        package = pkgs.hello;
-        command = "hello";
-        type = "stdio";
-      };
-      hmConfig = {
-        ai = {
-          mcpServers.declared = server;
-          kimchi = {
-            enable = true;
-            projectTrust."/srv/projects" = true;
-          };
-        };
-      };
-      hm = hmFilesWriter hmConfig;
-      hmEvaluated = evalHm hmConfig;
-      declaredMcp = (hmFiles ".config/kimchi/harness" hmEvaluated)."mcp.json".store;
-      devenv = pkgs.writeShellScript "kimchi-files-devenv" ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        ${(evalDevenv {
-          ai.mcpServers.declared = server;
-          ai.kimchi = {
-            enable = true;
-            native.harnessSettings.hideThinkingBlock = true;
-            native.settings.redaction.enabled = false;
-            permissions.defaultMode = "plan";
-          };
-        }).config.tasks."ai:kimchi:files".exec}
-      '';
-    in
-      pkgs.runCommand "module-test-kimchi-files-runtime" {nativeBuildInputs = [pkgs.jq];} ''
-        fail() { echo "FAIL: kimchi-files-runtime: $1" >&2; exit 1; }
-        export HOME="$TMPDIR/home"
-        export XDG_STATE_HOME="$TMPDIR/state"
-        harness="$HOME/.config/kimchi/harness"
-        mcp="$harness/mcp.json"
-        backups() { ls "$XDG_STATE_HOME"/nix-agentic-tools/materialize/kimchi-files-*.bak/mcp.json.* 2>/dev/null | wc -l; }
-        mkdir -p "$harness"
-        jq '.mcpServers.migrated = {"command": "migrated"}' ${declaredMcp} > "$mcp"
-
-        ${hm}
-        cmp ${declaredMcp} "$mcp" || fail "adoption did not restore the declaration: $(cat "$mcp")"
-        [ -f "$mcp" ] && [ ! -L "$mcp" ] || fail 'mcp.json is not a real file'
-        [ "$(stat -c %a "$mcp")" = 444 ] || fail 'mcp.json is not read-only'
-        [ "$(backups)" = 1 ] || fail 'the adopted file was not backed up once'
-        trust="$harness/trust.json"
-        [ -f "$trust" ] && [ "$(stat -c %a "$trust")" = 444 ] || fail 'trust.json is not a read-only file'
-        jq -e '. == {"/srv/projects": true}' "$trust" >/dev/null \
-          || fail "trust.json holds more than the declared decisions: $(cat "$trust")"
-
-        # Kimchi's rename over the copy.
-        printf '{"mcpServers":{}}\n' > "$TMPDIR/edited"
-        mv -f "$TMPDIR/edited" "$mcp"
-        ${hm}
-        cmp ${declaredMcp} "$mcp" || fail 'the in-app edit was not replaced'
-        [ "$(backups)" = 2 ] || fail 'the in-app edit was not backed up'
-
-        config="$HOME/.config/kimchi/config.json"
-        settings="$harness/settings.json"
-        [ "$(stat -c %a "$config")" = 600 ] || fail 'new config.json is not owner-only'
-        [ "$(stat -c %a "$settings")" = 600 ] || fail 'new settings.json is not owner-only'
-        jq '.deviceId = "device" | .region = "eu"' "$config" > "$TMPDIR/native-config.json"
-        chmod 600 "$TMPDIR/native-config.json"
-        mv -f "$TMPDIR/native-config.json" "$config"
-        jq '.lastChangelogVersion = "runtime" | .theme = "dark"' "$settings" > "$TMPDIR/native-settings.json"
-        chmod 600 "$TMPDIR/native-settings.json"
-        mv -f "$TMPDIR/native-settings.json" "$settings"
-        ${hm}
-        jq -e '.deviceId == "device" and .region == "us"' "$config" >/dev/null \
-          || fail "config.json did not preserve runtime leaves and restore declared leaves: $(cat "$config")"
-        jq -e '.lastChangelogVersion == "runtime" and .theme == "kimchi-minimal"' "$settings" >/dev/null \
-          || fail "settings.json did not preserve runtime leaves and restore declared leaves: $(cat "$settings")"
-        for path in "$harness/mcp.json" "$harness/permissions.json" "$harness/trust.json"; do
-          if printf 'edit\n' > "$path" 2>/dev/null; then
-            fail "in-place write succeeded against $path"
-          fi
-        done
-
-        export DEVENV_ROOT="$TMPDIR/project"
-        export DEVENV_STATE="$TMPDIR/project-state"
-        mkdir -p "$DEVENV_ROOT"
-        ${devenv}
-        [ "$(stat -c %a "$DEVENV_ROOT/.kimchi/config.json")" = 400 ] || fail 'the project config.json is not owner-only'
-        if printf 'edit\n' > "$DEVENV_ROOT/.kimchi/config.json" 2>/dev/null; then fail 'project config.json accepted an in-place write'; fi
-        for path in "$DEVENV_ROOT/.kimchi/mcp.json" "$DEVENV_ROOT/.kimchi/permissions.json" "$DEVENV_ROOT/.config/kimchi/harness/settings.json"; do
-          [ -e "$path" ] || fail "missing declared read-only copy $path"
-          if printf 'edit\n' > "$path" 2>/dev/null; then fail "in-place write succeeded against $path"; fi
-        done
-        jq -e '. == {"redaction": {"enabled": false}}' "$DEVENV_ROOT/.kimchi/config.json" >/dev/null \
-          || fail "the project config.json: $(cat "$DEVENV_ROOT/.kimchi/config.json")"
-        echo PASS > "$out"
-      '';
 
     # Agents use engine-owned read-only copies; native source bytes still
     # enter the formatted tree, and empty declarations retire owned copies.

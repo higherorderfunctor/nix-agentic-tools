@@ -84,6 +84,9 @@
       # generated tree whose checks gate an entry that does not point into it.
       requires = mkOption {
         type = types.listOf types.package;
+        # Keep build dependencies as context-bearing paths, not recursive
+        # derivation metadata that deep evaluation cannot traverse safely.
+        apply = map toString;
         default = [];
         internal = true;
         visible = false;
