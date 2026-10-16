@@ -1,22 +1,23 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-15 — runtime factories stage moved surfaces in
-> `_generatedFiles` (skills first) and forward them through the ai-module
-> layer-1 helper over one generated tree, which every staged entry's delivery
-> requires; the shared AGENTS.md composer is the layer-1 owner `internal` and
-> the ai-module devenv module writes the treefmt excludes; Copilot stages its
-> instructions, declares an agents gap and keeps both old ledgers, and Claude
-> every surface including HM `.claude.json` with both legacy ledgers; the
-> root-option provenance guard exempts the ai-module layer-1 forwarding helper
-> for its forwarded options; option declarations supply policy surfaces and
-> keyed withdrawal; runtime declarations supply normalized policy gaps and the
-> warning suite generates coverage for every runtime, surface and backend; a
-> record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
-> is github.com Copilot with its pools under `ai.copilot.github`; explicit
-> normalized overrides warn for live explicit contributions on unavailable
-> backends, excluding empty or disabled contributions beside inherited folds;
-> the coexistence assertion counts a switched-off staged path for its layer-1
-> entry and engine state, not for tree bytes.
+> `_generatedFiles` (Kiro context, steering, agents, skills and permissions
+> included) and forward them through the ai-module layer-1 helper over one
+> generated tree, which every staged entry's delivery requires; the shared
+> AGENTS.md composer is the layer-1 owner `internal` and the ai-module devenv
+> module writes the treefmt excludes; Copilot stages its instructions, declares
+> an agents gap and keeps both old ledgers, and Claude every surface including
+> HM `.claude.json` with both legacy ledgers; the root-option provenance guard
+> exempts the ai-module layer-1 forwarding helper for its forwarded options;
+> option declarations supply policy surfaces and keyed withdrawal; runtime
+> declarations supply normalized policy gaps and the warning suite generates
+> coverage for every runtime, surface and backend; a record's `optionNamespaces`
+> places launcher and pool options, and `ai.copilot` is github.com Copilot with
+> its pools under `ai.copilot.github`; explicit normalized overrides warn for
+> live explicit contributions on unavailable backends, excluding empty or
+> disabled contributions beside inherited folds; the coexistence assertion
+> counts a switched-off staged path for its layer-1 entry and engine state, not
+> for tree bytes.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -187,14 +188,14 @@ and only writers with that explicit opt-in; ordinary command and owned writers
 remain gated. An opted-in owned writer therefore receives empty targets, so
 ordinary retraction removes only what the previous generation's ledger recorded
 and then drops the ledger. It cannot emit product files while disabled. The
-callers are writers whose files nothing else retracts: Codex's execpolicy copies
-and Kiro's steering writer (it materializes read-only copies on devenv and only
-drains an older ledger on Home Manager). A ledger-owned copy outlives a disable
-unless its writer opts in, because Home Manager's generation diff and
+remaining caller is Codex's execpolicy writer. Kiro declares its steering ledger
+unconditionally in `legacyLedgers`, so the files engine drains it even when Kiro
+is disabled on the first upgrade. A ledger-owned copy outlives a disable unless
+its writer opts in, because Home Manager's generation diff and
 `devenv:files:cleanup` only remove links. On Home Manager a directory writer is
 a PAIR of entries: the prune phase deletes the real files before
-`checkLinkTargets`, the write phase unlinks the drained ledger. Kiro's
-retirement and Codex's Home Manager writer derive the target from the current
+`checkLinkTargets`, the write phase unlinks the drained ledger. Kiro's legacy
+declaration and Codex's Home Manager writer derive the target from the current
 `configDir`, so a custom directory must remain unchanged for the generation that
 disables or retires; change or remove it only after one activation/shell entry
 has drained the old ledger.
@@ -808,22 +809,18 @@ content, so a runtime's entry alone still lands as a copy. The old writer's
 Copilot's devenv instruction files are staged `ro` copies for the same reason
 (github.com reads the committed tree), its old writer's two directory ledgers
 its `legacyLedgers`; the agents ledger outlives its writer so the profiles it
-left retire on upgrade. Kiro's devenv steering is a copy so a developer's own
-steering beside it survives: its directory ledger claims only the files its
-writer wrote. For Kiro's copies, `own` adopts a file whose bytes already match
-without a backup, so a `git pull` of a committed copy is silent; the
-engine-owned copies above adopt identical bytes too, resetting a mode a checkout
-changed without a backup.
+left retire on upgrade. Kiro stages context, steering, agents, skills and
+permissions through the same layers. The engine owns its devenv steering copies
+individually, preserving a developer's own files beside them.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
 files use `content.run` in an owned writer, and runtime state keeps its typed
 lifecycle owners. Skills are staged entries (below). Kiro steering links on Home
 Manager (live 2.18.1 spikes confirmed startup discovery and same-session
-replacement reload) and is a read-only copy on devenv, claimed by the
-`ai:kiro:materialize-steering` directory ledger; Kiro hooks stay real-file
-reconciled (`lib/ai/own.nix`, a `dir` target) because the v3 scan keeps only
-`isFile()` entries. On Home Manager the same enable-independent writer declares
-nothing and only drains the steering copies an older ledger records.
+replacement reload) and is a read-only engine copy on devenv; Kiro hooks stay
+real-file reconciled (`lib/ai/own.nix`, a `dir` target) because the v3 scan
+keeps only `isFile()` entries. The ungated `legacyLedgers` declaration imports
+older steering copies before native link checks on both backends.
 
 While PR 3 moves surfaces to the ai-module layers, both paths coexist. Every
 runtime factory imports the layer-1 helper, so `ai.<runtime>.files2` forwards to

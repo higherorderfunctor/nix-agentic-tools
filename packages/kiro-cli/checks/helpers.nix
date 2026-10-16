@@ -35,28 +35,13 @@
   soleSame = a: b:
     builtins.length a == 1 && builtins.length b == 1 && builtins.head a == builtins.head b;
 
-  # ── Kiro file/materializer helpers ────────────────────────────────
-  # Steering now lives in the common runtime file map. Strip its native prefix
-  # in tests that care about the logical steering filenames rather than the
-  # backend target.
-  #
-  # `matLib = aiBase.materialize;` used to sit here. Its only consumer was the
-  # kiro auto-memory suite, removed with that subsystem on 2026-09-01, and
-  # deadnix caught it as an unused binding.
-  # The CONTENT of each steering entry, keyed by its logical filename. Content
-  # rather than the whole entry because that is what every caller asserts on,
-  # and it is one option deeper since the file map became a description of how
-  # a file lands rather than the bytes alone. An entry a consumer suppressed with `null` stays null.
+  # Logical steering content before formatting; delivery is asserted separately.
   kiroSteeringContent = evaluated: let
     prefix = "${evaluated.config.ai.kiro.configDir}/steering/";
   in
     lib.mapAttrs' (target: entry:
-      lib.nameValuePair (lib.removePrefix prefix target) (
-        if entry == null
-        then null
-        else entry.content
-      ))
-    (lib.filterAttrs (target: _entry: lib.hasPrefix prefix target) evaluated.config.ai.kiro.files);
+      lib.nameValuePair (lib.removePrefix prefix target) entry.content)
+    (lib.filterAttrs (target: _entry: lib.hasPrefix prefix target) evaluated.config.ai.kiro._generatedFiles);
   requireBody = path: ev: let
     label = "Kiro check requires config.${lib.showOption path}";
     body = lib.attrByPath path (throw "${label}: attribute is missing") ev.config;
@@ -83,7 +68,6 @@
   # mcp.json, so a check can read the mode, the render command, the declared
   # bytes and the ledger of either.
   mcpDirOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/settings" (ownPlan "kiro" entry ev);
-  steeringTargetOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/steering" (ownPlan "kiro" entry ev);
   hmMcpDirTarget = mcpDirOf "kiroMcpJson";
   dvMcpDirTarget = mcpDirOf "ai:kiro:materialize-mcp";
   # cli.json's declared settings, before its generated tree renders the bytes.
@@ -106,18 +90,10 @@
     then throw "Kiro check requires exactly one --plan argument in an own body"
     else unquote (builtins.head (lib.splitString " " (builtins.elemAt parts 1)));
   dvMcpTaskExec = requireBody ["tasks" "ai:kiro:materialize-mcp" "exec"];
-  dvTaskExec = requireBody ["tasks" "ai:kiro:materialize-steering" "exec"];
   hmHookPruneScript = requireBody ["home" "activation" "materialize-kiro-hooks-prune" "text"];
   hmHookWriteScript = requireBody ["home" "activation" "materialize-kiro-hooks-write" "text"];
   hmMcpPruneScript = requireBody ["home" "activation" "materialize-kiro-settings-prune" "text"];
   hmMcpWriteScript = requireBody ["home" "activation" "kiroMcpJson" "text"];
-  hmRetirementScript = requireBody ["home" "activation" "retire-materialize-kiro-steering" "text"];
-  # The retirement's WRITE phase. New name, and the only new entry name in this
-  # rework: an HM bundle holding a dir target requires the prune entry (the
-  # real file must be gone before checkLinkTargets), so the existing name keeps
-  # its prune position and the phase that unlinks the drained ledger needs one
-  # of its own.
-  hmRetirementLedgerScript = requireBody ["home" "activation" "retire-materialize-kiro-steering-ledger" "text"];
 in {
-  inherit dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
+  inherit dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame;
 }

@@ -490,22 +490,18 @@
     then
       lib.nameValuePair "${configDir}/agents/${name}.md" {
         content = lib.mkDefault {
-          _generated = true;
-          _surface = "agents";
           text = renderMarkdownAgent plan.normalized;
         };
         format = lib.mkDefault "markdown";
-        executable = null;
+        surface = "agents";
       }
     else
       lib.nameValuePair "${configDir}/agents/${name}.json" {
         content = lib.mkDefault {
-          _generated = true;
-          _surface = "agents";
           text = renderJsonAgent plan.normalized;
         };
         format = lib.mkDefault "json";
-        executable = null;
+        surface = "agents";
       };
 
   # A raw entry → its file entry, the same `{source|text}` on BOTH backends
@@ -523,17 +519,13 @@
       then "md"
       else "json"
     }" {
-      content = lib.mkDefault ({
-          _generated = true;
-          _surface = "agents";
-        }
-        // agent.fileContent value);
+      content = lib.mkDefault (agent.fileContent value);
       format = lib.mkDefault (
         if isMarkdown
         then "markdown"
         else "json"
       );
-      executable = null;
+      surface = "agents";
     };
 
   # Render one typed record → its v3 hook object (an element of an envelope's
@@ -636,29 +628,16 @@
         lib.nameValuePair "${name}.json" {text = content;})
       (mkAllHookFiles cfg);
 
-  # Project steering is a read-only COPY on devenv and a link on Home
-  # Manager. A committed or hand-kept `.kiro/steering/` then never holds a
-  # store symlink that dangles elsewhere, and the directory ledger claims
-  # only the files it wrote, so a developer's own steering files beside them
-  # survive every reload. On Home Manager the same ledger only retires the
-  # copies an older generation owned. Declared outside the product gate so
-  # both N→0 and upgrade+disable drain what the ledger records before Home
-  # Manager checks the replacement steering symlinks.
-  steeringWriter = "steering";
-  steeringLedger = "materialize/kiro-steering.manifest";
+  # The engine imports old steering copies before native links are checked,
+  # including when Kiro is disabled on the first upgrade.
   kiroMigrationConfig = {cfg, ...}: {
-    ai.kiro.activation.${steeringWriter} = {
-      entry = {
-        devenv = "ai:kiro:materialize-steering";
-        hm = "retire-materialize-kiro-steering-ledger";
-      };
-      ledgers.${steeringLedger} = {
+    ai.kiro.legacyLedgers = [
+      {
         codec = "dir";
+        ledger = "materialize/kiro-steering.manifest";
         path = "${cfg.configDir}/steering";
-      };
-      pruneEntry.hm = "retire-materialize-kiro-steering";
-      runWhenDisabled = true;
-    };
+      }
+    ];
   };
 
   # Shared assertion set for both backends: mutually exclusive inline/dir
@@ -781,7 +760,7 @@
     == "always";
 
   # Steering emitters route first, render second, and contribute the final
-  # native files to `ai.kiro.files` at default priority. Rule steering is a
+  # native files to `ai.kiro._generatedFiles`. Rule steering is a
   # read-only copy on devenv and a link on Home Manager (see
   # `kiroMigrationConfig`); the Home Manager context file stays a link.
   mkSteeringEmitters = {
@@ -803,29 +782,33 @@
     # fileMatchPattern: frontmatter). Source-backed rules resolve to text at
     # eval through aiCommon.readContent.
     {
-      ai.kiro.files = aiCommon.mkRuleFiles {
-        context = name: {inherit name;};
-        # A default fact, so a consumer's own fact on one file still wins.
-        fields = {
-          entry = steeringWriter;
-          facts.symlinkReadable = lib.mkDefault {
-            devenv = false;
-            hm = true;
+      ai.kiro._generatedFiles =
+        lib.mapAttrs (_path: text: {
+          content = lib.mkDefault {inherit text;};
+          format = "markdown";
+          # Kiro project steering must be a real read-only copy.
+          method = {
+            devenv = "ro";
+            hm = "symlink";
           };
-          ledger = steeringLedger;
-        };
-        path = steeringPath cfg;
-        rules = steeringRules;
-        runtime = "kiro";
-        transformer = lib.ai.transformers.kiro.kiroTransformer;
-      };
+          surface = "rules";
+        }) (aiCommon.renderRules {
+          context = name: {inherit name;};
+          path = steeringPath cfg;
+          rules = steeringRules;
+          runtime = "kiro";
+          transformer = lib.ai.transformers.kiro.kiroTransformer;
+        });
     }
     # Global context → `<contextFilename>` (default AGENTS.md — Kiro
     # reads it natively as always-included content). Written without
     # frontmatter; root context precedes per-CLI context.
     (lib.mkIf (hasContext && !sharedAgentsMd) {
-      ai.kiro.files.${contextSteeringPath cfg} =
-        aiCommon.contentFileEntry mergedContext;
+      ai.kiro._generatedFiles.${contextSteeringPath cfg} = {
+        content = lib.mkDefault (aiTypes.textSourceFile mergedContext);
+        format = "markdown";
+        surface = "context";
+      };
     })
   ];
 
@@ -1825,32 +1808,7 @@ in
                     then "0400"
                     else "0444";
                 };
-                # Kiro reads permissions only from ~/.kiro/settings/ or
-                # ~/.kiro/workspace-roots/<hash>/, never project .kiro/. A
-                # "trust always" answer at user or workspace scope writes
-                # permissions.yaml (failing harmlessly on this store link); the
-                # session-scoped answer does not.
-                "${settingsDir}/permissions.yaml" = lib.mkIf (isHm && permissionRules != []) {
-                  content = lib.mkDefault {
-                    _generated = true;
-                    _surface = "settings";
-                    source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
-                      rules = permissionRules;
-                    };
-                  };
-                  format = lib.mkDefault "yaml";
-                  executable = null;
-                };
               }
-              # Native records and raw files, one file each; `agentsDir`
-              # children arrive here as raw entries. One attrset, so a raw
-              # and a native entry at one key (an assertion rejects that)
-              # yield one file definition rather than a merge conflict that
-              # would hide the assertion.
-              # Filter invalid Markdown records so the named format assertion
-              # remains the sole error before the frontmatter emitter runs.
-              (lib.mapAttrs' (nativeAgentEntry cfg.configDir) (validNativeAgentPlans nativeAgentPlans)
-                // lib.mapAttrs' (rawAgentEntry cfg.configDir) rawAgents)
               # Kiro v3's hook scan keeps only entry.isFile() (Kiro#9787), so
               # hooks need real copies. The ledger claims individual files;
               # unrelated hand-placed hooks survive, including at N→0.
@@ -1875,10 +1833,32 @@ in
                   ledger = "materialize/kiro-hooks.manifest";
                 }) (lib.filterAttrs (name: _unit: hookNameSafe name) (mkHookUnits cfg)))
             ];
-            ai.kiro._generatedFiles = helpers.mkSkillFiles {
-              inherit (cfg) configDir;
-              skills = mergedSkills;
-            };
+            ai.kiro._generatedFiles = lib.mkMerge [
+              (helpers.mkSkillFiles {
+                inherit (cfg) configDir;
+                skills = mergedSkills;
+              })
+              {
+                # Kiro reads global permissions only; trust answers cannot
+                # replace this store link.
+                "${settingsDir}/permissions.yaml" = lib.mkIf (isHm && permissionRules != []) {
+                  content.source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
+                    rules = permissionRules;
+                  };
+                  format = "yaml";
+                  surface = "settings";
+                };
+              }
+              # Native records and raw files, one file each; `agentsDir`
+              # children arrive here as raw entries. One attrset, so a raw
+              # and a native entry at one key (an assertion rejects that)
+              # yield one file definition rather than a merge conflict that
+              # would hide the assertion.
+              # Filter invalid Markdown records so the named format assertion
+              # remains the sole error before the frontmatter emitter runs.
+              (lib.mapAttrs' (nativeAgentEntry cfg.configDir) (validNativeAgentPlans nativeAgentPlans)
+                // lib.mapAttrs' (rawAgentEntry cfg.configDir) rawAgents)
+            ];
           }
         ]
         ++ steeringEmitters);

@@ -8,6 +8,7 @@
     ./generated-files.nix
     ./generated-tree-gates.nix
     ./hm.nix
+    ./kiro.nix
     ./legacy.nix
     ./matrix.nix
     ./observer.nix

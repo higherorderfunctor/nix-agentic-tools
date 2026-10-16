@@ -8,8 +8,9 @@
 > the shared AGENTS.md composer reaches the files plan as the owner `internal`;
 > Claude stages every surface, including HM `.claude.json` as `rw`; the files
 > engine writes its rules copies on devenv; staged Markdown and raw entries are
-> whole-content defaults; hand rows are confined to the policy-only permissions
-> surface.
+> whole-content defaults; Kiro stages context, steering, agents and permissions
+> beside its skills, with an ungated steering legacy ledger; hand rows are
+> confined to the policy-only permissions surface.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -228,12 +229,13 @@ rather than a second path field: a runtime names exactly the groups it moves.
   with `runWhenDisabled = true`, so both N→0 and disabling Codex retract the
   copies; an `allow` policy must not outlive its declaration.
 - **Retirement can survive disable explicitly.** Kiro's `migrationConfig`
-  declares its unclaimed steering ledger with `runWhenDisabled = true`, and the
-  Codex execpolicy writer declares its own the same way. The adapter strips
-  every file claim and ordinary writer while disabled; the opted-in writer keeps
-  both HM phases or the existing devenv task. A directory ledger's unit
-  basenames must be unique; the router rejects collisions before a claimant can
-  disappear into the attribute map.
+  declares its steering `legacyLedgers` outside the enable gate. The engine
+  imports and retires those copies before native links. Codex's remaining
+  execpolicy writer uses `runWhenDisabled = true`. The adapter strips every file
+  claim and ordinary writer while disabled; the opted-in writer keeps both HM
+  phases or the existing devenv task. A directory ledger's unit basenames must
+  be unique; the router rejects collisions before a claimant can disappear into
+  the attribute map.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use
