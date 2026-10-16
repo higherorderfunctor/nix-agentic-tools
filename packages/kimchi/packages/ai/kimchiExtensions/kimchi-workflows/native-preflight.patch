@@ -1,15 +1,38 @@
 diff --git a/src/host/workflow-package.ts b/src/host/workflow-package.ts
 --- a/src/host/workflow-package.ts
 +++ b/src/host/workflow-package.ts
-@@ -121,7 +121,7 @@
- function workflowManifest(current: PackageManifest): PackageManifest {
- 	const managedDependencies: Record<string, string> = {
- 		[distribution.name]:
+@@ -123,8 +123,1 @@
+-		[distribution.name]:
 -			distribution.version === "0.0.0" ? localPackageSpecifier(developmentPackageRoot()) : distribution.version,
-+			distribution.version === "0.0.0" ? localPackageSpecifier(developmentPackageRoot()) : "file:@workflowPackage@",
- 		"@earendil-works/pi-coding-agent": distribution.toolchain.piCodingAgent,
- 		"@earendil-works/pi-tui": distribution.toolchain.piTui,
- 		"@types/node": distribution.toolchain.typesNode,
+-		"@earendil-works/pi-coding-agent": distribution.toolchain.piCodingAgent,
+-		"@earendil-works/pi-tui": distribution.toolchain.piTui,
+-		"@types/node": distribution.toolchain.typesNode,
+-		typebox: distribution.toolchain.typebox,
+-		typescript: distribution.toolchain.typescript,
+-		vitest: distribution.toolchain.vitest,
++		...JSON.parse(readFileSync("@workflowPackage@/toolchain.json", "utf8")),
+@@ -132,1 +125,20 @@
++	// Offline mode still accepts cached packages and local paths outside the closure.
++	for (const section of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
++		for (const name of Object.keys((current[section] ?? {}) as Record<string, unknown>)) {
++			if (section === "devDependencies" && Object.hasOwn(managedDependencies, name)) continue
++			throw new WorkflowPackagePreparationError(`closed Kimchi workflow toolchain forbids ${section} package ${name}`)
++		}
++	}
++	// pnpm also reads Yarn resolutions; executionEnv can download another Node.
++	const settings = current.pnpm as Record<string, unknown> | undefined
++	for (const [field, value] of Object.entries({ ...settings, resolutions: current.resolutions })) {
++		if (value == null) continue
++		const names = field === "overrides" || field === "resolutions"
++			? Object.keys(value as Record<string, unknown>)
++			: [field]
++		if (names.length > 0) {
++			throw new WorkflowPackagePreparationError(`closed Kimchi workflow toolchain forbids ${field}: ${names.join(", ")}`)
++		}
++	}
++
+-	const scripts: Record<string, string> = {
++	const scripts: Record<string, string> = {
 diff --git a/test/nix-preflight.test.ts b/test/nix-preflight.test.ts
 new file mode 100644
 --- /dev/null
@@ -32,7 +55,7 @@ new file mode 100644
 +			projectRoot: root,
 +			install: async (directory) => {
 +				const manifest = await readFile(path.join(directory, "package.json"), "utf8")
-+				expect(JSON.parse(manifest).devDependencies["@kimchi-dev/kimchi-workflows"]).toBe("file:@workflowPackage@")
++				expect(JSON.parse(manifest).devDependencies["@kimchi-dev/kimchi-workflows"]).toBe("file:@workflowPackage@/package.tgz")
 +				await prepareWorkflowPackageFixture({ directory })
 +				const framework = path.join(directory, "node_modules/@kimchi-dev/kimchi-workflows")
 +				await unlink(framework)
