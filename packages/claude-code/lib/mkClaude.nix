@@ -553,9 +553,6 @@ in
     }: let
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       isHm = backend == "hm";
-      # Claude's own state file, holding account tokens beside the unpin flags.
-      claudeJson = ".claude.json";
-      unpinLedger = "json-settings/claude-unpin-launch-effort.json";
       nativeSettings = aiCommon.filterNulls cfg.native.settings;
       # The typed event map (the one renderer Kimchi's hooks.json also uses)
       # and the legacy `native.settings.hooks` escape hatch, joined per event
@@ -724,28 +721,23 @@ in
                 lib.nameValuePair ".claude/skills/${name}" {content.source = pluginLib.mkPluginEntry name plugin;})
               cfg.plugins;
           }
-          # Claude writes native state (including OAuth tokens) here. Own
-          # only the unpin leaves. This user-global operation never runs from
-          # a project shell.
-          (helpers.mkReconciledDocument {
-            content = {
-              _generated = true;
-              _surface = "settings";
-              value = cfg.unpinLaunchEffort;
-            };
-            format = "json";
-            ledger = unpinLedger;
-            path = claudeJson;
-            runtime = "claude";
-            writer = "claudeUnpinLaunchEffort";
-          })
           {
-            # The unpin writer keeps an existing file's mode whether or not it
-            # rewrites it, so this is the only thing that narrows a file an
-            # earlier generation widened to 0644, with or without flags.
-            ai.claude.activation.claudeConfigMode = helpers.mkCredentialModeWriter {
-              inherit (pkgs) coreutils;
-              path = claudeJson;
+            ai.claude = {
+              _generatedFiles.".claude.json" =
+                staged "settings" "json" {value = cfg.unpinLaunchEffort;}
+                // {
+                  enable = cfg.unpinLaunchEffort != {};
+                  method = lib.mkDefault "rw";
+                };
+              # Keep credential repair after the engine, even with no flags.
+              activation2.claude-config-mode = {
+                after = ["materialized"];
+                command = ''
+                  credential_file="$HOME/.claude.json"
+                  if [ -f "$credential_file" ] && [ ! -L "$credential_file" ]; then
+                    ${pkgs.coreutils}/bin/chmod go-rwx -- "$credential_file"
+                  fi'';
+              };
             };
           }
         ]))
@@ -754,6 +746,15 @@ in
           ai.claude._generatedFiles.".mcp.json" = staged "mcpServers" "json" {value.mcpServers = renderedServers;};
         }))
       ];
+    hm.migrationConfig = _: {
+      ai.claude.legacyLedgers = [
+        {
+          codec = "json";
+          ledger = "json-settings/claude-unpin-launch-effort.json";
+          path = ".claude.json";
+        }
+      ];
+    };
     # The old devenv rules writer's ledger, declared while Claude is disabled
     # too, so the project copies it wrote drain on a disable as well as on
     # N→0. Home Manager linked its rules.

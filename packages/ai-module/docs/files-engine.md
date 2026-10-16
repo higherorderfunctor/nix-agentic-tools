@@ -116,10 +116,12 @@ made a copy, for both `ro` and `rw`. Native links have no state entry. Entries
 are keyed by complete relative path, never basename or directory ledger. A run
 that ends owning nothing deletes the state file instead of saving empty `files`,
 so an absent state file means nothing is owned and generated prune of an empty
-map skips the engine. State itself is private mode `0600`, written with atomic
-replacement under a namespace lock immediately after each successful file
-mutation. An invalid version, path, or state symlink fails closed. Only the
-engine writes this state.
+map skips the engine. State and backups share a directory enforced to mode
+`0700` before any state or backup write, including when the directory already
+exists. Backup contents and modes remain unchanged. State itself is private mode
+`0600`, written with atomic replacement under a namespace lock immediately after
+each successful file mutation. An invalid version, path, or state symlink fails
+closed. Only the engine writes this state.
 
 State version 0 has the same `files` payload as version 1. Under the lock, the
 engine validates version 0, changes only its version to 1, validates again, and

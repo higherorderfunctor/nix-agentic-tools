@@ -365,12 +365,6 @@
           ? ".claude/settings.json")))
     ];
   };
-  # Refuses an absent or blank body, so a renamed writer fails the check
-  # instead of passing it with an empty string.
-  unpinWriter = result:
-    lib.attrByPath ["home" "activation" "claudeUnpinLaunchEffort" "text"]
-    (throw "module-test: config.home.activation.claudeUnpinLaunchEffort.text is missing")
-    result.config;
 in {
   checks =
     {
@@ -697,8 +691,7 @@ in {
           && handlerCommands settings.hooks.PreToolUse == ["true"]
       );
 
-      # Every Claude surface is staged, so none stays on `ai.claude.files`
-      # except Home Manager's `.claude.json`. Each lands where it did: links in
+      # Every Claude surface is staged. Each lands where it did: links in
       # the backend's sink, devenv rules as engine copies.
       module-claude-surfaces-are-staged = mkTest "claude-surfaces-are-staged" (
         let
@@ -721,16 +714,16 @@ in {
           hm = (evalHm (lib.recursiveUpdate cfg {ai.claude.plugins.my-plugin = ../../stacked-workflows/skills/stack-fix;})).config;
           devenv = (evalDevenv cfg).config;
           shared = [".claude/CLAUDE.md" ".claude/agents/probe.md" ".claude/commands/probe.md" ".claude/hooks/probe" ".claude/output-styles/probe.md" ".claude/rules/probe.md" ".claude/settings.json" ".claude/skills/probe"];
-          hmStaged = shared ++ [".claude/skills/home-manager/.claude-plugin/plugin.json" ".claude/skills/home-manager/.mcp.json" ".claude/skills/my-plugin"];
+          hmStaged = shared ++ [".claude.json" ".claude/skills/home-manager/.claude-plugin/plugin.json" ".claude/skills/home-manager/.mcp.json" ".claude/skills/my-plugin"];
           devenvStaged = shared ++ [".mcp.json"];
           linked = files: lib.all (path: files ? ${path} || lib.any (lib.hasPrefix "${path}/") (builtins.attrNames files));
         in
-          builtins.attrNames hm.ai.claude.files
-          == [".claude.json"]
+          hm.ai.claude.files
+          == {}
           && devenv.ai.claude.files == {}
           && builtins.attrNames hm.ai.claude._generatedFiles == lib.sort lib.lessThan hmStaged
           && builtins.attrNames devenv.ai.claude._generatedFiles == lib.sort lib.lessThan devenvStaged
-          && linked hm.home.file hmStaged
+          && linked hm.home.file (lib.remove ".claude.json" hmStaged)
           && linked devenv.files (lib.remove ".claude/rules/probe.md" devenvStaged)
           && hm.home.file.".claude/hooks/probe".executable
           && devenv.files.".claude/hooks/probe".executable
@@ -848,19 +841,15 @@ in {
 
       # ── Claude launch-effort unpin reconciler ──────────────────────
 
-      # Default reconciler: flags from the committed sidecar are reconciled into
-      # ~/.claude.json. The declared leaves and the document they land in are
-      # read from `_reconciledDocuments`, not from the activation body: the
-      # reconciler carries them as data in a store plan, so the body names only
-      # the plan. The ledger path IS asserted here — it is the live migration
-      # contract that every previously written ownership record hangs off.
+      # Read the engine document and the ungated legacy import declaration.
       module-claude-hm-reconciles-unpin-launch-effort = mkTest "claude-hm-reconciles-unpin-launch-effort" (
         let
           result = evalHm {ai.claude.enable = true;};
           document = unpinDocument result;
         in
-          lib.hasInfix "--phase all" (unpinWriter result)
-          && document.ledger == "json-settings/claude-unpin-launch-effort.json"
+          result.config.ai.files2.".claude.json".method
+          == "rw"
+          && lib.any (entry: entry.ledger == "json-settings/claude-unpin-launch-effort.json" && entry.path == ".claude.json" && entry.codec == "json") result.config.ai.legacyLedgers
           && document.value.unpinOpus48LaunchEffort
       );
 
@@ -873,8 +862,9 @@ in {
             ai.claude.unpinLaunchEffort = lib.mkForce {};
           };
         in
-          lib.hasInfix "--phase all" (unpinWriter result)
-          && (unpinDocument result).value == {}
+          result.config.home.activation ? ai2-files2-apply
+          && result.config.ai.claude._generatedFiles.".claude.json".content.value == {}
+          && !(result.config.ai.files2 ? ".claude.json")
       );
 
       # A key set false is still written (re-pins that model deliberately).
@@ -888,9 +878,8 @@ in {
           (unpinDocument result).value.unpinOpus48LaunchEffort == false
       );
 
-      # One runtime corpus covers the document codec plus actual HM activations.
-      # Every empty generation is evaluated and executed, so a missing writer
-      # cannot satisfy the N-to-0 check.
+      # The generic old document codec remains here; Claude's real engine
+      # activations are exercised by ai-activation-settings-mode in ai-module.
       #
       # `harness.hmLib` rather than `lib`: `own` places its entry with
       # `lib.hm.dag`, which only the harness stubs.
@@ -947,21 +936,6 @@ in {
             // {
               header = "// User settings belong in settings.json.\n// This file is managed automatically.\n";
             })
-          (mkCase "claude" ".claude.json" {
-              unpinFirstLaunchEffort = true;
-              unpinSecondLaunchEffort = true;
-            } {
-              unpinSecondLaunchEffort = false;
-            } {
-              oauthAccount.token = "native-test-token";
-              unpinNativeLaunchEffort = true;
-            } (settings:
-              (evalHm {
-                ai.claude = {
-                  enable = true;
-                  unpinLaunchEffort = lib.mkForce settings;
-                };
-              }).config.home.activation.claudeUnpinLaunchEffort.text))
         ];
       in
         pkgs.runCommand "module-test-json-settings-reconciliation" {} ''

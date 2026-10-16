@@ -2,6 +2,7 @@
   imports = [
     ./activation-devenv.nix
     ./activation-hm.nix
+    ./claude.nix
     ./devenv.nix
     ./eval.nix
     ./generated-files.nix

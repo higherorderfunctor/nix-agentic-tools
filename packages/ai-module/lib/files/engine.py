@@ -520,7 +520,8 @@ def reconcile(plan, root, state_path, phase, legacy=(), legacy_state=None):
         if not valid_path(relative) or relative in seen or item["method"] not in ("ro", "rw", "symlink"):
             raise ValueError(f"invalid plan entry: {relative}")
         seen.add(relative)
-    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    state_path.parent.chmod(0o700)
     if state_path.is_symlink():
         raise ValueError(f"state symlink refused: {state_path}")
     lock = state_path.with_suffix(state_path.suffix + ".lock")
