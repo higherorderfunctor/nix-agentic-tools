@@ -1173,13 +1173,13 @@ in
             path = ["inclusion"];
             when = {
               name,
-              entryValue,
+              value,
               ...
             }:
               aiCommon.resolveInclusion {
                 runtime = "kiro";
                 inherit name;
-                rule = entryValue;
+                rule = value;
               }
               == "manual";
             reason = "Kiro CLI does not load manual steering; this mode only works in IDE clients.";

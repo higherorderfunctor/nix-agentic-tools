@@ -42,30 +42,11 @@
       else {primitive = "delivered";}
     ))
   (lib.subtractLists (builtins.attrNames facts.hand) schema.expectedKeys);
-  staticGaps = row: let
-    support = records.${row.ecosystem}.surfaceSupport.${row.surface} or {};
-    paths =
-      [["ai" row.surface]]
-      ++ lib.optional ((support.backends or []) != []) (optionPaths.pool row.ecosystem row.surface);
-  in
-    lib.optionals (delivered row) (map (gap:
-        (absent gap.reason)
-        // {
-          inputOptions =
-            map (path: path ++ (gap.path or []))
-            (
-              if gap.rootOnly or false
-              then [(builtins.head paths)]
-              else paths
-            );
-        })
-      (lib.filter (gap:
-        !(gap.each or false)
-        && !(gap.effective or false)
-        && !(gap ? when)
-        && builtins.isString gap.reason
-        && builtins.elem row.mode (gap.backends or modes))
-      (support.gaps or [])));
+  # A gap outside `each` names one field of the portable root.
+  staticGaps = row:
+    lib.optionals (delivered row) (map (gap: (absent gap.reason) // {inputOptions = [(["ai" row.surface] ++ gap.path)];})
+      (lib.filter (gap: !(gap.each or false) && !(gap ? when) && builtins.isString gap.reason)
+        (records.${row.ecosystem}.surfaceSupport.${row.surface}.gaps or [])));
   assemble = row: let
     cell = key row;
     children =

@@ -8,7 +8,6 @@
   entries,
   message,
   nonEmpty,
-  options,
   present,
   sharedSurfaces,
 }: let
@@ -20,87 +19,45 @@
   defaultReason = "${runtime}'s surfaceSupport does not consume this shared surface.";
   # A runtime unit's path relative to `ai.<runtime>`, inside its namespace.
   runtimePath = surface: namespaces.pool appRecord surface ++ [surface];
-  # Generated keyed folds have their own provenance; only consumer overrides
-  # of an undelivered normalized pool need a second diagnostic unit.
-  normalizedUnits = surface: let
-    path = ["ai" runtime] ++ namespaces.pool appRecord surface ++ ["normalized" surface];
-    option = lib.attrByPath path null options;
-    # Only explicit definitions name the keys a consumer asked for; measuring
-    # those keys on the REAL merged pool keeps per-key priority arbitration
-    # (merging the explicit list again would revive per-key values the
-    # generated fold's mkDefault defeated, forcing content the pool discarded).
-    definitions = lib.filter (definition: definition.file != toString ./mkBackendTransform.nix) option.definitionsWithLocations;
-    merged = lib.getAttrFromPath path config;
-    requested = lib.unique (lib.concatMap (definition: builtins.attrNames definition.value) definitions);
-  in
-    lib.optional (option
-      != null
-      && option.highestPrio < 1500
-      && definitions != []) {
-      inherit path;
-      value = lib.getAttrs (lib.filter (key: merged ? ${key}) requested) merged;
-    };
+  root = surface: {
+    path = ["ai" surface];
+    value = config.ai.${surface};
+  };
+  # The inputs a consumer sets a surface through, most specific first: the
+  # runtime's own pool where its record declares one, then the portable root.
   units = surface:
-    [
-      {
-        path = ["ai" surface];
-        root = true;
-        value = config.ai.${surface};
-      }
-    ]
-    ++ lib.optional (supported surface && lib.hasAttrByPath (runtimePath surface) cfg) {
+    lib.optional (supported surface && lib.hasAttrByPath (runtimePath surface) cfg) {
       path = ["ai" runtime] ++ runtimePath surface;
-      root = false;
       value = lib.getAttrFromPath (runtimePath surface) cfg;
-    };
+    }
+    ++ [(root surface)];
+  # A gap is one field a delivered surface drops: in every keyed entry (`each`,
+  # root or runtime pool), otherwise in the portable root.
   gapWarnings = surface: gap: let
     candidates =
       if gap.each or false
       then entries surface
-      else units surface;
-    gapPath = gap.path or [];
+      else [(root surface)];
     warnings = entry: let
-      value = lib.attrByPath gapPath null entry.value;
-      args =
-        entry
-        // {
-          inherit backend cfg config value;
-          entryValue = entry.value;
-        };
-      # Scalar overrides inherit on null. An effective gap diagnoses the
-      # winning root/runtime input once, rather than both declarations.
-      selected =
-        !(gap.effective or false)
-        || (!entry.root)
-        == (lib.attrByPath (runtimePath surface ++ gapPath) null cfg != null);
-      active =
-        builtins.elem backend (gap.backends or ["devenv" "hm"])
-        && (!(gap.rootOnly or false) || entry.root)
-        && selected
-        && (
-          if gapPath == []
-          then present entry.path entry.value
-          else nonEmpty value
-        )
-        && (gap.when or (_: true)) args;
+      args = entry // {inherit cfg;};
       reason =
         if builtins.isFunction gap.reason
         then gap.reason args
         else gap.reason;
     in
-      lib.optional active (message (entry.path ++ gapPath) reason);
+      lib.optional (nonEmpty (lib.attrByPath gap.path null entry.value) && (gap.when or (_: true)) args)
+      (message (entry.path ++ gap.path) reason);
   in
     lib.concatMap warnings candidates;
+  # An undelivered surface warns once, naming the most specific input set.
   surfaceWarnings = surface: let
     declaration = declarations.${surface} or {};
-    delivered = builtins.elem backend (declaration.backends or []);
   in
-    if !delivered
-    then
-      lib.concatMap (unit:
-        lib.optional (present unit.path unit.value)
-        (message unit.path (declaration.reason or defaultReason))) (units surface ++ normalizedUnits surface)
-    else lib.concatMap (gapWarnings surface) (declaration.gaps or []);
+    if builtins.elem backend (declaration.backends or [])
+    then lib.concatMap (gapWarnings surface) (declaration.gaps or [])
+    else
+      lib.take 1 (map (unit: message unit.path (declaration.reason or defaultReason))
+        (lib.filter (unit: present unit.path unit.value) (units surface)));
 in {
   warnings = lib.concatMap surfaceWarnings sharedSurfaces;
 }

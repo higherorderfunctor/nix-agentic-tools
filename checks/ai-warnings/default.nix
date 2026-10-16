@@ -255,74 +255,40 @@
       then (builtins.head absent).deliveryGap or (builtins.head absent).reason
       else throw "expected one policy absence writer for ${case.runtime}/${case.mode}/${case.surface}");
   unavailableCases = lib.filter (case: !(delivered case)) surfaceCases;
-  missingCases = let
-    normalizedCases = map (case:
-      case // {path = lib.init case.path ++ ["normalized" case.surface];})
-    (lib.filter (case: builtins.length case.path > 2) unavailableCases);
-    # Empty/disabled explicit rules must not diagnose live inherited keys twice.
-    mixedCases = lib.concatMap (case:
-      map (value:
-        case
-        // {
-          extra = lib.setAttrByPath case.path value;
-          path = ["ai" case.surface];
-        }) [{} {inactive.enable = false;}])
-    (lib.filter (case: case.surface == "rules") normalizedCases);
-    # A per-key fallback the inherited key defeats is diagnosed from the real
-    # merged pool, so its discarded value is never forced: a throwing fallback
-    # still evaluates. It names the key, so the normalized unit warns too.
-    shadowedCases = map (case:
-      case
-      // {
-        extra = lib.setAttrByPath case.path {
-          probe = lib.mkOptionDefault {text = throw "a discarded per-key fallback must not be forced";};
-        };
-        path = ["ai" case.surface];
-        count = 2;
-      })
-    (lib.filter (case: case.surface == "rules") normalizedCases);
-  in
+  missingCases =
     map (case:
       {
         reason = absenceReason case;
         count = 1;
       }
       // case)
-    (unavailableCases ++ normalizedCases ++ mixedCases ++ shadowedCases);
-  conditional = gap: gap ? when || (gap.each or false) || (gap.effective or false);
+    (unavailableCases
+      # Root and runtime pool both set still warn once, naming the runtime pool.
+      ++ map (case: case // {extra = lib.setAttrByPath ["ai" case.surface] case.value;})
+      (lib.filter (case: builtins.length case.path > 2) unavailableCases));
+  conditional = gap: gap ? when || (gap.each or false);
   staticCases = lib.concatMap (cell:
-    lib.concatMap (gap:
-      map (path:
-        cell
-        // {
-          count = 1;
-          path = path ++ (gap.path or []);
-          inherit (gap) reason;
-          value = sampleAt cell.surface (gap.path or []);
-        })
-      (
-        if gap.rootOnly or false
-        then [(builtins.head (surfacePaths cell.runtime cell.surface))]
-        else surfacePaths cell.runtime cell.surface
-      ))
-    (lib.filter (gap:
-      !(conditional gap) && builtins.elem cell.mode (gap.backends or policy.modes))
-    (cell.support.gaps or [])))
+    map (gap:
+      cell
+      // {
+        count = 1;
+        path = ["ai" cell.surface] ++ gap.path;
+        inherit (gap) reason;
+        value = sampleAt cell.surface gap.path;
+      })
+    (lib.filter (gap: !(conditional gap)) (cell.support.gaps or [])))
   (lib.filter delivered surfaceCells);
   gapCases = missingCases ++ staticCases;
   conditionalGaps = lib.concatMap (cell:
     map (gap: cell // {inherit gap;})
-    (lib.filter (gap:
-      conditional gap && builtins.elem cell.mode (gap.backends or policy.modes))
-    (cell.support.gaps or [])))
+    (lib.filter conditional (cell.support.gaps or [])))
   (lib.filter delivered surfaceCells);
   matchesGap = case: recorded:
     case.runtime
     == recorded.runtime
     && (case.surface or null) == recorded.surface
-    && (case.gapPath or []) == (recorded.gap.path or [])
-    && caseMode case == recorded.mode
-    && (!(recorded.gap.rootOnly or false) || builtins.elemAt case.path 1 == recorded.surface);
+    && (case.gapPath or []) == recorded.gap.path
+    && caseMode case == recorded.mode;
   conditionalDeclarations = lib.concatMap (runtime:
     lib.concatMap (surface:
       map (gap: {inherit gap runtime surface;})
@@ -335,15 +301,15 @@
       recorded.runtime
       == declared.runtime
       && recorded.surface == declared.surface
-      && (recorded.gap.path or []) == (declared.gap.path or [])
+      && recorded.gap.path == declared.gap.path
       && lib.any (case: matchesGap case recorded) cases)
     conditionalGaps)
-    "conditional warning declaration has no reachable case: ${declared.runtime}/${declared.surface}/${lib.showOption (declared.gap.path or [])}"; true)
+    "conditional warning declaration has no reachable case: ${declared.runtime}/${declared.surface}/${lib.showOption declared.gap.path}"; true)
   conditionalDeclarations;
   # Each active backend also needs its own explicit request.
   conditionalCovered = lib.all (recorded:
     assert lib.assertMsg (lib.any (case: matchesGap case recorded) cases)
-    "conditional warning gap has no case: ${recorded.runtime}/${recorded.mode}/${recorded.surface}/${lib.showOption (recorded.gap.path or [])}"; true)
+    "conditional warning gap has no case: ${recorded.runtime}/${recorded.mode}/${recorded.surface}/${lib.showOption recorded.gap.path}"; true)
   conditionalGaps;
   supportedCases = lib.filter delivered surfaceCases;
   consumedRootsQuiet = lib.all (case: let
@@ -417,13 +383,9 @@
       if builtins.isFunction recordedReason
       then
         recordedReason {
-          backend = mode;
           cfg = evaluation.ai.${case.runtime};
-          config = evaluation;
-          entryValue = case.value;
           name = lib.last case.path;
-          inherit (case) path;
-          value = lib.attrByPath (case.gapPath or []) null case.value;
+          inherit (case) path value;
         }
       else recordedReason;
     needle =

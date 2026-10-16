@@ -31,7 +31,7 @@
   poolOptionPools = ["environmentVariables"];
   sharedAgentsMdKeys = ["hasOnDemandIndex" "index" "key" "maxBytes" "rules"];
   supportKeys = ["backends" "gaps" "reason"];
-  gapKeys = ["backends" "each" "effective" "path" "reason" "rootOnly" "when"];
+  gapKeys = ["each" "path" "reason" "when"];
   validBackends = backends: builtins.isList backends && lib.all (backend: builtins.elem backend ["devenv" "hm"]) backends;
   validReason = reason: builtins.isString reason || builtins.isFunction reason;
   validGap = gap:
@@ -39,10 +39,10 @@
     == []
     && gap ? reason
     && validReason gap.reason
-    && validBackends (gap.backends or ["devenv" "hm"])
-    && builtins.isList (gap.path or [])
-    && lib.all (part: builtins.isString part && part != "") (gap.path or [])
-    && lib.all (key: builtins.isBool (gap.${key} or false)) ["each" "effective" "rootOnly"]
+    && gap ? path
+    && gap.path != []
+    && validPath gap.path
+    && builtins.isBool (gap.each or false)
     && (!(gap ? when) || builtins.isFunction gap.when);
   validSupport = support:
     unknownIn supportKeys support
@@ -81,7 +81,7 @@ in {
     unknownNamespaces = unknownIn namespaceGroups optionNamespaces;
   in
     lib.assertMsg (lib.all validSupport (builtins.attrValues surfaceSupport))
-    "ai runtime ${name}: surfaceSupport entries take backends (hm/devenv), reason and gaps; each gap takes a relative path, backend reach, boolean scope selectors, reason and a when predicate."
+    "ai runtime ${name}: surfaceSupport entries take backends (hm/devenv), reason and gaps; each gap takes a nonempty relative path, a boolean `each`, a reason and a when predicate."
     && checkBackend "hm" hm
     && checkBackend "devenv" devenv
     && lib.assertMsg (builtins.isAttrs optionNamespaces && unknownNamespaces == [] && lib.all validPath (builtins.attrValues optionNamespaces))
