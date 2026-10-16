@@ -520,7 +520,8 @@ def reconcile(plan, root, state_path, phase, legacy=(), legacy_state=None):
         if not valid_path(relative) or relative in seen or item["method"] not in ("ro", "rw", "symlink"):
             raise ValueError(f"invalid plan entry: {relative}")
         seen.add(relative)
-    # Move the interim state directory before creating or locking the final one.
+    # A state directory still named `files2` moves to `files` before the final
+    # one is created or locked, unless `files` already exists.
     if legacy_state is not None:
         previous = legacy_state / "files2"
         current = legacy_state / "files"

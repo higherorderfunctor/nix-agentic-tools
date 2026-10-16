@@ -2,19 +2,18 @@
 
 > **Last verified:** 2026-10-16 — non-AI owners use the same layer-1 helper;
 > delivery facts derive delivered and absent cells, keyed withdrawal and
-> normalized gaps from option and runtime declarations, with no writer matrix;
-> `poolOptions` covers `agentsDir` and `environmentVariables` only;
-> `optionNamespaces` places launcher and pool options; the devenv file observer
-> lives in ai-module and reads the files plan; the shared AGENTS.md composer
-> reaches the files plan as the owner `internal`; Claude stages every surface,
-> including HM `.claude.json` as `rw`; the files engine writes its rules copies
-> on devenv; staged Markdown and raw entries are whole-content defaults; Kiro
-> stages every surface, with hooks, settings and steering legacy ledgers
-> declared outside its enable gate; Kimchi stages every surface, with every
-> legacy ledger ungated; Codex stages every surface and declares both copy
-> ledgers while disabled; hand rows are confined to the policy-only permissions
-> surface; backend lowering and validation live only in ai-module after the old
-> delivery path removal.
+> normalized gaps from option and runtime declarations; `poolOptions` covers
+> `agentsDir` and `environmentVariables` only; `optionNamespaces` places
+> launcher and pool options; the devenv file observer lives in ai-module and
+> reads the files plan; the shared AGENTS.md composer reaches the files plan as
+> the owner `internal`; Claude stages every surface, including HM `.claude.json`
+> as `rw`; the files engine writes its rules copies on devenv; staged Markdown
+> and raw entries are whole-content defaults; Kiro stages every surface, with
+> hooks, settings and steering legacy ledgers declared outside its enable gate;
+> Kimchi stages every surface, with every legacy ledger ungated; Codex stages
+> every surface and declares both copy ledgers while disabled; hand rows are
+> confined to the policy-only permissions surface; backend lowering and
+> validation live only in ai-module.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -74,19 +73,24 @@ which locked `/login` out; do not move them back.
                              │
                              ▼  routing + native rendering
 ┌────────────────────────────────────────────────────────────┐
-│ L4: Final runtime output map                               │
-│   ai.<cli>.files = attrsOf { content; ... }       │
+│ L4: Staged runtime output map                              │
+│   ai.<cli>._generatedFiles → ai.<cli>.files (files layer 1)│
 │   - text/source default; structured leaves compose         │
-│   - sibling fields compose; enable suppresses entries       │
+│   - sibling fields compose; enable suppresses entries      │
 └────────────────────────────────────────────────────────────┘
                              │
-                             ▼  generic backend lowering
+                             ▼  ai-module forwarding and lowering
 ┌────────────────────────────────────────────────────────────┐
-│ L5: Native file sink                                       │
-│   - HM: home.file.*                                        │
-│   - Devenv: files.*                                        │
+│ L5: Delivery (files layers 2 and 3)                        │
+│   ai.files → native links: HM home.file.* / devenv files.* │
+│            → files engine copies (ro, rw)                  │
+│   ai.activation → HM home.activation / devenv tasks        │
 └────────────────────────────────────────────────────────────┘
 ```
+
+L1–L5 are fanout stages, not the files layers 1–3 of
+`packages/ai-module/docs/contract.md`: L4 ends at files layer 1, and L5 is
+layers 2 and 3.
 
 The runtime record has one data-only placement field, `optionNamespaces`,
 default `{}`: it maps the builder's two option groups to relative paths, and an
@@ -299,9 +303,8 @@ native-only supplement because normalized record gaps cannot address that
 separate option or its explicit-priority gate.
 
 Where a delivered file lands, and how, is the files plan's business, not these
-facts': the generated writer matrix and its gate were retired with the old
-writers' suites. Adding a shared surface or dropping runtime support creates
-absence cells without policy edits.
+facts'. Adding a shared surface or dropping runtime support creates absence
+cells without policy edits.
 
 ### Layer location map
 
@@ -388,14 +391,10 @@ absence cells without policy edits.
    lowers only some fields keeps it and warns for the rest.
 4. Add L4 routing/rendering into `ai.<runtime>._generatedFiles` in each
    supporting per-CLI factory's `config`. State content, format, method and
-   surface; commands use `ai.<runtime>.activation`. Retired writers declare
-   their `legacyLedgers` outside the enable gate.
+   surface; commands use `ai.<runtime>.activation`.
 5. Let ai-module lower the entries; change its backend only when the delivery
-   contract changes. Never write `home.file`, `home.activation`, `files` or
-   `tasks` from an owner module or factory — `ai-module-no-direct-sink-writes`
-   scans production libraries and owner modules. Exact non-writer declarations
-   and four Beads manual tasks are measured exceptions; negative fixtures cover
-   every non-AI owner.
+   contract changes. Never write native sinks from an owner module or factory;
+   see the contract's Owner rule.
 6. Wire L2↔L3 through `mergePool`, add the pool to the package-provenance guard,
    or document and test the concern's intentional non-pool composition rule
    (hooks append per-event lists).

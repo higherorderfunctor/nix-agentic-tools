@@ -1,6 +1,6 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-16 — runtime factories stage moved surfaces in
+> **Last verified:** 2026-10-16 — runtime factories stage surfaces in
 > `_generatedFiles` (every runtime surface included) and forward them through
 > the ai-module layer-1 helper over one generated tree, which every staged
 > entry's delivery requires; the shared AGENTS.md composer is the layer-1 owner
@@ -15,8 +15,8 @@
 > `ai.copilot` is github.com Copilot with its pools under `ai.copilot.github`;
 > explicit normalized overrides warn for live explicit contributions on
 > unavailable backends, excluding empty or disabled contributions beside
-> inherited folds; the old delivery path is removed, and ai-module owns the
-> delivered-path inventory and backend lowering.
+> inherited folds; ai-module owns the delivered-path inventory and backend
+> lowering.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -37,7 +37,7 @@
 > - **Root silence for unsupported runtimes is rejected.** It was the design,
 >   rejected by the operator on 2026-10-13; repeated activation warnings,
 >   including Copilot's, are accepted. Prior design:
->   `git show origin/main:dev/fragments/ai-module/ai-module-fanout.md`.
+>   `git show 17060194:dev/fragments/ai-module/ai-module-fanout.md`.
 > - **No per-backend delivery callback on the runtime record.** A backend spec's
 >   own `config` let a runtime lower each backend separately, and the untyped
 >   callbacks grew into near-duplicate per-backend delivery bodies that the
@@ -737,11 +737,10 @@ Every runtime factory imports the layer-1 helper. Only staged entries feed
 from the generated tree, values per leaf, and recursive sources or `run` as
 themselves. Every staged entry requires the tree: the engine adds its string
 context to each delivered leaf after walking the source. Attaching that context
-to the source before `readDir` would build the tree at evaluation. The old
-router, adapters and ownership writer are removed. Ungated `legacyLedgers`
-declarations and the engine's legacy drain remain for upgrades from older
-generations. `ai.deliveredPaths` is declared by ai-module and lists only enabled
-plan keys, with recursive trees excluded as `<key>/**`.
+to the source before `readDir` would build the tree at evaluation. Ungated
+`legacyLedgers` declarations and the engine's legacy drain remain for upgrades
+from older generations. `ai.deliveredPaths` is declared by ai-module and lists
+only enabled plan keys, with recursive trees excluded as `<key>/**`.
 
 ### Documentation parity is capability parity
 
@@ -773,10 +772,14 @@ From a consumer repo with the module imported:
 
 ```bash
 nix eval --impure --json \
-  '.#homeConfigurations."<host>".config.home.file' \
-  --apply 'files: builtins.filter (n: builtins.match "[.]claude/.*" n != null) (builtins.attrNames files)'
+  '.#homeConfigurations."<host>".config.ai.deliveredPaths' \
+  --apply 'paths: builtins.filter (n: builtins.match "[.]claude.*" n != null) paths'
 # Should list .claude/settings.json, skills, agents, … if ai.claude.enable = true
 ```
+
+`ai.deliveredPaths` covers every enabled plan path; `home.file` holds only the
+`symlink` entries, so engine-owned copies such as `.claude.json` never appear
+there.
 
 If the list stays empty despite `ai.claude.enable = true`, the fanout is broken
 — fix the module, not the consumer.

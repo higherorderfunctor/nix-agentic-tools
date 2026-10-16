@@ -182,10 +182,15 @@ an already-enabled Codex; it never enables Codex itself.
 
 ### Activation script patterns
 
-**Location and ordering:**
+**Location and ordering:** owners declare commands at layer 1, never
+`home.activation` (`ai-module-no-direct-sink-writes` fails a module line that
+starts with one):
 
 ```nix
-home.activation.<name> = lib.hm.dag.entryAfter ["linkGeneration"] (script);
+ai.<owner>.activation.<name> = {
+  after = ["files"]; # abstract points: files, linkCheck, materialized, secrets, shell
+  command = script;
+};
 ```
 
 File application runs after `linkGeneration`, once Home Manager has linked the
@@ -195,30 +200,8 @@ that ordering. ai-module supplies `files-prune` before `checkLinkTargets` and
 copy before a native link checks its destination. Producers state entries and
 abstract activation points rather than declaring writer bundles.
 
-**NEVER use `exit` as a short-circuit.** `home.activation.<name>` blocks are
-**inlined** into a single outer bash script at
-`$out/home-manager-generation/activate` that runs under `set -eu -o pipefail`.
-Any `exit 0` or `exit 1` inside an activation block terminates the **entire**
-activation — every subsequent hook (including `linkGeneration`, `home.file`
-writes, plugin installs, `reload-secrets`, service reloads) is silently skipped.
-Symptom: activation output stops cleanly mid-run with no error, and downstream
-state changes never land.
-
-Use structured control flow for fast paths:
-
-```nix
-# WRONG — terminates all subsequent activation hooks
-if [ "$NEW_FP" = "$OLD_FP" ]; then exit 0; fi
-# ... update work ...
-
-# RIGHT — continues to next hook
-if [ "$NEW_FP" != "$OLD_FP" ]; then
-  # ... update work ...
-fi
-```
-
-Reserve `exit 1` for cases where you actually want to abort the whole activation
-on an error. Never `exit 0` for a cache-hit fast path.
+`exit` semantics for layer-1 commands: see `packages/ai-module/docs/contract.md`
+(Activation).
 
 **Owned leaves for state documents:** Claude's `~/.claude.json` keeps
 harness-written state beside Nix-owned leaves. Its factory stages a JSON `rw`
@@ -287,11 +270,11 @@ project settings. Its hook copies retire through the same engine, and all three
 old ledgers stay declared while Kiro is disabled.
 
 Devenv-side writes are otherwise unconditional (always write the file when
-`enable = true`): devenv files are project-local symlinks, not home-dir writes.
-Claude is the exception. Its devenv `.claude/settings.json` and `.mcp.json` are
-emitted only when non-empty, because either one would shadow a project's own
-committed file, so an empty declaration writes nothing there. Kiro and Kimchi
-are the other exceptions: Kiro's project `settings/cli.json` and
+`enable = true`): devenv deliveries are project-local links or engine copies,
+not home-dir writes. Claude is the exception. Its devenv `.claude/settings.json`
+and `.mcp.json` are emitted only when non-empty, because either one would shadow
+a project's own committed file, so an empty declaration writes nothing there.
+Kiro and Kimchi are the other exceptions: Kiro's project `settings/cli.json` and
 `settings/mcp.json` and Kimchi's project settings copies are claimed only when
 something is declared, so enabling the runtime does not take over and back up
 those files.
@@ -322,7 +305,9 @@ precedence over the stored keyring value.
 
 Owners import `packages/ai-module/lib/runtime.nix`, then state final content,
 format and method in `ai.<owner>.files` or finite commands in
-`ai.<owner>.activation`. Only ai-module writes native file and activation sinks.
+`ai.<owner>.activation`. Only ai-module writes native file and activation sinks;
+`ai-module-no-direct-sink-writes` fails a library or owner module line that
+starts with one. The layer contract is `packages/ai-module/docs/contract.md`.
 Semble's cache guard follows `materialized`; glab's keyring marker and MCP
 credential-rotation checks follow `files` and `secrets`. HM lowering wraps the
 whole command in `run`; child command bodies use ordinary external commands, not
@@ -408,8 +393,9 @@ that do not use either module's activation guard.
   and `ai.mcp-services` on HM; `ai.beads`, `ai.git` and `ai.git-branchless` on
   devenv. Option docs retain them and check their presence explicitly outside
   shared runtime and pool parity.
-- HM uses `home.file` / `home.activation`; devenv uses `files.*` / `tasks.*`
-  with `enterTest` verification (per-project writable tree, not home dir)
+- ai-module lowers owner entries to `home.file` / `home.activation` on HM and
+  `files.*` / `tasks.*` on devenv (per-project writable tree, not home dir);
+  owners write neither
 - glab's `keyringSync` declaration exists in both facets, but devenv rejects
   enabling it: repository shells may consume global keyring state, while login,
   Secret Service, and graphical-session lifecycle belong to Home Manager
@@ -447,10 +433,10 @@ protection via the eval harness.
 
 **Eval-only checks DON'T catch everything.** Some bugs only manifest during real
 HM activation against real consumer state (e.g., the Nix path type strictness
-bug below). A diff that changes the body of a `home.activation.<name>` block,
-adds or removes a `home.file` entry, or changes literal-file lowering in
-`packages/ai-module/lib/files/backend.nix` is therefore NOT fully covered by a
-green `nix flake check`.
+bug below). A diff that changes an `ai.<owner>.activation` command, adds or
+removes an `ai.<owner>.files` or staged `_generatedFiles` entry, or changes
+`packages/ai-module/lib/lower-hm.nix` or `packages/ai-module/lib/files/**` is
+therefore NOT fully covered by a green `nix flake check`.
 
 **Do not run `home-manager switch` yourself — it mutates the operator's live
 system.** Instead add a line to the PR description naming the activation entries
@@ -529,3 +515,88 @@ store-path strings. A generated store-path string remains a supported,
 deliberate pattern even though this repository no longer ships a first-party
 producer. Reserve the `./`-literal discipline for the strict-`isPath` sinks
 noted above.
+
+<!-- Fragment: packages/ai-module/docs/contract.md -->
+
+## ai-module Files and Activation Contract
+
+> **Last verified:** 2026-10-16 — repository modules reach Home Manager and
+> devenv file and activation sinks only through ai-module's three layers, apart
+> from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`.
+
+The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
+known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
+refusals, state, legacy import, transitions). This is the part to hold while
+editing ai-module or any owner that writes through it.
+
+### Three layers
+
+| Layer | Option                                           | Written by                                                                                                                                      |
+| ----- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `ai.<owner>.files`                               | The owner, through `packages/ai-module/lib/runtime.nix`                                                                                         |
+| 2     | `ai.files` (claims in internal `ai.filesOwners`) | The layer-1 helper's forwarding; a consumer may override                                                                                        |
+| 3     | `ai.activation`                                  | The helper's forwarding of the owner's `ai.<owner>.activation`; generated engine entries are added at lowering, they are not option definitions |
+
+Keys are final backend-root-relative paths (`$HOME` or `$DEVENV_ROOT`); nothing
+adds a prefix. A runtime factory stages `ai.<runtime>._generatedFiles` and lets
+`lib/ai/app/generatedFiles.nix` turn it into layer 1 over one formatted, guarded
+tree; a non-AI owner writes layer 1 directly.
+
+### Owner rule
+
+- Owners write only `ai.<owner>.files` and `ai.<owner>.activation`, plus
+  `ai.<owner>.legacyLedgers` for an earlier writer's ledger. Native sinks
+  (`home.file`, `home.activation`, devenv `files`, `tasks`, `enterTest`) are
+  reached only through ai-module; `ai-module-no-direct-sink-writes` fails a line
+  in a library or owner module that starts with one of those sink names (or
+  `home = {`), except the exact path/line pairs exempted in
+  `packages/ai-module/checks/sink-guard.nix`. Manual devenv tasks, such as
+  Beads', are out of scope.
+- Root `ai.*` options are defined only in their declaring file; the
+  module-provenance guard (`rootPoolViolations`) exempts `lib/runtime.nix` alone
+  for `activation`, `files`, `filesOwners` and `legacyLedgers`.
+- A disabled owner forwards no files. Commands default to the owner's state;
+  `runWhenDisabled = true` keeps a release or retirement command running.
+  `legacyLedgers` and `runWhenDisabled` commands must be declared outside the
+  owner's enable gate.
+
+### Methods and where they lower
+
+| `method`  | Delivered by                                                               |
+| --------- | -------------------------------------------------------------------------- |
+| `symlink` | Native: HM `home.file`, devenv `files` (devenv guards stale/foreign links) |
+| `ro`      | Files engine copy, on both backends                                        |
+| `rw`      | Files engine key merge into a json/toml/yaml document, on both backends    |
+
+`method = { devenv = …; hm = …; }` picks per backend. `content.run` needs `ro`
+or `rw` and runs only in `files-apply`, after the `secrets` point. The engine
+never tracks native links, and a devenv `copyMode` override on a planned path
+fails evaluation.
+
+### Activation
+
+Commands order themselves with abstract points (`files`, `linkCheck`,
+`materialized`, `secrets`, `shell`) in `after`/`before`; existing native DAG or
+task names go only in `afterNodes`/`beforeNodes`. ai-module adds the strict
+header: HM runs each command in `run bash -c`, devenv in a subshell, so `exit`
+ends only that command. Native names are `ai-<key>` (HM) and `ai:<key>` (devenv)
+unless `name` sets one. Both backends reserve the keys `files-apply` and
+`files-prune`; devenv also reserves `files-guard`, `files-inspect` and
+`files-snapshot`.
+
+### Collisions
+
+Two runtime owners claiming one path fail, even with identical bytes, with
+`files."<path>": runtime owners <a> and <b> claim one destination`; a disabled
+entry still claims. Ancestor/descendant paths fail as overlapping destinations.
+A key in the helper's `shared` list (root `AGENTS.md`) forwards unclaimed, so
+its composer stays the single owner; divergent equal-priority definitions there
+fail with conflict text naming `lib/runtime.nix`, not the owners.
+
+### State and ownership
+
+The engine owns exactly what its state records:
+`nix-agentic-tools/files/ai.json` under XDG state (HM) or `$DEVENV_STATE`
+(devenv). `files-prune` runs on every activation, so removing the last entry
+drains its copies; an edited copy is backed up before it changes. Legacy ledgers
+import once into that state and are then deleted.

@@ -608,9 +608,9 @@ Two kinds of generated content, two owners:
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.
 
-The old generator's one-time cleanup task is retired. Legacy checkouts may still
-hold instruction files outside the ownership writer's ledger. The writer only
-prunes files in its own ledger, so those legacy files can be deleted by hand.
+Older checkouts may still hold instruction files the files engine never
+recorded. The engine prunes only paths in its state, so those files can be
+deleted by hand.
 
 ### Source Layout
 

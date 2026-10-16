@@ -523,9 +523,7 @@
   # the options documentation renders the default by evaluating the package.
   packageText = (appRecord.defaults or {}).packageText or null;
 
-  # `config` rides along so callbacks can observe sibling backend
-  # options — e.g. the devenv materializer's conditional `devenv:files`
-  # task edge needs `config.files != {}`.
+  # `config` rides along so callbacks can observe sibling backend options.
   #
   # `backend` rides along for the one callback shared by both: a runtime whose
   # delivery differs only in a consumer FACT states the fact per backend and

@@ -394,7 +394,7 @@ in {
 
     # Layer-1 replacements discard oversized generated content unread, and
     # suppression removes delivery. Generated defaults retain their byte limit;
-    # consumer content bypasses that generated-tree guard (design gap X1).
+    # consumer content bypasses that generated-tree guard.
     module-runtime-files-byte-limit-follows-final-entry = let
       oversized = lib.concatStrings (lib.replicate 64 "x");
       hmReplacement = evalHm {
@@ -579,7 +579,7 @@ in {
         && delivered (evalDevenv config)
     );
 
-    # L078: entry enable suppresses structured values and run content.
+    # Entry enable suppresses structured values and run content.
     module-runtime-files-disable-suppresses-every-form = mkTest "runtime-files-disable-suppresses-every-form" (
       lib.all (evaluate:
         lib.all (content:

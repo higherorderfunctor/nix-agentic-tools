@@ -1,7 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-14 — shell participates in delivery policy through
-> settings writers, launcher ownership and record-derived Copilot absences;
+> **Last verified:** 2026-10-16 — shell delivery cells derive from each runtime
+> record's `surfaceSupport`, with Copilot's absence and reason from its record;
 > `optionNamespaces.launcher` places `shell`; Copilot is github.com Copilot.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
@@ -114,9 +114,9 @@ backends. Devenv settings require a trusted project and the existing exact-cwd
 launcher guard.
 
 Delivery policy includes shell from the same shared option registration. Its
-physical rows associate Claude and Kimchi with their settings files, and Codex
-and Kiro with their process launchers; Copilot absence and its reason derive
-from the runtime record. Shell stays scalar and is not a keyed withdrawal pool.
+cells derive from each runtime record's `surfaceSupport`; Copilot's absence and
+its reason come from its record. Shell stays scalar and is not a keyed
+withdrawal pool.
 
 ### Kiro's FHS root does not change the shell default
 

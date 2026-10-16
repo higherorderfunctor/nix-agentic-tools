@@ -190,8 +190,8 @@ in {
         var?; } SOPS/agenix credential. Kiro does NOT env-substitute the
         url field, so a credential url is not injected as a
         `''${env:VAR}` placeholder at launch like a header — instead the
-        Kiro launcher assembles it into a real, private `mcp.json` at
-        activation from the decrypted secret.
+        files engine renders a private, owner-only `mcp.json` from the
+        decrypted secret at activation or shell entry.
         Delivered for Kiro only; other ecosystems throw on a credential
         url. See secretValue.nix.
       '';

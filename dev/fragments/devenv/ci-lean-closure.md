@@ -4,13 +4,10 @@
 > wrapper closure; github.com Copilot has none. The CI matrix reads
 > `ciPackages`; the repo shell applies `buildOverlay`. Kimchi source builds
 > require fresh closure measurements; old binary-release figures are not current
-> estimates. The instruction copier check is gone with the generator's
-> materializer, and the generated delivery matrix with the old writer suites.
-> The Codex permission-mix assertions and runtime PATH provenance are
+> estimates. The Codex permission-mix assertions and runtime PATH provenance are
 > consumer-wide shell-entry warnings, not repository enterTest loops. The
 > repository shell sets no harness permissions; contributors choose them in
-> their user config. The old ownership writer and verification hook are removed;
-> files-engine runtime checks cover delivery independently.
+> their user config. Files-engine runtime checks cover delivery independently.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 

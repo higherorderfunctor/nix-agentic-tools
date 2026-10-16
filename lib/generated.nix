@@ -1,4 +1,4 @@
-# Build one store tree per delivery-router invocation. Treefmt formats whole
+# Build one formatted, guarded store tree per call. Treefmt formats whole
 # composed files at target-relative paths; raw copies share the staging root.
 {lib}: pkgs: let
   types = ["json" "markdown" "toml" "yaml"];

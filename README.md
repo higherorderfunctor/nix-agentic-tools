@@ -74,11 +74,11 @@ services.mcp-servers.servers.github-mcp = {
 ```
 
 > **Static runtime files:** every runtime exposes
-> `ai.<runtime>.files."<relative-path>" = { text = "…"; };`. An entry can
-> instead set `source = ./file`. Generated context/rule outputs use the same
-> final map at default priority, so an ordinary whole entry replaces them and
-> `null` suppresses them. Paths are relative to HOME here and to the project
-> under devenv.
+> `ai.<runtime>.files."<relative-path>" = { content.text = "…"; };`. An entry
+> can instead set `content.source = ./file`. Generated context/rule outputs use
+> the same final map at default priority, so an ordinary whole entry replaces
+> them and `enable = false` suppresses them. Paths are relative to HOME here and
+> to the project under devenv.
 
 </details>
 
@@ -558,14 +558,15 @@ advertises `run_workflow` only when workflows are enabled.
 <summary><strong>Generated-file formatting</strong></summary>
 
 Every live, Nix-owned whole file whose bytes exist at build time is built into
-one store tree per delivery-router invocation. The flake's exported
-`treefmtModules.default` is always the base; the consumer's `ai.formatter`
-treefmt-nix module is layered on top. One treefmt run formats every composed
-file, including Markdown headers. Each formatted path must use the conventional
-extension for its declared format (`.json`, `.md`, `.toml`, `.yaml`, or `.yml`).
-An unmatched composed file fails the build and names its target-relative path.
-Raw files and recursive directory sources are copied byte-identically and never
-passed to treefmt. A failed formatter or check fails the build.
+one store tree per runtime and backend, plus one for the shared AGENTS.md. The
+flake's exported `treefmtModules.default` is always the base; the consumer's
+`ai.formatter` treefmt-nix module is layered on top. One treefmt run formats
+every composed file, including Markdown headers. Each formatted path must use
+the conventional extension for its declared format (`.json`, `.md`, `.toml`,
+`.yaml`, or `.yml`). An unmatched composed file fails the build and names its
+target-relative path. Raw files and recursive directory sources are copied
+byte-identically and never passed to treefmt. A failed formatter or check fails
+the build.
 
 On devenv, every delivered path is automatically excluded from the repository's
 own treefmt run. Other module consumers can use the read-only
@@ -585,9 +586,10 @@ tree, with the tree root as its working directory, that surface's
 target-relative paths in `"$@"`, and `AI_RUNTIME` exported to the runtime name.
 Empty snippets and surfaces with no files do not run. Checks see only build-time
 whole files. Generated raw skill entries participate even though formatters skip
-their bytes; runtime-rendered files, shared reconciled documents, and unstamped
-raw `ai.<runtime>.files` entries do not. Checks run in the Nix build sandbox, so
-only store-provided tools are available and network access is unavailable.
+their bytes; runtime-rendered files, shared reconciled documents, and entries
+defined directly in `ai.<runtime>.files` rather than staged by the runtime do
+not. Checks run in the Nix build sandbox, so only store-provided tools are
+available and network access is unavailable.
 
 ```nix
 ai.checks = {
@@ -604,12 +606,13 @@ ai.formatter = ./treefmt.nix;
 
 Generated context, rules, AGENTS.md and agent Markdown participate on both Home
 Manager and devenv, including Claude's direct Home Manager files. Static JSON,
-TOML and YAML entries participate when their file entry names the corresponding
-`format`; raw files and supplied directory trees participate without a
-formatter. Switch-time overlays and private documents rendered by `content.run`
-are excluded because their final bytes do not exist at build time. Shared
-document entries are excluded because they own reconciled leaves rather than a
-whole file.
+TOML and YAML entries are checked in the tree when their file entry names the
+corresponding `format`, but a `content.value` document is delivered as the files
+engine codec's rendering (`builtins.toJSON` for JSON), not formatter output; raw
+files and supplied directory trees participate without a formatter. Switch-time
+overlays and private documents rendered by `content.run` are excluded because
+their final bytes do not exist at build time. Shared document entries are
+excluded because they own reconciled leaves rather than a whole file.
 
 | Runtime | Static JSON/TOML/YAML in scope                                                                     | Outside the build tree                             |
 | ------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -618,13 +621,10 @@ whole file.
 | Kimchi  | Static config, harness settings, MCP, permissions and devenv hooks                                 | `trust.json` and credential-rendered `config.json` |
 | Kiro    | `cli.json`, Home Manager `permissions.yaml`, agent and hook JSON files                             | Runtime-rendered `mcp.json`                        |
 
-A single file can opt out of formatting and guards with
-`ai.<runtime>.files."<path>".format = "raw"`; it remains in the store tree. Byte
-limits still apply to opted-out paths. A `content.run` replacement of a
-generated entry requires `format = "raw"`; replacing an entire AGENTS.md entry
-may state `format = "markdown"` to retain formatting.
+A consumer's replacement of a generated entry's content lands verbatim: it is
+not formatted, guarded, checked or byte-limited, whatever `format` it states.
 
-`mkAgenticShell` generates no files in this delivery router, so it has no
+`mkAgenticShell` generates no files through ai-module, so it has no
 corresponding option.
 
 </details>
@@ -658,10 +658,11 @@ For example, these formatter outcomes differ:
 | A formatter that changes JSON `true` to `false`           | Bad          | `parseCompare` detects changed data                          |
 | Input with an unescaped pipe inside a Markdown table cell | Bad          | `tableCells` detects an extra input cell                     |
 
-A format guard error names what failed and why, then gives three choices: fix
-the input or formatter; disable that named guard if its invariant is unsuitable;
-or set the specific file's `format = "raw"` to opt out explicitly. The Kiro
-shape guard offers only fix or disable because a runtime still reads a raw file.
+A format guard error names what failed and why, then lists choices: fix the
+input or formatter, or disable that named guard if its invariant is unsuitable.
+Other guards also print a third hint, setting the file's format to raw, which
+has no effect on generated entries. The Kiro shape guard omits that hint because
+a runtime still reads a raw file.
 
 #### Using the guards on your own files
 

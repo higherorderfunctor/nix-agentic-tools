@@ -145,5 +145,3 @@ never as a fact source for Nix. The probe work owns the rewrite of this section.
 - `dev/fragments/git-tool-settings/git-tool-settings.md`: annotations and the
   option generator for git-absorb, git-branchless, git-revise.
 - `packages/kimchi/docs/kimchi-factory.md`: Kimchi's hand tables and reconcile.
-- `private/harness-facts-consolidation/HANDOFF.md`: the consolidation history,
-  batch by batch, with what was dismissed and why.

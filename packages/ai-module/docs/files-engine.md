@@ -1,11 +1,11 @@
-# files design
+# files engine
 
 ## Boundary and caller schema
 
-The file schema and engine rules below remain the contract for the moved
-implementation. [The ai-module design](DESIGN.md) defines its owner, generic
-options and backend lowering. The generic `ai.files` option owns the map;
-runtime producers forward their entries through the layer-1 helper.
+The file schema and engine rules below are the contract of the files engine.
+[The ai-module design](DESIGN.md) defines its owner, generic options and backend
+lowering. The generic `ai.files` option owns the map; runtime producers forward
+their entries through the layer-1 helper.
 
 | Option           | Nix type                                                                                   | Default     | Meaning                                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -87,26 +87,26 @@ sorted plan. It resolves backend-specific methods, validates paths, renders
 `builtins.readDir`. Regular files and symlinks become leaves under
 `<target>/<relative leaf>`. A symlink is never followed, so a `symlink` entry
 delivers a directory symlink as one native link to its source path, as Home
-Manager's recursive link and the old devenv per-leaf walk did; `ro` refuses it.
-Every leaf carries its full root-relative path, source, method, format, and
-permissions. A recursive walk preserves path values or store-string context in
-its child sources, so serialized plans retain store references. A non-recursive
-directory symlink is one path. Sources are probed only when `recursive = true`,
-so a derivation source is never built at evaluation; a non-recursive directory
-given to `ro` is refused by the engine at runtime (`source must be a file`).
-Collisions are checked after expansion, including ancestor/descendant overlaps.
-The plan contains no per-consumer writer or ledger declaration.
+Manager's recursive link does; `ro` refuses it. Every leaf carries its full
+root-relative path, source, method, format, and permissions. A recursive walk
+preserves path values or store-string context in its child sources, so
+serialized plans retain store references. A non-recursive directory symlink is
+one path. Sources are probed only when `recursive = true`, so a derivation
+source is never built at evaluation; a non-recursive directory given to `ro` is
+refused by the engine at runtime (`source must be a file`). Collisions are
+checked after expansion, including ancestor/descendant overlaps. The plan
+contains no per-consumer writer or ledger declaration.
 
 The desired owned set is derived entirely from enabled map entries: each `ro`
 leaf owns its **full relative path**, and each `rw` document owns its path plus
 the declared key paths. Native backends own `symlink` entries. `enable = false`
 and an empty map contribute no new copy ownership. The engine unions this
 desired set with the previous state, so a former copy remains discoverable at
-N→0. The backend module is installed outside the consumer's enable gate and
-passes `{}` when disabled; the stable namespace lets that empty invocation drain
-the same state. If the integrator removes the module itself, there is no
-activation to drain; module registration is therefore a documented integration
-invariant, not an extra file option.
+N→0. A disabled owner forwards no entries, and the always-imported backend
+module still emits prune; the stable namespace lets that empty plan drain the
+same state. If the integrator removes the module itself, there is no activation
+to drain; module registration is therefore a documented integration invariant,
+not an extra file option.
 
 State lives at
 `${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/files/ai.json` for HM
@@ -134,13 +134,44 @@ version 1 and is not written until something is owned. A second load of version
 payloads are refused before destination mutation; future migrations append to
 the ordered chain.
 
-Both phases also import legacy ownership ledgers named by `--legacy-plan` (found
-under `--legacy-state`) into this state once, before any retirement or write,
-then delete each ledger. Before creating the final state directory or taking the
-namespace lock, the engine also moves the previous state directory when only
-that directory exists; both-present and neither-present cases leave it untouched
-([PR 3 plan](CUTOVER.md), section 5). That import is not a state version; see
-the [PR 3 plan](CUTOVER.md), section 2.2.
+## Legacy ownership import
+
+Owners whose earlier writers kept their own ownership ledgers declare them in
+`ai.<owner>.legacyLedgers` (`{ codec; ledger; path; }`) outside their enable
+gate (runtimes through ungated `migrationConfig`), so a disabled owner still
+drains them; `git grep legacyLedgers` lists every declaration. The backend
+passes the list as `--legacy-plan` and the old state root as `--legacy-state`:
+HM `${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools`, devenv
+`$DEVENV_STATE/nix-agentic-tools`. `ledger` is relative to that root. `path` is
+the root-relative container of a `dir` ledger's units (`.` for root filenames)
+or the document a `json` ledger describes. A `dir` ledger is TSV, one
+`<name>\t<sha256 of the bytes last written>` line per unit; a `json` ledger is
+`{"managed_paths": [[segment, ...], ...], "version": 1}`.
+
+Before creating the final state directory or taking its lock, the engine renames
+`<legacy-state>/files2` to `<legacy-state>/files` when only the first exists.
+When both exist, `files` wins and `files2` stays untouched; when neither exists,
+the move creates nothing.
+
+| Step               | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| When               | Inside reconciliation, under the namespace lock, after loading state and its version chain, before any retirement or write. Both phases run it; prune runs first, so HM retires an imported copy before `checkLinkTargets`.                                                                                                                                                                                                                                            |
+| Trigger            | A listed ledger file exists. It is not a state version: a ledger can coexist with version 1 state after a crash between saving state and deleting the ledger.                                                                                                                                                                                                                                                                                                          |
+| Order              | Ledgers sorted by `ledger`; within one ledger, units sorted.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Skip               | Ledger file absent. A path already in state (state wins, which makes a re-run idempotent). A unit whose destination is absent. A `dir` unit whose destination is a symlink (a native link, not a copy). A `dir` unit name containing `/` or starting with `.`.                                                                                                                                                                                                         |
+| Refuse             | A ledger that is not a regular file; a ledger or unit path that is not root-relative; an undecodable `dir` ledger; a `json` ledger that is not version 1 with distinct nonempty string-list addresses; a destination that is neither a regular file nor (for `dir`) a symlink; a `json` document that does not parse with the JSON codec (leading `//` lines accepted); symlinked parents. The run fails before saving anything for that ledger, and the ledger stays. |
+| `dir` unit → state | Path `<container>/<name>`. Entry `{ method = "ro"; format = "raw"; digest = <witness if 64 hex, else on-disk digest>; mode = <on-disk mode>; created = true; keys = {}; }`.                                                                                                                                                                                                                                                                                            |
+| `json` → state     | Path = container. Entry `{ method = "rw"; format = "json"; digest = <on-disk digest>; mode = <on-disk mode>; created = false; keys = { <JSON Pointer of each recorded address present in the document> = <key digest of its value>; }; }`.                                                                                                                                                                                                                             |
+| Commit             | Validate the merged state, save it atomically, then delete the ledger file. A crash between the two re-imports nothing new (paths already in state) and deletes the ledger next time.                                                                                                                                                                                                                                                                                  |
+| Leave              | `<ledger stem>.bak/` backup directories and `materialize/lock`: user data and an inert lock.                                                                                                                                                                                                                                                                                                                                                                           |
+| Then               | Ordinary reconciliation: an imported path the plan no longer declares retires (copy removed, backup if edited; `rw` keys removed, native keys kept); a declared one follows the overwrite rule. A disabled owner passes an empty plan and the same legacy list, so its old copies drain.                                                                                                                                                                               |
+
+| Case                                                                | Result                                                                                         |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `dir` copy edited locally before the import                         | Witness ≠ disk: the first overwrite or retirement backs it up.                                 |
+| `dir` line whose witness is not 64 hex digits, or a `json` document | The on-disk bytes become the baseline; the first owned change is not backed up.                |
+| Owner's configured directory changed since the ledger               | The ledger name or container no longer matches; it is not imported and its files stay on disk. |
+| Two ledgers list one path                                           | The first in ledger order wins; the later ledger is still deleted.                             |
 
 ## Backend lowering and order
 
@@ -276,43 +307,6 @@ applies to owned copies, including their retirement.
 No-op changes retain the current bytes, including local whitespace; state may
 adopt that full image for later comparisons. At N→0 the plan is empty; prune
 still runs, retires every owned copy and deletes the state file, and no apply is
-generated. A disabled consumer has the same result because its always-installed
-module passes an empty map. An explicit `ro` mode must include the owner read
-bit because retirement compares the current bytes with the installed image
-before draining it.
-
-## Friction hunt
-
-The table groups current declarations by **materialization need**, not by
-runtime name. Every entry below uses only file fields from the schema; the
-namespace is fixed by the base. `method = { devenv = ...; hm = ...; }` is a file
-switch, not backend-specific writer code. These are proposed files declarations,
-not a migration in this project.
-
-| Current need and evidence                                                                                                                                                                                                                                                                | files declaration                                                                                                                                                                    |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Native context, agents, commands, output styles, hooks, rules, and shared AGENTS.md use text/source links: `packages/claude-code/lib/mkClaude.nix:699-752`, `lib/ai/app/sharedAgentsMd.nix:279-292`.                                                                                     | `content.text` or `content.source`; `format = "markdown"` for prose; `method = "symlink"`; hook scripts set `executable = true`.                                                     |
-| Structured settings render to JSON/TOML/YAML native links: `packages/claude-code/lib/mkClaude.nix:680-689`, `packages/chatgpt-codex/lib/mkCodex.nix:1567-1584`, `packages/kiro-cli/lib/mkKiro.nix:1833-1842`.                                                                            | `content.value = settings; format = "json"` (or `"toml"`/`"yaml"`); `method = "symlink"`.                                                                                            |
-| Extension and plugin directories need one native directory link: `packages/kimchi/lib/mkKimchi.nix:599-605`, `packages/claude-code/lib/mkClaude.nix:770-788`.                                                                                                                            | `content.source = directory; recursive = false; method = "symlink"`.                                                                                                                 |
-| Recursive skill leaves and scripts: `lib/ai/hm-helpers.nix:18-62`, `packages/ai-module/lib/files/default.nix:148-168`; one directory link is required by Codex: `packages/chatgpt-codex/lib/mkCodex.nix:1525-1534`.                                                                      | `content.source = skillDir; recursive = true; method = "symlink"` for leaves, or `recursive = false` for Codex's directory link. Source execute bits survive.                        |
-| Project rules must be real files in Claude, Copilot, Kiro; Kiro hooks also require real files: `packages/claude-code/lib/mkClaude.nix:703-730`, `packages/copilot-cli/lib/mkCopilot.nix:28-68`, `packages/kiro-cli/lib/mkKiro.nix:1854-1875`.                                            | `format = "markdown"; method = { devenv = "ro"; hm = "symlink"; }` for rules; hooks use `method = "ro"`. No writer or ledger is stated.                                              |
-| Codex execpolicy and daemon settings, Kimchi agents/settings/trust, Kiro CLI/MCP config are restored owned copies: `packages/chatgpt-codex/lib/mkCodex.nix:720-736`, `:1590-1600`; `packages/kimchi/lib/mkKimchi.nix:620-665`, `:689-718`; `packages/kiro-cli/lib/mkKiro.nix:1789-1827`. | `method = "ro"` with `content.value`, `content.source`, or `content.run`; `format` names JSON/Markdown; secret copies set `mode = "0400"`. The path-keyed state drains nested files. |
-| Harness-written settings merge declared keys, including empty-retirement: `packages/claude-code/lib/mkClaude.nix:784-795`, `packages/kimchi/lib/mkKimchi.nix:455-466`, `:669-672`.                                                                                                       | `method = "rw"; format = "json"; content.value = declaredMap`; an empty map retires previous keys. TOML and YAML use the same switch and codec interface.                            |
-| Credential documents need owner-only permissions: `lib/ai/hm-helpers.nix:150-175`, `packages/claude-code/lib/mkClaude.nix:798-805`.                                                                                                                                                      | `method = "rw"; format = "json"; mode = "0600"` imposes permissions on both new and existing regular documents.                                                                      |
-| Secret-dependent renderers run at activation after provider: `packages/kiro-cli/lib/mkKiro.nix:1757-1763`, `:1813-1827`; `packages/kimchi/lib/mkKimchi.nix:578-589`, `:659-665`.                                                                                                         | `content.run = renderBody; method = "ro"; format = "json"; mode = "0400"` when needed. The HM `sops-nix` edge is automatic.                                                          |
-| N→0 and disabled drain formerly require identities and ledgers outside the enabled file map: `packages/claude-code/lib/mkClaude.nix:170-188`, `packages/copilot-cli/lib/mkCopilot.nix:28-68`, `packages/kiro-cli/lib/mkKiro.nix:650-660`.                                                | Empty `files = {}` or `enable = false`; the library's stable state and always-installed backend module retire recorded paths.                                                        |
-| Unmanaged sibling preservation, modified-copy backup, and identical adoption are current engine contracts: `packages/ai-module/lib/files/engine.py` (`mutate`, `reconcile_ro`, `reconcile_rw`, `retire_rw`).                                                                             | No extra declaration; these are the `ro`/`rw` engine rules above.                                                                                                                    |
-
-Callers state `method = "rw"` for shared state or select a backend-specific
-method for reader constraints. Secret ordering derives from `content.run`. No
-materialization need found in these call sites requires a caller to name a
-writer, ledger, activation entry, task, or state path. Bespoke migration
-commands such as `packages/chatgpt-codex/lib/mkCodex.nix:1538-1563` are outside
-file materialization: files handles future method switches for its own state,
-not historical layouts it never owned.
-
-## Tests and chunk sequence
-
-[The ai-module design](DESIGN.md#pr-2-chunks-and-proof) defines the current
-check ownership, generated fixture matrix and remaining PR 2 chunks. Existing
-checks move beside the owner without changing their names or assertions.
+generated. A disabled owner has the same result: it forwards no entries. An
+explicit `ro` mode must include the owner read bit because retirement compares
+the current bytes with the installed image before draining it.

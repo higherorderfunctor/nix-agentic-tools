@@ -7,7 +7,8 @@ applyTo: "packages/claude-code/packages/ai/claude-code/package.nix,packages/clau
 
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-14 — the personal plugin carries MCP servers only;
+> **Last verified:** 2026-10-16 — plugins are staged entries delivered through
+> the ai-module files layers; the personal plugin carries MCP servers only;
 > unknown native settings and stale warning suppressions use the generic
 > open-keys inspector on both backends; settings are generated from the
 > committed facts in packages/claude-code/extracted/, measured once on Linux;

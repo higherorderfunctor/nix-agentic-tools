@@ -4,15 +4,14 @@
 > discovery was re-probed on 0.161.0; skills are staged entries the ai-module
 > files engine walks. Codex declares its skill migration through activation,
 > before linkCheck on both backends. The repository's committed instruction
-> files are read-only copies the files engine writes, never `files.*` symlinks;
-> the generator's materializer and the AGENTS.md seed are gone. Kiro and Kimchi
-> settings and Codex daemon settings are owned copies; Copilot writes repository
-> instructions only; its agents and skills declare gaps; the files engine writes
-> Claude's project rules. Identical copy bytes with changed permissions are
-> corrected without a backup. Recursive leaf links target one source-tree store
-> root while retaining per-file input contexts. The symlink guard uses devenv's
-> final file target and runs after engine pruning and before native file
-> creation. Recursive expansion belongs only to the files engine.
+> files are read-only copies the files engine writes, never `files.*` symlinks.
+> Kiro and Kimchi settings and Codex daemon settings are owned copies; Copilot
+> writes repository instructions only; its agents and skills declare gaps; the
+> files engine writes Claude's project rules. Identical copy bytes with changed
+> permissions are corrected without a backup. Recursive leaf links target one
+> source-tree store root while retaining per-file input contexts. The symlink
+> guard uses devenv's final file target and runs after engine pruning and before
+> native file creation. Recursive expansion belongs only to the files engine.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -119,16 +118,15 @@ generated instruction files; the engine owns their copies.
 
 ### Silent-fail behavior (important)
 
-The create script has three branches for conflicts. Cases 2 and 3 (existing file
-or non-file at the target path) **log to stderr but do NOT exit non-zero**. The
-`ai.skills` config evaluates fine, the build succeeds, but on disk there's no
-symlink.
+This is upstream behavior for a raw `files.*` entry. For an `ai.*` destination
+`ai:files-guard` refuses the same conflicts before `devenv:files`, so shell
+entry fails loudly instead.
 
-**Consequence for Layout B → A transitions:** if a real directory exists at the
-target path (because an HM activation or a previous devenv run using a
-directory-walking helper laid it down), devenv will log a warning and silently
-skip creating the new directory-link entry. The user sees skills "missing" with
-no clear error.
+The create script has three branches for conflicts. Cases 2 and 3 (existing file
+or non-file at the target path) **log to stderr but do NOT exit non-zero**: the
+config evaluates fine, the build succeeds, but on disk there's no symlink. If a
+real directory exists at the target path, devenv logs a warning and silently
+skips creating the new directory-link entry.
 
 **Detect silent failures in practice:**
 
@@ -246,8 +244,7 @@ Why copies rather than `files.*` symlinks:
 `devenv`'s own `files.<name>.copyMode = "copy"` was considered and rejected: it
 `rm -rf`s and re-`cp`s unconditionally on every entry (a read race plus mtime
 churn), it cannot prune, and it has no ownership record, so it cannot retract a
-file whose rule is removed. The `seed` mode the generator's AGENTS.md used is
-gone with the generator's materializer.
+file whose rule is removed.
 
 Skills still use `files.*` symlinks — they are not tracked. Claude's
 `.claude/settings.json` and `.mcp.json` and Codex's `config.toml` are also store

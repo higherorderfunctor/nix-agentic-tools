@@ -23,7 +23,9 @@ best practices and idiomatic patterns.
   allow per-leaf overrides at normal priority?
 - Is `lib.hasAttrByPath` the right check or should it use `options` instead of
   `config`?
-- Are `home.file` paths correct and won't conflict with other modules?
+- Do modules deliver files and commands only through `ai.<owner>.files` and
+  `ai.<owner>.activation` (no raw `home.file`, `home.activation`, `files` or
+  `tasks`), with final paths that cannot collide with another owner?
 
 ### Overlay Patterns
 

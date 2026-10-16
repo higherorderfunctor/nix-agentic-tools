@@ -9,6 +9,9 @@ to `devenv hook`.
 - **Measured:** 2026-09-22, one machine, `x86_64-linux`.
 - **Versions:** devenv `2.3.2+87edd16`, direnv `2.37.1`. No pass recorded the
   Nix version.
+- **Code paths** are as of the measurement date. Some cited files, such as
+  `lib/ai/materialize.nix`, no longer exist; file delivery is in
+  `packages/ai-module/`.
 - **Shape:** five agents over four measurement passes, appended in order — an
   initial eval-cache probe, a refutation of it, a direnv measurement pass, a
   refutation of that, and a final pass on what `devenv hook` watches. Later

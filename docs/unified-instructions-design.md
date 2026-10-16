@@ -328,11 +328,11 @@ metadata.
 
 ## Codex size guard
 
-- The Codex AGENTS.md that survives final-file arbitration, generated or a
-  consumer replacement (inline or store-backed), is measured on its BUILT file
-  against `ai.codex.projectDocMaxBytes` (32 KiB by default). The limit is keyed
-  by path, and the surviving file is measured in its runtime's generated tree,
-  including when its format is `raw`.
+- The generated Codex AGENTS.md is measured on its BUILT file in its runtime's
+  generated tree against `ai.codex.projectDocMaxBytes` (32 KiB by default). The
+  limit is keyed by path. A consumer replacement lands verbatim and is not
+  measured at build time; Codex launchers warn at runtime when the effective
+  budget truncates project documentation.
 - If over cap: the **tree's build fails**, identifying the file and suggesting a
   replacement, trimming, or raising the cap.
 - Replacement and tombstones discard the lazy generated default before its
@@ -370,12 +370,11 @@ override file.
    - **Codex:** shared/per-app context and rules lower into `~/.codex/AGENTS.md`
      for Home Manager and project-root `AGENTS.md` for devenv. Scoped content
      degrades to explicit prose.
-4. **Codex size guard** — shipped as a build-time byte check on the surviving
-   AGENTS.md after final-file arbitration, run in the install check of the tree
-   that delivers it (including when its format is `raw`), using
+4. **Codex size guard** — shipped as a build-time byte check on the generated
+   AGENTS.md, run in the install check of its generated tree, using
    `ai.codex.projectDocMaxBytes` (32 KiB by default). Tombstones and
    replacements suppress discarded generated content before it is read; a
-   store-backed final source is measured too.
+   replacement is not measured.
 5. **Consumer migration (`nixos-config`)** — out of scope for this repo.
    Consumer can now use
    `ai.kiro.rules = builtins.mapAttrs (…) (builtins.readDir …)` on their own

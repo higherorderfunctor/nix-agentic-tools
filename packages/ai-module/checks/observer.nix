@@ -1,5 +1,5 @@
-# PR 3 chunk 4: the devenv observer (L168, L169). Its graph edges are asserted
-# here; observer.py executes the generated snapshot and inspect tasks on real
+# The devenv observer (`files-snapshot`, `files-inspect`). Its graph edges are
+# asserted here; observer.py executes the generated snapshot and inspect tasks on real
 # directories for layer-1 entries and an unclaimed recursive entry.
 {
   harness,

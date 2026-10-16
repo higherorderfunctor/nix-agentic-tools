@@ -1,4 +1,4 @@
-# Chunk 5a fixture matrix: backend × format × method × shape, generated with
+# Fixture matrix: backend × format × method × shape, generated with
 # cartesianProduct. Evaluation only, through the real backend modules: a valid
 # cell asserts its normalized plan, its sink (native link or engine plan) and
 # its secret edge; an impossible cell asserts its exact named refusal.

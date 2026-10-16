@@ -1053,27 +1053,10 @@
       if hasUrlSecret
       then "${exports}${pkgs.gettext}/bin/envsubst ${lib.escapeShellArg envsubstVars} < ${templateFile}"
       else ''${pkgs.coreutils}/bin/cat ${templateFile}'';
-    # SCOPED in a subshell — required, for two independent reasons:
-    #
-    #   1. Home Manager concatenates every activation DAG entry into ONE script
-    #      that it opens with its own `set -eu` + pipefail. A bare strict-mode
-    #      header here therefore persists into every LATER entry and into home
-    #      manager's own code. The repo Bash standard mandates scoping for
-    #      exactly this reason; this body was the one activation writer not
-    #      following it.
-    #   2. `${exports}` puts a decrypted SECRET in the environment. Unscoped,
-    #      that value stays exported for the remainder of activation, visible to
-    #      every subsequent entry and anything they spawn. A subshell confines it
-    #      to the envsubst that needs it.
-    #
-    # The body has no parent-shell effects to preserve (the exports are
-    # deliberately transient), so scoping costs nothing. Failure still
-    # propagates: the subshell exits non-zero and the caller's `set -e` sees it,
-    # which is why the guards above end in `false` rather than `exit` — `exit`
-    # would truncate the whole concatenated activation script.
-    #
-    # Both materializer backends also isolate render commands. Keeping this
-    # body scoped makes secret lifetime a property of the renderer itself.
+    # Runs as `content.run` in the files engine's own `bash -c`, which adds the
+    # strict header. The subshell only confines the exported secret (and the
+    # `cd`) to the render, so secret lifetime is a property of the renderer
+    # itself. Failure still propagates: the subshell exits non-zero.
   in
     aiCommon.scopedActivation ''
       set -euETo pipefail
