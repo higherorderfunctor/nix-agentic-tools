@@ -86,12 +86,11 @@
         if backend == "hm"
         then config.home.activation
         else config.tasks;
-      apply =
-        graph.${
-          if backend == "hm"
-          then "ai2-files2-apply"
-          else "ai2:files2-apply"
-        };
+      applyName =
+        if backend == "hm"
+        then "ai2-files2-apply"
+        else "ai2:files2-apply";
+      apply = graph.${applyName};
       prune =
         graph.${
           if backend == "hm"
@@ -127,15 +126,20 @@
         else "ai2:link-check"
       )
       prune.before;
-      assert hasRun == lib.elem "fixture-provider" apply.after;
-      assert backend != "hm" || hasRun == lib.elem "sops-nix" apply.after;
-      assert lib.elem (
+      assert (graph ? ${applyName}) == (plan != []);
+      assert plan == [] || hasRun == lib.elem "fixture-provider" apply.after;
+      assert plan == [] || backend != "hm" || hasRun == lib.elem "sops-nix" apply.after;
+      assert plan
+      == []
+      || lib.elem (
         if backend == "hm"
         then "linkGeneration"
         else "ai2:files-linked"
       )
       apply.after;
-      assert lib.elem (
+      assert plan
+      == []
+      || lib.elem (
         if backend == "hm"
         then "ai2-files-ready"
         else "ai2:files-ready"

@@ -85,7 +85,8 @@ with tempfile.TemporaryDirectory() as temporary:
             def activate(name):
                 phase(name, "prune")
                 phase(name, "apply")
-                records = json.loads(state.read_text())["files"]
+                assert state.exists() == bool(steps[name]["plan"])
+                records = json.loads(state.read_text())["files"] if steps[name]["plan"] else {}
                 assert set(records) == {item["path"] for item in steps[name]["plan"]}
                 for item in steps[name]["plan"]:
                     path = root / item["path"]
@@ -106,7 +107,7 @@ with tempfile.TemporaryDirectory() as temporary:
             activate("disabled" if disabled_first else "empty")
             assert (json.loads(target.read_text()) == {"mcpServers": {}} if backend == "hm" and not disabled_first else target.read_bytes() == original)
             if disabled_first:
-                assert json.loads(state.read_text())["files"] == {}
+                assert not state.exists()
                 print(f"PASS: {backend} disabled-first: all legacy ledgers drained, foreign files preserved")
                 continue
             activate("plain")
