@@ -81,12 +81,11 @@
           if isHm
           then config.home.activation
           else config.tasks;
-        apply =
-          graph.${
-            if isHm
-            then "ai2-files2-apply"
-            else "ai2:files2-apply"
-          };
+        applyName =
+          if isHm
+          then "ai2-files2-apply"
+          else "ai2:files2-apply";
+        apply = graph.${applyName};
         prune =
           graph.${
             if isHm
@@ -163,9 +162,12 @@
           else "ai2:link-check"
         )
         prune.before;
-        assert hasRun == lib.elem "fixture-provider" apply.after;
-        assert !isHm || hasRun == lib.elem "sops-nix" apply.after;
-        assert lib.elem (
+        assert (graph ? ${applyName}) == (plan != []);
+        assert plan == [] || hasRun == lib.elem "fixture-provider" apply.after;
+        assert plan == [] || !isHm || hasRun == lib.elem "sops-nix" apply.after;
+        assert plan
+        == []
+        || lib.elem (
           if isHm
           then "linkGeneration"
           else "ai2:files-linked"

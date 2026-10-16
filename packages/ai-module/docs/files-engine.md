@@ -22,6 +22,9 @@ production consumer imports it yet.
 | `recursive`      | `bool`                                                                                     | `false`     | Expand a source directory into leaves at any depth; otherwise a directory source is one native directory symlink. |
 | `requires`       | `listOf package`, internal                                                                 | `[]`        | Derivations built before delivery, never read: their string context rides on each delivered leaf after the walk.  |
 
+`requires` accepts packages and exposes context-bearing store paths, preserving
+build dependencies without traversing recursive derivation metadata.
+
 The submodule keeps text/source/value/run as nullable sibling options. After
 each sibling merges its own definitions, normalization walks the siblings from
 the lowest numeric `options.content.<field>.highestPrio`, skips a priority whose

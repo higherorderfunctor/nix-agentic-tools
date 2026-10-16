@@ -1088,7 +1088,7 @@ in {
       in
         devenv.config.files ? ".kimchi/hooks.json"
         && devenv.config.ai.files2.".kimchi/hooks.json".method == "symlink"
-        && devenv.config.ai.files2.".kimchi/hooks.json".requires == [devenv.config.ai.kimchi._generatedTree]
+        && devenv.config.ai.files2.".kimchi/hooks.json".requires == ["${devenv.config.ai.kimchi._generatedTree}"]
         && fileValue ".kimchi/hooks.json" devenv
         == {
           hooks = {

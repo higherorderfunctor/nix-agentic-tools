@@ -82,7 +82,8 @@ with tempfile.TemporaryDirectory() as temporary:
                 def activate(name):
                     phase(name, "prune")
                     phase(name, "apply")
-                    records = json.loads(state.read_text())["files"]
+                    assert state.exists() == bool(steps[name]["plan"])
+                    records = json.loads(state.read_text())["files"] if steps[name]["plan"] else {}
                     assert set(records) == {item["path"] for item in steps[name]["plan"]}
                     for item in steps[name]["plan"]:
                         target = root / item["path"]
@@ -118,7 +119,7 @@ with tempfile.TemporaryDirectory() as temporary:
                     for entry in legacy:
                         if entry["codec"] == "json":
                             assert json.loads((root / entry["path"]).read_text()) == {"native": "keep"}
-                    assert json.loads(state.read_text())["files"] == {}
+                    assert not state.exists()
                 elif scenario == "legacy":
                     mcp = harness / "mcp.json" if backend == "hm" else root / ".kimchi/mcp.json"
                     mcp.parent.mkdir(parents=True, exist_ok=True)
