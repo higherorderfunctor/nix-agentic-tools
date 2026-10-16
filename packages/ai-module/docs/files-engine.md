@@ -4,8 +4,8 @@
 
 The file schema and engine rules below remain the contract for the moved
 implementation. [The ai-module design](DESIGN.md) defines its owner, generic
-options and backend lowering. The generic `ai.files2` option owns the map; no
-production consumer imports it yet.
+options and backend lowering. The generic `ai.files2` option owns the map;
+runtime producers forward their entries through the layer-1 helper.
 
 | Option           | Nix type                                                                                   | Default     | Meaning                                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -134,7 +134,7 @@ version 1 and is not written until something is owned. A second load of version
 payloads are refused before destination mutation; future migrations append to
 the ordered chain.
 
-Both phases also import the old `own.py` ledgers named by `--legacy-plan` (found
+Both phases also import legacy ownership ledgers named by `--legacy-plan` (found
 under `--legacy-state`) into this state once, before any retirement or write,
 then delete each ledger. That import is not a state version; see the
 [PR 3 plan](CUTOVER.md), section 2.2.
@@ -291,23 +291,22 @@ declarations, not a migration in this project.
 | Native context, agents, commands, output styles, hooks, rules, and shared AGENTS.md use text/source links: `packages/claude-code/lib/mkClaude.nix:699-752`, `lib/ai/app/sharedAgentsMd.nix:279-292`.                                                                                     | `content.text` or `content.source`; `format = "markdown"` for prose; `method = "symlink"`; hook scripts set `executable = true`.                                                     |
 | Structured settings render to JSON/TOML/YAML native links: `packages/claude-code/lib/mkClaude.nix:680-689`, `packages/chatgpt-codex/lib/mkCodex.nix:1567-1584`, `packages/kiro-cli/lib/mkKiro.nix:1833-1842`.                                                                            | `content.value = settings; format = "json"` (or `"toml"`/`"yaml"`); `method = "symlink"`.                                                                                            |
 | Extension and plugin directories need one native directory link: `packages/kimchi/lib/mkKimchi.nix:599-605`, `packages/claude-code/lib/mkClaude.nix:770-788`.                                                                                                                            | `content.source = directory; recursive = false; method = "symlink"`.                                                                                                                 |
-| Recursive skill leaves and scripts: `lib/ai/hm-helpers.nix:18-62`, `lib/ai/formats.nix:30-68`; one directory link is required by Codex: `packages/chatgpt-codex/lib/mkCodex.nix:1525-1534`.                                                                                              | `content.source = skillDir; recursive = true; method = "symlink"` for leaves, or `recursive = false` for Codex's directory link. Source execute bits survive.                        |
+| Recursive skill leaves and scripts: `lib/ai/hm-helpers.nix:18-62`, `packages/ai-module/lib/files/default.nix:148-168`; one directory link is required by Codex: `packages/chatgpt-codex/lib/mkCodex.nix:1525-1534`.                                                                      | `content.source = skillDir; recursive = true; method = "symlink"` for leaves, or `recursive = false` for Codex's directory link. Source execute bits survive.                        |
 | Project rules must be real files in Claude, Copilot, Kiro; Kiro hooks also require real files: `packages/claude-code/lib/mkClaude.nix:703-730`, `packages/copilot-cli/lib/mkCopilot.nix:28-68`, `packages/kiro-cli/lib/mkKiro.nix:1854-1875`.                                            | `format = "markdown"; method = { devenv = "ro"; hm = "symlink"; }` for rules; hooks use `method = "ro"`. No writer or ledger is stated.                                              |
 | Codex execpolicy and daemon settings, Kimchi agents/settings/trust, Kiro CLI/MCP config are restored owned copies: `packages/chatgpt-codex/lib/mkCodex.nix:720-736`, `:1590-1600`; `packages/kimchi/lib/mkKimchi.nix:620-665`, `:689-718`; `packages/kiro-cli/lib/mkKiro.nix:1789-1827`. | `method = "ro"` with `content.value`, `content.source`, or `content.run`; `format` names JSON/Markdown; secret copies set `mode = "0400"`. The path-keyed state drains nested files. |
 | Harness-written settings merge declared keys, including empty-retirement: `packages/claude-code/lib/mkClaude.nix:784-795`, `packages/kimchi/lib/mkKimchi.nix:455-466`, `:669-672`.                                                                                                       | `method = "rw"; format = "json"; content.value = declaredMap`; an empty map retires previous keys. TOML and YAML use the same switch and codec interface.                            |
 | Credential documents need owner-only permissions: `lib/ai/hm-helpers.nix:150-175`, `packages/claude-code/lib/mkClaude.nix:798-805`.                                                                                                                                                      | `method = "rw"; format = "json"; mode = "0600"` imposes permissions on both new and existing regular documents.                                                                      |
 | Secret-dependent renderers run at activation after provider: `packages/kiro-cli/lib/mkKiro.nix:1757-1763`, `:1813-1827`; `packages/kimchi/lib/mkKimchi.nix:578-589`, `:659-665`.                                                                                                         | `content.run = renderBody; method = "ro"; format = "json"; mode = "0400"` when needed. The HM `sops-nix` edge is automatic.                                                          |
 | N→0 and disabled drain formerly require identities and ledgers outside the enabled file map: `packages/claude-code/lib/mkClaude.nix:170-188`, `packages/copilot-cli/lib/mkCopilot.nix:28-68`, `packages/kiro-cli/lib/mkKiro.nix:650-660`.                                                | Empty `files2 = {}` or `enable = false`; the library's stable state and always-installed backend module retire recorded paths.                                                       |
-| Unmanaged sibling preservation, modified-copy backup, and identical adoption are current reconciler contracts: `lib/ai/own.py:305-405`, `:751-854`.                                                                                                                                      | No extra declaration; these are the `ro`/`rw` engine rules above.                                                                                                                    |
+| Unmanaged sibling preservation, modified-copy backup, and identical adoption are current engine contracts: `packages/ai-module/lib/files/engine.py` (`mutate`, `reconcile_ro`, `reconcile_rw`, `retire_rw`).                                                                             | No extra declaration; these are the `ro`/`rw` engine rules above.                                                                                                                    |
 
-The hunt removed three proposed caller fields: `facts.harnessWrites` (state
-`method = "rw"`), `facts.symlinkReadable` (state the backend-specific `method`),
-and `afterSecrets` (derived from `content.run`). No materialization need found
-in these call sites requires a caller to name a writer, ledger, activation
-entry, task, or state path. Bespoke migration commands such as
-`packages/chatgpt-codex/lib/mkCodex.nix:1538-1563` are outside file
-materialization: files2 handles future method switches for its own state, not
-historical layouts it never owned.
+Callers state `method = "rw"` for shared state or select a backend-specific
+method for reader constraints. Secret ordering derives from `content.run`. No
+materialization need found in these call sites requires a caller to name a
+writer, ledger, activation entry, task, or state path. Bespoke migration
+commands such as `packages/chatgpt-codex/lib/mkCodex.nix:1538-1563` are outside
+file materialization: files2 handles future method switches for its own state,
+not historical layouts it never owned.
 
 ## Tests and chunk sequence
 

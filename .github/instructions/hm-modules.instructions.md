@@ -15,7 +15,8 @@ applyTo: "packages/*/modules/homeManager/**"
 > skill source before the files engine walks it; Kiro is gated by
 > `ai.kiro.cli.enable`; factories read the derived, read-only `ai.kiro.enable`;
 > `ai.copilot` is github.com Copilot, with pools under `ai.copilot.github` and
-> no launcher.
+> no launcher. ai-module supplies the sole file writer and its ordered prune and
+> apply entries; legacy ledgers remain available for upgrades.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -83,7 +84,7 @@ config = mkMerge [
 
 **No per-CLI block flips an upstream `programs.<cli>.enable`.** Every runtime
 installs its package through the shared backend transform and delivers its files
-through `ai.<runtime>.files`, so a consumer sets the launcher switch once and
+through `ai.<runtime>.files2`, so a consumer sets the launcher switch once and
 there is no second module to import, enable or keep in step.
 
 ### Assertion conventions
@@ -186,18 +187,12 @@ an already-enabled Codex; it never enables Codex itself.
 home.activation.<name> = lib.hm.dag.entryAfter ["linkGeneration"] (script);
 ```
 
-All file-writing/merging activation scripts run `entryAfter ["linkGeneration"]`,
-i.e. after HM has actually linked the generation's files into the home
-directory. `entryAfter ["writeBoundary"]` is NOT sufficient for that:
-`writeBoundary` is a sibling of `linkGeneration` (order between siblings comes
-from `lib.toposort`), so a writeBoundary-ordered script can run before
-`home.file` entries exist on disk. The `entryBefore` users all come from one
-function: `lib/ai/own.nix` gives every bundle holding a `dir` target a prune
-entry at `entryBefore ["checkLinkTargets"]` (Kiro's hooks and `settings`
-directory), which must clear a real file flipping to a symlink before HM checks
-link targets. A document-only bundle has no prune entry, because a document's
-retraction and its assertion are one read-modify-write that must not be split
-across two processes.
+File application runs after `linkGeneration`, once Home Manager has linked the
+generation into the home directory. `writeBoundary` alone does not establish
+that ordering. ai-module supplies `files2-prune` before `checkLinkTargets` and
+`files2-apply` after linking; apply depends on prune. Prune clears a retiring
+copy before a native link checks its destination. Producers state entries and
+abstract activation points rather than declaring writer bundles.
 
 **NEVER use `exit` as a short-circuit.** `home.activation.<name>` blocks are
 **inlined** into a single outer bash script at
@@ -246,8 +241,7 @@ provenance is unknown. `files2-rw-runtime`, `ai-activation-settings-mode` and
 
 The files engine publishes each file atomically and saves ownership state for
 idempotent re-runs. It has no activation rollback or compare-and-swap retry for
-concurrent native writers; those are outside the engine MVP. The old `own.py`
-race tests remain synthetic old-engine coverage until chunk 12 removes it.
+concurrent native writers; those are outside the engine MVP.
 
 A new `rw` document defaults to 0600; an existing one loses group/other access.
 Claude also declares `activation2.claude-config-mode` after `materialized`,
@@ -455,8 +449,8 @@ protection via the eval harness.
 HM activation against real consumer state (e.g., the Nix path type strictness
 bug below). A diff that changes the body of a `home.activation.<name>` block,
 adds or removes a `home.file` entry, or changes literal-file lowering in
-`lib/ai/runtime-files.nix` is therefore NOT fully covered by a green
-`nix flake check`.
+`packages/ai-module/lib/files/backend.nix` is therefore NOT fully covered by a
+green `nix flake check`.
 
 **Do not run `home-manager switch` yourself — it mutates the operator's live
 system.** Instead add a line to the PR description naming the activation entries

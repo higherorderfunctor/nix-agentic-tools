@@ -16,7 +16,8 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 > The Codex permission-mix assertions and runtime PATH provenance are
 > consumer-wide shell-entry warnings, not repository enterTest loops. The
 > repository shell sets no harness permissions; contributors choose them in
-> their user config.
+> their user config. The old ownership writer and verification hook are removed;
+> files-engine runtime checks cover delivery independently.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 
@@ -27,8 +28,9 @@ operator-chosen diagnostic cost, not an automatic merge-path cost. The required
 previously justified the runtime workflow:
 
 - `instructions-drift` compares the committed instruction files with what the
-  repository's `ai.*` writers deliver, and `ai-own-runtime` proves the copy
-  writer's real-file type, mode, idempotence, adoption and pruning;
+  repository's `ai.*` entries deliver; `files2-ro-runtime` and
+  `ai-module-transitions` prove copy type, mode, idempotence, adoption and
+  retirement;
 - `isolate-prek-hooks` executes the exact shared-hook rewriter in primary and
   linked worktrees;
 - `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
@@ -44,10 +46,10 @@ skill directories.
 
 The repository no longer repeats instruction-file and Claude settings delivery
 assertions in `enterTest`. ai-module's checks pin where the files plan lands
-each file and by which method. `lib/ai/adapters/devenv.nix` also contributes
-`own.py --verify` for owned copies, including their real-file requirement. That
-verification still runs only when `devenv test` is invoked; the flake checks
-test delivery independently of a developer's checkout.
+each file and by which method. Runtime checks execute the files engine on real
+temporary directories, independently of a developer's checkout. The devenv
+observer reports absent or changed native links without failing shell entry; it
+reads the normalized plan and native link list only.
 
 `devenv.nix` still evaluates an `isCI` branch for the manual diagnostic. It
 omits tooling that enterTest never invokes, but it does not alter repository
@@ -200,8 +202,8 @@ this paragraph would rot the next time one is added.)
 > Claude's project rules. Identical copy bytes with changed permissions are
 > corrected without a backup. Recursive leaf links target one source-tree store
 > root while retaining per-file input contexts. The symlink guard uses devenv's
-> final file target, follows its own runtime's writers before file creation, and
-> reports every conflict before failing.
+> final file target and runs after engine pruning and before native file
+> creation. Recursive expansion belongs only to the files engine.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -290,33 +292,21 @@ createSymlinkScript = filename: fileOption: ''
 No recursion in this branch — one `ln -s` per entry. Upstream
 `src/modules/files.nix:115` updates with `ln -sf` without `-n`: an existing link
 to a directory is followed, so a changed target attempts to create a link inside
-the old read-only store directory and fails. The delivery router's devenv-only
-`ai:<runtime>:guard-symlink-updates` task uses its lowered symlink entries to
-unlink only changed links whose current target is under `/nix/store/`. It fails
-loudly on a real file or directory at a delivered path, where devenv would only
-warn and skip the entry. For a non-store link, devenv ran `ln -sf` without `-n`:
-a link to a file, or a dangling link, was replaced, but a link to a writable
-directory was followed, leaving the old link and adding a stray link inside that
-directory. The guard now refuses both. The guard runs after
-`devenv:files:cleanup` and all owned and command writers of its runtime ordered
-before `devenv:files`, then before `devenv:files`. There is one guard per
-runtime with symlink entries; no file-type probing is needed. A cross-owner
-handoff from an owned copy to a symlink can fail the guard for one shell entry
-until the other owner's retraction has run. Its desired target is
-`config.files.<path>.file` for entries whose final `copyMode` is `symlink`,
-including devenv's executable wrapper, rather than the source-tree path. The
-guard reports every offending path before failing. A failed guard makes
-`devenv:files` and `devenv:enterShell` `DependencyFailed`: shell entry continues
-with a warning, but no `files.*` entry from any runtime or the user is created
-or updated, and `devenv test` fails.
+the old read-only store directory and fails. ai-module's one `files2-guard`
+checks desired native destinations after engine pruning and pre-link commands,
+and before `devenv:files`. It accepts the desired store link, removes changed
+store links, and refuses regular files, directories, special files, non-store
+links and symlinked parents. The desired target is `config.files.<path>.file`,
+including devenv's executable wrapper. Removed links remain devenv's cleanup
+responsibility. A failed guard prevents native file creation and shell entry
+reports the failed dependency.
 
 The other branch does recurse. `createCopyScript` drops a previous
 store-symlink, then materializes with `cp -RL` followed by `chmod -R u+w`, so a
 directory source is copied through and the result is WRITABLE. `copyMode`
 accepts `symlink` (default), `seed` (create only when absent, preserving user
-edits) and `copy` (overwrite every entry). This repo uses `seed` only for the
-generated `AGENTS.md` ownership handoff described below. Repeated overwrite mode
-remains rejected.
+edits) and `copy` (overwrite every entry). This repo uses neither mode for
+generated instruction files; the engine owns their copies.
 
 ### Silent-fail behavior (important)
 
@@ -353,7 +343,7 @@ delivery guard handles changed store-link targets. It **only removes symlinks**
 transitions get stuck: orphan cleanup can't clear a real dir that a previous
 generation laid down.
 
-### The user-space walker (the delivery router's one walk)
+### The files engine's recursive walk
 
 To produce Layout B (a directory containing per-file symlinks) via the `files`
 option, split one logical "skill directory" into N
@@ -375,14 +365,10 @@ Key behaviors:
   dirs.
 - Does NOT need IFD. It's pure `readDir` on paths the flake already tracks.
 
-The implementation lives in `lib/ai/formats.nix:walk`, called by
-`lib/ai/deliver.nix` for any delivery entry with `recursive = true` on the
-devenv backend. A factory therefore declares the tree ONCE, with a directory
-source, and each backend expands it its own way — this walk, or Home Manager's
-native recursion. It replaced three hand-written copies of the same recursion
-(the skill helper, its devenv twin, and kiro's inline agents-directory walker).
-Skills no longer take it: `mkSkillFiles` stages them, and the ai-module files
-engine walks them on both backends (`dev/fragments/ai-skills`).
+The implementation lives in `packages/ai-module/lib/files/default.nix:walk`. A
+producer stages one recursive directory source; the files engine expands it into
+leaves for both backends. `mkSkillFiles` uses that staging path. There is no
+separate backend walker.
 
 The walk separates traversal identity from target identity. It traverses the
 original source, interpolates that directory once, and points every native leaf
@@ -412,15 +398,10 @@ HM's `home.file.<name>` submodule has a `recursive` field
 (`home-manager/modules/files.nix`). When `source` is a directory and
 `recursive = true`, HM's activation script walks the directory and creates
 per-file symlinks inside a real subdirectory at `<name>`, with state tracking
-per file. Our old-path delivery entries use it for Layout B consumers: the
-adapter passes `recursive` straight through to `home.file`. Skills no longer do;
-they arrive as per-leaf files-engine links on Home Manager too. Codex
-deliberately uses a non-recursive source instead, producing the same
-whole-directory link as devenv.
-
-devenv chose a simpler, flatter model without recursive support. Not a bug; a
-deliberate design difference. The user-space walker restores parity at the cost
-of eval-time directory walks.
+per file. This repository instead gives Home Manager per-leaf links already
+expanded by the files engine. Codex deliberately uses a non-recursive source,
+producing the same whole-directory link as devenv. Shared expansion gives both
+backends the same leaf inventory.
 
 ### Upstream PR opportunity
 

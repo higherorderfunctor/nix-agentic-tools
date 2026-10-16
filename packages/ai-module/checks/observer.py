@@ -10,10 +10,8 @@ import tempfile
 LEDGER = "ai-delivery-observed.json"
 # The option each observed path is reported under, by delivery path.
 OPTIONS = {
-    "moved.json": 'ai.*.files."moved.json"',
+    "moved.json": 'ai.codex.files2."moved.json"',
     "new.md": 'ai.codex.files2."new.md"',
-    "old.md": 'ai.*.files."old.md"',
-    "probe": 'ai.*.files."probe"',
     "tree/nested/deep/leaf.md": 'ai.files2."tree"',
 }
 
@@ -56,11 +54,11 @@ def main():
         ledger = state / LEDGER
 
         # Snapshot keeps only owned names from devenv's previous link list.
-        (state / "files.json").write_text(json.dumps({"managedFiles": ["old.md", "consumer.md", "unrelated"]}))
+        (state / "files.json").write_text(json.dumps({"managedFiles": ["new.md", "consumer.md", "unrelated"]}))
         run(bash, before["snapshot"], root, state)
-        assert json.loads(ledger.read_text()) == {"old.md": {"option": OPTIONS["old.md"]}}
+        assert json.loads(ledger.read_text()) == {"new.md": {"option": OPTIONS["new.md"]}}
 
-        # Delivered as declared: silent. The seeded copy is never inspected.
+        # Delivered as declared: silent. Unclaimed native links are never inspected.
         link(root, before["links"])
         run(bash, before["inspect"], root, state)
         assert set(OPTIONS) <= set(json.loads(ledger.read_text())) and "consumer.md" not in json.loads(ledger.read_text())
@@ -80,9 +78,8 @@ def main():
             link(root, {name: before["links"][name]})
 
         # Retired: user content in place of each link is reported, kept, and
-        # reported again. The consumer's `probe` and the engine's owned
-        # `moved.json` copy are not removals.
-        retired = [name for name in OPTIONS if name not in ("moved.json", "probe")]
+        # reported again. The engine's owned `moved.json` copy is not a removal.
+        retired = [name for name in OPTIONS if name != "moved.json"]
         # What devenv cleanup does to the links `after` no longer declares.
         for name in set(before["links"]) - set(after["links"]):
             clear(root / name)

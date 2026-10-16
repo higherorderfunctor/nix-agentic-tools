@@ -94,7 +94,7 @@
     };
     config._contentPrio = options.content.highestPrio;
   });
-  # An `own.py` ledger the engine imports into its state once.
+  # A legacy ownership ledger the engine imports into its state once.
   legacyLedgerType = types.submodule {
     options = {
       codec = mkOption {type = types.enum ["dir" "json"];};

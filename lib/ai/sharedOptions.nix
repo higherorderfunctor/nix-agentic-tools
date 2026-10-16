@@ -17,7 +17,7 @@
   aiCommon = import ./ai-common.nix {inherit lib;};
   agent = import ./agent.nix {inherit lib;};
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
-  deliveryOptions = import ./delivery-options.nix {inherit lib;};
+  inherit (import ./app/generatedFiles.nix {inherit lib pkgs;}) surfaces;
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
   formatter =
@@ -38,7 +38,6 @@
     (pkgs // {ai = config.ai.internal.packages;})
     formatter.programs.prettier.enable;
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
-  runtimeFiles = import ./runtime-files.nix {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
@@ -155,13 +154,6 @@
     '';
   };
   sandboxSafeSshCommand = lib.getExe sandboxSafeSsh;
-  livePaths = isLive: files:
-    lib.mapAttrsToList
-    (path: entry:
-      if entry.recursive
-      then "${path}/**"
-      else path)
-    (lib.filterAttrs (_path: isLive) files);
   # One registration declares every shared fanout surface and supplies the
   # decompose step with its names. Adding a declaration here automatically
   # warns for every enabled runtime whose surfaceSupport omits it.
@@ -404,18 +396,6 @@ in {
   options.ai =
     sharedSurfaceOptions
     // {
-      deliveredPaths = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        readOnly = true;
-        description = ''
-          Target-relative paths delivered by every enabled runtime, with
-          recursive directory entries represented as `<directory>/**`. Devenv
-          adds these paths to its repository treefmt excludes automatically;
-          other module consumers can reference this read-only list from their
-          own formatter configuration.
-        '';
-      };
-
       formatter = lib.mkOption {
         type = lib.types.deferredModule;
         default = {};
@@ -452,7 +432,7 @@ in {
             '';
           };
         }
-        // lib.genAttrs deliveryOptions.surfaces (surface:
+        // lib.genAttrs surfaces (surface:
           lib.mkOption {
             type = lib.types.lines;
             default = config.ai.checks.all;
@@ -634,16 +614,6 @@ in {
       # declares those options, so it is the one place with nowhere else to
       # expand to.
       ai = {
-        deliveredPaths = lib.unique (
-          lib.concatMap
-          (name:
-            lib.optionals (lib.attrByPath ["ai" name "enable"] false config)
-            (livePaths runtimeFiles.isLive (lib.attrByPath ["ai" name "files"] {} config)))
-          harnessNames
-          # The layers' plan: enabled owners, the shared AGENTS.md composer
-          # among them, forward their staged entries here.
-          ++ livePaths (entry: entry.enable) config.ai.files2
-        );
         rules = lib.mkIf (config.ai.rulesDir != null) (
           lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)
         );

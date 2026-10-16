@@ -332,25 +332,25 @@
       # and the backend links it read-only. The engine copies neither and no
       # writer reconciles either, so an in-app change does not persist, and
       # disabling Claude drops the link.
-      (perBackend "settings-and-mcp-are-read-only-links" (arm: let
-        cfg = enable: {
-          ai.claude = {
-            inherit enable;
-            mcpServers.remote = {
-              type = "http";
-              url = "https://example.invalid/mcp";
+      (perBackend "settings-and-mcp-are-read-only-links" (
+        arm: let
+          cfg = enable: {
+            ai.claude = {
+              inherit enable;
+              mcpServers.remote = {
+                type = "http";
+                url = "https://example.invalid/mcp";
+              };
+              native.settings.effortLevel = "low";
             };
-            native.settings.effortLevel = "low";
           };
-        };
-        on = arm.eval (cfg true);
-        off = arm.eval (cfg false);
-        paths = [".claude/settings.json" arm.mcpPath];
-      in
-        lib.all (path: (arm.files on.config) ? ${path} && !((arm.files off.config) ? ${path})) paths
-        && lib.all (path: on.config.ai.files2.${path}.method == "symlink") paths
-        && lib.all (writer: writer.ledgers == {} || lib.all (ledger: !(lib.elem ledger.path paths)) (lib.attrValues writer.ledgers))
-        (lib.attrValues on.config.ai.claude.activation)))
+          on = arm.eval (cfg true);
+          off = arm.eval (cfg false);
+          paths = [".claude/settings.json" arm.mcpPath];
+        in
+          lib.all (path: (arm.files on.config) ? ${path} && !((arm.files off.config) ? ${path})) paths
+          && lib.all (path: on.config.ai.files2.${path}.method == "symlink") paths
+      ))
 
       # Nothing set, nothing written: an empty settings.json would still
       # shadow a project's own committed file on devenv.
@@ -718,10 +718,8 @@ in {
           devenvStaged = shared ++ [".mcp.json"];
           linked = files: lib.all (path: files ? ${path} || lib.any (lib.hasPrefix "${path}/") (builtins.attrNames files));
         in
-          hm.ai.claude.files
-          == {}
-          && devenv.ai.claude.files == {}
-          && builtins.attrNames hm.ai.claude._generatedFiles == lib.sort lib.lessThan hmStaged
+          builtins.attrNames hm.ai.claude._generatedFiles
+          == lib.sort lib.lessThan hmStaged
           && builtins.attrNames devenv.ai.claude._generatedFiles == lib.sort lib.lessThan devenvStaged
           && linked hm.home.file (lib.remove ".claude.json" hmStaged)
           && linked devenv.files (lib.remove ".claude/rules/probe.md" devenvStaged)
@@ -879,73 +877,6 @@ in {
         in
           (unpinDocument result).value.unpinOpus48LaunchEffort == false
       );
-
-      # The generic old document codec remains here; Claude's real engine
-      # activations are exercised by ai-activation-settings-mode in ai-module.
-      #
-      # `harness.hmLib` rather than `lib`: `own` places its entry with
-      # `lib.hm.dag`, which only the harness stubs.
-      module-json-settings-reconciliation = let
-        helpers = import ../../../lib/ai/hm-helpers.nix {lib = harness.hmLib;};
-        # Every `render` here reads an HM activation entry's `.text`, which
-        # expects home-manager's `run` helper already in scope.
-        mkCase = name: configFile: first: second: native: render: {
-          inherit configFile first name native second;
-          scripts = map (settings: harness.hmRunShim + render settings) [first second {}];
-        };
-        cases = [
-          ((mkCase "document" ".settings with spaces/config.json" {
-                array = [{enabled = true;}];
-                "dot.key" = true;
-                nested.managed = true;
-                nullable = null;
-                retained = 1;
-                shape = "scalar";
-              } {
-                retained = 2;
-                shape.child = true;
-              } {
-                nested.native = "survives";
-                oauthAccount.token = "native-test-token";
-              } (settings:
-                # The codec, not a caller: a space in the path, a dotted key, a
-                # null leaf, an array and a scalar/table transition, none of which
-                # any real caller declares all at once. `runtime` only decides
-                # where the eval-visible record lands, and this case reads the
-                # writer alone.
-                  (helpers.mkOwnBundle {
-                    backend = "hm";
-                    declared.".settings with spaces/config.json" = settings;
-                    entryNames.write = "documentCodecTest";
-                    python = pkgs.python3;
-                    runtime = "claude";
-                    targets = [
-                      {
-                        codec = "json";
-                        ledger = "json-settings/document-codec-test.json";
-                        path = ".settings with spaces/config.json";
-                        units.text = builtins.toJSON settings;
-                      }
-                    ];
-                    inherit pkgs;
-                  })
-            .home
-            .activation
-            .documentCodecTest
-            .text))
-            # An application may head its JSON with `//` comment lines, which
-            # the reconciler must read past and keep.
-            // {
-              header = "// User settings belong in settings.json.\n// This file is managed automatically.\n";
-            })
-        ];
-      in
-        pkgs.runCommand "module-test-json-settings-reconciliation" {} ''
-          ${pkgs.python3}/bin/python ${./json-settings-runtime.py} \
-            ${pkgs.writeText "json-settings-cases.json" (builtins.toJSON cases)} \
-            ${pkgs.bash}/bin/bash
-          touch "$out"
-        '';
 
       # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
 

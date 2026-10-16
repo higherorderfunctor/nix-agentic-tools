@@ -223,7 +223,7 @@
     lib.foldl' lib.recursiveUpdate {
       ai.claude = {
         enable = true;
-        files.".claude/settings.json".content.enable = false;
+        files2.".claude/settings.json".enable = false;
         rules.heading.text = "#   Heading";
       };
       ai.programs = lib.genAttrs ["delegate-routing" "kimchi-docs" "stacked-workflows"] (_: {enable = true;});

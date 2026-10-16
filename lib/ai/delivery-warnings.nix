@@ -23,7 +23,6 @@
   generatedReplaced ? _path: false,
 }: let
   aiCommon = import ./ai-common.nix {inherit lib;};
-  runtimeFiles = import ./runtime-files.nix {inherit lib;};
   policy = import ../../config/ai-delivery.nix {inherit lib;};
   runtime = appRecord.name;
   cfg = config.ai.${runtime};
@@ -141,29 +140,13 @@
         else "This HTTP MCP field is not rendered for stdio."
       ))
     ignored) (entries "mcpServers");
-  # A context or rule unit whose file is switched off or replaced. The unit
-  # was requested and resolved, and the file that would carry it either has
-  # `content.enable = false` or carries a consumer's own bytes instead of the
-  # generated ones, so nothing delivers it: the drop that used to be silent.
-  # A replacement is recognized by the `_generated` marker every generator
-  # sets inside its own `content` definition, which any consumer `content`
-  # definition discards whole (lib/ai/delivery-options.nix).
-  #
-  # During coexistence the old shared entry supplies staged content and
-  # default liveness. Final shared overrides arbitrate in ai.files2 below.
-  finalEntry = path:
-    if builtins.elem path sharedTargets
-    then config.ai.internal.files.${path} or null
-    else cfg.files.${path} or null;
-  switchedOff = entry: !(runtimeFiles.isLive entry);
-  replaced = entry: runtimeFiles.isLive entry && !(entry.content._generated or false);
-  overridingRuntime = files: test: path: let
+  overridingRuntime = test: path: let
     overrides = name: let
       other = config.ai.${name} or {};
     in
       (other.enable or false)
-      && (other.${files} or {}) ? ${path}
-      && test other.${files}.${path};
+      && (other.files2 or {}) ? ${path}
+      && test other.files2.${path};
     candidates = builtins.attrNames (config.ai.internal.agentsMdTargets or {});
   in
     if builtins.elem path sharedTargets
@@ -182,7 +165,7 @@
       if shared
       then entry._contentPrio < (lib.mkDefault null).priority
       else generatedReplaced path;
-    owner = overridingRuntime "files2" (candidate:
+    owner = overridingRuntime (candidate:
       if !entry.enable
       then !candidate.enable
       else candidate._contentPrio == entry._contentPrio)
@@ -194,34 +177,11 @@
     else if contentReplaced
     then "${option ["content"]} replaces `${path}`, the file that carries it, with its own bytes"
     else null;
-  # The reason a unit's file does not carry it, or null when it does.
-  legacyDropReason = path: let
-    entry = finalEntry path;
-    option = test: suffix: lib.showOption (["ai" (lib.defaultTo runtime (overridingRuntime "files" test path)) "files" path] ++ suffix);
-  in
-    if entry == null
-    then null
-    else if switchedOff entry
-    then "${option switchedOff ["content" "enable"]} = false switches off `${path}`, the file that carries it"
-    else if replaced entry
-    then "${option replaced ["content"]} replaces `${path}`, the file that carries it, with its own bytes"
-    else null;
+  # Only requested units backed by a generated or shared entry can be dropped.
   dropReason = path:
-    if builtins.elem path sharedTargets
-    then let
-      entry = config.ai.files2.${path};
-      legacy = finalEntry path;
-    in
-      # Old public disables still supply the composer's enable default. A
-      # migrated override wins at the final shared entry and names files2.
-      if !entry.enable && overridingRuntime "files2" (candidate: !candidate.enable) path == null && legacy != null && switchedOff legacy
-      then legacyDropReason path
-      else if !entry.enable || entry._contentPrio < (lib.mkDefault null).priority
-      then generatedDropReason path
-      else legacyDropReason path
-    else if generatedContent ? ${path}
+    if builtins.elem path sharedTargets || generatedContent ? ${path}
     then generatedDropReason path
-    else legacyDropReason path;
+    else null;
   offMessage = unit: path: remedy:
     message unit (dropReason path)
     + ". Remove that override, or withhold it from ${runtime} with ${remedy}.";

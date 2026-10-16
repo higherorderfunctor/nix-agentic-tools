@@ -66,7 +66,6 @@
             }
           ];
       in
-        assert config.ai.codex.files == {} && config.ai.codex.activation == {} && config.ai.codex._ownPlans == {};
         assert builtins.attrNames config.ai.codex._generatedFiles
         == (
           if enable

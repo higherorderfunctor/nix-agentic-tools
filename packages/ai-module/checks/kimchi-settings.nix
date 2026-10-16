@@ -136,7 +136,6 @@
           }) [configPath "${harnessDir}/settings.json"]);
         hasRun = lib.any (item: item.content ? run) copies;
       in
-        assert config.ai.kimchi.files == {} && config.ai.kimchi.activation == {} && config.ai.kimchi._ownPlans == {};
         assert builtins.attrNames config.ai.kimchi.files2 == lib.sort builtins.lessThan expected;
         assert lib.all (path: config.ai.files2Owners.${path} == ["kimchi"]) expected;
         assert lib.all (item:

@@ -48,7 +48,6 @@
     hmJson = "${docs.hmOptionsDoc.optionsJSON}/share/doc/nixos/options.json";
     expectedCodexRoots = pkgs.writeText "expected-codex-option-roots" (
       lib.concatStringsSep "\n" [
-        "ai.codex.activation"
         "ai.codex.activation2"
         "ai.codex.agents"
         "ai.codex.agentsDir"
@@ -58,11 +57,9 @@
         "ai.codex.enable"
         "ai.codex.environmentVariables"
         "ai.codex.execpolicyRules"
-        "ai.codex.files"
         "ai.codex.files2"
         "ai.codex.hooks"
         "ai.codex.mcpServers"
-        "ai.codex.methodFor"
         "ai.codex.native"
         "ai.codex.normalized"
         "ai.codex.package"
@@ -235,12 +232,8 @@
       # was retired.
       ${guardEach "forbid_key" jsonDocs [] (["ai.instructions"] ++ map (runtime: "ai.${runtime}.instructions") runtimes)}
 
-      # Internal channels must remain absent from both consumer-facing
-      # references even though they are declared symmetrically. That covers the
-      # integration inputs AND `_ownPlans`, which exists so module evaluation
-      # can read what a reconciler's store plan will assert — it is a check
-      # seam, never an ownership surface a consumer may declare.
-      ${guardEach "forbid_text" (jsonDocs ++ markdownDocs) [] ["_integration_writable_roots" "_ownPlans"]}
+      # Integration inputs stay absent from consumer-facing references.
+      ${guardEach "forbid_text" (jsonDocs ++ markdownDocs) [] ["_integration_writable_roots"]}
 
       # Devenv-only service APIs still belong in the consumer reference. This
       # positive control prevents an omitted transform prefix from silently

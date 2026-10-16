@@ -78,10 +78,6 @@ _: {
         # The delivery facts the warning readers share with the layer's
         # runtime records.
         "config/ai-delivery*.nix"
-        # The two backend adapters: the only code allowed to write the four
-        # native sink paths, and the far end of every fanout these fragments
-        # describe.
-        "lib/ai/adapters/**"
         "lib/ai/agent.nix"
         # Home of both merge helpers these fragments describe (`mergePool`,
         # `resolveOverride`) — previously
@@ -89,12 +85,6 @@ _: {
         "lib/ai/ai-common.nix"
         "lib/ai/app/**"
         "lib/ai/default.nix"
-        # The delivery layer: the router both adapters lower through, and the
-        # option schema a runtime describes its files and writers with.
-        "lib/ai/deliver.nix"
-        "lib/ai/delivery-options.nix"
-        "lib/ai/deliveryMethod.nix"
-        "lib/ai/formats.nix"
         "lib/ai/hooks.nix"
         # The shared launcher; `shell-option` documents the environment it bakes.
         "lib/ai/launcher.nix"
@@ -102,15 +92,9 @@ _: {
         # so it is exactly where collision-semantics' "where a MODULE may
         # contribute" rule has to be read before editing. Previously unscoped.
         "lib/ai/mkSkillPackageModule.nix"
-        # The reconciler behind the ledger-guarded, enable-independent
-        # migration exception documented by the fanout fragments.
-        "lib/ai/own.nix"
-        "lib/ai/own.py"
         # Portable program option-tree factory. Like `mkRuntime`, it declares
         # capability-gated runtime paths and resolves root/runtime values.
         "lib/ai/program.nix"
-        # Final B7 static-file registry and generic backend lowering.
-        "lib/ai/runtime-files.nix"
         # The runtime registry that file and sharedOptions.nix share.
         "lib/ai/runtimes.nix"
         "lib/ai/sharedOptions.nix"
@@ -120,6 +104,8 @@ _: {
         "lib/markdown/**"
         "lib/testing/module-harness.nix"
         "packages/*/checks/module-eval.nix"
+        # Entry validation, legacy drain and the sole native-sink lowering.
+        "packages/ai-module/**"
         # The five AI CLI factories, listed explicitly. `packages/*/lib/mk*.nix`
         # used to stand here and matched 24 files — every MCP server factory,
         # glab, beads and semble included — so editing an unrelated `mk*.nix`

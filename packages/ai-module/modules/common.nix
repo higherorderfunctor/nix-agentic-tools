@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   pkgs ? null,
   ...
@@ -14,6 +15,16 @@ in {
     activation2Order.secretNodes = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [];
+    };
+    deliveredPaths = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      readOnly = true;
+      description = ''
+        Target-relative paths delivered by the enabled file plan, with recursive
+        directories represented as `<directory>/**`. Devenv adds them to its
+        repository treefmt excludes; other consumers can use the read-only list
+        in their own formatter configuration.
+      '';
     };
     files2 = lib.mkOption {
       type = lib.types.attrsOf files2.entryType;
@@ -34,4 +45,11 @@ in {
       visible = false;
     };
   };
+  config.ai.deliveredPaths =
+    lib.mapAttrsToList
+    (path: entry:
+      if entry.recursive
+      then "${path}/**"
+      else path)
+    (lib.filterAttrs (_path: entry: entry.enable) config.ai.files2);
 }

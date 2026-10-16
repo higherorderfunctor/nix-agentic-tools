@@ -189,7 +189,7 @@ Sources: <https://developers.openai.com/codex/guides/agents-md>,
 | Project multi-file dir      | `.claude/rules/*.md`   | `.kiro/steering/**/*.md`                    | `.github/instructions/**/*.instructions.md`                                 | —                         |
 | Path-scope frontmatter      | `paths:`               | `inclusion:fileMatch` + `fileMatchPattern:` | `applyTo:`                                                                  | — (dir placement only)    |
 | Inclusion modes             | always / path-scoped   | always / auto / fileMatch / manual          | always / applyTo                                                            | always only               |
-| On-demand refs              | Skills                 | `#name` + Skills                            | Skills + `/skillname`                                                       | Skills                    |
+| On-demand refs              | Skills                 | `#name` + Skills                            | Skills + `/example`                                                         | Skills                    |
 | `@file` imports             | native, recursive      | —                                           | —                                                                           | —                         |
 | Reads AGENTS.md natively    | **no**                 | yes                                         | yes (primary)                                                               | yes (primary)             |
 | Reads cross-ecosystem files | n/a                    | no                                          | `CLAUDE.md` + `GEMINI.md`                                                   | — (unless in fallbacks)   |
@@ -357,7 +357,7 @@ override file.
    7dad0b8.
 3. **Per-CLI factories.**
    - **Claude:** context → `.claude/<context.filename>` (HM
-     `~/.claude/CLAUDE.md`) through `ai.claude.files`; rules emit to
+     `~/.claude/CLAUDE.md`) through `ai.claude.files2`; rules emit to
      `.claude/rules/<name>.md` via `claudeTransformer`. Shipped 8f0c16b,
      7dad0b8.
    - **Kiro:** context → HM `<configDir>/steering/AGENTS.md` or devenv repo-root

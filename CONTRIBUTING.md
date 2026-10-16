@@ -51,14 +51,14 @@ nix flake check       # linters + evaluation (does NOT build packages)
 > requires a separate network update; the generator produces content only;
 > `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file
 > from its generated-file tree, formatted there with this repository's treefmt;
-> the drift check compares the built files.
+> the drift check compares the built files; ai-module is the sole backend
+> delivery path.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
-> AGENTS.md, so `ai.codex.files."AGENTS.md".content.enable = false` switched
-> `ai.*` off for it, and every `ai.*` rule for Codex (Semble's CLI rule among
-> them) was dropped with no diagnostic. One writer per file, and that writer is
-> `ai.*`. Full lineage:
+> AGENTS.md, so disabling its runtime delivery dropped every Codex rule
+> (Semble's CLI rule among them) with no diagnostic. One writer per file, and
+> that writer is `ai.*`. Full lineage:
 > `git show f77d34ac:dev/fragments/pipeline/generation-architecture.md`.
 
 Two kinds of generated content, two owners:

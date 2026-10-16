@@ -190,7 +190,7 @@ in {
         tree = result.options.ai.kiro;
       in
         lib.all (path: !lib.hasAttrByPath path tree && lib.hasAttrByPath (["cli"] ++ path) tree) moved
-        && lib.all (key: builtins.hasAttr key tree) ["activation" "agents" "configDir" "context" "enable" "files" "hooks" "mcpServers" "permissions" "rules" "skills"]
+        && lib.all (key: builtins.hasAttr key tree) ["activation2" "agents" "configDir" "context" "enable" "files2" "hooks" "mcpServers" "permissions" "rules" "skills"]
         && tree.cli ? enable
         && tree.enable.readOnly
         && !(builtins.tryEval (evaluate {ai.kiro = {package = null;};}).config).success;
@@ -1987,7 +1987,6 @@ in {
       in
         result.config.ai.files2Owners.".kiro/skills/stack-fix"
         == ["kiro"]
-        && !(result.config.ai.kiro.files ? ".kiro/skills/stack-fix")
         && result.config.home.file.".kiro/skills/stack-fix/SKILL.md".source == "${src}/SKILL.md"
     );
 
@@ -3032,8 +3031,6 @@ in {
         in
           lib.elem legacy config.ai.kiro.legacyLedgers
           && lib.elem legacy config.ai.legacyLedgers
-          && !(config.ai.kiro.activation ? steering)
-          && !(lib.any (lib.hasPrefix ".kiro/steering/") (builtins.attrNames config.ai.kiro.files))
           && (enable || config.ai.kiro.files2 == {})) [false true]) [evalHm evalDevenv]
     );
 

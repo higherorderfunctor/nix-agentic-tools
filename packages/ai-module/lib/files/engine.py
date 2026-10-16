@@ -429,7 +429,7 @@ def reconcile_ro(root, state_path, state, relative, item):
 
 
 def read_ledger(path, codec):
-    """Units of an old `own.py` ledger, by its reader's rules; None when absent."""
+    """Units of a legacy ownership ledger, by its original reader's rules; None when absent."""
     try:
         info = path.lstat()
     except FileNotFoundError:

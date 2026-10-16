@@ -12,7 +12,8 @@
 > steering legacy ledgers declared outside its enable gate; Kimchi stages every
 > surface, with every legacy ledger ungated; Codex stages every surface and
 > declares both copy ledgers while disabled; hand rows are confined to the
-> policy-only permissions surface.
+> policy-only permissions surface; backend lowering and validation live only in
+> ai-module after the old delivery path removal.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -73,9 +74,9 @@ which locked `/login` out; do not move them back.
                              ▼  routing + native rendering
 ┌────────────────────────────────────────────────────────────┐
 │ L4: Final runtime output map                               │
-│   ai.<cli>.files = attrsOf (nullOr { content; ... })       │
+│   ai.<cli>.files2 = attrsOf { content; ... }       │
 │   - text/source default; structured leaves compose         │
-│   - sibling fields compose; null suppresses entries       │
+│   - sibling fields compose; enable suppresses entries       │
 └────────────────────────────────────────────────────────────┘
                              │
                              ▼  generic backend lowering
@@ -105,7 +106,7 @@ rather than a second path field: a runtime names exactly the groups it moves.
 ### Rules
 
 - **Artifact routing/rendering lives at L4; physical emission lives at L5.**
-  L1/L2/L2b are pure fanout — they never touch `ai.<runtime>.files`,
+  L1/L2/L2b are pure fanout — they never touch `ai.<runtime>.files2`,
   `home.file.*`, or devenv `files.*`. The one sidecar exception is managed MCP
   proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes and
   emits unique active systemd units, while only lowered client entries traverse
@@ -127,19 +128,19 @@ rather than a second path field: a runtime names exactly the groups it moves.
 - **Claude delivers its own files.** Agents, commands, output styles, hook
   scripts, skills, plugins, rules, context, `.claude/settings.json` and the MCP
   files are staged entries (`ai.claude._generatedFiles`) that reach the backends
-  through the files layers; `ai.claude.files` is empty. All reach both backends
-  except `.claude.json`, consumer plugins and the MCP personal plugin (its
-  manifest and `.mcp.json`), which are Home Manager only because a plugin is
-  user-scope; devenv writes MCP servers to the project `.mcp.json` instead.
-  Nothing is handed to an upstream Home Manager or devenv Claude module.
-  Settings and MCP servers are configuration, so `.claude/settings.json` and the
-  devenv `.mcp.json` are Nix-owned read-only links rather than reconciled
-  documents, and an in-app change such as `/tui` does not persist. Every
-  settings contribution goes through `ai.claude.native.settings`, so one entry
-  carries the whole document. Claude's user-global `.claude.json` is the
-  exception: it holds OAuth tokens and runtime state, so it uses `rw` on Home
-  Manager only. Empty unpin declarations stage no document; the engine still
-  retires previous keys. The legacy JSON ledger is declared while disabled too.
+  through the files layers. All reach both backends except `.claude.json`,
+  consumer plugins and the MCP personal plugin (its manifest and `.mcp.json`),
+  which are Home Manager only because a plugin is user-scope; devenv writes MCP
+  servers to the project `.mcp.json` instead. Nothing is handed to an upstream
+  Home Manager or devenv Claude module. Settings and MCP servers are
+  configuration, so `.claude/settings.json` and the devenv `.mcp.json` are
+  Nix-owned read-only links rather than reconciled documents, and an in-app
+  change such as `/tui` does not persist. Every settings contribution goes
+  through `ai.claude.native.settings`, so one entry carries the whole document.
+  Claude's user-global `.claude.json` is the exception: it holds OAuth tokens
+  and runtime state, so it uses `rw` on Home Manager only. Empty unpin
+  declarations stage no document; the engine still retires previous keys. The
+  legacy JSON ledger is declared while disabled too.
   `activation2.claude-config-mode` runs after `materialized`, even with no
   flags, stripping group and other access from regular files while Claude is
   enabled.
@@ -331,7 +332,7 @@ absence cells without policy edits.
 - managed MCP proxy ownership, validation, and systemd unit aggregation →
   `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
 - per-scope package ownership guard → `checks/module-provenance/helpers.nix`
-- L4 per-runtime routing/rendering into `ai.<runtime>.files` →
+- L4 per-runtime routing/rendering into `ai.<runtime>.files2` →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex and
@@ -357,18 +358,18 @@ absence cells without policy edits.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit
-  whose final file is switched off or replaced (no `content._generated`);
+  whose final file is switched off or replaced (selected content and priority);
   `checkRecord.nix` rejects a stray field.
-- L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
-  single-owner map → `lib/ai/app/sharedAgentsMd.nix`, which stages the winner
+- L4 shared AGENTS.md rendering and public-entry arbitration into the
+  single-owner plan → `lib/ai/app/sharedAgentsMd.nix`, which stages the winner
   and forwards it through the ai-module layer-1 helper as the owner `internal`
   (a read-only copy by default, written by the files engine)
 - B7 public file-option declaration and runtime enable gate →
-  `lib/ai/app/mkBackendTransform.nix`
-- L5 generic backend lowering → `lib/ai/deliver.nix` (the router) and
-  `lib/ai/adapters/{hm,devenv}.nix`, called from
-  `lib/ai/app/mkBackendTransform.nix`. `lib/ai/runtime-files.nix` keeps the
-  map's validation and the shape one entry takes in a native file sink.
+  `packages/ai-module/lib/runtime.nix`
+- L5 generic backend lowering and entry validation →
+  `packages/ai-module/lib/files/default.nix`, `lib/files/backend.nix` and
+  `lib/lower-{hm,devenv}.nix` under that owner; the runtime factory renders and
+  stages entries without writing native sinks.
 
 ### Adding a new concern X
 
@@ -385,13 +386,13 @@ absence cells without policy edits.
    consumes it. The normalized `settings` pool follows the same rule: a runtime
    with no lossless target for any field (Kiro) leaves it out, and one that
    lowers only some fields keeps it and warns for the rest.
-4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
-   factory's `config`. Declare owned outputs' ledgers under
-   `ai.<runtime>.activation`; work that owns no files uses `command`.
-5. Let the existing L5 router lower the surviving entry; change
-   `lib/ai/deliver.nix` or an adapter only when the delivery contract itself
-   changes, and never write `home.file`, `home.activation`, `files` or `tasks`
-   from a factory — `ai-module-no-direct-sink-writes` scans for it.
+4. Add L4 routing/rendering into `ai.<runtime>._generatedFiles` in each
+   supporting per-CLI factory's `config`. State content, format, method and
+   surface; commands use `ai.<runtime>.activation2`. Retired writers declare
+   their `legacyLedgers` outside the enable gate.
+5. Let ai-module lower the entries; change its backend only when the delivery
+   contract changes. Never write `home.file`, `home.activation`, `files` or
+   `tasks` from a factory — `ai-module-no-direct-sink-writes` scans for it.
 6. Wire L2↔L3 through `mergePool`, add the pool to the package-provenance guard,
    or document and test the concern's intentional non-pool composition rule
    (hooks append per-event lists).

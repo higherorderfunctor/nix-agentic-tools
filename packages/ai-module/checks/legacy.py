@@ -1,4 +1,4 @@
-"""Execute the engine's import of old `own.py` ledgers on real directories."""
+"""Execute the engine's import of legacy ownership ledgers on real directories."""
 
 import hashlib
 import importlib.util
@@ -46,7 +46,7 @@ def write_ledger(old, ledger, units):
 
 
 def seed(root, old):
-    """Old copies and ledgers as `own.py` left them."""
+    """Copies and ledgers left by the retired ownership writer."""
     write(root / "dir/match", b"match\n")
     write(root / "dir/edited", b"edited\n", 0o644)
     write(root / "dir/empty", b"empty\n")

@@ -15,8 +15,8 @@
 > `ai.copilot` is github.com Copilot with its pools under `ai.copilot.github`;
 > explicit normalized overrides warn for live explicit contributions on
 > unavailable backends, excluding empty or disabled contributions beside
-> inherited folds; the coexistence assertion counts a switched-off staged path
-> for its layer-1 entry and engine state, not for tree bytes.
+> inherited folds; the old delivery path is removed, and ai-module owns the
+> delivered-path inventory and backend lowering.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -121,7 +121,7 @@ Copilot sets `pools = ["github"]` and reserves `launcher = ["cli"]`; it ships no
 package, so it has no launcher, and its root `enable` stays the switch.
 
 No runtime hands its files to an upstream `programs.<cli>` or devenv
-integration: every one delivers through `ai.<runtime>.files`, so there is no
+integration: every one delivers through `ai.<runtime>.files2`, so there is no
 second enable to flip or to override. Claude asserts the exclusion, because its
 upstream modules write the same files: `ai.claude.enable` beside Home Manager's
 `programs.claude-code.enable` or devenv's `claude.code.enable` fails evaluation.
@@ -441,10 +441,10 @@ enabled ecosystem whose native model preserves the option's semantics):
   literal), so every writer must test `isPathLike`, never `builtins.isPath`.
   Kiro keeps a raw `.md` path's suffix and writes everything else as `.json`.
   Kimchi's agent files are the one Markdown surface a harness rewrites (the
-  `/agents` commands), so they state `method = "copy-ro"` and take the
-  reconciler's default `0444` mode. Edit, Disable and Enable therefore fail for
-  a declared agent instead of changing Nix-owned content; Create and Eject can
-  still add an unowned sibling.
+  `/agents` commands), so they state `method = "ro"` and take the reconciler's
+  default `0444` mode. Edit, Disable and Enable therefore fail for a declared
+  agent instead of changing Nix-owned content; Create and Eject can still add an
+  unowned sibling.
 
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
@@ -516,20 +516,20 @@ rule that names `references` becomes a path-scoped index entry; `auto` and
 requires a description. Rules default enabled; a per-runtime same-key rule with
 `enable = false` suppresses an inherited root rule. Same-priority `text`
 definitions concatenate, and enabled rules require non-empty text or a source
-path. After B7 arbitration, a surviving Codex AGENTS.md must fit
-`ai.codex.projectDocMaxBytes` (32 KiB by default). The generated-file tree
-checks its built bytes in `installCheckPhase`, so an oversized file fails the
-build. A raised limit is also written to Codex's own `project_doc_max_bytes`,
-which Codex honors at project scope, so the file the guard admits is the file
-Codex reads. On devenv the key lands in the project's `.codex/config.toml`,
-which Codex applies only in a trusted project, so an untrusted session still
-uses the user limit or Codex's default. Every module-provided Codex launcher
-checks project documentation locally, on Home Manager and devenv and in repos
-without devenv. The shared `effectiveProjectDocMaxBytes` resolver reads system,
-user, profile, trusted-project and session limits, and discovers the configured
-project root. The preflight selects the first existing `AGENTS.override.md`,
-`AGENTS.md` or configured fallback in each directory from root to cwd, and
-accounts for the cumulative budget. Warnings name `project_doc_max_bytes` and
+path. Generated Codex AGENTS.md content must fit `ai.codex.projectDocMaxBytes`
+(32 KiB by default). The generated-file tree checks its built bytes in
+`installCheckPhase`, so an oversized file fails the build. A raised limit is
+also written to Codex's own `project_doc_max_bytes`, which Codex honors at
+project scope, so the file the guard admits is the file Codex reads. On devenv
+the key lands in the project's `.codex/config.toml`, which Codex applies only in
+a trusted project, so an untrusted session still uses the user limit or Codex's
+default. Every module-provided Codex launcher checks project documentation
+locally, on Home Manager and devenv and in repos without devenv. The shared
+`effectiveProjectDocMaxBytes` resolver reads system, user, profile,
+trusted-project and session limits, and discovers the configured project root.
+The preflight selects the first existing `AGENTS.override.md`, `AGENTS.md` or
+configured fallback in each directory from root to cwd, and accounts for the
+cumulative budget. Warnings name `project_doc_max_bytes` and
 `ai.codex.projectDocMaxBytes`; a skipped project config raising the limit adds
 the user-config trust remedy. Explicitly untrusted projects load no project
 docs. The preflight is bounded to one second, swallows failures, consumes no
@@ -540,11 +540,11 @@ check calibrates local discovery against that prompt builder offline. The
 shell-entry document-window notice and manual devenv prompt probe are gone. The
 instructions-drift build check still requires the path-scoped index and
 always-on rule markers within this repo's default 32 KiB window. A replacement
-or disable suppresses the generated bytes before they are read; a surviving
-store-backed `source` is measured after materialization. A `content.run` file
-cannot be measured in the build tree; the router warns about that limit at
-evaluation. Codex also rejects `matcher = []` as ambiguous; use `null` when
-there is no file scope or a non-empty list for `fileMatch` content.
+or disable suppresses the generated bytes before they are read. Consumer layer-1
+or layer-2 replacements bypass the generated tree and its byte guard; launcher
+warnings still inspect the local project documentation. Codex also rejects
+`matcher = []` as ambiguous; use `null` when there is no file scope or a
+non-empty list for `fileMatch` content.
 
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
@@ -651,23 +651,22 @@ launcher pool (`ai.kiro.cli.environmentVariables`) or pool namespace
 (`ai.copilot.github.rules`) is diagnosed at the path a consumer wrote.
 
 A context or rule unit that resolves for a runtime but lands in a file whose
-final entry has `content.enable = false` warns too, root or per-runtime: the
-file option that switched it off is the consumer's own, and the drop used to be
-silent (this repository's Codex rules vanished behind
-`files."AGENTS.md".content.enable = false`). The record's `contentTargets`
-callback names each unit's path from the same bindings its delivery uses; for a
-shared AGENTS.md key the final entry is the owner's and the message names the
-runtime whose public entry disabled it. Every such warning has a per-runtime
-remedy, so it never repeats forever: `ai.<runtime>.rules.<name>.enable = false`
-for a rule, `ai.<runtime>.normalized.context = lib.mkForce null` for context
-(root and runtime context compose, so `ai.<runtime>.context.enable = false`
-would not withhold the root part). A file REPLACED with the consumer's own bytes
-(`files.<path>.content.text = …`, or a `source`) drops the same units and warns
-the same way. Every generator sets an internal `content._generated` inside its
-own `content` definition; a consumer's `content` definition at ordinary priority
-discards that definition whole, so a live final entry without the marker is a
-replacement. A sibling-only override (`method`, `executable`) keeps the
-generated content and stays quiet.
+final entry has `enable = false` warns too, root or per-runtime: the file option
+that switched it off is the consumer's own, and the drop used to be silent (this
+repository's Codex rules vanished behind `files2."AGENTS.md".enable = false`).
+The record's `contentTargets` callback names each unit's path from the same
+bindings its delivery uses; for a shared AGENTS.md key the final entry is the
+owner's and the message names the runtime whose public entry disabled it. Every
+such warning has a per-runtime remedy, so it never repeats forever:
+`ai.<runtime>.rules.<name>.enable = false` for a rule,
+`ai.<runtime>.normalized.context = lib.mkForce null` for context (root and
+runtime context compose, so `ai.<runtime>.context.enable = false` would not
+withhold the root part). A file REPLACED with the consumer's own bytes
+(`files2.<path>.content.text = …`, or a `source`) drops the same units and warns
+the same way. `generatedFiles.nix` detects replacement from the selected content
+alternative and priority; Markdown and raw defaults are whole-content
+definitions, while structured values retain generated siblings. A sibling-only
+override (`method`, `executable`) keeps generated content and stays quiet.
 
 ### Assertion semantics
 
@@ -733,26 +732,16 @@ declarations cover both deleted copy writers. `activation2.codex-daemon-select`
 runs while disabled; `activation2.codex-migrate-skill-links` runs before
 `linkCheck` on both backends, with `after = []`.
 
-While PR 3 moves surfaces to the ai-module layers, both paths coexist. Every
-runtime factory imports the layer-1 helper, so `ai.<runtime>.files2` forwards to
-`ai.files2` while the runtime is enabled. A moved surface is staged in the
-internal `ai.<runtime>._generatedFiles` (the files engine entry plus `surface`).
-`lib/ai/app/generatedFiles.nix` builds the runtime's one generated tree from its
-staged and old live entries (the router calls it) and gives layer 1 each staged
-entry at `mkDefault`: text and non-recursive source as the tree file, a value
-per leaf, a recursive source or `run` as itself. Every staged entry also gets
-`requires = [tree]`: the engine adds the tree's string context to each delivered
-leaf after its walk, so the tree's guards, checks and byte limits gate a
-recursive source or a value too. The context cannot ride on the walked source:
-`readDir` builds every derivation in a string's context, so the tree would build
-at evaluation. An assertion refuses a destination live in `ai.<runtime>.files`
-that is also enabled in `ai.files2` or live in the staged entries; a staged path
-counts even with its `ai.files2` entry switched off: the tree leaves its bytes
-out, but it keeps its layer-1 entry and engine state, so the engine would still
-own the destination. Skills use the same staging path: `mkSkillFiles` stages one
-entry per tree, which the files engine walks into per-leaf links on both
-backends, and `ai.deliveredPaths` lists enabled `ai.files2` keys so devenv's
-treefmt still skips them.
+Every runtime factory imports the layer-1 helper. Only staged entries feed
+`lib/ai/app/generatedFiles.nix`, which supplies text and non-recursive source
+from the generated tree, values per leaf, and recursive sources or `run` as
+themselves. Every staged entry requires the tree: the engine adds its string
+context to each delivered leaf after walking the source. Attaching that context
+to the source before `readDir` would build the tree at evaluation. The old
+router, adapters and ownership writer are removed. Ungated `legacyLedgers`
+declarations and the engine's legacy drain remain for upgrades from older
+generations. `ai.deliveredPaths` is declared by ai-module and lists only enabled
+plan keys, with recursive trees excluded as `<key>/**`.
 
 ### Documentation parity is capability parity
 

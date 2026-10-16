@@ -12,8 +12,6 @@
 }: let
   mcpLib = import ../mcp.nix {inherit lib;};
   aiBase = import ../ai {inherit lib;};
-  aiTypes = import ../ai/types.nix {inherit lib;};
-  deliveryMethod = import ../ai/deliveryMethod.nix {inherit lib;};
   files2 = import ../../packages/ai-module/lib/files/default.nix {inherit lib pkgs;};
   # The runtime registry, shared with lib/ai/sharedOptions.nix and
   # checks/modules/options-doc.nix. Importing it rather than restating the five names
@@ -371,62 +369,23 @@
   claimedBy = runtime: config: item:
     lib.any (key: item.path == key || lib.hasPrefix "${key}/" item.path)
     (builtins.attrNames (lib.filterAttrs (_path: owners: lib.elem runtime owners) config.ai.files2Owners));
-  # The `own` plan ONE writer applies, as recorded by `helpers.mkOwnBundle`:
-  # `bash` plus the ordered targets, with each target's codec, path, ledger and
-  # units. The plan FILE is a derivation, so reading it back would be
-  # import-from-derivation; this is the same value, eval-visible, and the
-  # writer is built from it rather than from a mirror of it. Read a render
-  # command as `(ownPlan …).targets` → the target's `units.<name>.run`, and a
-  # dir unit's mode as that unit's `mode`.
-  #
-  # It THROWS on an absent entry rather than defaulting to `{}`: a renamed or
-  # dropped writer must fail a check, never satisfy one with an empty plan.
-  #
-  # The entry `files2-apply` names the files engine, which writes every `ro`
-  # and `rw` entry of `ai.files2`: its `targets` are the normalized plan
-  # entries under the runtime's layer-1 claims, each `{path; method; content;
-  # format; mode; ...}`.
+  # The engine's normalized `ro`/`rw` entries claimed by one runtime.
+  # Keep the explicit phase argument so a stale writer name fails its check.
   ownPlan = runtime: entry: evaluated: let
     targets = lib.filter (claimedBy runtime evaluated.config) (engineEntries evaluated.config);
   in
     if entry != "files2-apply"
-    then
-      (lib.attrByPath ["ai" runtime "_ownPlans" entry]
-        (throw "module-test: config.ai.${runtime}._ownPlans.\"${entry}\" is missing")
-        evaluated.config)
-      .plan
+    then throw "module-test: expected the files2-apply engine phase, got ${entry}"
     else if targets == []
     then throw "module-test: ai.${runtime} claims no ro or rw entry of ai.files2"
     else {inherit targets;};
-  # What one writer's plan will assert into one runtime-writable document:
-  # `{ledger, value}`, found by the document PATH rather than by the writer's
-  # entry name, because that is the identity a settings check cares about.
-  #
-  # `value` cannot come out of the plan itself — a document target's content is
-  # `builtins.toJSON value`, and `builtins.fromJSON` refuses a string that
-  # refers to a store path — so it is read from the same record's `declared`
-  # map, which the `mkOwnBundle` caller fills from the value it serialized.
-  # An `rw` entry of `ai.files2` the runtime claims has no ledger: `{value}`.
+  # A runtime's writable document, found by the final root-relative path.
   ownedDocument = runtime: path: evaluated: let
-    engine = lib.findFirst (item: item.path == path && item.method == "rw" && claimedBy runtime evaluated.config item) null (engineEntries evaluated.config);
-    plans =
-      lib.attrByPath ["ai" runtime "_ownPlans"]
-      (throw "module-test: config.ai.${runtime}._ownPlans is missing")
-      evaluated.config;
-    hits = lib.concatMap (record:
-      map (target: {
-        inherit (target) ledger;
-        value =
-          record.declared.${path}
-          or (throw "module-test: ai.${runtime} owns \"${path}\" through a plan that declared no value for it");
-      })
-      (lib.filter (target: target.codec != "dir" && target.path == path) record.plan.targets)) (lib.attrValues plans);
+    entry = lib.findFirst (item: item.path == path && item.method == "rw" && claimedBy runtime evaluated.config item) null (engineEntries evaluated.config);
   in
-    if engine != null
-    then {inherit (engine.content) value;}
-    else if lib.length hits == 1
-    then lib.head hits
-    else throw "module-test: expected exactly one ai.${runtime} document plan for \"${path}\", found ${toString (lib.length hits)}";
+    if entry != null
+    then {inherit (entry.content) value;}
+    else throw "module-test: ai.${runtime} claims no rw document at \"${path}\"";
   # A Claude JSON document as delivered on either backend: the value of its
   # layer-1 entry (`ai.claude.files2`), `{}` when none is declared. Throws when
   # an entry is declared but the backend's symlink sink does not carry it, so a
@@ -452,35 +411,11 @@
     then ".claude/skills/home-manager/.mcp.json"
     else ".mcp.json";
   claudeMcpServers = backend: evaluated: (claudeDocument (claudeMcpPath backend) evaluated).mcpServers or {};
-  # Every file a backend delivers, whichever writer lands it: the native sink
-  # entries for symlinks (devenv `files`, Home Manager `home.file`), plus each
-  # unit of an owned writer's directory plan for a read-only copy, as `{text}`
-  # or `{source}` plus its `mode`, plus each `ro`/`rw` entry of `ai.files2`
-  # as its normalized content plus its `method` and `mode`; the shared
-  # AGENTS.md composer (`ai.internal`) is one of those. Read it where
-  # a check asks what reaches the tree rather than how: a file that moves from
-  # a symlink to a copy stays where the check looks. Takes the evaluated
-  # `config`.
+  # Native symlinks plus normalized engine copies and writable documents.
   deliveredFiles = config: let
-    copiesOf = target:
-      lib.optionals (target.codec == "dir") (lib.mapAttrsToList (address: unit: {
-          name =
-            if target.path == "."
-            then address
-            else "${target.path}/${address}";
-          value =
-            lib.optionalAttrs (unit ? text) {inherit (unit) text;}
-            // lib.optionalAttrs (unit ? store) {source = unit.store;}
-            // lib.optionalAttrs (unit ? mode) {inherit (unit) mode;};
-        })
-        target.units);
-    copies = lib.concatMap (plans:
-      lib.concatMap (record: lib.concatMap copiesOf record.plan.targets)
-      (builtins.attrValues plans))
-    (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) harnessNames);
     engine = map (item: lib.nameValuePair item.path (item.content // {inherit (item) method;} // lib.optionalAttrs (item.mode != null) {inherit (item) mode;})) (engineEntries config);
   in
-    builtins.listToAttrs (copies ++ engine) // (config.files or config.home.file);
+    builtins.listToAttrs engine // (config.files or config.home.file);
   # The actual generated-tree derivation that supplies a delivered file. The
   # source equality keeps this tied to the sink rather than merely selecting a
   # same-runtime tree with a copied build recipe.
@@ -513,38 +448,12 @@
     staged =
       config.ai.${lib.head claims}._generatedFiles.${path}
       or (throw "module-test: \"${path}\" is not a staged generated entry of ai.${lib.head claims}");
-    owners =
-      lib.filter (runtime: (config.ai.${runtime}.enable or false) && (config.ai.${runtime}.files or {}) ? ${path})
-      harnessNames;
-    owner =
-      if (config.ai.internal.files or {}) ? ${path}
-      then "internal"
-      else if lib.length owners == 1
-      then lib.head owners
-      else throw "module-test: expected exactly one ai.* entry for \"${path}\", found ${toString (lib.length owners)}";
-    backend =
-      if config ? home
-      then "hm"
-      else "devenv";
-    cfg = config.ai.${owner};
-    entry = config.ai.${owner}.files.${path};
-    method = deliveryMethod.resolve {
-      inherit backend entry path;
-      methodFor = cfg.methodFor or deliveryMethod.byRule;
-    };
   in
-    if claims != []
-    then
-      if staged.enable && builtins.elem staged.content._choice ["source" "text"]
-      then {${staged.content._choice} = staged.content.${staged.content._choice};}
-      else throw "module-test: \"${path}\" is not a live staged text or source entry"
-    else if !entry.content.enable
-    then throw "module-test: \"${path}\" is not a live generated tree entry (disabled)"
-    else if entry.content.run != null
-    then throw "module-test: \"${path}\" is not a live generated tree entry (`run` content)"
-    else if method == "shared"
-    then throw "module-test: \"${path}\" is not a generated tree entry (delivery method is `shared`)"
-    else aiTypes.textSourceFile entry.content;
+    if claims == []
+    then throw "module-test: \"${path}\" has no runtime claim"
+    else if staged.enable && builtins.elem staged.content._choice ["source" "text"]
+    then {${staged.content._choice} = staged.content.${staged.content._choice};}
+    else throw "module-test: \"${path}\" is not a live staged text or source entry";
   # Whether a delivered file record (`home.file.<p>`, `files.<p>`, a
   # `deliveredFiles` entry) is `path` inside its runtime's generated tree.
   fromTree = kind: path: file: lib.hasSuffix "-${kind}/${path}" (toString (file.source or ""));

@@ -7,7 +7,7 @@
   backend,
   config,
   root,
-  # Parent of the engine state and of the old `own.py` ledgers it imports.
+  # Parent of the engine state and of the legacy ownership ledgers it imports.
   stateRoot,
 }: let
   files2 = import ./default.nix {inherit lib pkgs;};

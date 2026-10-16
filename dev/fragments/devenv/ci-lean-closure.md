@@ -9,7 +9,8 @@
 > The Codex permission-mix assertions and runtime PATH provenance are
 > consumer-wide shell-entry warnings, not repository enterTest loops. The
 > repository shell sets no harness permissions; contributors choose them in
-> their user config.
+> their user config. The old ownership writer and verification hook are removed;
+> files-engine runtime checks cover delivery independently.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 
@@ -20,8 +21,9 @@ operator-chosen diagnostic cost, not an automatic merge-path cost. The required
 previously justified the runtime workflow:
 
 - `instructions-drift` compares the committed instruction files with what the
-  repository's `ai.*` writers deliver, and `ai-own-runtime` proves the copy
-  writer's real-file type, mode, idempotence, adoption and pruning;
+  repository's `ai.*` entries deliver; `files2-ro-runtime` and
+  `ai-module-transitions` prove copy type, mode, idempotence, adoption and
+  retirement;
 - `isolate-prek-hooks` executes the exact shared-hook rewriter in primary and
   linked worktrees;
 - `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
@@ -37,10 +39,10 @@ skill directories.
 
 The repository no longer repeats instruction-file and Claude settings delivery
 assertions in `enterTest`. ai-module's checks pin where the files plan lands
-each file and by which method. `lib/ai/adapters/devenv.nix` also contributes
-`own.py --verify` for owned copies, including their real-file requirement. That
-verification still runs only when `devenv test` is invoked; the flake checks
-test delivery independently of a developer's checkout.
+each file and by which method. Runtime checks execute the files engine on real
+temporary directories, independently of a developer's checkout. The devenv
+observer reports absent or changed native links without failing shell entry; it
+reads the normalized plan and native link list only.
 
 `devenv.nix` still evaluates an `isCI` branch for the manual diagnostic. It
 omits tooling that enterTest never invokes, but it does not alter repository

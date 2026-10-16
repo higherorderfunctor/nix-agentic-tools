@@ -2,8 +2,8 @@
 # over the layers, through a synthetic runtime record and every repository
 # module: formatted text reaches `ai.files2` as its tree file, value leaves
 # merge with a consumer's, a consumer's layer-1 content wins, a disabled
-# runtime reads and forwards nothing, an old-path duplicate is refused (a staged
-# path whose layer-1 entry is switched off included), a switched-off context file is warned about by its layer-1 option, the
+# runtime reads and forwards nothing, a switched-off context file is warned
+# about by its layer-1 option, the
 # plan-aware harness readers return the engine's `ro`/`rw` entries, and
 # `ai.formatter` and `ai.guards` reach the runtime's tree.
 {
@@ -57,22 +57,9 @@
   inherit (enabled.config.ai) files2;
   source = "${enabled.config.ai.probe._generatedTree}/doc.md";
   # A disabled runtime never reads its staged entries: neither its layer 1
-  # (`ai.probe.files2`) nor its tree (the adapter gate) forces this throw.
+  # (`ai.probe.files2`) nor its tree forces this throw.
   disabled = evaluate {
     ai.probe._generatedFiles."lazy.txt".content.text = throw "a disabled runtime read its staged entries";
-  };
-  clash = evaluate {
-    ai.probe = {
-      enable = true;
-      files = {
-        "clash.txt".content.text = "old";
-        "doc.md".content.text = "old";
-      };
-      files2 = {
-        "clash.txt".content.text = "new";
-        "doc.md".enable = false;
-      };
-    };
   };
   switchedOff = evaluate {
     ai = {
@@ -108,15 +95,12 @@
       };
     }).config.ai.probe._generatedTree;
   buildLog = tree: "${pkgs.testers.testBuildFailure tree}/testBuildFailure.log";
-  refused = path: lib.any (assertion: !assertion.assertion && lib.hasInfix path assertion.message) clash.config.assertions;
   delivered = harness.deliveredFiles enabled.config;
   failures =
     lib.optional (files2."doc.md".content.source != source || files2."doc.md".method != "ro") "formatted source reaches ai.files2"
     ++ lib.optional (files2."settings.json".content.value != document) "value leaves merge"
     ++ lib.optional (files2."override.txt".content._choice != "text" || files2."override.txt".content.text != "consumer") "consumer layer-1 content wins"
     ++ lib.optional (disabled.config.ai.probe.files2 != {} || disabled.config.ai.probe._generatedTree != null || disabled.config.ai.files2 != {} || disabled.config.ai.files2Owners != {}) "disabled runtime forwards nothing"
-    ++ lib.optional (!refused "clash.txt") "old-path duplicate refused"
-    ++ lib.optional (!refused "doc.md") "old path shadowing a switched-off staged path refused"
     ++ lib.optional (!lib.any (lib.hasInfix ''ai.probe.files2."doc.md".enable = false'') switchedOff.config.warnings) "warnings read layer-1 enable"
     ++ lib.optional (map (target: target.path) (harness.ownPlan "probe" "files2-apply" enabled).targets != ["doc.md" "settings.json"]) "ownPlan"
     ++ lib.optional ((harness.ownedDocument "probe" "settings.json" enabled).value != document) "ownedDocument"

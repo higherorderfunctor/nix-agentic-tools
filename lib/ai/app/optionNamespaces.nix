@@ -12,7 +12,7 @@
 # Kiro keeps its CLI launcher under `ai.kiro.cli`; Copilot reserves
 # `ai.copilot.cli` for a launcher it does not ship yet and keeps github.com's
 # pools under `ai.copilot.github`. Delivery options (`files`, `activation`,
-# `checks`, `methodFor`) and a runtime's own `options` are not grouped here.
+# `checks`) and a runtime's own `options` are not grouped here.
 #
 # A launcher is a package. A record without `defaults.package` has none, so
 # it declares no `package` option, installs nothing, and keeps its `enable`

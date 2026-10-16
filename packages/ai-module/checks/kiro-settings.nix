@@ -99,7 +99,6 @@
         };
       hasRun = lib.any (item: item.content ? run) plan;
     in
-      assert config.ai.kiro.files == {} && config.ai.kiro.activation == {};
       assert config.ai.kiro.legacyLedgers == legacy ".kiro";
       assert lib.all (item: lib.elem item config.ai.legacyLedgers) (legacy ".kiro");
       assert builtins.attrNames config.ai.kiro.files2 == lib.sort builtins.lessThan expected;

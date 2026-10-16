@@ -158,7 +158,6 @@ in {
           staged ? ${path}
           && config.ai.kimchi.files2 ? ${path}
           && config.ai.files2Owners.${path} == ["kimchi"]
-          && !(config.ai.kimchi.files ? ${path})
           && config.ai.files2.${path}.mode == null
           && config.ai.files2.${path}.executable == null)
         moved
