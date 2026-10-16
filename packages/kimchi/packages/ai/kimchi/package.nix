@@ -45,6 +45,23 @@
   piTuiPackage = fetchExtraction extraction.piTuiPackage;
   externalizeExtensions = import ../../../lib/externalizeExtensions.nix {inherit externalizedExtensions lib;};
 
+  # Extend upstream's dependency-owned patch before either pnpm consumer sees
+  # the source. Rehash every reference (including peer snapshots) without
+  # regenerating unrelated lock resolutions. Registry tarball bytes stay intact.
+  piPatchPath = "patches/@earendil-works__pi-coding-agent@${extraction.piPackage.version}.patch";
+  patchedSource = pkgs.applyPatches {
+    src = kimchiSource;
+    postPatch = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      old_pi_patch_hash=$(sha256sum ${lib.escapeShellArg piPatchPath} | cut -d ' ' -f 1)
+      cat ${./package-identity.patch} >> ${lib.escapeShellArg piPatchPath}
+      new_pi_patch_hash=$(sha256sum ${lib.escapeShellArg piPatchPath} | cut -d ' ' -f 1)
+      substituteInPlace pnpm-lock.yaml \
+        --replace-fail "$old_pi_patch_hash" "$new_pi_patch_hash"
+    '';
+  };
+
   extracted =
     pkgs.runCommand "kimchi-extracted.json" {
       nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
@@ -178,7 +195,7 @@ in
   in {
     pname = "kimchi";
     inherit (sources) version;
-    src = kimchiSource;
+    src = patchedSource;
 
     # Source changes, one concern per patch; each opens with its own rationale.
     # Refuse changed hunk context on upstream drift instead of applying fuzz.

@@ -10,7 +10,7 @@ import tempfile
 
 kimchi, package, observer, delivery = sys.argv[1:]
 delivered = {entry["name"]: entry for entry in json.loads(Path(delivery).read_text())}
-source = "extensions/workflows"
+source = "packages/workflows"
 
 
 def run(args, cwd, env):
@@ -87,6 +87,7 @@ with tempfile.TemporaryDirectory() as scratch:
         if configured:
             assert len(rows) == 1 and rows[0][0] == "enabled" and source in rows[0][2], listing.stdout
             resource_id = rows[0][1]
+            assert resource_id == "plugins.package.packages-workflows", resource_id
         else:
             assert rows == [], listing.stdout
         args = [kimchi, *trust_args, "--mode", "json", "--session-dir", str(base / "sessions"), "-e", observer, "-p", "/workflow list"]

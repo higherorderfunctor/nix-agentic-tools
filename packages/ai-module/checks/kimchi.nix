@@ -130,7 +130,7 @@ in {
         delivered = deliveredFiles config;
         staged = config.ai.kimchi._generatedFiles;
         agentPath = "${agentsDir}/reviewer.md";
-        extensionPath = "${harnessDir}/extensions/probe";
+        extensionPath = "${harnessDir}/packages/probe";
         skillPath = "${skillsDir}/probe";
         moved = [agentPath extensionPath skillPath] ++ lib.optional (backend == "hm") contextPath;
         disabled = (backends.${backend} (lib.recursiveUpdate settings {ai.kimchi.enable = false;})).config;

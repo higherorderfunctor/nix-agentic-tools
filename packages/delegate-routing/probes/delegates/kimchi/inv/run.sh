@@ -6,7 +6,7 @@ shopt -s inherit_errexit 2>/dev/null || :
 # claude:inv — loads observer.ts, which prints every registered tool and command at the first input event
 # and swallows the input (no model call). Writes <work>/<label>.{tools,commands}.json and the run dir
 # <work>/run-<label>-*; work = $PROBE_OUT/kimchi-inv or a fresh temp dir. WORKFLOWS=1 links the pinned
-# kimchi-workflows extension into the harness extensions dir.
+# kimchi-workflows extension into the harness packages dir.
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source-path=SCRIPTDIR
 # shellcheck source=../../common/pin.sh
@@ -23,8 +23,8 @@ if [[ -n ${HARNESS_SETTINGS:-} ]]; then
   cp "$HARNESS_SETTINGS" "$base/home/.config/kimchi/harness/settings.json"
 fi
 if [[ -n ${WORKFLOWS:-} ]]; then
-  mkdir -p "$base/home/.config/kimchi/harness/extensions"
-  ln -s "${KIMCHI_WORKFLOWS_PKG:-$(probe_pkg kimchi-workflows)}" "$base/home/.config/kimchi/harness/extensions/workflows"
+  mkdir -p "$base/home/.config/kimchi/harness/packages"
+  ln -s "${KIMCHI_WORKFLOWS_PKG:-$(probe_pkg kimchi-workflows)}" "$base/home/.config/kimchi/harness/packages/workflows"
 fi
 read -r -a extra_env <<<"${EXTRA_ENV:-}"
 read -r -a prompt_args <<<"${PROMPT_ARGS--p hello}"
