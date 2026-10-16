@@ -6,13 +6,13 @@
 > requires; the shared AGENTS.md composer is the layer-1 owner `internal` and
 > the ai-module devenv module writes the treefmt excludes; Copilot stages its
 > instructions, declares an agents gap and keeps both old ledgers, and Claude
-> every surface but `.claude.json` with its rules ledger; the root-option
-> provenance guard exempts the ai-module layer-1 forwarding helper for its
-> forwarded options; option declarations supply policy surfaces and keyed
-> withdrawal; runtime declarations supply normalized policy gaps and the warning
-> suite generates coverage for every runtime, surface and backend; a record's
-> `optionNamespaces` places launcher and pool options, and `ai.copilot` is
-> github.com Copilot with its pools under `ai.copilot.github`; explicit
+> every surface including HM `.claude.json` with both legacy ledgers; the
+> root-option provenance guard exempts the ai-module layer-1 forwarding helper
+> for its forwarded options; option declarations supply policy surfaces and
+> keyed withdrawal; runtime declarations supply normalized policy gaps and the
+> warning suite generates coverage for every runtime, surface and backend; a
+> record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
+> is github.com Copilot with its pools under `ai.copilot.github`; explicit
 > normalized overrides warn for live explicit contributions on unavailable
 > backends, excluding empty or disabled contributions beside inherited folds;
 > the coexistence assertion counts a switched-off staged path for its layer-1

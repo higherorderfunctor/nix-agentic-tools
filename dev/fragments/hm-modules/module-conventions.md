@@ -1,10 +1,12 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-15 — `mkSkillFiles` interpolates every skill source
-> before the files engine walks it; no check gates the N-to-zero writer defect;
-> Kiro is gated by `ai.kiro.cli.enable`; factories read the derived, read-only
-> `ai.kiro.enable`; `ai.copilot` is github.com Copilot, with pools under
-> `ai.copilot.github` and no launcher.
+> **Last verified:** 2026-10-15 — Claude uses engine-backed `rw` ownership,
+> Kimchi retains legacy ledgers, and Claude has an ordered activation2 mode
+> command; `mkSkillFiles` interpolates every skill source before the files
+> engine walks it; no check gates the N-to-zero writer defect; Kiro is gated by
+> `ai.kiro.cli.enable`; factories read the derived, read-only `ai.kiro.enable`;
+> `ai.copilot` is github.com Copilot, with pools under `ai.copilot.github` and
+> no launcher.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -214,12 +216,13 @@ Reserve `exit 1` for cases where you actually want to abort the whole activation
 on an error. Never `exit 0` for a cache-hit fast path.
 
 **Owned leaves for state documents:** Claude's `~/.claude.json` keeps
-harness-written state beside Nix-owned leaves. A factory states
-`facts.harnessWrites` on the file and names the writer whose JSON ledger claims
-it. The delivery router builds one `lib/ai/own.nix` bundle: declared leaves are
-asserted, retired leaves are retracted, and unowned state survives. Kimchi's
-user `config.json` and `harness/settings.json` are documents too, since `/login`
-and `/model` write into them (settled 2026-09-30 after a read-only copy locked
+harness-written state beside Nix-owned leaves. Its factory stages a JSON `rw`
+document through `_generatedFiles`; the files engine asserts declared leaves,
+retracts retired leaves and preserves unowned state. Kimchi still uses the
+legacy path: its factory states `facts.harnessWrites` and names a JSON ledger
+writer, which the delivery router lowers through `lib/ai/own.nix`. Kimchi's user
+`config.json` and `harness/settings.json` are documents because `/login` and
+`/model` write into them (settled 2026-09-30 after a read-only copy locked
 `/login` out); its `mcp.json`, `permissions.json` and `trust.json` stay
 read-only copies. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has
 no way to tell a native key from a Nix key that was deleted. Only a STATE file
@@ -236,17 +239,16 @@ A target that stops declaring anything deletes its document when the retraction
 leaves an empty object: every byte was ours. A symlink is never touched. Locked
 by `ai-own-runtime` (`two_phase`).
 
-A runtime that shares a state document (Claude Code's `.claude.json`) can rename
-its own write over the path between `own.py`'s read and its rename, which the
-flock cannot see. So a document is published by compare-and-swap: `own.py`
-records the SHA-256 of the bytes it parsed, and immediately before the rename
-re-reads the path. If it moved, the run re-parses the runtime's bytes, replays
-its own sets and deletes onto them, and tries again, up to three attempts.
-Content rather than mtime, because a sibling rename can leave the same size and
-mtime behind. Exhaustion fails the run loudly with the runtime's write intact
-and the ledger unwritten; it never overwrites. This narrows the window to the
-check-to-rename gap and cannot close it. Locked by `ai-activation-settings-mode`
-(the race cases).
+A runtime that shares a state document can rename its own write over the path
+between `own.py`'s read and its rename, which the flock cannot see. So a
+document is published by compare-and-swap: `own.py` records the SHA-256 of the
+bytes it parsed, and immediately before the rename re-reads the path. If it
+moved, the run re-parses the runtime's bytes, replays its own sets and deletes
+onto them, and tries again, up to three attempts. Content rather than mtime,
+because a sibling rename can leave the same size and mtime behind. Exhaustion
+fails the run loudly with the runtime's write intact and the ledger unwritten;
+it never overwrites. This narrows the window to the check-to-rename gap and
+cannot close it. Locked by `ai-own-settings-mode` (the race cases).
 
 Modes on a document are the reconciler's, not the caller's: a NEW file is
 created 0600, and an existing regular file keeps the mode it has. Document
@@ -256,13 +258,13 @@ A document that carries credentials needs more than that. Because an existing
 file keeps its mode, a file an earlier generation widened to 0644 stays 0644
 whether the writer rewrites it (a non-empty declaration) or leaves it alone (an
 empty one), and the runtimes keep the mode on their own rewrites. So each such
-document also gets an ungated `command` writer from
-`helpers.mkCredentialModeWriter`, the only thing that narrows it: it strips
-group and other access from a regular file on every activation and skips a
-symlink or a missing file. `claudeConfigMode` covers `~/.claude.json`. Home
-Manager only. Locked by `ai-activation-settings-mode`, which renders the real
-modules in both gate states, a non-empty declaration and an empty one, so a
-writer gated on either fails.
+document also gets a mode command. Claude's Home Manager
+`activation2.claude-config-mode` follows `materialized`, runs while Claude is
+enabled even with no declared keys, and strips group and other access from
+regular `~/.claude.json` files, skipping symlinks and missing files. Locked by
+`ai-activation-settings-mode`, which renders the real modules in both gate
+states, a non-empty declaration and an empty one, so a writer gated on either
+fails.
 
 Every target, unit, mode, ledger name and byte of content travels as DATA in a
 store-resident plan, so none of it is interpolated into generated shell — and
@@ -294,17 +296,16 @@ materializer were removed 2026-09-19 as unreachable dead code (see the Settled
 bullet in `dev/fragments/ai-module/ai-module-fanout.md`).
 
 **Every HM settings writer is unconditional.** Kiro's `kiroMcpJson`, kimchi's
-`kimchiFiles`, codex's `materialize-codex-daemon-settings` and claude's
-`claudeUnpinLaunchEffort` are all emitted while the ecosystem is enabled,
-whatever the declaration says. An empty declaration is not "nothing to do", it
-is the RETRACTION path: empty settings plus no prior ledger is a strict no-op,
-while empty settings plus a prior ledger must run so a later generation retracts
-the leaves it used to own without erasing native state. A
-`mkIf (cfg.native.settings != {})` around one of these writers is the N-to-zero
-defect. The check that evaluated every imperative writer under a populated AND
-an empty declaration was retired with the generated writer matrix, so review
-catches it until the runtime moves to the files engine, which retires an
-undeclared copy itself.
+`kimchiFiles` and codex's `materialize-codex-daemon-settings` are emitted while
+the ecosystem is enabled, whatever the declaration says. An empty declaration is
+not "nothing to do", it is the RETRACTION path: empty settings plus no prior
+ledger is a strict no-op, while empty settings plus a prior ledger must run so a
+later generation retracts the leaves it used to own without erasing native
+state. A `mkIf (cfg.native.settings != {})` around one of these writers is the
+N-to-zero defect. The check that evaluated every imperative writer under a
+populated AND an empty declaration was retired with the generated writer matrix,
+so review catches it until the runtime moves to the files engine, which retires
+an undeclared copy itself.
 
 Devenv-side writes are otherwise unconditional (always write the file when
 `enable = true`): devenv files are project-local symlinks, not home-dir writes.

@@ -13,13 +13,13 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 > requires; the shared AGENTS.md composer is the layer-1 owner `internal` and
 > the ai-module devenv module writes the treefmt excludes; Copilot stages its
 > instructions, declares an agents gap and keeps both old ledgers, and Claude
-> every surface but `.claude.json` with its rules ledger; the root-option
-> provenance guard exempts the ai-module layer-1 forwarding helper for its
-> forwarded options; option declarations supply policy surfaces and keyed
-> withdrawal; runtime declarations supply normalized policy gaps and the warning
-> suite generates coverage for every runtime, surface and backend; a record's
-> `optionNamespaces` places launcher and pool options, and `ai.copilot` is
-> github.com Copilot with its pools under `ai.copilot.github`; explicit
+> every surface including HM `.claude.json` with both legacy ledgers; the
+> root-option provenance guard exempts the ai-module layer-1 forwarding helper
+> for its forwarded options; option declarations supply policy surfaces and
+> keyed withdrawal; runtime declarations supply normalized policy gaps and the
+> warning suite generates coverage for every runtime, surface and backend; a
+> record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
+> is github.com Copilot with its pools under `ai.copilot.github`; explicit
 > normalized overrides warn for live explicit contributions on unavailable
 > backends, excluding empty or disabled contributions beside inherited folds;
 > the coexistence assertion counts a switched-off staged path for its layer-1
@@ -1489,9 +1489,10 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 > `environmentVariables` only; `optionNamespaces` places launcher and pool
 > options; the devenv file observer lives in ai-module and reads the files plan;
 > the shared AGENTS.md composer reaches the files plan as the owner `internal`;
-> Claude stages every surface but `.claude.json`, whose rules copies the files
-> engine writes on devenv; staged Markdown and raw entries are whole-content
-> defaults; hand rows are confined to the policy-only permissions surface.
+> Claude stages every surface, including HM `.claude.json` as `rw`; the files
+> engine writes its rules copies on devenv; staged Markdown and raw entries are
+> whole-content defaults; hand rows are confined to the policy-only permissions
+> surface.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1612,22 +1613,22 @@ rather than a second path field: a runtime names exactly the groups it moves.
 - **Claude delivers its own files.** Agents, commands, output styles, hook
   scripts, skills, plugins, rules, context, `.claude/settings.json` and the MCP
   files are staged entries (`ai.claude._generatedFiles`) that reach the backends
-  through the files layers; nothing but `.claude.json` stays on
-  `ai.claude.files`. All of them reach both backends except consumer plugins and
-  the MCP personal plugin (its manifest and `.mcp.json`), which are Home Manager
-  only because a plugin is user-scope; devenv writes MCP servers to the project
-  `.mcp.json` instead. Nothing is handed to an upstream Home Manager or devenv
-  Claude module. Settings and MCP servers are configuration, so
-  `.claude/settings.json` and the devenv `.mcp.json` are Nix-owned read-only
-  links rather than reconciled documents, and an in-app change such as `/tui`
-  does not persist. Every settings contribution goes through
-  `ai.claude.native.settings`, so one entry carries the whole document. Claude's
-  user-global `.claude.json` is the exception: it holds OAuth tokens and runtime
-  state, so it claims the existing JSON ledger under `claudeUnpinLaunchEffort`;
-  its writer survives empty declarations and remains Home Manager only. That
-  writer keeps whatever mode it finds, whether or not it rewrites the file, so
-  an ungated `claudeConfigMode` command writer is the only thing that narrows
-  the token-bearing file to owner-only, on every activation.
+  through the files layers; `ai.claude.files` is empty. All reach both backends
+  except `.claude.json`, consumer plugins and the MCP personal plugin (its
+  manifest and `.mcp.json`), which are Home Manager only because a plugin is
+  user-scope; devenv writes MCP servers to the project `.mcp.json` instead.
+  Nothing is handed to an upstream Home Manager or devenv Claude module.
+  Settings and MCP servers are configuration, so `.claude/settings.json` and the
+  devenv `.mcp.json` are Nix-owned read-only links rather than reconciled
+  documents, and an in-app change such as `/tui` does not persist. Every
+  settings contribution goes through `ai.claude.native.settings`, so one entry
+  carries the whole document. Claude's user-global `.claude.json` is the
+  exception: it holds OAuth tokens and runtime state, so it uses `rw` on Home
+  Manager only. Empty unpin declarations stage no document; the engine still
+  retires previous keys. The legacy JSON ledger is declared while disabled too.
+  `activation2.claude-config-mode` runs after `materialized`, even with no
+  flags, stripping group and other access from regular files while Claude is
+  enabled.
 - **The CLI's write primitive picks the method.** Codex's `config.toml` is a
   store symlink on both backends: every Codex config writer writes a temporary
   beside the link's target, so an in-app save fails and the link survives
@@ -1661,12 +1662,12 @@ rather than a second path field: a runtime names exactly the groups it moves.
   but no `files.*` entry from any runtime or the user is created or updated, and
   `devenv test` fails.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` is a
-  writable state file with Nix-owned leaves. The adapter runs its JSON bundle on
-  activation and retains unowned state. `helpers.mkReconciledDocument` emits
-  each writer and file entry together; its ledger name remains a literal upgrade
-  contract. Kimchi's `config.json` is fully Nix-owned and lands in the same
-  directory copy writer as its other settings. A replaced copy is restored at
-  switch.
+  writable state file with Nix-owned leaves. The files engine restores declared
+  keys on activation and retains native keys. Its legacy ledger name remains a
+  literal upgrade contract. Kimchi still uses `helpers.mkReconciledDocument`
+  until its migration. Kimchi's `config.json` is fully Nix-owned and lands in
+  the same directory copy writer as its other settings. A replaced copy is
+  restored at switch.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON ledger, even without a claimant.

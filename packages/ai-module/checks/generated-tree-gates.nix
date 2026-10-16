@@ -32,9 +32,11 @@
         checks.skills = "exit 7";
         claude = {
           enable = true;
-          # Only the skill: the devenv settings link is built from the tree too.
+          # Only the skill: the devenv settings link is built from the tree too,
+          # and a non-empty unpin map stages Home Manager's `.claude.json`.
           files2.".claude/settings.json".enable = false;
           skills.probe = ./fixtures/probe-skill;
+          unpinLaunchEffort = {};
         };
       };
       delivered = [".claude/skills/probe/SKILL.md" ".claude/skills/probe/references/nested.md" ".claude/skills/probe/scripts/executable-probe"];

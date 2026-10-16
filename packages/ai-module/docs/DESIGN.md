@@ -64,6 +64,13 @@ prefix once, before declaring paths; user overrides use the same final path.
 | Kimchi  | Configured harness, configuration and MCP directories; project `.kimchi/`.             |
 | Kiro    | Configured settings and `.kiro/` directories; project context may be root `AGENTS.md`. |
 
+Claude's `.claude.json` is Home Manager only. Its producer disables the staged
+`rw` entry when the unpin map is empty, leaving the engine to retire old keys
+without adopting an unrelated document. The mode command runs while Claude is
+enabled, including with an empty map, after `materialized`. Engine state is
+saved atomically while files remain owned and deleted otherwise; repeat
+activation preserves ownership contents rather than the state file's timestamp.
+
 These examples are not hard-coded prefix policy in the base. A producer must
 make an absolute home configuration path relative to `home.homeDirectory`; paths
 outside the active root are refused by the file contract.

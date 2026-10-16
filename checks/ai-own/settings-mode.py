@@ -294,82 +294,14 @@ def retiring_race(parent):
         fail(label, "the ledger still claims the retracted leaf")
 
 
-def activate(home, gate, label):
-    """Run one gate state's merge and mode entries of the real modules."""
-    result = subprocess.run(
-        [TOOLS["bash"], TOOLS["gates"][gate]["script"]],
-        env=home.environment,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    if result.returncode != 0:
-        fail(label, f"activation exited {result.returncode}: {result.stderr}")
-
-
-def merged(runtime, declared):
-    """`runtime` with every declared leaf laid over it."""
-    result = dict(runtime)
-    for key, value in declared.items():
-        result[key] = merged(result.get(key, {}), value) if isinstance(value, dict) else value
-    return result
-
-
-def widened(parent, gate):
-    """5. A credential file an earlier generation widened to 0644 must end up
-    0600 in both gate states. `own.py` keeps the mode it finds, and runtimes
-    keep it on their own rewrites, so nothing else would ever close it again.
-
-    Open: the merge rewrites the file, keeps the runtime's keys and adds the
-    declared leaves. Closed: the merge runs with nothing declared and the file
-    must come out byte-identical.
-    """
-    label = f"gate {gate}"
-    home = Home(parent, f"gate-{gate}")
-    runtime = {"token": "secret"}
-    documents = TOOLS["gates"][gate]["documents"]
-    for name in documents:
-        path = home.root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(runtime))
-        path.chmod(0o644)
-    activate(home, gate, label)
-    for name, declared in documents.items():
-        path = home.root / name
-        if mode_of(path) != 0o600:
-            fail(label, f"~/{name} left at mode {mode_of(path):o}, expected 600")
-        if declared:
-            if json.loads(path.read_text()) != merged(runtime, declared):
-                fail(label, f"~/{name} is not the runtime's keys plus the declared leaves: {path.read_text()!r}")
-        # Narrowing must not rewrite what the runtime wrote.
-        elif path.read_text() != json.dumps(runtime):
-            fail(label, f"~/{name} was rewritten: {path.read_text()!r}")
-
-
-def guarded(parent):
-    """6. The narrowing is guarded: a missing file must not fail activation,
-    and a symlink (a Home Manager store link, say) is not ours to chmod."""
-    home = Home(parent, "guarded")
-    linked = home.root / "linked.json"
-    linked.write_text("{}")
-    linked.chmod(0o644)
-    (home.root / ".claude.json").symlink_to("linked.json")
-    activate(home, "closed", "guards")
-    if mode_of(linked) != 0o644:
-        fail("symlink", f"activation changed a symlink target's mode to {mode_of(linked):o}")
-
-
 def main():
     with tempfile.TemporaryDirectory() as parent:
         for case in (created, existing):
             case(parent)
         for repeated in (False, True):
             race(parent, repeated)
-        for gate in ("open", "closed"):
-            widened(parent, gate)
-        guarded(parent)
         retiring_race(parent)
-    print("PASS: ai-activation settings mode")
+    print("PASS: own settings mode")
 
 
 if __name__ == "__main__":
