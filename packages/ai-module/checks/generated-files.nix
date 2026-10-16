@@ -3,8 +3,9 @@
 # module: formatted text reaches `ai.files2` as its tree file, value leaves
 # merge with a consumer's, a consumer's layer-1 content wins, a disabled
 # runtime reads and forwards nothing, an old-path duplicate is refused (a staged
-# path whose layer-1 entry is switched off included), a switched-off context file is warned about by its layer-1 option, and the
-# plan-aware harness readers return the engine's `ro`/`rw` entries.
+# path whose layer-1 entry is switched off included), a switched-off context file is warned about by its layer-1 option, the
+# plan-aware harness readers return the engine's `ro`/`rw` entries, and
+# `ai.formatter` and `ai.guards` reach the runtime's tree.
 {
   harness,
   lib,
@@ -82,6 +83,31 @@
       };
     };
   };
+  # Prettier switched off in `ai.formatter`: doc.md has no formatter, which
+  # fails the tree, and the guards that follow prettier default off.
+  unformatted = evaluate {
+    ai = {
+      formatter.programs.prettier.enable = lib.mkForce false;
+      probe.enable = true;
+    };
+  };
+  # A staged table whose body row has more cells than its header: the default
+  # tableCells guard fails the tree, and switching it off lets the tree build.
+  guarded = guards:
+    (evaluate {
+      ai = {
+        inherit guards;
+        probe = {
+          enable = true;
+          _generatedFiles."table.md" = {
+            content.text = "| A | B |\n| - | - |\n| x | `|| true` y |\n";
+            format = "markdown";
+            method = "ro";
+          };
+        };
+      };
+    }).config.ai.probe._generatedTree;
+  buildLog = tree: "${pkgs.testers.testBuildFailure tree}/testBuildFailure.log";
   refused = path: lib.any (assertion: !assertion.assertion && lib.hasInfix path assertion.message) clash.config.assertions;
   delivered = harness.deliveredFiles enabled.config;
   failures =
@@ -95,7 +121,8 @@
     ++ lib.optional (map (target: target.path) (harness.ownPlan "probe" "files2-apply" enabled).targets != ["doc.md" "settings.json"]) "ownPlan"
     ++ lib.optional ((harness.ownedDocument "probe" "settings.json" enabled).value != document) "ownedDocument"
     ++ lib.optional ((delivered."doc.md".source or null) != source || (delivered."settings.json".method or null) != "rw") "deliveredFiles"
-    ++ lib.optional (harness.markdownInput enabled "doc.md" != {text = markdown;}) "markdownInput";
+    ++ lib.optional (harness.markdownInput enabled "doc.md" != {text = markdown;}) "markdownInput"
+    ++ lib.optional (lib.any (guard: !enabled.config.ai.guards.${guard} || unformatted.config.ai.guards.${guard}) ["splitCodeSpans" "tableCells"]) "guards follow prettier";
 in {
   checks.ai-module-generated-files = assert lib.assertMsg (failures == []) "generated files: ${lib.concatStringsSep ", " failures}";
     pkgs.runCommandLocal "ai-module-generated-files" {} ''
@@ -103,6 +130,9 @@ in {
       shopt -s inherit_errexit 2>/dev/null || :
       # Prettier rewrites the `*` bullet to `-`, so the tree file is formatted.
       ${pkgs.gnugrep}/bin/grep -qx -- '- item' ${source}
+      ${pkgs.gnugrep}/bin/grep -qF 'no formatter for path: doc.md' ${buildLog unformatted.config.ai.probe._generatedTree}
+      ${pkgs.gnugrep}/bin/grep -qF 'Generated-file guard tableCells failed.' ${buildLog (guarded {})}
+      [[ -f ${guarded {tableCells = false;}}/table.md ]]
       printf 'PASS: staged files reach ai.files2 formatted, mergeable, overridable and gated\n' > "$out"
     '';
 }

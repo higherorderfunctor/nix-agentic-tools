@@ -19,7 +19,6 @@
     "/AGENTS.md",
     "/CONTRIBUTING.md",
     "/README.md",
-    "config/ai-delivery-generated.nix",
     "config/cspell",
     "devenv.yaml",
     "docs/**",

@@ -32,7 +32,6 @@ for it. When several entries match, their guidance composes.
 - **`ai-module`**
   - Match:
     - `checks/*/module-eval.nix`
-    - `checks/ai-delivery/**`
     - `checks/module-provenance/**`
     - `config/ai-delivery*.nix`
     - `lib/ai/adapters/**`

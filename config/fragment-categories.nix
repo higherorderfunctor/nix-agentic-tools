@@ -74,10 +74,9 @@ _: {
         # (`rootPoolViolations`). Editing it without the fanout and collision
         # fragments loaded is how the rule gets "simplified" back out.
         "checks/*/module-eval.nix"
-        "checks/ai-delivery/**"
         "checks/module-provenance/**"
-        # The matrix's pure readers and live generator share the layer's
-        # default-directory and independent-probe contracts.
+        # The delivery facts the warning readers share with the layer's
+        # runtime records.
         "config/ai-delivery*.nix"
         # The two backend adapters: the only code allowed to write the four
         # native sink paths, and the far end of every fanout these fragments

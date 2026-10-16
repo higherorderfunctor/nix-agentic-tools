@@ -1,12 +1,13 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-14 — only runtimes with launcher packages enter the
+> **Last verified:** 2026-10-15 — only runtimes with launcher packages enter the
 > wrapper closure; github.com Copilot has none. The CI matrix reads
 > `ciPackages`; the repo shell applies `buildOverlay`. Kimchi source builds
 > require fresh closure measurements; old binary-release figures are not current
 > estimates. The instruction copier check is gone with the generator's
-> materializer. The Codex permission-mix assertions and runtime PATH provenance
-> are consumer-wide shell-entry warnings, not repository enterTest loops. The
+> materializer, and the generated delivery matrix with the old writer suites.
+> The Codex permission-mix assertions and runtime PATH provenance are
+> consumer-wide shell-entry warnings, not repository enterTest loops. The
 > repository shell sets no harness permissions; contributors choose them in
 > their user config.
 >
@@ -35,12 +36,11 @@ matches fail the build. These checks do not inspect a developer's materialized
 skill directories.
 
 The repository no longer repeats instruction-file and Claude settings delivery
-assertions in `enterTest`. `ai-delivery-generated` pins the generic file
-locations and delivery methods in `config/ai-delivery-generated.nix`.
-`lib/ai/adapters/devenv.nix` also contributes `own.py --verify` for owned
-copies, including their real-file requirement. That verification still runs only
-when `devenv test` is invoked; the flake checks test delivery independently of a
-developer's checkout.
+assertions in `enterTest`. ai-module's checks pin where the files plan lands
+each file and by which method. `lib/ai/adapters/devenv.nix` also contributes
+`own.py --verify` for owned copies, including their real-file requirement. That
+verification still runs only when `devenv test` is invoked; the flake checks
+test delivery independently of a developer's checkout.
 
 `devenv.nix` still evaluates an `isCI` branch for the manual diagnostic. It
 omits tooling that enterTest never invokes, but it does not alter repository

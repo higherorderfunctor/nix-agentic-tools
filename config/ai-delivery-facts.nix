@@ -1,44 +1,12 @@
-# Consumer facts and independent input probes. Physical paths, methods and
-# activation names belong to the generated delivery matrix.
+# Consumer facts the delivery records cannot state: absences outside the
+# shared surfaces, native writers beside an unsupported surface, and the
+# input options each row's warning probes.
 {lib}: let
   optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
   absent = reason: {
     inherit reason;
     primitive = "notApplicable";
-    target = null;
-    writerAttr = [];
-    pruneTrigger = "none";
   };
-  probe = option: nonEmpty: empty: {
-    base = {};
-    inherit option;
-    nonEmpty = lib.setAttrByPath option nonEmpty;
-    empty = lib.setAttrByPath option empty;
-  };
-  wrapper = mode: executable: {
-    primitive = "ownWrapper";
-    target = "${executable} process environment (store launcher)";
-    writerAttr =
-      if mode == "hm"
-      then ["home" "packages"]
-      else ["packages"];
-    pruneTrigger = "none; switching the profile/shell selects a new store launcher with the current environment.";
-  };
-  mcpProbe = ecosystem: probe (optionPaths.pool ecosystem "mcpServers") {probe.command = "true";} {};
-  settingsProbe = ecosystem: probe (optionPaths.nativeSettings ecosystem) {model = "probe";} {};
-  hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
-  ownRetraction = mode: "On ${retractionMoment mode}, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
-  # The same program with the other container, for a target whose units are
-  # whole files. The ledger records one sha256 per file it wrote, so a file the
-  # declaration dropped is removed, a file edited since it was written is
-  # backed up first, and a path this generation never wrote is never touched.
-  ownFiles = at: "On ${at}, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
-  # HM reconciles on activation, devenv on shell entry. Both retraction
-  # mechanisms name the moment, and nothing else in a row varies with it.
-  retractionMoment = mode:
-    if mode == "hm"
-    then "activation"
-    else "shell entry";
   inputOptions = surface: ecosystem:
     if surface == "permissions"
     then
@@ -62,141 +30,22 @@
     else
       [["ai" surface]]
       ++ lib.optional (builtins.elem surface (builtins.attrNames (lib.filterAttrs (_: support: support.backends != []) optionPaths.records.${ecosystem}.surfaceSupport))) (optionPaths.pool ecosystem surface);
-  both = value: {
-    devenv = value;
-    hm = value;
+in {
+  inherit absent inputOptions;
+  # Absences on the policy-only permissions surface, which no runtime record
+  # declares.
+  hand = let
+    copilot = absent "github.com Copilot reads no permissions file; a custom agent profile's `tools` list, which ai.copilot.github.agents writes, is the only tool restriction a repository file carries. See https://docs.github.com/en/copilot/reference/custom-agents-configuration.";
+  in {
+    "permissions/copilot/devenv" = copilot;
+    "permissions/copilot/hm" = copilot;
+    "permissions/kiro/devenv" = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";
   };
-  handDefinitions = {
-    environmentVariables = {
-      codex = lib.genAttrs modes (mode: wrapper mode "codex");
-      kimchi = lib.genAttrs modes (mode: wrapper mode "kimchi");
-      kiro = lib.genAttrs modes (mode: wrapper mode "kiro-cli");
-    };
-    permissions = {
-      copilot = both (absent "github.com Copilot reads no permissions file; a custom agent profile's `tools` list, which ai.copilot.github.agents writes, is the only tool restriction a repository file carries. See https://docs.github.com/en/copilot/reference/custom-agents-configuration.");
-      kiro = {devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";};
-    };
-    shell = {
-      codex = lib.genAttrs modes (mode: wrapper mode "codex");
-      kiro = lib.genAttrs modes (mode: wrapper mode "kiro-cli");
-    };
-  };
-  hand = builtins.listToAttrs (lib.concatMap (surface:
-    lib.concatMap (ecosystem:
-      lib.mapAttrsToList (mode: value: lib.nameValuePair "${surface}/${ecosystem}/${mode}" value)
-      handDefinitions.${surface}.${ecosystem}) (builtins.attrNames handDefinitions.${surface}))
-  (builtins.attrNames handDefinitions));
-  inherit (import ./ai-delivery-schema.nix {inherit lib;}) imperativePrimitives key modes;
-  evidence = {
-    claude = "packages/claude-code/lib/mkClaude.nix";
-    codex = "packages/chatgpt-codex/lib/mkCodex.nix";
-    copilot = "packages/copilot-cli/lib/mkCopilot.nix";
-    kimchi = "packages/kimchi/lib/mkKimchi.nix";
-    kiro = "packages/kiro-cli/lib/mkKiro.nix";
-  };
-  metadata = row:
-    {
-      evidence = evidence.${row.ecosystem};
-      inputOptions = inputOptions row.surface row.ecosystem;
-    }
-    // lib.optionalAttrs (key row == "settings/kimchi/devenv") {
-      deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys land as a read-only copy at the fixed project harness path.";
-    }
-    // lib.optionalAttrs (key row == "settings/kiro/devenv") {
-      deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";
-    }
-    // lib.optionalAttrs (key row == "rules/kiro/devenv") {
-      condition = "Always-on unscoped rules join sharedAgentsMd; scoped/manual rules stay in steering.";
-    };
-  probeFor = row:
-  # Agent profiles that land as copies: a probe agent must change the body.
-    if row.surface == "agents" && builtins.elem row.ecosystem ["copilot" "kimchi"]
-    then
-      probe (optionPaths.pool row.ecosystem "agents") {
-        probe = {
-          description = "probe";
-          instructions.text = "probe";
-        };
-      } {}
-    # The row's OWN runtime's context: the shared AGENTS.md is a copy whose
-    # writer must see it change. For the Kiro retirement row this is the
-    # probe it always had.
-    else if row.surface == "context"
-    then probe (optionPaths.pool row.ecosystem "context") {text = "probe";} {}
-    else if row.surface == "shell"
-    then
-      if row.ecosystem == "claude"
-      then probe (optionPaths.nativeSettings "claude") {env.CLAUDE_CODE_SHELL = "/bin/bash";} {}
-      else probe ["ai" "kimchi" "native" "harnessSettings"] {shellPath = "/bin/bash";} {}
-    else if row.surface == "hooks"
-    then hookProbe
-    else if row.surface == "mcpServers"
-    then mcpProbe row.ecosystem
-    else if row.surface == "permissions"
-    then
-      if row.ecosystem == "kimchi"
-      then probe ["ai" "kimchi" "permissions"] {allow = ["probe"];} {}
-      else probe ["ai" "codex" "native" "settings" "permissions"] {probe.network.enabled = false;} {}
-    else if row.surface == "rules" && row.ecosystem == "claude"
-    then probe ["ai" "rules"] {probe.text = "probe";} {}
-    else if row.ecosystem == "codex" && row.surface == "rules" && lib.hasInfix "/rules/" row.target
-    then probe ["ai" "codex" "execpolicyRules"] {probe = "prefix_rule(pattern = [\"probe\"], decision = \"allow\")";} {}
-    # A rule copy's writer must see a rule of the kind it carries: the shared
-    # AGENTS.md takes an unscoped one, Kiro steering and Copilot instruction
-    # files a scoped one.
-    else if row.surface == "rules"
-    then
-      probe ["ai" "rules"] {
-        probe =
-          {text = "probe";}
-          // lib.optionalAttrs (!lib.hasSuffix "AGENTS.md" row.target) {matcher = ["probe/**"];};
-      } {}
-    else if row.ecosystem == "claude"
-    then probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {}
-    else if row.ecosystem == "kimchi"
-    then
-      if lib.hasSuffix "/harness/settings.json" row.target
-      then
-        probe ["ai" "kimchi" "native" "harnessSettings"]
-        (
-          # `resources` is user-scope-only, so devenv rejects it.
-          if row.mode == "hm"
-          then {resources.probe = true;}
-          else {hideThinkingBlock = true;}
-        ) {}
-      else
-        probe ["ai" "kimchi" "native" "settings"] {
-          llmEndpoint = "https://example.invalid";
-          skillPaths = ["probe"];
-        } {}
-    else if row.ecosystem == "kiro"
-    then
-      probe (optionPaths.nativeSettings row.ecosystem)
-      (
-        if row.mode == "hm"
-        then {chat.defaultModel = "probe";}
-        else {chat.enableTangentMode = true;}
-      ) {}
-    else settingsProbe row.ecosystem;
-  annotate = row: let
-    imperative = builtins.elem row.primitive imperativePrimitives;
-    declaration = probeFor row;
-  in
-    row
-    // lib.optionalAttrs imperative {probe = declaration;}
-    // lib.optionalAttrs (imperative && row.surface == "settings") {inputOptions = [declaration.option];}
-    # Only a retirement row is declaration-independent. An owned COPY of a
-    # context file (the shared AGENTS.md) is an ordinary writer whose body
-    # follows the declaration.
-    // lib.optionalAttrs (imperative && row.surface == "context" && lib.hasSuffix "/<legacy-owned-file>" row.target) {
-      declarationIndependent = "This writer removes what a PRIOR generation's ledger recorded. Its `own` target declares NO units, so its plan — and therefore the whole body, which is one command over two store paths — is the same under every declaration by construction.";
-    }
-    // lib.optionalAttrs (row.ecosystem == "codex" && row.surface == "rules" && lib.hasInfix "/rules/" row.target) {
-      inputOptions = [["ai" "codex" "execpolicyRules"]];
-      role = "Native execution-policy rules are a separate declaration from Markdown ai.rules.";
-    };
-  # Diagnostic-only writers name inputs the primary writer cannot consume;
-  # they do not alter lowering or the physical delivery matrix.
+  # Shared surfaces a record does not consume while a native option still
+  # writes the file (Kiro's native hooks and `cli.json`): the row delivers
+  # and the root request warns as a child, so the native options stay quiet.
+  nativeWriters = ["hooks/kiro/devenv" "hooks/kiro/hm" "settings/kiro/devenv" "settings/kiro/hm"];
+  # Diagnostic-only children for inputs the primary row cannot consume.
   supplements = {
     "settings/claude/devenv" = [
       ((absent "unpinLaunchEffort is an explicit HM-only global ~/.claude.json operation; devenv does not mutate HOME.")
@@ -206,14 +55,4 @@
         })
     ];
   };
-in {
-  inherit absent annotate hand key metadata supplements;
-  pruneTrigger = mode: primitive:
-    if primitive == "ownLeaves"
-    then ownRetraction mode
-    else if primitive == "ownPathManaged"
-    then ownFiles (retractionMoment mode)
-    else if mode == "hm"
-    then "Home Manager generation diff on switch; changed declarations replace the store symlink."
-    else "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
 }

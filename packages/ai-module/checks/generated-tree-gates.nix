@@ -34,7 +34,7 @@
           enable = true;
           # The devenv settings copy is old-path delivery, built from the tree.
           files.".claude/settings.json".content.enable = false;
-          skills.probe = ../../../checks/ai-delivery-layer/fixtures/probe-skill;
+          skills.probe = ./fixtures/probe-skill;
         };
       };
       delivered = [".claude/skills/probe/SKILL.md" ".claude/skills/probe/references/nested.md" ".claude/skills/probe/scripts/executable-probe"];

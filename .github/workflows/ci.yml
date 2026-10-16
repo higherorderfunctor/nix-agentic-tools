@@ -700,8 +700,8 @@ jobs:
       # evaluate and build every package; the module checks import every
       # module. The only output no gate evaluates is `devShells.ci`, a four
       # package mkShell for the update pipeline. Neither no-build form works
-      # as a substitute: `nix flake check --no-build` cannot copy the fixture
-      # path checks/ai-delivery-layer reads back ("path … is not valid"), and
+      # as a substitute: `nix flake check --no-build` cannot copy a fixture
+      # path a check reads back ("path … is not valid"), and
       # `nix flake show` disables import-from-derivation outright. Fork PRs
       # skip the matrix (read-only Hestia), so they keep the single full check.
       - name: Run full flake checks (fork)

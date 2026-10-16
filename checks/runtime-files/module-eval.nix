@@ -744,7 +744,7 @@ in {
           '';
           claude = {
             enable = true;
-            skills.probe = ../ai-delivery-layer/fixtures/probe-skill;
+            skills.probe = ../../packages/ai-module/checks/fixtures/probe-skill;
           };
           context.text = "probe";
           rules.probe.text = "probe";
@@ -773,7 +773,7 @@ in {
           checks.skills = "exit 7";
           claude = {
             enable = true;
-            skills.probe = ../ai-delivery-layer/fixtures/probe-skill;
+            skills.probe = ../../packages/ai-module/checks/fixtures/probe-skill;
           };
         };
       };
@@ -818,12 +818,12 @@ in {
 
     module-ai-checks-stamp-coverage = mkTest "ai-checks-stamp-coverage" (
       let
-        specimen = import ../ai-delivery/specimen.nix {inherit lib;};
+        specimen = import ./specimen.nix {inherit lib;};
         missing = mode: runtime: let
           evaluated =
             if mode == "hm"
-            then evalHm (specimen.config mode runtime)
-            else evalDevenv (specimen.config mode runtime);
+            then evalHm (specimen mode runtime)
+            else evalDevenv (specimen mode runtime);
         in
           lib.mapAttrsToList
           (path: _: "${runtime}/${mode}/${path}")
