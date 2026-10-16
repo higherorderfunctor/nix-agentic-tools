@@ -10,7 +10,6 @@
   appRecord,
   backend,
   config,
-  options ? {},
   # Path each context/rule unit lands in (the record's `contentTargets`), the
   # paths the shared AGENTS.md owner holds, and whether the runtime has
   # context at all. All empty for a caller that knows none of them.

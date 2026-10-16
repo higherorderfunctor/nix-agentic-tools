@@ -66,7 +66,7 @@
       lib.setAttrByPath (normalizedPath pool) value)
     values);
   deliveryWarnings = import ../delivery-warnings.nix {inherit lib;} {
-    inherit appRecord backend config options;
+    inherit appRecord backend config;
     # Where this runtime's context and rules land, from its own path
     # bindings, and which of those paths the shared AGENTS.md owner holds.
     contentTargets = lib.optionalAttrs (appRecord ? contentTargets) (let
