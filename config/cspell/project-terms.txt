@@ -222,6 +222,7 @@ libexec
 libgcc
 libgit
 libm
+libopus
 libpthread
 librt
 librusty

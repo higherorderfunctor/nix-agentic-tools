@@ -1,12 +1,12 @@
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-16 — the package carries its prebuilt voice
-> resource; settings stage through the files engine and selection uses an
-> ungated layer-3 command; devenv can opt into runtime project trust; launcher
-> flags are checked as root-command `uses`; Home Manager owns daemon selection
-> and settings; both backends run the offline project-document and
-> project-config preflight before it execs the original binary, isolated by the
-> shared `lib/ai/launcher-preflight.nix`.
+> **Last verified:** 2026-10-16 — the package uses nixpkgs' source-built voice
+> and store-linked runtime at its output root; settings stage through the files
+> engine and selection uses an ungated layer-3 command; devenv can opt into
+> runtime project trust; launcher flags are checked as root-command `uses`; Home
+> Manager owns daemon selection and settings; both backends run the offline
+> project-document and project-config preflight before it execs the original
+> binary, isolated by the shared `lib/ai/launcher-preflight.nix`.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -17,8 +17,8 @@ never reaches the process that runs every tool call.
 ## Home Manager pins it (`ai.codex.pinDaemonToPackage`, default on)
 
 - **The pin.** Activation (`lib/daemonSelect.nix`) points `current` straight at
-  `<package>/libexec/codex` and removes any `auto-update-version` marker. A
-  selection outside `releases/` with no marker never qualifies for the updater.
+  `<package>/.` and removes any `auto-update-version` marker. A selection
+  outside `releases/` with no marker never qualifies for the updater.
   `updater.autoUpdateEnabled = false`, the pin's default in
   `ai.codex.native.daemonSettings`, is the second guard.
 - **Upstream's lock.** The selection runs under upstream's daemon operation lock
@@ -41,14 +41,13 @@ never reaches the process that runs every tool call.
 - **Release only what it wrote.** Disabling Codex or the pin removes a `current`
   of the exact shape the selector writes, `<store>/<name>/<root>`, so GC cannot
   leave it dangling. Any other `current`, such as a `home.file`-managed link, is
-  left alone. `<root>` has one source, `lib/packageLayout.nix`: `package.nix`
-  installs there, the selector builds its owned shape from it, and `mkCodex.nix`
-  refuses to pin a package whose `passthru.codexPackage.root` differs, since it
-  could never release it.
+  left alone. `<root>` is `.` and has one source, `lib/packageLayout.nix`:
+  `package.nix` installs there, the selector builds its owned shape from it, and
+  `mkCodex.nix` refuses to pin a package whose `passthru.codexPackage.root`
+  differs, since it could never release it.
 - **The opt-out.** `false` restores upstream's copy and updater. The copied
-  executables are this source build's, and its voice resource is patched to the
-  nix glibc; both link against store paths nothing roots from the copy, so it
-  breaks after GC until the updater replaces it.
+  executables and GStreamer runtime depend on store paths nothing roots from the
+  copy, so it breaks after GC until the updater replaces it.
 - **Auto-start is off** (`features.daemon_auto_start` defaults to false; users
   can opt in). A daemon keeps the environment of whoever started it and serves
   every later client with it. With sessions open across direnv or devenv
@@ -149,6 +148,10 @@ runs both notices' fixtures through each backend's launcher.
 
 ## Gates
 
+- `checks/chatgpt-codex-package-layout.nix` verifies the output-root layout, a
+  single source-built voice host, matching commit stamps and daemon bootstrap
+  through the store-linked runtime. `chatgpt-codex-voice-runtime` reuses
+  nixpkgs' handshake and GStreamer initialization test on Linux and Darwin.
 - `checks/chatgpt-codex-daemon-selection.nix` runs the rendered activation
   against the real daemon: pin, unchanged re-pin under a held lock, simulated
   bump, unpin, and a foreign `current` that survives, with the settings copy
