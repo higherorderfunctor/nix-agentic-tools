@@ -23,6 +23,8 @@ in {
   checks.semble-worker-mappings = pkgs.runCommand "semble-worker-mappings" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
+    export HOME="$TMPDIR/home"
+    ${pkgs.coreutils}/bin/mkdir -p "$HOME"
     ${script}
     touch "$out"
   '';
