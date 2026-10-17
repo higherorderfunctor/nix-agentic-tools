@@ -11,8 +11,9 @@ applyTo: "packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix,packages/chatgpt
 > reader through `apiKeyHelper` for file, command and concat references, and
 > clears inherited API keys, bearer tokens, custom headers and
 > Bedrock/Vertex/Foundry switches in settings, and suppresses the inherited
-> API-key descriptor before Claude starts. Codex, Kimchi, Kiro and Copilot omit
-> `proxy` from `surfaceSupport` and warn through the generated warning cases.
+> API-key descriptor before Claude starts. Codex uses command-backed provider
+> auth. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport` and warn
+> through the generated warning cases.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
@@ -55,30 +56,32 @@ conflict.
 One provider table per endpoint: `base_url` is the origin plus `/v1`, `name` is
 the provider id (Codex refuses to load a provider without one),
 `wire_api = "responses"` and `requires_openai_auth = false`. `true` would send a
-ChatGPT login's token to the proxy. `plain` becomes `experimental_bearer_token`.
-`file` and `helper` become command-backed `auth` (`cat <path>`, or the helper),
-which Codex re-runs every five minutes and after a 401. Never `env_key`: tool
+ChatGPT login's token to the proxy. Every key becomes command-backed `auth`
+through a strict helper that calls `redact.assign` and prints the resolved key
+with a constant `printf` format. File, command and concat references share the
+reader's failure checks; no resolved key is interpolated into shell or TOML.
+Codex re-runs auth every five minutes and after a 401. Never `env_key`: tool
 subprocesses inherit it, and Home Manager's launcher environment does not reach
 devenv's.
 
 - **Home Manager** writes `model_provider = "ai-proxy"` and
-  `[model_providers.ai-proxy]` into user config.toml, plus the overridable
-  defaults `features.plugins = false` and `analytics.enabled = false`, which
-  stop plugin sync and usage metrics from reaching other hosts. A devenv shell
-  inherits the user file with no devenv configuration.
+  `[model_providers.ai-proxy]` into user config.toml. A devenv shell inherits
+  the user file with no devenv configuration.
 - **devenv** cannot use project config: Codex strips `model_provider` and
   `model_providers` from project layers. Its launcher passes
   `-c model_providers.ai-proxy-devenv={…}` and
   `-c model_provider=ai-proxy-devenv`, the highest layer, baked in as
-  `--add-flag`s. The quieting defaults go to the trusted project's config.toml.
+  `--add-flag`s.
 - **A separate id on devenv is load-bearing.** Codex deep-merges layers per key,
-  so session flags reusing `ai-proxy` would add their auth fields to the user
-  table, and `auth` beside `experimental_bearer_token` fails to load.
+  so session flags reusing `ai-proxy` could inherit incompatible user auth
+  fields, such as `experimental_bearer_token`, beside the proxy's `auth`.
 - No `[profiles.*]` or `profile`: the pinned Codex rejects both.
 
 `chatgpt-codex-proxy` runs the pinned binary against loopback mock proxies in
-the build sandbox. It covers each Home Manager key form, the devenv url form,
-and Home Manager plus devenv with different key forms.
+the build sandbox. It covers all three reference forms on both backends, Home
+Manager plus devenv precedence, and a legacy user bearer token beside a devenv
+provider. It also executes the helpers directly with quotes, multiline values
+and shell metacharacters, and checks failure output for leaks.
 
 ### Kimchi, Kiro, Copilot
 

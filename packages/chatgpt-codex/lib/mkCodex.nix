@@ -1390,10 +1390,8 @@ in
               project_doc_max_bytes = lib.mkDefault cfg.projectDocMaxBytes;
             })
             # ai.proxy (./proxy.nix): Home Manager selects the provider in
-            # user config.toml; devenv's launcher selects its own, and the
-            # quieting defaults land in the trusted project's config.toml.
-            (lib.mkIf (isHm && resolvedProxy ? endpoint) (codexProxy.hmSettings resolvedProxy.endpoint))
-            (lib.mkIf (!isHm && resolvedProxy != null) codexProxy.quietSettings)
+            # user config.toml; devenv's launcher selects its own.
+            (lib.mkIf (isHm && resolvedProxy != null) (codexProxy.hmSettings resolvedProxy))
           ];
           # `pinDaemonToPackage` is Home Manager-only (see its option), so this
           # must not force `options.ai.codex.pinDaemonToPackage` under devenv,

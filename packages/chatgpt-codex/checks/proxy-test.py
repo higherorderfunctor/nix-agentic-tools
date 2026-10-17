@@ -1,3 +1,4 @@
+# cspell:ignore urandom
 """Offline ai.proxy contract: the pinned Codex sends every request to the
 selected proxy with the selected client key, through Home Manager's user
 config.toml and devenv's launcher. Mock proxies listen on loopback inside the
@@ -9,18 +10,13 @@ import shutil
 import subprocess
 import sys
 import threading
+import tomllib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-(
-    codex,
-    hm_plain,
-    hm_file,
-    hm_helper,
-    devenv_plain,
-    devenv_file,
-    secrets_placeholder,
-) = sys.argv[1:]
+codex, key_file, cases_file = sys.argv[1:]
+cases = json.loads(Path(cases_file).read_text())
+key_path = Path(key_file)
 HM_PORT, DEVENV_PORT = 8317, 8318
 
 requests = []
@@ -82,26 +78,25 @@ for port in (HM_PORT, DEVENV_PORT):
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
 tmp = Path(os.environ["TMPDIR"])
-secrets = tmp / "secrets"
-secrets.mkdir()
-(secrets / "hm-key").write_text("sk-hm-file\n")
 project = tmp / "project"
 project.mkdir()
 
 
-def run(binary, config):
+def run(binary, config, key):
     """One `codex exec` with a fresh Codex home holding `config`, or none."""
     home = Path(tmp / "home")
     shutil.rmtree(home, ignore_errors=True)
     codex_home = home / ".codex"
     codex_home.mkdir(parents=True)
     if config is not None:
-        text = Path(config).read_text().replace(secrets_placeholder, str(secrets))
+        text = Path(config).read_text()
         (codex_home / "config.toml").write_text(text)
     with lock:
         requests.clear()
     environment = {
         "CODEX_HOME": str(codex_home),
+        "CODEX_PROXY_TEST_STATUS": "0",
+        "CODEX_PROXY_TEST_VALUE": key + "\n\n",
         "DEVENV_ROOT": str(project),
         "HOME": str(home),
         "PATH": os.environ["PATH"],
@@ -120,6 +115,8 @@ def run(binary, config):
 
 
 def expect(name, result, seen, port, key):
+    if result.returncode != 0:
+        sys.exit(f"FAIL {name}: codex exited {result.returncode}: {result.stderr}")
     posts = [r for r in seen if r["method"] == "POST" and r["path"] == "/v1/responses"]
     if not posts:
         sys.exit(f"FAIL {name}: no POST /v1/responses reached a proxy.\nseen={seen}\nstderr={result.stderr}")
@@ -129,17 +126,60 @@ def expect(name, result, seen, port, key):
     print(f"ok: {name}: {len(seen)} requests, all to :{port} with the selected key")
 
 
-# Home Manager: the provider and its key form in user config.toml.
-expect("hm plain", *run(codex, hm_plain), HM_PORT, "sk-hm-plain")
-expect("hm file", *run(codex, hm_file), HM_PORT, "sk-hm-file")
-expect("hm helper", *run(codex, hm_helper), HM_PORT, "sk-hm-helper")
+def resolved(form, key):
+    return 'prefix-"\'$HOME$(touch injected)`' + key + "-suffix" if form == "concat" else key
 
-# devenv alone: the url form as eval-time session flags, in each key form a
-# session flag renders differently: a plain key's `experimental_bearer_token`
-# and a file key's command-backed `auth` inline table.
-expect("devenv url plain", *run(devenv_plain, None), DEVENV_PORT, "sk-devenv-plain")
-expect("devenv url file", *run(devenv_file, None), DEVENV_PORT, "sk-devenv-file")
 
-# Both: devenv's own provider id wins over Home Manager's user provider, even
-# with the other key form (a shared id would fail to load).
-expect("hm + devenv url", *run(devenv_file, hm_plain), DEVENV_PORT, "sk-devenv-file")
+# Exercise runtime bytes directly: HTTP disallows embedded newlines, while a
+# reference must preserve them without interpreting any shell metacharacters.
+secret = "secret-" + os.urandom(16).hex() + " ' \" \\ $HOME $(touch injected) `touch injected`\nnext"
+helper_cases = 0
+for form, config in cases["configs"].items():
+    provider = tomllib.loads(Path(config).read_text())["model_providers"]["ai-proxy"]
+    helper = provider["auth"]["command"]
+    key_path.write_text(secret + "\n\n")
+    environment = dict(os.environ, CODEX_PROXY_TEST_STATUS="0", CODEX_PROXY_TEST_VALUE=secret + "\n\n")
+    result = subprocess.run([helper], env=environment, capture_output=True, text=True)
+    assert (result.returncode, result.stdout, result.stderr) == (0, resolved(form, secret), ""), form
+    assert not Path("injected").exists(), (form, "shell injection")
+    helper_cases += 1
+    if form == "command":
+        environment["CODEX_PROXY_TEST_STATUS"] = "7"
+    else:
+        key_path.unlink()
+    result = subprocess.run([helper], env=environment, capture_output=True, text=True)
+    assert result.returncode != 0 and result.stdout == "", (form, "failed reference succeeded")
+    assert "ai.codex.proxy.key:" in result.stderr and secret not in result.stderr, form
+    helper_cases += 1
+print(f"verified {helper_cases} Codex helper cases: file, command, concat, multiline bytes and failures")
+
+# Each reference form reaches the selected proxy through real Codex provider
+# auth. A legacy bearer token in the user layer must not contaminate devenv's
+# separately named provider, and devenv must win over Home Manager's endpoint.
+for form, config in cases["configs"].items():
+    key = f"sk-hm-{form}"
+    key_path.write_text(key + "\n\n")
+    expect(f"hm {form}", *run(codex, config, key), HM_PORT, resolved(form, key))
+for form, binary in cases["launchers"].items():
+    key = f"sk-devenv-{form}"
+    key_path.write_text(key + "\n\n")
+    expect(f"devenv {form}", *run(binary, None, key), DEVENV_PORT, resolved(form, key))
+key_path.write_text("sk-selected\n")
+expect(
+    "hm + devenv command",
+    *run(cases["launchers"]["command"], cases["configs"]["file"], "sk-selected"),
+    DEVENV_PORT,
+    "sk-selected",
+)
+legacy = tmp / "legacy.toml"
+legacy.write_text(
+    'model_provider = "ai-proxy"\n[model_providers.ai-proxy]\n'
+    'name = "ai-proxy"\nbase_url = "http://127.0.0.1:8317/v1"\n'
+    'wire_api = "responses"\nexperimental_bearer_token = "sk-user-legacy"\n'
+)
+expect(
+    "legacy user auth + devenv file",
+    *run(cases["launchers"]["file"], legacy, "sk-selected"),
+    DEVENV_PORT,
+    "sk-selected",
+)
