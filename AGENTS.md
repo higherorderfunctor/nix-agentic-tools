@@ -116,6 +116,11 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`packages/claude-code/docs/claude-code-wrapper.md`](packages/claude-code/docs/claude-code-wrapper.md)
     - [`packages/claude-code/docs/heron-brook-clamp.md`](packages/claude-code/docs/heron-brook-clamp.md)
+- **`cliproxyapi`**
+  - Match:
+    - `packages/cliproxyapi/**`
+  - Read:
+    - [`packages/cliproxyapi/docs/cliproxyapi-extraction.md`](packages/cliproxyapi/docs/cliproxyapi-extraction.md)
 - **`codex-daemon`**
   - Match:
     - `packages/chatgpt-codex/**`

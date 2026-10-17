@@ -48,6 +48,14 @@
       };
       kinds = ["bad-row" "secret"];
     };
+    blank-list = {
+      input.rows.value.description = [];
+      kinds = ["bad-row"];
+    };
+    blank-list-item = {
+      input.rows.value.description = ["kept" " "];
+      kinds = ["bad-row"];
+    };
     blank-non-secret-excluded = {
       input.rows.value.excluded = "";
       kinds = ["bad-row"];
@@ -75,6 +83,19 @@
       entries = [];
       kinds = [];
     };
+    ignored-list = {
+      input.rows.value.ignored = ["reason"];
+      kinds = ["bad-row"];
+    };
+    list-fill = {
+      input.rows.value.description = ["fill-first" "round-robin"];
+      description = ["fill-first" "round-robin"];
+      kinds = [];
+    };
+    list-non-string = {
+      input.rows.value.description = ["kept" 1];
+      kinds = ["bad-row"];
+    };
     needs-human = {
       input.facts.value.type = null;
       kinds = ["needs-human"];
@@ -82,6 +103,52 @@
     new-name = {
       input.rows = {};
       kinds = [];
+    };
+    # A pattern row fills every fact it matches, a credential included.
+    pattern = {
+      input = {
+        facts = {
+          "keys.a[].token".type = "string";
+          "keys.b-c[].token".type = "string";
+        };
+        patterns."keys.*[].token".excluded = "runtime file delivery";
+        rows = {};
+      };
+      kinds = [];
+      check = result: lib.all (entry: entry.excluded == "runtime file delivery") (builtins.attrValues result.entries);
+    };
+    # A `*` matches one key, never a path.
+    pattern-one-key = {
+      input = {
+        facts."keys.a.b.leaf".type = "string";
+        patterns."keys.*.leaf".description = "hand prose";
+        rows = {};
+      };
+      kinds = ["removed"];
+      check = result: !(result.entries."keys.a.b.leaf" ? description);
+    };
+    pattern-overlap = {
+      input = {
+        facts."keys.a.leaf".type = "string";
+        patterns."keys.*.leaf".description = "hand prose";
+        rows."keys.a.leaf".description = "other prose";
+      };
+      kinds = ["bad-row"];
+    };
+    pattern-pattern-overlap = {
+      input = {
+        facts."keys.a.leaf".type = "string";
+        patterns = {
+          "*.a.leaf".description = "other prose";
+          "keys.*.leaf".description = "hand prose";
+        };
+        rows = {};
+      };
+      kinds = ["bad-row"];
+    };
+    pattern-stale = {
+      input.patterns."keys.*.leaf".description = "hand prose";
+      kinds = ["removed"];
     };
     removed-row = {
       input = {
@@ -209,7 +276,8 @@
     == case.kinds
     && builtins.attrNames result.entries == (case.entries or (builtins.attrNames surface.facts))
     && (!(case ? description) || result.entries.value.description == case.description)
-    && (!(case ? type) || result.entries.value.type == case.type);
+    && (!(case ? type) || result.entries.value.type == case.type)
+    && (!(case ? check) || case.check result);
   failures = builtins.attrNames (lib.filterAttrs (_: case: !(run case)) cases);
 in {
   checks.extracted-reconcile = harness.mkTest "extracted-reconcile" (
