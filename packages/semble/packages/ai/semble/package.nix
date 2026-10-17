@@ -10,6 +10,7 @@
   repoPath,
   versionCheckHook,
 }: let
+  inherit (pkgs.ai.generic) mcp;
   inherit (python3.pkgs) buildPythonPackage;
   customization = import ../../../lib/customization.nix {inherit lib;};
   defaultConfig = pkgs.writeText "semble-config.json" (builtins.toJSON customization.defaultConfig);
@@ -180,6 +181,7 @@ in
       ../../../patches/extra-grammars.patch
       ../../../patches/models.patch
     ];
+    patchFlags = ["-p1" "--fuzz=0"];
     # Scope strict mode: Python's later wrapping hook reads unset array keys.
     postPatch = ''
       (

@@ -1,7 +1,8 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-11 — extracted updates run `regenCommand` through
-> owner checks built with `mkOwnerCheck` and their `passthru.regenerate`.
+> **Last verified:** 2026-10-16 — Semble uses the additive MCP Python SDK
+> overlay; its SDK and private build and transport pins update as one owner
+> group.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -262,9 +263,16 @@ for majors of one package; this is the general form.
 ### Semble's source build and roles
 
 Semble uses `buildPythonApplication` with this flake's nixpkgs. Its three
-vendored dependencies stay let-bound and exposed through passthru. Four source
-sidecars feed one grouped `--use-update-script` target; its final extraction
-step regenerates both committed Semble snapshots from package passthru.
+vendored dependencies stay let-bound. Four source sidecars feed one grouped
+`--use-update-script` target; its final extraction step regenerates both
+committed Semble snapshots from package passthru. The MCP SDK is a separate
+supporting package at `pkgs.ai.generic.mcp`, owned by `packages/mcp`. It
+overrides nixpkgs' Python SDK without extending the Python package set. Its
+owner groups the SDK, transport and versioning-tool source pins under one update
+target. `mcp-types` shares the SDK source and version, while `httpcore2` shares
+HTTPX2's; those exact-version pairs cannot drift independently. The private
+versioning tool also needs a newer Dunamai. These scoped dependencies leave
+nixpkgs' MCP 1.x consumers intact.
 
 When one derivation ships multiple role binaries, expose secondary roles with a
 plain attrset/meta overlay. `semble-mcp` changes only `meta.mainProgram`, so

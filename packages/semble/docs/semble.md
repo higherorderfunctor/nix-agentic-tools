@@ -1,9 +1,8 @@
 # Semble integrations
 
-> **Last verified:** 2026-10-16 — cache invalidation uses layer-1 activation on
-> both backends; Semble uses measured-once extracted facts, one unforked
-> `extracted.json`; grouped dependency updates respect the pinned release
-> requirements.
+> **Last verified:** 2026-10-16 — indexing discovers files before chunking; the
+> parent resolves mapped languages for spawned workers; the SDK uses the scoped
+> MCP overlay.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -15,7 +14,8 @@
 Semble provides local semantic and lexical code search through a CLI and an MCP
 server. This repository builds it from source with its own nixpkgs and adds
 matching Home Manager and devenv convenience modules for Claude, Codex, and
-Kiro.
+Kiro. The MCP entry point uses `pkgs.ai.generic.mcp`, an independently tracked
+Python SDK overlay; nixpkgs' own Python SDK stays available to other consumers.
 
 The published package always carries both patches; with the default config,
 search behaves like upstream, but an index written by a non-Nix `semble` in the
@@ -163,18 +163,23 @@ The extracted extension map is used for validation and documentation only. It is
 not merged in as default mappings: that would re-declare every built-in suffix
 and drift from upstream's own detection.
 
-In Semble 0.6.0, index creation collects files before wrapping iteration in a
-progress bar. The customization patch passes content selection to that
-collection and the repository root to language detection inside the loop. The
-`module-semble-extra-grammars-load` check runs the configured launcher and
-exercises grammar loading, mapped discovery, and cache fingerprints;
-`module-semble-null-language-runtime` indexes null-mapped files against a
-fixture model and searches them. Static Python modules read the JSON named by
-`SEMBLE_NIX_CONFIG` once, failing if the file is missing. Python computes a
-SHA-256 fingerprint over its grammar and mapping config, writes it into index
-metadata, and rejects caches created by a different config. The HM and devenv
-modules additionally clear their owned cache root when the underlying Semble
-package changes.
+Index creation discovers and stats files with an `os.scandir` walk before
+chunking them. The customization patch passes content selection through
+`_stat_files` into the walker and resolves each stale file's language against
+the indexed repository root in the parent. Chunking jobs carry that resolved
+language, including `None`, into `_chunk_file`; `SEMBLE_INDEX_WORKERS` selects
+spawned worker processes for at least 200 stale files. Display paths do not
+affect root-relative mappings. The `semble-worker-mappings` check compares
+serial and spawned indexing of mapped files, including null languages and
+content selection. The `module-semble-extra-grammars-load` check runs the
+configured launcher and exercises grammar loading, mapped discovery, and cache
+fingerprints; `module-semble-null-language-runtime` indexes null-mapped files
+against a fixture model and searches them. Static Python modules read the JSON
+named by `SEMBLE_NIX_CONFIG` once, failing if the file is missing. Python
+computes a SHA-256 fingerprint over its grammar and mapping config, writes it
+into index metadata, and rejects caches created by a different config. The HM
+and devenv modules additionally clear their owned cache root when the underlying
+Semble package changes.
 
 Shebang-based inference is deliberately out of scope. Extensionless scripts must
 be listed through `pathMappings`; the integration does not read file contents to
