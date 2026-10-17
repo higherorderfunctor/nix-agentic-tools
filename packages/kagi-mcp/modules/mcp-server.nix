@@ -1,8 +1,4 @@
-{
-  lib,
-  mcpLib,
-  ...
-}: let
+{lib, ...}: let
   inherit (lib) mkOption types optionalAttrs;
 in {
   meta = {
@@ -22,7 +18,11 @@ in {
   };
 
   settingsOptions = {
-    credentials = mcpLib.mkCredentialsOption "KAGI_API_KEY";
+    credentials = mkOption {
+      type = types.nullOr (import ../../../lib/redact {inherit lib;}).types.redacted;
+      default = null;
+      description = "Redact reference resolved into KAGI_API_KEY when the server starts.";
+    };
 
     path = mkOption {
       type = types.str;

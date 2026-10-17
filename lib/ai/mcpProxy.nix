@@ -97,7 +97,7 @@
 }: let
   inherit (lib) concatStringsSep filterAttrs foldl' mapAttrs mapAttrs' mapAttrsToList;
 
-  credentialsLib = import ../credentials.nix {inherit lib;};
+  redact = import ../redact {inherit lib;};
 
   # Upper-case; every non-alphanumeric becomes '_'. Same shape as the
   # Kiro preprocessor's `deriveEnvVar`, deliberately NOT shared with it:
@@ -170,7 +170,7 @@
     "X-Forwarded-Proto"
   ];
 
-  isCredential = v: builtins.isAttrs v && (v ? file || v ? helper);
+  isCredential = v: builtins.isAttrs v && v ? _redact;
 
   isProxied = srv:
     builtins.isAttrs srv
@@ -257,35 +257,18 @@
     }
   ];
 
-  # ── One secretValue → { rendered; secrets; } ────────────────────────
-  # A plain string is literal config. A credential becomes
-  # `<prefix>{$VAR}<suffix>` plus the VAR→credential binding the wrapper
-  # exports. prefix/suffix stay in the CONFIG rather than in the exported
-  # value, so the env var holds the raw secret and nothing else — which
-  # also means rotating the file needs no change here.
-  #
-  # The token itself comes from `envRef` — see the escaping trap noted
-  # there before rewriting this as an interpolated string.
+  # The whole composed value is read once into a consumer-owned variable.
   renderValue = serverName: field: value:
-    if !(isCredential value)
+    if builtins.isString value
     then {
       rendered = value;
       secrets = {};
     }
     else let
-      var =
-        if (value.var or null) != null
-        then value.var
-        else envVarFor serverName field;
-      prefix = value.prefix or "";
-      suffix = value.suffix or "";
-      cred =
-        if (value.file or null) != null
-        then {inherit (value) file;}
-        else {inherit (value) helper;};
+      var = envVarFor serverName "header_${field}";
     in {
-      rendered = prefix + envRef var + suffix;
-      secrets = {${var} = cred;};
+      rendered = envRef var;
+      secrets = {${var} = value;};
     };
 
   # ── Per-server proxy spec ───────────────────────────────────────────
@@ -324,12 +307,7 @@
     # single shape instead of an eval-time and a runtime variant.
     urlSecret =
       if urlCred
-      then
-        (
-          if (url.file or null) != null
-          then {inherit (url) file;}
-          else {inherit (url) helper;}
-        )
+      then url
       else null;
     urlLiteral =
       if urlCred
@@ -337,9 +315,11 @@
       else url;
 
     headers = mapAttrs (_: r: r.rendered) headerResults;
-    headerSecrets =
-      foldl' (acc: r: acc // r.secrets) {}
-      (builtins.attrValues headerResults);
+    headerSecrets = foldl' (acc: r:
+      if lib.any (var: acc ? ${var} && acc.${var} != r.secrets.${var}) (builtins.attrNames r.secrets)
+      then throw "MCP proxy ${serverName}: headers derive the same variable; rename one header."
+      else acc // r.secrets) {}
+    (builtins.attrValues headerResults);
 
     # Headers the operator set to null: forwarded as deletions so a client
     # header can be dropped before it reaches the upstream.
@@ -429,19 +409,20 @@
     '';
 
   # ── ExecStart wrapper ───────────────────────────────────────────────
-  # Reads every secret from its file (absolute coreutils paths, empty and
-  # missing-file guards — see lib/credentials.nix), splits the upstream
+  # Resolves redact references at launch, then splits the upstream
   # url into origin and path, then execs Caddy. Nothing lands in argv.
   #
-  # Failing CLOSED here is deliberate and differs from the kiro launcher,
-  # which cannot refuse to start the user's editor. A proxy that starts
-  # without its credential would answer every client with a 401 from the
-  # upstream and look like a broken remote, so it exits instead.
+  # A failed read aborts before a daemon can answer clients with upstream 401s.
   startScriptFor = spec: let
     secretExports =
       concatStringsSep "\n"
       (mapAttrsToList
-        (var: cred: credentialsLib.mkSecretExport pkgs var cred)
+        (variable: value:
+          redact.assign {
+            inherit pkgs value variable;
+            option = "MCP proxy ${spec.name}.${variable}";
+            export = true;
+          })
         (spec.headerSecrets
           // lib.optionalAttrs (spec.urlSecret != null) {
             ${spec.urlVar} = spec.urlSecret;
@@ -456,6 +437,7 @@
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
 
+      export PATH="${lib.makeBinPath [pkgs.coreutils]}''${PATH:+:$PATH}"
       ${secretExports}
       ${literalUrlAssignment}
 

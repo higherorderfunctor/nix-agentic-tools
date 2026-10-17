@@ -5,6 +5,7 @@
   pkgs,
   ...
 }: let
+  redact = import ../../../lib/redact {inherit lib;};
   hmLib = import ./dag-lib.nix harness.hmLib;
   evaluate = backend:
     if backend == "hm"
@@ -47,7 +48,7 @@
         backend = "hm";
         config.services.mcp-servers.servers.github-mcp = {
           enable = true;
-          settings.credentials.file = "/run/secrets/gh-token";
+          settings.credentials = redact.file "/run/secrets/gh-token";
         };
         key = "mcp-restart-on-secret-rotation";
         linuxOnly = true;

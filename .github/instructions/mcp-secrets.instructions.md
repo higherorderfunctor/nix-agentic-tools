@@ -7,10 +7,10 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-10-16 — Kiro stages MCP run content through the files
-> engine, whose apply phase follows the secrets point on both backends; runtime
-> surfaceSupport declarations own normalized backend reach and nested delivery
-> diagnostics; the MCP capability marker holds the pool's option path.
+> **Last verified:** 2026-10-17 — MCP credential settings and HTTP references
+> use redact; consumers derive environment names, resolve full concat values
+> with redact.assign, and abort on failed reads. Kiro headers resolve at launch,
+> URLs during files-engine apply after the secrets point.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -33,9 +33,10 @@ SOPS/agenix-injected `headers` and `url` so secrets never land in the
 world-readable store or in committed config. Files:
 
 - `lib/ai/mcpServer/commonSchema.nix` — the (C) http shape; `url` and each
-  `headers.<name>` are `secretValue`.
-- `lib/ai/mcpServer/secretValue.nix` — `either str credential`
-  (`{ file | helper; prefix?; suffix?; var?; }`).
+  `headers.<name>` use `redact.types.maybeRedacted lib.types.str`.
+- `lib/redact` — `file`, `command` and `concat` references; shared types and
+  `assign` perform sealed validation and runtime resolution. Packaged MCP
+  credential options accept nullable `redact.types.redacted` values.
 - `lib/ai/app/mkBackendTransform.nix` — declaration-scope client lowering; its
   internal normalized-pool marker is the dynamic discovery boundary for custom
   app records.
@@ -161,9 +162,9 @@ through the environment.
   after the host, `${_rest#*/}` returns `_rest` unchanged and the path silently
   becomes the hostname.
 
-It fails CLOSED, deliberately differing from the launcher wrapper below: an
-empty or unreadable secret exits 1 naming the variable and the file, rather than
-starting a proxy that would answer every client with the upstream's 401.
+Every consumer uses `redact.assign`: missing, unreadable, empty, NUL-bearing
+references and failed commands abort before launch or materialization. Errors
+name the consumer option without printing values or command output.
 
 ### Two header surfaces, and which one is which
 
@@ -309,20 +310,18 @@ VERIFIED against kiro-cli 2.13.0 (binary): `substitute_env_vars` runs over http
 **header values** and the stdio env only — the **url field is never passed
 through it**. So:
 
-- **Header secret** → rendered into mcp.json as a `<prefix>${env:VAR}<suffix>`
-  placeholder. The launcher wrapper (`wrapPackage.nix`) emits an
-  `export VAR="$(<coreutils>/bin/cat <file>)"` line — after `envExports`, so a
-  secret always wins over a same-named static value — and Kiro substitutes the
-  placeholder at launch. mcp.json (placeholder only) is safe to store/commit.
-  Collected in `secretEnv`. The `cat` is spelled as an ABSOLUTE coreutils path
-  in the emitted line, never bare: this wrapper can be spawned with an empty
-  PATH, where a bare `cat` would silently yield an empty credential.
-- **URL secret** → Kiro won't expand it, so the literal url must be present when
-  Kiro reads mcp.json. It renders to a bare `<prefix>${VAR}<suffix>` sentinel in
-  a store TEMPLATE, and WE substitute it with `envsubst` (explicit var list, so
-  header `${env:...}` survive) into a REAL private mcp.json at activation.
-  Collected in `urlSecretEnv` (kept disjoint from `secretEnv` — different
-  mechanism + time; a shared var name throws).
+- **Header reference** → mcp.json holds `${env:VAR}`. The launcher resolves the
+  whole value, including `redact.concat` literals, with `redact.assign` after
+  static environment exports. A failed read aborts Kiro launch.
+- **URL reference** → a store template holds `${VAR}`. Activation resolves the
+  whole value and uses an explicit `envsubst` variable list so header
+  placeholders survive; files-engine delivery writes private mcp.json.
+
+`deriveEnvVar` lives in `packages/kiro-cli/lib/mcpSecrets.nix`. Server and field
+names determine variables; consumers cannot choose `var`. Header fields have a
+`header_` namespace so a header called `url` cannot collide with the URL
+binding. Distinct source bindings that sanitize to one name fail with a rename
+diagnostic. The proxy uses the same separation between header and URL variables.
 
 ### ⚠ KNOWN LIMITATION — header creds are PER-BINARY, mcp.json is USER-GLOBAL
 
@@ -372,14 +371,10 @@ servers are present; only the remote end sees an unauthenticated request.
 sent; the distinction only changes how the remote end reports it. Do not write
 one down as fact without probing it.
 
-**Related, same family:** `wrapPackage.nix` exports each header credential with
-`export VAR="$(<coreutils>/bin/cat <file>)"` (absolute, as above). That line's
-exit status is `export`'s — always 0 — so an unreadable secret at LAUNCH yields
-an empty credential rather than a failure, even under strict mode.
-(`mkMcpJsonScript` had the identical idiom for the url and now uses a bare
-assignment plus an emptiness guard; the wrapper has NOT been changed, because
-failing closed there would refuse to launch kiro at all and that is a product
-decision, not a cleanup.)
+The launcher's references fail closed through `redact.assign`. A wrapper that
+carries a declared reference cannot silently continue after its reader fails. A
+different Kiro package that never carried that declaration still has the
+per-package limitation above.
 
 **The fix direction already exists in this repo — it is
 `services.mcp-servers`.** A server in that registry (`serverNames` in

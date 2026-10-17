@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory() as temporary:
             path.write_text(template["text"])
         templates[template["path"]] = str(path)
 
-    def plan_for(step):
+    def plan_for(step, root):
         plan = copy.deepcopy(step["plan"])
         for item in plan:
             content = item["content"]
@@ -38,6 +38,7 @@ with tempfile.TemporaryDirectory() as temporary:
             elif "value" in content and not Path(content["rendered"]).exists():
                 item["content"] = {"text": json.dumps(content["value"], separators=(",", ":"))}
             elif "run" in content:
+                content["run"] = content["run"].replace("/run/redact-fixture/", str(root) + "/")
                 for original, path in templates.items():
                     content["run"] = content["run"].replace(original, path)
         return plan
@@ -48,7 +49,7 @@ with tempfile.TemporaryDirectory() as temporary:
     probe = base / "acceptance"
     probe.mkdir()
     (probe / "credential-url").write_text(data["plainUrl"])
-    renderer = next(item for item in plan_for(data["fixture"]["devenv"]["secret"]) if item["content"].get("run"))
+    renderer = next(item for item in plan_for(data["fixture"]["devenv"]["secret"], probe) if item["content"].get("run"))
     os.environ["DEVENV_ROOT"] = str(base / "wrong-root")
     render_fixture({"files": [{"path": renderer["path"], "renderCommand": renderer["content"]["run"], "renderShell": data["bash"]}]}, probe, base / "acceptance-state")
     assert json.loads((probe / renderer["path"]).read_text())["mcpServers"]["demo"]["url"] == data["plainUrl"]
@@ -80,7 +81,7 @@ with tempfile.TemporaryDirectory() as temporary:
 
             def phase(name, action):
                 step = steps[name]
-                engine.reconcile(plan_for(step), root, state, action, step["legacyLedgers"], old)
+                engine.reconcile(plan_for(step, root), root, state, action, step["legacyLedgers"], old)
 
             def activate(name):
                 phase(name, "prune")
@@ -138,12 +139,9 @@ with tempfile.TemporaryDirectory() as temporary:
             (root / "credential-url").write_text(data["plainUrl"])
             (root / "subdir").mkdir()
             os.chdir(root / "subdir")
-            if backend == "hm":
-                # HM retains activation cwd; devenv alone anchors relative readers.
-                (root / "subdir/credential-url").write_text(data["plainUrl"])
             phase("secret", "apply")
             assert target.stat().st_mode & 0o777 == 0o400
-            assert json.loads(target.read_text())["mcpServers"]["demo"]["headers"]["X-Token"] == "${env:KIRO_MCP_DEMO_X_TOKEN}"
+            assert json.loads(target.read_text())["mcpServers"]["demo"]["headers"]["X-Token"] == "${env:KIRO_MCP_DEMO_HEADER_X_TOKEN}"
             assert not (root / "subdir/.kiro").exists()
             os.chdir(root)
             activate("plain")

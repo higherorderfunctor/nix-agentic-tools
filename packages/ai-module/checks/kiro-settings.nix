@@ -5,6 +5,7 @@
   pkgs,
   ...
 }: let
+  redact = import ../../../lib/redact {inherit lib;};
   files = import ../lib/files/default.nix {inherit lib pkgs;};
   dagLib = import ./dag-lib.nix harness.hmLib;
   inherit (import ../../kiro-cli/checks/helpers.nix {inherit harness lib pkgs;}) renderedMcpJson;
@@ -13,7 +14,7 @@
     empty = {};
     helper.demo = {
       type = "http";
-      url.helper = "./failed-helper";
+      url = redact.command "/run/redact-fixture/failed-helper";
     };
     plain.demo = {
       type = "http";
@@ -21,12 +22,12 @@
     };
     private.demo = {
       type = "http";
-      url.file = "credential-url";
+      url = redact.file "/run/redact-fixture/credential-url";
     };
     secret.demo = {
-      headers.X-Token.file = "header-token";
+      headers.X-Token = redact.file "/run/redact-fixture/header-token";
       type = "http";
-      url.file = "credential-url";
+      url = redact.file "/run/redact-fixture/credential-url";
     };
   };
   legacy = prefix:

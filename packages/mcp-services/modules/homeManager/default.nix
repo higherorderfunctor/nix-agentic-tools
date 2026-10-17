@@ -122,7 +122,7 @@
 
     credSnippet =
       if hasCreds
-      then mcpLib.mkCredentialsSnippet pkgs credVars evaluatedSettings
+      then mcpLib.mkCredentialAssignments pkgs credVars evaluatedSettings
       else "";
 
     # `--host` is passed explicitly rather than left to mcp-proxy's own
@@ -282,7 +282,7 @@ in {
         concatLists (mapAttrsToList (optName: spec:
           lib.optional spec.required {
             assertion = evaluatedSettings.${optName} != null;
-            message = "services.mcp-servers.servers.${name}.settings.${optName}: credentials are required (set file or helper)";
+            message = "services.mcp-servers.servers.${name}.settings.${optName}: credentials are required (use redact.file or redact.command)";
           })
         credVars))
       enabledServers);
