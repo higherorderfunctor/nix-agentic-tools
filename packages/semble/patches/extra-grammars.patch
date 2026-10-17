@@ -33,7 +33,9 @@ diff --git a/src/semble/index/files.py b/src/semble/index/files.py
 diff --git a/src/semble/index/file_walker.py b/src/semble/index/file_walker.py
 --- a/src/semble/index/file_walker.py
 +++ b/src/semble/index/file_walker.py
-@@ -6,0 +7,1 @@
+@@ -6,1 +6,2 @@
+-from pathspec import GitIgnoreSpec
++from pathspec import GitIgnoreSpec
 +from semble.path_mappings import get_mapped_content
 @@ -53,2 +54,7 @@
 -def walk_files(root: Path, extensions: Sequence[str], ignore: Sequence[str] | None = None) -> Iterator[Path]:
@@ -92,7 +94,9 @@ diff --git a/src/semble/index/create.py b/src/semble/index/create.py
 -    for file_path in walk_files(path, extensions):
 +    for file_path in walk_files(path, extensions, content=content):
          with contextlib.suppress(OSError):
-@@ -178,0 +180,1 @@
+@@ -178,1 +179,2 @@
+-    resolved_extensions = get_extensions(normalized)
++    resolved_extensions = get_extensions(normalized)
 +    resolved_content = tuple(item.value for item in normalized)
 @@ -189,4 +191,4 @@
 -    files = _stat_files(path, resolved_extensions, display_root, previous_manifest, skipped_large)

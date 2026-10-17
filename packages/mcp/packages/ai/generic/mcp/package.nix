@@ -1,6 +1,7 @@
-# cspell:ignore logfire mcpserver mtkennerly truststore
+# cspell:ignore logfire mcpserver mtkennerly ninoseki truststore
 # The SDK and its private Python dependencies track releases as one update group.
 {
+  extractedLib,
   lib,
   packageLib,
   pkgs,
@@ -9,12 +10,38 @@
 }: let
   ps = pkgs.python3Packages;
   sourceSpecs = {
-    dunamai.repo = "mtkennerly/dunamai";
-    httpx2.repo = "pydantic/httpx2";
+    dunamai = {
+      parents = [{project = "uv-dynamic-versioning";}];
+      repo = "mtkennerly/dunamai";
+    };
+    httpx2 = {
+      parents = [{project = "mcp";}];
+      repo = "pydantic/httpx2";
+    };
     mcp.repo = "modelcontextprotocol/python-sdk";
-    uv-dynamic-versioning.pypiName = "uv_dynamic_versioning";
+    uv-dynamic-versioning = {
+      parents = [
+        {
+          project = "httpx2";
+          pyproject = "src/httpcore2/pyproject.toml";
+        }
+        {
+          project = "httpx2";
+          pyproject = "src/httpx2/pyproject.toml";
+        }
+        {
+          project = "mcp";
+          pyproject = "pyproject.toml";
+        }
+        {
+          project = "mcp";
+          pyproject = "src/mcp-types/pyproject.toml";
+        }
+      ];
+      repo = "ninoseki/uv-dynamic-versioning";
+    };
   };
-  sourcesFiles = lib.mapAttrs (name: _: ../../../../. + "/${name}-sources.json") sourceSpecs;
+  sourcesFiles = (lib.mapAttrs (name: _: ../../../../. + "/${name}-sources.json") sourceSpecs) // {mcp = ../../../../sources.json;};
   sources = lib.mapAttrs (_: file: builtins.fromJSON (builtins.readFile file)) sourcesFiles;
   githubSource = name: let
     spec = sourceSpecs.${name};
@@ -30,24 +57,32 @@
   updateScript = pkgs.writeShellScript "update-mcp-group" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: spec:
-      if spec ? repo
-      then
-        packageLib.ghArchiveUpdateScript {
+    ${lib.concatMapStringsSep "\n" (name: let
+        spec = sourceSpecs.${name};
+      in "${packageLib.ghArchiveUpdateScript ({
           inherit pkgs;
           inherit (spec) repo;
           pname = name;
           sourcesFile = repoPath sourcesFiles.${name};
         }
-      else
-        packageLib.mkUpdateScript {
-          inherit pkgs;
-          pname = name;
-          sourcesFile = repoPath sourcesFiles.${name};
-          platforms.src = version: "https://files.pythonhosted.org/packages/source/${builtins.substring 0 1 spec.pypiName}/${spec.pypiName}/${spec.pypiName}-${version}.tar.gz";
-          versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://pypi.org/pypi/${name}/json | ${pkgs.jq}/bin/jq -r '.info.version'";
-        })
-    sourceSpecs)}
+        // lib.optionalAttrs (spec ? parents) {
+          versionCheck.cmd = packageLib.pythonDependencyVersionCmd {
+            inherit pkgs;
+            dependency = name;
+            parents = map (parent:
+              {sourcesFile = repoPath sourcesFiles.${parent.project};}
+              // (
+                if parent ? pyproject
+                then {
+                  pyprojectUrl = "https://raw.githubusercontent.com/${sourceSpecs.${parent.project}.repo}/v{version}/${parent.pyproject}";
+                }
+                else {inherit (parent) project;}
+              ))
+            spec.parents;
+          };
+        })}")
+      # Parent pins must be current before their dependency bounds are read.
+      ["mcp" "httpx2" "uv-dynamic-versioning" "dunamai"]}
   '';
 
   dunamai = ps.dunamai.overridePythonAttrs (old: {
@@ -57,8 +92,8 @@
   });
   uv-dynamic-versioning = (ps.uv-dynamic-versioning.override {inherit dunamai;}).overridePythonAttrs (old: {
     inherit (sources.uv-dynamic-versioning) version;
-    src = pkgs.fetchurl {inherit (sources.uv-dynamic-versioning.src) url hash;};
-    # The sdist has no VCS checkout for upstream's repository-manipulation tests.
+    src = githubSource "uv-dynamic-versioning";
+    # Repository-manipulation tests need .git.
     doCheck = false;
     meta = (old.meta or {}) // {changelog = "https://github.com/ninoseki/uv-dynamic-versioning/releases/tag/v${sources.uv-dynamic-versioning.version}";};
   });
@@ -95,7 +130,7 @@
   };
 in
   (ps.mcp.override {inherit uv-dynamic-versioning;}).overridePythonAttrs (old: let
-    optionalDependencies = lib.filterAttrs (name: _: builtins.elem name ["cli" "rich"]) old.optional-dependencies;
+    optionalDependencies = lib.getAttrs ["cli" "rich"] old.optional-dependencies;
   in {
     inherit (sources.mcp) version;
     src = sdkSource;
@@ -126,14 +161,22 @@ in
         blockbuster
         inline-snapshot
         logfire
-        pillow
-        pydantic-settings
-        pytest-asyncio
         pytest-examples
         pytestCheckHook
       ]
       ++ lib.concatAttrValues optionalDependencies;
     pytestFlags = ["--override-ini=pythonpath=." "tests/server/mcpserver/test_server.py"];
     disabledTests = [];
-    passthru = (old.passthru or {}) // {inherit updateScript;};
+    passthru =
+      (old.passthru or {})
+      // {
+        inherit updateScript;
+        regenerateExtracted =
+          (pkgs.writeShellScript "mcp-regenerate-extracted" ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            ${(extractedLib {inherit pkgs;}).regenCommand {name = "semble";}}
+          '')
+          // {sidecars = ["packages/semble/extracted/extracted.json"];};
+      };
   })

@@ -22,7 +22,7 @@ def main() -> None:
         (root / directory).mkdir(parents=True)
     for number in range(205):
         (root / "scripts" / f"job-{number:03}").write_text(
-            f"#!/bin/bash\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\necho gamma worker {number}\n",
+            f"echo gamma worker {number}\n",
             encoding="utf-8",
         )
         (root / "docs" / f"note-{number:03}.py").write_text(

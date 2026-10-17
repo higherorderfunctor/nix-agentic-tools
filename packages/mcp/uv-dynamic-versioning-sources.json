@@ -1,7 +1,7 @@
 {
   "version": "0.14.1",
   "src": {
-    "url": "https://files.pythonhosted.org/packages/source/u/uv_dynamic_versioning/uv_dynamic_versioning-0.14.1.tar.gz",
-    "hash": "sha256-hkLbaGzlxQQXA156JXrHO35cOnoywz5FvX42uiLutkg="
+    "url": "https://github.com/ninoseki/uv-dynamic-versioning/archive/v0.14.1.tar.gz",
+    "hash": "sha256-j9Fv4ryqV3nHYmI1zA/5f6pEYWK55ZBj8/FxT5bicEg="
   }
 }
