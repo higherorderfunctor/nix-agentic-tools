@@ -1,6 +1,6 @@
 # The CI-only Hestia binary uses the pinned action source plus the local
-# manifest-scope patch. The action pin is checked against `rev` by
-# dev/scripts/test-ci-cache.py.
+# manifest-scope and GC retention patches. dev/scripts/test-ci-cache.py checks
+# the action pin against `rev`.
 {
   inputs,
   pkgs,
@@ -23,7 +23,10 @@ in
   rustPlatform.buildRustPackage {
     pname = "ci-hestia";
     inherit version src;
-    patches = [../.github/actions/check-cache/patches/pr-manifest-scope.patch];
+    patches = [
+      ../.github/actions/check-cache/patches/pr-manifest-scope.patch
+      ../.github/actions/check-cache/patches/gc-pr-manifest-retention.patch
+    ];
     postPatch = ''
       (
       set -euETo pipefail
@@ -48,6 +51,8 @@ in
       export SSL_CERT_FILE="$NIX_SSL_CERT_FILE"
       runHook preCheck
       cargo test --offline --workspace --lib
+      cargo test --offline --test gc
+      cargo test --offline --test gc_pr_retention
       cargo test --offline --test pr_manifest_scope
       runHook postCheck
       )
