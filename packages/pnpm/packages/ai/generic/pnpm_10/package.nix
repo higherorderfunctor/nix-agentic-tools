@@ -17,8 +17,6 @@
 # again whenever nixpkgs catches up. Do not "clean up" pnpm_10 on parity
 # grounds — see dev/fragments/overlays/overlay-pattern.md, which records
 # the same rule for btop.
-#
-# Contrast pnpm_11, which carries a real content delta today.
 {
   packageLib,
   pkgs,
