@@ -1,0 +1,2845 @@
+{
+  "config": {
+    "access.api-keys": {
+      "description": "APIKeys is a list of keys for authenticating clients to this proxy server.",
+      "template": "API keys for authentication",
+      "type": "list"
+    },
+    "access.api-keys[]": { "type": "string" },
+    "api-keys.claude": {
+      "description": "ClaudeKey defines a list of Claude API key configurations as specified in the YAML configuration file.",
+      "type": "list"
+    },
+    "api-keys.claude[]": { "type": "object" },
+    "api-keys.claude[].base-url": {
+      "description": "BaseURL is the base URL for the Claude API endpoint.\nIf empty, the default Claude API URL will be used.",
+      "type": "string"
+    },
+    "api-keys.claude[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.claude[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.claude[].excluded-models[]": { "type": "string" },
+    "api-keys.claude[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.claude[].headers.<name>": { "type": "string" },
+    "api-keys.claude[].keys": { "type": "list" },
+    "api-keys.claude[].keys[]": { "type": "object" },
+    "api-keys.claude[].keys[].api-key": {
+      "description": "APIKey is the authentication key for accessing Claude API services.",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].cloak": {
+      "description": "Cloak configures request cloaking for non-Claude-Code clients.",
+      "type": "object"
+    },
+    "api-keys.claude[].keys[].cloak.cache-user-id": {
+      "description": "CacheUserID controls whether Claude user_id values are cached per API key.\nWhen false, a fresh random user_id is generated for every request.",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].cloak.mode": {
+      "description": "Mode controls cloaking behavior: \"auto\" (default), \"always\", or \"never\".\nSupplying this CloakConfig explicitly enables cloaking for an unprofiled API key.\n- \"auto\": cloak unless strong request signals identify a verified native entrypoint\n- \"always\": cloak every unconfirmed client; confirmed native Claude Code remains passthrough\n- \"never\": never apply cloaking",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].cloak.sensitive-words": {
+      "description": "SensitiveWords is a list of words to obfuscate with zero-width characters.\nThis can help bypass certain content filters.",
+      "type": "list"
+    },
+    "api-keys.claude[].keys[].cloak.sensitive-words[]": { "type": "string" },
+    "api-keys.claude[].keys[].cloak.strict-mode": {
+      "description": "StrictMode controls how caller system prompts are handled when cloaking.\n- false (default): legacy-model whitelist uses a user reminder; all other models use a mid-conversation system message\n- true: strip caller system prompts and keep only the Claude Code billing and identity blocks",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.claude[].keys[].excluded-models[]": { "type": "string" },
+    "api-keys.claude[].keys[].experimental-cch-signing": {
+      "description": "ExperimentalCCHSigning is retained for configuration compatibility.\nCCH signing is automatic for Claude OAuth and supported direct upstreams.",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].fingerprint-profile": {
+      "description": "FingerprintProfile selects the Claude Code request fingerprint for this\ncredential on Anthropic Messages. Empty/default keeps the caller request\nfingerprint and headers, including first-party api.anthropic.com API keys.\n\"claude-code-cli\" opts official Anthropic API keys, custom gateways, and\ndelegated providers such as Kimi into the Claude Code OAuth CLI Messages\nshape (OAuth betas, CCH signing, stable CLI identity) without treating the\ncredential as a real OAuth token for refresh/profile/runtime semantics.\nCCH is a per-request hash and follows the native gate: it is emitted only on\napi.anthropic.com and Vertex, so an opt-in on any other gateway sends the\nbilling block unsigned and cannot bust that gateway's prompt cache. Kimi\nstrips the attribution entirely by default and keeps it, unsigned, after an\nexplicit opt-in. count_tokens keeps the native model/messages/tools shape.\nRecognized values are defined by NormalizeClaudeFingerprintProfile.",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.claude[].keys[].headers.<name>": { "type": "string" },
+    "api-keys.claude[].keys[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.claude[].keys[].models[]": { "type": "object" },
+    "api-keys.claude[].keys[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].models[].is-compat": {
+      "description": "IsCompat preserves thinking blocks with empty signatures for compatible upstreams\nand enables provider-aware signed-thinking replay for Claude-compatible API-key models.\nDefault false keeps the normal signature validation behavior.",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.claude[].keys[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.claude[].keys[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.claude[].keys[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.claude[].keys[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.claude[].keys[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.claude[].keys[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].native-tool-search": {
+      "description": "NativeToolSearch trusts a custom base URL with Anthropic native tool search\n(defer_loading tools and tool_reference results) for Codex tool_search.\nOfficial api.anthropic.com credentials use native tool search without it.",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/claude-sonnet-4\").",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.claude[].keys[].proxy-url": {
+      "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].rebuild-mid-system-message": {
+      "description": "RebuildMidSystemMessage moves Claude messages with role \"system\" into the top-level system field.",
+      "type": "bool"
+    },
+    "api-keys.claude[].keys[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.claude[].keys[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.claude[].keys[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.claude[].keys[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.claude[].keys[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.claude[].keys[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.claude[].keys[].weight": {
+      "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
+      "type": "int"
+    },
+    "api-keys.claude[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.claude[].models[]": { "type": "object" },
+    "api-keys.claude[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.claude[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.claude[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.claude[].models[].is-compat": {
+      "description": "IsCompat preserves thinking blocks with empty signatures for compatible upstreams\nand enables provider-aware signed-thinking replay for Claude-compatible API-key models.\nDefault false keeps the normal signature validation behavior.",
+      "type": "bool"
+    },
+    "api-keys.claude[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.claude[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.claude[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.claude[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.claude[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.claude[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.claude[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.claude[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.claude[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.claude[].name": { "type": "string" },
+    "api-keys.claude[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/claude-sonnet-4\").",
+      "type": "string"
+    },
+    "api-keys.claude[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.claude[].proxy-url": {
+      "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
+      "type": "string"
+    },
+    "api-keys.claude[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.claude[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.claude[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.claude[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.claude[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.claude[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.claude[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.claude[].request-scoped-errors[].match[]": { "type": "string" },
+    "api-keys.claude[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.codex": {
+      "description": "Codex defines a list of Codex API key configurations as specified in the YAML configuration file.",
+      "type": "list"
+    },
+    "api-keys.codex[]": { "type": "object" },
+    "api-keys.codex[].base-url": {
+      "description": "BaseURL is the base URL for the Codex API endpoint.\nIf empty, the default Codex API URL will be used.",
+      "type": "string"
+    },
+    "api-keys.codex[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.codex[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.codex[].excluded-models[]": { "type": "string" },
+    "api-keys.codex[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.codex[].headers.<name>": { "type": "string" },
+    "api-keys.codex[].keys": { "type": "list" },
+    "api-keys.codex[].keys[]": { "type": "object" },
+    "api-keys.codex[].keys[].alpha-search": {
+      "description": "AlphaSearch allows this Codex API key to serve the Alpha Search endpoint.",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].api-key": {
+      "description": "APIKey is the authentication key for accessing Codex API services.",
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].disable-codex-cloaking": {
+      "description": "DisableCodexCloaking optionally overrides the global codex.disable-codex-cloaking for this credential.\nTrue disables cloaking; false explicitly enables cloaking; omitted inherits global codex.disable-codex-cloaking.",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.codex[].keys[].excluded-models[]": { "type": "string" },
+    "api-keys.codex[].keys[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.codex[].keys[].headers.<name>": { "type": "string" },
+    "api-keys.codex[].keys[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.codex[].keys[].models[]": { "type": "object" },
+    "api-keys.codex[].keys[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].models[].is-compat": {
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.codex[].keys[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].models[].support-configuration-update": {
+      "description": "SupportConfigurationUpdate enables configuration_update for this API-key model.\nIt defaults to false, independently of the built-in OAuth model catalog.",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.codex[].keys[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.codex[].keys[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.codex[].keys[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.codex[].keys[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.codex[].keys[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gpt-5-codex\").",
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.codex[].keys[].proxy-url": {
+      "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.codex[].keys[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.codex[].keys[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.codex[].keys[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.codex[].keys[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.codex[].keys[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.codex[].keys[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.codex[].keys[].websockets": {
+      "description": "Websockets enables the Responses API websocket transport for this credential.",
+      "type": "bool"
+    },
+    "api-keys.codex[].keys[].weight": {
+      "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
+      "type": "int"
+    },
+    "api-keys.codex[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.codex[].models[]": { "type": "object" },
+    "api-keys.codex[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.codex[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.codex[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.codex[].models[].is-compat": {
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "type": "bool"
+    },
+    "api-keys.codex[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.codex[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.codex[].models[].support-configuration-update": {
+      "description": "SupportConfigurationUpdate enables configuration_update for this API-key model.\nIt defaults to false, independently of the built-in OAuth model catalog.",
+      "type": "bool"
+    },
+    "api-keys.codex[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.codex[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.codex[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.codex[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.codex[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.codex[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.codex[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.codex[].name": { "type": "string" },
+    "api-keys.codex[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gpt-5-codex\").",
+      "type": "string"
+    },
+    "api-keys.codex[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.codex[].proxy-url": {
+      "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
+      "type": "string"
+    },
+    "api-keys.codex[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.codex[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.codex[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.codex[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.codex[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.codex[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.codex[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.codex[].request-scoped-errors[].match[]": { "type": "string" },
+    "api-keys.codex[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.gemini": {
+      "description": "GeminiKey defines Gemini API key configurations with optional routing overrides.",
+      "type": "list"
+    },
+    "api-keys.gemini[]": { "type": "object" },
+    "api-keys.gemini[].base-url": {
+      "description": "BaseURL optionally overrides the Gemini API endpoint.",
+      "type": "string"
+    },
+    "api-keys.gemini[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.gemini[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.gemini[].excluded-models[]": { "type": "string" },
+    "api-keys.gemini[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.gemini[].headers.<name>": { "type": "string" },
+    "api-keys.gemini[].keys": { "type": "list" },
+    "api-keys.gemini[].keys[]": { "type": "object" },
+    "api-keys.gemini[].keys[].api-key": {
+      "description": "APIKey is the authentication key for accessing Gemini API services.",
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.gemini[].keys[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.gemini[].keys[].excluded-models[]": { "type": "string" },
+    "api-keys.gemini[].keys[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.gemini[].keys[].headers.<name>": { "type": "string" },
+    "api-keys.gemini[].keys[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.gemini[].keys[].models[]": { "type": "object" },
+    "api-keys.gemini[].keys[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.gemini[].keys[].models[].is-compat": {
+      "description": "IsCompat preserves thinking blocks with empty signatures for compatible upstreams.\nDefault false keeps the normal signature validation behavior.",
+      "type": "bool"
+    },
+    "api-keys.gemini[].keys[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.gemini[].keys[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.gemini[].keys[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.gemini[].keys[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.gemini[].keys[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.gemini[].keys[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.gemini[].keys[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.gemini[].keys[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.gemini[].keys[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gemini-3-pro-preview\").",
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.gemini[].keys[].proxy-url": {
+      "description": "ProxyURL optionally overrides the global proxy for this API key.",
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.gemini[].keys[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.gemini[].keys[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.gemini[].keys[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.gemini[].keys[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.gemini[].keys[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.gemini[].keys[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.gemini[].keys[].weight": {
+      "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
+      "type": "int"
+    },
+    "api-keys.gemini[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.gemini[].models[]": { "type": "object" },
+    "api-keys.gemini[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.gemini[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.gemini[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.gemini[].models[].is-compat": {
+      "description": "IsCompat preserves thinking blocks with empty signatures for compatible upstreams.\nDefault false keeps the normal signature validation behavior.",
+      "type": "bool"
+    },
+    "api-keys.gemini[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.gemini[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.gemini[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.gemini[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.gemini[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.gemini[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.gemini[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.gemini[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.gemini[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.gemini[].name": { "type": "string" },
+    "api-keys.gemini[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gemini-3-pro-preview\").",
+      "type": "string"
+    },
+    "api-keys.gemini[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.gemini[].proxy-url": {
+      "description": "ProxyURL optionally overrides the global proxy for this API key.",
+      "type": "string"
+    },
+    "api-keys.gemini[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.gemini[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.gemini[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.gemini[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.gemini[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.gemini[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.gemini[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.gemini[].request-scoped-errors[].match[]": { "type": "string" },
+    "api-keys.gemini[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.interactions": {
+      "description": "InteractionsKey defines native Google Interactions API key configurations.",
+      "type": "list"
+    },
+    "api-keys.interactions[]": { "type": "object" },
+    "api-keys.interactions[].base-url": {
+      "description": "BaseURL optionally overrides the Gemini API endpoint.",
+      "type": "string"
+    },
+    "api-keys.interactions[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.interactions[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.interactions[].excluded-models[]": { "type": "string" },
+    "api-keys.interactions[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.interactions[].headers.<name>": { "type": "string" },
+    "api-keys.interactions[].keys": { "type": "list" },
+    "api-keys.interactions[].keys[]": { "type": "object" },
+    "api-keys.interactions[].keys[].api-key": {
+      "description": "APIKey is the authentication key for accessing Gemini API services.",
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.interactions[].keys[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.interactions[].keys[].excluded-models[]": { "type": "string" },
+    "api-keys.interactions[].keys[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.interactions[].keys[].headers.<name>": { "type": "string" },
+    "api-keys.interactions[].keys[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.interactions[].keys[].models[]": { "type": "object" },
+    "api-keys.interactions[].keys[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.interactions[].keys[].models[].is-compat": {
+      "description": "IsCompat preserves thinking blocks with empty signatures for compatible upstreams.\nDefault false keeps the normal signature validation behavior.",
+      "type": "bool"
+    },
+    "api-keys.interactions[].keys[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.interactions[].keys[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.interactions[].keys[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.interactions[].keys[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.interactions[].keys[].models[].thinking.levels[]": {
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.interactions[].keys[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.interactions[].keys[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.interactions[].keys[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gemini-3-pro-preview\").",
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.interactions[].keys[].proxy-url": {
+      "description": "ProxyURL optionally overrides the global proxy for this API key.",
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.interactions[].keys[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.interactions[].keys[].request-scoped-errors[]": {
+      "type": "object"
+    },
+    "api-keys.interactions[].keys[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.interactions[].keys[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.interactions[].keys[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.interactions[].keys[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.interactions[].keys[].weight": {
+      "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
+      "type": "int"
+    },
+    "api-keys.interactions[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.interactions[].models[]": { "type": "object" },
+    "api-keys.interactions[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.interactions[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.interactions[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.interactions[].models[].is-compat": {
+      "description": "IsCompat preserves thinking blocks with empty signatures for compatible upstreams.\nDefault false keeps the normal signature validation behavior.",
+      "type": "bool"
+    },
+    "api-keys.interactions[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.interactions[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.interactions[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.interactions[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.interactions[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.interactions[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.interactions[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.interactions[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.interactions[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.interactions[].name": { "type": "string" },
+    "api-keys.interactions[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gemini-3-pro-preview\").",
+      "type": "string"
+    },
+    "api-keys.interactions[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.interactions[].proxy-url": {
+      "description": "ProxyURL optionally overrides the global proxy for this API key.",
+      "type": "string"
+    },
+    "api-keys.interactions[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.interactions[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.interactions[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.interactions[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.interactions[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.interactions[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.interactions[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.interactions[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.interactions[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.meta": {
+      "description": "MetaKey defines Meta API key configurations using the same structure as Codex API keys.",
+      "type": "list"
+    },
+    "api-keys.meta[]": { "type": "object" },
+    "api-keys.meta[].base-url": {
+      "description": "BaseURL is the base URL for the Codex API endpoint.\nIf empty, the default Codex API URL will be used.",
+      "type": "string"
+    },
+    "api-keys.meta[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.meta[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.meta[].excluded-models[]": { "type": "string" },
+    "api-keys.meta[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.meta[].headers.<name>": { "type": "string" },
+    "api-keys.meta[].keys": { "type": "list" },
+    "api-keys.meta[].keys[]": { "type": "object" },
+    "api-keys.meta[].keys[].alpha-search": {
+      "description": "AlphaSearch allows this Codex API key to serve the Alpha Search endpoint.",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].api-key": {
+      "description": "APIKey is the authentication key for accessing Codex API services.",
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].disable-codex-cloaking": {
+      "description": "DisableCodexCloaking optionally overrides the global codex.disable-codex-cloaking for this credential.\nTrue disables cloaking; false explicitly enables cloaking; omitted inherits global codex.disable-codex-cloaking.",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.meta[].keys[].excluded-models[]": { "type": "string" },
+    "api-keys.meta[].keys[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.meta[].keys[].headers.<name>": { "type": "string" },
+    "api-keys.meta[].keys[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.meta[].keys[].models[]": { "type": "object" },
+    "api-keys.meta[].keys[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].models[].is-compat": {
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.meta[].keys[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].models[].support-configuration-update": {
+      "description": "SupportConfigurationUpdate enables configuration_update for this API-key model.\nIt defaults to false, independently of the built-in OAuth model catalog.",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.meta[].keys[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.meta[].keys[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.meta[].keys[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.meta[].keys[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.meta[].keys[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gpt-5-codex\").",
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.meta[].keys[].proxy-url": {
+      "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.meta[].keys[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.meta[].keys[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.meta[].keys[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.meta[].keys[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.meta[].keys[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.meta[].keys[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.meta[].keys[].websockets": {
+      "description": "Websockets enables the Responses API websocket transport for this credential.",
+      "type": "bool"
+    },
+    "api-keys.meta[].keys[].weight": {
+      "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
+      "type": "int"
+    },
+    "api-keys.meta[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.meta[].models[]": { "type": "object" },
+    "api-keys.meta[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.meta[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.meta[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.meta[].models[].is-compat": {
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "type": "bool"
+    },
+    "api-keys.meta[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.meta[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.meta[].models[].support-configuration-update": {
+      "description": "SupportConfigurationUpdate enables configuration_update for this API-key model.\nIt defaults to false, independently of the built-in OAuth model catalog.",
+      "type": "bool"
+    },
+    "api-keys.meta[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.meta[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.meta[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.meta[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.meta[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.meta[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.meta[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.meta[].name": { "type": "string" },
+    "api-keys.meta[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gpt-5-codex\").",
+      "type": "string"
+    },
+    "api-keys.meta[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.meta[].proxy-url": {
+      "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
+      "type": "string"
+    },
+    "api-keys.meta[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.meta[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.meta[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.meta[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.meta[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.meta[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.meta[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.meta[].request-scoped-errors[].match[]": { "type": "string" },
+    "api-keys.meta[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.openai-compatibility": {
+      "description": "OpenAICompatibility defines OpenAI API compatibility configurations for external providers.",
+      "type": "list"
+    },
+    "api-keys.openai-compatibility[]": { "type": "object" },
+    "api-keys.openai-compatibility[].base-url": {
+      "description": "BaseURL is the base URL for the external OpenAI-compatible API endpoint.",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this provider when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].disabled": {
+      "description": "Disabled prevents this provider from being used for routing.",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent to this provider.",
+      "type": "map"
+    },
+    "api-keys.openai-compatibility[].headers.<name>": { "type": "string" },
+    "api-keys.openai-compatibility[].keys": {
+      "description": "APIKeyEntries defines API keys with optional per-key proxy configuration.",
+      "type": "list"
+    },
+    "api-keys.openai-compatibility[].keys[]": { "type": "object" },
+    "api-keys.openai-compatibility[].keys[].api-key": {
+      "description": "APIKey is the authentication key for accessing the external API services.",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].keys[].proxy-url": {
+      "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].keys[].weight": {
+      "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
+      "type": "int"
+    },
+    "api-keys.openai-compatibility[].models": {
+      "description": "Models defines the model configurations including aliases for routing.",
+      "type": "list"
+    },
+    "api-keys.openai-compatibility[].models[]": { "type": "object" },
+    "api-keys.openai-compatibility[].models[].alias": {
+      "description": "Alias is the model name alias that clients will use to reference this model.",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].models[].image": {
+      "description": "Image marks this model as callable through /v1/images/generations and /v1/images/edits.",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].models[].input-modalities": {
+      "description": "InputModalities declares chat/responses input capabilities (e.g. text, image) for Codex and other clients.\nThis is separate from Image, which only enables /v1/images/* endpoints.",
+      "type": "list"
+    },
+    "api-keys.openai-compatibility[].models[].input-modalities[]": {
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].models[].is-compat": {
+      "description": "IsCompat preserves Claude thinking blocks for compatible upstreams.\nDefault false keeps the normal signature validation behavior.",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.openai-compatibility[].models[].name": {
+      "description": "Name is the actual model name used by the external provider.",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].models[].output-modalities": {
+      "description": "OutputModalities declares supported output modalities when known (e.g. text, image).",
+      "type": "list"
+    },
+    "api-keys.openai-compatibility[].models[].output-modalities[]": {
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.\nIf nil, the model defaults to level-based reasoning with levels [\"low\", \"medium\", \"high\"].",
+      "type": "object"
+    },
+    "api-keys.openai-compatibility[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.openai-compatibility[].models[].thinking.levels[]": {
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.openai-compatibility[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.openai-compatibility[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].models[].use-max-completion-tokens": {
+      "description": "UseMaxCompletionTokens emits max_completion_tokens instead of legacy max_tokens for this model.\nDefault false preserves max_tokens for older compatible upstreams.",
+      "type": "bool"
+    },
+    "api-keys.openai-compatibility[].name": {
+      "description": "Name is the identifier for this OpenAI compatibility configuration.",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].prefix": {
+      "description": "Prefix optionally namespaces model aliases for this provider (e.g., \"teamA/kimi-k2\").",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].priority": {
+      "description": "Priority controls selection preference when multiple providers or credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.openai-compatibility[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this provider.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.openai-compatibility[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.openai-compatibility[].request-scoped-errors[]": {
+      "type": "object"
+    },
+    "api-keys.openai-compatibility[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.openai-compatibility[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.openai-compatibility[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.openai-compatibility[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.openai-compatibility[].support-prompt-cache-key": {
+      "description": "SupportPromptCacheKey enables derived prompt_cache_key injection for supported requests.",
+      "type": "bool"
+    },
+    "api-keys.vertex": {
+      "description": "VertexCompatAPIKey defines Vertex AI-compatible API key configurations for third-party providers.\nUsed for services that use Vertex AI-style paths but with simple API key authentication.",
+      "type": "list"
+    },
+    "api-keys.vertex[]": { "type": "object" },
+    "api-keys.vertex[].base-url": {
+      "description": "BaseURL optionally overrides the Vertex-compatible API endpoint.\nWhen it contains a \"/publishers/\" segment it is used as the full resource\nprefix (e.g. \"https://aiplatform.googleapis.com/v1/projects/{p}/locations/{l}/publishers/google/models\")\nand the executor only appends \"/{model}:{action}\". Otherwise \"/v1\" is\ninserted if absent, then \"/publishers/google/models\" is appended; a\ntrailing version segment like \"/v1\" or \"/v1beta1\" is never duplicated.",
+      "type": "string"
+    },
+    "api-keys.vertex[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.vertex[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.vertex[].excluded-models[]": { "type": "string" },
+    "api-keys.vertex[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.\nCommonly used for cookies, user-agent, and other authentication headers.",
+      "type": "map"
+    },
+    "api-keys.vertex[].headers.<name>": { "type": "string" },
+    "api-keys.vertex[].keys": { "type": "list" },
+    "api-keys.vertex[].keys[]": { "type": "object" },
+    "api-keys.vertex[].keys[].api-key": {
+      "description": "APIKey is the authentication key for accessing the Vertex-compatible API.\nMaps to the x-goog-api-key header.",
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.vertex[].keys[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.vertex[].keys[].excluded-models[]": { "type": "string" },
+    "api-keys.vertex[].keys[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.\nCommonly used for cookies, user-agent, and other authentication headers.",
+      "type": "map"
+    },
+    "api-keys.vertex[].keys[].headers.<name>": { "type": "string" },
+    "api-keys.vertex[].keys[].interactions": {
+      "description": "Interactions optionally enables native Vertex Interactions API routing for this key.",
+      "type": "bool"
+    },
+    "api-keys.vertex[].keys[].models": {
+      "description": "Models defines the model configurations including aliases for routing.",
+      "type": "list"
+    },
+    "api-keys.vertex[].keys[].models[]": { "type": "object" },
+    "api-keys.vertex[].keys[].models[].alias": {
+      "description": "Alias is the model name alias that clients will use to reference this model.",
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.vertex[].keys[].models[].name": {
+      "description": "Name is the actual model name used by the external provider.",
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.vertex[].keys[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.vertex[].keys[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.vertex[].keys[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.vertex[].keys[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.vertex[].keys[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.vertex[].keys[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.vertex[].keys[].prefix": {
+      "description": "Prefix optionally namespaces model aliases for this credential (e.g., \"teamA/vertex-pro\").",
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.vertex[].keys[].proxy-url": {
+      "description": "ProxyURL optionally overrides the global proxy for this API key.",
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.vertex[].keys[].weight": {
+      "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
+      "type": "int"
+    },
+    "api-keys.vertex[].models": {
+      "description": "Models defines the model configurations including aliases for routing.",
+      "type": "list"
+    },
+    "api-keys.vertex[].models[]": { "type": "object" },
+    "api-keys.vertex[].models[].alias": {
+      "description": "Alias is the model name alias that clients will use to reference this model.",
+      "type": "string"
+    },
+    "api-keys.vertex[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.vertex[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.vertex[].models[].name": {
+      "description": "Name is the actual model name used by the external provider.",
+      "type": "string"
+    },
+    "api-keys.vertex[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.vertex[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.vertex[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.vertex[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.vertex[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.vertex[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.vertex[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.vertex[].name": { "type": "string" },
+    "api-keys.vertex[].prefix": {
+      "description": "Prefix optionally namespaces model aliases for this credential (e.g., \"teamA/vertex-pro\").",
+      "type": "string"
+    },
+    "api-keys.vertex[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.vertex[].proxy-url": {
+      "description": "ProxyURL optionally overrides the global proxy for this API key.",
+      "type": "string"
+    },
+    "api-keys.vertex[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.xai": {
+      "description": "XAIKey defines xAI API key configurations using the same structure as Codex API keys.",
+      "type": "list"
+    },
+    "api-keys.xai[]": { "type": "object" },
+    "api-keys.xai[].base-url": {
+      "description": "BaseURL is the base URL for the Codex API endpoint.\nIf empty, the default Codex API URL will be used.",
+      "type": "string"
+    },
+    "api-keys.xai[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.xai[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.xai[].excluded-models[]": { "type": "string" },
+    "api-keys.xai[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.xai[].headers.<name>": { "type": "string" },
+    "api-keys.xai[].keys": { "type": "list" },
+    "api-keys.xai[].keys[]": { "type": "object" },
+    "api-keys.xai[].keys[].alpha-search": {
+      "description": "AlphaSearch allows this Codex API key to serve the Alpha Search endpoint.",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].api-key": {
+      "description": "APIKey is the authentication key for accessing Codex API services.",
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].disable-codex-cloaking": {
+      "description": "DisableCodexCloaking optionally overrides the global codex.disable-codex-cloaking for this credential.\nTrue disables cloaking; false explicitly enables cloaking; omitted inherits global codex.disable-codex-cloaking.",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].disable-cooling": {
+      "description": "DisableCooling overrides the global cooling policy for this credential when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].excluded-models": {
+      "description": "ExcludedModels lists model IDs that should be excluded for this provider.",
+      "type": "list"
+    },
+    "api-keys.xai[].keys[].excluded-models[]": { "type": "string" },
+    "api-keys.xai[].keys[].headers": {
+      "description": "Headers optionally adds extra HTTP headers for requests sent with this key.",
+      "type": "map"
+    },
+    "api-keys.xai[].keys[].headers.<name>": { "type": "string" },
+    "api-keys.xai[].keys[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.xai[].keys[].models[]": { "type": "object" },
+    "api-keys.xai[].keys[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].models[].is-compat": {
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.xai[].keys[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].models[].support-configuration-update": {
+      "description": "SupportConfigurationUpdate enables configuration_update for this API-key model.\nIt defaults to false, independently of the built-in OAuth model catalog.",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.xai[].keys[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.xai[].keys[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.xai[].keys[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.xai[].keys[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.xai[].keys[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gpt-5-codex\").",
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.xai[].keys[].proxy-url": {
+      "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.xai[].keys[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.xai[].keys[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.xai[].keys[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.xai[].keys[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.xai[].keys[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.xai[].keys[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "api-keys.xai[].keys[].websockets": {
+      "description": "Websockets enables the Responses API websocket transport for this credential.",
+      "type": "bool"
+    },
+    "api-keys.xai[].keys[].weight": {
+      "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
+      "type": "int"
+    },
+    "api-keys.xai[].models": {
+      "description": "Models defines upstream model names and aliases for request routing.",
+      "type": "list"
+    },
+    "api-keys.xai[].models[]": { "type": "object" },
+    "api-keys.xai[].models[].alias": {
+      "description": "Alias is the client-facing model name that maps to Name.",
+      "type": "string"
+    },
+    "api-keys.xai[].models[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "api-keys.xai[].models[].force-mapping": {
+      "description": "ForceMapping rewrites upstream response model fields back to Alias.",
+      "type": "bool"
+    },
+    "api-keys.xai[].models[].is-compat": {
+      "description": "IsCompat converts Codex MultiAgentV2 agent_message items into portable\nResponses message/user input when client.codex.optimize-multi-agent-v2 is also true.\nUse this for third-party Responses-compatible endpoints that do not accept\nnative agent_message items or empty-signature thinking blocks. Default false\nkeeps the native behavior unchanged.",
+      "type": "bool"
+    },
+    "api-keys.xai[].models[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "api-keys.xai[].models[].name": {
+      "description": "Name is the upstream model identifier used when issuing requests.",
+      "type": "string"
+    },
+    "api-keys.xai[].models[].support-configuration-update": {
+      "description": "SupportConfigurationUpdate enables configuration_update for this API-key model.\nIt defaults to false, independently of the built-in OAuth model catalog.",
+      "type": "bool"
+    },
+    "api-keys.xai[].models[].thinking": {
+      "description": "Thinking configures the thinking/reasoning capability for this model.",
+      "type": "object"
+    },
+    "api-keys.xai[].models[].thinking.dynamic-allowed": {
+      "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
+      "type": "bool"
+    },
+    "api-keys.xai[].models[].thinking.levels": {
+      "description": "Levels defines discrete reasoning effort levels (e.g., \"low\", \"medium\", \"high\").\nWhen set, the model uses level-based reasoning instead of token budgets.",
+      "type": "list"
+    },
+    "api-keys.xai[].models[].thinking.levels[]": { "type": "string" },
+    "api-keys.xai[].models[].thinking.max": {
+      "description": "Max is the maximum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.xai[].models[].thinking.min": {
+      "description": "Min is the minimum allowed thinking budget (inclusive).",
+      "type": "int"
+    },
+    "api-keys.xai[].models[].thinking.zero-allowed": {
+      "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
+      "type": "bool"
+    },
+    "api-keys.xai[].name": { "type": "string" },
+    "api-keys.xai[].prefix": {
+      "description": "Prefix optionally namespaces models for this credential (e.g., \"teamA/gpt-5-codex\").",
+      "type": "string"
+    },
+    "api-keys.xai[].priority": {
+      "description": "Priority controls selection preference when multiple credentials match.\nHigher values are preferred; defaults to 0.",
+      "type": "int"
+    },
+    "api-keys.xai[].proxy-url": {
+      "description": "ProxyURL overrides the global proxy setting for this API key if provided.",
+      "type": "string"
+    },
+    "api-keys.xai[].request-retry": {
+      "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.xai[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.xai[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.xai[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.xai[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.xai[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.xai[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.xai[].request-scoped-errors[].match[]": { "type": "string" },
+    "api-keys.xai[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "client": {
+      "description": "Client configures client-facing compatibility behavior.",
+      "template": "Client-facing compatibility settings apply to both OAuth and API-key routes.",
+      "type": "object"
+    },
+    "client.codex": { "type": "object" },
+    "client.codex.enable-apply-patch": {
+      "description": "EnableApplyPatch advertises freeform apply_patch only for supported models.\nDefault false clears the capability regardless of template metadata.",
+      "template": "When false (default), only models that natively declare freeform apply_patch advertise it.\nWhen true, non-template and bridged models supported by every routing executor also advertise \"freeform\".",
+      "type": "bool"
+    },
+    "client.codex.optimize-multi-agent-v2": {
+      "description": "OptimizeMultiAgentV2 optimizes official Codex multi-agent requests across providers.\nDefault false leaves the client's multi-agent behavior unchanged.",
+      "template": "When true, optimize Codex Desktop, codex-tui, and codex_cli_rs requests for multi-agent v2.\nThis refreshes Codex spawn_agent model details, removes message parameter encryption,\nnormalizes encrypted agent_message content for Codex, and converts agent_message input\ninto standard user messages for non-Codex upstream protocols.\nDefault false. Applies to both OAuth and API-key credentials across providers.\nLegacy provider paths migrate here; this path wins conflicts, including explicit false.",
+      "type": "bool"
+    },
+    "config-version": {
+      "template": "Configuration template using the v8 layout.\nCopy this file to config.yaml and replace the client keys and any enabled examples.\nOptional upstream credentials and request rules remain commented until configured.\nExisting legacy configuration files and /v0/management requests remain supported.\nWhen both spellings of a field are present, the v8 value wins (including false,\n0, and empty collections), and the corresponding legacy field is removed on load/save.\nLegacy-only fields still work. GET requests and config-version: 8 alone do not\nmigrate a legacy file; a successful configuration write through /v8/management does.\nThe compatibility notes at the end show old spellings for existing deployments.",
+      "type": "int"
+    },
+    "credentials.concurrency": {
+      "description": "CredentialConcurrency contains Home-authoritative credential lifecycle settings.",
+      "type": "any"
+    },
+    "credentials.concurrency.busy-retry-max": { "type": "duration" },
+    "credentials.concurrency.busy-retry-min": { "type": "duration" },
+    "credentials.concurrency.cleanup-interval": { "type": "duration" },
+    "credentials.concurrency.cpa-cancel-bound": { "type": "duration" },
+    "credentials.concurrency.cpa-heartbeat-timeout": { "type": "duration" },
+    "credentials.concurrency.lifecycle-config-revision": { "type": "int" },
+    "credentials.concurrency.max-limit": { "type": "int" },
+    "credentials.concurrency.observation-barrier-revision": { "type": "int" },
+    "credentials.concurrency.reclaim-grace": { "type": "duration" },
+    "credentials.concurrency.release-flush-interval": { "type": "duration" },
+    "credentials.concurrency.release-max-backoff": { "type": "duration" },
+    "credentials.in-flight": {
+      "description": "CredentialInFlight configures credential observation snapshots.",
+      "type": "object"
+    },
+    "credentials.in-flight.max-aggregate-groups": { "type": "int" },
+    "credentials.in-flight.max-details": { "type": "int" },
+    "credentials.in-flight.max-part-bytes": { "type": "int" },
+    "credentials.in-flight.max-part-count": { "type": "int" },
+    "credentials.in-flight.max-revision-bytes": { "type": "int" },
+    "credentials.in-flight.max-string-bytes": { "type": "int" },
+    "credentials.in-flight.snapshot-interval": { "type": "string" },
+    "credentials.in-flight.staging-retention": { "type": "string" },
+    "credentials.in-flight.stale-after": { "type": "string" },
+    "management": {
+      "description": "RemoteManagement nests management-related options under 'remote-management'.",
+      "template": "Management API settings",
+      "type": "object"
+    },
+    "management.allow-remote": {
+      "description": "AllowRemote toggles remote (non-localhost) access to management API.",
+      "template": "Whether to allow remote (non-localhost) management access.\nWhen false, only localhost can access management endpoints (a key is still required).",
+      "type": "bool"
+    },
+    "management.base-url": {
+      "description": "BaseURL specifies the base URL of the remote management API for TUI client mode (e.g. \"https://proxy.example.com\").",
+      "type": "string"
+    },
+    "management.disable-auto-update-panel": {
+      "description": "DisableAutoUpdatePanel disables automatic periodic background updates of the management panel asset from GitHub.\nWhen false (the default), the background updater remains enabled; when true, the panel is only downloaded on first access if missing.",
+      "type": "bool"
+    },
+    "management.disable-control-panel": {
+      "description": "DisableControlPanel skips serving and syncing the bundled management UI when true.",
+      "template": "Disable the bundled management control panel asset download and HTTP route when true.",
+      "type": "bool"
+    },
+    "management.panel-github-repository": {
+      "description": "PanelGitHubRepository overrides the GitHub repository used to fetch the management panel asset.\nAccepts either a repository URL (https://github.com/org/repo) or an API releases endpoint.",
+      "template": "GitHub repository for the management control panel. Accepts a repository URL or releases API URL.",
+      "type": "string"
+    },
+    "management.secret-key": {
+      "description": "SecretKey is the management key (plaintext or bcrypt hashed). YAML key intentionally 'secret-key'.",
+      "template": "Management key. If a plaintext value is provided here, it will be hashed on startup.\nAll management requests (even from localhost) require this key.\nLeave empty to disable the Management API entirely (404 for /v0/management and /v8/management routes).",
+      "type": "string"
+    },
+    "models": {
+      "description": "Models selects optional catalog sources independently for each catalog.",
+      "template": "Optional model catalog sources: http(s) URLs or absolute local file paths.\nEach explicit source overrides --local-model; otherwise --local-model uses\nembedded catalogs, and normal mode uses the official remote sources.\nFailed refreshes retain the last valid catalog; custom sources never fall back\nto official URLs. Files and URLs are refreshed every 3 hours and on source changes.\nHome mode never loads the general catalog, even when explicitly configured.",
+      "type": "object"
+    },
+    "models.catalog": { "type": "string" },
+    "models.codex-catalog": { "type": "string" },
+    "models.devin-catalog": { "type": "string" },
+    "multimedia.disable-image-generation": {
+      "description": "DisableImageGeneration controls whether the built-in image_generation tool is injected/allowed.\n\nSupported values:\n  - false (default): image_generation is enabled everywhere (normal behavior).\n  - true: image_generation is disabled everywhere. The server stops injecting it, removes it from request payloads,\n    and returns 404 for /v1/images/generations and /v1/images/edits.\n  - \"chat\": disable image_generation injection for all non-images endpoints (e.g. /v1/responses, /v1/chat/completions),\n    while keeping /v1/images/generations and /v1/images/edits enabled and preserving image_generation there.\n  - \"passthrough\": do not modify the tool list on non-images endpoints — keep image_generation if the client\n    sent it and do not inject it otherwise; on /v1/images/generations and /v1/images/edits behave like \"chat\".",
+      "template": "disable-image-generation supports: false (default), true, \"chat\", or \"passthrough\".",
+      "type": "any"
+    },
+    "multimedia.gpt-image-2-base-model": {
+      "description": "GPTImage2BaseModel sets the base (mainline) model used by the legacy hosted\nimage_generation tool path when a Codex image request is not proxied directly\nthrough the Image API.\n\nThe value must start with \"gpt-\" (case-insensitive). If empty or invalid, the\ndefault base model (\"gpt-5.4-mini\") is used.",
+      "type": "string"
+    },
+    "multimedia.video-result-auth-cache-ttl": {
+      "description": "VideoResultAuthCacheTTL controls how long video IDs stay pinned to the credential\nthat created them. Accepts duration strings like \"30m\" or \"3h\".\nEmpty or invalid values use the default 3h.",
+      "template": "How long video IDs returned by /openai/v1/videos and xAI video creation stay bound\nto the credential that created them. Default: 3h.",
+      "type": "string"
+    },
+    "oauth.auth-auto-refresh-workers": {
+      "description": "AuthAutoRefreshWorkers overrides the size of the core auth auto-refresh and manual refresh-all worker pool.\nWhen <= 0, the default worker count is used.",
+      "type": "int"
+    },
+    "oauth.auth-dir": {
+      "description": "AuthDir is the directory where authentication token files are stored.",
+      "template": "Authentication directory (supports ~ for home directory)",
+      "type": "string"
+    },
+    "oauth.excluded-models": {
+      "description": "OAuthExcludedModels defines per-provider global model exclusions applied to OAuth/file-backed auth entries.",
+      "type": "map"
+    },
+    "oauth.excluded-models.<name>": { "type": "list" },
+    "oauth.excluded-models.<name>[]": { "type": "string" },
+    "oauth.model-alias": {
+      "description": "OAuthModelAlias defines global model name aliases for OAuth/file-backed auth channels.\nThese aliases affect both model listing and model routing for supported channels:\nvertex, aistudio, antigravity, claude, codex, kimi, xai, meta.\n\nNOTE: This does not apply to existing per-credential model alias features under:\ngemini-api-key, interactions-api-key, codex-api-key, xai-api-key, meta-api-key, claude-api-key, openai-compatibility, and vertex-api-key.",
+      "type": "map"
+    },
+    "oauth.model-alias.<name>": { "type": "list" },
+    "oauth.model-alias.<name>[]": { "type": "object" },
+    "oauth.model-alias.<name>[].alias": { "type": "string" },
+    "oauth.model-alias.<name>[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "oauth.model-alias.<name>[].force-mapping": { "type": "bool" },
+    "oauth.model-alias.<name>[].fork": { "type": "bool" },
+    "oauth.model-alias.<name>[].name": { "type": "string" },
+    "oauth.providers.aistudio.ws-auth": {
+      "description": "WebsocketAuth enables or disables authentication for the WebSocket API.",
+      "template": "When true, enable authentication for the WebSocket API (/v1/ws).",
+      "type": "bool"
+    },
+    "oauth.providers.antigravity": {
+      "description": "Antigravity configures provider-wide Antigravity request behavior.",
+      "template": "Antigravity provider behavior.",
+      "type": "object"
+    },
+    "oauth.providers.antigravity.antigravity-credits": {
+      "description": "AntigravityCredits enables credits-based last-resort fallback for Claude models.\nWhen all free-tier auths are exhausted (429/503), the conductor retries with\nan auth that has available Google One AI credits.",
+      "template": "Use credits as a last resort after free-tier Claude quota is exhausted.",
+      "type": "bool"
+    },
+    "oauth.providers.antigravity.connection-pool": {
+      "description": "ConnectionPool configures upstream HTTP connection pooling behavior for Antigravity.",
+      "type": "object"
+    },
+    "oauth.providers.antigravity.connection-pool.enabled": {
+      "description": "Enabled controls whether upstream connection pooling is enabled.\nDefaults to false (short-lived connection mode). Set to true to enable connection pooling.",
+      "type": "bool"
+    },
+    "oauth.providers.antigravity.connection-pool.idle-conn-timeout": {
+      "description": "IdleConnTimeout specifies how long an idle connection stays in the pool before expiring.\nDefaults to \"30s\". Capped at 210s to prevent exceeding Google Frontend (GFE) 240s cutoff.",
+      "type": "string"
+    },
+    "oauth.providers.antigravity.connection-pool.max-idle-conns-per-host": {
+      "description": "MaxIdleConnsPerHost specifies the maximum number of idle connections to retain per host per credential.\nDefaults to 2.",
+      "type": "int"
+    },
+    "oauth.providers.antigravity.sensitive-words": {
+      "description": "SensitiveWords is a list of words to obfuscate with zero-width characters in system instructions.",
+      "type": "list"
+    },
+    "oauth.providers.antigravity.sensitive-words[]": { "type": "string" },
+    "oauth.providers.antigravity.signature-bypass-strict": { "type": "bool" },
+    "oauth.providers.antigravity.signature-cache-enabled": {
+      "description": "AntigravitySignatureCacheEnabled controls whether signature cache validation is enabled for thinking blocks.\nWhen true (default), cached signatures are preferred and validated.\nWhen false, client signatures are used directly after normalization (bypass mode).",
+      "type": "bool"
+    },
+    "oauth.providers.codex": {
+      "description": "Codex configures provider-wide Codex request behavior.",
+      "template": "Codex provider behavior.",
+      "type": "object"
+    },
+    "oauth.providers.codex.header-defaults": {
+      "description": "CodexHeaderDefaults configures fallback headers for Codex OAuth model requests.\nThese are used only when the client does not send its own headers.",
+      "type": "object"
+    },
+    "oauth.providers.codex.header-defaults.beta-features": { "type": "string" },
+    "oauth.providers.codex.header-defaults.user-agent": { "type": "string" },
+    "oauth.providers.codex.live-media-relay": {
+      "description": "LiveMediaRelay terminates and relays Codex Live WebRTC media in this process.",
+      "template": "Terminate and relay Codex Live WebRTC audio and DataChannel traffic in this process.\nThis requires inbound UDP reachability. Keep disabled to preserve direct media behavior.",
+      "type": "any"
+    },
+    "oauth.providers.codex.live-media-relay.disable-private-remote-ips": {
+      "template": "Reject downstream SDP candidates that target private, loopback, link-local, or unspecified IPs.\nKeep false for local or trusted-network Codex Desktop connections.",
+      "type": "bool"
+    },
+    "oauth.providers.codex.live-media-relay.enabled": { "type": "bool" },
+    "oauth.providers.codex.live-media-relay.ice-servers": { "type": "list" },
+    "oauth.providers.codex.live-media-relay.ice-servers[]": {
+      "type": "object"
+    },
+    "oauth.providers.codex.live-media-relay.ice-servers[].credential": {
+      "type": "string"
+    },
+    "oauth.providers.codex.live-media-relay.ice-servers[].urls": {
+      "type": "list"
+    },
+    "oauth.providers.codex.live-media-relay.ice-servers[].urls[]": {
+      "type": "string"
+    },
+    "oauth.providers.codex.live-media-relay.ice-servers[].username": {
+      "type": "string"
+    },
+    "oauth.providers.codex.live-media-relay.max-sessions": {
+      "template": "Maximum concurrent media sessions. Zero uses the default of 32.",
+      "type": "int"
+    },
+    "oauth.providers.codex.live-media-relay.public-ip": {
+      "template": "Public IPv4 or IPv6 address advertised when CPA is behind 1:1 NAT.",
+      "type": "string"
+    },
+    "oauth.providers.codex.live-media-relay.udp-port-max": { "type": "int" },
+    "oauth.providers.codex.live-media-relay.udp-port-min": {
+      "template": "Optional UDP allocation range. Both values must be set together and provide at least two ports per session.",
+      "type": "int"
+    },
+    "oauth.providers.codex.signin-with-chatgpt-identifier": {
+      "description": "SignInWithChatGPTIdentifier configures the identifier (agent_name_hint and User-Agent prefix)\nfor Codex Sign in with ChatGPT (SIWC) OAuth authorization and API requests.\nDefaults to \"CLIProxyAPI\".",
+      "template": "Identifier (agent_name_hint and User-Agent prefix) for Sign in with ChatGPT (SIWC) OAuth and API requests.",
+      "type": "string"
+    },
+    "oauth.providers.devin": {
+      "description": "Devin configures provider-wide Devin request behavior.",
+      "type": "object"
+    },
+    "oauth.providers.devin.sensitive-words": {
+      "description": "SensitiveWords is a list of words to obfuscate with zero-width characters in system prompts and messages.",
+      "type": "list"
+    },
+    "oauth.providers.devin.sensitive-words[]": { "type": "string" },
+    "oauth.request-scoped-errors": {
+      "description": "OAuthRequestScopedErrors defines per-provider request-scoped error rules applied to OAuth/file-backed auth entries.\nSupported channels include: vertex, aistudio, antigravity, claude, codex, kimi, xai, meta, and OAuth plugin provider keys.\n\nNOTE: This applies only to OAuth credentials and does not affect per-credential request-scoped-errors under *-api-key.",
+      "type": "map"
+    },
+    "oauth.request-scoped-errors.<name>": { "type": "list" },
+    "oauth.request-scoped-errors.<name>[]": { "type": "object" },
+    "oauth.request-scoped-errors.<name>[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "oauth.request-scoped-errors.<name>[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "oauth.request-scoped-errors.<name>[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "oauth.request-scoped-errors.<name>[].match-regexr[]": { "type": "string" },
+    "oauth.request-scoped-errors.<name>[].match[]": { "type": "string" },
+    "oauth.request-scoped-errors.<name>[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "oauth.settings": {
+      "description": "OAuthSettings defines per-channel model settings (such as max-context-length) applied to OAuth/file-backed auth entries.",
+      "type": "map"
+    },
+    "oauth.settings.<name>": { "type": "list" },
+    "oauth.settings.<name>[]": { "type": "object" },
+    "oauth.settings.<name>[].alias": { "type": "string" },
+    "oauth.settings.<name>[].max-context-length": {
+      "description": "MaxContextLength overrides the context window advertised to Codex clients.",
+      "type": "int"
+    },
+    "oauth.settings.<name>[].name": { "type": "string" },
+    "observability.logs.debug": {
+      "description": "Debug enables or disables debug-level logging and other debug features.",
+      "template": "Enable debug logging",
+      "type": "bool"
+    },
+    "observability.logs.error-logs-max-files": {
+      "description": "ErrorLogsMaxFiles limits the number of error log files retained when request logging is disabled.\nWhen exceeded, the oldest error log files are deleted. Default is 10. Set to 0 to disable cleanup.",
+      "template": "Maximum number of error log files retained when request logging is disabled.\nWhen exceeded, the oldest error log files are deleted. Default is 10. Set to 0 to disable cleanup.",
+      "type": "int"
+    },
+    "observability.logs.logging-to-file": {
+      "description": "LoggingToFile controls whether application logs are written to rotating files or stdout.",
+      "template": "When true, write application logs to rotating files instead of stdout",
+      "type": "bool"
+    },
+    "observability.logs.logs-max-total-size-mb": {
+      "description": "LogsMaxTotalSizeMB limits the total size (in MB) of log files under the logs directory.\nWhen exceeded, the oldest log files are deleted until within the limit. Set to 0 to disable.",
+      "template": "Maximum total size (MB) of log files under the logs directory. When exceeded, the oldest log\nfiles are deleted until within the limit. Set to 0 to disable.",
+      "type": "int"
+    },
+    "observability.logs.request-log": {
+      "description": "RequestLog enables or disables detailed request logging functionality.",
+      "template": "Record proxy request/response logs. Management requests are excluded.",
+      "type": "bool"
+    },
+    "observability.pprof": {
+      "description": "Pprof config controls the optional pprof HTTP debug server.",
+      "template": "Enable pprof HTTP debug server (host:port). Keep it bound to localhost for safety.",
+      "type": "object"
+    },
+    "observability.pprof.addr": {
+      "description": "Addr is the host:port address for the pprof HTTP server.",
+      "type": "string"
+    },
+    "observability.pprof.enable": {
+      "description": "Enable toggles the pprof HTTP debug server.",
+      "type": "bool"
+    },
+    "observability.usage.redis-usage-queue-retention-seconds": {
+      "description": "RedisUsageQueueRetentionSeconds controls how long usage queue items are retained\nin memory for Management API consumers.\nDefault: 60. Max: 3600.",
+      "template": "How long (in seconds) usage queue items are retained in memory for the Management API.\nThe local Redis RESP usage output is disabled.\nDefault: 60. Max: 3600.",
+      "type": "int"
+    },
+    "observability.usage.usage-statistics-enabled": {
+      "description": "UsageStatisticsEnabled toggles in-memory usage aggregation; when false, usage data is discarded.",
+      "template": "When false, disable in-memory usage statistics aggregation",
+      "type": "bool"
+    },
+    "plugins": {
+      "description": "Plugins configures dynamic plugin discovery and per-plugin settings.",
+      "template": "Standard dynamic library plugins are trusted in-process code. They are disabled by default.\nBuild Go examples with go build -buildmode=c-shared for the target GOOS/GOARCH.\nOther languages can implement the same C ABI and JSON method protocol.\nPlugin executors require a matching auth record with the same provider key.\nIf the same provider is configured as OpenAI-compatible, the native executor wins.\nPlugin command-line flags and Management API routes are optional capabilities.\nExisting native flags/routes and higher-priority plugin flags/routes cannot be replaced.\nPlugin list Management API reads Logo and ConfigFields from plugin metadata for management UI display.\nPer-plugin enabled only controls plugins.configs.<pluginID>.enabled and does not implicitly change global plugins.enabled.",
+      "type": "object"
+    },
+    "plugins.auth-revision": {
+      "description": "AuthRevision changes when Home-managed plugin credentials change.",
+      "type": "int"
+    },
+    "plugins.configs": {
+      "description": "Configs stores per-plugin instance configuration by plugin ID.",
+      "type": "map"
+    },
+    "plugins.configs.<name>": { "type": "any" },
+    "plugins.configs.<name>.enabled": {
+      "description": "Enabled toggles this plugin instance. Nil is normalized to false during YAML parsing.",
+      "type": "bool"
+    },
+    "plugins.configs.<name>.priority": {
+      "description": "Priority controls plugin startup and routing order.",
+      "type": "int"
+    },
+    "plugins.dir": {
+      "description": "Dir is the plugin discovery directory.",
+      "type": "string"
+    },
+    "plugins.enabled": {
+      "description": "Enabled toggles dynamic plugin loading.",
+      "type": "bool"
+    },
+    "plugins.store-auth": {
+      "description": "StoreAuth defines optional auth rules for plugin store registry, metadata, and artifact requests.",
+      "type": "list"
+    },
+    "plugins.store-auth[]": { "type": "object" },
+    "plugins.store-auth[].allow-insecure": { "type": "bool" },
+    "plugins.store-auth[].apply-to": { "type": "list" },
+    "plugins.store-auth[].apply-to[]": { "type": "string" },
+    "plugins.store-auth[].header-name": { "type": "string" },
+    "plugins.store-auth[].header-value-env": { "type": "string" },
+    "plugins.store-auth[].match": { "type": "string" },
+    "plugins.store-auth[].password-env": { "type": "string" },
+    "plugins.store-auth[].token-env": { "type": "string" },
+    "plugins.store-auth[].type": { "type": "string" },
+    "plugins.store-auth[].username-env": { "type": "string" },
+    "plugins.store-sources": {
+      "description": "StoreSources appends third-party plugin store registries to the built-in official source.",
+      "type": "list"
+    },
+    "plugins.store-sources[]": { "type": "string" },
+    "quota-exceeded": {
+      "description": "QuotaExceeded defines the behavior when a quota is exceeded.",
+      "type": "object"
+    },
+    "quota-exceeded.switch-preview-model": {
+      "description": "SwitchPreviewModel indicates whether to automatically switch to a preview model when a quota is exceeded.",
+      "type": "bool"
+    },
+    "quota-exceeded.switch-project": {
+      "description": "SwitchProject indicates whether to automatically switch to another project when a quota is exceeded.",
+      "type": "bool"
+    },
+    "requests.nonstream-keepalive-interval": {
+      "description": "NonStreamKeepAliveInterval controls how often blank lines are emitted for non-streaming responses.\n<= 0 disables keep-alives. Value is in seconds.",
+      "template": "When > 0, emit blank lines every N seconds for non-streaming responses to prevent idle timeouts.",
+      "type": "int"
+    },
+    "requests.passthrough-headers": {
+      "description": "PassthroughHeaders controls whether upstream response headers are forwarded to downstream clients.\nDefault is false (disabled).",
+      "template": "When true, forward filtered upstream response headers to downstream clients.\nDefault is false (disabled).",
+      "type": "bool"
+    },
+    "requests.payload": {
+      "description": "Payload defines default and override rules for provider payload parameters.",
+      "type": "object"
+    },
+    "requests.payload.default": {
+      "description": "Default defines rules that only set parameters when they are missing in the payload.",
+      "type": "list"
+    },
+    "requests.payload.default-raw": {
+      "description": "DefaultRaw defines rules that set raw JSON values only when they are missing.",
+      "type": "list"
+    },
+    "requests.payload.default-raw[]": { "type": "object" },
+    "requests.payload.default-raw[].models": {
+      "description": "Models lists model entries with name pattern and protocol constraint.",
+      "type": "list"
+    },
+    "requests.payload.default-raw[].models[]": { "type": "object" },
+    "requests.payload.default-raw[].models[].exist": {
+      "description": "Exist requires payload JSON paths to exist and not be null.",
+      "type": "list"
+    },
+    "requests.payload.default-raw[].models[].exist[]": { "type": "string" },
+    "requests.payload.default-raw[].models[].from-protocol": {
+      "description": "FromProtocol restricts the rule to a specific source protocol (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.default-raw[].models[].headers": {
+      "description": "Headers restricts the rule to requests whose headers match all configured wildcard patterns.",
+      "type": "map"
+    },
+    "requests.payload.default-raw[].models[].headers.<name>": {
+      "type": "string"
+    },
+    "requests.payload.default-raw[].models[].match": {
+      "description": "Match requires payload JSON paths to equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.default-raw[].models[].match[]": { "type": "map" },
+    "requests.payload.default-raw[].models[].match[].<name>": { "type": "any" },
+    "requests.payload.default-raw[].models[].name": {
+      "description": "Name is the model name or wildcard pattern (e.g., \"gpt-*\", \"*-5\", \"gemini-*-pro\").",
+      "type": "string"
+    },
+    "requests.payload.default-raw[].models[].not-exist": {
+      "description": "NotExist requires payload JSON paths to be missing or null.",
+      "type": "list"
+    },
+    "requests.payload.default-raw[].models[].not-exist[]": { "type": "string" },
+    "requests.payload.default-raw[].models[].not-match": {
+      "description": "NotMatch requires payload JSON paths to not equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.default-raw[].models[].not-match[]": { "type": "map" },
+    "requests.payload.default-raw[].models[].not-match[].<name>": {
+      "type": "any"
+    },
+    "requests.payload.default-raw[].models[].protocol": {
+      "description": "Protocol restricts the rule to a specific translator format (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.default-raw[].params": {
+      "description": "Params maps JSON paths (gjson/sjson syntax) to values written into the payload.\nFor *-raw rules, values are treated as raw JSON fragments (strings are used as-is).",
+      "type": "map"
+    },
+    "requests.payload.default-raw[].params.<name>": { "type": "any" },
+    "requests.payload.default[]": { "type": "object" },
+    "requests.payload.default[].models": {
+      "description": "Models lists model entries with name pattern and protocol constraint.",
+      "type": "list"
+    },
+    "requests.payload.default[].models[]": { "type": "object" },
+    "requests.payload.default[].models[].exist": {
+      "description": "Exist requires payload JSON paths to exist and not be null.",
+      "type": "list"
+    },
+    "requests.payload.default[].models[].exist[]": { "type": "string" },
+    "requests.payload.default[].models[].from-protocol": {
+      "description": "FromProtocol restricts the rule to a specific source protocol (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.default[].models[].headers": {
+      "description": "Headers restricts the rule to requests whose headers match all configured wildcard patterns.",
+      "type": "map"
+    },
+    "requests.payload.default[].models[].headers.<name>": { "type": "string" },
+    "requests.payload.default[].models[].match": {
+      "description": "Match requires payload JSON paths to equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.default[].models[].match[]": { "type": "map" },
+    "requests.payload.default[].models[].match[].<name>": { "type": "any" },
+    "requests.payload.default[].models[].name": {
+      "description": "Name is the model name or wildcard pattern (e.g., \"gpt-*\", \"*-5\", \"gemini-*-pro\").",
+      "type": "string"
+    },
+    "requests.payload.default[].models[].not-exist": {
+      "description": "NotExist requires payload JSON paths to be missing or null.",
+      "type": "list"
+    },
+    "requests.payload.default[].models[].not-exist[]": { "type": "string" },
+    "requests.payload.default[].models[].not-match": {
+      "description": "NotMatch requires payload JSON paths to not equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.default[].models[].not-match[]": { "type": "map" },
+    "requests.payload.default[].models[].not-match[].<name>": { "type": "any" },
+    "requests.payload.default[].models[].protocol": {
+      "description": "Protocol restricts the rule to a specific translator format (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.default[].params": {
+      "description": "Params maps JSON paths (gjson/sjson syntax) to values written into the payload.\nFor *-raw rules, values are treated as raw JSON fragments (strings are used as-is).",
+      "type": "map"
+    },
+    "requests.payload.default[].params.<name>": { "type": "any" },
+    "requests.payload.filter": {
+      "description": "Filter defines rules that remove parameters from the payload by JSON path.",
+      "type": "list"
+    },
+    "requests.payload.filter[]": { "type": "object" },
+    "requests.payload.filter[].models": {
+      "description": "Models lists model entries with name pattern and protocol constraint.",
+      "type": "list"
+    },
+    "requests.payload.filter[].models[]": { "type": "object" },
+    "requests.payload.filter[].models[].exist": {
+      "description": "Exist requires payload JSON paths to exist and not be null.",
+      "type": "list"
+    },
+    "requests.payload.filter[].models[].exist[]": { "type": "string" },
+    "requests.payload.filter[].models[].from-protocol": {
+      "description": "FromProtocol restricts the rule to a specific source protocol (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.filter[].models[].headers": {
+      "description": "Headers restricts the rule to requests whose headers match all configured wildcard patterns.",
+      "type": "map"
+    },
+    "requests.payload.filter[].models[].headers.<name>": { "type": "string" },
+    "requests.payload.filter[].models[].match": {
+      "description": "Match requires payload JSON paths to equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.filter[].models[].match[]": { "type": "map" },
+    "requests.payload.filter[].models[].match[].<name>": { "type": "any" },
+    "requests.payload.filter[].models[].name": {
+      "description": "Name is the model name or wildcard pattern (e.g., \"gpt-*\", \"*-5\", \"gemini-*-pro\").",
+      "type": "string"
+    },
+    "requests.payload.filter[].models[].not-exist": {
+      "description": "NotExist requires payload JSON paths to be missing or null.",
+      "type": "list"
+    },
+    "requests.payload.filter[].models[].not-exist[]": { "type": "string" },
+    "requests.payload.filter[].models[].not-match": {
+      "description": "NotMatch requires payload JSON paths to not equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.filter[].models[].not-match[]": { "type": "map" },
+    "requests.payload.filter[].models[].not-match[].<name>": { "type": "any" },
+    "requests.payload.filter[].models[].protocol": {
+      "description": "Protocol restricts the rule to a specific translator format (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.filter[].params": {
+      "description": "Params lists JSON paths (gjson/sjson syntax) to remove from the payload.",
+      "type": "list"
+    },
+    "requests.payload.filter[].params[]": { "type": "string" },
+    "requests.payload.override": {
+      "description": "Override defines rules that always set parameters, overwriting any existing values.",
+      "type": "list"
+    },
+    "requests.payload.override-raw": {
+      "description": "OverrideRaw defines rules that always set raw JSON values, overwriting any existing values.",
+      "type": "list"
+    },
+    "requests.payload.override-raw[]": { "type": "object" },
+    "requests.payload.override-raw[].models": {
+      "description": "Models lists model entries with name pattern and protocol constraint.",
+      "type": "list"
+    },
+    "requests.payload.override-raw[].models[]": { "type": "object" },
+    "requests.payload.override-raw[].models[].exist": {
+      "description": "Exist requires payload JSON paths to exist and not be null.",
+      "type": "list"
+    },
+    "requests.payload.override-raw[].models[].exist[]": { "type": "string" },
+    "requests.payload.override-raw[].models[].from-protocol": {
+      "description": "FromProtocol restricts the rule to a specific source protocol (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.override-raw[].models[].headers": {
+      "description": "Headers restricts the rule to requests whose headers match all configured wildcard patterns.",
+      "type": "map"
+    },
+    "requests.payload.override-raw[].models[].headers.<name>": {
+      "type": "string"
+    },
+    "requests.payload.override-raw[].models[].match": {
+      "description": "Match requires payload JSON paths to equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.override-raw[].models[].match[]": { "type": "map" },
+    "requests.payload.override-raw[].models[].match[].<name>": {
+      "type": "any"
+    },
+    "requests.payload.override-raw[].models[].name": {
+      "description": "Name is the model name or wildcard pattern (e.g., \"gpt-*\", \"*-5\", \"gemini-*-pro\").",
+      "type": "string"
+    },
+    "requests.payload.override-raw[].models[].not-exist": {
+      "description": "NotExist requires payload JSON paths to be missing or null.",
+      "type": "list"
+    },
+    "requests.payload.override-raw[].models[].not-exist[]": {
+      "type": "string"
+    },
+    "requests.payload.override-raw[].models[].not-match": {
+      "description": "NotMatch requires payload JSON paths to not equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.override-raw[].models[].not-match[]": { "type": "map" },
+    "requests.payload.override-raw[].models[].not-match[].<name>": {
+      "type": "any"
+    },
+    "requests.payload.override-raw[].models[].protocol": {
+      "description": "Protocol restricts the rule to a specific translator format (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.override-raw[].params": {
+      "description": "Params maps JSON paths (gjson/sjson syntax) to values written into the payload.\nFor *-raw rules, values are treated as raw JSON fragments (strings are used as-is).",
+      "type": "map"
+    },
+    "requests.payload.override-raw[].params.<name>": { "type": "any" },
+    "requests.payload.override[]": { "type": "object" },
+    "requests.payload.override[].models": {
+      "description": "Models lists model entries with name pattern and protocol constraint.",
+      "type": "list"
+    },
+    "requests.payload.override[].models[]": { "type": "object" },
+    "requests.payload.override[].models[].exist": {
+      "description": "Exist requires payload JSON paths to exist and not be null.",
+      "type": "list"
+    },
+    "requests.payload.override[].models[].exist[]": { "type": "string" },
+    "requests.payload.override[].models[].from-protocol": {
+      "description": "FromProtocol restricts the rule to a specific source protocol (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.override[].models[].headers": {
+      "description": "Headers restricts the rule to requests whose headers match all configured wildcard patterns.",
+      "type": "map"
+    },
+    "requests.payload.override[].models[].headers.<name>": { "type": "string" },
+    "requests.payload.override[].models[].match": {
+      "description": "Match requires payload JSON paths to equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.override[].models[].match[]": { "type": "map" },
+    "requests.payload.override[].models[].match[].<name>": { "type": "any" },
+    "requests.payload.override[].models[].name": {
+      "description": "Name is the model name or wildcard pattern (e.g., \"gpt-*\", \"*-5\", \"gemini-*-pro\").",
+      "type": "string"
+    },
+    "requests.payload.override[].models[].not-exist": {
+      "description": "NotExist requires payload JSON paths to be missing or null.",
+      "type": "list"
+    },
+    "requests.payload.override[].models[].not-exist[]": { "type": "string" },
+    "requests.payload.override[].models[].not-match": {
+      "description": "NotMatch requires payload JSON paths to not equal the configured values.",
+      "type": "list"
+    },
+    "requests.payload.override[].models[].not-match[]": { "type": "map" },
+    "requests.payload.override[].models[].not-match[].<name>": {
+      "type": "any"
+    },
+    "requests.payload.override[].models[].protocol": {
+      "description": "Protocol restricts the rule to a specific translator format (e.g., \"gemini\", \"responses\").",
+      "type": "string"
+    },
+    "requests.payload.override[].params": {
+      "description": "Params maps JSON paths (gjson/sjson syntax) to values written into the payload.\nFor *-raw rules, values are treated as raw JSON fragments (strings are used as-is).",
+      "type": "map"
+    },
+    "requests.payload.override[].params.<name>": { "type": "any" },
+    "requests.proxy-url": {
+      "description": "ProxyURL is the URL of an optional proxy server to use for outbound requests.",
+      "template": "Proxy URL. Supports socks5/http/https protocols. Example: socks5://user:pass@192.168.1.1:1080/\nPer-entry proxy-url also supports \"direct\" or \"none\" to bypass both the global proxy-url and environment proxies explicitly.",
+      "type": "string"
+    },
+    "requests.streaming": {
+      "description": "Streaming configures server-side streaming behavior (keep-alives and safe bootstrap retries).",
+      "type": "object"
+    },
+    "requests.streaming.bootstrap-retries": {
+      "description": "BootstrapRetries controls how many times the server may retry a streaming request before any bytes are sent,\nto allow auth rotation / transient recovery.\n<= 0 disables bootstrap retries. Default is 0.",
+      "type": "int"
+    },
+    "requests.streaming.keepalive-seconds": {
+      "description": "KeepAliveSeconds controls how often the server emits SSE heartbeats (\": keep-alive\\n\\n\")\nor WebSocket Ping control frames.\n<= 0 disables keep-alives. Default is 0.",
+      "type": "int"
+    },
+    "requests.streaming.send-keepalive-before-ft": {
+      "description": "SendKeepAliveBeforeFT controls whether SSE heartbeats are sent before the first token arrives\nwhen KeepAliveSeconds > 0. Default is false.",
+      "type": "bool"
+    },
+    "requests.tls-handshake-timeout-seconds": {
+      "description": "TLSHandshakeTimeoutSeconds bounds upstream TLS handshakes made by the\nshared uTLS client, in seconds. It applies to both the Claude Code\nAnthropic transport and the Chrome ChatGPT/Codex transport; the\nstandard fallback transport is unaffected. It starts after TCP or\nproxy connection establishment returns and does not bound dialing or\nproxy CONNECT. Those uTLS paths use custom TLS dialing, for which Go\nignores http.Transport.TLSHandshakeTimeout, so a peer that accepts the\nconnection but never answers the ClientHello would otherwise block the\nrequest indefinitely and request-retry could never engage. The bound\napplies only during the TLS handshake and is removed once it succeeds,\nso inference and long-running streams are unaffected. The default 0\ndisables the bound (previous behavior); negative values are treated as\n0, and values beyond the representable duration range saturate.",
+      "template": "Maximum time, in seconds, for upstream TLS handshakes made by the shared built-in\nuTLS client. It applies to both the Claude Code Anthropic transport and the Chrome\nChatGPT/Codex transport; the standard fallback transport is unaffected. The timer\nstarts after TCP or proxy connection establishment returns; it does not bound dialing\nor proxy CONNECT. When the upstream path accepts the connection but never answers the\nTLS ClientHello, the request would otherwise wait indefinitely and request-retry could\nnever engage. The bound applies only during the TLS handshake and is lifted once it\nsucceeds, so inference and long-running streams are never time-limited.\nSet to 0 to disable (default).",
+      "type": "int"
+    },
+    "routing": {
+      "description": "Routing controls credential selection behavior.",
+      "template": "Routing strategy for selecting credentials when multiple match.",
+      "type": "object"
+    },
+    "routing.cooldown.disable-cooling": {
+      "description": "DisableCooling disables auth/model cooldown scheduling when true unless a credential or provider overrides it.",
+      "template": "When true, disable auth/model cooldown scheduling globally (prevents blackout windows after failure states).\nA credential/provider disable-cooling value, when present, overrides this global value.",
+      "type": "bool"
+    },
+    "routing.cooldown.save-cooldown-status": {
+      "description": "SaveCooldownStatus persists runtime cooldown status next to auth files when true.",
+      "template": "When true, persist per-auth cooldown status as .cds files next to auth files.\nDefault is false; when false, cooldown status is kept in memory only.",
+      "type": "bool"
+    },
+    "routing.cooldown.transient-error-cooldown-seconds": {
+      "description": "TransientErrorCooldownSeconds controls cooldowns for transient upstream errors (408/500/502/503/504/520-526).\n0 keeps the legacy default cooldown. Negative values disable these cooldowns.",
+      "template": "Cooldown duration in seconds for transient upstream errors (408/500/502/503/504/520-526).\nSet to 0 to keep the legacy 60-second cooldown; set to -1 to disable transient error cooldowns.",
+      "type": "int"
+    },
+    "routing.force-model-prefix": {
+      "description": "ForceModelPrefix requires explicit model prefixes (e.g., \"teamA/gemini-3-pro-preview\")\nto target prefixed credentials. When false, unprefixed model requests may use prefixed\ncredentials as well.",
+      "template": "When true, unprefixed model requests only use credentials without a prefix (except when prefix == model name).",
+      "type": "bool"
+    },
+    "routing.retry.max-retry-credentials": {
+      "description": "MaxRetryCredentials defines the maximum number of different credentials to\ntry in each credential retry round.\nSet to 0 or a negative value to keep trying all available credentials (legacy behavior).",
+      "template": "Maximum number of different credentials to try in each credential retry round\nafter per-credential round filtering. Set to 0 to try all available\ncredentials. Credentials skipped by this cap still age with the global round,\nso the cap does not guarantee a fixed number of actual retries per credential.",
+      "type": "int"
+    },
+    "routing.retry.max-retry-interval": {
+      "description": "MaxRetryInterval defines the maximum positive cooldown wait, in seconds,\nallowed before starting another credential retry round. A non-positive value\nforbids positive cooldown waits; it does not disable same-round credential\nfailover or immediate additional rounds allowed by RequestRetry.",
+      "template": "Maximum cooldown wait in seconds between retry rounds.\nSet to 0 or below to never wait for credential cooldown.\nRetry rounds that need no wait remain controlled by request-retry.",
+      "type": "int"
+    },
+    "routing.retry.request-retry": {
+      "description": "RequestRetry defines the number of additional credential retry rounds after\nthe first round has exhausted its eligible credentials.",
+      "template": "Number of additional credential retry rounds after the first round exhausts\nits eligible credentials. Round 0 is the initial round; round r only admits\ncredentials whose effective request-retry is at least r. Explicit non-negative\ncredential/provider overrides take precedence; omitted or negative overrides\ninherit this global value, and explicit 0 only admits round 0. New CPA nodes\nsend retry_round=0 for the initial round and increment it for additional rounds;\nlegacy dispatch methods omit the field and keep old semantics.\nAdditional rounds apply to HTTP 403, 408, 429, 500, 502, 503, and 504 failures.\nIndividual credential/provider overrides take precedence; 0 disables additional\nrounds, while an omitted or negative override inherits this global setting.",
+      "type": "int"
+    },
+    "routing.session-affinity": {
+      "description": "SessionAffinity enables universal session-sticky routing for all clients.\nExplicit Claude Code, Codex, OpenCode, and pi session headers are preferred,\nfollowed by prompt_cache_key, Responses conversation IDs, legacy body IDs,\nexecution or derived session identity, and the existing message-content hash fallback.\nAutomatic failover is always enabled when bound auth becomes unavailable.",
+      "template": "weighted-round-robin uses each credential's integer weight (default 1, maximum 1,000,000).\nNon-positive weights exclude the credential while this strategy is active.\nFor OAuth/file credentials, add a top-level numeric \"weight\" field to the auth JSON.\nEnable universal session-sticky routing for all clients.\nExplicit Claude Code, Codex, OpenCode, and pi session headers are preferred,\nfollowed by prompt_cache_key, Responses conversation IDs, legacy body IDs,\nexecution or derived session identity, and the existing first-message hash fallback.\nAutomatic failover is always enabled when bound auth becomes unavailable.\nAn established binding outranks credential priority: once a session is bound, that\ncredential is kept even if a higher-priority credential recovers. Credential priority\nstill decides cold bindings, requests without a session, and post-failover rebinding.",
+      "type": "bool"
+    },
+    "routing.session-affinity-rebind-on": {
+      "description": "SessionAffinityRebindOn controls which credential failures rebind an established session\nto the failover credential.\nSupported values:\n  - \"any\" (default): any credential-attributed failure unbinds and rebinds on failover.\n  - \"quota\": transient errors (408, 5xx, empty stream, buffer limit) fail over for that\n    request only while keeping the session bound to its original credential; quota and\n    auth errors (429, 401/402/403, 404/model support, invalid_grant) rebind as normal.\nIgnored when SessionAffinity is false.",
+      "template": "Controls which credential failures rebind an established session to the failover credential:\nrequest only while keeping the session bound to its original credential; quota and auth\nerrors (429, 401/402/403, 404/model support, invalid_grant) rebind as normal.\nIgnored when routing.session-affinity is false.",
+      "type": "string"
+    },
+    "routing.session-affinity-subagents": {
+      "description": "SessionAffinitySubagents controls whether subagents (child sessions with parent references)\ninherit and bind to the parent's upstream credential across all providers (Claude, Codex,\nAntigravity, Gemini), maximizing prompt and KV cache reuse.\nWhen false, subagents are distributed across the credential pool via the fallback selector.\nDefault: true. Ignored when SessionAffinity is false.",
+      "template": "When true (default), subagents (child sessions with parent references) inherit and bind\nto the parent's upstream credential across all providers (Claude, Codex, Antigravity, Gemini),\nmaximizing Prompt/KV Cache reuse and minimizing TTFT.\nWhen false, subagents are distributed across the credential pool via the fallback selector\nfor maximum parallel concurrency.\nIgnored when routing.session-affinity is false.",
+      "type": "bool"
+    },
+    "routing.session-affinity-ttl": {
+      "description": "SessionAffinityTTL specifies how long session-to-auth bindings are retained.\nDefault: 1h. Accepts duration strings like \"30m\", \"1h\", \"2h30m\".",
+      "template": "How long session-to-auth bindings are retained. Default: 1h",
+      "type": "string"
+    },
+    "routing.strategy": {
+      "description": "Strategy selects the credential selection strategy.\nSupported values: \"round-robin\" (default), \"weighted-round-robin\", \"fill-first\".",
+      "template": "round-robin (default), weighted-round-robin, fill-first",
+      "type": "string"
+    },
+    "server.commercial-mode": {
+      "description": "CommercialMode disables high-overhead request logging and HTTP middleware features to minimize per-request memory usage.",
+      "template": "When true, disable high-overhead request logging and HTTP middleware features to reduce per-request memory usage under high concurrency.",
+      "type": "bool"
+    },
+    "server.discovery": {
+      "description": "Discovery configures local network mDNS / DNS-SD service advertising.",
+      "template": "Enable local network mDNS / DNS-SD service discovery (RFC 6762 / RFC 6763).\nWhen enabled, broadcasts _ai-gateway._tcp with API protocol subtypes on the local network.\nNOTE for Docker users: Link-local multicast (224.0.0.251) cannot cross default NAT bridge networks.\nTo broadcast across the physical LAN, run the container with host networking (--net=host / network_mode: host).",
+      "type": "object"
+    },
+    "server.discovery.advertise-management": {
+      "description": "AdvertiseManagement explicitly controls whether management endpoints are exposed (default: false).",
+      "type": "bool"
+    },
+    "server.discovery.auth-required": {
+      "description": "AuthRequired indicates whether authentication is required for client calls (default: true).",
+      "type": "bool"
+    },
+    "server.discovery.enabled": {
+      "description": "Enabled toggles mDNS service advertising on the local network (default: false).",
+      "type": "bool"
+    },
+    "server.discovery.interfaces": {
+      "description": "Interfaces specifies network interface filtering rules.",
+      "type": "object"
+    },
+    "server.discovery.interfaces.exclude": { "type": "list" },
+    "server.discovery.interfaces.exclude[]": { "type": "string" },
+    "server.discovery.interfaces.include": { "type": "list" },
+    "server.discovery.interfaces.include[]": { "type": "string" },
+    "server.discovery.service-name": {
+      "description": "ServiceName is the optional custom instance name. When empty, defaults to CPA-<ShortID>.",
+      "type": "string"
+    },
+    "server.discovery.service-type": {
+      "description": "ServiceType is the DNS-SD service type (default: _ai-gateway._tcp).",
+      "type": "string"
+    },
+    "server.discovery.subtypes": {
+      "description": "Subtypes specifies DNS-SD API protocol subtypes to advertise (e.g. _responses, _messages, _generate-content).",
+      "type": "list"
+    },
+    "server.discovery.subtypes[]": { "type": "string" },
+    "server.github-token": {
+      "description": "GitHubToken is the global token for GitHub requests, taking precedence over GITHUB_TOKEN.",
+      "template": "Global token for GitHub requests (for example, release and asset downloads).\nA non-empty config token takes precedence over the GITHUB_TOKEN environment variable.\nLeave empty to use GITHUB_TOKEN, or unauthenticated requests if neither is set.",
+      "type": "string"
+    },
+    "server.host": {
+      "description": "Host is the network host/interface on which the API server will bind.\nDefault is empty (\"\") to bind all interfaces (IPv4 + IPv6). Use \"127.0.0.1\" or \"localhost\" for local-only access.",
+      "template": "Server host/interface to bind to. Default is empty (\"\") to bind all interfaces (IPv4 + IPv6).\nUse \"127.0.0.1\" or \"localhost\" to restrict access to local machine only.",
+      "type": "string"
+    },
+    "server.max-request-body-bytes": {
+      "description": "MaxRequestBodyBytes limits the size (in bytes) of incoming HTTP request bodies.\nValues <= 0 disable the limit (default).",
+      "template": "Maximum allowed size (in bytes) for incoming HTTP request bodies.\nRequests exceeding this limit are rejected with HTTP 413 Payload Too Large.\nDefault is 0 (disabled / no limit).",
+      "type": "int"
+    },
+    "server.port": {
+      "description": "Port is the network port on which the API server will listen.",
+      "template": "Server port",
+      "type": "int"
+    },
+    "server.tls": {
+      "description": "TLS config controls HTTPS server settings.",
+      "template": "TLS settings for HTTPS. When enabled, the server listens with the provided certificate and key.",
+      "type": "object"
+    },
+    "server.tls.cert": {
+      "description": "Cert is the path to the TLS certificate file.",
+      "type": "string"
+    },
+    "server.tls.enable": {
+      "description": "Enable toggles HTTPS server mode.",
+      "type": "bool"
+    },
+    "server.tls.key": {
+      "description": "Key is the path to the TLS private key file.",
+      "type": "string"
+    },
+    "server.trusted-proxies": {
+      "description": "TrustedProxies lists the IPs or CIDRs allowed to provide forwarded client IP headers.\nThe server applies this list at startup; changing it requires a restart.",
+      "template": "IP addresses or CIDRs of proxies allowed to supply forwarded client IP headers.\nAn empty list (the default) does not trust forwarded headers. Restart after changing this setting.",
+      "type": "list"
+    },
+    "server.trusted-proxies[]": { "type": "string" },
+    "upstream.claude": {
+      "description": "ClaudeCode configures Claude Code compatibility behavior.\n\nClaude configures provider-wide Claude request behavior.",
+      "type": "object"
+    },
+    "upstream.claude.disable-claude-cloak-mode": {
+      "description": "DisableClaudeCloakMode globally disables Claude request cloaking when true.\nCloaking disguises requests as the official Claude Code CLI and replaces the\nsystem prompt. When true, every Claude credential defaults to no cloaking\n(\"never\"); a specific credential can still re-enable or override it via its own\ncloak settings (the per claude-api-key \"cloak\" block, or a \"cloak_mode\" value in\nthe auth/OAuth token file). Default false preserves the per-client \"auto\" behavior.",
+      "template": "When true, disable Claude request cloaking on OAuth and API-key CLI profiles (the Claude Code CLI disguise and\nsystem prompt replacement), so the original system prompt is passed through to Claude as-is.\nCredential attributes and explicit per-key cloak modes override this shared default.\nDefault false keeps the per-client \"auto\" behavior (cloak only non-Claude-Code clients).\nAPI-key overrides use api-keys.claude[].keys[].cloak.mode.",
+      "type": "bool"
+    },
+    "upstream.claude.disable-cloaking-model-list": {
+      "description": "DisableCloakingModelList disables model ID cloaking in Anthropic model list responses.",
+      "template": "When true, return original model IDs in Anthropic model list responses instead of cloaked IDs.",
+      "type": "bool"
+    },
+    "upstream.claude.header-defaults": {
+      "description": "ClaudeHeaderDefaults configures default header values for Claude API requests.\nThese are used as fallbacks when the client does not send its own headers.",
+      "type": "object"
+    },
+    "upstream.claude.header-defaults.anthropic-beta-append": { "type": "list" },
+    "upstream.claude.header-defaults.anthropic-beta-append[]": {
+      "type": "string"
+    },
+    "upstream.claude.header-defaults.anthropic-beta-strip": { "type": "list" },
+    "upstream.claude.header-defaults.anthropic-beta-strip[]": {
+      "type": "string"
+    },
+    "upstream.claude.header-defaults.arch": { "type": "string" },
+    "upstream.claude.header-defaults.client-request-id": { "type": "string" },
+    "upstream.claude.header-defaults.inject-diagnostics": { "type": "bool" },
+    "upstream.claude.header-defaults.os": { "type": "string" },
+    "upstream.claude.header-defaults.package-version": { "type": "string" },
+    "upstream.claude.header-defaults.runtime-version": { "type": "string" },
+    "upstream.claude.header-defaults.stabilize-device-profile": {
+      "type": "bool"
+    },
+    "upstream.claude.header-defaults.timeout": { "type": "string" },
+    "upstream.claude.header-defaults.timezone": { "type": "string" },
+    "upstream.claude.header-defaults.user-agent": { "type": "string" },
+    "upstream.claude.model-level-cooling": {
+      "description": "ModelLevelCooling scopes Claude quota cooldowns to the requested model\nrather than cooling down the entire credential across all sibling models.",
+      "template": "When true, scope quota cooldowns to the requested model rather than cooling down\nthe entire credential across all sibling models. Default is false.",
+      "type": "bool"
+    },
+    "upstream.claude.session-date-pin-days": {
+      "description": "SessionDatePinDays retains the cloaked currentDate pin per session for\nthis many days, independently of continuity expiry and credential\nswitches. A nil value (unset) defaults to 7 days; an explicit 0 keeps\nthe continuity-scoped pin (1h lifetime).",
+      "template": "Days to retain the cloaked currentDate pin per session, so an idle gap or a credential\nswitch cannot re-anchor the date and invalidate earlier thinking signatures and the\nprompt cache. Default 7; an explicit 0 keeps the continuity-scoped pin (1h lifetime).",
+      "type": "int"
+    },
+    "upstream.claude.tool-search": {
+      "description": "ToolSearch enables Codex client tool_search on Claude Responses routes:\nAnthropic native tool search where the credential supports it, a pre-tool_search\ntranslation elsewhere, and per-credential search advertising in the Codex\ncatalog. Default false keeps the translation that predates tool_search support.",
+      "template": "When true, enable Codex client tool_search on Claude Responses routes. Credentials on\napi.anthropic.com (or keys with native-tool-search: true) receive it as Anthropic native\ntool search (defer_loading + tool_reference), which keeps the prompt-cache prefix stable\nacross tool discoveries; other credentials fall back to the plain translation. The Codex\nmodel catalog advertises supports_search_tool for a Claude model only when every\ncredential serving it supports native tool search.\nDefault false keeps the translation and catalog behavior that predate tool_search support.",
+      "type": "bool"
+    },
+    "upstream.codex.disable-codex-cloaking": {
+      "description": "DisableCodexCloaking disables forcing the official Codex identity headers on HTTP/SSE and WebSocket requests.",
+      "template": "Disable forcing the official Codex User-Agent and Originator headers on HTTP/SSE and WebSocket requests.",
+      "type": "bool"
+    },
+    "upstream.codex.model-level-cooling": {
+      "description": "ModelLevelCooling scopes Codex usage_limit_reached quota cooldowns to the requested model\nrather than cooling down the entire credential across all sibling models.",
+      "template": "When true, scope Codex usage_limit_reached quota cooldowns to the requested model rather\nthan cooling down the entire credential across all sibling models.\nDefault: false",
+      "type": "bool"
+    },
+    "upstream.codex.orphan-delegation-compatibility": {
+      "description": "OrphanDelegationCompatibility enables opt-in compatibility for orphan Codex delegation outputs.",
+      "template": "When true, enable opt-in compatibility for orphan Codex delegation outputs.\nConverts orphan function_call_output items from codex_app/create_thread and\ncodex_app/send_message_to_thread (which lack a valid call_id or matching function_call)\ninto standard user messages across Responses and non-Codex protocols when the request\nheader contains X-Openai-Subagent: collab_spawn.",
+      "type": "bool"
+    },
+    "upstream.codex.response-steering": {
+      "description": "ResponseSteering enables full-duplex Codex WebSockets, bound to one\nupstream model/account/socket for their entire lifetime. Default is false.",
+      "template": "Experimental full-duplex Codex Responses WebSocket steering (default: false).\nKeeps one upstream account/model per socket; accepted input is never replayed.",
+      "type": "bool"
+    },
+    "upstream.codex.stream-bootstrap-buffering": {
+      "description": "StreamBootstrapBuffering holds back the frames that arrive before generation starts, none of\nwhich the client has seen anything from - the handshake (response.created, response.in_progress,\nthe websocket metadata frames), keepalive heartbeats, and the *.added announcements of an item\nor part that is still empty - until the first generated event arrives. The upstream delivers\nserver_is_overloaded rejections inside an HTTP 200 stream right after those frames instead of\nreturning 503 on the wire, so buffering them keeps the downstream response headers uncommitted\nlong enough to retry on another credential. Trade-off: the response headers are delayed until\nthe upstream starts generating, which on a slow reasoning turn now means several heartbeat\nintervals rather than one, and can trip client or reverse-proxy read timeouts. The hold is\nbounded by a frame and a byte budget, not by wall-clock time, and neither budget is advanced\nby a websocket peer that sends only control frames or by an upstream that never terminates an\nSSE line. Only overload and rate-limit rejections fail over deliberately. A stream that ends\nwhile the bootstrap is still holding ends the attempt rather than reaching the client, and\nwhat follows is pre-existing but now far more likely, since the hold can span the whole\nreasoning phase instead of ending at the first keepalive: a clean end with no terminal event\nis request-scoped on SSE and stops there, while a websocket close or a transport error on\neither transport is not, so the request may be retried on another credential.\nDefault is false.",
+      "template": "Hold back the frames that carry nothing the client has seen - the handshake (response.created,\nresponse.in_progress, the websocket metadata frames), keepalive heartbeats, and the *.added\nannouncements of an item or part that is still empty - until the upstream emits its first\ngenerated event. Anything else, including a server-side tool item such as web_search_call and\nany frame not on that list, releases the stream immediately. On the SSE transport the lines that\nare not `data:` frames - comments, `event:` lines, blank separators - are held alongside them.\nThe hold is bounded by a frame budget and a 1 MiB byte budget, not by wall-clock time: an\nupstream that trickles frames holds the response headers for as long as the client will wait.\nWhy: the upstream smuggles `server_is_overloaded` rejections *inside* an HTTP 200 stream,\nright after those handshake events, instead of returning 503 on the wire. Buffering them\nkeeps the downstream response headers uncommitted long enough to transparently retry on\nanother credential. Only overload/rate-limit rejections trigger failover; every other terminal\nfailure is still delivered in-stream exactly as before. One pre-existing behaviour is worth\nknowing, because this option makes the window it lives in much longer: if the stream ends while\nthe bootstrap is still holding, the attempt ends instead of the error reaching the client, and\nwhether another credential is then tried depends on how it ended. A clean end with no terminal\nevent is request-scoped on SSE, so nothing else is tried; a websocket close, or a transport error\nsuch as a dropped connection on either transport, is not, so the request may be retried on\nanother credential. None of that is new, but before this option the hold ended at the first\nkeepalive, so it was rare; now it can span the whole reasoning phase.\nTrade-off: response headers are delayed until generation starts. Because heartbeats are held\ntoo, the delay now ends at the first generated token rather than at the first heartbeat. The\nbudget bounds how much is held, not how long: 48 SSE lines, which measures out as 15 heartbeats\nof the three-line event:/data:/blank shape, 23 of a two-line \": keepalive\" comment followed by\nits blank separator, or 47 of a bare \": keepalive\" with no separator - one short of the obvious\ndivision, because the rejection frame's own event: line comes out of the same budget before its\nline gets the round number instead. At a 10s upstream heartbeat that is 150s, 230s or 470s of\nuncommitted response headers depending on the framing the upstream picks, all of it past nginx's\n60s default proxy_read_timeout, so raise the timeouts in front of the proxy before enabling this.\nThose seconds bound what the buffer holds, not when the response headers are committed. Headers\nare committed on the first chunk the downstream translator actually produces, so for a format\nthat renders the handshake as nothing - Chat Completions and Gemini do - they stay uncommitted\npast the budget, until the first generated token. That is not specific to the budget: any frame\nthat releases the buffer has always behaved this way.\nThe websocket transport spends the same 48 differently - one per message read, whether the loop\nholds it or skips it, with no framing to divide by - so there it is 48 heartbeats, about 480s.\nTwo cases no budget covers: a websocket peer that sends only ping frames, which the library\nanswers inside the read call, leaving only the 5 minute websocket read deadline; and an upstream\nthat stops mid-line on SSE, where the scanner never returns and only the request context ends the\nwait. Neither is made worse by this option - with it off the same stalled line stalls the\nconductor instead, which waits on the same context - but a client-side request timeout, not\nproxy_read_timeout, is what bounds them.\nDefault: false",
+      "type": "bool"
+    },
+    "upstream.codex.stream-bootstrap-timeout": {
+      "description": "StreamBootstrapTimeout specifies an optional maximum duration to hold back uncommitted response\nheaders during bootstrap buffering before releasing the stream to the client.\nDefaults to \"0\" (unlimited time, relying purely on the 48-frame and 1MB byte bounds).\nWhen set (e.g. \"20s\"), the stream is released once the time ceiling is reached, avoiding\nreverse-proxy timeouts (e.g. Nginx 60s proxy_read_timeout).",
+      "template": "Optional maximum duration to hold back uncommitted response headers during bootstrap buffering.\nWhen set (e.g. \"20s\"), if the time ceiling is reached before the first generated token,\nthe stream is released to the client and further in-stream overloads are delivered rather\nthan failed over. This bounds how long trickled heartbeats or early empty frames can delay\nresponse headers before streaming begins.\nRecommendation: If your CPA is deployed behind a reverse proxy with a strict read timeout\n(e.g. Nginx default proxy_read_timeout 60s or Cloudflare 100s timeout), setting this to \"20s\"\nis strongly recommended to guarantee headers commit well before proxy timeouts while retaining\na comfortable 20s window to fail over early scheduling overloads.\nNote: The timeout check is evaluated as upstream frames arrive; it never aborts the upstream\nconnection. Downstream headers are committed as soon as the downstream translator emits chunks\n(for formats that render handshake/heartbeats, headers commit immediately on release; for\nformats like Chat Completions and Gemini that render nothing until the first text token, headers\ncommit when that first token arrives).\nWhen unset or set to \"0\", \"0s\", \"none\", \"unlimited\", \"disabled\", \"off\", or \"never\", no time ceiling\nis applied, and buffering relies purely on the 48-frame and 1MB byte budget.\nDefault: \"0\" (unlimited)",
+      "type": "string"
+    },
+    "upstream.xai": {
+      "description": "XAI configures provider-wide xAI request behavior.",
+      "type": "object"
+    },
+    "upstream.xai.inject-x-search": {
+      "description": "InjectXSearch injects xAI's native x_search tool when the request does not declare it.",
+      "template": "When true, inject the native x_search tool when the request does not declare it.\nThe injected tool is also added to tool_choice.allowed_tools when applicable.",
+      "type": "bool"
+    }
+  }
+}
