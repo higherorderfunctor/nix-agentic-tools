@@ -1,9 +1,7 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-14 — workflow defaults cover the two KAS tweaks;
-> backend modules pass their scope to the shared skill-package factory, which
-> gates package rules by delivery capability; the per-turn reminder derives its
-> hook runtimes from that scope.
+> **Last verified:** 2026-10-16 — Kiro workflow step sessions skip the per-turn
+> reminder; root sessions and the other runtimes retain their reminder output.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -202,6 +200,15 @@ The default wording is Claude's user-voiced grant against the heron_brook clamp.
 Before changing it, read `packages/claude-code/docs/heron-brook-clamp.md`.
 Consumer delivery and enable controls are documented in the `reminder` option;
 the hook pools own conflict diagnostics.
+
+Kiro workflow step sessions skip the reminder so a delegated step does not
+receive another invitation to delegate (measured on kiro-cli 2.31.1 with
+`--v3`). The hook reads its session ID from stdin and checks the session's
+`_meta.kiro.workflow` object under `$HOME/.kiro/sessions`; the engine uses
+`HOME`, independently of the client's `KIRO_HOME` (see
+`fixtures/kiro-primitives/carried-negatives.md`, C-1). Root sessions retain the
+exact reminder; missing or unreadable session data fails open to that same
+output.
 
 ## Acceptance suite
 
