@@ -1,8 +1,5 @@
-# `ai.proxy` for Codex (lib/proxy.nix): the provider Home Manager writes into
-# user config.toml, the session flags devenv's launcher passes, and, against
-# the pinned binary and loopback mock proxies, that every request reaches the
-# selected proxy with the selected key in each key form and backend
-# combination.
+# `ai.proxy` for Codex: both backends use the shared redact reader through
+# command-backed provider auth, and the selected provider wins across layers.
 {
   harness,
   lib,
@@ -10,19 +7,22 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
-
-  # Rewritten to the build directory by the runtime check; a /run/secrets
-  # path would not exist in the sandbox.
-  secretsPlaceholder = "/nat-codex-proxy-secrets";
-  helper = pkgs.writeShellScript "codex-proxy-key-helper" ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    echo sk-hm-helper
-  '';
-  devenvKey = pkgs.writeText "codex-proxy-devenv-key" "sk-devenv-file\n";
+  redact = import ../../../lib/redact {inherit lib;};
+  keyFile = "/tmp/codex-proxy $(touch injected) ' key";
+  command = lib.getExe (import ../../../lib/strict-shell-application.nix pkgs {
+    name = "codex-proxy-test-command";
+    text = ''
+      printf '%s' "$CODEX_PROXY_TEST_VALUE"
+      exit "$CODEX_PROXY_TEST_STATUS"
+    '';
+  });
+  keys = {
+    command = redact.command command;
+    concat = redact.concat ["prefix-\"'$HOME$(touch injected)`" (redact.file keyFile) "-suffix"];
+    file = redact.file keyFile;
+  };
   hmOrigin = "http://127.0.0.1:8317";
   devenvOrigin = "http://127.0.0.1:8318";
-
   failedMessages = result: map (a: a.message) (builtins.filter (a: !a.assertion) result.config.assertions);
   hmSettings = result: result.config.ai.codex.files.".codex/config.toml".content.value;
   hmWith = proxy:
@@ -42,28 +42,21 @@
     evalDevenv {
       ai = lib.recursiveUpdate {codex.enable = true;} ai;
     };
-  launcher = result: "${lib.head result.config.packages}/bin/codex";
-
-  fileProvider = {
-    auth = {
-      args = ["${secretsPlaceholder}/hm-key"];
-      command = "${pkgs.coreutils}/bin/cat";
-    };
-    base_url = "${hmOrigin}/v1";
-    name = "ai-proxy";
-    requires_openai_auth = false;
-    wire_api = "responses";
-  };
+  launcher = key: "${lib.head
+    (devenvWith {
+      proxy = {
+        url = devenvOrigin;
+        inherit key;
+      };
+    }).config.packages}/bin/codex";
   unsupportedWarning = backend: lib.hasPrefix "ai.proxy is set but ${backend} does not deliver it to codex";
 in {
   checks =
     {
-      # The provider, its key form and the overridable quieting defaults in
-      # user config.toml; `ai.codex.proxy` replaces the root selection; and
-      # Codex no longer warns that it ignores the surface.
       module-codex-proxy-hm-provider = mkTest "codex-proxy-hm-provider" (
         let
-          file = hmEndpoint {file = "${secretsPlaceholder}/hm-key";};
+          file = hmEndpoint keys.file;
+          provider = (hmSettings file).model_providers.ai-proxy;
           overridden = evalHm {
             ai = {
               codex = {
@@ -71,12 +64,12 @@ in {
                 native.settings.analytics.enabled = true;
                 proxy = {
                   url = devenvOrigin;
-                  key.plain = "sk-codex";
+                  key = keys.command;
                 };
               };
               proxy = {
                 url = hmOrigin;
-                key.plain = "sk-root";
+                key = keys.file;
               };
             };
           };
@@ -91,32 +84,33 @@ in {
               plugins = false;
             };
             model_provider = "ai-proxy";
-            model_providers.ai-proxy = fileProvider;
+            model_providers.ai-proxy = {
+              auth.command = provider.auth.command;
+              base_url = "${hmOrigin}/v1";
+              name = "ai-proxy";
+              requires_openai_auth = false;
+              wire_api = "responses";
+            };
           }
-          && (hmSettings (hmEndpoint {plain = "sk-hm-plain";})).model_providers.ai-proxy.experimental_bearer_token == "sk-hm-plain"
-          && (hmSettings (hmEndpoint {helper = "${helper}";})).model_providers.ai-proxy
-          == {
-            auth.command = "${helper}";
-            base_url = "${hmOrigin}/v1";
-            name = "ai-proxy";
-            requires_openai_auth = false;
-            wire_api = "responses";
-          }
-          && (hmSettings overridden).model_providers.ai-proxy.experimental_bearer_token == "sk-codex"
+          && lib.all (key: let
+            auth = (hmSettings (hmEndpoint key)).model_providers.ai-proxy.auth;
+          in
+            builtins.attrNames auth == ["command"] && lib.hasSuffix "/bin/codex-proxy-key" auth.command) (builtins.attrValues keys)
+          && (hmSettings overridden).model_providers.ai-proxy.base_url == "${devenvOrigin}/v1"
+          && (hmSettings overridden).model_providers.ai-proxy.auth == (hmSettings (hmEndpoint keys.command)).model_providers.ai-proxy.auth
           && (hmSettings overridden).analytics.enabled
           && !(builtins.any (unsupportedWarning "hm") file.config.warnings)
           && !((hmSettings (hmWith {})) ? model_provider)
       );
 
-      # devenv writes no provider into the project config, which Codex would
-      # ignore (the launcher carries it; chatgpt-codex-proxy runs it); the
-      # quieting defaults do go there, and only with a selection.
+      # Project config cannot carry providers. The launcher supplies them as
+      # session flags; only the quiet defaults belong in the project file.
       module-codex-proxy-devenv-project-config = mkTest "codex-proxy-devenv-project-config" (
         let
           url = devenvWith {
             proxy = {
               url = devenvOrigin;
-              key.plain = "sk-devenv-url";
+              key = keys.file;
             };
           };
           none = devenvWith {};
@@ -137,28 +131,17 @@ in {
       chatgpt-codex-proxy =
         pkgs.runCommand "chatgpt-codex-proxy" {
           nativeBuildInputs = [pkgs.coreutils pkgs.python3];
+          cases = pkgs.writeText "codex-proxy-cases.json" (builtins.toJSON {
+            configs = lib.mapAttrs (_: hmConfig) keys;
+            launchers = lib.mapAttrs (_: launcher) keys;
+          });
         } ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           python3 ${./proxy-test.py} ${lib.escapeShellArgs [
             "${harness.aiStubs.chatgpt-codex}/bin/codex"
-            (hmConfig {plain = "sk-hm-plain";})
-            (hmConfig {file = "${secretsPlaceholder}/hm-key";})
-            (hmConfig {helper = "${helper}";})
-            (launcher (devenvWith {
-              proxy = {
-                url = devenvOrigin;
-                key.plain = "sk-devenv-plain";
-              };
-            }))
-            (launcher (devenvWith {
-              proxy = {
-                url = devenvOrigin;
-                key.file = "${devenvKey}";
-              };
-            }))
-            secretsPlaceholder
-          ]}
+            keyFile
+          ]} "$cases"
           echo PASS >"$out"
         '';
     };
