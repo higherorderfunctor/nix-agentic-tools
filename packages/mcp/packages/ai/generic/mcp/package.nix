@@ -83,6 +83,7 @@
         })}")
       # Parent pins must be current before their dependency bounds are read.
       ["mcp" "httpx2" "uv-dynamic-versioning" "dunamai"]}
+    ${(extractedLib {inherit pkgs;}).regenCommand {name = "semble";}}
   '';
 
   dunamai = ps.dunamai.overridePythonAttrs (old: {
@@ -171,12 +172,5 @@ in
       (old.passthru or {})
       // {
         inherit updateScript;
-        regenerateExtracted =
-          (pkgs.writeShellScript "mcp-regenerate-extracted" ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            ${(extractedLib {inherit pkgs;}).regenCommand {name = "semble";}}
-          '')
-          // {sidecars = ["packages/semble/extracted/extracted.json"];};
       };
   })

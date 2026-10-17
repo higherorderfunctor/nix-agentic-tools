@@ -1,7 +1,8 @@
 ## Overlay Grouping under `pkgs.ai`
 
 > **Last verified:** 2026-10-16 — MCP updates follow pinned parent dependency
-> bounds and regenerate Semble's extracted SDK surface.
+> bounds; the MCP group update script regenerates Semble's extracted SDK
+> surface.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -274,10 +275,10 @@ versioning tool also needs a newer Dunamai. The shared
 `pythonDependencyVersionCmd` selects the newest stable release satisfying
 runtime requirements from PyPI or build requirements from pinned
 `pyproject.toml` URLs. MCP updates run in parent-first order: SDK, HTTPX2,
-uv-dynamic-versioning, Dunamai. The SDK target exposes
-`passthru.regenerateExtracted` with Semble's extracted JSON as its sidecar, so
-`regenerate_sidecars package mcp` refreshes the SDK-generated schemas in the
-same update. These scoped dependencies leave nixpkgs' MCP 1.x consumers intact.
+uv-dynamic-versioning, Dunamai. The MCP group update script then runs
+`regenCommand { name = "semble"; }` to regenerate Semble's extracted surface,
+including the SDK-generated schemas, in the same update. These scoped
+dependencies leave nixpkgs' MCP 1.x consumers intact.
 
 When one derivation ships multiple role binaries, expose secondary roles with a
 plain attrset/meta overlay. `semble-mcp` changes only `meta.mainProgram`, so

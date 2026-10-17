@@ -1,7 +1,7 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-16 — the MCP target uses `regenerateExtracted` to
-> refresh Semble's SDK-generated extracted surface in the same update.
+> **Last verified:** 2026-10-16 — the MCP group update script regenerates
+> Semble's SDK-generated extracted surface in the same update.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
