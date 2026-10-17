@@ -26,8 +26,10 @@
           select(length == 1) | .[0].session_id
           | select(test("\\Asess_[A-Za-z0-9_-]+\\z"))
         ' 2>/dev/null || :)"
-        # Reject missing IDs and path traversal/glob characters before globbing.
-        if [[ -n "$session_id" ]]; then
+        # The regex refuses missing or non-string IDs, path separators, `..`
+        # segments and a trailing newline that command substitution would strip.
+        # An unset HOME falls through to the reminder instead of tripping nounset.
+        if [[ -n "$session_id" && -n "''${HOME:-}" ]]; then
           # Kiro's engine session root follows HOME, not the client-only KIRO_HOME.
           for session in "$HOME"/.kiro/sessions/*/"$session_id"/session.json; do
             if ${pkgs.jq}/bin/jq -es '

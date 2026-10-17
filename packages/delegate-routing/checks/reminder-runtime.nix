@@ -21,8 +21,8 @@
     '';
   });
   reminder = pkgs.writeText "delegate-routing-reminder-expected" evaluated.config.ai.programs.delegate-routing.reminder.text;
-  # Trimmed from the measured root-session.json and step-session.json samples:
-  # retain only the metadata the hook reads; the step's workflow.type was "step".
+  # Measured on kiro-cli 2.31.1 --v3: step sessions carry _meta.kiro.workflow
+  # (an object, type "step"); root sessions have none. Only that metadata is kept.
   sessions = pkgs.writeText "delegate-routing-reminder-sessions.json" (builtins.toJSON {
     root._meta.kiro = {};
     step._meta.kiro.workflow.type = "step";
@@ -53,9 +53,9 @@ in {
     environment = dict(os.environ, HOME=str(home), KIRO_HOME=str(home / "client"))
     reminder = Path("${reminder}").read_bytes()
 
-    def check(command, payload, expected):
+    def check(command, payload, expected, env=environment):
         result = subprocess.run(
-            [command], input=payload, capture_output=True, env=environment, check=False
+            [command], input=payload, capture_output=True, env=env, check=False
         )
         assert result.returncode == 0, result
         assert result.stderr == b"", result.stderr
@@ -68,7 +68,7 @@ in {
         ("missing ID", {}, reminder),
         ("newline ID", {"session_id": "sess_step\n"}, reminder),
         ("non-string ID", {"session_id": 1}, reminder),
-        ("path traversal", {"session_id": "sess_../x"}, reminder),
+        ("path traversal", {"session_id": "sess_root/../sess_step"}, reminder),
         ("unknown", {"session_id": "sess_unknown"}, reminder),
         ("wildcard", {"session_id": "sess_*"}, reminder),
         ("wrong prefix", {"session_id": "step"}, reminder),
@@ -84,6 +84,9 @@ in {
     ]:
         check("${hook}", payload, reminder)
         print(f"PASS: {name}")
+    unset_home = {key: value for key, value in environment.items() if key != "HOME"}
+    check("${hook}", b'{"session_id":"sess_step"}', reminder, unset_home)
+    print("PASS: unset HOME")
 
     check("${plainPrinter}", b'{"session_id":"sess_step"}', reminder)
     try:
