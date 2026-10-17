@@ -1,11 +1,16 @@
 {
   "config": {
+    "access": {
+      "template": "Client authentication for the proxy API. These are not upstream provider keys.",
+      "type": "object"
+    },
     "access.api-keys": {
       "description": "APIKeys is a list of keys for authenticating clients to this proxy server.",
       "template": "API keys for authentication",
       "type": "list"
     },
     "access.api-keys[]": { "type": "string" },
+    "api-keys": { "type": "object" },
     "api-keys.claude": {
       "description": "ClaudeKey defines a list of Claude API key configurations as specified in the YAML configuration file.",
       "type": "list"
@@ -1911,6 +1916,7 @@
       "template": "Configuration template using the v8 layout.\nCopy this file to config.yaml and replace the client keys and any enabled examples.\nOptional upstream credentials and request rules remain commented until configured.\nExisting legacy configuration files and /v0/management requests remain supported.\nWhen both spellings of a field are present, the v8 value wins (including false,\n0, and empty collections), and the corresponding legacy field is removed on load/save.\nLegacy-only fields still work. GET requests and config-version: 8 alone do not\nmigrate a legacy file; a successful configuration write through /v8/management does.\nThe compatibility notes at the end show old spellings for existing deployments.",
       "type": "int"
     },
+    "credentials": { "type": "object" },
     "credentials.concurrency": {
       "description": "CredentialConcurrency contains Home-authoritative credential lifecycle settings.",
       "type": "any"
@@ -1980,6 +1986,7 @@
     "models.catalog": { "type": "string" },
     "models.codex-catalog": { "type": "string" },
     "models.devin-catalog": { "type": "string" },
+    "multimedia": { "template": "Image and video behavior.", "type": "object" },
     "multimedia.disable-image-generation": {
       "description": "DisableImageGeneration controls whether the built-in image_generation tool is injected/allowed.\n\nSupported values:\n  - false (default): image_generation is enabled everywhere (normal behavior).\n  - true: image_generation is disabled everywhere. The server stops injecting it, removes it from request payloads,\n    and returns 404 for /v1/images/generations and /v1/images/edits.\n  - \"chat\": disable image_generation injection for all non-images endpoints (e.g. /v1/responses, /v1/chat/completions),\n    while keeping /v1/images/generations and /v1/images/edits enabled and preserving image_generation there.\n  - \"passthrough\": do not modify the tool list on non-images endpoints — keep image_generation if the client\n    sent it and do not inject it otherwise; on /v1/images/generations and /v1/images/edits behave like \"chat\".",
       "template": "disable-image-generation supports: false (default), true, \"chat\", or \"passthrough\".",
@@ -1993,6 +2000,10 @@
       "description": "VideoResultAuthCacheTTL controls how long video IDs stay pinned to the credential\nthat created them. Accepts duration strings like \"30m\" or \"3h\".\nEmpty or invalid values use the default 3h.",
       "template": "How long video IDs returned by /openai/v1/videos and xAI video creation stay bound\nto the credential that created them. Default: 3h.",
       "type": "string"
+    },
+    "oauth": {
+      "template": "OAuth/file-backed credentials. Token material stays in the credential store.",
+      "type": "object"
     },
     "oauth.auth-auto-refresh-workers": {
       "description": "AuthAutoRefreshWorkers overrides the size of the core auth auto-refresh and manual refresh-all worker pool.\nWhen <= 0, the default worker count is used.",
@@ -2023,6 +2034,11 @@
     "oauth.model-alias.<name>[].force-mapping": { "type": "bool" },
     "oauth.model-alias.<name>[].fork": { "type": "bool" },
     "oauth.model-alias.<name>[].name": { "type": "string" },
+    "oauth.providers": {
+      "template": "Provider options below apply to OAuth/file-backed credentials.\nAPI-key credentials use their own group/key options.",
+      "type": "object"
+    },
+    "oauth.providers.aistudio": { "type": "object" },
     "oauth.providers.aistudio.ws-auth": {
       "description": "WebsocketAuth enables or disables authentication for the WebSocket API.",
       "template": "When true, enable authentication for the WebSocket API (/v1/ws).",
@@ -2164,6 +2180,11 @@
       "type": "int"
     },
     "oauth.settings.<name>[].name": { "type": "string" },
+    "observability": {
+      "template": "Application logs, request logs, usage aggregation, and profiling.",
+      "type": "object"
+    },
+    "observability.logs": { "type": "object" },
     "observability.logs.debug": {
       "description": "Debug enables or disables debug-level logging and other debug features.",
       "template": "Enable debug logging",
@@ -2202,6 +2223,7 @@
       "description": "Enable toggles the pprof HTTP debug server.",
       "type": "bool"
     },
+    "observability.usage": { "type": "object" },
     "observability.usage.redis-usage-queue-retention-seconds": {
       "description": "RedisUsageQueueRetentionSeconds controls how long usage queue items are retained\nin memory for Management API consumers.\nDefault: 60. Max: 3600.",
       "template": "How long (in seconds) usage queue items are retained in memory for the Management API.\nThe local Redis RESP usage output is disabled.\nDefault: 60. Max: 3600.",
@@ -2273,6 +2295,10 @@
     "quota-exceeded.switch-project": {
       "description": "SwitchProject indicates whether to automatically switch to another project when a quota is exceeded.",
       "type": "bool"
+    },
+    "requests": {
+      "template": "Shared request/response behavior.",
+      "type": "object"
     },
     "requests.nonstream-keepalive-interval": {
       "description": "NonStreamKeepAliveInterval controls how often blank lines are emitted for non-streaming responses.\n<= 0 disables keep-alives. Value is in seconds.",
@@ -2603,6 +2629,7 @@
       "template": "Routing strategy for selecting credentials when multiple match.",
       "type": "object"
     },
+    "routing.cooldown": { "type": "object" },
     "routing.cooldown.disable-cooling": {
       "description": "DisableCooling disables auth/model cooldown scheduling when true unless a credential or provider overrides it.",
       "template": "When true, disable auth/model cooldown scheduling globally (prevents blackout windows after failure states).\nA credential/provider disable-cooling value, when present, overrides this global value.",
@@ -2623,6 +2650,7 @@
       "template": "When true, unprefixed model requests only use credentials without a prefix (except when prefix == model name).",
       "type": "bool"
     },
+    "routing.retry": { "type": "object" },
     "routing.retry.max-retry-credentials": {
       "description": "MaxRetryCredentials defines the maximum number of different credentials to\ntry in each credential retry round.\nSet to 0 or a negative value to keep trying all available credentials (legacy behavior).",
       "template": "Maximum number of different credentials to try in each credential retry round\nafter per-credential round filtering. Set to 0 to try all available\ncredentials. Credentials skipped by this cap still age with the global round,\nso the cap does not guarantee a fixed number of actual retries per credential.",
@@ -2662,6 +2690,10 @@
       "description": "Strategy selects the credential selection strategy.\nSupported values: \"round-robin\" (default), \"weighted-round-robin\", \"fill-first\".",
       "template": "round-robin (default), weighted-round-robin, fill-first",
       "type": "string"
+    },
+    "server": {
+      "template": "Listener, TLS, network discovery, and server operation.",
+      "type": "object"
     },
     "server.commercial-mode": {
       "description": "CommercialMode disables high-overhead request logging and HTTP middleware features to minimize per-request memory usage.",
@@ -2749,6 +2781,10 @@
       "type": "list"
     },
     "server.trusted-proxies[]": { "type": "string" },
+    "upstream": {
+      "template": "Shared upstream behavior applies to OAuth and API-key credentials.",
+      "type": "object"
+    },
     "upstream.claude": {
       "description": "ClaudeCode configures Claude Code compatibility behavior.\n\nClaude configures provider-wide Claude request behavior.",
       "type": "object"
@@ -2802,6 +2838,7 @@
       "template": "When true, enable Codex client tool_search on Claude Responses routes. Credentials on\napi.anthropic.com (or keys with native-tool-search: true) receive it as Anthropic native\ntool search (defer_loading + tool_reference), which keeps the prompt-cache prefix stable\nacross tool discoveries; other credentials fall back to the plain translation. The Codex\nmodel catalog advertises supports_search_tool for a Claude model only when every\ncredential serving it supports native tool search.\nDefault false keeps the translation and catalog behavior that predate tool_search support.",
       "type": "bool"
     },
+    "upstream.codex": { "type": "object" },
     "upstream.codex.disable-codex-cloaking": {
       "description": "DisableCodexCloaking disables forcing the official Codex identity headers on HTTP/SSE and WebSocket requests.",
       "template": "Disable forcing the official Codex User-Agent and Originator headers on HTTP/SSE and WebSocket requests.",
