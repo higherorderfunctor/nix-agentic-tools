@@ -511,6 +511,15 @@ _: {
         "update-pipeline"
       ];
     };
+    # redact: references, sealed types, the reader and `assign` for secrets
+    # kept out of the Nix store.
+    redact = {
+      scopes = [
+        "checks/redact/**"
+        "lib/redact/**"
+      ];
+      sources = ["redact"];
+    };
     # shell-activation: why this repo activates through direnv rather than
     # `devenv hook`, and what a migration would silently cost.
     #

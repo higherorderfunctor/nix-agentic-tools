@@ -1165,6 +1165,79 @@
     </details>
 
     <details>
+    <summary><strong>Secrets kept out of the Nix store (lib.redact)</strong></summary>
+
+    `lib.redact` lets an option name a secret instead of holding it. A reference
+    says where the value lives. Nothing is read at evaluation: the launcher reads
+    it when it starts. Paths are absolute strings. A file path such as
+    `./token` or `"''${./token}"` is refused, because Nix has already copied
+    that file into the world-readable store, and a file path under the store is
+    refused too. A command may name a store program, which becomes a dependency
+    of the launcher.
+
+    A module declares the options and delivers them with `redact.assign`:
+
+    ```nix
+    {config, inputs, lib, pkgs, ...}: let
+      inherit (inputs.nix-agentic-tools.lib) redact;
+      cfg = config.my.tool;
+      deliver = option: variable: value:
+        redact.assign {
+          inherit option pkgs value variable;
+          export = true;
+        };
+    in {
+      options.my.tool = {
+        # Sealed: a reference, or a concat holding one. A literal fails
+        # evaluation, and the error does not print it.
+        token = lib.mkOption {type = redact.types.redacted;};
+        # Cleartext is allowed, and visibly so: a string or a reference.
+        host = lib.mkOption {type = redact.types.maybeRedacted lib.types.str;};
+        # A secret-looking name (`*_TOKEN`, `AUTHORIZATION`) needs a reference.
+        environment = lib.mkOption {
+          type = redact.types.environment;
+          default = {};
+        };
+      };
+
+      # The module picks each variable name; a literal is shell-escaped.
+      config.home.packages = [
+        (pkgs.writeShellScriptBin "tool" '''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ''${deliver "my.tool.host" "TOOL_HOST" cfg.host}
+          ''${deliver "my.tool.token" "TOOL_TOKEN" cfg.token}
+          ''${lib.concatStringsSep "\n" (lib.mapAttrsToList
+            (name: deliver "my.tool.environment.''${name}" name)
+            cfg.environment)}
+          exec ''${lib.getExe pkgs.tool} "$@"
+        ''')
+      ];
+    }
+    ```
+
+    A user sets them with references from the same `redact`:
+
+    ```nix
+    my.tool = {
+      host = "gitlab.example.com";
+      # A file, read at launch: sops-nix, agenix or anything that decrypts to one.
+      token = redact.file config.sops.secrets.tool-token.path;
+      # A command's stdout behind a literal prefix, joined at launch.
+      environment.AUTHORIZATION = redact.concat [
+        "Bearer "
+        (redact.command "''${pkgs.tool-token}/bin/tool-token")
+      ];
+    };
+    ```
+
+    At launch a missing, empty or unreadable file, or a failing command, stops
+    the launcher with `<option>: <reason>`. The value is never printed, never on
+    a command line, and never in the store.
+
+    </details>
+
+    <details>
     <summary><strong>Delegate Routing</strong></summary>
 
     ```nix
