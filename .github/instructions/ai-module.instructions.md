@@ -92,7 +92,7 @@ import once into that state and are then deleted.
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-16 — runtime factories stage surfaces in
+> **Last verified:** 2026-10-17 — runtime factories stage surfaces in
 > `_generatedFiles` (every runtime surface included) and forward them through
 > the ai-module layer-1 helper over one generated tree, which every staged
 > entry's delivery requires; the shared AGENTS.md composer is the layer-1 owner
@@ -108,7 +108,8 @@ import once into that state and are then deleted.
 > an undelivered surface warns once per runtime and backend, set at the root,
 > the runtime pool or its normalized option, and record gaps are `path`, `each`,
 > `when` and `reason` only; ai-module owns the delivered-path inventory and
-> backend lowering.
+> backend lowering; `ai.proxy` selects a shared endpoint with a whole
+> per-runtime override, gated by runtime capability.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived

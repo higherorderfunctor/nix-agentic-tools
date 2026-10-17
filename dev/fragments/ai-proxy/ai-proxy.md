@@ -1,9 +1,9 @@
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-15 — root and per-runtime `url` + `key` selection,
-> resolved into `ai.<runtime>.normalized.proxy`. No runtime declares `proxy` in
-> `surfaceSupport` yet, so delivery policy and the generated warning cases
-> derive its absence everywhere.
+> **Last verified:** 2026-10-17 — root and per-runtime `url` + redacted `key`
+> selection, resolved into `ai.<runtime>.normalized.proxy`. No runtime declares
+> `proxy` in `surfaceSupport` yet, so delivery policy and the generated warning
+> cases derive its absence everywhere.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -37,17 +37,22 @@ the root selection in force and fails its own assertion. The resolved value is
 null or `{endpoint = {url; key};}`. `url` is the origin only: each runtime
 appends its own protocol path, so a path would be doubled.
 
-`patterns` holds every url and key value to a charset with no quote, space, `$`,
-backslash or newline, so a consumer can substitute one unescaped into a JSON
-string, a TOML string or a double-quoted shell string. An unquoted shell word is
-not safe: the url pattern admits `[` and `]`, which bash glob-expands. Do not
-widen a pattern without adding escaping wherever a value is substituted.
+`key` requires `redact.types.redacted`: `redact.file`, `redact.command` or
+`redact.concat` with a reference. It authenticates access to the proxy's
+upstream subscriptions, so cleartext has no harmless use here. Root and
+per-runtime options use the same type as the normalized endpoint.
+
+References remain unresolved during evaluation. A consuming runtime must use
+`redact.assign` when its launcher starts and escape the resolved value for its
+destination format. A key's contents cannot be charset-checked at evaluation;
+never substitute the runtime value unescaped into JSON, TOML or shell source.
+The `url` pattern validates only the proxy origin.
 
 ### Checks
 
-`checks/ai-proxy/module-eval.nix` covers selection validation and the
-per-runtime override through a test runtime that declares `proxy`. The
-unsupported-runtime warnings are `ai-warnings-delivery`'s generated cases,
-driven by its `proxy` sample (the url form).
+`checks/ai-proxy/module-eval.nix` covers selection validation, redacted key
+refusal and the per-runtime override through a test runtime that declares
+`proxy`. The unsupported-runtime warnings are `ai-warnings-delivery`'s generated
+cases, driven by its `proxy` sample (the url form).
 `checks/ai-factory/factory-eval.nix` carries `proxy` in its every-surface
 request set.

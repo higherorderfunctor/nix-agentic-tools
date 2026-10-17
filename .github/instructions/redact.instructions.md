@@ -7,10 +7,10 @@ applyTo: "checks/redact/**,lib/redact/**"
 
 ## Redact: secrets kept out of the Nix store
 
-> **Last verified:** 2026-10-15 — library only: references, `redacted`,
-> `maybeRedacted`, `concat`, `environment` and `assign`; file paths in the store
-> are refused by context and by location, commands may name a store program; a
-> null beside a value is a conflict; no consumer uses it yet, and
+> **Last verified:** 2026-10-17 — references, `redacted`, `maybeRedacted`,
+> `concat`, `environment` and `assign`; file paths in the store are refused by
+> context and by location, commands may name a store program; a null beside a
+> value is a conflict; `ai.proxy.key` requires `redacted`, while
 > `lib/credentials.nix` and `lib/ai/mcpServer/secretValue.nix` remain until
 > consumers move over.
 

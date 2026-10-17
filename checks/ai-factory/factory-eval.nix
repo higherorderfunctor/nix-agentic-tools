@@ -22,7 +22,7 @@
       headers.Authorization = "probe";
     };
     proxy = {
-      key.plain = "probe";
+      key = (import ../../lib/redact {inherit lib;}).file "/run/secrets/ai-proxy-key";
       url = "http://127.0.0.1:8317";
     };
     rules.probe.text = "probe";

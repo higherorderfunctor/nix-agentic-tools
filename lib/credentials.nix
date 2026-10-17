@@ -61,55 +61,44 @@
   # a file indirection would be ceremony. The description says plainly
   # which branch leaks and which does not, so the choice is informed
   # rather than accidental.
-  #
-  # `envVar` names where the value is delivered, for the descriptions; null
-  # omits that sentence, for a consumer that renders the value somewhere
-  # other than one environment variable (`ai.proxy`'s client key).
-  # `mkSecretType` is the bare type, for a required or nested value.
-  mappedTo = envVar: lib.optionalString (envVar != null) " Mapped to ${envVar}.";
-  mkSecretType = {envVar ? null}: let
-    mapped = mappedTo envVar;
-  in
-    types.attrTag {
-      plain = mkOption {
-        type = types.str;
-        description = ''
-          Literal value, interpolated into the Nix store and therefore
-          WORLD-READABLE. Use it only for a value whose disclosure is
-          harmless: public configuration, or a key that grants nothing
-          beyond this machine.${mapped}
-        '';
-      };
-      file = mkOption {
-        type = types.str;
-        description = ''
-          Path to a file containing the raw value, read at runtime and
-          never placed in the Nix store. Works with sops-nix, agenix, or
-          anything else that decrypts to a file.${mapped}
-        '';
-      };
-      helper = mkOption {
-        type = types.str;
-        description = ''
-          Path to an executable printing the raw value on stdout, run at
-          runtime. Nothing is placed in the Nix store.${mapped}
-        '';
-      };
-    };
-
   mkSecretOption = {
-    envVar ? null,
+    envVar,
     description,
   }:
     mkOption {
-      type = types.nullOr (mkSecretType {inherit envVar;});
+      type = types.nullOr (types.attrTag {
+        plain = mkOption {
+          type = types.str;
+          description = ''
+            Literal value, interpolated into the Nix store and therefore
+            WORLD-READABLE. Correct for public configuration; never use it
+            for a token. Mapped to ${envVar}.
+          '';
+        };
+        file = mkOption {
+          type = types.str;
+          description = ''
+            Path to a file containing the raw value, read at runtime and
+            never placed in the Nix store. Works with sops-nix, agenix, or
+            anything else that decrypts to a file. Mapped to ${envVar}.
+          '';
+        };
+        helper = mkOption {
+          type = types.str;
+          description = ''
+            Path to an executable printing the raw value on stdout, run at
+            runtime. Nothing is placed in the Nix store. Mapped to
+            ${envVar}.
+          '';
+        };
+      });
       default = null;
       description = ''
         ${description}
 
         Set exactly one of `plain`, `file` or `helper`; the type system
         rejects any other combination, so there is no runtime check to
-        forget.${mappedTo envVar}
+        forget. Mapped to ${envVar}.
       '';
     };
 
@@ -238,6 +227,5 @@ in {
     mkSecretAssignment
     mkSecretExport
     mkSecretOption
-    mkSecretType
     ;
 }
