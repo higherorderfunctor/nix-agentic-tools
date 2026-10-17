@@ -187,8 +187,8 @@ Supporting properties:
   depends on the patched output, and on 2026-10-17 the devenv lane's shell-entry
   check published the patched closure through it (sweep `39032289943`), caught
   by the tripwire below. That lane therefore sets `skipPush`, which
-  `test-ci-packages.py` pins. Every other credentialed job builds nothing
-  outside the kiro closure that depends on the patched output, and every layer
+  `test-ci-packages.py` pins. The package shards and the other update lanes
+  build the patched output only as its own `kiro-cli-…` root, and every layer
   inside it matches the regex — a property of the current graph that fails
   silently. The tripwire below is the actual guarantee.
 - **Patched derivations are RENAMED so a leak is self-identifying.** Both
