@@ -39,6 +39,7 @@
   # (`hookTrustFor`), as a session flag: Codex reads hook trust only from user
   # config and session flags, and devenv never writes the user's config.
   launcherFlags = import ./launcher-flags.nix;
+  codexPackage = cfg: cfg.package.launcherPackage or cfg.package;
   codexInstallPackage = {
     backend,
     cfg,
@@ -46,7 +47,7 @@
     ...
   } @ args: let
     hookTrust = hookTrustFor args;
-    package = cfg.package.launcherPackage or cfg.package;
+    package = codexPackage cfg;
   in
     lib.ai.mkLauncher pkgs {
       environmentVariables = launcherEnvironment;
@@ -736,10 +737,10 @@
   daemonSettingsManifest = "materialize/codex-daemon-settings.manifest";
   # Only the layout the selector can release: a package whose complete Codex
   # package sits anywhere else would be pinned and then never unpinned.
-  hasDaemonLayout = cfg:
-    cfg.package
-    != null
-    && (cfg.package.passthru.codexPackage.root or null) == packageLayout.root;
+  hasDaemonLayout = cfg: let
+    package = codexPackage cfg;
+  in
+    package != null && (package.passthru.codexPackage.root or null) == packageLayout.root;
   # `pinDaemonToPackage` is Home Manager-only; `or false` keeps this callable
   # from a devenv `cfg`, which has no such attribute at all.
   isDaemonPinned = cfg: cfg.enable && (cfg.pinDaemonToPackage or false) && hasDaemonLayout cfg;
@@ -1257,7 +1258,7 @@ in
         activation = lib.optionalAttrs (backend == "hm") {
           codex-daemon-select = {
             command = ''${lib.getExe daemonSelect} "$HOME"/${lib.escapeShellArg cfg.configDir} ${lib.escapeShellArg (
-                lib.optionalString (isDaemonPinned cfg) "${cfg.package}/${cfg.package.passthru.codexPackage.root}"
+                lib.optionalString (isDaemonPinned cfg) "${codexPackage cfg}/${packageLayout.root}"
               )}'';
             runWhenDisabled = true;
           };
@@ -1422,7 +1423,7 @@ in
                 # A null `package` is covered by the inert-setting warning
                 # below, not this assertion — it must not fire on null alone.
                 assertion = !cfg.pinDaemonToPackage || cfg.package == null || hasDaemonLayout cfg;
-                message = "ai.codex.pinDaemonToPackage needs ai.codex.package to carry upstream's complete Codex package at ${packageLayout.root} (passthru.codexPackage.root), as this flake's chatgpt-codex does. Set ai.codex.package to that package, or set ai.codex.pinDaemonToPackage = false to leave the daemon to upstream's own copy and updater.";
+                message = "ai.codex.pinDaemonToPackage needs ai.codex.package to carry upstream's complete Codex package at its output root (passthru.codexPackage.root = \"${packageLayout.root}\"), as this flake's chatgpt-codex does. Set ai.codex.package to that package, or set ai.codex.pinDaemonToPackage = false to leave the daemon to upstream's own copy and updater.";
               }
             ]
             ++ lib.optionals (!isHm) [

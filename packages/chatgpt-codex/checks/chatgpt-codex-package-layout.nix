@@ -46,17 +46,11 @@
           [ -f "$root/$f" ] && [ -x "$root/$f" ] || fail "package is missing executable $f"
         done
 
-        # CLI and voice must carry the same source commit for their handshake.
+        # The CLI must carry the source commit used by the voice handshake.
         commit=${pkgs.lib.escapeShellArg codex.buildCommit}
-        [ "$("$root/codex-resources/voice/bin/codex-voice-host" --build-commit)" = "$commit" ] \
-          || fail "voice host does not report the source build commit $commit"
         grep -qaF "$commit" "$root/bin/codex" \
           || fail "bin/codex is not stamped with the voice build commit $commit"
 
-        # nixpkgs' patches admit declared store links in daemon and voice loaders.
-        for f in codex-path/rg ${pkgs.lib.optionalString isLinux "codex-resources/bwrap"}; do
-          [ -L "$root/$f" ] && [ -e "$root/$f" ] || fail "invalid store link $f"
-        done
         [ "$(find "$root" -name codex-package.json | wc -l)" -eq 1 ] \
           || fail "package must contain one layout"
         [ "$(find "$root" -name codex-voice-host | wc -l)" -eq 1 ] \

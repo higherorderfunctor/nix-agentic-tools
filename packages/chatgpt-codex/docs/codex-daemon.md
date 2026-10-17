@@ -1,12 +1,13 @@
 # Codex's app-server daemon: Home Manager selects its package
 
 > **Last verified:** 2026-10-16 — the package uses nixpkgs' source-built voice
-> and store-linked runtime at its output root; settings stage through the files
-> engine and selection uses an ungated layer-3 command; devenv can opt into
-> runtime project trust; launcher flags are checked as root-command `uses`; Home
-> Manager owns daemon selection and settings; both backends run the offline
-> project-document and project-config preflight before it execs the original
-> binary, isolated by the shared `lib/ai/launcher-preflight.nix`.
+> and store-linked runtime at its output root; daemon pins unwrap selected
+> launchers; settings stage through the files engine and selection uses an
+> ungated layer-3 command; devenv can opt into runtime project trust; launcher
+> flags are checked as root-command `uses`; Home Manager owns daemon selection
+> and settings; both backends run the offline project-document and
+> project-config preflight before it execs the original binary, isolated by the
+> shared `lib/ai/launcher-preflight.nix`.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -17,8 +18,9 @@ never reaches the process that runs every tool call.
 ## Home Manager pins it (`ai.codex.pinDaemonToPackage`, default on)
 
 - **The pin.** Activation (`lib/daemonSelect.nix`) points `current` straight at
-  `<package>/.` and removes any `auto-update-version` marker. A selection
-  outside `releases/` with no marker never qualifies for the updater.
+  `<package>/.`, using the original package when `ai.codex.package` selects a
+  launcher, and removes any `auto-update-version` marker. A selection outside
+  `releases/` with no marker never qualifies for the updater.
   `updater.autoUpdateEnabled = false`, the pin's default in
   `ai.codex.native.daemonSettings`, is the second guard.
 - **Upstream's lock.** The selection runs under upstream's daemon operation lock

@@ -128,6 +128,5 @@ in
       prev.meta
       // {
         description = "OpenAI Codex CLI — coding agent that runs locally in your terminal";
-        platforms = ["aarch64-darwin" "x86_64-linux"];
       };
   })
