@@ -1,4 +1,4 @@
-# Declares cross-app options (ai.context, ai.mcpServers,
+# Declares cross-app options (ai.context, ai.mcpServers, ai.proxy,
 # ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and formatting and guards: how
 # every runtime's generated files are formatted and checked.
 #
@@ -38,6 +38,7 @@
     (pkgs // {ai = config.ai.internal.packages;})
     formatter.programs.prettier.enable;
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
+  proxyLib = import ./proxy {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
@@ -274,6 +275,7 @@
         managed-proxy identity, proxy owners must use distinct keys.
       '';
     };
+    proxy = proxyLib.rootOption;
     rules = keyedOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
@@ -592,6 +594,9 @@ in {
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
     (lib.optionalAttrs hasAssertions {assertions = proxyAssertions;})
+    # `ai.proxy`'s root selection; mkBackendTransform.nix asserts each
+    # runtime's own.
+    (lib.optionalAttrs hasAssertions {assertions = proxyLib.assertionsFor ["ai" "proxy"] config.ai.proxy;})
     # Drop the systemd path entirely in devenv. `mkIf false` would still define
     # an unknown option there; the option-tree probe is a build-time condition
     # and does not force config. Unsupported active declarations fail through
