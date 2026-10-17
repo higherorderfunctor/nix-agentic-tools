@@ -100,8 +100,8 @@ repository files (`AGENTS.md`, `.github/instructions/`, `.github/agents/`,
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-16 — nixpkgs stamps Codex from tracked buildCommit;
-> the layout check guards voice commit agreement; Kiro parses embedded rollout
+> **Last verified:** 2026-10-16 — Codex adopts nixpkgs' output-root layout,
+> source-built voice and store-linked runtime; Kiro parses embedded rollout
 > JSON, preserving state fields; copies must agree. The byte-preserving patcher
 > remains strict.
 
@@ -110,8 +110,7 @@ repository files (`AGENTS.md`, `.github/instructions/`, `.github/agents/`,
 AI coding CLI recipes live at `packages/<owner>/packages/ai/<name>/package.nix`:
 
 - **chatgpt-codex** — OpenAI Codex CLI, compiled from the GitHub source by
-  overriding nixpkgs' `codex`, plus the prebuilt voice resource from the GitHub
-  release
+  overriding nixpkgs' `codex`, including its source-built voice host
 - **claude-code** — Claude Code CLI, pre-built binary
 - **copilot-cli** — GitHub Copilot CLI, pre-built SEA binary fetched from GitHub
   releases
@@ -138,36 +137,30 @@ derivation to pin the version and `src` from a per-platform `sources.json`, then
 re-composes the public package through upstream's wrapper.
 
 **Source override** (chatgpt-codex): `pkgs.codex.override` swaps in the locked
-`mkRustPlatform`, and `overrideAttrs` moves `buildCommit`, `version`, `src` and
-`cargoDeps` to the `sources.json` pins (nixpkgs' version is not an argument, and
-`buildRustPackage` reads its argument `cargoHash`, so `cargoDeps` is restated).
-nixpkgs' `no-daemon_auto_start.patch` is dropped: our modules write that setting
-and declared facts under `extracted/` record the binary's own defaults.
+`mkRustPlatform`, and `overrideAttrs` pins `buildCommit`, `version`, `src` and
+`cargoHash` from `sources.json`. nixpkgs' vendor derivation reads those final
+attributes and disables bundled Opus so voice links against its `libopus`. The
+recipe retains nixpkgs' `nix-package-layout.patch` and
+`nix-voice-runtime.patch`: daemon validation and the voice loader accept the
+declared store-linked rg, bwrap and GStreamer files. It filters only
+`no-daemon_auto_start.patch`, since modules declare that setting explicitly
+while the binary retains upstream's default.
 
-- postInstall assembles upstream's complete package as `$out/libexec/codex`
-  (`codex-package.json`, `bin/codex`, `bin/codex-code-mode-host`,
-  `codex-path/rg`, Linux `codex-resources/bwrap`; rg and bwrap copied from
-  nixpkgs), with `$out/bin/*` as relative symlinks into it, and nixpkgs' PATH
-  wrapper is dropped. Since 0.157.0 the app-server daemon only starts when the
-  canonical executable sits at `<root>/bin/codex` beside a `codex-package.json`
-  whose `target` is the running platform's (`x86_64-unknown-linux-gnu` for this
-  glibc build), and it copies `<root>` into `CODEX_HOME` rejecting any symlink
-  that leaves it. bwrap is looked up on PATH first and the bundled copy is the
-  fallback; rg is looked up in `codex-path` first. Neither needs a PATH wrapper.
-- The optional `codex-resources/voice` is extracted as real files from the
-  release archive so its build commit matches that archive. It comes from
-  `codex-package-<target>.tar.gz` (both platforms' archives carry it). That
-  happens in postFixup, so strip never touches it (it would break the macOS
-  signatures), and on Linux a scoped `autoPatchelf` repoints it at the nix glibc
-  while the source-built binaries are left alone. The voice host refuses any CLI
-  whose compiled-in `STABLE_GIT_COMMIT` differs from its own (unset means
-  `"dev"`). nixpkgs stamps `STABLE_GIT_COMMIT` and `CODEX_BUILD_COMMIT` from the
-  tracked `buildCommit`; the layout check fails when the archive's voice build
-  commit differs. The fully prebuilt recipe is
-  `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
-  `checks/chatgpt-codex-package-layout.nix` starts and stops the real daemon to
-  hold this. Its daemon policy is in
-  `packages/chatgpt-codex/docs/codex-daemon.md`.
+- nixpkgs installs the complete package at `$out`: `codex-package.json`,
+  `bin/codex`, `bin/codex-code-mode-host`, `codex-path/rg`, Linux
+  `codex-resources/bwrap`, and `codex-resources/voice`. The CLI and voice host
+  build from the same source with `CODEX_BUILD_COMMIT` and `STABLE_GIT_COMMIT`
+  set to `buildCommit`. Voice is enabled on Darwin and GNU Linux, covering
+  `aarch64-darwin` and `x86_64-linux`; its private runtime links nixpkgs'
+  GStreamer libraries and plugins. Public executables follow the upstream
+  package's CLI and code-mode host; Cargo's auxiliary `logs_client` SQLite
+  viewer is excluded.
+- `lib/packageLayout.nix` names `.` as the package root. The daemon selector
+  pins `<package>/.` and releases only that literal shape. The layout check
+  starts and stops the real daemon through nixpkgs' patched package validation;
+  `chatgpt-codex-voice-runtime` reuses nixpkgs' framed handshake and GStreamer
+  initialization test. See `packages/chatgpt-codex/docs/codex-daemon.md` for
+  daemon policy.
 
 **Standalone binary** (copilot-cli): there is no nixpkgs base to inherit, so it
 is a fresh `stdenv.mkDerivation` over a per-platform release tarball selected
@@ -190,16 +183,14 @@ These packages pin versions in their recipe or release `sources.json` sidecar.
 Each uses an update strategy managed by `config.update.targets` (see owner
 `registry.nix`):
 
-- `chatgpt-codex` — `sources.json` {buildCommit, cargoHash, srcHash, version,
-  per-platform release archive `{url, hash}`} + `mkUpdateScript`; version via
-  `ghLatestVersionCmd` with `tagPrefix = "rust-v"` (openai/codex cuts several
-  tag series, so the prefix is load-bearing). The script prefetches each
-  platform's archive and resolves `buildCommit` from the `rust-v<version>` tag
-  (dereferencing annotated tags), then `passthru.fixVendorHash` restores the
-  source and cargo vendor hashes the rewrite dropped. Not automated: the V8
-  library comes from nixpkgs' `librusty_v8` pin, so a codex bump that moves the
-  `v8` crate fails to build until nixpkgs catches up or we pin `librusty_v8`
-  ourselves
+- `chatgpt-codex` — `sources.json` {buildCommit, cargoHash, srcHash, version} +
+  `mkUpdateScript`; version via `ghLatestVersionCmd` with `tagPrefix = "rust-v"`
+  (openai/codex cuts several tag series, so the prefix is load-bearing). The
+  script resolves `buildCommit` from the `rust-v<version>` tag (dereferencing
+  annotated tags), then `passthru.fixVendorHash` restores the source and cargo
+  vendor hashes the rewrite dropped. Not automated: the V8 library comes from
+  nixpkgs' `librusty_v8` pin, so a codex bump that moves the `v8` crate fails to
+  build until nixpkgs catches up or we pin `librusty_v8` ourselves
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   GitHub release and prefetches per-platform binaries
 - `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release
