@@ -7,11 +7,8 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-16 — every surface uses the files layers; shared
-> documents use `rw`, renderers execute after secrets, and every legacy ledger
-> drains even while Kimchi is disabled. pnpm owns the local-package identity
-> fix; named packages use project precedence across harness scopes and npm
-> installs, delivered under `packages/` outside PI auto-discovery.
+> **Last verified:** 2026-10-17 — apiKey and gitTokens take nullable redact
+> references; launch and activation resolve them through the shared reader.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -323,21 +320,23 @@ stub for an unset, empty and non-empty caller value rather than grepping its
 text. Locked by `module-kimchi-devenv-env-shadowed-resources` and
 `module-kimchi-wrapper-builds`.
 
-`ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
-`lib/credentials.nix` shape. Kimchi reads git tokens only from the user
-`config.json` and has no environment input for them
+`ai.kimchi.gitTokens.<host>` takes a redact reference or null (omitted), using
+`lib.redact.file`, `lib.redact.command` or `lib.redact.concat`. Literal strings
+and the retired `{ file | helper }` records are refused. Kimchi reads git tokens
+only from the user `config.json` and has no environment input for them
 (`src/extensions/teleport/provisioning/git-token.ts`), so this branch cannot use
 the ordinary value declaration: its staged `content.run` renderer exports each
-token from its file and merges it into the declaration with `jq` at activation.
-This branch retains whole-file `ro` ownership and mode 0400. The store holds
-only credential paths and the renderer. The engine apply phase follows the
-`secrets` point on both backends, including HM's `sops-nix`; consumers register
-other providers once in `ai.activationOrder.secretNodes`. Switching an existing
-`rw` document to this whole-file owner refuses while native keys remain, per the
-engine contract. `native.settings` has no `gitTokens` option, which would write
-the secret into the store. Devenv rejects the option by name. The API key needs
-no leaf: Kimchi prefers `KIMCHI_API_KEY` over the file everywhere it reads the
-key (`loadConfig`, the telemetry and mismatch paths in `src/config.ts`), and the
+token with `redact.assign` and merges it into the declaration with `jq` at
+activation. This branch retains whole-file `ro` ownership and mode 0400. The
+store holds only references, literal concat parts and the renderer. The engine
+apply phase follows the `secrets` point on both backends, including HM's
+`sops-nix`; consumers register other providers once in
+`ai.activationOrder.secretNodes`. Switching an existing `rw` document to this
+whole-file owner refuses while native keys remain, per the engine contract.
+`native.settings` has no `gitTokens` option, which would write the secret into
+the store. Devenv rejects the option by name. The API key needs no leaf: Kimchi
+prefers `KIMCHI_API_KEY` over the file everywhere it reads the key
+(`loadConfig`, the telemetry and mismatch paths in `src/config.ts`), and the
 launcher exports it from `ai.kimchi.apiKey`. With it set, an in-app login or
 logout changes nothing the next launch reads. Locked by
 `module-kimchi-git-tokens` and `ai-module-kimchi-settings`.
@@ -580,17 +579,25 @@ that helper is Kiro-specific (Kiro's `cli.json` wants flat dot keys like
 turns `settings.telemetry.enabled` into a literal `"telemetry.enabled"` string
 key Kimchi cannot read. Locked by `module-kimchi-config-json-nested`.
 
-## Gotcha: apiKey is a runtime SOPS credential, never a store literal
+## Gotcha: apiKey requires a redact reference
 
-`apiKey` is `lib.mcp.mkCredentialsOption "KIMCHI_API_KEY"` — the same
-`{ file | helper }` discriminated union the MCP servers use. The key is exported
-at launch via `lib.mcp.mkCredentialsSnippet`
-(`KIMCHI_API_KEY="$(<coreutils>/bin/cat <file>)"`) injected through
-`wrapProgram --run`, so the decrypted secret is read at runtime and the store
-holds only the **path**, never the key. Never reintroduce a plaintext `str`
-apiKey funneled into `--set`: that bakes the secret into a world-readable
-`/nix/store` wrapper. Mimic the existing credential pattern; do not invent a new
-secret surface.
+`ai.kimchi.apiKey` is nullable `redact.types.redacted`, as is each
+`gitTokens.<host>` entry. Both are secrets, so cleartext strings are refused;
+`maybeRedacted` would allow them into the store. Null leaves the API key
+unmanaged or omits a token host. For example:
+
+```nix
+ai.kimchi.apiKey = lib.redact.file "/run/secrets/kimchi-key";
+ai.kimchi.gitTokens."github.com" = lib.redact.command "${pkgs.myToken}/bin/token";
+```
+
+`redact.assign` exports the key as `KIMCHI_API_KEY` through `wrapProgram --run`
+at launch; token references resolve in the activation renderer. Missing,
+unreadable, empty or NUL-bearing files and failed commands abort with the option
+name, never the value or command output. Commands are executable absolute paths;
+concat combines literal parts and references. Secret files must be absolute
+paths outside the Nix store with no string context. The store holds references
+and literal concat parts, never resolved values.
 
 ## Gotcha: wrapProgram separator
 

@@ -5,6 +5,7 @@
   pkgs,
   ...
 }: let
+  redact = import ../../../lib/redact {inherit lib;};
   files = import ../lib/files/default.nix {inherit lib pkgs;};
   dagLib = import ./dag-lib.nix harness.hmLib;
   trust = {
@@ -49,8 +50,8 @@
                 gitTokens = lib.optionalAttrs secret {
                   "github.com" =
                     if name == "helper"
-                    then {helper = "./failed-helper";}
-                    else {file = "git-token";};
+                    then redact.command "/run/redact-fixture/failed-helper"
+                    else redact.file "/run/redact-fixture/git-token";
                 };
                 hooks = lib.optionalAttrs declared {TurnStart = [{hooks = [{command = "turn";}];}];};
                 mcpServers = lib.optionalAttrs declared {

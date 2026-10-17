@@ -15,7 +15,7 @@
 }: let
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
-  mcpLib = import ../../../lib/mcp.nix {inherit lib;};
+  redact = import ../../../lib/redact {inherit lib;};
   sharedHooks = lib.ai.hooks;
   # Native option types, project-tier keys and environment names, all read
   # from the committed sidecar (never passthru.extracted: that is IFD).
@@ -286,14 +286,14 @@
     # options, not free-form entries.
     effectiveEnvVars = launcherEnvironment // kimchiEnvVars;
 
-    # The Cast AI key is a secret: read it from its decrypted file (or
-    # helper) at launch via the repo's shared credential snippet, so it is
-    # never serialized into the world-readable /nix/store. Same mechanism
-    # the MCP servers use (lib/mcp.nix); sops-nix / agenix agnostic.
-    credSnippet =
-      if cfg.apiKey != null
-      then mcpLib.mkCredentialsSnippet pkgs {apiKey.envVar = sidecar.environmentName "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
-      else "";
+    # Resolve the reference at launch; the store holds no key value.
+    credSnippet = redact.assign {
+      inherit pkgs;
+      option = "ai.kimchi.apiKey";
+      variable = sidecar.environmentName "KIMCHI_API_KEY";
+      value = cfg.apiKey;
+      export = true;
+    };
 
     # Kimchi resolves project config, MCP servers, and harness settings from
     # process.cwd() exactly. Changing cwd here would also change the directory
@@ -347,7 +347,7 @@
     };
   };
   # Both backends install the same prepared wrapper (env + the runtime secret,
-  # which is cat'd at launch so it never enters the store). Handed to the
+  # which is read at launch so it never enters the store). Handed to the
   # shared transform's `installPackage` hook, which owns the `home.packages` /
   # `packages` lowering. Devenv adds the exact-cwd guard when it writes any
   # project file Kimchi resolves from the working directory.
@@ -446,10 +446,9 @@
     relativeTrustKeys = builtins.filter (key: !(lib.hasPrefix "/" key)) (builtins.attrNames cfg.projectTrust);
     # Git tokens are secrets with no environment input: Kimchi reads them only
     # from the user config.json (src/extensions/teleport/provisioning/
-    # git-token.ts). So the renderer reads each one from its file or helper
-    # when the writer runs and merges it into the declaration; the store holds
-    # only the path. Each export lives in the renderer's own process.
-    tokenVars = lib.listToAttrs (lib.imap0 (index: host: lib.nameValuePair host {envVar = "kimchi_git_token_${toString index}";}) (builtins.attrNames gitTokens));
+    # git-token.ts). The renderer resolves each reference when the writer runs
+    # and merges it into the declaration. Each export lives in that process.
+    tokenVars = lib.listToAttrs (lib.imap0 (index: host: lib.nameValuePair host "kimchi_git_token_${toString index}") (builtins.attrNames gitTokens));
     userConfigContent =
       if gitTokens == {}
       then {value = filteredSettings;}
@@ -457,8 +456,15 @@
         run = ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          ${mcpLib.mkCredentialsSnippet pkgs tokenVars gitTokens}
-          exec ${pkgs.jq}/bin/jq -n --slurpfile declared ${pkgs.writeText "kimchi-config.json" (builtins.toJSON filteredSettings)} ${lib.escapeShellArg "$declared[0] * {gitTokens: {${lib.concatStringsSep ", " (lib.mapAttrsToList (host: var: "${builtins.toJSON host}: env.${var.envVar}") tokenVars)}}}"}
+          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (host: variable:
+            redact.assign {
+              inherit pkgs variable;
+              option = lib.showOption ["ai" "kimchi" "gitTokens" host];
+              value = gitTokens.${host};
+              export = true;
+            })
+          tokenVars)}
+          exec ${pkgs.jq}/bin/jq -n --slurpfile declared ${pkgs.writeText "kimchi-config.json" (builtins.toJSON filteredSettings)} ${lib.escapeShellArg "$declared[0] * {gitTokens: {${lib.concatStringsSep ", " (lib.mapAttrsToList (host: var: "${builtins.toJSON host}: env.${var}") tokenVars)}}}"}
         '';
       };
   in
@@ -861,23 +867,28 @@ in
         '';
       };
 
-      # Cast AI key — a runtime credential (file | helper), exported as
-      # KIMCHI_API_KEY at launch. Reuses the repo's shared MCP credential
-      # pattern (lib/mcp.nix) so the secret is read from its decrypted file
-      # at runtime and never lands in the /nix/store. Set exactly one of
-      # apiKey.file (sops-nix/agenix path) or apiKey.helper.
-      apiKey = mcpLib.mkCredentialsOption (sidecar.environmentName "KIMCHI_API_KEY");
+      apiKey = lib.mkOption {
+        type = lib.types.nullOr redact.types.redacted;
+        default = null;
+        example = lib.literalExpression ''lib.redact.file "/run/secrets/kimchi-api-key"'';
+        description = ''
+          Cast AI key as a redact reference, exported as KIMCHI_API_KEY at
+          launch. Use lib.redact.file, lib.redact.command or lib.redact.concat;
+          the value is read at runtime and never enters the Nix store.
+        '';
+      };
 
       gitTokens = lib.mkOption {
-        type = lib.types.attrsOf (mcpLib.mkCredentialsOption "the config.json `gitTokens.<host>` leaf").type;
+        type = lib.types.attrsOf (lib.types.nullOr redact.types.redacted);
         default = {};
-        example = {"github.com".file = "/run/secrets/kimchi-github-token";};
+        example = lib.literalExpression ''{"github.com" = lib.redact.file "/run/secrets/kimchi-github-token";}'';
         description = ''
-          Git tokens Kimchi's teleport and remote runs use, keyed by host.
-          Kimchi reads them only from the user config.json and has no
-          environment input for them, so Home Manager reads each one from its
-          file or helper at activation and writes it into that owner-only
-          file; the store holds only the path. Devenv rejects this option:
+          Git tokens Kimchi's teleport and remote runs use, keyed by host,
+          as redact references (lib.redact.file, lib.redact.command or
+          lib.redact.concat). A null entry is omitted. Kimchi reads tokens
+          only from the user config.json and has no environment input for
+          them, so Home Manager resolves each reference at activation and
+          writes it into that owner-only file. Devenv rejects this option:
           without Home Manager the file is Kimchi's own.
         '';
       };

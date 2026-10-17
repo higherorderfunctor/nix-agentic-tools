@@ -72,6 +72,7 @@ with tempfile.TemporaryDirectory() as temporary:
                             rendered.write_text(json.dumps(content["value"]))
                             content["rendered"] = str(rendered)
                         elif "run" in content:
+                            content["run"] = content["run"].replace("/run/redact-fixture/", str(root) + "/")
                             content["run"] = content["run"].replace(data["trustPath"], str(trust_input)).replace(step["template"]["path"], str(template))
                             content["run"] = re.sub(r"/nix/store/[^\s]+/bin/python3", sys.executable, content["run"])
                     return plan
