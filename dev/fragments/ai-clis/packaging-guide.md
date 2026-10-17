@@ -1,8 +1,9 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-16 — Codex pins source commits and extracts
-> matching release voice; Kiro parses embedded rollout JSON, preserving state
-> fields; copies must agree. The byte-preserving patcher remains strict.
+> **Last verified:** 2026-10-16 — nixpkgs stamps Codex from tracked buildCommit;
+> the layout check guards voice commit agreement; Kiro parses embedded rollout
+> JSON, preserving state fields; copies must agree. The byte-preserving patcher
+> remains strict.
 
 ### Overview
 
@@ -60,8 +61,9 @@ and declared facts under `extracted/` record the binary's own defaults.
   signatures), and on Linux a scoped `autoPatchelf` repoints it at the nix glibc
   while the source-built binaries are left alone. The voice host refuses any CLI
   whose compiled-in `STABLE_GIT_COMMIT` differs from its own (unset means
-  `"dev"`), so preBuild exports the voice manifest's `buildCommit` from the same
-  archive. The fully prebuilt recipe is
+  `"dev"`). nixpkgs stamps `STABLE_GIT_COMMIT` and `CODEX_BUILD_COMMIT` from the
+  tracked `buildCommit`; the layout check fails when the archive's voice build
+  commit differs. The fully prebuilt recipe is
   `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
   `checks/chatgpt-codex-package-layout.nix` starts and stops the real daemon to
   hold this. Its daemon policy is in

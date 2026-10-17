@@ -33,8 +33,9 @@
 # PREBUILT VOICE. The optional `codex-resources/voice` (the voice host plus
 # its private GStreamer runtime) is taken from the release archive so its
 # build commit matches that archive. The `codex-package-<target>.tar.gz` is
-# pinned per platform in the sidecar; both platforms' archives carry it. It
-# goes in during postFixup, so strip and the ELF shrinker never see it:
+# pinned per platform in the sidecar; both platforms' archives carry the voice
+# directory, which goes in during postFixup, so strip and the ELF shrinker
+# never see it:
 # stripping would break the macOS code signatures. On Linux it is glibc-linked,
 # so a scoped autoPatchelf repoints its interpreter and rpath at the nix glibc;
 # the source-built binaries are left alone. The voice `manifest.json` lists
@@ -42,8 +43,9 @@
 # at runtime. It does check the build commit: the CLI's `Hello` must carry
 # the commit the voice host was compiled with, or the host refuses the session
 # as an incompatible helper (codex-rs/voice-host). Both read it from
-# STABLE_GIT_COMMIT at compile time, defaulting to "dev", so preBuild stamps
-# this build with the `buildCommit` of the archive's voice manifest.
+# STABLE_GIT_COMMIT at compile time, defaulting to "dev". nixpkgs stamps
+# STABLE_GIT_COMMIT and CODEX_BUILD_COMMIT from the tracked buildCommit; the
+# layout check fails when the archive's voice build commit differs.
 #
 # Fully prebuilt history (musl tarball installed verbatim):
 # `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
@@ -108,7 +110,7 @@
 in
   (pkgs.codex.override {inherit rustPlatform;}).overrideAttrs (finalAttrs: prev: {
     pname = "chatgpt-codex";
-    # nixpkgs uses buildCommit for the source revision and compiled-in stamps.
+    # nixpkgs uses buildCommit for src, STABLE_GIT_COMMIT and CODEX_BUILD_COMMIT.
     inherit (sources) buildCommit version;
     src = prev.src.override {hash = sources.srcHash or lib.fakeHash;};
     # buildRustPackage derives cargoDeps from its ARGUMENT cargoHash, which
@@ -139,23 +141,6 @@ in
     # nixpkgs patches daemon_auto_start's built-in default to false. Our
     # modules write that setting explicitly, so the binary keeps upstream's.
     patches = [];
-
-    # The voice handshake's commit, read from the archive the voice host
-    # comes from. Exported in this shell so cargoBuildHook compiles it in.
-    preBuild =
-      (prev.preBuild or "")
-      + ''
-        STABLE_GIT_COMMIT=$(
-          set -euETo pipefail
-          tar -xzOf ${releaseArchive} codex-resources/voice/manifest.json \
-            | sed -n 's/.*"buildCommit": *"\([0-9a-f]\{40\}\)".*/\1/p'
-        )
-        if [ -z "$STABLE_GIT_COMMIT" ]; then
-          echo "chatgpt-codex: no buildCommit in the voice manifest of ${releaseArchive}" >&2
-          false
-        fi
-        export STABLE_GIT_COMMIT
-      '';
 
     postInstall =
       (prev.postInstall or "")
@@ -246,14 +231,13 @@ in
           # committed sidecar from the freshly-bumped binary in the SAME
           # update/chatgpt-codex PR (no intra-PR drift).
           extraExtract = ''
-            version=$(${pkgs.jq}/bin/jq -er .version "${sourcesFile}")
             buildCommit=$(
               ${pkgs.git}/bin/git ls-remote --exit-code https://github.com/openai/codex \
-                "refs/tags/rust-v$version" "refs/tags/rust-v$version^{}" \
+                "refs/tags/rust-v$latest" "refs/tags/rust-v$latest^{}" \
                 | ${pkgs.gawk}/bin/awk 'NR == 1 {commit = $1} /\^\{\}$/ {commit = $1} END {print commit}'
             )
             if [[ ! "$buildCommit" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "chatgpt-codex: no commit for rust-v$version" >&2
+              echo "chatgpt-codex: no commit for rust-v$latest" >&2
               exit 1
             fi
             tmp=$(${pkgs.coreutils}/bin/mktemp)
