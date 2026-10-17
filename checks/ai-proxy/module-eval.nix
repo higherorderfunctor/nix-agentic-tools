@@ -8,6 +8,8 @@
 }: let
   inherit (harness) aiBase evalDevenv evalDevenvModules evalHm evalHmModules mkTest;
 
+  redact = import ../../lib/redact {inherit lib;};
+
   failedMessages = result: map (assertion: assertion.message) (builtins.filter (assertion: !assertion.assertion) result.config.assertions);
   failsWith = fragments: result:
     builtins.any (message: lib.all (fragment: lib.hasInfix fragment message) fragments) (failedMessages result);
@@ -30,35 +32,45 @@
     ];
 in {
   checks = {
+    # The authentication key requires a redact reference at both scopes;
+    # cleartext and the retired credential branches cannot enter normalization.
+    module-ai-proxy-redacted-key = mkTest "ai-proxy-redacted-key" (
+      lib.all (backend: let
+        rejected = config:
+          !(builtins.tryEval (builtins.deepSeq (evalApp backend config).config.ai.testapp.normalized.proxy true)).success;
+        invalid = ["literal-client-key" {file = "/run/secrets/key";} {_redact.file = "${builtins.storeDir}/key";}];
+        url = "http://127.0.0.1:8317";
+      in
+        lib.all (key:
+          rejected {ai.proxy = {inherit key url;};}
+          && rejected {ai.testapp.proxy = {inherit key url;};})
+        invalid)
+      ["devenv" "hm"]
+    );
+
     # A key without a url and a url without a key each fail with the option
     # path; a valid `url` form passes on both backends. A url carrying a path
     # fails, since every runtime appends its own.
     module-ai-proxy-root-selection-validation = mkTest "ai-proxy-root-selection-validation" (
       failsWith ["ai.proxy.url needs `key`"] (evalHm {ai.proxy.url = "http://127.0.0.1:8317";})
-      && failsWith ["ai.proxy.key is set without `url`"] (evalHm {ai.proxy.key.plain = "sk-local";})
+      && failsWith ["ai.proxy.key is set without `url`"] (evalHm {ai.proxy.key = redact.file "/run/secrets/ai-proxy-key";})
       && failsWith ["ai.proxy.url must be the proxy origin only"] (evalHm {
         ai.proxy = {
+          key = redact.file "/run/secrets/ai-proxy-key";
           url = "http://127.0.0.1:8317/v1";
-          key.plain = "sk-local";
-        };
-      })
-      && failsWith ["ai.proxy.key.plain must be"] (evalDevenv {
-        ai.proxy = {
-          url = "http://127.0.0.1:8317";
-          key.plain = "sk local";
         };
       })
       && failedMessages (evalHm {
         ai.proxy = {
+          key = redact.file "/run/secrets/ai-proxy-key";
           url = "http://[::1]:8317";
-          key.file = "/run/secrets/ai-proxy-key";
         };
       })
       == []
       && failedMessages (evalDevenv {
         ai.proxy = {
+          key = redact.command "${pkgs.hello}/bin/hello";
           url = "http://localhost:8317";
-          key.helper = "/run/current-system/sw/bin/proxy-key";
         };
       })
       == []
@@ -72,17 +84,17 @@ in {
       lib.all (backend: let
         resolved = config: (evalApp backend config).config.ai.testapp.normalized.proxy;
         root = {
+          key = redact.file "/run/secrets/ai-proxy-key";
           url = "http://127.0.0.1:8317";
-          key.plain = "sk-local";
         };
         work = {
+          key = redact.concat ["Bearer " (redact.command "${pkgs.hello}/bin/hello")];
           url = "http://127.0.0.1:8318";
-          key.file = "/run/secrets/ai-proxy-key";
         };
         keyOnly = {
           ai = {
             proxy = root;
-            testapp.proxy.key.plain = "sk-work";
+            testapp.proxy.key = redact.file "/run/secrets/work-proxy-key";
           };
         };
       in
