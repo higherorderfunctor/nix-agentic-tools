@@ -39,6 +39,7 @@ in
         (_: "sha256-SKjUIxSvmEFYW+sMkFkyNVo4U5cOGwqZ48DTl0h8gDk=");
     };
     doCheck = true;
+    nativeCheckInputs = [pkgs.nix];
     # Nounset must not leak into stdenv's strip.sh during fixupPhase.
     checkPhase = ''
       (

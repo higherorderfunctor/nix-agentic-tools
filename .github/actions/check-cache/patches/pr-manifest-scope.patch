@@ -2,6 +2,8 @@ Patch for Mic92/hestia v3.1.0 (dfed9ced335d28978ba74e513939a10db1f71025).
 
 The default family remains m3; other refs explicitly use m3pr with m3 as
 read-only base. Reservations and visibility barriers use only the own index.
+Drains verify reusable packs before path and chunk deduplication, and discard
+missing locations again at commit.
 
 --- a/src/cli.rs
 +++ b/src/cli.rs
@@ -214,7 +216,42 @@ read-only base. Reservations and visibility barriers use only the own index.
      use super::*;
 --- a/src/pipeline.rs
 +++ b/src/pipeline.rs
-@@ -222,9 +222,10 @@
+@@ -26,11 +26,11 @@
+ use crate::gha::blob;
+ use crate::gha::savemutable::SaveMutable;
+ use crate::gha::twirp::{DownloadUrl, Reservation, TwirpClient};
+-use crate::manifest::{Manifest, PackInfo, PathEntry, PathHash, Root};
++use crate::manifest::{Manifest, PackHash, PackInfo, PathEntry, PathHash, Root};
+ use crate::pathinfo::{Error as PathInfoError, Lookup, PathInfo, StoreDatabase};
+ use crate::protocol::DrainStats;
+ use crate::refnorm::RefTable;
+-use crate::substituter::ManifestStore;
++use crate::substituter::{ManifestStore, entry_chunks};
+ use crate::upstream::UpstreamFilter;
+ use futures_util::{StreamExt as _, TryStreamExt as _};
+
+@@ -205,6 +205,20 @@
+     }
+ }
+
++/// Remove unavailable locations before both path and chunk dedup, and again
++/// from commit-time snapshots so stale repack counters cannot win the merge.
++fn discard_missing_packs(manifest: &mut Manifest, missing: &BTreeSet<PackHash>) {
++    manifest.packs.retain(|pack, _| !missing.contains(pack));
++    manifest
++        .chunks
++        .retain(|_, location| !missing.contains(&location.pack));
++    manifest.paths.retain(|_, entry| {
++        entry_chunks(entry)
++            .iter()
++            .all(|chunk| manifest.chunks.contains_key(chunk))
++    });
++}
++
+ /// Everything the pipeline needs to talk to the world.
+ pub struct PipelineContext {
+     pub twirp: TwirpClient,
+@@ -222,9 +236,10 @@
      pub root_key: String,
      /// Workflow run id (`$GITHUB_RUN_ID`); see [`Root::merge`].
      pub run_id: Option<String>,
@@ -227,7 +264,7 @@ read-only base. Reservations and visibility barriers use only the own index.
      /// Compressed bytes per pack ([`PACK_TARGET_SIZE`] in production; tests
      /// use small values to exercise pack splitting).
      pub pack_target_size: u64,
-@@ -270,6 +271,7 @@
+@@ -270,6 +285,7 @@
  impl PipelineContext {
      fn save_mutable(&self) -> SaveMutable<'_> {
          SaveMutable::new(&self.twirp, &self.http, &self.manifest_prefix)
@@ -235,6 +272,66 @@ read-only base. Reservations and visibility barriers use only the own index.
      }
 
      /// Load the current manifest, or an empty one if none exists yet or
+@@ -323,7 +339,41 @@
+         };
+         // `current` is the basis for every dedup decision below; the commit
+         // at the end must include all of it (see the merge closure).
+-        let current = loaded.merge(known);
++        let mut current = loaded.merge(known);
++        // Check storage directly: serve marks the manifest ready before its
++        // background verification finishes. A per-drain lookup also catches
++        // eviction since an earlier verification. Check every reusable chunk
++        // location, including chunks a newly built path might deduplicate.
++        let packs: BTreeSet<PackHash> = current.chunks.values().map(|loc| loc.pack).collect();
++        let missing: BTreeSet<PackHash> = futures_util::stream::iter(packs)
++            .map(|pack| async move {
++                let key = chunker::pack_cache_key(&pack);
++                let available = match self.twirp.get_download_url(&key, &[]).await? {
++                    DownloadUrl::Miss => false,
++                    DownloadUrl::Hit { url, .. } => {
++                        match blob::get_with_refresh(&self.http, &url, Some(0..1), || async {
++                            match self.twirp.get_download_url(&key, &[]).await? {
++                                DownloadUrl::Hit { url, .. } => Ok(url),
++                                DownloadUrl::Miss => Err(GhaError::InvalidResponse(format!(
++                                    "pack {key} vanished during URL refresh"
++                                ))),
++                            }
++                        })
++                        .await
++                        {
++                            Ok(_) => true,
++                            Err(GhaError::Status { status: 404, .. }) => false,
++                            Err(err) => return Err(err),
++                        }
++                    }
++                };
++                Ok::<_, GhaError>((!available).then_some(pack))
++            })
++            .buffer_unordered(UPLOAD_CONCURRENCY)
++            .try_filter_map(|pack| async move { Ok(pack) })
++            .try_collect()
++            .await?;
++        discard_missing_packs(&mut current, &missing);
+         // Reservation floor: never reserve at or below a version we have
+         // already seen, even when commit-time lookups regress below it
+         // (non-monotonic eventually consistent reads).
+@@ -703,7 +753,7 @@
+             .save_with_floor(floor, |existing| {
+                 // A corrupt base manifest is replaced, not merged with: the
+                 // commit must not fail because of it (never crash CI).
+-                let base = match existing {
++                let mut base = match existing {
+                     Some(entry) => decode_manifest_or_empty(&entry.data),
+                     None => Manifest::new(),
+                 };
+@@ -714,6 +764,7 @@
+                 // referencing chunks whose locations are missing (dangling,
+                 // unservable, and never healed because later drains see the
+                 // path as already stored).
++                discard_missing_packs(&mut base, &missing);
+                 let merged = base.merge(current.clone()).merge(delta.clone());
+                 let encoded = merged
+                     .encode()
 --- a/src/serve.rs
 +++ b/src/serve.rs
 @@ -49,7 +49,7 @@
@@ -328,14 +425,10 @@ read-only base. Reservations and visibility barriers use only the own index.
              let _ = manifest_ready_tx.send(true);
 --- a/src/substituter.rs
 +++ b/src/substituter.rs
-@@ -215,6 +215,20 @@
-     pub fn set_version_if_newer(&self, manifest: Manifest, version: u64) {
-         let mut inner = self.inner.write().expect("manifest lock poisoned");
-         if version > inner.version {
-+            *inner = Arc::new(ManifestView::new(manifest, version));
-+        }
-+    }
-+
+@@ -219,6 +219,20 @@
+         }
+     }
+
 +    /// Non-default lookups can refresh the base family while the own index stays
 +    /// unchanged (including zero for a fresh PR).
 +    pub fn set_version_if_at_least(&self, manifest: Manifest, version: u64) {
@@ -346,9 +439,22 @@ read-only base. Reservations and visibility barriers use only the own index.
 +            } else {
 +                manifest
 +            };
-             *inner = Arc::new(ManifestView::new(manifest, version));
-         }
-     }
++            *inner = Arc::new(ManifestView::new(manifest, version));
++        }
++    }
++
+     /// The served manifest and its version (clone; manifests are small).
+     pub fn versioned(&self) -> (u64, Manifest) {
+         let view = self.view();
+@@ -925,7 +939,7 @@
+ }
+
+ /// All chunks referenced by an entry's file tree (deduplicated).
+-fn entry_chunks(entry: &PathEntry) -> BTreeSet<ChunkHash> {
++pub(crate) fn entry_chunks(entry: &PathEntry) -> BTreeSet<ChunkHash> {
+     flatten_tree(&entry.tree)
+         .into_iter()
+         .filter_map(|(_, node)| match node {
 @@ -1204,6 +1218,36 @@
 
  #[cfg(test)]
@@ -388,17 +494,16 @@ read-only base. Reservations and visibility barriers use only the own index.
 
 --- /dev/null
 +++ b/tests/pr_manifest_scope.rs
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,270 @@
 +//! Manifest families are selected by key, independent of GitHub ref precedence.
-+#[path = "support/fake_gha.rs"]
-+mod fake_gha;
++mod support;
 +
 +use std::time::Duration;
 +
 +use bytes::Bytes;
 +use hestia::gha::{savemutable::SaveMutable, twirp::Reservation};
 +use hestia::manifest::{ChunkHash, ChunkLocation, Manifest, PackHash, PackInfo, Root};
-+use fake_gha::FakeGha;
++use support::fake_gha::FakeGha;
 +
 +fn manifest(name: &str, repacks_survived: u32) -> Manifest {
 +    let mut manifest = Manifest::new();
@@ -546,6 +651,120 @@ read-only base. Reservations and visibility barriers use only the own index.
 +    assert!(!loaded.roots.contains_key("own"));
 +}
 +
++/// Exercise the shared drain used by matrix registration and post-build jobs,
++/// both without a published view and with an unverified daemon view.
++#[tokio::test]
++async fn evicted_own_pack_is_repushed_and_closure_imports() {
++    use hestia::pipeline::AccessLog;
++    use hestia::substituter::{ManifestStore, Substituter};
++    use std::collections::BTreeSet;
++    use std::process::Stdio;
++    use support::common::{path_hash_of, pipeline_context, to_path_set};
++    use support::store::ScratchStore;
++    use tokio::io::AsyncWriteExt as _;
++
++    for published in [false, true] {
++        let store = ScratchStore::create().expect("regression requires nix-store on PATH");
++        let (top, dep) = store.add_paths_with_reference("evicted-own");
++        let fake = FakeGha::start().await;
++        let http = reqwest::Client::new();
++        let mut ctx = pipeline_context(&fake, &http, store.database());
++        ctx.manifest_prefix = "m3pr".into();
++        ctx.base_manifest_prefix = Some("m3".into());
++        let view = ManifestStore::new();
++        if published {
++            ctx.publish = Some(view.clone());
++        }
++        seed(&fake, "m3#1000", &Manifest::new()).await;
++        let first = ctx
++            .run(to_path_set(&[&top]), BTreeSet::new(), 10)
++            .await
++            .unwrap();
++        assert_eq!(first.pushed, 2);
++        let mut stale = ctx.load_manifest().await.unwrap();
++        // A stale GC location must not beat the healed upload's count of zero.
++        for location in stale.chunks.values_mut() {
++            location.repacks_survived = 5;
++        }
++        seed(&fake, "m3pr#2", &stale).await;
++        if published {
++            view.set_version(stale.clone(), 2);
++        }
++        for pack in stale.packs.keys() {
++            fake.evict(&http, &hestia::chunker::pack_cache_key(pack))
++                .await;
++        }
++        // Deliberately do not call verify_packs: this also covers serve's
++        // manifest-ready-before-verification race.
++        let healed = ctx
++            .run(to_path_set(&[&top]), BTreeSet::new(), 20)
++            .await
++            .unwrap();
++        assert_eq!(healed.pushed, 2);
++        assert_eq!(healed.skipped_existing, 0);
++        assert!(healed.packs_uploaded > 0);
++        let manifest = ctx.load_manifest().await.unwrap();
++        assert!(
++            manifest
++                .chunks
++                .values()
++                .all(|location| location.repacks_survived == 0)
++        );
++        view.set(manifest);
++        let router = Substituter::new(
++            store.database().store_dir().clone(),
++            view,
++            AccessLog::new(),
++            fake.twirp(&http),
++            http.clone(),
++        )
++        .into_router();
++        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++        let addr = listener.local_addr().unwrap();
++        let task = tokio::spawn(async move {
++            axum::serve(listener, router).await.unwrap();
++        });
++        let response = http
++            .get(format!("http://{addr}/closure/{}", path_hash_of(&top)))
++            .send()
++            .await
++            .unwrap();
++        assert_eq!(response.status(), 200);
++        let body = response
++            .bytes()
++            .await
++            .expect("healed closure export completes");
++        let destination = store.create_destination();
++        let mut import = tokio::process::Command::new("nix-store")
++            .args([
++                "--store",
++                &destination.uri,
++                "--option",
++                "require-sigs",
++                "false",
++                "--import",
++            ])
++            .stdin(Stdio::piped())
++            .stdout(Stdio::piped())
++            .stderr(Stdio::piped())
++            .spawn()
++            .unwrap();
++        import.stdin.take().unwrap().write_all(&body).await.unwrap();
++        let output = import.wait_with_output().await.unwrap();
++        assert!(
++            output.status.success(),
++            "{}",
++            String::from_utf8_lossy(&output.stderr)
++        );
++        for path in [&top, &dep] {
++            assert_eq!(
++                std::fs::read(path).unwrap(),
++                std::fs::read(destination.physical_path(path)).unwrap()
++            );
++        }
++        task.abort();
++    }
++}
 --- a/tests/support/common.rs
 +++ b/tests/support/common.rs
 @@ -50,6 +50,7 @@
