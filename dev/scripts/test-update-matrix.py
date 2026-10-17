@@ -1185,6 +1185,7 @@ class PreparationTest(unittest.TestCase):
         self.write_stubs()
         self.env = dict(
             os.environ,
+            DEVENV_CALLS=str(self.root / "devenv-calls"),
             GITHUB_TOKEN="fixture",
             NAT_UPDATE_WORKTREES_DIR=str(self.root / "worktrees"),
             NIX_CALLS=str(self.root / "nix-calls"),
@@ -1243,7 +1244,16 @@ os.execv({real_awk!r}, [{real_awk!r}, *sys.argv[1:]])
         )
         self.write_executable(
             "devenv",
-            "#!/usr/bin/env python3\nraise SystemExit(0)\n",
+            """#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+with open(os.environ['DEVENV_CALLS'], 'a') as f: f.write(json.dumps(args) + '\\n')
+if args == ['--no-tui', 'shell', 'true']:
+    assert Path(os.environ['NIX_CALLS']).read_text().count('--result-file') == 1
+    raise SystemExit(int(os.environ.get('DEVENV_SHELL_RC', '0')))
+assert args == ['update'], args
+""",
         )
         self.write_executable(
             "nix",
@@ -1524,6 +1534,37 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         calls = list(map(json.loads, (self.root / "nix-calls").read_text().splitlines()))
         verifier = next(call for call in calls if call[:1] == ["run"])
         self.assertEqual(verifier[verifier.index("--eval-workers") + 1], "1")
+
+    def test_input_shell_entry_gate(self):
+        cases = (
+            ("devenv", "input", "0", "UPDATED", True),
+            ("devenv", "input", "17", "HELD BACK", True),
+            ("demo", "input", "17", "UPDATED", False),
+            ("devenv", "input-compiler", "17", "UPDATED", False),
+        )
+        for name, mode, shell_rc, status, enters_shell in cases:
+            with self.subTest(name=name, mode=mode, shell_rc=shell_rc):
+                result = subprocess.run(
+                    ["bash", str(SCRIPTS / "update-input.sh"), name],
+                    cwd=self.repo,
+                    env=dict(self.env, NIX_MODE=mode, DEVENV_SHELL_RC=shell_rc),
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                report = (self.repo / ".update-report.txt").read_text()
+                self.assertIn(f"{status}: {name}", report)
+                calls = list(map(json.loads, (self.root / "devenv-calls").read_text().splitlines()))
+                self.assertEqual(calls, [["update"]] + ([["--no-tui", "shell", "true"]] if enters_shell else []))
+                if status == "HELD BACK":
+                    self.assertIn("devenv: devenv shell failed to enter", result.stderr)
+                    self.assertEqual(self.git("rev-parse", f"update/{name}"), self.base)
+                else:
+                    self.assertNotEqual(self.git("rev-parse", f"update/{name}"), self.base)
+                self.git("branch", "-D", f"update/{name}")
+                (self.repo / ".update-report.txt").unlink()
+                for path in ("devenv-calls", "nix-calls"):
+                    (self.root / path).unlink()
 
     def test_verifier_setup_rejection_holds_input_back_without_committing(self):
         result = subprocess.run(
