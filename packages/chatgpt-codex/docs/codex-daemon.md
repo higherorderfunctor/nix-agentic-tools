@@ -1,11 +1,12 @@
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-16 — settings stage through the files engine and
-> selection uses an ungated layer-3 command; devenv can opt into runtime project
-> trust; launcher flags are checked as root-command `uses`; Home Manager owns
-> daemon selection and settings; both backends run the offline project-document
-> and project-config preflight before it execs the original binary, isolated by
-> the shared `lib/ai/launcher-preflight.nix`.
+> **Last verified:** 2026-10-16 — the package carries its prebuilt voice
+> resource; settings stage through the files engine and selection uses an
+> ungated layer-3 command; devenv can opt into runtime project trust; launcher
+> flags are checked as root-command `uses`; Home Manager owns daemon selection
+> and settings; both backends run the offline project-document and
+> project-config preflight before it execs the original binary, isolated by the
+> shared `lib/ai/launcher-preflight.nix`.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -45,9 +46,9 @@ never reaches the process that runs every tool call.
   refuses to pin a package whose `passthru.codexPackage.root` differs, since it
   could never release it.
 - **The opt-out.** `false` restores upstream's copy and updater. The copied
-  executables are this source build's, and its voice and zsh resources are
-  patched to the nix glibc; both link against store paths nothing roots from the
-  copy, so it breaks after GC until the updater replaces it.
+  executables are this source build's, and its voice resource is patched to the
+  nix glibc; both link against store paths nothing roots from the copy, so it
+  breaks after GC until the updater replaces it.
 - **Auto-start is off** (`features.daemon_auto_start` defaults to false; users
   can opt in). A daemon keeps the environment of whoever started it and serves
   every later client with it. With sessions open across direnv or devenv

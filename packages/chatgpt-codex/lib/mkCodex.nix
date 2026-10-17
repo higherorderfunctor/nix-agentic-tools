@@ -1194,7 +1194,7 @@ in
         starts the new one.
         `false` releases the selection and restores upstream's copy and
         hourly self-update. That copy is taken from this package, whose
-        executables and patched voice and zsh resources are dynamically
+        executables and patched voice resource are dynamically
         linked against store paths nothing roots from the copy: it breaks
         after garbage collection until upstream's updater replaces it. Home
         Manager only.

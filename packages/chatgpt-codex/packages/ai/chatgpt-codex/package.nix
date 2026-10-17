@@ -1,7 +1,7 @@
 # ChatGPT Codex CLI — nixpkgs' source-built `codex`, compiled with this
 # repo's locked Rust platform at the version, source and cargo hashes in
 # ../../../sources.json, and installed as upstream's COMPLETE PACKAGE with
-# the two optional resources taken from upstream's release.
+# the optional voice resource taken from upstream's release.
 #
 # nixpkgs owns the build: cargo flags (codex-cli + codex-code-mode-host), the
 # postPatch, the prebuilt V8 library, the env and the shell completions. We move only the
@@ -30,17 +30,16 @@
 # check is compiled in only when CODEX_BWRAP_SHA256 is set at build time, which
 # this build does not set. So no PATH wrapper is needed, and none is added.
 #
-# PREBUILT RESOURCES. The optional `codex-resources/zsh` (upstream's patched
-# zsh fork) and `codex-resources/voice` (the voice host plus its private
-# GStreamer runtime) are not built here: upstream fetches the first prebuilt
-# and builds the second with Bazel outside cargo. They are extracted from the
-# same release's `codex-package-<target>.tar.gz`, pinned per platform in the
-# sidecar; both platforms' archives carry both. They go in during postFixup, so
-# strip and the ELF shrinker never see them: stripping would break the macOS
-# code signatures. On Linux they are glibc-linked, so a scoped autoPatchelf
-# repoints their interpreter and rpath at the nix glibc; the source-built
-# binaries are left alone. The voice `manifest.json` lists upstream's digests,
-# including its own `bin/codex`; codex does not check them at runtime. It
+# PREBUILT VOICE. The optional `codex-resources/voice` (the voice host plus
+# its private GStreamer runtime) is built upstream with Bazel outside cargo.
+# It is extracted from the same release's `codex-package-<target>.tar.gz`,
+# pinned per platform in the sidecar; both platforms' archives carry it. It
+# goes in during postFixup, so strip and the ELF shrinker never see it:
+# stripping would break the macOS code signatures. On Linux it is glibc-linked,
+# so a scoped autoPatchelf repoints its interpreter and rpath at the nix glibc;
+# the source-built binaries are left alone. The voice `manifest.json` lists
+# upstream's digests, including its own `bin/codex`; codex does not check them
+# at runtime. It
 # does check the build commit: the CLI's `Hello` must carry the commit the
 # voice host was compiled with, or the host refuses the session as an
 # incompatible helper (codex-rs/voice-host). Both read it from
@@ -77,7 +76,6 @@
   # Present in both platforms' archives: each resource and its entrypoint.
   resources = {
     voice = "bin/codex-voice-host";
-    zsh = "bin/zsh";
   };
   resourceDirs = map (r: "codex-resources/${r}") (lib.attrNames resources);
   resourcePaths = lib.concatMapStringsSep " " (d: ''"$out/${packageRoot}/${d}"'') resourceDirs;
@@ -196,10 +194,9 @@ in
       tar -xzf ${releaseArchive} -C "$out/${packageRoot}" ${lib.escapeShellArgs resourceDirs}
       ${lib.optionalString isLinux ''
         # The archive ships the voice libraries read-only; patchelf rewrites
-        # in place. zsh needs libtinfo; the voice host brings its own
-        # GStreamer and glib and needs nothing beyond glibc.
+        # in place. The voice host brings its own GStreamer and glib
+        # and needs nothing beyond glibc.
         chmod -R u+w ${resourcePaths}
-        addAutoPatchelfSearchPath ${lib.getLib pkgs.ncurses}/lib
         autoPatchelf ${resourcePaths}
       ''}
       )

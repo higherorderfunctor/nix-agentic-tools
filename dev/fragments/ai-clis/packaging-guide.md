@@ -1,15 +1,16 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-15 — Kiro parses embedded rollout JSON, preserving
-> state fields; copies must agree. The byte-preserving patcher remains strict.
+> **Last verified:** 2026-10-16 — Codex extracts the prebuilt voice resource;
+> Kiro parses embedded rollout JSON, preserving state fields; copies must agree.
+> The byte-preserving patcher remains strict.
 
 ### Overview
 
 AI coding CLI recipes live at `packages/<owner>/packages/ai/<name>/package.nix`:
 
 - **chatgpt-codex** — OpenAI Codex CLI, compiled from the GitHub source by
-  overriding nixpkgs' `codex`, plus the prebuilt voice and zsh resources from
-  the GitHub release
+  overriding nixpkgs' `codex`, plus the prebuilt voice resource from the GitHub
+  release
 - **claude-code** — Claude Code CLI, pre-built binary
 - **copilot-cli** — GitHub Copilot CLI, pre-built SEA binary fetched from GitHub
   releases
@@ -52,15 +53,15 @@ and declared facts under `extracted/` record the binary's own defaults.
   glibc build), and it copies `<root>` into `CODEX_HOME` rejecting any symlink
   that leaves it. bwrap is looked up on PATH first and the bundled copy is the
   fallback; rg is looked up in `codex-path` first. Neither needs a PATH wrapper.
-- The optional `codex-resources/{voice,zsh}` are not built: they are extracted
-  as real files from the same release's `codex-package-<target>.tar.gz` (both
-  platforms' archives carry both). That happens in postFixup, so strip never
-  touches them (it would break the macOS signatures), and on Linux a scoped
-  `autoPatchelf` repoints them at the nix glibc and ncurses while the
-  source-built binaries are left alone. The voice host refuses any CLI whose
-  compiled-in `STABLE_GIT_COMMIT` differs from its own (unset means `"dev"`), so
-  preBuild exports the voice manifest's `buildCommit` from the same archive. The
-  fully prebuilt recipe is
+- The optional `codex-resources/voice` is built upstream with Bazel and
+  extracted as real files from the same release's
+  `codex-package-<target>.tar.gz` (both platforms' archives carry it). That
+  happens in postFixup, so strip never touches them (it would break the macOS
+  signatures), and on Linux a scoped `autoPatchelf` repoints them at the nix
+  glibc while the source-built binaries are left alone. The voice host refuses
+  any CLI whose compiled-in `STABLE_GIT_COMMIT` differs from its own (unset
+  means `"dev"`), so preBuild exports the voice manifest's `buildCommit` from
+  the same archive. The fully prebuilt recipe is
   `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
   `checks/chatgpt-codex-package-layout.nix` starts and stops the real daemon to
   hold this. Its daemon policy is in

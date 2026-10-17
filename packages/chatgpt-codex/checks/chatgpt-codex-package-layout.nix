@@ -58,11 +58,6 @@
           [ -f "$root/$f" ] && [ -x "$root/$f" ] || fail "package is missing executable $f"
         done
 
-        # The prebuilt zsh is the one resource that runs on its own; on Linux
-        # this proves its interpreter and libtinfo were repointed at nix.
-        [ "$("$root/codex-resources/zsh/bin/zsh" -fc 'print ok')" = ok ] \
-          || fail "bundled zsh does not run"
-
         # Voice refuses any CLI whose stamped commit differs from the voice
         # host's own. Running the host also proves it executes on this
         # platform after patching.
