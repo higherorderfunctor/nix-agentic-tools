@@ -1,9 +1,9 @@
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
 > **Last verified:** 2026-10-17 — root and per-runtime `url` + redacted `key`
-> selection, resolved into `ai.<runtime>.normalized.proxy`; Claude consumes it
-> through a reference-reading `apiKeyHelper`. Other runtimes declare no proxy
-> support and warn through delivery policy.
+> selection, resolved into `ai.<runtime>.normalized.proxy`; Claude and Codex
+> consume references through credential helpers using `redact.assign`. Other
+> runtimes declare no proxy support and warn through delivery policy.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -17,8 +17,8 @@ credential proxy.
 - `sharedOptions.nix` registers the root option and asserts the root selection.
 - `proxy` is a key of `sharedSurfaceOptions`, so it is a delivery-policy surface
   and every enabled runtime whose `surfaceSupport` omits `proxy` gets the
-  standard decomposition warning. Claude declares support; the other runtimes
-  warn rather than dropping a selection silently.
+  standard decomposition warning. Claude and Codex declare support; the other
+  runtimes warn rather than dropping a selection silently.
 - `mkBackendTransform.nix`, for a record whose `surfaceSupport` declares
   `proxy`, declares `ai.<runtime>.proxy` (same selection options as the root)
   and `ai.<runtime>.normalized.proxy`. The callbacks get it as
@@ -57,3 +57,6 @@ cases, driven by its `proxy` sample (the url form).
 `checks/ai-factory/factory-eval.nix` carries `proxy` in its every-surface
 request set. `packages/claude-code/checks/claude-proxy.nix` checks settings and
 runs the file, command and concat helpers on both backends.
+`packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix` checks Codex's provider
+settings and session flags, runs the reference helpers, and sends requests
+through the pinned Codex to loopback proxies on both backends.

@@ -147,13 +147,17 @@ _: {
       scopes = [
         "checks/ai-proxy/**"
         "lib/ai/proxy/**"
+        "packages/chatgpt-codex/lib/proxy.nix"
         "packages/claude-code/lib/proxy.nix"
       ];
       sources = ["ai-proxy"];
     };
-    # ai-proxy-runtimes: how Claude renders the resolved endpoint.
+    # ai-proxy-runtimes: how Claude and Codex render the resolved endpoint.
     ai-proxy-runtimes = {
       scopes = [
+        "packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix"
+        "packages/chatgpt-codex/checks/proxy-test.py"
+        "packages/chatgpt-codex/lib/proxy.nix"
         "packages/claude-code/checks/claude-proxy.nix"
         "packages/claude-code/lib/proxy.nix"
       ];
