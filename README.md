@@ -311,6 +311,7 @@ Temporarily unclassified supporting packages live in the split-ready
 | `fblog` | Command-line JSON log viewer |
 | `gluetun` | VPN client for multiple providers (Linux only) |
 | `iron-proxy` | Egress proxy for sandboxed agents: allowlisted hosts and secret injection |
+| `mcp` | Model Context Protocol Python SDK |
 | `oh-my-posh` | Prompt theme engine for any shell |
 | `otel-tui` | Terminal OpenTelemetry viewer |
 | `pipelock` | Agent egress firewall: forward proxy with hostname, SSRF and DLP checks |

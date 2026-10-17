@@ -677,9 +677,8 @@ are ignored.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-11 — update scripts run `regenCommand` through
-> owner checks’ `passthru.regenerate` and stage committed files under each
-> owner’s `extracted/` directory.
+> **Last verified:** 2026-10-16 — the MCP group update script regenerates
+> Semble's SDK-generated extracted surface in the same update.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -750,17 +749,20 @@ Targets fall into three categories:
   `regenerate_sidecars package <name>`: a package exposing
   `passthru.regenerateExtracted` (git-absorb and git-revise, whose
   `--version skip` bumps never run an `extraExtract`) gets its sidecar refreshed
-  in the same commit, and a failure holds the bump back. `update-targets-parity`
-  fails when a target with `passthru.extracted` has neither that nor
-  `--use-update-script`. The Beads binary target is a grouped package: its
-  `passthru.updateScript` runs independent Beads and Dolt release updaters in
-  sequence, so either upstream can move while the target still produces one
-  branch, one build of `.#beads`, and one PR. The paired Dolt remains a nested
-  package dependency, not a second registry row or Ninja edge. The `treefmt-nix`
-  input target waits for the other isolated targets, then the final
-  `update-report` target runs `update-report.sh` to print a summary grouped by
-  status. There is no base-checkout format/build finalizer because it cannot
-  observe changes committed only on target branches.
+  in the same commit, and a failure holds the bump back. MCP uses the same hook
+  to run Semble's `regenCommand` and declares
+  `packages/semble/extracted/extracted.json` in the script's `sidecars`, keeping
+  SDK-generated schemas with the SDK update. `update-targets-parity` fails when
+  a target with `passthru.extracted` has neither that nor `--use-update-script`.
+  The Beads binary target is a grouped package: its `passthru.updateScript` runs
+  independent Beads and Dolt release updaters in sequence, so either upstream
+  can move while the target still produces one branch, one build of `.#beads`,
+  and one PR. The paired Dolt remains a nested package dependency, not a second
+  registry row or Ninja edge. The `treefmt-nix` input target waits for the other
+  isolated targets, then the final `update-report` target runs
+  `update-report.sh` to print a summary grouped by status. There is no
+  base-checkout format/build finalizer because it cannot observe changes
+  committed only on target branches.
 
   Semble's grouped script tracks the CLI, model2vec, vicinity and the grammar
   wheels, then regenerates both snapshots. Human-reviewed template hashes stay

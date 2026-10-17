@@ -1,7 +1,7 @@
 {
-  "version": "0.9.0",
+  "version": "0.10.0",
   "src": {
-    "url": "https://files.pythonhosted.org/packages/source/m/model2vec/model2vec-0.9.0.tar.gz",
-    "hash": "sha256-9QIpzqEoydtc+nshc0eClL48hOXT1/uEh+vXryhTg6s="
+    "url": "https://files.pythonhosted.org/packages/source/m/model2vec/model2vec-0.10.0.tar.gz",
+    "hash": "sha256-RxGe8fkXtNp6ABC/EMWHySNjmmr06lHLLUJPwynQnS8="
   }
 }

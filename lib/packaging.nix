@@ -27,6 +27,24 @@ rec {
     rev,
   }: "${upstream}+${builtins.substring 0 7 rev}";
 
+  # Resolve runtime or build requirements against mutable parent release pins.
+  pythonDependencyVersionCmd = {
+    dependency,
+    parents,
+    pkgs,
+  }: let
+    python = pkgs.python3.withPackages (ps: [ps.packaging]);
+    parentArgs = parent: [
+      (
+        if parent ? pyprojectUrl
+        then "--build-system"
+        else "--runtime"
+      )
+      (parent.pyprojectUrl or parent.project)
+      parent.sourcesFile
+    ];
+  in "${python}/bin/python3 -I ${./packaging/dependency-version.py} ${pkgs.lib.escapeShellArgs ([dependency] ++ builtins.concatMap parentArgs parents)}";
+
   # Read version from Cargo.toml [package] section.
   readCargoVersion = path:
     (builtins.fromTOML (builtins.readFile path)).package.version;
@@ -193,6 +211,7 @@ rec {
   # definition order carries no meaning.
   # `sourcesFile` is required and passed through from the owner's repoPath.
   # The helper never assumes a directory layout for mutable source files.
+  # versionCheck can constrain the release to a pinned parent's requirements.
   ghArchiveUpdateScript = {
     extraExtract ? "",
     pkgs,
@@ -200,6 +219,7 @@ rec {
     repo,
     sourcesFile,
     tagPrefix ? "v",
+    versionCheck ? {},
   }:
     mkUpdateScript {
       inherit extraExtract pkgs pname sourcesFile;
@@ -207,7 +227,7 @@ rec {
         src = ver: "https://github.com/${repo}/archive/${tagPrefix}${ver}.tar.gz";
       };
       unpack = true;
-      versionCheck.cmd = ghLatestVersionCmd {inherit pkgs repo tagPrefix;};
+      versionCheck = {cmd = ghLatestVersionCmd {inherit pkgs repo tagPrefix;};} // versionCheck;
     };
 
   # Shell command printing the latest GitHub release version, resolved

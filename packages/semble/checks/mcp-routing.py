@@ -55,8 +55,7 @@ finally:
 
 
 def text_of(result) -> str:
-    blocks = result[0] if isinstance(result, tuple) else result
-    return blocks[0].text
+    return result.content[0].text
 
 
 class StubServer:

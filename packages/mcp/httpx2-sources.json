@@ -1,0 +1,7 @@
+{
+  "version": "2.13.1",
+  "src": {
+    "url": "https://github.com/pydantic/httpx2/archive/v2.13.1.tar.gz",
+    "hash": "sha256-XgjFiSwc4xCyPJcTB/Exh838fUOKsT0JRrha7s70C50="
+  }
+}

@@ -10,6 +10,7 @@
   repoPath,
   versionCheckHook,
 }: let
+  inherit (pkgs.ai.generic) mcp;
   inherit (python3.pkgs) buildPythonPackage;
   customization = import ../../../lib/customization.nix {inherit lib;};
   defaultConfig = pkgs.writeText "semble-config.json" (builtins.toJSON customization.defaultConfig);
@@ -32,8 +33,16 @@
     x86_64-darwin = "macosx_10_13_x86_64";
     x86_64-linux = "manylinux2014_x86_64";
   };
-  dependencyPython = python3.withPackages (ps: [ps.packaging]);
-  dependencyVersionCmd = pname: "${dependencyPython}/bin/python3 -I ${../../../update/dependency-version.py} ${lib.escapeShellArg (repoPath sourcesFiles.semble)} ${lib.escapeShellArg pname}";
+  dependencyVersionCmd = dependency:
+    packageLib.pythonDependencyVersionCmd {
+      inherit dependency pkgs;
+      parents = [
+        {
+          project = "semble";
+          sourcesFile = repoPath sourcesFiles.semble;
+        }
+      ];
+    };
   updateRows = {
     model2vec = {
       platforms.src = sdistUrl "model2vec";
@@ -180,6 +189,7 @@ in
       ../../../patches/extra-grammars.patch
       ../../../patches/models.patch
     ];
+    patchFlags = ["-p1" "--fuzz=0"];
     # Scope strict mode: Python's later wrapping hook reads unset array keys.
     postPatch = ''
       (

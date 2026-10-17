@@ -1,7 +1,7 @@
 {
-  "version": "0.6.2",
+  "version": "0.7.0",
   "src": {
-    "url": "https://github.com/MinishLab/semble/archive/v0.6.2.tar.gz",
-    "hash": "sha256-piUdFOTKGc/Nk8pHIP68VQOhpZMfXDCSV0OIkrD5SjA="
+    "url": "https://github.com/MinishLab/semble/archive/v0.7.0.tar.gz",
+    "hash": "sha256-1nCmCoao1YEy1NAslYQlgoCWgl5YQZX9oOID/Z1WdR8="
   }
 }
