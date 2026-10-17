@@ -23,7 +23,7 @@ in {
       python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
       touch "$out"
     '';
-  imports = [./checks/module-eval.nix];
+  imports = [./checks/module-eval.nix ./checks/reminder-runtime.nix];
   testing.moduleProbes = [
     {
       ai = {
