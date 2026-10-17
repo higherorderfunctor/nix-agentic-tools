@@ -1,12 +1,12 @@
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-10-16 — final file and activation names;
-> `mkSkillFiles` stages skills in `ai.<runtime>._generatedFiles`, and the files
-> engine walks each tree into per-leaf links on both backends; runtime
-> surfaceSupport declarations own normalized backend reach and nested delivery
-> diagnostics; package skills and rules require the backend and follow its
-> reach; Copilot declares a skill gap because the module does not copy skill
-> trees.
+> **Last verified:** 2026-10-16 — every package is opt-in (no factory enable
+> default, no harness quieting); final file and activation names; `mkSkillFiles`
+> stages skills in `ai.<runtime>._generatedFiles`, and the files engine walks
+> each tree into per-leaf links on both backends; runtime surfaceSupport
+> declarations own normalized backend reach and nested delivery diagnostics;
+> package skills and rules require the backend and follow its reach; Copilot
+> declares a skill gap because the module does not copy skill trees.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -116,16 +116,7 @@ not override `runtimes.<runtime>.enable`. Its portable option is
 semantics. A resolved false runtime receives no package skills or router rule,
 while siblings continue to inherit the portable value.
 
-The portable enable defaults to false. `enableDefault = true` makes a package
-default-on; its runtime overrides still default to null and inherit it. Because
-a default-on package contributes with no configuration, the harness's
-config-form evaluators (`evalHm`, `evalDevenv`) turn every program whose
-`enable` defaults to true off below the option default's priority
-(`quietDefaults` in `lib/testing/module-harness.nix`, derived from `options`);
-without that, every check that inspects generated rules, AGENTS.md or warnings
-sees each default-on program's router (22 checks failed evaluation when the
-first one was added). A check of the real default uses `evalHmModules` /
-`evalDevenvModules`, as instructions-drift does.
+The portable enable defaults to false; every package is opt-in.
 
 The factory passes `config`, `lib`, `pkgs` and `runtime` to both `skills` and
 `rules` callbacks. Import it once with the full supported runtime set; render

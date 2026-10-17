@@ -5,10 +5,10 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenvModules evalHmModules harnessNames mkTest;
+  inherit (harness) harnessNames mkTest;
   backends = {
-    devenv = config: evalDevenvModules [{inherit config;}];
-    hm = config: evalHmModules [{inherit config;}];
+    devenv = harness.evalDevenv;
+    hm = harness.evalHm;
   };
   # The retained delivery policy is this test's expectation oracle for which
   # runtimes get a skill or a router; production uses the runtime support
