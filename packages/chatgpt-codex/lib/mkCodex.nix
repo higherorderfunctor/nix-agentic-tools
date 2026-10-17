@@ -1400,10 +1400,13 @@ in
           # Default priority (unset) stays silent; an explicit `true` with no
           # package to pin warns once.
           warnings = lib.optionals (options ? warnings) (lib.optionals isHm (
-            lib.optional
-            (cfg.package == null && cfg.pinDaemonToPackage && options.ai.codex.pinDaemonToPackage.highestPrio < 1500)
-            "ai.codex.package is null, so ai.codex.pinDaemonToPackage is inert: there is no package to pin the daemon to."
-          ));
+              lib.optional
+              (cfg.package == null && cfg.pinDaemonToPackage && options.ai.codex.pinDaemonToPackage.highestPrio < 1500)
+              "ai.codex.package is null, so ai.codex.pinDaemonToPackage is inert: there is no package to pin the daemon to."
+            )
+            # devenv carries the provider only as launcher flags.
+            ++ lib.optional (!isHm && resolvedProxy != null && cfg.package == null)
+            "ai.codex.proxy is selected but ai.codex.package is null; devenv passes the proxy provider only through the managed launcher, so an unmanaged Codex ignores it.");
           assertions =
             mkAgentAssertions {inherit nativeAgents rawAgents;}
             ++ mkExecpolicyAssertions cfg.execpolicyRules

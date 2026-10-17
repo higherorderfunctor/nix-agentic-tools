@@ -64,9 +64,18 @@ in {
             };
           };
           none = devenvWith {};
+          unmanaged = devenvWith {
+            codex.package = null;
+            proxy = {
+              url = devenvOrigin;
+              key = keys.file;
+            };
+          };
         in
           failedMessages url
           == []
+          && builtins.any (lib.hasPrefix "ai.codex.proxy is selected but ai.codex.package is null") unmanaged.config.warnings
+          && !(builtins.any (lib.hasPrefix "ai.codex.proxy is selected") url.config.warnings)
           && !(url.config.ai.codex.files ? ".codex/config.toml")
           && !(none.config.ai.codex.files ? ".codex/config.toml")
           && !(builtins.any (unsupportedWarning "devenv") url.config.warnings)

@@ -60,9 +60,8 @@ ChatGPT login's token to the proxy. Every key becomes command-backed `auth`
 through a strict helper that calls `redact.assign` and prints the resolved key
 with a constant `printf` format. File, command and concat references share the
 reader's failure checks; no resolved key is interpolated into shell or TOML.
-Codex re-runs auth every five minutes and after a 401. Never `env_key`: tool
-subprocesses inherit it, and Home Manager's launcher environment does not reach
-devenv's.
+Never `env_key`: tool subprocesses inherit it, and Home Manager's launcher
+environment does not reach devenv's.
 
 - **Home Manager** writes `model_provider = "ai-proxy"` and
   `[model_providers.ai-proxy]` into user config.toml. A devenv shell inherits
@@ -71,17 +70,19 @@ devenv's.
   `model_providers` from project layers. Its launcher passes
   `-c model_providers.ai-proxy-devenv={…}` and
   `-c model_provider=ai-proxy-devenv`, the highest layer, baked in as
-  `--add-flag`s.
+  `--add-flag`s. With `ai.codex.package = null` nothing carries them, so devenv
+  warns.
 - **A separate id on devenv is load-bearing.** Codex deep-merges layers per key,
   so session flags reusing `ai-proxy` could inherit incompatible user auth
   fields, such as `experimental_bearer_token`, beside the proxy's `auth`.
-- No `[profiles.*]` or `profile`: the pinned Codex rejects both.
 
 `chatgpt-codex-proxy` runs the pinned binary against loopback mock proxies in
 the build sandbox. It covers all three reference forms on both backends, Home
 Manager plus devenv precedence, and a legacy user bearer token beside a devenv
-provider. It also executes the helpers directly with quotes, multiline values
-and shell metacharacters, and checks failure output for leaks.
+provider, with inherited `OPENAI_API_KEY`, `CODEX_API_KEY` and `auth.json`
+credentials that must appear in no request header. It also executes the helpers
+directly with quotes, multiline values and shell metacharacters, and checks
+failure output for leaks.
 
 ### Kimchi, Kiro, Copilot
 

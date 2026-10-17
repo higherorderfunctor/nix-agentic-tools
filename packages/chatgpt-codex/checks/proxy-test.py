@@ -34,6 +34,7 @@ class Proxy(BaseHTTPRequestHandler):
             requests.append(
                 {
                     "auth": self.headers.get("authorization"),
+                    "headers": dict(self.headers),
                     "method": self.command,
                     "path": self.path.split("?")[0],
                     "port": self.server.server_address[1],
@@ -91,6 +92,8 @@ def run(binary, config, key):
     if config is not None:
         text = Path(config).read_text()
         (codex_home / "config.toml").write_text(text)
+    # Inherited OpenAI credentials must never reach the proxy.
+    (codex_home / "auth.json").write_text(json.dumps({"OPENAI_API_KEY": "inherited-auth-json"}))
     with lock:
         requests.clear()
     environment = {
@@ -98,7 +101,9 @@ def run(binary, config, key):
         "CODEX_PROXY_TEST_STATUS": "0",
         "CODEX_PROXY_TEST_VALUE": key + "\n\n",
         "DEVENV_ROOT": str(project),
+        "CODEX_API_KEY": "inherited-codex-key",
         "HOME": str(home),
+        "OPENAI_API_KEY": "inherited-openai-key",
         "PATH": os.environ["PATH"],
         "TERM": "dumb",
     }
@@ -123,6 +128,9 @@ def expect(name, result, seen, port, key):
     wrong = [r for r in seen if r["port"] != port or r["auth"] != f"Bearer {key}"]
     if wrong:
         sys.exit(f"FAIL {name}: expected port {port} with Bearer {key}, got {wrong}")
+    leaked = [n for r in seen for n, v in r["headers"].items() if "inherited" in v]
+    if leaked:
+        sys.exit(f"FAIL {name}: inherited credential in headers {leaked}")
     print(f"ok: {name}: {len(seen)} requests, all to :{port} with the selected key")
 
 
