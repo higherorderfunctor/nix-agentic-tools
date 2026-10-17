@@ -1,10 +1,31 @@
 Patch for Mic92/hestia v3.1.0 (dfed9ced335d28978ba74e513939a10db1f71025).
 
-The default family remains m3; other refs explicitly use m3pr with m3 as
-read-only base. Reservations and visibility barriers use only the own index.
-Drains verify reusable packs before path and chunk deduplication, and discard
-missing locations again at commit.
+The default family remains m3; other refs use m3pr with m3 as read-only
+base. Live main locations win; a live own location survives a stale base.
+Pack checks are limited to family conflicts and dedup candidates, memoized
+per drain; absence is rechecked before known-missing locations are pruned.
 
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1005,6 +1005,7 @@
+  "bytes",
+  "clap",
+  "futures-util",
++ "harmonia-store-db",
+  "harmonia-store-nar-info",
+  "harmonia-store-path",
+  "harmonia-store-path-info",
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -74,6 +74,8 @@
+ harmonia-utils-signature = { git = "https://github.com/nix-community/harmonia", rev = "bba51756f92a488d440e4c426747fb681abce4a7" }
+
+ [dev-dependencies]
++# Build hermetic store database fixtures without nix-store or a daemon.
++harmonia-store-db = { git = "https://github.com/nix-community/harmonia", rev = "bba51756f92a488d440e4c426747fb681abce4a7" }
+ # Integration tests spawn the hestia binary and nix tooling
+ tokio = { version = "1", features = ["process"] }
+ # Property-based tests for manifest merge laws
 --- a/src/cli.rs
 +++ b/src/cli.rs
 @@ -34,6 +34,14 @@
@@ -55,10 +76,99 @@ missing locations again at commit.
      fn upstream_key_names_require_the_filter_flag() {
          // Without `requires`, an explicit key name would parse fine and be
          // silently discarded by serve::run's empty-filter branch.
+--- a/src/gha/mod.rs
++++ b/src/gha/mod.rs
+@@ -11,6 +11,7 @@
+ //!   `GITHUB_TOKEN`. Used by `hestia gc`.
+
+ pub mod blob;
++pub(crate) mod packs;
+ pub mod rest;
+ pub mod savemutable;
+ pub mod twirp;
+--- /dev/null
++++ b/src/gha/packs.rs
+@@ -0,0 +1,73 @@
++//! Availability evidence shared by family resolution and one drain's dedup.
++
++use std::collections::{BTreeMap, BTreeSet};
++use std::time::Duration;
++
++use super::twirp::{DownloadUrl, TwirpClient};
++use super::{Error, blob};
++use crate::manifest::PackHash;
++
++pub(crate) struct PackAvailability<'a> {
++    twirp: &'a TwirpClient,
++    http: &'a reqwest::Client,
++    checked: tokio::sync::Mutex<BTreeMap<PackHash, bool>>,
++}
++
++impl<'a> PackAvailability<'a> {
++    pub(crate) fn new(twirp: &'a TwirpClient, http: &'a reqwest::Client) -> Self {
++        Self {
++            twirp,
++            http,
++            checked: Default::default(),
++        }
++    }
++
++    pub(crate) async fn contains(&self, pack: PackHash) -> Result<bool, Error> {
++        let mut checked = self.checked.lock().await;
++        if let Some(available) = checked.get(&pack) {
++            return Ok(*available);
++        }
++        let key = crate::chunker::pack_cache_key(&pack);
++        // Exact-key lookups can lag finalization. Require two absence results,
++        // separated by a short propagation window; errors never become misses.
++        for attempt in 0..2 {
++            let available = match self.twirp.get_download_url(&key, &[]).await? {
++                DownloadUrl::Miss => false,
++                DownloadUrl::Hit { url, .. } => {
++                    match blob::get_with_refresh(self.http, &url, Some(0..1), || async {
++                        match self.twirp.get_download_url(&key, &[]).await? {
++                            DownloadUrl::Hit { url, .. } => Ok(url),
++                            DownloadUrl::Miss => Err(Error::InvalidResponse(format!(
++                                "pack {key} vanished during URL refresh"
++                            ))),
++                        }
++                    })
++                    .await
++                    {
++                        Ok(_) => true,
++                        Err(Error::Status { status: 404, .. }) => false,
++                        Err(err) => return Err(err),
++                    }
++                }
++            };
++            if available {
++                checked.insert(pack, true);
++                return Ok(true);
++            }
++            if attempt == 0 {
++                tokio::time::sleep(Duration::from_millis(100)).await;
++            }
++        }
++        checked.insert(pack, false);
++        Ok(false)
++    }
++
++    pub(crate) async fn missing(&self) -> BTreeSet<PackHash> {
++        self.checked
++            .lock()
++            .await
++            .iter()
++            .filter_map(|(pack, available)| (!available).then_some(*pack))
++            .collect()
++    }
++}
 --- a/src/gha/savemutable.rs
 +++ b/src/gha/savemutable.rs
-@@ -34,6 +34,8 @@
+@@ -32,8 +32,11 @@
 
+ use bytes::Bytes;
+
++use crate::gha::packs::PackAvailability;
  use crate::gha::twirp::{DownloadUrl, Reservation, TwirpClient};
  use crate::gha::{Error, blob};
 +use crate::manifest::Manifest;
@@ -66,7 +176,7 @@ missing locations again at commit.
 
  /// Cache key for version `index` of family `prefix`, e.g. `m#5`.
  fn key_for(prefix: &str, index: u64) -> String {
-@@ -74,6 +76,7 @@
+@@ -74,6 +77,7 @@
      twirp: &'a TwirpClient,
      http: &'a reqwest::Client,
      prefix: String,
@@ -74,7 +184,7 @@ missing locations again at commit.
      /// Delay between conflict retries.
      retry_delay: Duration,
      /// Give up after this many conflicting save attempts.
-@@ -93,6 +96,7 @@
+@@ -93,6 +97,7 @@
              twirp,
              http,
              prefix: prefix.into(),
@@ -82,7 +192,7 @@ missing locations again at commit.
              retry_delay: Duration::from_secs(3),
              max_attempts: 60,
              // 20 conflicts x 3s = 60s before an index is judged abandoned:
-@@ -115,9 +119,23 @@
+@@ -115,9 +120,39 @@
          self
      }
 
@@ -95,9 +205,25 @@ missing locations again at commit.
      /// Load the newest entry of this family, or `None` if there is none yet.
      pub async fn load(&self) -> Result<Option<MutableEntry>, Error> {
 -        let prefix = search_prefix(&self.prefix);
++        self.load_with_availability(&PackAvailability::new(self.twirp, self.http))
++            .await
++    }
++
++    pub(crate) async fn load_with_availability(
++        &self,
++        availability: &PackAvailability<'_>,
++    ) -> Result<Option<MutableEntry>, Error> {
 +        let own = self.load_family(&self.prefix).await?;
 +        match &self.base_prefix {
-+            Some(prefix) => merge_fork_entries(own, self.load_family(prefix).await?, &self.prefix),
++            Some(prefix) => {
++                merge_fork_entries(
++                    own,
++                    self.load_family(prefix).await?,
++                    &self.prefix,
++                    availability,
++                )
++                .await
++            }
 +            None => Ok(own),
 +        }
 +    }
@@ -107,7 +233,7 @@ missing locations again at commit.
          let lookup = self
              .twirp
              .get_download_url(&prefix, &[prefix.as_str()])
-@@ -126,7 +144,7 @@
+@@ -126,7 +161,7 @@
              DownloadUrl::Miss => return Ok(None),
              DownloadUrl::Hit { url, matched_key } => (url, matched_key),
          };
@@ -116,7 +242,7 @@ missing locations again at commit.
 
          // The signed URL was just issued, but refresh anyway if it raced
          // with an expiry. The refresh re-runs the prefix lookup, which may
-@@ -151,7 +169,7 @@
+@@ -151,7 +186,7 @@
 
          let (key, index) = match refreshed_key.lock().expect("not poisoned").take() {
              Some(key) => {
@@ -125,7 +251,33 @@ missing locations again at commit.
                  (key, index)
              }
              None => (matched_key, index),
-@@ -198,14 +216,27 @@
+@@ -180,7 +215,24 @@
+     /// — which may still return an older version — does not make the
+     /// writer reserve an index that is already taken and spin in the
+     /// conflict loop until the lookup catches up.
+-    pub async fn save_with_floor<F>(&self, floor: u64, mut merge: F) -> Result<u64, Error>
++    pub async fn save_with_floor<F>(&self, floor: u64, merge: F) -> Result<u64, Error>
++    where
++        F: FnMut(Option<&MutableEntry>) -> Result<Vec<u8>, Error>,
++    {
++        self.save_with_floor_and_availability(
++            floor,
++            merge,
++            &PackAvailability::new(self.twirp, self.http),
++        )
++        .await
++    }
++
++    pub(crate) async fn save_with_floor_and_availability<F>(
++        &self,
++        floor: u64,
++        mut merge: F,
++        availability: &PackAvailability<'_>,
++    ) -> Result<u64, Error>
+     where
+         F: FnMut(Option<&MutableEntry>) -> Result<Vec<u8>, Error>,
+     {
+@@ -198,14 +250,35 @@
          // that version's changes from every later one (docs/savemutable.als,
          // NoLostUpdate).
          let mut newest: Option<MutableEntry> = None;
@@ -148,23 +300,33 @@ missing locations again at commit.
 +                }
 +            }
 +            let base_entry = match &self.base_prefix {
-+                Some(_) => merge_fork_entries(newest.clone(), newest_base.clone(), &self.prefix)?,
++                Some(_) => {
++                    merge_fork_entries(
++                        newest.clone(),
++                        newest_base.clone(),
++                        &self.prefix,
++                        availability,
++                    )
++                    .await?
++                }
 +                None => newest.clone(),
 +            };
 +            let data = Bytes::from(merge(base_entry.as_ref())?);
 
              let base = newest.as_ref().map(|entry| entry.index).unwrap_or(0);
              let index = base.max(skip_through) + 1;
-@@ -241,6 +272,58 @@
+@@ -241,6 +314,69 @@
      }
  }
 
-+/// Base entries replace stale own entries; roots keep the upstream merge rule.
++/// Main wins shared entries unless its conflicting location is absent and own is live.
++/// Roots keep the upstream merge rule.
 +/// The returned index belongs only to the own family, including zero on a fresh PR.
-+fn merge_fork_entries(
++async fn merge_fork_entries(
 +    own: Option<MutableEntry>,
 +    default: Option<MutableEntry>,
 +    own_prefix: &str,
++    availability: &PackAvailability<'_>,
 +) -> Result<Option<MutableEntry>, Error> {
 +    if own.is_none() && default.is_none() {
 +        return Ok(None);
@@ -180,10 +342,19 @@ missing locations again at commit.
 +        .unwrap_or_default();
 +    let Manifest {
 +        paths,
-+        chunks,
++        mut chunks,
 +        packs,
 +        roots,
 +    } = default_manifest;
++    for (hash, location) in &mut chunks {
++        if let Some(own) = own_manifest.chunks.get(hash)
++            && own != location
++            && !availability.contains(location.pack).await?
++            && availability.contains(own.pack).await?
++        {
++            *location = own.clone();
++        }
++    }
 +    let mut manifest = own_manifest;
 +    manifest.paths.extend(paths);
 +    manifest.chunks.extend(chunks);
@@ -216,8 +387,11 @@ missing locations again at commit.
      use super::*;
 --- a/src/pipeline.rs
 +++ b/src/pipeline.rs
-@@ -26,11 +26,11 @@
+@@ -24,13 +24,14 @@
+ use crate::chunker::{self, PackBuilder, chunk_path, compress_chunks, nar_hash_from_chunks};
+ use crate::gha::Error as GhaError;
  use crate::gha::blob;
++use crate::gha::packs::PackAvailability;
  use crate::gha::savemutable::SaveMutable;
  use crate::gha::twirp::{DownloadUrl, Reservation, TwirpClient};
 -use crate::manifest::{Manifest, PackInfo, PathEntry, PathHash, Root};
@@ -226,16 +400,16 @@ missing locations again at commit.
  use crate::protocol::DrainStats;
  use crate::refnorm::RefTable;
 -use crate::substituter::ManifestStore;
-+use crate::substituter::{ManifestStore, entry_chunks};
++use crate::substituter::{ManifestStore, entry_chunks, merge_resolved_locations};
  use crate::upstream::UpstreamFilter;
  use futures_util::{StreamExt as _, TryStreamExt as _};
 
-@@ -205,6 +205,20 @@
+@@ -205,6 +206,20 @@
      }
  }
 
-+/// Remove unavailable locations before both path and chunk dedup, and again
-+/// from commit-time snapshots so stale repack counters cannot win the merge.
++/// Prune locations rejected by dedup from working and commit snapshots so
++/// stale repack counters cannot win over this drain's fresh uploads.
 +fn discard_missing_packs(manifest: &mut Manifest, missing: &BTreeSet<PackHash>) {
 +    manifest.packs.retain(|pack, _| !missing.contains(pack));
 +    manifest
@@ -251,7 +425,7 @@ missing locations again at commit.
  /// Everything the pipeline needs to talk to the world.
  pub struct PipelineContext {
      pub twirp: TwirpClient,
-@@ -222,9 +236,10 @@
+@@ -222,9 +237,10 @@
      pub root_key: String,
      /// Workflow run id (`$GITHUB_RUN_ID`); see [`Root::merge`].
      pub run_id: Option<String>,
@@ -264,7 +438,7 @@ missing locations again at commit.
      /// Compressed bytes per pack ([`PACK_TARGET_SIZE`] in production; tests
      /// use small values to exercise pack splitting).
      pub pack_target_size: u64,
-@@ -270,6 +285,7 @@
+@@ -270,6 +286,7 @@
  impl PipelineContext {
      fn save_mutable(&self) -> SaveMutable<'_> {
          SaveMutable::new(&self.twirp, &self.http, &self.manifest_prefix)
@@ -272,66 +446,153 @@ missing locations again at commit.
      }
 
      /// Load the current manifest, or an empty one if none exists yet or
-@@ -323,7 +339,41 @@
+@@ -312,7 +329,12 @@
+         }
+
+         let load_started = std::time::Instant::now();
+-        let (loaded_version, loaded) = self.load_manifest_versioned().await?;
++        let save = self.save_mutable();
++        let availability = PackAvailability::new(&self.twirp, &self.http);
++        let (loaded_version, loaded) = match save.load_with_availability(&availability).await? {
++            Some(entry) => (entry.index, decode_manifest_or_empty(&entry.data)),
++            None => (0, Manifest::new()),
++        };
+
+         // Read-your-writes: cache lookups may lag behind this daemon's own
+         // commits, so fold in the manifest we are currently serving (it is
+@@ -323,7 +345,17 @@
          };
          // `current` is the basis for every dedup decision below; the commit
          // at the end must include all of it (see the merge closure).
 -        let current = loaded.merge(known);
-+        let mut current = loaded.merge(known);
-+        // Check storage directly: serve marks the manifest ready before its
-+        // background verification finishes. A per-drain lookup also catches
-+        // eviction since an earlier verification. Check every reusable chunk
-+        // location, including chunks a newly built path might deduplicate.
-+        let packs: BTreeSet<PackHash> = current.chunks.values().map(|loc| loc.pack).collect();
-+        let missing: BTreeSet<PackHash> = futures_util::stream::iter(packs)
-+            .map(|pack| async move {
-+                let key = chunker::pack_cache_key(&pack);
-+                let available = match self.twirp.get_download_url(&key, &[]).await? {
-+                    DownloadUrl::Miss => false,
-+                    DownloadUrl::Hit { url, .. } => {
-+                        match blob::get_with_refresh(&self.http, &url, Some(0..1), || async {
-+                            match self.twirp.get_download_url(&key, &[]).await? {
-+                                DownloadUrl::Hit { url, .. } => Ok(url),
-+                                DownloadUrl::Miss => Err(GhaError::InvalidResponse(format!(
-+                                    "pack {key} vanished during URL refresh"
-+                                ))),
-+                            }
-+                        })
-+                        .await
-+                        {
-+                            Ok(_) => true,
-+                            Err(GhaError::Status { status: 404, .. }) => false,
-+                            Err(err) => return Err(err),
-+                        }
-+                    }
-+                };
-+                Ok::<_, GhaError>((!available).then_some(pack))
-+            })
-+            .buffer_unordered(UPLOAD_CONCURRENCY)
-+            .try_filter_map(|pack| async move { Ok(pack) })
-+            .try_collect()
-+            .await?;
-+        discard_missing_packs(&mut current, &missing);
++        let mut current = if self.base_manifest_prefix.is_some() {
++            // Keep the family loader's resolved locations; an older published
++            // repack counter must not undo its availability decision.
++            if loaded_version >= known_version {
++                merge_resolved_locations(known, loaded)
++            } else {
++                merge_resolved_locations(loaded, known)
++            }
++        } else {
++            loaded.merge(known)
++        };
          // Reservation floor: never reserve at or below a version we have
          // already seen, even when commit-time lookups regress below it
          // (non-monotonic eventually consistent reads).
-@@ -703,7 +753,7 @@
-             .save_with_floor(floor, |existing| {
-                 // A corrupt base manifest is replaced, not merged with: the
-                 // commit must not fail because of it (never crash CI).
+@@ -388,7 +420,20 @@
+
+             let hash = info.path_hash();
+
+-            if let Some(existing) = current.paths.get(&hash) {
++            let existing = current.paths.get(&hash);
++            let mut available = existing.is_some();
++            if let Some(entry) = existing {
++                for chunk in entry_chunks(entry) {
++                    match current.chunks.get(&chunk) {
++                        Some(location) if availability.contains(location.pack).await? => {}
++                        _ => {
++                            available = false;
++                            break;
++                        }
++                    }
++                }
++            }
++            if let Some(existing) = existing.filter(|_| available) {
+                 // Already stored: bump the push clock so push-TTL-based
+                 // liveness keeps protecting it.
+                 root_paths.insert(hash);
+@@ -510,13 +555,18 @@
+                 } = *ready;
+                 chunk_time += elapsed;
+
+-                let new_chunks: Vec<chunker::Chunk> = chunked
+-                    .chunks
+-                    .into_iter()
+-                    .filter(|chunk| {
+-                        !current.chunks.contains_key(&chunk.hash) && batch_chunks.insert(chunk.hash)
+-                    })
+-                    .collect();
++                let mut new_chunks = Vec::new();
++                for chunk in chunked.chunks {
++                    if !batch_chunks.insert(chunk.hash) {
++                        continue;
++                    }
++                    if let Some(location) = current.chunks.get(&chunk.hash)
++                        && availability.contains(location.pack).await?
++                    {
++                        continue;
++                    }
++                    new_chunks.push(chunk);
++                }
+
+                 prepared.push(PreparedPath {
+                     hash: info.path_hash(),
+@@ -622,6 +672,8 @@
+         // upload is the wall time of the whole pipelined section.
+         stats.upload_ms = upload_started.elapsed().as_millis() as u64;
+
++        let missing = availability.missing().await;
++        discard_missing_packs(&mut current, &missing);
+         let mut delta = Manifest::new();
+         let mut packs: Vec<(u64, chunker::Pack)> = Vec::new();
+         for (uploaded, size, pack) in uploads {
+@@ -698,29 +750,33 @@
+         // version can be published without re-loading it from the cache.
+         let commit_started = std::time::Instant::now();
+         let mut committed: Option<Manifest> = None;
+-        let version = self
+-            .save_mutable()
+-            .save_with_floor(floor, |existing| {
+-                // A corrupt base manifest is replaced, not merged with: the
+-                // commit must not fail because of it (never crash CI).
 -                let base = match existing {
-+                let mut base = match existing {
-                     Some(entry) => decode_manifest_or_empty(&entry.data),
-                     None => Manifest::new(),
-                 };
-@@ -714,6 +764,7 @@
-                 // referencing chunks whose locations are missing (dangling,
-                 // unservable, and never healed because later drains see the
-                 // path as already stored).
-+                discard_missing_packs(&mut base, &missing);
-                 let merged = base.merge(current.clone()).merge(delta.clone());
-                 let encoded = merged
-                     .encode()
+-                    Some(entry) => decode_manifest_or_empty(&entry.data),
+-                    None => Manifest::new(),
+-                };
+-                // `current` covers the gap when `existing` is a stale read:
+-                // the commit must contain everything the dedup decisions
+-                // above were based on. Merging anything less can drop a
+-                // concurrent writer's paths and leave this delta's entries
+-                // referencing chunks whose locations are missing (dangling,
+-                // unservable, and never healed because later drains see the
+-                // path as already stored).
+-                let merged = base.merge(current.clone()).merge(delta.clone());
+-                let encoded = merged
+-                    .encode()
+-                    .map_err(|err| GhaError::InvalidResponse(err.to_string()))?;
+-                committed = Some(merged);
+-                Ok(encoded)
+-            })
++        let version = save
++            .save_with_floor_and_availability(
++                floor,
++                |existing| {
++                    // A corrupt base manifest is replaced, not merged with: the
++                    // commit must not fail because of it (never crash CI).
++                    let mut base = match existing {
++                        Some(entry) => decode_manifest_or_empty(&entry.data),
++                        None => Manifest::new(),
++                    };
++                    // `current` covers the gap when `existing` is a stale read:
++                    // the commit must contain everything the dedup decisions
++                    // above were based on. Merging anything less can drop a
++                    // concurrent writer's paths and leave this delta's entries
++                    // referencing chunks whose locations are missing (dangling,
++                    // unservable, and never healed because later drains see the
++                    // path as already stored).
++                    discard_missing_packs(&mut base, &missing);
++                    let merged = base.merge(current.clone()).merge(delta.clone());
++                    let encoded = merged
++                        .encode()
++                        .map_err(|err| GhaError::InvalidResponse(err.to_string()))?;
++                    committed = Some(merged);
++                    Ok(encoded)
++                },
++                &availability,
++            )
+             .await?;
+         stats.commit_ms = commit_started.elapsed().as_millis() as u64;
+         stats.manifest_version = version;
 --- a/src/serve.rs
 +++ b/src/serve.rs
 @@ -49,7 +49,7 @@
@@ -425,7 +686,22 @@ missing locations again at commit.
              let _ = manifest_ready_tx.send(true);
 --- a/src/substituter.rs
 +++ b/src/substituter.rs
-@@ -219,6 +219,20 @@
+@@ -189,6 +189,14 @@
+     inner: Arc<RwLock<Arc<ManifestView>>>,
+ }
+
++/// Preserve the family loader's storage-checked choices over repack counters.
++pub(crate) fn merge_resolved_locations(other: Manifest, resolved: Manifest) -> Manifest {
++    let locations = resolved.chunks.clone();
++    let mut merged = other.merge(resolved);
++    merged.chunks.extend(locations);
++    merged
++}
++
+ impl ManifestStore {
+     pub fn new() -> Self {
+         Self::default()
+@@ -219,6 +227,20 @@
          }
      }
 
@@ -435,7 +711,7 @@ missing locations again at commit.
 +        let mut inner = self.inner.write().expect("manifest lock poisoned");
 +        if version >= inner.version {
 +            let manifest = if version == inner.version {
-+                inner.manifest.clone().merge(manifest)
++                merge_resolved_locations(inner.manifest.clone(), manifest)
 +            } else {
 +                manifest
 +            };
@@ -446,7 +722,7 @@ missing locations again at commit.
      /// The served manifest and its version (clone; manifests are small).
      pub fn versioned(&self) -> (u64, Manifest) {
          let view = self.view();
-@@ -925,7 +939,7 @@
+@@ -925,7 +947,7 @@
  }
 
  /// All chunks referenced by an entry's file tree (deduplicated).
@@ -455,7 +731,7 @@ missing locations again at commit.
      flatten_tree(&entry.tree)
          .into_iter()
          .filter_map(|(_, node)| match node {
-@@ -1204,6 +1218,36 @@
+@@ -1204,6 +1226,36 @@
 
  #[cfg(test)]
  mod tests {
@@ -494,7 +770,7 @@ missing locations again at commit.
 
 --- /dev/null
 +++ b/tests/pr_manifest_scope.rs
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,553 @@
 +//! Manifest families are selected by key, independent of GitHub ref precedence.
 +mod support;
 +
@@ -610,6 +886,15 @@ missing locations again at commit.
 +    // The PR imported P/5 before main removed the missing pack and uploaded Q/0.
 +    seed(&fake, "m3pr#1", &manifest("P", 5)).await;
 +    seed(&fake, "m3#2", &manifest("Q", 0)).await;
++    for name in ["P", "Q"] {
++        support::common::store_entry(
++            &twirp,
++            &http,
++            &hestia::chunker::pack_cache_key(&PackHash::digest(name)),
++            name.as_bytes(),
++        )
++        .await;
++    }
 +    let current = Manifest::decode(&save.load().await.unwrap().unwrap().data).unwrap();
 +    let shared = ChunkHash::digest(b"shared");
 +    assert_eq!(current.chunks[&shared].pack, PackHash::digest("Q"));
@@ -651,24 +936,179 @@ missing locations again at commit.
 +    assert!(!loaded.roots.contains_key("own"));
 +}
 +
-+/// Exercise the shared drain used by matrix registration and post-build jobs,
-+/// both without a published view and with an unverified daemon view.
-+#[tokio::test]
-+async fn evicted_own_pack_is_repushed_and_closure_imports() {
++/// A real StoreDatabase backed by a temp SQLite file, not nix-store. The
++/// pipeline still chunks files and verifies their recorded NAR hashes.
++struct Fixture {
++    _dir: tempfile::TempDir,
++    database: hestia::pathinfo::StoreDatabase,
++    top: std::path::PathBuf,
++    dep: std::path::PathBuf,
++}
++
++impl Fixture {
++    async fn new() -> Self {
++        use harmonia_store_db::{OpenMode, StoreDb};
++        use harmonia_store_path_info::{NarHash, UnkeyedValidPathInfo};
++        use hestia::pathinfo::{StoreDatabase, StoreDir};
++
++        let dir = tempfile::tempdir().unwrap();
++        let store_dir = StoreDir::new(dir.path().join("store")).unwrap();
++        std::fs::create_dir(store_dir.to_str()).unwrap();
++        let db_path = dir.path().join("db.sqlite");
++        let mut db = StoreDb::open(&db_path, OpenMode::Create).unwrap();
++        db.create_schema().unwrap();
++        let dep = dir
++            .path()
++            .join("store/00000000000000000000000000000001-dep");
++        let top = dir
++            .path()
++            .join("store/00000000000000000000000000000002-top");
++        std::fs::write(&dep, b"dependency bytes").unwrap();
++        std::fs::write(&top, format!("top refers to {}", dep.display())).unwrap();
++        for (path, references) in [(&dep, vec![]), (&top, vec![&dep])] {
++            let (hash, nar_size) = hestia::chunker::nar_hash_and_size(path).await.unwrap();
++            db.register_valid_path(
++                &store_dir,
++                &store_dir.parse(path.to_str().unwrap()).unwrap(),
++                &UnkeyedValidPathInfo {
++                    ca: None,
++                    deriver: None,
++                    nar_hash: NarHash::from_slice(&hash.0).unwrap(),
++                    nar_size,
++                    references: references
++                        .iter()
++                        .map(|path| store_dir.parse(path.to_str().unwrap()).unwrap())
++                        .collect(),
++                    registration_time: None,
++                    signatures: Default::default(),
++                    store_dir: store_dir.clone(),
++                    ultimate: false,
++                },
++            )
++            .unwrap();
++        }
++        Self {
++            _dir: dir,
++            database: StoreDatabase::with_store_dir(db_path, store_dir),
++            top,
++            dep,
++        }
++    }
++}
++
++/// Read the real HTTP body to completion, then validate each Nix export frame
++/// against the local file's NAR and metadata, including the final terminator.
++/// Every assertion runs without nix-store, including in the Nix build sandbox.
++async fn assert_closure(
++    fake: &FakeGha,
++    http: &reqwest::Client,
++    fixture: &Fixture,
++    view: hestia::substituter::ManifestStore,
++) {
 +    use hestia::pipeline::AccessLog;
-+    use hestia::substituter::{ManifestStore, Substituter};
++    use hestia::refnorm::RefTable;
++    use hestia::substituter::Substituter;
++    use support::common::path_hash_of;
++
++    let router = Substituter::new(
++        fixture.database.store_dir().clone(),
++        view,
++        AccessLog::new(),
++        fake.twirp(http),
++        http.clone(),
++    )
++    .into_router();
++    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++    let addr = listener.local_addr().unwrap();
++    let task = tokio::spawn(async move {
++        axum::serve(listener, router).await.unwrap();
++    });
++    let response = http
++        .get(format!(
++            "http://{addr}/closure/{}",
++            path_hash_of(&fixture.top)
++        ))
++        .send()
++        .await
++        .unwrap();
++    assert_eq!(response.status(), 200);
++    let body = response
++        .bytes()
++        .await
++        .expect("healed closure export completes");
++    task.abort();
++    let mut input = body.as_ref();
++    fn u64_from(input: &mut &[u8]) -> u64 {
++        let (value, rest) = input.split_at_checked(8).expect("complete export integer");
++        *input = rest;
++        u64::from_le_bytes(value.try_into().unwrap())
++    }
++    fn string_from(input: &mut &[u8]) -> String {
++        let len = u64_from(input) as usize;
++        let (value, rest) = input
++            .split_at_checked(len.next_multiple_of(8))
++            .expect("complete export string");
++        *input = rest;
++        String::from_utf8(value[..len].to_vec()).unwrap()
++    }
++    for (path, references) in [(&fixture.dep, vec![]), (&fixture.top, vec![&fixture.dep])] {
++        assert_eq!(u64_from(&mut input), 1, "path frame marker");
++        let refs: Vec<_> = references
++            .iter()
++            .map(|path| {
++                fixture
++                    .database
++                    .store_dir()
++                    .parse(path.to_str().unwrap())
++                    .unwrap()
++            })
++            .collect();
++        let refs = RefTable::new(&refs);
++        let chunked = hestia::chunker::chunk_path(path, &refs).await.unwrap();
++        let nar = hestia::chunker::nar_from_chunks(&chunked.tree, &chunked.chunk_map(), &refs)
++            .await
++            .unwrap();
++        let (actual_nar, rest) = input.split_at_checked(nar.len()).expect("complete NAR");
++        assert_eq!(actual_nar, nar);
++        input = rest;
++        assert_eq!(u64_from(&mut input), 0x4558494e, "export magic");
++        assert_eq!(string_from(&mut input), path.to_str().unwrap());
++        assert_eq!(u64_from(&mut input), references.len() as u64);
++        for reference in references {
++            assert_eq!(string_from(&mut input), reference.to_str().unwrap());
++        }
++        assert_eq!(string_from(&mut input), "", "no deriver");
++        assert_eq!(u64_from(&mut input), 0, "no legacy signature");
++    }
++    assert_eq!(u64_from(&mut input), 0, "end-of-stream terminator");
++    assert!(input.is_empty(), "no trailing bytes after terminator");
++}
++
++#[tokio::test]
++async fn evicted_own_pack_is_repushed_and_closure_completes() {
++    repair_and_export(false, false).await;
++}
++
++#[tokio::test]
++async fn stale_base_cannot_undo_repair_on_reload_or_publication() {
++    repair_and_export(true, false).await;
++}
++
++#[tokio::test]
++async fn lagging_live_pack_is_not_repushed() {
++    repair_and_export(false, true).await;
++}
++
++async fn repair_and_export(stale_base: bool, lagging: bool) {
++    use hestia::substituter::ManifestStore;
 +    use std::collections::BTreeSet;
-+    use std::process::Stdio;
-+    use support::common::{path_hash_of, pipeline_context, to_path_set};
-+    use support::store::ScratchStore;
-+    use tokio::io::AsyncWriteExt as _;
++    use support::common::{pipeline_context, to_path_set};
 +
 +    for published in [false, true] {
-+        let store = ScratchStore::create().expect("regression requires nix-store on PATH");
-+        let (top, dep) = store.add_paths_with_reference("evicted-own");
++        let fixture = Fixture::new().await;
 +        let fake = FakeGha::start().await;
 +        let http = reqwest::Client::new();
-+        let mut ctx = pipeline_context(&fake, &http, store.database());
++        let mut ctx = pipeline_context(&fake, &http, fixture.database.clone());
 +        ctx.manifest_prefix = "m3pr".into();
 +        ctx.base_manifest_prefix = Some("m3".into());
 +        let view = ManifestStore::new();
@@ -677,93 +1117,212 @@ missing locations again at commit.
 +        }
 +        seed(&fake, "m3#1000", &Manifest::new()).await;
 +        let first = ctx
-+            .run(to_path_set(&[&top]), BTreeSet::new(), 10)
++            .run(to_path_set(&[&fixture.top]), BTreeSet::new(), 10)
 +            .await
 +            .unwrap();
 +        assert_eq!(first.pushed, 2);
 +        let mut stale = ctx.load_manifest().await.unwrap();
-+        // A stale GC location must not beat the healed upload's count of zero.
++        // Stale GC counters must not defeat a live fresh upload.
 +        for location in stale.chunks.values_mut() {
 +            location.repacks_survived = 5;
 +        }
 +        seed(&fake, "m3pr#2", &stale).await;
++        if stale_base {
++            seed(&fake, "m3#1001", &stale).await;
++            ctx.pack_target_size = 1; // Force fresh locations in different packs.
++        }
 +        if published {
 +            view.set_version(stale.clone(), 2);
 +        }
-+        for pack in stale.packs.keys() {
-+            fake.evict(&http, &hestia::chunker::pack_cache_key(pack))
-+                .await;
++        if lagging {
++            fake.set_stale_lookups_after(&http, 2, 1).await;
++        } else {
++            for pack in stale.packs.keys() {
++                fake.evict(&http, &hestia::chunker::pack_cache_key(pack))
++                    .await;
++            }
 +        }
-+        // Deliberately do not call verify_packs: this also covers serve's
-+        // manifest-ready-before-verification race.
++        // No background verify_packs: exercise the readiness race too.
 +        let healed = ctx
-+            .run(to_path_set(&[&top]), BTreeSet::new(), 20)
++            .run(to_path_set(&[&fixture.top]), BTreeSet::new(), 20)
 +            .await
 +            .unwrap();
-+        assert_eq!(healed.pushed, 2);
-+        assert_eq!(healed.skipped_existing, 0);
-+        assert!(healed.packs_uploaded > 0);
-+        let manifest = ctx.load_manifest().await.unwrap();
++        assert_eq!(healed.pushed, if lagging { 0 } else { 2 });
++        assert_eq!(healed.skipped_existing, if lagging { 2 } else { 0 });
++        if !lagging {
++            assert!(healed.packs_uploaded > 0);
++        }
++        let manifest = ctx.load_manifest().await.unwrap(); // NEXT family load.
 +        assert!(
 +            manifest
 +                .chunks
 +                .values()
-+                .all(|location| location.repacks_survived == 0)
++                .all(|location| location.repacks_survived == if lagging { 5 } else { 0 })
 +        );
-+        view.set(manifest);
-+        let router = Substituter::new(
-+            store.database().store_dir().clone(),
-+            view,
-+            AccessLog::new(),
-+            fake.twirp(&http),
-+            http.clone(),
-+        )
-+        .into_router();
-+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-+        let addr = listener.local_addr().unwrap();
-+        let task = tokio::spawn(async move {
-+            axum::serve(listener, router).await.unwrap();
-+        });
-+        let response = http
-+            .get(format!("http://{addr}/closure/{}", path_hash_of(&top)))
-+            .send()
-+            .await
-+            .unwrap();
-+        assert_eq!(response.status(), 200);
-+        let body = response
-+            .bytes()
-+            .await
-+            .expect("healed closure export completes");
-+        let destination = store.create_destination();
-+        let mut import = tokio::process::Command::new("nix-store")
-+            .args([
-+                "--store",
-+                &destination.uri,
-+                "--option",
-+                "require-sigs",
-+                "false",
-+                "--import",
-+            ])
-+            .stdin(Stdio::piped())
-+            .stdout(Stdio::piped())
-+            .stderr(Stdio::piped())
-+            .spawn()
-+            .unwrap();
-+        import.stdin.take().unwrap().write_all(&body).await.unwrap();
-+        let output = import.wait_with_output().await.unwrap();
-+        assert!(
-+            output.status.success(),
-+            "{}",
-+            String::from_utf8_lossy(&output.stderr)
-+        );
-+        for path in [&top, &dep] {
-+            assert_eq!(
-+                std::fs::read(path).unwrap(),
-+                std::fs::read(destination.physical_path(path)).unwrap()
++        if stale_base {
++            assert!(
++                manifest
++                    .chunks
++                    .values()
++                    .all(|loc| !stale.packs.contains_key(&loc.pack)),
++                "repair used a different pack layout"
 +            );
 +        }
-+        task.abort();
++        // An equal-index refresh of an unverified published view must not
++        // resurrect a stale location via Manifest::merge's repack counters.
++        if published {
++            view.set_version(stale.clone(), healed.manifest_version);
++        }
++        view.set_version_if_at_least(manifest.clone(), healed.manifest_version);
++        assert_closure(&fake, &http, &fixture, view.clone()).await;
++        if stale_base && published {
++            // Main has now healed too. Its live location must also win over
++            // an equal-version published PR view with old high counters.
++            seed(&fake, "m3#1002", &manifest).await;
++            seed(&fake, "m3pr#4", &stale).await;
++            view.set_version(stale, 4);
++            let stats = ctx
++                .run(to_path_set(&[&fixture.top]), BTreeSet::new(), 30)
++                .await
++                .unwrap();
++            assert_eq!(
++                stats.pushed, 0,
++                "live main beats stale published counters during drain"
++            );
++            assert_eq!(stats.skipped_existing, 2);
++            assert_closure(&fake, &http, &fixture, view).await;
++        }
 +    }
++}
++
++#[tokio::test]
++async fn dedup_checks_only_reused_packs_once_per_drain() {
++    use std::collections::BTreeSet;
++    use support::common::{path_hash_of, pipeline_context, to_path_set};
++    let fixture = Fixture::new().await;
++    let fake = FakeGha::start().await;
++    let http = reqwest::Client::new();
++    let ctx = pipeline_context(&fake, &http, fixture.database.clone());
++    ctx.run(to_path_set(&[&fixture.top]), BTreeSet::new(), 10)
++        .await
++        .unwrap();
++    let mut current = ctx.load_manifest().await.unwrap();
++    // Unrelated stale chunks must not cause any availability requests.
++    current = current.merge(manifest("unrelated-missing", 9));
++    seed(&fake, "m3#2", &current).await;
++    let start = fake.download_requests().len();
++    let blobs = fake.blob_requests().len();
++    let stats = ctx
++        .run(to_path_set(&[&fixture.top]), BTreeSet::new(), 20)
++        .await
++        .unwrap();
++    assert_eq!(stats.skipped_existing, 2);
++    let requests = fake.download_requests()[start..].to_vec();
++    let packs: Vec<_> = requests
++        .iter()
++        .filter(|key| key.starts_with("pack-"))
++        .collect();
++    assert_eq!(packs.len(), 1, "two skipped paths share one checked pack");
++    assert_eq!(
++        fake.blob_requests()[blobs..]
++            .iter()
++            .filter(|req| req.key.starts_with("pack-"))
++            .count(),
++        1
++    );
++    println!(
++        "evaluator fixture: {} pack lookups, 1 range GET; {} total lookups",
++        packs.len(),
++        requests.len()
++    );
++    // An access-only worker drain relies on no pack for write dedup.
++    let start = fake.download_requests().len();
++    ctx.run(
++        BTreeSet::new(),
++        BTreeSet::from([path_hash_of(&fixture.top)]),
++        30,
++    )
++    .await
++    .unwrap();
++    assert!(
++        fake.download_requests()[start..]
++            .iter()
++            .all(|key| !key.starts_with("pack-"))
++    );
++    println!("access-only worker fixture: 0 pack lookups, 0 range GETs");
++    // Remove just one path entry: its newly prepared chunks reuse the same
++    // checked pack as the skipped dependency (no second request).
++    current.paths.remove(&path_hash_of(&fixture.top));
++    seed(&fake, "m3#4", &current).await;
++    let start = fake.download_requests().len();
++    let stats = ctx
++        .run(to_path_set(&[&fixture.top]), BTreeSet::new(), 40)
++        .await
++        .unwrap();
++    assert_eq!(stats.pushed, 1);
++    assert_eq!(stats.skipped_existing, 1);
++    assert_eq!(stats.new_chunks, 0);
++    assert_eq!(
++        fake.download_requests()[start..]
++            .iter()
++            .filter(|key| key.starts_with("pack-"))
++            .count(),
++        1
++    );
++}
++
++#[tokio::test]
++async fn new_path_does_not_reuse_evicted_chunks() {
++    use std::collections::BTreeSet;
++    use support::common::{path_hash_of, pipeline_context, to_path_set};
++    let fixture = Fixture::new().await;
++    let fake = FakeGha::start().await;
++    let http = reqwest::Client::new();
++    let ctx = pipeline_context(&fake, &http, fixture.database.clone());
++    ctx.run(to_path_set(&[&fixture.top]), BTreeSet::new(), 10)
++        .await
++        .unwrap();
++    let mut current = ctx.load_manifest().await.unwrap();
++    current.paths.remove(&path_hash_of(&fixture.top));
++    current.paths.remove(&path_hash_of(&fixture.dep));
++    for loc in current.chunks.values_mut() {
++        loc.repacks_survived = 5;
++    }
++    seed(&fake, "m3#2", &current).await;
++    for pack in current.packs.keys() {
++        fake.evict(&http, &hestia::chunker::pack_cache_key(pack))
++            .await;
++    }
++    let stats = ctx
++        .run(to_path_set(&[&fixture.top]), BTreeSet::new(), 20)
++        .await
++        .unwrap();
++    assert_eq!(stats.pushed, 2);
++    assert!(stats.new_chunks > 0);
++    assert!(stats.packs_uploaded > 0);
++    let view = hestia::substituter::ManifestStore::new();
++    view.set(ctx.load_manifest().await.unwrap());
++    assert_closure(&fake, &http, &fixture, view).await;
++}
++
++#[tokio::test]
++async fn pack_lookup_errors_remain_fatal() {
++    use std::collections::BTreeSet;
++    use support::common::{pipeline_context, to_path_set};
++    let fixture = Fixture::new().await;
++    let fake = FakeGha::start().await;
++    let http = reqwest::Client::new();
++    let ctx = pipeline_context(&fake, &http, fixture.database.clone());
++    ctx.run(to_path_set(&[&fixture.top]), BTreeSet::new(), 10)
++        .await
++        .unwrap();
++    // The family lookup succeeds; the dedup pack lookup gets HTTP 401.
++    fake.expire_token_after(&http, 1).await;
++    let err = ctx
++        .run(to_path_set(&[&fixture.top]), BTreeSet::new(), 10)
++        .await
++        .unwrap_err();
++    assert!(err.to_string().contains("expired"), "{err}");
 +}
 --- a/tests/support/common.rs
 +++ b/tests/support/common.rs
@@ -775,3 +1334,42 @@ missing locations again at commit.
          pack_target_size: PACK_TARGET_SIZE,
          read_only: Arc::new(AtomicBool::new(false)),
          publish: None,
+--- a/tests/support/fake_gha.rs
++++ b/tests/support/fake_gha.rs
+@@ -83,6 +83,7 @@
+     valid_sigs: HashSet<String>,
+     clock: u64,
+     blob_requests: Vec<BlobRequest>,
++    download_requests: Vec<String>,
+     /// `Some(n)`: n more Twirp calls succeed, then everything gets 401.
+     twirp_calls_until_401: Option<u64>,
+     /// `Some(n)`: n more CreateCacheEntry calls succeed, then quota errors.
+@@ -247,6 +248,8 @@
+     };
+     let mut inner = state.inner.lock().unwrap();
+
++    inner.download_requests.push(request.key.clone());
++
+     // Fidelity note (verified against the production service): only
+     // `restore_keys` are consulted, as ordered prefix matches with the
+     // newest entry winning per prefix. The `key` field alone matches
+@@ -621,6 +624,7 @@
+             valid_sigs: HashSet::new(),
+             clock: 0,
+             blob_requests: Vec::new(),
++            download_requests: Vec::new(),
+             twirp_calls_until_401: None,
+             creates_until_quota: None,
+             deny_writes: false,
+@@ -682,6 +686,11 @@
+         self.inner.lock().unwrap().blob_requests.clone()
+     }
+
++    /// Keys looked up through Twirp, including misses.
++    pub fn download_requests(&self) -> Vec<String> {
++        self.inner.lock().unwrap().download_requests.clone()
++    }
++
+     /// Set the fake's clock (unix seconds). Subsequent operations record
+     /// `created_at` / `last_accessed_at` values just after this instant,
+     /// which lets GC tests simulate days passing.
