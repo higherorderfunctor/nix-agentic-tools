@@ -496,7 +496,7 @@
           inherit enable;
           mcpServers.probe = fixture;
         };
-        internal.sharedSurfaces = (harness.evalDevenv {}).config.ai.internal.sharedSurfaces;
+        internal = {inherit sharedSurfaces;};
       };
     };
   mcpFieldCasesPass =

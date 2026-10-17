@@ -144,9 +144,9 @@
   #
   # Identical on both backends because both write the same settings tree,
   # so it is defined once here rather than duplicated per callback.
-  # Claude is the only harness here with no launcher wrapper, so its process
-  # environment is expressed through `settings.env` in settings.json. Both the
-  # typed shell and the module-contributed sandbox-safe SSH command ride it.
+  # Claude settings env beats process env, so both the typed shell and the
+  # module-contributed sandbox-safe SSH command ride settings.json. The optional
+  # proxy launcher only clears the inherited API-key descriptor before startup.
   #
   # mkDefault keeps an explicit `ai.claude.native.settings.env.<KEY>` winning, which
   # is the same precedence the wrapper harnesses get by merging module
@@ -231,6 +231,7 @@ in
     inherit pkgs;
     name = "claude";
     contextFilename = "CLAUDE.md";
+    inherit (claudeProxy) installPackage;
     surfaceSupport = {
       agents = {};
       context = {};
@@ -585,6 +586,10 @@ in
         (lib.optionalAttrs (options ? warnings) {
           warnings =
             nativeFileWarnings cfg
+            # package = null is the config-only opt-out: no launcher can clear
+            # the descriptor Claude caches before loading these settings.
+            ++ lib.optional (resolvedProxy != null && cfg.package == null)
+            "ai.claude.proxy is selected but ai.claude.package is null; launch Claude with CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR unset, because only the managed launcher suppresses that inherited credential before startup."
             ++ lib.optional (!isHm && cfg.plugins != {})
             "ai.claude.plugins is set but ${backend} does not deliver it to claude (reason: The devenv backend has no writer for this Claude surface.)";
         })

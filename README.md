@@ -381,7 +381,7 @@ instruction building.
 | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
 | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
 | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. github.com Copilot is explicitly excluded |
-| Local AI proxy | Point each CLI at CLIProxyAPI | `ai.proxy` selection (`url` + a `redact.file`, `redact.command` or `redact.concat` client `key`); per-runtime `ai.<runtime>.proxy`, declared only for a runtime that consumes it, replaces it. No runtime consumes it yet, so each warns | Same |
+| Local AI proxy | Point each CLI at CLIProxyAPI | `ai.proxy` selection (`url` + a `redact.file`, `redact.command` or `redact.concat` client `key`); per-runtime `ai.<runtime>.proxy`, declared only for a runtime that consumes it, replaces it. Claude reads the reference through `apiKeyHelper`; other runtimes warn | Same |
 | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
 ### Kimchi project delivery

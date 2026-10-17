@@ -17,7 +17,8 @@
 > the runtime pool or its normalized option, and record gaps are `path`, `each`,
 > `when` and `reason` only; ai-module owns the delivered-path inventory and
 > backend lowering; `ai.proxy` selects a shared endpoint with a whole
-> per-runtime override, gated by runtime capability.
+> per-runtime override, gated by runtime capability; Claude consumes it and
+> suppresses its inherited API-key descriptor through the installed launcher.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -575,8 +576,9 @@ non-empty list for `fileMatch` content.
   2026-08-10 when it gained a wrapper; its `shell_environment_policy` is a
   different thing and still is — that filters what SPAWNED commands inherit,
   while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.native.settings.env` is its
-  native equivalent.
+  exclusion: `ai.claude.native.settings.env` is its native equivalent and beats
+  process env. Its optional proxy launcher only suppresses the inherited API-key
+  descriptor before startup.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
   runtime variable** — not for Codex, not for anything. An earlier revision of

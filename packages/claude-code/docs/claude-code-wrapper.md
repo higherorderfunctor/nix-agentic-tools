@@ -1,15 +1,16 @@
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-16 — plugins are staged entries delivered through
-> the ai-module files layers; the personal plugin carries MCP servers only;
-> unknown native settings and stale warning suppressions use the generic
-> open-keys inspector on both backends; settings are generated from the
-> committed facts in packages/claude-code/extracted/, measured once on Linux;
-> Darwin validates its own extraction against that raw. The schema check gates
-> stale and shadowed rows, missing paths and wildcard grammar. Catalog,
-> retirement and launch-pin facts are content-located AST reads of the unpacked
-> graph; unsupported catalog properties, retirement rows and launch-pin shapes
-> fail with PROBE.
+> **Last verified:** 2026-10-17 — a selected proxy installs a launcher that
+> suppresses the inherited API-key descriptor before Claude caches it; plugins
+> are staged entries delivered through the ai-module files layers; the personal
+> plugin carries MCP servers only; unknown native settings and stale warning
+> suppressions use the generic open-keys inspector on both backends; settings
+> are generated from the committed facts in packages/claude-code/extracted/,
+> measured once on Linux; Darwin validates its own extraction against that raw.
+> The schema check gates stale and shadowed rows, missing paths and wildcard
+> grammar. Catalog, retirement and launch-pin facts are content-located AST
+> reads of the unpacked graph; unsupported catalog properties, retirement rows
+> and launch-pin shapes fail with PROBE.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -18,15 +19,22 @@ Claude Code ships as a **pre-built compiled binary** (a Bun single-exec). The
 base package (`packages/claude-code/packages/ai/claude-code/package.nix`)
 installs it directly as `$out/bin/claude`.
 
-### There is no wrapper
+### Proxy credential suppression at launch
 
-`$out/bin/claude` is the pre-built binary itself, installed by the shared
-backend transform on both backends. Claude Code 2.1.157 and later discovers a
-plugin as a personal plugin at `<configDir>/skills/<name>` (yes, `skills/`, not
-`plugins/`), so nothing needs a `--plugin-dir` argument. Home Manager's own
-Claude module wraps the binary for older versions; `ai.*` does not use that
-module and does not port the wrapper, so a package override older than 2.1.157
-loses personal plugins.
+The base package's `$out/bin/claude` is the pre-built binary itself. Without a
+proxy selection, the shared backend transform installs it unchanged. A selected
+`ai.proxy` or `ai.claude.proxy` installs a `lib.ai.mkLauncher` wrapper on both
+backends that unsets `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before exec. Claude
+Code 2.1.302 caches that descriptor before settings env applies, so clearing it
+in settings alone still sends the inherited key to the proxy. The endpoint and
+reference-reading `apiKeyHelper` stay in settings; no key is baked into the
+launcher.
+
+Claude Code 2.1.157 and later discovers a plugin as a personal plugin at
+`<configDir>/skills/<name>` (yes, `skills/`, not `plugins/`), so nothing needs a
+`--plugin-dir` argument. Home Manager's own Claude module wraps the binary for
+older versions; `ai.*` does not use that module or port its plugin wrapper, so a
+package override older than 2.1.157 loses personal plugins.
 
 The two cannot run side by side. With `ai.claude.enable` on, Home Manager's
 `programs.claude-code.enable` or devenv's `claude.code.enable` fails evaluation
