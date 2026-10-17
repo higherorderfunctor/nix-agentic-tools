@@ -51,6 +51,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Overlay parity needs a foreign nixpkgs revision independent of devenv.
+    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-26.05";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -255,13 +257,6 @@
           kiro-cli = (pkgsFor system).ai.kiro-cli;
         };
       });
-
-    # Evaluation-only IFD roots can be absent from check/runtime closures.
-    # String coercion preserves the original output; a path value is copied
-    # under a different store name by `nix eval --raw`.
-    ciEvaluationInputs = forAllSystems (system: {
-      devenv-nixpkgs = toString inputs.devenv.inputs.nixpkgs.legacyPackages.${system}.path;
-    });
 
     # Every package under its flat name plus the nested roots (`ai`, `docs`,
     # ...), checked by plain nixpkgs: `nix run <this flake>#claude-code`

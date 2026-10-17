@@ -1,8 +1,7 @@
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-16 — drains heal missing packs, family loads
-> preserve live locations, and GC retains manifest heads with supersession grace
-> before planning.
+> **Last verified:** 2026-10-17 — overlay parity uses the ordinary
+> `nixpkgs-stable` input; no patched evaluation source needs retention.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -61,17 +60,11 @@ read-only substituter. On a cold main or same-repository PR run, the early job
 pays one Rust build before cache consumers start. Fork PRs have no publication
 token, so their test job builds the binary locally if it is absent from Cachix.
 
-`ciEvaluationInputs.<system>.devenv-nixpkgs` explicitly exposes the original
-patched source through
-`toString inputs.devenv.inputs.nixpkgs.legacyPackages.<system>.path`. Preserve
-the string coercion: a path-valued flake output is copied to a differently named
-store path by `nix eval --raw`. Evaluation-only sources can be absent from check
-and runtime closures, and substitution does not fire the post-build hook. The
-test job therefore resolves and registers this exact input explicitly, drains
-the cache, then requires the served narinfo's `StorePath` to equal it. A
-successful hook exit alone is insufficient: Hestia's hook tolerates daemon
-errors. Its narinfo endpoint requires an available manifest entry rather than
-falling back to the local store.
+Overlay parity imports the ordinary `nixpkgs-stable` flake source directly.
+Unlike devenv's patched nixpkgs output, it requires no evaluation-time source
+build or explicit Hestia registration. Nix fetches the locked input normally;
+its packages use the existing `cache.nixos.org` substituter. This does not
+establish a warm-cache result for evaluation-only sources.
 
 Cold or changed inputs, eviction, and inaccessible GitHub cache scopes still
 require upstream substitution or a local build. The default branch continues to
@@ -121,16 +114,15 @@ are deleted after `min_age`; the next PR run re-uploads only paths it has
 locally and supplies to the drain (including expanded local dependencies),
 through the healing above. Unrelated missing paths are not reconstructed. That
 was already true of PR-scoped `m3#` manifests before this patch. The daemon logs
-both loaded keys. Fork PRs explicitly use read-only mode and skip registration
-and its positive narinfo guard. They can restore accessible entries or fall back
-upstream without needing cache write access. No live warm-cache result or
-speedup is established by local validation. `hestia-gc.yml` runs daily on the
-default branch with the helper in read-only mode and `actions: write` for
-garbage collection, limiting stale roots and packs within GitHub's shared cache
-quota. It has no explicit job timeout, matching upstream's GC workflow:
-repacking and the one-second REST mutation spacing can exceed 15 minutes.
-Garbage collection does not prevent GitHub's own expiry or LRU eviction. This
-cache carries no Cachix publishing token.
+both loaded keys. Fork PRs explicitly use read-only mode. They can restore
+accessible entries or fall back upstream without needing cache write access. No
+live warm-cache result or speedup is established by local validation.
+`hestia-gc.yml` runs daily on the default branch with the helper in read-only
+mode and `actions: write` for garbage collection, limiting stale roots and packs
+within GitHub's shared cache quota. It has no explicit job timeout, matching
+upstream's GC workflow: repacking and the one-second REST mutation spacing can
+exceed 15 minutes. Garbage collection does not prevent GitHub's own expiry or
+LRU eviction. This cache carries no Cachix publishing token.
 
 The `checks-eval` job registers every evaluated `.drv` closure in the same
 cache. Its workers pass the eval job's `manifest-version` through the helper's
