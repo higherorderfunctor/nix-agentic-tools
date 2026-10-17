@@ -10,8 +10,10 @@
   pkgs,
 }: let
   redact = import ../../../lib/redact {inherit lib;};
-  # Settings env overrides inherited API keys and bearer tokens, so a
-  # lower-scope token cannot accompany the reference resolved by apiKeyHelper.
+  # Settings env overrides inherited API keys, bearer tokens and custom
+  # headers, so a lower-scope credential cannot accompany the reference
+  # resolved by apiKeyHelper, and inherited Bedrock, Vertex or Foundry
+  # switches, which would send model traffic past the proxy.
   render = {
     key,
     url,
@@ -36,6 +38,10 @@
       ANTHROPIC_API_KEY = "";
       ANTHROPIC_AUTH_TOKEN = "";
       ANTHROPIC_BASE_URL = url;
+      ANTHROPIC_CUSTOM_HEADERS = "";
+      CLAUDE_CODE_USE_BEDROCK = "";
+      CLAUDE_CODE_USE_FOUNDRY = "";
+      CLAUDE_CODE_USE_VERTEX = "";
     };
   };
 

@@ -2,10 +2,10 @@
 
 > **Last verified:** 2026-10-17 — Claude uses `redact.assign` and the shared
 > reader through `apiKeyHelper` for file, command and concat references, and
-> clears inherited API keys and bearer tokens in settings, and suppresses the
-> inherited API-key descriptor before Claude starts. Codex, Kimchi, Kiro and
-> Copilot omit `proxy` from `surfaceSupport` and warn through the generated
-> warning cases.
+> clears inherited API keys, bearer tokens, custom headers and
+> Bedrock/Vertex/Foundry switches in settings, and suppresses the inherited
+> API-key descriptor before Claude starts. Codex, Kimchi, Kiro and Copilot omit
+> `proxy` from `surfaceSupport` and warn through the generated warning cases.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
@@ -23,9 +23,14 @@ Settings merge per key across scopes, so an inherited token or a lower-scope key
 would otherwise accompany the helper's proxy key. An explicit
 `ANTHROPIC_API_KEY` value also prompts interactive Claude, and declining sends
 the claude.ai login instead (blank suppression probed on Claude Code 2.1.296).
-Claude Code 2.1.302 reads and caches `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR`
-before applying settings env. A blank in settings cannot suppress it. A selected
-proxy therefore installs a launcher through `lib.ai.mkLauncher` that unsets the
+`env.ANTHROPIC_CUSTOM_HEADERS` is blank for the same reason: Claude forwards
+inherited custom headers, which can carry a credential.
+`CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX` and
+`CLAUDE_CODE_USE_FOUNDRY` are blank because an inherited switch sends model
+traffic past the proxy; the live check measures both on the pinned CLI. Claude
+Code 2.1.302 reads and caches `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR` before
+applying settings env. A blank in settings cannot suppress it. A selected proxy
+therefore installs a launcher through `lib.ai.mkLauncher` that unsets the
 descriptor before exec; without a selection the package stays unchanged. An
 explicit `ai.claude.package = null` keeps settings delivery and warns that the
 caller must unset the descriptor when launching an unmanaged Claude.

@@ -99,7 +99,8 @@ in {
       && settings.env.ANTHROPIC_AUTH_TOKEN == ""
       && result.config.ai.claude.normalized.proxy.key == redact.file "/run/secrets/work-key"
       && settings.apiKeyHelper == (settingsFor eval (redact.file "/run/secrets/work-key")).apiKeyHelper))
-    {
+    # The live run binds a loopback port, which the Darwin sandbox refuses.
+    (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       claude-proxy-runtime =
         pkgs.runCommand "claude-proxy-runtime" {
           nativeBuildInputs = [pkgs.python3];
@@ -160,7 +161,7 @@ in {
           received = threading.Event()
           class Handler(http.server.BaseHTTPRequestHandler):
               def do_POST(self):
-                  records.append((self.path, self.headers.get("x-api-key"), self.headers.get("authorization")))
+                  records.append((self.path, self.headers.get("x-api-key"), self.headers.get("authorization"), dict(self.headers)))
                   self.send_response(401)
                   self.end_headers()
                   self.wfile.write(b'{"type":"error","error":{"type":"authentication_error","message":"test proxy"}}')
@@ -175,18 +176,25 @@ in {
           try:
               for backend, launcher in launchers.items():
                   root = Path(backend).resolve()
-                  root.mkdir()
+                  user = root / "user"
+                  user.mkdir(parents=True)
                   config = settings[backend]["file"]
                   config["env"]["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{server.server_port}"
-                  (root / "settings.json").write_text(json.dumps(config))
+                  # Each backend's own scope: Home Manager writes user
+                  # settings, devenv the project's .claude/settings.json.
+                  scope = user if backend == "hm" else root / ".claude"
+                  scope.mkdir(exist_ok=True)
+                  (scope / "settings.json").write_text(json.dumps(config))
                   records.clear()
                   received.clear()
                   rd, wr = os.pipe()
                   os.write(wr, b"inherited-descriptor-key")
                   os.close(wr)
-                  child_env = dict(os.environ, HOME=str(root), CLAUDE_CONFIG_DIR=str(root),
+                  child_env = dict(os.environ, HOME=str(root), CLAUDE_CONFIG_DIR=str(user),
                                    CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR=str(rd),
                                    ANTHROPIC_API_KEY="inherited-api-key", ANTHROPIC_AUTH_TOKEN="inherited-token",
+                                   ANTHROPIC_CUSTOM_HEADERS="x-inherited-credential: inherited-header",
+                                   CLAUDE_CODE_USE_BEDROCK="1", CLAUDE_CODE_USE_FOUNDRY="1", CLAUDE_CODE_USE_VERTEX="1",
                                    TERM="dumb")
                   try:
                       process = subprocess.Popen([launcher, "-p", "hello", "--model", "claude-sonnet-4-5", "--max-turns", "1"],
@@ -204,14 +212,16 @@ in {
                   finally:
                       os.close(rd)
                   assert records and all(url.startswith("/v1/messages") and key == secret and auth == "Bearer " + secret
-                                         for url, key, auth in records), (backend, "selected credentials did not reach proxy alone")
-                  print(f"verified {backend} pinned Claude HTTP request: selected key in x-api-key and Authorization; inherited descriptor suppressed")
+                                         for url, key, auth, _ in records), (backend, "selected credentials did not reach proxy alone")
+                  leaked = [name for *_, headers in records for name, value in headers.items() if "inherited" in value]
+                  assert not leaked, (backend, "inherited credential in headers", leaked)
+                  print(f"verified {backend} pinned Claude HTTP request: selected key in x-api-key and Authorization; inherited descriptor, keys, headers and provider switches suppressed")
           finally:
               server.shutdown()
               server.server_close()
           PYTHON
           touch "$out"
         '';
-    }
+    })
   ];
 }
