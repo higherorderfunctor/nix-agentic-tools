@@ -312,10 +312,7 @@ in {
             && builtins.any (a: lib.hasInfix "proxy.headers" a.message) failed
         );
 
-      # Devenv lifecycle remains deliberately separate. A used top-level owner is
-      # lowered for the client model but still fails rather than silently omitting
-      # the managed process that would make its loopback URL live.
-      module-mcp-proxy-devenv-lifecycle-remains-rejected = mkTest "mcp-proxy-devenv-lifecycle-remains-rejected" (
+      module-mcp-proxy-devenv-emits-process = mkTest "mcp-proxy-devenv-emits-process" (
         let
           result = evalDevenv {
             ai = {
@@ -323,14 +320,10 @@ in {
               mcpServers.shared = proxySampleServer;
             };
           };
-          failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
         in
-          builtins.any
-          (assertion:
-            lib.hasInfix "ai.mcpServers" assertion.message
-            && lib.hasInfix "backend does not implement" assertion.message
-            && lib.hasInfix "devenv lifecycle is tracked separately" assertion.message)
-          failed
+          lib.all (assertion: assertion.assertion) result.config.assertions
+          && lib.hasSuffix "/bin/ai-service-mcp-proxy-shared" result.config.processes.mcp-proxy-shared.exec
+          && (claudeMcpServers "devenv" result).shared.url == "http://127.0.0.1:9501/"
       );
 
       module-mcp-proxy-header-variable-collision = mkTest "mcp-proxy-header-variable-collision" (!(builtins.tryEval (builtins.deepSeq (mcpProxyLib.specFor "example" {

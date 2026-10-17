@@ -87,8 +87,8 @@
 #
 # ── Scope ─────────────────────────────────────────────────────────────
 # Home Manager runs the proxy through `ai.services` on Linux and warns on
-# Darwin, where launchd is unsupported. Devenv has no proxy lifecycle;
-# `sharedOptions.nix` refuses a devenv declaration through assertions.
+# Darwin, where launchd is unsupported. Devenv emits a process through
+# `ai.services`, started with `devenv up`.
 {
   lib,
   pkgs,
@@ -223,35 +223,17 @@
   # Validation belongs to the declaration that owns the managed proxy, not to
   # every runtime view that happens to inherit its lowered client entry.
   assertionsFor = {
+    key,
     optionPath,
-    servers,
-    backendSupported,
-  }: let
-    proxied = proxiedServers servers;
-    withoutUrl =
-      builtins.attrNames
-      (filterAttrs (_: srv: (srv.url or null) == null) proxied);
-    withCredentialClientHeaders =
-      builtins.attrNames
-      (filterAttrs
-        (_: srv:
-          builtins.any
-          isCredential
-          (builtins.attrValues (srv.headers or {})))
-        proxied);
-    names = builtins.attrNames proxied;
-  in [
+    server,
+  }: [
     {
-      assertion = withoutUrl == [];
-      message = "${optionPath}: ${concatStringsSep ", " withoutUrl} set `proxy.enable` but no `url`. The proxy forwards to that url, so there is nothing to proxy to — set `url` (a plain string or a credential), or drop `proxy.enable`.";
+      assertion = (server.url or null) != null;
+      message = "${optionPath}: ${key} set `proxy.enable` but no `url`. The proxy forwards to that url, so there is nothing to proxy to — set `url` (a plain string or a credential), or drop `proxy.enable`.";
     }
     {
-      assertion = withCredentialClientHeaders == [];
-      message = "${optionPath}: ${concatStringsSep ", " withCredentialClientHeaders} set `proxy.enable` and put a CREDENTIAL in the server's top-level `headers`. On a proxied server those are the CLIENT's headers and are written into its config, which would hand it the credential the proxy exists to withhold. Move them to `proxy.headers`, where the daemon injects them and no client ever sees the value. (Top-level `headers` used to be absorbed into the daemon automatically; that behavior was removed so the key means one thing.)";
-    }
-    {
-      assertion = backendSupported || proxied == {};
-      message = "${optionPath}: ${concatStringsSep ", " names} set `proxy.enable`, which this backend does not implement. Home Manager owns the current systemd user-service lifecycle; devenv lifecycle is tracked separately and is deliberately out of scope here. Declare these servers in Home Manager, or drop `proxy.enable` and accept client-side credentials.";
+      assertion = !(builtins.any isCredential (builtins.attrValues (server.headers or {})));
+      message = "${optionPath}: ${key} set `proxy.enable` and put a CREDENTIAL in the server's top-level `headers`. On a proxied server those are the CLIENT's headers and are written into its config, which would hand it the credential the proxy exists to withhold. Move them to `proxy.headers`, where the daemon injects them and no client ever sees the value. (Top-level `headers` used to be absorbed into the daemon automatically; that behavior was removed so the key means one thing.)";
     }
   ];
 

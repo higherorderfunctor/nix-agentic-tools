@@ -41,7 +41,6 @@
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
-  isDevenv = options ? devenv;
 
   # ── Managed MCP proxy ownership ─────────────────────────────────────
   # A top-level proxied declaration is one shared owner, not one owner per
@@ -84,19 +83,16 @@
   # Each declaration becomes the service of the layer that owns it: a used
   # top-level entry under the shared `internal` owner, a runtime entry under
   # that runtime. The claims registry then rejects one key declared twice,
-  # byte-identical or not. Devenv has no proxy lifecycle yet; its assertion
-  # below refuses the declaration before any service is written.
+  # byte-identical or not.
   proxyServices = declarations:
-    lib.optionalAttrs (!isDevenv) (builtins.listToAttrs (map (declaration:
+    builtins.listToAttrs (map (declaration:
       lib.nameValuePair "mcp-proxy-${declaration.key}" (mcpProxy.serviceFor declaration.key declaration.server))
-    declarations));
+    declarations);
   proxyValidationAssertions =
     lib.concatMap
     (declaration:
       mcpProxy.assertionsFor {
-        inherit (declaration) optionPath;
-        backendSupported = !isDevenv;
-        servers = {${declaration.key} = declaration.server;};
+        inherit (declaration) key optionPath server;
       })
     activeProxyDeclarations;
 
