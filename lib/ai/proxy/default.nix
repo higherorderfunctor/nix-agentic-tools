@@ -22,8 +22,10 @@
         type = redact.types.redacted;
         description = "The proxy client key the harness presents.";
       };
+      # Typed, not only asserted: normalized options are a public input, and
+      # a value set here directly skips the selection assertions.
       url = mkOption {
-        type = types.str;
+        type = types.strMatching urlPattern;
         description = "The proxy origin, `http://<host>:<port>`, with no path.";
       };
     };

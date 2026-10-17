@@ -79,7 +79,8 @@ in {
     # The root selection reaches a consuming runtime as the resolved endpoint;
     # a runtime selection replaces it whole, on both backends, so a runtime
     # key never pairs with a root url; a runtime's own invalid selection fails
-    # with its own option path, even while the runtime is disabled.
+    # with its own option path, even while the runtime is disabled. A url
+    # with a path set on the normalized option directly is refused too.
     module-ai-proxy-runtime-override = mkTest "ai-proxy-runtime-override" (
       lib.all (backend: let
         resolved = config: (evalApp backend config).config.ai.testapp.normalized.proxy;
@@ -113,7 +114,11 @@ in {
         && failsWith ["ai.testapp.proxy.key is set without `url`"] (evalApp backend keyOnly)
         && failsWith ["ai.testapp.proxy.url needs `key`"] (evalApp backend {
           ai.testapp.proxy.url = "http://127.0.0.1:8318";
-        }))
+        })
+        && !(builtins.tryEval (builtins.deepSeq (resolved {
+            ai.testapp.normalized.proxy = lib.mkForce (root // {url = "http://127.0.0.1:8317/v1";});
+          })
+          true)).success)
       ["devenv" "hm"]
     );
   };
