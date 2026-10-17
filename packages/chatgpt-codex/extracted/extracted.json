@@ -1065,6 +1065,7 @@
     { "maturity": "stable", "name": "apps" },
     { "maturity": "removed", "name": "apps_mcp_path_override" },
     { "maturity": "under development", "name": "artifact" },
+    { "maturity": "under development", "name": "async_compaction" },
     { "maturity": "stable", "name": "auth_elicitation" },
     {
       "maturity": "under development",
@@ -1076,17 +1077,22 @@
     { "maturity": "stable", "name": "browser_use_external" },
     { "maturity": "stable", "name": "browser_use_full_cdp_access" },
     { "maturity": "under development", "name": "chronicle" },
-    { "maturity": "under development", "name": "cli_daybreak" },
+    { "maturity": "stable", "name": "cli_daybreak" },
     { "maturity": "under development", "name": "code_mode" },
     { "maturity": "removed", "name": "code_mode_buffered_exec" },
     { "maturity": "stable", "name": "code_mode_host" },
-    { "maturity": "under development", "name": "code_mode_interrupt" },
+    { "maturity": "under development", "name": "code_mode_host_grpc" },
+    { "maturity": "stable", "name": "code_mode_interrupt" },
     { "maturity": "under development", "name": "code_mode_only" },
     {
       "maturity": "under development",
       "name": "code_mode_only_strict_3p_tools"
     },
     { "maturity": "under development", "name": "code_mode_prewarm" },
+    {
+      "maturity": "under development",
+      "name": "code_mode_tool_description_first"
+    },
     { "maturity": "under development", "name": "code_mode_tool_search" },
     { "maturity": "under development", "name": "codex_apps_mcp_2026_07_28" },
     { "maturity": "removed", "name": "codex_git_commit" },
@@ -1099,6 +1105,7 @@
     },
     { "maturity": "stable", "name": "content_item_kinds" },
     { "maturity": "under development", "name": "context_management" },
+    { "maturity": "under development", "name": "credential_masking" },
     { "maturity": "under development", "name": "current_time_reminder" },
     { "maturity": "under development", "name": "cwd_relative_turn_diffs" },
     { "maturity": "stable", "name": "daemon_auto_start" },
@@ -1142,6 +1149,10 @@
     {
       "maturity": "under development",
       "name": "guardian_root_handoff_context"
+    },
+    {
+      "maturity": "under development",
+      "name": "guardian_trust_orchestrator_connectors"
     },
     { "maturity": "under development", "name": "guardianv2" },
     { "maturity": "removed", "name": "guardianv2.thread_context" },
@@ -1189,6 +1200,7 @@
       "maturity": "under development",
       "name": "omit_app_server_notification_media"
     },
+    { "maturity": "under development", "name": "output_token_replay" },
     { "maturity": "removed", "name": "personality" },
     { "maturity": "removed", "name": "plugin_hooks" },
     { "maturity": "stable", "name": "plugin_sharing" },
@@ -1214,6 +1226,7 @@
       "maturity": "under development",
       "name": "retain_client_developer_messages"
     },
+    { "maturity": "under development", "name": "retain_client_tool_outputs" },
     { "maturity": "under development", "name": "rollout_budget" },
     { "maturity": "under development", "name": "runtime_metrics" },
     { "maturity": "removed", "name": "search_tool" },
@@ -1223,7 +1236,7 @@
     { "maturity": "stable", "name": "shell_snapshot" },
     { "maturity": "under development", "name": "shell_snapshot_v2" },
     { "maturity": "stable", "name": "shell_tool" },
-    { "maturity": "under development", "name": "shell_zsh_fork" },
+    { "maturity": "removed", "name": "shell_zsh_fork" },
     { "maturity": "removed", "name": "skill_env_var_dependency_prompt" },
     { "maturity": "stable", "name": "skill_mcp_dependency_install" },
     { "maturity": "stable", "name": "skill_search" },
@@ -1234,6 +1247,10 @@
     { "maturity": "under development", "name": "standalone_web_search" },
     { "maturity": "removed", "name": "steer" },
     { "maturity": "under development", "name": "step_model_switching" },
+    {
+      "maturity": "under development",
+      "name": "subagent_default_context_limits"
+    },
     { "maturity": "stable", "name": "system_proxy_fallback" },
     { "maturity": "removed", "name": "terminal_resize_reflow" },
     {
