@@ -100,16 +100,16 @@ in {
       in
         resolved {}
         == null
-        && resolved {ai.proxy = root;} == {endpoint = root;}
+        && resolved {ai.proxy = root;} == root
         && resolved {
           ai = {
             proxy = root;
             testapp.proxy = work;
           };
         }
-        == {endpoint = work;}
-        && resolved {ai.testapp.proxy = work;} == {endpoint = work;}
-        && resolved keyOnly == {endpoint = root;}
+        == work
+        && resolved {ai.testapp.proxy = work;} == work
+        && resolved keyOnly == root
         && failsWith ["ai.testapp.proxy.key is set without `url`"] (evalApp backend keyOnly)
         && failsWith ["ai.testapp.proxy.url needs `key`"] (evalApp backend {
           ai.testapp.proxy.url = "http://127.0.0.1:8318";

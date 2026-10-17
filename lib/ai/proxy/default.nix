@@ -15,8 +15,8 @@
   urlPattern = "https?://([A-Za-z0-9.-]+|\\[[0-9A-Fa-f:.]+[]])(:[0-9]+)?";
   urlDescription = "the proxy origin only, `http://<host>:<port>`, with no path";
 
-  # The shape of a resolved `url` selection.
-  endpointType = types.submodule {
+  # `ai.<runtime>.normalized.proxy`: null or the selected endpoint record.
+  resolvedType = types.nullOr (types.submodule {
     options = {
       key = mkOption {
         type = redact.types.redacted;
@@ -26,14 +26,6 @@
         type = types.str;
         description = "The proxy origin, `http://<host>:<port>`, with no path.";
       };
-    };
-  };
-
-  # `ai.<runtime>.normalized.proxy`: null when nothing is selected.
-  resolvedType = types.nullOr (types.attrTag {
-    endpoint = mkOption {
-      type = endpointType;
-      description = "An endpoint known at evaluation: the `url` form.";
     };
   });
 
@@ -94,7 +86,7 @@
   in
     if !isSelected selection
     then null
-    else {endpoint = {inherit (selection) key url;};};
+    else {inherit (selection) key url;};
 
   rootOption = mkOption {
     type = types.submodule {

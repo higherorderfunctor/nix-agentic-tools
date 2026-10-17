@@ -8,9 +8,10 @@ applyTo: "checks/ai-proxy/**,lib/ai/proxy/**"
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
 > **Last verified:** 2026-10-17 — root and per-runtime `url` + redacted `key`
-> selection, resolved into `ai.<runtime>.normalized.proxy`. No runtime declares
-> `proxy` in `surfaceSupport` yet, so delivery policy and the generated warning
-> cases derive its absence everywhere.
+> selection, resolved directly into null or `{key; url;}` at
+> `ai.<runtime>.normalized.proxy`. No runtime declares `proxy` in
+> `surfaceSupport` yet, so delivery policy and the generated warning cases
+> derive its absence everywhere.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -41,8 +42,8 @@ the proxy.
 A per-runtime selection that selects anything (a `url`) replaces the root
 selection WHOLE. Fields never mix across levels: a runtime `key` alone leaves
 the root selection in force and fails its own assertion. The resolved value is
-null or `{endpoint = {url; key};}`. `url` is the origin only: each runtime
-appends its own protocol path, so a path would be doubled.
+null or `{key; url;}`. `url` is the origin only: each runtime appends its own
+protocol path, so a path would be doubled.
 
 `key` requires `redact.types.redacted`: `redact.file`, `redact.command` or
 `redact.concat` with a reference. It authenticates access to the proxy's
