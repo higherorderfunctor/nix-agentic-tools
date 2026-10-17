@@ -256,12 +256,11 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-17 — KAS patch selection takes only the two
-> fixed-text workflow prompt tweaks; the native package binds one KAS extracted
-> from its release input; selected prompt replacements fail closed at build
-> time; KAS 0.66.43 (Kiro 2.32.0) ships no image module, so the drift check
-> loads ONNX alone. Darwin packaging points both the executable filename and
-> argv0 at the app binary; native CI verifies fresh-home dispatch.
+> **Last verified:** 2026-10-17 — MCP header exports resolve redact references
+> at launch and abort on failure; URL references resolve at activation. KAS
+> 0.66.43 (Kiro 2.32.0) ships no image module, so the drift check loads ONNX
+> alone. The package-bound KAS and argv dispatch contracts below are otherwise
+> unchanged.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.

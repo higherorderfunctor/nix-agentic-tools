@@ -391,6 +391,12 @@ for it. When several entries match, their guidance composes.
     - [`dev/fragments/pipeline/fragment-pipeline.md`](dev/fragments/pipeline/fragment-pipeline.md)
     - [`dev/fragments/pipeline/generation-architecture.md`](dev/fragments/pipeline/generation-architecture.md)
     - [`dev/fragments/pipeline/update-pipeline.md`](dev/fragments/pipeline/update-pipeline.md)
+- **`redact`**
+  - Match:
+    - `checks/redact/**`
+    - `lib/redact/**`
+  - Read:
+    - [`dev/fragments/redact/redact.md`](dev/fragments/redact/redact.md)
 - **`semble-integration`**
   - Match:
     - `packages/semble/**`

@@ -207,6 +207,15 @@ set +e
     fi
   fi
 
+  # Verify shell entry only for a devenv bump with passing package verification.
+  if [ "$name" = devenv ] && [ "$verify_rc" -eq 0 ]; then
+    log_info "Verifying devenv shell entry..."
+    if ! devenv --no-tui shell true; then
+      log_failure "$name: devenv shell failed to enter"
+      exit 1
+    fi
+  fi
+
   # Phase 2.5: Formatter pass — only when this input bump actually
   # moved `formatter.<system>`'s store path. Most inputs (devenv,
   # git-branchless, rust-overlay, etc.) don't carry new

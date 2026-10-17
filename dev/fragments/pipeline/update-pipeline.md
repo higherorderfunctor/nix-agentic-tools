@@ -1,7 +1,7 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-16 — the MCP group update script regenerates
-> Semble's SDK-generated extracted surface in the same update.
+> **Last verified:** 2026-10-17 — devenv input bumps verify shell entry after
+> successful package verification and hold back on entry failure.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -64,7 +64,10 @@ Targets fall into three categories:
   `lib.extracted.regenCommand`) of every package whose
   `passthru.updateFlakeInput` names the input, and stages the `sidecars` each
   one lists. Git-branchless's config census follows its input through this path.
-  A failed regeneration holds the input back.
+  A failed regeneration holds the input back. After successful package
+  verification, only the `devenv` input runs `devenv --no-tui shell true` with
+  the installed CLI in its updated worktree. A failed shell entry holds the bump
+  back before commit and publication.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages.
   Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
@@ -264,14 +267,15 @@ Every target writes exactly one line to `.update-report.txt`:
 - `NO UPDATES: <name>` — already at latest.
 - `HELD BACK: <name> | <version-detail> (<reason>)` — the update was found but
   could not be WRITTEN: the lock update failed, a hash could not be derived, the
-  formatter errored, or the commit failed. A failing BUILD is deliberately not
-  on this list — see "What holds a target back" below.
+  formatter errored, devenv shell entry failed, or the commit failed. A failing
+  BUILD is deliberately not on this list — see "What holds a target back" below.
 
 `update-report.sh` sorts entries by status and prints a summary.
 
 ### What holds a target back
 
-One rule: **hold back only when the PR cannot be written.**
+Hold back when the PR cannot be written. The `devenv` input also requires
+successful shell entry after passing package verification.
 
 | Failure                             | PR writable?                                  | Outcome                             |
 | ----------------------------------- | --------------------------------------------- | ----------------------------------- |
@@ -281,6 +285,7 @@ One rule: **hold back only when the PR cannot be written.**
 | verifier setup cannot start         | no — validation never ran                     | `HELD BACK`                         |
 | verifier result coverage incomplete | no — validation may have terminated early     | `HELD BACK`                         |
 | formatter errors                    | no — tree left non-canonical                  | `HELD BACK`                         |
+| devenv shell entry fails            | shell-entry preparation requirement failed    | `HELD BACK`                         |
 | `git add` / `git commit` fails      | no                                            | `HELD BACK`                         |
 | everything written, build fails     | **yes**                                       | `UPDATED` — red PR, then a red lane |
 

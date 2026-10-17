@@ -8,6 +8,8 @@
     mapAttrsToList
     ;
 
+  redact = import ./redact {inherit lib;};
+
   # ── Load a server definition by name ───────────────────────────────
   # Loads on demand — no centralized server list needed in lib.
   # The server list is implicit from the caller's attrset keys (for
@@ -19,8 +21,7 @@
   # settingsOptions declares the public options; optional settingsModule is an
   # ordinary Nix module for config defaults and config.assertions over settings.
   # Assertion values merge with caller values; the internal option is reserved.
-  loadServer = name: import ../packages/${name}/modules/mcp-server.nix {inherit lib mcpLib;};
-  mcpLib = {inherit mkCredentialsOption;};
+  loadServer = name: import ../packages/${name}/modules/mcp-server.nix {inherit lib;};
 
   isExternal = serverDef: serverDef.meta ? external && serverDef.meta.external;
 
@@ -80,48 +81,33 @@
   in
     (serverDef.settingsToArgs cfgShim mode) ++ extraArgs;
 
-  # ── Credentials option generator ──────────────────────────────────
-  # MOVED to lib/credentials.nix and re-exported here unchanged, so every
-  # MCP server module keeps the exact option type it had. The move
-  # happened when packages/glab — not an MCP server — needed the same
-  # runtime-secret primitives. Do not fork a second copy back into this
-  # file; add to credentials.nix instead.
-  inherit (credentialsLib) mkCredentialsOption mkCredentialsSnippet;
-
-  credentialsLib = import ./credentials.nix {inherit lib;};
-
-  # ── Credentials helpers ──────────────────────────────────────────
-  # credentialVars: { settingsOptionName = { envVar = "ENV_VAR"; required = bool; }; }
-  # settings: evaluated settings attrset — credentialVars keys are looked up here
+  # Kimchi still uses the legacy credential options and snippets.
+  inherit (import ./credentials.nix {inherit lib;}) mkCredentialsOption mkCredentialsSnippet;
 
   hasCredentials = credentialVars: settings:
-    any (optName: let
-      cred = settings.${optName};
+    any (optName: settings.${optName} != null) (builtins.attrNames credentialVars);
+
+  credentialFilePaths = credentialVars: settings:
+    lib.concatMap (optName: let
+      value = settings.${optName};
+      parts =
+        if value == null
+        then []
+        else value._redact.concat or [value];
     in
-      (cred.file or null) != null || (cred.helper or null) != null)
+      lib.concatMap (part: lib.optional (builtins.isAttrs part && part._redact ? file) part._redact.file) parts)
     (builtins.attrNames credentialVars);
 
-  # File paths backing file-based credentials, in declaration order.
-  # Helper-based creds have no stable file to fingerprint, so they are
-  # excluded. The path is stable across a rotation (only the content
-  # changes), so callers hash these files to decide whether a dependent
-  # long-lived service must restart. Agnostic to the secret manager
-  # (sops-nix, agenix, ln, ...): it only needs the decrypted file path.
-  credentialFilePaths = credentialVars: settings:
-    builtins.filter (p: p != null)
-    (mapAttrsToList (optName: _: let
-      cred = settings.${optName} or null;
-    in
-      if cred != null && cred ? file
-      then cred.file
-      else null)
+  mkCredentialAssignments = pkgs: credentialVars: settings:
+    lib.concatStringsSep "\n" (mapAttrsToList (optName: spec:
+      redact.assign {
+        inherit pkgs;
+        option = "settings.${optName}";
+        variable = spec.envVar;
+        value = settings.${optName};
+        export = true;
+      })
     credentialVars);
-
-  # `mkCredentialsSnippet` also lives in lib/credentials.nix now (it is
-  # inherited above). It still uses absolute store paths for every
-  # command — Claude Code's MCP `env` field REPLACES the process
-  # environment, so a bare `cat` there fails with "command not found"
-  # and the server starts silently unauthenticated.
 
   # ── Secrets wrapper for stdio servers with credentials ─────────────
   # Returns a string (store path) for use directly as a command.
@@ -135,7 +121,8 @@
     drv = pkgs.writeShellScript (name + "-env") ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      ${mkCredentialsSnippet pkgs credentialVars settings}
+      export PATH="${lib.makeBinPath [pkgs.coreutils]}''${PATH:+:$PATH}"
+      ${mkCredentialAssignments pkgs credentialVars settings}
       exec "${getExe package}" "$@"
     '';
   in "${drv}";
@@ -189,8 +176,7 @@
     then
       {
         type = "http";
-        # A plain-string url passes through. A credential-valued url (an
-        # attrset { file|helper; ... }) must have been resolved to a
+        # A plain-string url passes through. A credential-valued url (a redact reference) must have been resolved to a
         # sentinel placeholder string by the Kiro preprocessor BEFORE
         # reaching here; if one arrives raw, a non-Kiro ecosystem is
         # rendering it (Kiro never hits this — it preprocesses first), so
@@ -202,7 +188,7 @@
           else url;
       }
       # Plain-string headers pass through. A credential-valued header
-      # (an attrset { file|helper; ... }) must have been resolved to a
+      # (a redact reference) must have been resolved to a
       # `${env:VAR}` placeholder string by the Kiro preprocessor BEFORE
       # reaching here; if one arrives raw, a non-Kiro ecosystem is
       # rendering it (Kiro never hits this — it preprocesses first), so
@@ -329,6 +315,7 @@ in {
     isExternal
     loadServer
     mkCfgShim
+    mkCredentialAssignments
     mkCredentialsOption
     mkCredentialsSnippet
     mkHttpEntry

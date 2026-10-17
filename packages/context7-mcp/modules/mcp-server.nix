@@ -1,8 +1,4 @@
-{
-  lib,
-  mcpLib,
-  ...
-}: let
+{lib, ...}: let
   inherit (lib) mkOption optionalAttrs types;
 in {
   meta = {
@@ -25,7 +21,11 @@ in {
   };
 
   settingsOptions = {
-    credentials = mcpLib.mkCredentialsOption "CONTEXT7_API_KEY";
+    credentials = mkOption {
+      type = types.nullOr (import ../../../lib/redact {inherit lib;}).types.redacted;
+      default = null;
+      description = "Redact reference resolved into CONTEXT7_API_KEY when the server starts.";
+    };
 
     path = mkOption {
       type = types.str;
