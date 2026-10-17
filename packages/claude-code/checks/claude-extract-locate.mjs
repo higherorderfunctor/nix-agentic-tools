@@ -66,6 +66,18 @@ const check = (name, ok, detail) => {
   );
 };
 
+// ── The @internal marker identifies the filter by its calls, not substrings ──
+// 2.1.302 named the predicate `ys`; `Object.keys(` in the smaller recursive
+// decoy is not a call to it.
+check(
+  "internal marker: a member call ending in the predicate name is not a call",
+  L.locateFilterByMarker(
+    'var M=/^@internal/;function ys(e){return typeof e==="string"&&M.test(e)}' +
+      "function gp(e,n){return Object.keys(n).every((r)=>gp(e,r))}" +
+      "function F(e,n){if(ys(e.description))return;for(let c of e)F(c,n)}",
+  ) === "F",
+);
+
 // ── The schema description identifies the direct builder or its wrapper ──
 const schemaDescription = L.ANCHORS.schemaKeyDescription;
 check(

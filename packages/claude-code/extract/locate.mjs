@@ -388,13 +388,17 @@ export function locateFilterByMarker(src) {
   ).exec(src);
   if (!mp) return null;
   const pred = mp[1];
+  // A bare substring test is not a call test: at 2.1.302 the predicate is
+  // `ys`, and every `Object.keys(` in an unrelated recursive function matched.
+  const calls = (body, name) =>
+    new RegExp(`(?<![A-Za-z0-9_$.])${escId(name)}\\(`).test(body);
   const re = /function\s+[A-Za-z0-9_$]+\s*\(/g;
   const found = [];
   for (const m of src.matchAll(re)) {
     const span = functionSpan(src, m.index);
     if (!span || span.end < 0) continue;
     const body = src.slice(span.bodyStart, span.end);
-    if (body.includes(pred + "(") && body.includes(span.name + "(")) {
+    if (calls(body, pred) && calls(body, span.name)) {
       found.push({ name: span.name, size: span.end - span.bodyStart });
     }
   }
