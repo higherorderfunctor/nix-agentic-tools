@@ -51,6 +51,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Overlay parity needs a foreign nixpkgs revision independent of devenv.
+    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-26.05";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";

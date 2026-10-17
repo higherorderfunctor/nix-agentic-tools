@@ -1,7 +1,7 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-17 — overlay parity uses this flake's nixpkgs with
-> a marked stdenv to make foreign derivations differ by construction.
+> **Last verified:** 2026-10-17 — overlay parity uses a stable nixpkgs input
+> independent of devenv, with a cheap foreign hello positive control.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -157,11 +157,10 @@ the module defaults. The consumer then owns the recipe breakage above.
 ### `checks.nat-overlay-parity`
 
 Eval-only; every assertion compares drvPath or out path strings, or whether one
-evaluates. The foreign set imports this flake's nixpkgs with
-`config.replaceStdenv`: `stdenvAdapters.addAttrsToDerivation` adds a harmless
-`natOverlayParityForeign` environment attribute. Packages built on that set have
-different derivations by construction, without another nixpkgs input. Each
-import retains its caller's license configuration.
+evaluates. The foreign set imports the `nixpkgs-stable` flake input
+(`nixos-26.05`), independently locked from this flake's unstable nixpkgs and
+from devenv. Each import retains its caller's license configuration. The hello
+drvPath positive control fails if the two package sets stop differing.
 
 - **A** the overlay over the foreign nixpkgs gives `ciPackages`' drv for every
   claimed leaf, and the claim list equals the `ciPackages` leaves except the
@@ -182,6 +181,7 @@ import retains its caller's license configuration.
   `ciPackages`' rumdl. Disabling the probe, any override re-check, the
   `meta.available` copy or `rootsFor`'s `checkedBy` fails C (measured
   2026-10-04).
+- **D** foreign `hello` differs from this flake's `hello`.
 - **E** every module package default, both backends, over a base with none of
   this flake's roots (the harness's `injectAi = false`), equals `ciPackages`,
   and with the overlay equals the overlay attribute. Sites that build from a
@@ -191,7 +191,7 @@ import retains its caller's license configuration.
   checked in the claude tree and, on devenv, in the shared AGENTS.md writer's.
 - **F** `pkgsStatic` takes the fallback.
 - **G** no module file reads `pkgs.<root>` for any claimed root. A new module
-  that passes the unmodified `pkgs` to a factory is not caught by H, only by
+  that passes the unmodified `pkgs` to a factory is not caught by G, only by
   adding its row to E. `lib/ai/**` is not scanned: its public factories take the
   caller's `pkgs` by design.
 

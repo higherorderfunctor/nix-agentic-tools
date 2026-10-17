@@ -1,7 +1,7 @@
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-17 — overlay parity uses this flake's marked
-> nixpkgs; check caching needs no separate evaluation-input retention.
+> **Last verified:** 2026-10-17 — overlay parity uses the ordinary
+> `nixpkgs-stable` input; no patched evaluation source needs retention.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -59,6 +59,12 @@ cache, configured before `check-cache`; the daily GC job also enables that
 read-only substituter. On a cold main or same-repository PR run, the early job
 pays one Rust build before cache consumers start. Fork PRs have no publication
 token, so their test job builds the binary locally if it is absent from Cachix.
+
+Overlay parity imports the ordinary `nixpkgs-stable` flake source directly.
+Unlike devenv's patched nixpkgs output, it requires no evaluation-time source
+build or explicit Hestia registration. Nix fetches the locked input normally;
+its packages use the existing `cache.nixos.org` substituter. This does not
+establish a warm-cache result for evaluation-only sources.
 
 Cold or changed inputs, eviction, and inaccessible GitHub cache scopes still
 require upstream substitution or a local build. The default branch continues to

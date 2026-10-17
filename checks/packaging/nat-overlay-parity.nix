@@ -20,13 +20,14 @@
 #      `meta.available`, and so do the module roots (`rootsFor`); `allowUnfree`
 #      and `allowUnfreePredicate` each admit claude-code with that drv;
 #      `.overrideAttrs` and `.overrideDerivation` are checked again
+#   D  foreign hello differs, so comparing the same package set cannot pass
 #   E  every module package default, both backends, with and without the
 #      overlay, over a base with NO `ai` attribute
 #   F  the fallback (non-native triple) still builds on `final`
 #   G  no module file reads a root (`pkgs.ai`, `pkgs.docs`, ...) from raw pkgs
 #
-# Linux only: F uses pkgsStatic. The foreign set uses this flake's nixpkgs
-# with a marked stdenv, so building on it changes derivations by construction.
+# Linux only: F uses pkgsStatic. The foreign set uses the stable nixpkgs input;
+# D checks that it produces a different derivation from this flake's nixpkgs.
 #
 # B's refusal rows assume a pure evaluation. Under `--impure` with
 # NIXPKGS_ALLOW_UNFREE=1, or a ~/.config/nixpkgs/config.nix allowing unfree,
@@ -53,20 +54,9 @@
   overlay = self.overlays.default;
 
   # ── Foreign nixpkgs ────────────────────────────────────────────────
-  # A harmless environment attribute changes every derivation built with the
-  # foreign stdenv without fetching or depending on a second nixpkgs revision.
   foreignWith = config:
-    import inputs.nixpkgs {
-      inherit system;
-      config =
-        config
-        // {
-          replaceStdenv = {pkgs}:
-            pkgs.stdenvAdapters.addAttrsToDerivation {
-              natOverlayParityForeign = "1";
-            }
-            pkgs.stdenv;
-        };
+    import inputs.nixpkgs-stable {
+      inherit config system;
     };
   foreign = foreignWith {allowUnfree = true;};
   foreignFree = foreignWith {};
@@ -409,6 +399,7 @@
     ++ lib.optional (sorted (lib.subtractLists (ciOnlyNames ++ publicNames) (builtins.attrNames ciPackages)) != unfreeNames)
     "B: ciPackages minus packages is not exactly the unfree leaves ${toString unfreeNames}"
     ++ map (message: "C: ${message}") consumerMismatches
+    ++ lib.optional (drvOf foreign.hello == drvOf pkgs.hello) "D: foreign hello is identical; the foreign package set is untested"
     ++ map (message: "E: ${message}") defaultMismatches
     ++ lib.optional (natSystemOf pkgs != system) "F: natSystemOf rejects this flake's own native set"
     ++ lib.optional (natSystemOf staticPkgs != null) "F: natSystemOf accepts pkgsStatic"
