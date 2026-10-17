@@ -6,7 +6,8 @@
 # `packages/<name>/modules/mcp-server.nix` returns this shape.
 #
 # Fields:
-#   meta.modes         — { stdio = "cmd ..."; http? = "cmd ..." | "bridge"; }
+#   meta.modes         — { stdio = "binary args..."; http? = "binary args..." | "bridge"; }
+#                        Space-separated argv; environment belongs in settingsToEnv.
 #   meta.scope         — "local" | "remote"
 #   meta.defaultPort?  — default port for HTTP binding (absent for stdio-only)
 #   meta.honorsServiceHost? — required bool for native HTTP modes
@@ -25,7 +26,7 @@ _: {
   # Predicate: server has a locally-packaged binary (not external).
   hasLocalPackage = serverDef: !(serverDef.meta ? external && serverDef.meta.external);
 
-  # Predicate: server can run as a systemd service (local package + HTTP mode).
+  # Predicate: server can run as a managed service (local package + HTTP mode).
   hasServiceCapability = serverDef:
     !(serverDef.meta ? external && serverDef.meta.external)
     && serverDef.meta.modes ? http;

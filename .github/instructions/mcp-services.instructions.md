@@ -7,8 +7,9 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/mcpServer/mk
 
 ## Managed MCP Service Bind-Address Contract
 
-> **Last verified:** 2026-10-06 — the native-declaration table has one row
-> (`nixos-mcp`). Full lineage:
+> **Last verified:** 2026-10-17 — managed MCP daemons declare ai.services; the
+> shared launcher owns environment resolution, rotation and port claims. Native
+> HTTP transport selection uses settingsToEnv. Full lineage:
 > `git show ed5898b1:dev/fragments/mcp-services/service-host-contract.md`.
 
 `services.mcp-servers.servers.<name>.service.host` is a security control, not
@@ -63,3 +64,19 @@ without per-server metadata, audited native support accepts one, unaudited
 native mode fails, and audited unsupported native mode rejects one. A real
 server marked unsupported also needs a module-eval rejection test so its
 metadata cannot drift from the factory-only fixtures.
+
+Managed servers declare `ai.mcp-services.services."mcp-<name>"`. Their command
+is upstream argv from `meta.modes` and `settingsToArgs`, with package-resolved
+executables; bridge argv puts `mcp-proxy` before the stdio child and passes its
+host and port explicitly. Native modes put transport environment selection in
+`settingsToEnv`, not in a shell command prefix. HTTP settings and credential
+references form the service environment; a secret-named variable there takes
+only a redact reference, so a plain token in `env` fails evaluation.
+`ports.main` registers the listener in the shared claims registry, so two
+daemons cannot claim one port.
+
+The generic launcher resolves credentials at start. File references derive
+rotation triggers automatically; Home Manager activation compares content and
+try-restarts running units after the secrets point. Command references have no
+file trigger. Linux retains `mcp-<name>.service`; Darwin warns for each daemon
+because the Home Manager backend does not support launchd.

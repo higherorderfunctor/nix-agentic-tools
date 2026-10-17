@@ -5,7 +5,8 @@
 > with redact.assign, and abort on failed reads. Kiro headers resolve at launch,
 > URLs during files-engine apply after the secrets point. Proxy daemons use
 > ai.services and scoped service claims on both backends; devenv up starts the
-> generated proxy process.
+> generated proxy process; managed MCP daemons use the shared launcher and
+> derive rotation triggers from credential file references.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -42,6 +43,24 @@ world-readable store or in committed config. Files:
 - `packages/kiro-cli/lib/mkKiro.nix` — `mkMcpJsonScript` + wiring.
 - `packages/kiro-cli/lib/wrapPackage.nix` — `secretEnv` → the runtime `export`
   that puts the decrypted value in the launcher's env.
+
+### Managed MCP daemon credentials
+
+`services.mcp-servers` declares `ai.mcp-services.services."mcp-<name>"`. Its
+credential settings become reference-valued environment entries, resolved by the
+generic `ai.services` launcher before it execs upstream argv.
+
+| Consumer                     | Credential reader           | Rotation                                       |
+| ---------------------------- | --------------------------- | ---------------------------------------------- |
+| Client-launched stdio server | `lib/mcp.nix` stdio wrapper | Next client launch                             |
+| Managed MCP daemon           | `ai.services` launcher      | File references derive shared restart triggers |
+| Proxy daemon                 | `ai.services` launcher      | File references derive shared restart triggers |
+
+Home Manager compares trigger file content after the secrets point and
+try-restarts a running daemon when its recorded fingerprint changes. The first
+activation only records a fingerprint; command references provide no file to
+watch. Managed MCP daemons need no separate credential wrapper or rotation
+activation entry.
 
 ### The proxy path — `proxy.enable`, and why it is the preferred one
 
