@@ -1,0 +1,418 @@
+Patch for Mic92/hestia v3.1.0 after pr-manifest-scope.patch.
+
+Keep each ref's main/PR head plus upstream's creation grace; delete by ID
+and prune history before planning/repacking.
+
+--- a/src/gc.rs
++++ b/src/gc.rs
+@@ -1156,52 +1156,60 @@
+         Ok(deleted)
+     }
+
+-    /// Execute step 6 of 6: delete superseded manifest versions (`m#K` for
+-    /// `K < newest`). Without this, every drain and GC commit leaves one
+-    /// dead entry behind forever.
++    /// Delete superseded main and PR manifests, keeping each ref's head.
++    /// Reuse the creation-age grace of main manifests for in-flight readers.
+     pub async fn cleanup_manifests(&self, now: u64) -> Result<usize, Error> {
+-        let prefix = format!("{}#", self.manifest_prefix);
+-        let entries = self.rest.list_caches(&prefix).await?;
+-        let indexed: Vec<(u64, &CacheEntry)> = entries
+-            .iter()
+-            // Another namespace's m#N sequence restarts at 1; letting its
+-            // (possibly higher) indices into `newest` would make GC delete
+-            // this namespace's live manifest head.
+-            .filter(|entry| entry.version == self.twirp.version())
+-            .filter_map(|entry| Some((parse_manifest_index(&prefix, &entry.key)?, entry)))
+-            .collect();
+-        let Some(newest) = indexed.iter().map(|(index, _)| *index).max() else {
+-            return Ok(0);
++        let mut deleted = 0;
++        for family in [
++            &self.manifest_prefix,
++            &format!("{}pr", self.manifest_prefix),
++        ] {
++            let prefix = format!("{family}#");
++            let entries = self.rest.list_caches(&prefix).await?;
++            let indexed: Vec<(u64, &CacheEntry)> = entries
++                .iter()
++                .filter(|entry| entry.version == self.twirp.version())
++                // Missing identity cannot safely participate in retention.
++                .filter(|entry| entry.id != 0 && !entry.cache_ref.is_empty())
++                .filter_map(|entry| Some((parse_manifest_index(&prefix, &entry.key)?, entry)))
++                .collect();
++            let mut newest: BTreeMap<&str, u64> = BTreeMap::new();
++            for (index, entry) in &indexed {
++                let head = newest.entry(&entry.cache_ref).or_insert(*index);
++                *head = (*head).max(*index);
++            }
++            for (index, entry) in indexed {
++                // Unknown ages are retained, as in upstream main cleanup.
++                let Some(created) = entry.created_unix() else {
++                    continue;
++                };
++                if index < newest[entry.cache_ref.as_str()]
++                    && now.saturating_sub(created) > self.policy.min_age
++                    && self.rest.delete_by_id(entry.id).await?
++                {
++                    deleted += 1;
++                }
++            }
++        }
++        Ok(deleted)
++    }
++
++    /// The full GC flow: prune history, then plan and execute pack work in
++    /// crash-safe order. Dry runs only plan.
++    pub async fn run(&self, dry_run: bool, now: u64) -> Result<GcReport, Error> {
++        // Prune before planning downloads every surviving main manifest.
++        // Heads and reader grace survive; plan and commit reload their inputs.
++        let manifests_deleted = if dry_run {
++            0
++        } else {
++            self.cleanup_manifests(now).await?
+         };
+-
+-        let mut deleted = 0;
+-        for (index, entry) in indexed {
+-            // Keep the newest version; older ones must also be old enough
+-            // that no in-flight reader still holds their download URL.
+-            // An unparsable timestamp means the age is unknown: skip the
+-            // entry rather than judging it infinitely old.
+-            let Some(created) = entry.created_unix() else {
+-                continue;
+-            };
+-            let age = now.saturating_sub(created);
+-            if index < newest
+-                && age > self.policy.min_age
+-                && !self.rest.delete_by_key(&entry.key).await?.is_empty()
+-            {
+-                deleted += 1;
+-            }
+-        }
+-        Ok(deleted)
+-    }
+-
+-    /// The full GC flow: plan, then (unless `dry_run`) execute every step in
+-    /// crash-safe order.
+-    pub async fn run(&self, dry_run: bool, now: u64) -> Result<GcReport, Error> {
+         let (_, _, gc_plan) = self.plan(now).await?;
+         eprintln!("hestia gc: plan: {}", gc_plan.summary());
+
+         let mut report = GcReport {
+             plan: gc_plan.clone(),
++            manifests_deleted,
+             ..GcReport::default()
+         };
+         if dry_run {
+@@ -1221,7 +1229,7 @@
+         let outcome = self.commit(&repacks, now).await?;
+         report.manifest_version = outcome.version;
+
+-        // 4-6. Deletes happen strictly after the commit landed. Recency is
++        // 4-5. Pack deletes happen strictly after the commit landed. Recency is
+         // re-checked against a fresh listing right before deleting: between
+         // the commit and here, a drain can have re-uploaded (or CAS-touched)
+         // a pack in the stale delete sets, and that drain must win.
+@@ -1241,7 +1249,6 @@
+             .collect();
+         report.packs_deleted = self.delete_packs(&deletable).await?;
+         report.orphans_deleted = self.delete_orphans(&orphan_keys).await?;
+-        report.manifests_deleted = self.cleanup_manifests(now).await?;
+
+         Ok(report)
+     }
+--- a/src/gha/rest.rs
++++ b/src/gha/rest.rs
+@@ -7,6 +7,7 @@
+ //! ```text
+ //! GET    /repos/{repo}/actions/caches?key={prefix}&per_page=&page=
+ //! DELETE /repos/{repo}/actions/caches?key={key}
++//! DELETE /repos/{repo}/actions/caches/{cache_id}
+ //! ```
+ //!
+ //! The workflow needs `permissions: actions: write` for deletion.
+@@ -185,6 +186,10 @@
+ /// path bump it, which is what makes 1-byte Range reads work as GC touches.
+ #[derive(Debug, Clone, Deserialize)]
+ pub struct CacheEntry {
++    #[serde(default)]
++    pub id: u64,
++    #[serde(default, rename = "ref")]
++    pub cache_ref: String,
+     pub key: String,
+     /// Cache `version` namespace the entry was created under (the value the
+     /// Twirp client sent with CreateCacheEntry). Lets GC distinguish its own
+@@ -346,6 +351,11 @@
+             };
+             let status = response.status();
+             if status.is_success() {
++                // ID deletion returns 204 with no JSON body.
++                if status == reqwest::StatusCode::NO_CONTENT {
++                    return serde_json::from_value(serde_json::Value::Null)
++                        .map_err(|err| Error::InvalidResponse(err.to_string()));
++                }
+                 return Ok(response.json().await?);
+             }
+
+@@ -435,6 +445,18 @@
+                 return Ok(Some(entries));
+             }
+             page += 1;
++        }
++    }
++
++    /// Delete exactly one cache entry, preserving same-key entries in other
++    /// refs and version namespaces. A concurrent deletion is idempotent.
++    pub async fn delete_by_id(&self, id: u64) -> Result<bool, Error> {
++        let url = format!("{}/{id}", self.caches_url());
++        let request = self.request(reqwest::Method::DELETE, &url);
++        match self.send::<()>(&url, request, true).await {
++            Ok(()) => Ok(true),
++            Err(Error::Status { status: 404, .. }) => Ok(false),
++            Err(err) => Err(err),
+         }
+     }
+
+--- a/tests/gc.rs
++++ b/tests/gc.rs
+@@ -221,7 +221,8 @@
+
+         // The old pack stays stored while any surviving manifest version
+         // references it; once cleanup has aged those versions out, the
+-        // orphan sweep collects it (within two further nightly runs).
++        // orphan sweep collects it in that same follow-up run, because
++        // manifest cleanup now precedes planning and pack protection.
+         let stored = sim.stored_pack_keys().await;
+         assert!(stored.contains(&pack_cache_key(&original_pack)));
+         let mut swept_at = None;
+@@ -240,7 +241,7 @@
+         }
+         assert_eq!(
+             swept_at,
+-            Some(2),
++            Some(1),
+             "the old pack must be swept exactly once every protecting \
+              version aged out (not earlier, not never)"
+         );
+--- /dev/null
++++ b/tests/gc_pr_retention.rs
+@@ -0,0 +1,117 @@
++//! Manifest retention uses repository-wide REST identities, never key deletion.
++mod support;
++
++use std::collections::BTreeSet;
++use std::time::Duration;
++
++use hestia::gc::{GcContext, GcPolicy, SECS_PER_HOUR};
++use support::fake_gha::FakeGha;
++
++const NOW: u64 = 1_800_000_000;
++
++fn context(fake: &FakeGha) -> GcContext {
++    let http = reqwest::Client::new();
++    GcContext {
++        twirp: fake.twirp(&http),
++        rest: fake.rest(&http),
++        http,
++        manifest_prefix: "m3".to_string(),
++        policy: GcPolicy::default(),
++    }
++}
++
++async fn ids(gc: &GcContext) -> BTreeSet<u64> {
++    gc.rest
++        .list_caches("")
++        .await
++        .unwrap()
++        .into_iter()
++        .map(|entry| entry.id)
++        .collect()
++}
++
++#[tokio::test]
++async fn retains_each_ref_head_and_creation_grace_in_own_namespace() {
++    tokio::time::timeout(Duration::from_secs(30), async {
++        let fake = FakeGha::start().await;
++        let gc = context(&fake);
++        let version = gc.twirp.version();
++        let old = NOW - 2 * SECS_PER_HOUR;
++        let a = "refs/pull/1/merge";
++        let b = "refs/pull/2/merge";
++        let main = "refs/heads/main";
++        // A's #1/#2 are stale while B's identically keyed #2 is its head.
++        // Numeric ordering matters: #10, not #9, is A's head.
++        let rows = [
++            ("m3pr#1", a, version, old, false),
++            ("m3pr#2", a, version, old, false),
++            ("m3pr#2", b, version, old, true),
++            ("m3pr#1", b, version, old, false),
++            ("m3pr#10", a, version, old, true),
++            ("m3pr#9", a, version, NOW - SECS_PER_HOUR, true),
++            ("m3pr#8", a, version, NOW - 30, true),
++            ("m3pr#7", a, version, NOW + 30, true),
++            ("m3pr#100", a, "foreign", old, true),
++            ("m3pr#1", a, "foreign", old, true),
++            ("m3pr#010", a, version, old, true),
++            ("m3pr#99", "", version, old, true),
++            ("m3#1", main, version, old, false),
++            ("m3#2", main, version, NOW - 30, true),
++            ("m3#3", main, version, old, true),
++            ("m3#1", main, "foreign", old, true),
++            ("pack-unrelated", main, version, old, true),
++        ];
++        let mut expected = BTreeSet::new();
++        for (key, cache_ref, namespace, created, keep) in rows {
++            let id = fake.insert_cache_entry(key, cache_ref, namespace, b"metadata only", created);
++            if keep {
++                expected.insert(id);
++            }
++        }
++        assert_eq!(gc.cleanup_manifests(NOW).await.unwrap(), 4);
++        assert_eq!(ids(&gc).await, expected);
++        assert_eq!(
++            gc.cleanup_manifests(NOW).await.unwrap(),
++            0,
++            "idempotent cleanup"
++        );
++        assert!(
++            fake.blob_requests().is_empty(),
++            "retention is metadata only"
++        );
++        // Exercise the real empty 204 response and already-deleted 404 path.
++        let id = fake.insert_cache_entry("other", a, version, b"", old);
++        assert!(gc.rest.delete_by_id(id).await.unwrap());
++        assert!(!gc.rest.delete_by_id(id).await.unwrap());
++    })
++    .await
++    .expect("retention test timed out");
++}
++
++#[tokio::test]
++async fn cleanup_precedes_failed_planning_but_dry_run_never_deletes() {
++    tokio::time::timeout(Duration::from_secs(30), async {
++        let fake = FakeGha::start().await;
++        let gc = context(&fake);
++        let version = gc.twirp.version();
++        let old = NOW - 2 * SECS_PER_HOUR;
++        fake.insert_cache_entry("m3#1", "refs/heads/main", version, b"bad manifest", old);
++        let head =
++            fake.insert_cache_entry("m3#2", "refs/heads/main", version, b"bad manifest", old);
++        fake.insert_cache_entry("m3pr#1", "refs/pull/1/merge", version, b"", old);
++        let pr_head = fake.insert_cache_entry("m3pr#2", "refs/pull/1/merge", version, b"", old);
++        let before = ids(&gc).await;
++        assert!(
++            gc.run(true, NOW).await.is_err(),
++            "invalid manifest must fail planning"
++        );
++        assert_eq!(ids(&gc).await, before, "dry run deleted entries");
++        assert!(
++            gc.run(false, NOW).await.is_err(),
++            "cleanup must not mask plan errors"
++        );
++        assert_eq!(ids(&gc).await, BTreeSet::from([head, pr_head]));
++    })
++    .await
++    .expect("early cleanup test timed out");
++}
+--- a/tests/support/fake_gha.rs
++++ b/tests/support/fake_gha.rs
+@@ -8,7 +8,7 @@
+ //!   GetCacheEntryDownloadURL, with real reservation semantics
+ //!   (`already_exists` blocks reserved-but-unfinalized keys too).
+ //! * Azure blob: PUT BlockBlob / GET with Range, gated on signed URLs.
+-//! * GitHub REST: list (prefix + pagination) / delete by key.
++//! * GitHub REST: list (prefix + pagination) / delete by key or ID.
+ //!
+ //! Test-only injection endpoints simulate the failure modes GitHub will
+ //! throw at us in production:
+@@ -55,6 +55,7 @@
+ #[derive(Debug, Clone)]
+ struct Entry {
+     id: u64,
++    cache_ref: String,
+     key: String,
+     version: String,
+     finalized: bool,
+@@ -194,6 +195,7 @@
+     let created_at = inner.tick();
+     inner.entries.push(Entry {
+         id,
++        cache_ref: "refs/heads/main".to_string(),
+         key: request.key,
+         version: request.version,
+         finalized: false,
+@@ -459,7 +461,7 @@
+ fn rest_entry_json(entry: &Entry) -> serde_json::Value {
+     json!({
+         "id": entry.id,
+-        "ref": "refs/heads/main",
++        "ref": entry.cache_ref,
+         "key": entry.key,
+         "version": entry.version,
+         // The real REST API reports RFC 3339 UTC timestamps.
+@@ -520,6 +522,19 @@
+         "actions_caches": removed_json,
+     }))
+     .into_response()
++}
++
++async fn rest_delete_id(
++    State(state): State<AppState>,
++    Path((_owner, _repo, id)): Path<(String, String, u64)>,
++) -> StatusCode {
++    let mut inner = state.inner.lock().unwrap();
++    let Some(index) = inner.entries.iter().position(|entry| entry.id == id) else {
++        return StatusCode::NOT_FOUND;
++    };
++    inner.entries.remove(index);
++    std::fs::remove_file(inner.blob_path(id)).unwrap();
++    StatusCode::NO_CONTENT
+ }
+
+ // ---------------------------------------------------------------------------
+@@ -640,6 +655,10 @@
+             .route(
+                 "/repos/{owner}/{repo}/actions/caches",
+                 get(rest_list).delete(rest_delete),
++            )
++            .route(
++                "/repos/{owner}/{repo}/actions/caches/{id}",
++                axum::routing::delete(rest_delete_id),
+             )
+             .route("/test/evict", post(test_evict))
+             .route("/test/expire-urls", post(test_expire_urls))
+@@ -677,6 +696,33 @@
+         }
+     }
+
++    /// Seed REST-visible entries in independent refs without broadening the
++    /// fake's single-scope Twirp lookup semantics.
++    pub fn insert_cache_entry(
++        &self,
++        key: &str,
++        cache_ref: &str,
++        version: &str,
++        data: &[u8],
++        created: u64,
++    ) -> u64 {
++        let mut inner = self.inner.lock().unwrap();
++        inner.next_id += 1;
++        let id = inner.next_id;
++        std::fs::write(inner.blob_path(id), data).unwrap();
++        inner.entries.push(Entry {
++            id,
++            cache_ref: cache_ref.to_string(),
++            key: key.to_string(),
++            version: version.to_string(),
++            finalized: true,
++            size: data.len() as u64,
++            created_at: created,
++            last_accessed_at: created,
++        });
++        id
++    }
++
+     /// All blob downloads served so far, in order.
+     pub fn blob_requests(&self) -> Vec<BlobRequest> {
+         self.inner.lock().unwrap().blob_requests.clone()
