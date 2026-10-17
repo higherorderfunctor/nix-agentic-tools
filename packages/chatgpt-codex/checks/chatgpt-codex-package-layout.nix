@@ -1,19 +1,5 @@
-# Runtime contract — Codex must recognize its own install as a complete
-# package, and start its background daemon from it.
-#
-# Since 0.157.0 an interactive `codex` launch auto-starts the app-server
-# daemon, and the daemon bootstrap refuses to run unless the CLI's canonical
-# executable sits at `<root>/bin/codex` beside `<root>/codex-package.json`.
-# 0.157.1 shipped here from the loose release binaries, with no manifest, and
-# every launch died with "this CLI has no complete local package". Nothing
-# failed at build time: `codex --version` does not consult the package.
-#
-# So this check runs the bootstrap itself, `codex app-server daemon start`,
-# against a throwaway CODEX_HOME, then stops it. That is the exact code path
-# (codex-rs/app-server-daemon, prepare_install.rs) that failed. It needs no
-# network and no credentials: the daemon copies the package and answers on a
-# local socket. The structural assertions before it name the broken piece
-# rather than leaving the reader a daemon error to decode.
+# Runtime contract: nixpkgs' complete package must bootstrap the real daemon.
+# Structure and helper stamps are checked before copying it to a fresh CODEX_HOME.
 {
   pkgs,
   self,
@@ -33,6 +19,8 @@
       pkgs.runCommand "chatgpt-codex-package-layout" {
         nativeBuildInputs = [pkgs.coreutils pkgs.findutils pkgs.jq pkgs.procps];
       } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         fail() {
           echo "FAIL: $*" >&2
           exit 1
@@ -58,18 +46,17 @@
           [ -f "$root/$f" ] && [ -x "$root/$f" ] || fail "package is missing executable $f"
         done
 
-        # Voice refuses any CLI whose stamped commit differs from the voice
-        # host's own. Running the host also proves it executes on this
-        # platform after patching.
-        commit="$(jq -r .buildCommit "$root/codex-resources/voice/manifest.json")"
-        [ "$("$root/codex-resources/voice/bin/codex-voice-host" --build-commit)" = "$commit" ] \
-          || fail "voice host does not report the manifest's build commit $commit"
+        # The CLI must carry the source commit used by the voice handshake.
+        commit=${pkgs.lib.escapeShellArg codex.buildCommit}
         grep -qaF "$commit" "$root/bin/codex" \
           || fail "bin/codex is not stamped with the voice build commit $commit"
 
-        # The bootstrap copies the tree and rejects links that leave it.
-        links="$(find "$root" -type l)"
-        [ -z "$links" ] || fail "package contains symlinks: $links"
+        [ "$(find "$root" -name codex-package.json | wc -l)" -eq 1 ] \
+          || fail "package must contain one layout"
+        [ "$(find "$root" -name codex-voice-host | wc -l)" -eq 1 ] \
+          || fail "package must contain one voice host"
+        [ "$(find "$pkg/bin" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)" = "$(printf '%s\n' codex codex-code-mode-host)" ] \
+          || fail "unexpected public executable set"
 
         # The behavioral half: the bootstrap that failed. A short CODEX_HOME
         # keeps the control socket under the Unix path-length limit.
@@ -87,7 +74,9 @@
         # the build.
         pkill -f "$CODEX_HOME" || :
 
-        echo "ok — Codex starts its daemon from ${codex}" > $out
+        echo "ok — Codex starts its daemon from ${codex}" > "$out"
       '';
+    # Exercise the framed handshake and initialize GStreamer with discovery disabled.
+    chatgpt-codex-voice-runtime = codex.passthru.tests.voice-runtime;
   };
 }

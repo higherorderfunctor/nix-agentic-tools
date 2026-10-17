@@ -1234,6 +1234,31 @@ in {
         && lib.all (assertion: assertion.assertion) hm.config.assertions
     );
 
+    module-codex-daemon-hm-pins-launcher-package = mkTest "codex-daemon-hm-pins-launcher-package" (
+      let
+        package = aiStubs.chatgpt-codex;
+        launcher = harness.aiBase.mkLauncher pkgs {
+          environmentVariables.CODEX_SELECTED_LAUNCHER = "1";
+          exe = "codex";
+          name = "codex-selected-launcher";
+          inherit package;
+        };
+        settings.ai.codex = {
+          enable = true;
+          package = launcher;
+        };
+        hm = evalHm settings;
+        devenv = evalDevenv settings;
+        packageRoot = builtins.unsafeDiscardStringContext "${package}/${package.passthru.codexPackage.root}";
+      in
+        lib.hasSuffix " ${packageRoot}" hm.config.ai.codex.activation.codex-daemon-select.command
+        && daemonSettings hm == {updater.autoUpdateEnabled = false;}
+        && lib.all (assertion: assertion.assertion) hm.config.assertions
+        && lib.all (assertion: assertion.assertion) devenv.config.assertions
+        && (builtins.head hm.config.home.packages).launcherPackage == package
+        && (builtins.head devenv.config.packages).launcherPackage == package
+    );
+
     # Declared daemon settings land beside the pin's updater default, and an
     # explicit updater choice beats it.
     module-codex-daemon-hm-settings-are-declared = mkTest "codex-daemon-hm-settings-are-declared" (

@@ -69,6 +69,8 @@ in {
       pkgs.runCommand "chatgpt-codex-daemon-selection" {
         nativeBuildInputs = [pkgs.coreutils pkgs.flock pkgs.jq pkgs.procps];
       } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         ${harness.hmRunShim}
         fail() {
           echo "FAIL: $*" >&2
@@ -103,7 +105,7 @@ in {
             || fail "daemon start from $1 failed"
           pid="$(jq -er .pid start.json)" || fail "daemon start reported no pid: $(cat start.json)"
           exe="$(readlink "/proc/$pid/exe")"
-          [ "$exe" = "$1/bin/codex" ] || fail "daemon runs $exe, not $1/bin/codex"
+          [ "$exe" = "$(realpath "$1/bin/codex")" ] || fail "daemon runs $exe, not $1/bin/codex"
           sleep 2
           [ ! -e "$selection/releases" ] || fail "the daemon from $1 copied the package into releases/"
           [ ! -e "$CODEX_HOME/app-server-daemon/daemon-updater.pid" ] \
