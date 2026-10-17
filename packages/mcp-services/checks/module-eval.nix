@@ -35,10 +35,9 @@ in {
       source = lib.fileset.toSource {
         root = ../../..;
         fileset = lib.fileset.unions [
-          ../../../lib/credentials.nix
-          ../../../lib/redact
-          ../../../lib/runtime-values
           ../../../lib/mcp.nix
+          ../../../lib/open-keys
+          ../../../lib/redact
           ../../../packages/gitlab-mcp/modules/mcp-server.nix
         ];
       };
@@ -100,7 +99,6 @@ in {
       source = lib.fileset.toSource {
         root = ../../..;
         fileset = lib.fileset.unions [
-          ../../../lib/credentials.nix
           ../../../lib/mcp.nix
           ../../../packages/git-intel-mcp/modules/mcp-server.nix
         ];

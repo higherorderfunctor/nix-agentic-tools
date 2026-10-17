@@ -2,7 +2,7 @@
 # so a consumer that declares options before `pkgs` exists (the git tools'
 # option modules) can call it.
 {lib}: let
-  inherit (import ../runtime-values {inherit lib;}) classify;
+  inherit (import ../redact/classify.nix {inherit lib;}) classify;
   nonBlank = value: builtins.isString value && builtins.match "[[:space:]]*" value == null;
 in {
   # Facts carry upstream types. Only string leaves and string-to-string maps

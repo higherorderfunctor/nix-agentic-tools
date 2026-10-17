@@ -81,9 +81,6 @@
   in
     (serverDef.settingsToArgs cfgShim mode) ++ extraArgs;
 
-  # Kimchi still uses the legacy credential options and snippets.
-  inherit (import ./credentials.nix {inherit lib;}) mkCredentialsOption mkCredentialsSnippet;
-
   hasCredentials = credentialVars: settings:
     any (optName: settings.${optName} != null) (builtins.attrNames credentialVars);
 
@@ -316,8 +313,6 @@ in {
     loadServer
     mkCfgShim
     mkCredentialAssignments
-    mkCredentialsOption
-    mkCredentialsSnippet
     mkHttpEntry
     mkPackageEntry
     mkSecretsWrapper

@@ -2,7 +2,7 @@
 # nothing is read at evaluation, and the reader resolves it when a launcher
 # starts. Design and the leak-safe error choice: dev/fragments/redact/redact.md.
 {lib}: let
-  inherit (import ../runtime-values {inherit lib;}) classify;
+  inherit (import ./classify.nix {inherit lib;}) classify;
 
   # A path is refused with an empty, `.` or `..` segment, so the path tested is
   # the path the reader opens or runs; symlinks are not resolved.
@@ -129,7 +129,7 @@ in {
   concat = parts: sealed "redact.concat" {_redact.concat = parts;};
   file = path: sealed "redact.file" {_redact.file = path;};
   types = {
-    # Secret-classified names (lib/runtime-values) take `redacted`, any other
+    # Secret-classified names (classify.nix) take `redacted`, any other
     # name `maybeRedacted str`. null drops the definition and `assign` emits
     # nothing for it: an inherited variable is not unset, which is left to the
     # consumer's launcher.

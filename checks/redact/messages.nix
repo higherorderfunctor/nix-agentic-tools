@@ -14,7 +14,6 @@
     fileset = lib.fileset.unions [
       ../../lib/open-keys
       ../../lib/redact
-      ../../lib/runtime-values
     ];
   };
   # Each value receives the sentinel where a consumer would put a secret, and

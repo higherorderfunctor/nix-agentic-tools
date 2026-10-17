@@ -333,7 +333,7 @@ for it. When several entries match, their guidance composes.
   - Match:
     - `checks/open-keys/**`
     - `lib/open-keys/**`
-    - `lib/runtime-values/classify.nix`
+    - `lib/redact/classify.nix`
     - `packages/chatgpt-codex/lib/mkCodex.nix`
     - `packages/claude-code/lib/mkClaude.nix`
     - `packages/kiro-cli/lib/mkKiro.nix`

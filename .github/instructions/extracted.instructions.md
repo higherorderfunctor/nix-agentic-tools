@@ -214,10 +214,9 @@ never as a fact source for Nix. The probe work owns the rewrite of this section.
 
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-15 — each owner commits one `extracted.json` with
-> `__platforms` forks; `load` projects it per system; `regenerate` carries a
-> host's fresh raws into it, and only a Linux carry makes other systems follow;
-> owner checks use `mkOwnerCheck`.
+> **Last verified:** 2026-10-17 — owners commit forked `extracted.json`; Linux
+> carries make other systems follow; owner checks use `mkOwnerCheck`; facts and
+> reconciliation share the private redact classifier.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -398,7 +397,7 @@ merge {
   decisions ? {};            # parsed decisions.json
   raws;                      # { "<system>" = <parsed raw tree>; }
   systems;                   # import ../../config/systems.nix
-  secretHints ? {};          # passed to lib.runtimeValues.classify per key
+  secretHints ? {};          # passed to lib/redact/classify.nix per key
 }
 → {
   aggregate = {

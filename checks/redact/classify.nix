@@ -2,10 +2,9 @@
 {
   harness,
   lib,
-  self,
   ...
 }: let
-  inherit (self.lib.runtimeValues) classify;
+  inherit (import ../../lib/redact/classify.nix {inherit lib;}) classify;
   cases = {
     "--api-key" = true;
     "absorb.token" = true;
@@ -99,7 +98,7 @@
     ++ contextCases;
   mismatches = builtins.filter (entry: classify entry.input != entry.expected) expectations;
 in {
-  checks.runtime-values-classifier = harness.mkTest "runtime-values-classifier" (
+  checks.redact-classifier = harness.mkTest "redact-classifier" (
     assert lib.assertMsg (mismatches == []) (builtins.toJSON mismatches); true
   );
 }

@@ -1465,7 +1465,7 @@ in {
       '';
 
     # References must evaluate without becoming shell environment entries;
-    # literals and the retired credential records fail on both backends.
+    # literals and unmarked file or helper records fail on both backends.
     module-kimchi-credential = mkTest "kimchi-credential" (
       let
         result = evalDevenv {
