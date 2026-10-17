@@ -257,8 +257,10 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 # kiro-cli wrapper: the argv contract
 
 > **Last verified:** 2026-10-17 — MCP header exports resolve redact references
-> at launch and abort on failure; URL references resolve at activation. The
-> package-bound KAS and argv dispatch contracts below are unchanged.
+> at launch and abort on failure; URL references resolve at activation. KAS
+> 0.66.43 (Kiro 2.32.0) ships no image module, so the drift check loads ONNX
+> alone. The package-bound KAS and argv dispatch contracts below are otherwise
+> unchanged.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -413,8 +415,8 @@ at evaluation from a derivation output.
 `kiro-kas-extraction` covers discovery/architecture/checksum and unsafe archive
 refusals. `kiro-bundle-patch` covers strict selected-anchor refusal and decoded
 synthetic JavaScript behavior. `kiro-bundle-patch-drift` checks every vendor
-selection, real native image/ONNX modules, WASM solving, shipped ripgrep, and
-ACP initialization. `kiro-kas-dispatch` exercises real launcher/direct chat,
+selection, the real native ONNX module, WASM solving, shipped ripgrep, and ACP
+initialization. `kiro-kas-dispatch` exercises real launcher/direct chat,
 CLI/ACP, fresh/stale homes, override precedence and explicit V2 selection. The
 FHS contract check separately inspects the command paths inside the synthesized
 root; nested bubblewrap execution is not portable inside a Nix build sandbox.

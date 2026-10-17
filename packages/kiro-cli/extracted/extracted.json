@@ -137,7 +137,7 @@
     },
     "tui": { "segment": "internal", "treatment_percent": 50 },
     "v3_prompt": {
-      "internal_treatment_percent": 50,
+      "internal_treatment_percent": 75,
       "segment": "all",
       "treatment_percent": 10
     },
@@ -171,6 +171,8 @@
     "chat.keybindings.toggleInterruptBehavior",
     "chat.keybindings.toggleSessionDashboard",
     "chat.modelDefaults",
+    "chat.modelPicker.lastUsed",
+    "chat.modelPicker.sortBy",
     "chat.notificationMethod",
     "chat.outputStyle",
     "chat.preserveScrollback",
