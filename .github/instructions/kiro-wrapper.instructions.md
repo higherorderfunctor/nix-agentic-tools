@@ -416,8 +416,8 @@ at evaluation from a derivation output.
 `kiro-kas-extraction` covers discovery/architecture/checksum and unsafe archive
 refusals. `kiro-bundle-patch` covers strict selected-anchor refusal and decoded
 synthetic JavaScript behavior. `kiro-bundle-patch-drift` checks every vendor
-selection, the real native ONNX module, WASM solving, shipped ripgrep, and
-ACP initialization. `kiro-kas-dispatch` exercises real launcher/direct chat,
+selection, the real native ONNX module, WASM solving, shipped ripgrep, and ACP
+initialization. `kiro-kas-dispatch` exercises real launcher/direct chat,
 CLI/ACP, fresh/stale homes, override precedence and explicit V2 selection. The
 FHS contract check separately inspects the command paths inside the synthesized
 root; nested bubblewrap execution is not portable inside a Nix build sandbox.
