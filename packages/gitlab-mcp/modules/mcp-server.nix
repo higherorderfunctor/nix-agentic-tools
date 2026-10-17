@@ -13,12 +13,10 @@
 # upstream env var whose purpose is meaningful to the consumer.
 # Normalizing all MCP modules to a unified credential schema is a
 # separate, deferred design — do not "fix" this in passing.
-{
-  lib,
-  mcpLib,
-  ...
-}: let
+{lib, ...}: let
   inherit (lib) mkOption types concatStringsSep optionalAttrs;
+
+  credentialType = types.nullOr (import ../../../lib/redact {inherit lib;}).types.redacted;
 
   # Upstream tool registry — extracted 2026-05-20 from
   # tools/registry.ts:194-1124 at
@@ -220,10 +218,6 @@ in {
     scope = "remote";
     defaultPort = 19761;
     credentialVars = {
-      pat = {
-        envVar = "GITLAB_PERSONAL_ACCESS_TOKEN";
-        required = true;
-      };
       apiUrl = {
         envVar = "GITLAB_API_URL";
         required = false;
@@ -232,15 +226,31 @@ in {
         envVar = "GITLAB_JOB_TOKEN";
         required = false;
       };
+      pat = {
+        envVar = "GITLAB_PERSONAL_ACCESS_TOKEN";
+        required = true;
+      };
     };
     tools = knownTools;
   };
 
   settingsOptions = {
     # ── Credentials ────────────────────────────────────────────
-    pat = mcpLib.mkCredentialsOption "GITLAB_PERSONAL_ACCESS_TOKEN";
-    apiUrl = mcpLib.mkCredentialsOption "GITLAB_API_URL";
-    jobToken = mcpLib.mkCredentialsOption "GITLAB_JOB_TOKEN";
+    apiUrl = mkOption {
+      type = credentialType;
+      default = null;
+      description = "Redact reference resolved into GITLAB_API_URL when the server starts.";
+    };
+    jobToken = mkOption {
+      type = credentialType;
+      default = null;
+      description = "Redact reference resolved into GITLAB_JOB_TOKEN when the server starts.";
+    };
+    pat = mkOption {
+      type = credentialType;
+      default = null;
+      description = "Redact reference resolved into GITLAB_PERSONAL_ACCESS_TOKEN when the server starts.";
+    };
 
     # ── Typed options ──────────────────────────────────────────
     instanceUrl = mkOption {
@@ -250,7 +260,7 @@ in {
         GitLab instance URL (plain string, lands in Nix store).
         Flows to GITLAB_API_URL. Use this when the URL is public
         knowledge. For URLs that must stay out of the store, use
-        `settings.apiUrl.file` / `settings.apiUrl.helper` instead
+        `settings.apiUrl = redact.file "/run/secrets/gitlab-url"` instead
         — the two are mutually exclusive.
       '';
     };
@@ -337,8 +347,8 @@ in {
   settingsModule = {config, ...}: {
     config.assertions = [
       {
-        assertion = config.instanceUrl == null || ((config.apiUrl.file or null) == null && (config.apiUrl.helper or null) == null);
-        message = "gitlab-mcp: settings.instanceUrl and settings.apiUrl.file/helper are mutually exclusive";
+        assertion = config.instanceUrl == null || config.apiUrl == null;
+        message = "gitlab-mcp: settings.instanceUrl and settings.apiUrl are mutually exclusive";
       }
     ];
   };

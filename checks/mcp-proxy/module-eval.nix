@@ -6,6 +6,7 @@
   harness,
   ...
 }: let
+  redact = import ../../lib/redact {inherit lib;};
   inherit (import ../../lib/testing/mcp-fixtures.nix {inherit lib pkgs harness;}) mcpProxyLib proxySampleServer;
   inherit (harness) claudeMcpPath claudeMcpServers evalDevenv evalHm mcpLib mkTest;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
@@ -261,6 +262,19 @@ in {
         && !(lib.hasInfix "X-Api-Key" (builtins.toJSON entry))
     );
 
+    module-mcp-proxy-header-variable-collision = mkTest "mcp-proxy-header-variable-collision" (!(builtins.tryEval (builtins.deepSeq (mcpProxyLib.specFor "example" {
+        url = "https://example.com/mcp";
+        proxy = {
+          host = "127.0.0.1";
+          port = 9501;
+          headers = {
+            "X-Key" = redact.file "/run/secrets/one";
+            "X_Key" = redact.file "/run/secrets/two";
+          };
+        };
+      })
+      true)).success);
+
     # The Caddyfile lands in the WORLD-READABLE Nix store, so it may carry
     # only `{$VAR}` tokens. This also pins the escaping trap: Nix's `$${`
     # is an escape for a literal `${`, so a regression here silently emits
@@ -281,8 +295,8 @@ in {
         # test goes green on the insecure config. Measured.
         lib.hasInfix "bind 127.0.0.1" cf
         && lib.hasInfix "persist_config off" cf
-        && lib.hasInfix "{$MCP_PROXY_EXAMPLE_X_SERVICE_TOKEN}" cf
-        && lib.hasInfix "Bearer {$MCP_PROXY_EXAMPLE_X_API_KEY}" cf
+        && lib.hasInfix "{$MCP_PROXY_EXAMPLE_HEADER_X_SERVICE_TOKEN}" cf
+        && lib.hasInfix "{$MCP_PROXY_EXAMPLE_HEADER_X_API_KEY}" cf
         && lib.hasInfix "{$MCP_PROXY_EXAMPLE_ORIGIN}" cf
         && lib.hasInfix "{$MCP_PROXY_EXAMPLE_PATH}" cf
         # Plain-string headers are not secrets and stay literal.
@@ -340,8 +354,8 @@ in {
           env \
             MCP_PROXY_EXAMPLE_ORIGIN=https://example.invalid \
             MCP_PROXY_EXAMPLE_PATH=/mcp \
-            MCP_PROXY_EXAMPLE_X_API_KEY=DUMMY-CREDENTIAL-autosave-check \
-            MCP_PROXY_EXAMPLE_X_SERVICE_TOKEN=DUMMY-CREDENTIAL-service-check \
+            MCP_PROXY_EXAMPLE_HEADER_X_API_KEY=DUMMY-CREDENTIAL-autosave-check \
+            MCP_PROXY_EXAMPLE_HEADER_X_SERVICE_TOKEN=DUMMY-CREDENTIAL-service-check \
             XDG_CONFIG_HOME="$xdg_root/config" \
             XDG_DATA_HOME="$xdg_root/data" \
             timeout 2 caddy run --config "$config" --adapter caddyfile \
@@ -420,9 +434,9 @@ in {
               cli.enable = true;
               mcpServers.jira = {
                 type = "http";
-                url.file = "/run/secrets/jira-url";
+                url = redact.file "/run/secrets/jira-url";
                 # WRONG on purpose: belongs under proxy.headers.
-                headers."X-Jira-Token".file = "/run/secrets/service-token";
+                headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
                 proxy = {
                   enable = true;
                   port = 9501;
@@ -459,12 +473,12 @@ in {
             cli.enable = true;
             mcpServers.jira = {
               type = "http";
-              url.file = "/run/secrets/jira-url";
+              url = redact.file "/run/secrets/jira-url";
               headers."X-Client-Sent" = "yes";
               proxy = {
                 enable = true;
                 port = 9501;
-                headers."X-Jira-Token".file = "/run/secrets/service-token";
+                headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
               };
             };
           };
@@ -485,11 +499,11 @@ in {
             cli.enable = true;
             mcpServers.jira = {
               type = "http";
-              url.file = "/run/secrets/jira-url";
+              url = redact.file "/run/secrets/jira-url";
               proxy = {
                 enable = true;
                 port = 9501;
-                headers."X-Jira-Token".file = "/run/secrets/service-token";
+                headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
               };
             };
           };
@@ -527,14 +541,14 @@ in {
       let
         s = builtins.readFile (mcpProxyLib.startScriptFor (mcpProxyLib.specFor "example" proxySampleServer));
       in
-        lib.hasInfix "/bin/cat \"/run/secrets/service-token\"" s
-        && lib.hasInfix "export MCP_PROXY_EXAMPLE_X_SERVICE_TOKEN" s
+        lib.hasInfix "redact-read" s
+        && lib.hasInfix "/run/secrets/service-token" s
+        && lib.hasInfix "export MCP_PROXY_EXAMPLE_HEADER_X_SERVICE_TOKEN" s
         && lib.hasInfix "set -euETo pipefail" s
         && lib.hasInfix "shopt -s inherit_errexit" s
         # Fail closed: an empty or unreadable secret must not start a proxy
         # that would answer every client with the upstream's 401.
-        && lib.hasInfix "resolved empty from" s
-        && lib.hasInfix "the file is missing or unreadable" s
+        && lib.hasInfix "|| exit 1" s
         # Never a bare `cat` — this wrapper can be spawned with no PATH.
         && !(lib.hasInfix "\ncat " s)
         # The secret must not be an ARGUMENT to caddy.
@@ -548,7 +562,7 @@ in {
       mkTest "mcp-credential-header-non-kiro-throws" (!(builtins.tryEval (builtins.toJSON (mcpLib.renderServer pkgs "x" {
         type = "http";
         url = "u";
-        headers.H.file = "/f";
+        headers.H = redact.file "/f";
       })))
     .success);
 
@@ -558,7 +572,7 @@ in {
     module-mcp-credential-url-non-kiro-throws =
       mkTest "mcp-credential-url-non-kiro-throws" (!(builtins.tryEval (builtins.toJSON (mcpLib.renderServer pkgs "x" {
         type = "http";
-        url.file = "/f";
+        url = redact.file "/f";
       })))
     .success);
 
@@ -567,14 +581,21 @@ in {
     # and against a populated one. A grep proves the line was emitted; only
     # running it proves the line works.
     module-credential-empty-guard-aborts = let
-      credLib = import ../../lib/credentials.nix {inherit lib;};
-      # `mkSecretExport` bakes the path in at generation time and the test
+      # `redact.assign` bakes the path in at generation time and the test
       # needs two different files, so the path is a placeholder substituted
       # per-case below.
       runner = pkgs.writeShellScript "empty-guard-runner" ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        ${credLib.mkSecretExport pkgs "TEST_TOKEN" {file = "@SECRET@";}}
+        export PATH="${pkgs.coreutils}/bin"
+        ${redact.assign {
+          inherit pkgs;
+          option = "TEST_TOKEN";
+          variable = "TEST_TOKEN";
+          value = redact.concat ["Bearer " (redact.file "/run/redact-test-secret") " suffix"];
+          export = true;
+        }}
+        [[ $TEST_TOKEN == 'Bearer a-real-token suffix' ]]
         echo "REACHED-PROGRAM"
       '';
     in
@@ -593,8 +614,8 @@ in {
 
         empty=$(mktemp) && : > "$empty"
         full=$(mktemp) && printf 'a-real-token' > "$full"
-        sed "s|@SECRET@|$full|"  ${runner} > full.sh
-        sed "s|@SECRET@|$empty|" ${runner} > empty.sh
+        sed "s|/run/redact-test-secret|$full|"  ${runner} > full.sh
+        sed "s|/run/redact-test-secret|$empty|" ${runner} > empty.sh
 
         # Positive control. Without it, a guard that rejected EVERYTHING would
         # still pass the negative case below and look correct.
@@ -609,13 +630,13 @@ in {
         # sails past and dies on `cat: …: Is a directory`, losing the
         # variable name and the path the guard exists to report.
         mkdir -p secret-dir
-        sed "s|@SECRET@|$PWD/secret-dir|" ${runner} > dir.sh
+        sed "s|/run/redact-test-secret|$PWD/secret-dir|" ${runner} > dir.sh
         if got=$(${pkgs.bash}/bin/bash dir.sh 2>&1); then
           echo "FAIL: a directory as the secret path did not abort (got: $got)" >&2
           exit 1
         fi
         case "$got" in
-          *"is a directory, not a secret file"*) : ;;
+          *"reference is a directory"*) : ;;
           *)
             echo "FAIL: directory aborted, but not via the guard (got: $got)" >&2
             exit 1 ;;
@@ -630,7 +651,7 @@ in {
         case "$got" in
           *REACHED-PROGRAM*)
             echo "FAIL: reached the program despite the guard" >&2; exit 1 ;;
-          *"TEST_TOKEN resolved empty"*) : ;;
+          *"TEST_TOKEN: reference resolved empty"*) : ;;
           *)
             echo "FAIL: aborted, but not via the guard (got: $got)" >&2; exit 1 ;;
         esac

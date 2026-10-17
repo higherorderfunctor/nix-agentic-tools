@@ -46,9 +46,14 @@ def guard(script, root):
 def credentials(manifest):
     for case, package in json.loads(Path(manifest).read_text()).items():
         for binary in ["kiro-cli", "kiro-cli-chat"]:
-            result = run([f"{package}/bin/{binary}"], output="launched", warning=(
-                None if case in ["absent", "good"] else "ai.kiro.mcpServers.probe.headers.Authorization"
-            ))
+            argv = [f"{package}/bin/{binary}"]
+            if case in ["absent", "good"]:
+                result = run(argv, output="launched")
+            else:
+                result = subprocess.run(argv, text=True, capture_output=True)
+                assert result.returncode != 0, result
+                assert "launched" not in result.stdout, result.stdout
+                assert "ai.kiro.mcpServers.probe.headers.Authorization" in result.stderr, result.stderr
             assert "fixture-token" not in result.stderr + result.stdout
 
 
@@ -73,4 +78,4 @@ with tempfile.TemporaryDirectory() as directory:
     guard(sys.argv[2], root / "guard")
     credentials(sys.argv[3])
     global_feature_notices(sys.argv[1], root / "global-feature-notices")
-print("PASS: Kiro feature notices and optional hook warnings have firing and silent controls")
+print("PASS: Kiro credential launch guards, feature notices and optional hook warnings have firing and silent controls")

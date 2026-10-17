@@ -69,7 +69,7 @@ stacked-workflows.gitPreset = "full";
 
 services.mcp-servers.servers.github-mcp = {
   enable = true;
-  settings.credentials.file = "/run/secrets/github-token";
+  settings.credentials = inputs.nix-agentic-tools.lib.redact.file "/run/secrets/github-token";
 };
 ```
 
@@ -967,7 +967,7 @@ trade-off does not mean re-deriving it.
 services.mcp-servers.servers = {
   github-mcp = {
     enable = true;
-    settings.credentials.file = config.sops.secrets.github-token.path;
+    settings.credentials = inputs.nix-agentic-tools.lib.redact.file config.sops.secrets.github-token.path;
   };
   nixos-mcp.enable = true;
   context7-mcp.enable = true;

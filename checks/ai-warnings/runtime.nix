@@ -8,6 +8,7 @@
     (harness.evalDevenv {
       ai.kiro.cli = {enable = true;} // declaration;
     }).config.enterShell;
+  redact = import ../../lib/redact {inherit lib;};
   stubBin = pkgs.writeShellScript "kiro-warning-stub" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -30,10 +31,16 @@
     };
   wrappers = pkgs.writeText "credential-warning-wrappers.json" (builtins.toJSON {
     absent = wrap {};
-    empty = wrap {PROBE.file = pkgs.writeText "empty-credential" "";};
-    failed = wrap {PROBE.helper = "${pkgs.coreutils}/bin/false";};
-    good = wrap {PROBE.file = pkgs.writeText "test-credential" "fixture-token";};
-    missing = wrap {PROBE.file = "/definitely-missing-ai-warning-test-secret";};
+    empty = wrap {PROBE = redact.command "${pkgs.coreutils}/bin/true";};
+    failed = wrap {PROBE = redact.command "${pkgs.coreutils}/bin/false";};
+    good = wrap {
+      PROBE = redact.command (toString (pkgs.writeShellScript "test-credential" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf 'fixture-token'
+      ''));
+    };
+    missing = wrap {PROBE = redact.file "/definitely-missing-ai-warning-test-secret";};
   });
 in {
   checks.ai-warnings-runtime =
