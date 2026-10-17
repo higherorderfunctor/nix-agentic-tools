@@ -1,9 +1,10 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-16 — Codex adopts nixpkgs' output-root layout,
+> **Last verified:** 2026-10-17 — Codex adopts nixpkgs' output-root layout,
 > source-built voice and store-linked runtime; Kiro parses embedded rollout
 > JSON, preserving state fields; copies must agree. The byte-preserving patcher
-> remains strict.
+> remains strict. The devenv update lane realizes the patched Kiro through the
+> repo shell, so it does not push.
 
 ### Overview
 
@@ -148,6 +149,7 @@ days later, so `ci.yml` provably was not the source. Two workflow paths hold
 | `ci.yml` test           | no                               | no token                 |
 | `kiro-patched`          | yes                              | no token                 |
 | `update.yml` inputs     | **yes — `verify_all_packages`**  | token → **`pushFilter`** |
+| `update.yml` devenv     | **yes — the repo devenv shell**  | token → **`skipPush`**   |
 
 `ci-packages.py` removes its `EXCLUDED` names before partitioning the native
 package set and emits a positive `--select` expression for each shard. Keep the
@@ -181,10 +183,14 @@ Supporting properties:
   the layers naming cannot reach (below). `ci.yml` used to publish the unpatched
   package on purpose; it no longer does.
 - **It is not a guarantee on its own**: "paths may still be pushed if they are
-  part of another path's closure". Nothing outside the kiro closure depends on
-  the patched output today and every layer inside it matches the regex, so it
-  holds — but that is a property of the current graph, and it fails silently.
-  The tripwire below is the actual guarantee.
+  part of another path's closure". The repo devenv shell is such a path: it
+  depends on the patched output, and on 2026-10-17 the devenv lane's shell-entry
+  check published the patched closure through it (sweep `39032289943`), caught
+  by the tripwire below. That lane therefore sets `skipPush`, which
+  `test-ci-packages.py` pins. The package shards and the other update lanes
+  build the patched output only as its own `kiro-cli-…` root, and every layer
+  inside it matches the regex — a property of the current graph that fails
+  silently. The tripwire below is the actual guarantee.
 - **Patched derivations are RENAMED so a leak is self-identifying.** Both
   variants used to be `kiro-cli-unwrapped-<version>`, differing only by store
   hash, which is exactly why one sat unnoticed in a cache listing. The patched
