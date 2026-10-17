@@ -7,6 +7,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
+  redact = import ../../../lib/redact {inherit lib;};
   inherit (import ../../chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
 in {
   checks = {
@@ -39,36 +40,42 @@ in {
         && builtins.length settingNames > 20
     );
 
-    # The three-branch union must accept each branch, and the type system
-    # (not a runtime throw) is what forbids setting two at once.
-    module-glab-secret-branches-accepted = mkTest "glab-secret-branches-accepted" (
+    module-glab-redact-references-accepted = mkTest "glab-redact-references-accepted" (
       let
         ev = evalHm {
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
-            token.file = "/run/secrets/gitlab-token";
-            job_token.helper = "/run/wrappers/bin/job-token";
+            host = "gitlab.example.com";
+            token = redact.file "/run/secrets/gitlab-token";
+            job_token = redact.command "/run/wrappers/bin/job-token";
           };
         };
       in
         ev.config.glab.host
-        == {plain = "gitlab.example.com";}
-        && ev.config.glab.token == {file = "/run/secrets/gitlab-token";}
-        && ev.config.glab.job_token == {helper = "/run/wrappers/bin/job-token";}
+        == "gitlab.example.com"
+        && ev.config.glab.token == redact.file "/run/secrets/gitlab-token"
+        && ev.config.glab.job_token == redact.command "/run/wrappers/bin/job-token"
         && builtins.length ev.config.home.packages == 1
     );
 
-    # The whole point of the wrapper: a `file` secret must appear as a
-    # RUNTIME read, and its contents must never be interpolated. A `plain`
-    # value is allowed in the script; a file path is only ever `cat`ed.
+    module-glab-literal-credentials-rejected = mkTest "glab-literal-credentials-rejected" (
+      lib.all
+      (eval:
+        lib.all
+        (name: !(builtins.tryEval (builtins.deepSeq (eval {glab.${name} = "literal-token";}).config.glab.${name} true)).success)
+        ["job_token" "token"])
+      [evalDevenv evalHm]
+    );
+
+    # References name runtime sources; the launcher never reads their contents
+    # during evaluation.
     module-glab-wrapper-reads-secrets-at-runtime = mkTest "glab-wrapper-reads-secrets-at-runtime" (
       let
         ev = evalHm {
           glab = {
             enable = true;
-            host.file = "/run/secrets/gitlab-url";
-            token.file = "/run/secrets/gitlab-token";
+            host = redact.file "/run/secrets/gitlab-url";
+            token = redact.file "/run/secrets/gitlab-token";
             settings.git_protocol = "ssh";
             extraSettings.brand_new_key = "value";
           };
@@ -91,8 +98,8 @@ in {
         && lib.hasInfix "export GLAB_GIT_PROTOCOL" script
         # extraSettings uses glab's uppercase fallback.
         && lib.hasInfix "BRAND_NEW_KEY=" script
-        # Absolute store path for cat — the wrapper may run without PATH.
-        && !(lib.hasInfix "$(cat " script)
+        && lib.hasInfix "redact-read glab.host file /run/secrets/gitlab-url" script
+        && lib.hasInfix "redact-read glab.token file /run/secrets/gitlab-token" script
         # Each env var is exported exactly once. A duplicated export is
         # harmless at runtime but means the key partitioning has drifted
         # between the options and the wrapper — which it once had.
@@ -107,10 +114,10 @@ in {
         ev = evalHm {
           glab = {
             enable = true;
-            host.file = "/run/secrets/gitlab-url";
+            host = redact.file "/run/secrets/gitlab-url";
             keyringSync.enable = true;
             settings.git_protocol = "ssh";
-            token.file = "/run/secrets/gitlab-token";
+            token = redact.file "/run/secrets/gitlab-token";
           };
         };
         pendingFile = "/home/test/.local/state/glab/keyring-sync-pending";
@@ -156,17 +163,17 @@ in {
         devenv = evalDevenv {
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
+            host = "gitlab.example.com";
             keyringSync.enable = true;
-            token.file = "/run/secrets/gitlab-token";
+            token = redact.file "/run/secrets/gitlab-token";
           };
         };
-        plainToken = evalHm {
+        missingToken = evalHm {
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
+            host = "gitlab.example.com";
             keyringSync.enable = true;
-            token.plain = "store-visible-token";
+            token = null;
           };
         };
         disabled = evalHm {glab.keyringSync.enable = true;};
@@ -175,8 +182,8 @@ in {
         "glab.keyringSync.enable is Home Manager-only: devenv may consume a user's existing keyring, but a repository shell must not own login or graphical-session services."
         (failedMessages devenv)
         && builtins.elem
-        "glab.keyringSync.enable requires glab.token.file or glab.token.helper; token.plain would already expose the token through the Nix store."
-        (failedMessages plainToken)
+        "glab.keyringSync.enable requires glab.token as a redact reference."
+        (failedMessages missingToken)
         && builtins.elem
         "glab.keyringSync.enable requires glab.enable."
         (failedMessages disabled)
@@ -196,7 +203,7 @@ in {
         ev = evalDevenv {
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
+            host = "gitlab.example.com";
           };
         };
       in
@@ -213,7 +220,7 @@ in {
       let
         base = {
           enable = true;
-          host.plain = "gitlab.example.com";
+          host = "gitlab.example.com";
         };
         hm = evalHm {glab = base;};
         dv = evalDevenv {glab = base;};
@@ -235,7 +242,7 @@ in {
           };
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
+            host = "gitlab.example.com";
           };
         };
         hmEval = evalHm base;
@@ -269,6 +276,11 @@ in {
     # stronger, since a leftover directory from an earlier run cannot
     # satisfy them.
     module-glab-preflight-runtime = let
+      hostCommand = pkgs.writeShellScript "glab-test-host" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf '%s' "$GLAB_TEST_HOST"
+      '';
       stub =
         (pkgs.writeShellScriptBin "glab" ''
           set -euETo pipefail
@@ -280,8 +292,8 @@ in {
         enable = true;
         package = stub;
         configDir = "glab-preflight-cfg";
-        host.plain = "https://gitlab.example.com/some/path";
-        token.plain = "t0ken";
+        host = redact.command "${hostCommand}";
+        token = null;
         job_token = null;
         settings = {};
         extraSettings = {};
@@ -293,6 +305,7 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
 
         export HOME="$PWD/home"
+        export GLAB_TEST_HOST=https://gitlab.example.com/some/path
         # Matches cfg.configDir above; the wrapper resolves it against the
         # build directory, which is this script's cwd.
         cfg=glab-preflight-cfg
@@ -378,8 +391,8 @@ in {
           # Build-relative, for the reason given on
           # module-glab-preflight-runtime.
           configDir = "glab-ipv6-cfg";
-          host.plain = "http://[2001:db8::1]/gitlab";
-          token.plain = "t0ken";
+          host = "http://[2001:db8::1]/gitlab";
+          token = null;
           job_token = null;
           settings = {};
           extraSettings = {};
@@ -443,8 +456,8 @@ in {
           enable = true;
           package = stub;
           configDir = null;
-          host.plain = "gitlab.example.com";
-          token.plain = "t0ken";
+          host = "gitlab.example.com";
+          token = null;
           job_token = null;
           settings = {};
           extraSettings = {};
@@ -504,8 +517,8 @@ in {
             enable = true;
             package = stub;
             configDir = cfgDir;
-            host.plain = hostValue;
-            token.plain = "t0ken";
+            host = hostValue;
+            token = null;
             job_token = null;
             settings = {};
             extraSettings = {};

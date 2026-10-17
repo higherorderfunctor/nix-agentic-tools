@@ -11,31 +11,33 @@ that happen to agree.
 
 ## Usage
 
+Bind `redact = inputs.nix-agentic-tools.lib.redact` in these examples.
+
 ```nix
 {
   glab = {
     enable = true;
 
     # Self-hosted instance whose URL should stay out of the store.
-    host.file = config.sops.secrets.gitlab-url.path;
-    token.file = config.sops.secrets.gitlab-token.path;
+    host = redact.file config.sops.secrets.gitlab-url.path;
+    token = redact.file config.sops.secrets.gitlab-token.path;
 
     settings = {
-      git_protocol = "ssh";
       check_update = false;
+      git_protocol = "ssh";
       telemetry = false;
     };
   };
 }
 ```
 
-For a public instance the URL is ordinary configuration, so use `plain`:
+For a public instance the URL can be an ordinary string:
 
 ```nix
 glab = {
   enable = true;
-  host.plain = "gitlab.com";
-  token.helper = "/run/wrappers/bin/my-token-helper";
+  host = "gitlab.com";
+  token = redact.command "/run/wrappers/bin/my-token-helper";
 };
 ```
 
@@ -47,9 +49,9 @@ Secret Service backend:
 ```nix
 glab = {
   enable = true;
-  host.file = config.sops.secrets.gitlab-url.path;
+  host = redact.file config.sops.secrets.gitlab-url.path;
   keyringSync.enable = true;
-  token.file = config.sops.secrets.gitlab-token.path;
+  token = redact.file config.sops.secrets.gitlab-token.path;
 
   settings.git_protocol = "ssh";
 };
@@ -68,13 +70,13 @@ cannot take its normal plaintext-config fallback. The service has `Restart=no`
 and removes the marker on every exit, so one activation permits at most one
 prompt. A later activation creates a fresh marker and permits one new attempt.
 
-After that probe, the service reads `host` and `token` from their `file` or
-`helper` branches and passes the token to
-`glab auth login --stdin --use-keyring`. The explicit (now deprecated) keyring
-flag keeps package overrides predating keyring-by-default behavior secure. The
-token is never placed in command arguments, a persistent environment variable,
-or the Nix store. `token.plain` is rejected because it would already have
-exposed the credential through the store.
+After that probe, the service resolves the `host` and `token` redact references
+and passes the token to `glab auth login --stdin --use-keyring`. The explicit
+(now deprecated) keyring flag keeps package overrides predating
+keyring-by-default behavior secure. The token is never placed in command
+arguments, a persistent environment variable, or the Nix store. Literal tokens
+are rejected because they would already have exposed the credential through the
+store.
 
 While synchronization is enabled, the ordinary Home Manager wrapper stops
 exporting `GITLAB_TOKEN`; environment credentials take precedence over stored
@@ -86,38 +88,37 @@ the devenv facet so the two option trees cannot drift, but enabling it there is
 an evaluation error: a repository shell may consume a user's keyring, but it
 must not own login, Secret Service, or graphical-session units.
 
-## Secret-capable options
+## Secrets and instance URLs
 
-`host`, `token` and `job_token` each take **exactly one** of three branches. The
-option is a discriminated union, so "plain and file both set" is not a state you
-can construct — there is no runtime assertion to forget.
+`token` and `job_token` accept a redact reference or `null`. `host` also accepts
+a literal string for a public instance. A private self-hosted URL uses the same
+reference API, so it stays out of the store.
 
-| branch   | behavior                                                       |
-| -------- | -------------------------------------------------------------- |
-| `plain`  | literal value, interpolated into the store, **world-readable** |
-| `file`   | path read at runtime; nothing enters the store                 |
-| `helper` | executable run at runtime; nothing enters the store            |
+- `redact.file "/run/secrets/gitlab-token"` reads a file at runtime.
+- `redact.command "/absolute/token-helper"` runs an executable at runtime.
+- `redact.concat ["prefix" reference]` joins literal parts and references.
 
-`file` and `helper` both **abort** when the value comes back empty, rather than
-exporting nothing and letting glab fall back to its own default. That matters
-most for `host`, whose default is `gitlab.com`: an empty self-managed URI would
-otherwise send your token to the wrong instance, silently. A half-applied sops
-rotation, or a key the reader cannot decrypt, produces exactly that empty file.
+References abort on missing, unreadable, empty or NUL-bearing values, or a
+failing command. This matters most for `host`, whose upstream default is
+`gitlab.com`: an empty self-managed URL must never silently send a token to the
+wrong instance. Errors name the Nix option without printing the resolved value
+or command output.
 
-With `keyringSync.enable`, `token.file` or `token.helper` becomes the source for
-the one-shot synchronizer instead of an environment export on every glab
-invocation.
+With `keyringSync.enable`, `token` supplies the one-shot synchronizer instead of
+an environment export on every glab invocation. The token goes over stdin; the
+hostname, resolved from `host`, is an argument to `glab auth login`.
 
-`token` and `job_token` are secret-capable because glab's own schema marks them
-keyring-eligible. `host` is included on top of that: a self-hosted instance URL
-is often information an operator would rather not publish in a world-readable
-store path, even though upstream does not class it as a credential.
+`token` and `job_token` are credentials because glab's own schema marks them
+keyring-eligible. The hostname is optionally redacted because an operator may
+wish to keep a self-hosted instance out of the world-readable store, even though
+upstream does not class it as a credential.
 
 ## Settings
 
-> **Last verified:** 2026-10-15 — glab reads measured-once config-key facts, one
-> unforked `extracted.json`, through the shared extracted aggregate and owner
-> drift check.
+> **Last verified:** 2026-10-17 — glab resolves credentials and optional private
+> instance URLs through redact; measured-once config-key facts still come from
+> one unforked `extracted.json` through the shared aggregate and owner drift
+> check.
 
 `glab.settings.*` is **generated** from the `packages/glab/extracted/` facts.
 The Go dump reads glab's vendored `internal/config.KeySchema` without running
@@ -193,10 +194,8 @@ The wrapper also, before every `exec`:
 - creates the config directory at mode `0700` when absent;
 - repairs `config.yml` to `0600` when a stray umask left it looser, since glab
   hard-refuses anything else;
-- fails when a credential file is missing or resolves empty, with a message
-  naming the environment variable and the path it was read from (for example
-  `GITLAB_TOKEN … from /run/secrets/gitlab-token`) — not the Nix option, which
-  the wrapper does not know at runtime.
+- fails when a redact reference cannot resolve, with an error naming the Nix
+  option (for example `glab.token: reference file is missing`).
 
 ## `configDir` — project-local state
 
