@@ -8,7 +8,9 @@
 }: let
   redact = import ../../lib/redact {inherit lib;};
   inherit (import ../../lib/testing/mcp-fixtures.nix {inherit lib pkgs harness;}) mcpProxyLib proxySampleServer;
-  inherit (harness) claudeMcpPath claudeMcpServers evalDevenv evalHm mcpLib mkTest;
+  inherit (harness) claudeMcpPath claudeMcpServers evalDevenv mcpLib mkTest;
+  # Units exist only on Linux; pin the platform so the contract holds on every CI host.
+  evalHm = harness.evalHmLinux;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
 in {
   checks = {
@@ -505,20 +507,10 @@ in {
       let
         result =
           harness.evalHmWithSpecialArgs {
-            pkgs =
-              pkgs
-              // {
-                stdenv =
-                  pkgs.stdenv
-                  // {
-                    hostPlatform =
-                      pkgs.stdenv.hostPlatform
-                      // {
-                        isDarwin = true;
-                        isLinux = false;
-                      };
-                  };
-              };
+            pkgs = harness.pkgsOn {
+              isDarwin = true;
+              isLinux = false;
+            };
           } {
             ai.claude = {
               enable = true;

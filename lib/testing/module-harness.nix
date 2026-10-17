@@ -223,6 +223,15 @@
     };
   evalHmWithSpecialArgs = extraSpecialArgs: config: evalHmModulesWithSpecialArgs extraSpecialArgs [{inherit config;}];
   evalHm = evalHmWithSpecialArgs {};
+  # The package set with its host platform pinned, so a contract about one
+  # platform's lowering (systemd units exist only on Linux) evaluates the same
+  # on every CI host.
+  pkgsOn = platform: pkgs // {stdenv = pkgs.stdenv // {hostPlatform = pkgs.stdenv.hostPlatform // platform;};};
+  linuxPkgs = pkgsOn {
+    isDarwin = false;
+    isLinux = true;
+  };
+  evalHmLinux = evalHmWithSpecialArgs {pkgs = linuxPkgs;};
   # A whole module rather than a config attrset, for a configuration that
   # declares options of its own (a stand-in for an upstream module).
   evalHmModules = evalHmModulesWithSpecialArgs {};
@@ -446,6 +455,6 @@
     then (markdownInput evaluated path).text
     else throw "module-test: ${path} is not delivered from its generated tree";
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmLinux evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs linuxPkgs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan pkgsOn setEnable tomlFormat;
   inherit testing;
 }

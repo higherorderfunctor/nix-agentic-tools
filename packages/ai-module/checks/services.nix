@@ -21,20 +21,16 @@
       restartOnChange = ["/etc/daemon.conf" "/run/secrets/first"];
     };
   expectedTriggers = ["/etc/daemon.conf" "/run/secrets/first" "/run/secrets/second"];
-  hm = backends.evaluate "hm" {services = entries // {inherit watched;};};
+  hm = backends.evaluateWith harness.linuxPkgs "hm" {services = entries // {inherit watched;};};
   devenv = backends.evaluate "devenv" {services = entries // {inherit watched;};};
   unsupported = isDarwin:
     (lib.evalModules {
       specialArgs = {
         inherit (backends.sinks.hm) lib;
-        pkgs =
-          pkgs
-          // {
-            stdenv.hostPlatform = {
-              inherit isDarwin;
-              isLinux = false;
-            };
-          };
+        pkgs = harness.pkgsOn {
+          inherit isDarwin;
+          isLinux = false;
+        };
       };
       modules = [
         harness.hmStubs
@@ -184,7 +180,7 @@ in {
       && services.triggers hm.ai.services.watched == expectedTriggers
       && hm.home.activation.ai-services-restart-on-change.after == ["linkGeneration" "sops-nix" "vault:ready"]
       && !(devenv.tasks ? "ai:services-restart-on-change")
-      && !((backends.evaluate "hm" {services.plain = daemon;}).home.activation ? ai-services-restart-on-change)
+      && !((backends.evaluateWith harness.linuxPkgs "hm" {services.plain = daemon;}).home.activation ? ai-services-restart-on-change)
       && darwin.systemd.user.services == {}
       && darwin.warnings == ["ai.services.live: Home Manager writes services as systemd user units, which this platform lacks; the service is not written"]
       && other.warnings == darwin.warnings
