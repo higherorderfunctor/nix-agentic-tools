@@ -1,8 +1,4 @@
-{
-  lib,
-  mcpLib,
-  ...
-}: let
+{lib, ...}: let
   inherit (lib) mkOption types concatStringsSep optional optionals;
 
   knownToolsets = [
@@ -83,7 +79,11 @@ in {
   };
 
   settingsOptions = {
-    credentials = mcpLib.mkCredentialsOption "GITHUB_PERSONAL_ACCESS_TOKEN";
+    credentials = mkOption {
+      type = types.nullOr (import ../../../lib/redact {inherit lib;}).types.redacted;
+      default = null;
+      description = "Redact reference resolved into GITHUB_PERSONAL_ACCESS_TOKEN when the server starts.";
+    };
 
     ghHost = mkOption {
       type = types.nullOr types.str;

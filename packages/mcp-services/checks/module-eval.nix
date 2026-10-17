@@ -6,6 +6,7 @@
   harness,
   ...
 }: let
+  redact = import ../../../lib/redact {inherit lib;};
   inherit (harness) evalHm mcpLib mkTest;
 
   assertionSettings = passing: {
@@ -35,6 +36,8 @@ in {
         root = ../../..;
         fileset = lib.fileset.unions [
           ../../../lib/credentials.nix
+          ../../../lib/redact
+          ../../../lib/runtime-values
           ../../../lib/mcp.nix
           ../../../packages/gitlab-mcp/modules/mcp-server.nix
         ];
@@ -44,18 +47,19 @@ in {
         let
           lib = import ${pkgs.path}/lib;
           mcpLib = import ${source}/lib/mcp.nix { inherit lib; };
+          redact = import ${source}/lib/redact { inherit lib; };
           settings = {
             assertions = [{ assertion = callerPassing; message = "gitlab caller assertion failed"; }];
             instanceUrl = if instance then "https://gitlab.example.com" else null;
           } // lib.optionalAttrs (credential != "none") {
-            apiUrl.''${credential} = "/run/secrets/gitlab-url";
+            apiUrl = if credential == "file" then redact.file "/run/secrets/gitlab-url" else redact.command "/run/secrets/gitlab-url";
           };
           result = mcpLib.evalSettings "gitlab-mcp" settings;
         in
           builtins.deepSeq result (
             assert !(result ? assertions);
             assert result.instanceUrl == settings.instanceUrl;
-            assert credential == "none" || result.apiUrl.''${credential} == "/run/secrets/gitlab-url";
+            assert credential == "none" || result.apiUrl == settings.apiUrl;
             true
           )
       '';
@@ -65,17 +69,17 @@ in {
       } ''
         export NIX_STATE_DIR="$TMPDIR/nix-state"
         mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
-        for credential in none file helper; do
+        for credential in none file command; do
           nix-instantiate --eval --strict ${probe} --argstr credential "$credential"
         done
         nix-instantiate --eval --strict ${probe} --arg instance true
-        for credential in file helper; do
+        for credential in file command; do
           if nix-instantiate --eval --strict ${probe} --argstr credential "$credential" --arg instance true >actual.stdout 2>actual.stderr; then
             echo "FAIL: gitlab instanceUrl + apiUrl.$credential unexpectedly succeeded" >&2
             exit 1
           fi
           grep -F 'MCP server gitlab-mcp settings assertions failed:' actual.stderr
-          grep -F 'settings.instanceUrl and settings.apiUrl.file/helper are mutually exclusive' actual.stderr
+          grep -F 'settings.instanceUrl and settings.apiUrl are mutually exclusive' actual.stderr
         done
         # The server's passing assertion must not hide a failing caller assertion.
         if nix-instantiate --eval --strict ${probe} --arg callerPassing false >actual.stdout 2>actual.stderr; then
@@ -87,7 +91,7 @@ in {
           echo "FAIL: diagnostic includes a passing server assertion" >&2
           exit 1
         fi
-        echo "PASS: gitlab mutex rejects file/helper conflicts; valid settings and caller assertions verified" | tee "$out"
+        echo "PASS: gitlab mutex rejects file/command conflicts; valid settings and caller assertions verified" | tee "$out"
       '';
 
     # tryEval cannot expose throw messages. Follow facet-mock-negative by
@@ -202,7 +206,7 @@ in {
         result = evalHm {
           services.mcp-servers.servers.github-mcp = {
             enable = true;
-            settings.credentials.file = "/run/secrets/gh-token";
+            settings.credentials = redact.file "/run/secrets/gh-token";
           };
         };
         activation = result.config.home.activation.ai-mcp-restart-on-secret-rotation or null;
@@ -222,7 +226,7 @@ in {
       result = evalHm {
         services.mcp-servers.servers.github-mcp = {
           enable = true;
-          settings.credentials.file = "/build/token";
+          settings.credentials = redact.file "/build/token";
         };
       };
       systemctl = pkgs.writeShellScript "mcp-systemctl-fixture" ''
@@ -276,7 +280,7 @@ in {
         result = evalHm {
           services.mcp-servers.servers.github-mcp = {
             enable = true;
-            settings.credentials.helper = "/run/wrappers/gh-token-helper";
+            settings.credentials = redact.command "/run/wrappers/gh-token-helper";
           };
         };
       in

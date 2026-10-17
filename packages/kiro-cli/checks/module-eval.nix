@@ -6,6 +6,7 @@
   harness,
   ...
 }: let
+  redact = import ../../../lib/redact {inherit lib;};
   inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest;
   kiroFact = let
     extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
@@ -621,130 +622,33 @@ in {
         mcpJson = renderedMcpJson {
           jira = {
             type = "http";
-            url = {
-              file = "/run/secrets/jira-url";
-              prefix = "https://";
-            };
+            url = redact.concat ["https://" (redact.file "/run/secrets/jira-url")];
             timeout = 300000;
             headers = {
               "X-MCP-Servers" = "jira";
-              "X-Jira-Token".file = "/run/secrets/service-token";
-              "X-Api-Key" = {
-                file = "/run/secrets/llm";
-                prefix = "Bearer ";
-              };
+              "X-Jira-Token" = redact.file "/run/secrets/service-token";
+              "X-Api-Key" = redact.concat ["Bearer " (redact.file "/run/secrets/llm")];
             };
           };
         };
       in
-        lib.hasInfix "\${env:KIRO_MCP_JIRA_X_JIRA_TOKEN}" mcpJson
-        && lib.hasInfix "Bearer \${env:KIRO_MCP_JIRA_X_API_KEY}" mcpJson
-        && lib.hasInfix "https://\${KIRO_MCP_JIRA_URL}" mcpJson
+        lib.hasInfix "\${env:KIRO_MCP_JIRA_HEADER_X_JIRA_TOKEN}" mcpJson
+        && lib.hasInfix "\${env:KIRO_MCP_JIRA_HEADER_X_API_KEY}" mcpJson
+        && lib.hasInfix "\${KIRO_MCP_JIRA_URL}" mcpJson
         && lib.hasInfix ''"X-MCP-Servers":"jira"'' mcpJson
         && !(lib.hasInfix "/run/secrets/service-token" mcpJson)
         && !(lib.hasInfix "/run/secrets/llm" mcpJson)
         && !(lib.hasInfix "/run/secrets/jira-url" mcpJson)
     );
 
-    # ONE credential shared by TWO servers. A gateway that multiplexes several
-    # backends behind a single endpoint produces this: each server carries its
-    # own token and a routing header, but they authenticate with the SAME api
-    # key. The shared key must collapse to a SINGLE export rather than tripping
-    # the collision guard — that guard rejects one var bound to two DIFFERENT
-    # sources, which is not this case.
-    module-kiro-mcp-secret-shared-across-servers = mkTest "kiro-mcp-secret-shared-across-servers" (
-      let
-        sharedKey = {
-          file = "/run/secrets/gateway-key";
-          prefix = "Bearer ";
-          var = "GW_KEY";
-        };
-        mkServer = route: tokenFile: tokenVar: {
-          type = "http";
-          url = "https://gateway.example.com/mcp/";
-          headers = {
-            "X-Api-Key" = sharedKey;
-            "X-Route" = route;
-            "X-Token" = {
-              file = tokenFile;
-              var = tokenVar;
-            };
-          };
-        };
-        result = renderKiroSecrets {
-          alpha = mkServer "alpha" "/run/secrets/alpha-token" "ALPHA_TOKEN";
-          beta = mkServer "beta" "/run/secrets/beta-token" "BETA_TOKEN";
-        };
-        rendered = builtins.toJSON result.servers;
-      in
-        # The shared key deduped to one export, the per-server tokens stayed distinct.
-        (builtins.attrNames result.secretEnv)
-        == ["ALPHA_TOKEN" "BETA_TOKEN" "GW_KEY"]
-        && result.secretEnv.GW_KEY.file == "/run/secrets/gateway-key"
-        # Both servers reference that one var, with the prefix composed per-server.
-        && (builtins.length (builtins.filter
-          (lib.hasInfix "Bearer \${env:GW_KEY}")
-          (map builtins.toJSON (builtins.attrValues result.servers))))
-        == 2
-        # Plain routing headers pass through untouched; no secret path is serialized.
-        && lib.hasInfix ''"X-Route":"beta"'' rendered
-        && !(lib.hasInfix "/run/secrets/" rendered)
-    );
-
-    # An explicit `var` is user-supplied and lands verbatim in generated shell
-    # (`export <var>=…`, and the envsubst variable list), so an illegal shell
-    # identifier must fail at EVAL rather than produce a broken activation
-    # script at the moment secrets are materialized. A DERIVED name cannot hit
-    # this — `sanitize` builds it — so only the explicit path needs the guard.
-    module-kiro-mcp-secret-illegal-var-throws = mkTest "kiro-mcp-secret-illegal-var-throws" (
-      let
-        renders = var:
-          builtins.tryEval (builtins.toJSON
-            (renderKiroSecrets {
-              a = {
-                type = "http";
-                url = "https://a.example.com/mcp/";
-                headers."X-Key" = {
-                  file = "/run/secrets/one";
-                  inherit var;
-                };
-              };
-            })
-          .secretEnv);
-      in
-        # Hyphen, space, and a leading digit are all rejected...
-        !(renders "my-key").success
-        && !(renders "my key").success
-        && !(renders "1KEY").success
-        # ...while a legal identifier still goes through.
-        && (renders "MY_KEY_1").success
-    );
-
-    # The collision guard genuinely fires: the SAME var bound to two DIFFERENT
-    # files is ambiguous (silent last-wins would export the wrong secret), so it
-    # must throw rather than pick one. Guards the dedup above from being widened
-    # into "same name always wins".
-    module-kiro-mcp-secret-var-collision-throws = mkTest "kiro-mcp-secret-var-collision-throws" (!(builtins.tryEval (builtins.toJSON
-      (renderKiroSecrets {
-        a = {
-          type = "http";
-          url = "https://a.example.com/mcp/";
-          headers."X-Key" = {
-            file = "/run/secrets/one";
-            var = "SHARED";
-          };
-        };
-        b = {
-          type = "http";
-          url = "https://b.example.com/mcp/";
-          headers."X-Key" = {
-            file = "/run/secrets/two";
-            var = "SHARED";
-          };
+    # Distinct fields which sanitize to one shell name must not overwrite.
+    module-kiro-mcp-secret-var-collision-throws = mkTest "kiro-mcp-secret-var-collision-throws" (!(builtins.tryEval (builtins.deepSeq (renderKiroSecrets {
+        a.headers = {
+          "X-Key" = redact.file "/run/secrets/one";
+          "X_Key" = redact.file "/run/secrets/two";
         };
       })
-      .secretEnv))
-    .success);
+      true)).success);
 
     # Kiro HM<->devenv parity: the SAME config yields the SAME rendered
     # mcp.json template on both backends (identical content -> identical
@@ -756,8 +660,8 @@ in {
         serversCfg = {
           jira = {
             type = "http";
-            url.file = "/run/secrets/jira-url";
-            headers."X-Jira-Token".file = "/run/secrets/service-token";
+            url = redact.file "/run/secrets/jira-url";
+            headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
           };
         };
         cfg = {
@@ -796,8 +700,8 @@ in {
             cli.enable = true;
             mcpServers.jira = {
               type = "http";
-              url.file = "/run/secrets/jira-url";
-              headers."X-Jira-Token".file = "/run/secrets/service-token";
+              url = redact.file "/run/secrets/jira-url";
+              headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
             };
           };
         };
@@ -820,9 +724,8 @@ in {
         && lib.hasInfix ''KIRO_MCP_JIRA_URL="$('' script
         && !(lib.hasInfix ''export KIRO_MCP_JIRA_URL="$('' script)
         && lib.hasInfix "export KIRO_MCP_JIRA_URL\n" script
-        # A secret file that exists but is EMPTY reads successfully, so length
-        # is checked too rather than trusting the exit status alone.
-        && lib.hasInfix ''if [ -z "''${KIRO_MCP_JIRA_URL}" ]; then'' script
+        && lib.hasInfix "redact-read" script
+        && lib.hasInfix "|| exit 1" script
         # Scoped: HM concatenates every activation entry into one script, so an
         # unscoped strict-mode header leaks into later entries and HM's own
         # code, and the exported SECRET would stay live for the rest of

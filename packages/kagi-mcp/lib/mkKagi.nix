@@ -4,12 +4,8 @@
 # to produce a typed attrset that conforms to the common MCP server
 # schema (type, package, command, args, env, settings, url).
 #
-# This is a newer API under `lib.ai.mcpServers.*`. It is SEPARATE from
-# the live, consumer-facing `lib.ai.mkStdioEntry` / `lib.ai.loadServer`
-# path which already has working typed settings + auth
-# (`KAGI_API_KEY` via `settings.credentials.file` /
-# `settings.credentials.helper` sops-nix pass-through) declared in
-# `packages/kagi-mcp/modules/mcp-server.nix`.
+# The shared settings surface accepts redact references and resolves them
+# into the server's credential environment variable at launch.
 {
   lib,
   pkgs,

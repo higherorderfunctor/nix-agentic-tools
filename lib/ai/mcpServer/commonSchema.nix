@@ -9,7 +9,7 @@
 #       (provides typed settings schema, mode strings, credentialVars).
 #       Each ecosystem's renderServer translates to its native target,
 #       wrapping the package with a credentials snippet when settings.*
-#       includes file/helper credentials.
+#       includes redact references.
 #
 #   (B) Raw command — escape hatch for ad-hoc wrappers
 #       { type = "stdio"; command = "<abs-path>"; args = [...]; env = {...}; }
@@ -19,20 +19,14 @@
 #
 #   (C) External HTTP — for already-running / remote services
 #       { type = "http"; url = "..."; headers = {...}; timeout = <ms>; }
-#       Pass-through. Each `headers.<name>` value AND `url` may be a
-#       plain string (baked into the store) OR a { file | helper;
-#       prefix?; suffix?; var?; } SOPS/agenix credential. A credential
-#       HEADER renders as a `${env:VAR}` placeholder the Kiro launcher
-#       substitutes at runtime. A credential URL cannot use that path
-#       (Kiro does not env-substitute the url field, verified against
-#       2.13.0), so the launcher instead assembles it into a real,
-#       private `mcp.json` at activation from the decrypted secret (see
-#       `mkMcpJsonScript` in mkKiro.nix). Both are delivered for Kiro
-#       only; other ecosystems throw on a credential value. See
-#       secretValue.nix.
+#       URLs and headers accept a public string or a redact reference. Kiro
+#       expands header environment placeholders at launch; URL references are
+#       resolved into private mcp.json at activation. Other runtimes reject
+#       unresolved references; proxy.enable keeps them in a daemon instead.
 #       Used by services.mcp-servers outputs and lib.ai.externalServers.
 {lib, ...}: let
-  secretValue = import ./secretValue.nix lib;
+  redact = import ../../redact {inherit lib;};
+  httpValue = redact.types.maybeRedacted lib.types.str;
 in {
   options = {
     type = lib.mkOption {
@@ -177,32 +171,30 @@ in {
       default = {};
       description = ''
         Server-specific settings — typed by the server module's
-        settingsOptions. Credentials (file/helper) flow through here
+        settingsOptions. Redact references flow through here
         and the renderer materializes them into a wrapper script.
       '';
     };
     url = lib.mkOption {
-      type = lib.types.nullOr secretValue;
+      type = lib.types.nullOr httpValue;
       default = null;
       description = ''
         HTTP endpoint URL for shape (C). A plain string (baked into the
-        world-readable store) OR a { file | helper; prefix?; suffix?;
-        var?; } SOPS/agenix credential. Kiro does NOT env-substitute the
+        world-readable store) OR a redact reference. Kiro does NOT env-substitute the
         url field, so a credential url is not injected as a
         `''${env:VAR}` placeholder at launch like a header — instead the
         files engine renders a private, owner-only `mcp.json` from the
         decrypted secret at activation or shell entry.
         Delivered for Kiro only; other ecosystems throw on a credential
-        url. See secretValue.nix.
+        url.
       '';
     };
     headers = lib.mkOption {
-      type = lib.types.attrsOf secretValue;
+      type = lib.types.attrsOf httpValue;
       default = {};
       description = ''
         HTTP request headers for shape (C). Each value is a plain string
-        or a { file | helper; prefix?; suffix?; var?; } SOPS/agenix
-        credential rendered as a `''${env:VAR}` placeholder — the Kiro
+        or a redact reference rendered as a `''${env:VAR}` placeholder — the Kiro
         launcher injects the secret into its environment at start
         (delivered for Kiro only; other ecosystems throw on a credential
         value).
@@ -299,20 +291,19 @@ in {
             '';
           };
           headers = lib.mkOption {
-            type = lib.types.attrsOf (lib.types.nullOr secretValue);
+            type = lib.types.attrsOf (lib.types.nullOr httpValue);
             default = {};
             description = ''
               Headers the PROXY DAEMON applies on the way upstream. Three
               value shapes:
 
-              - a credential (`{ file | helper; prefix?; suffix?; var?; }`)
-                — read from its `file`, or produced by its `helper`, when
-                the daemon starts.
+              - a redact reference — resolved when the daemon starts.
 
                 The SECRET VALUE never reaches the client, the Nix store,
                 argv, or the journal. What lands in the store-backed
-                Caddyfile is a `{$VAR}` PLACEHOLDER, wrapped in any
-                `prefix`/`suffix`, which Caddy substitutes from the
+                Caddyfile is a `{$VAR}` PLACEHOLDER for the whole
+                resolved value, including `redact.concat` literal parts.
+                Caddy substitutes it from the
                 daemon's environment while parsing its config. The
                 distinction matters: the rendered header line is public,
                 the value it resolves to is not.

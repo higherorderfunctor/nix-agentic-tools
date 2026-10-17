@@ -1,11 +1,8 @@
 ## Redact: secrets kept out of the Nix store
 
-> **Last verified:** 2026-10-15 — library only: references, `redacted`,
-> `maybeRedacted`, `concat`, `environment` and `assign`; file paths in the store
-> are refused by context and by location, commands may name a store program; a
-> null beside a value is a conflict; no consumer uses it yet, and
-> `lib/credentials.nix` and `lib/ai/mcpServer/secretValue.nix` remain until
-> consumers move over.
+> **Last verified:** 2026-10-17 — packaged MCP credentials, HTTP values, proxy
+> injection and Kiro MCP delivery consume redact references; legacy credentials
+> serve remaining Kimchi and glab consumers.
 
 `lib/redact` is a pure `{lib}` import, exported as `lib.redact`. A value either
 is cleartext, which is visible and lands in the store, or names where a secret
@@ -17,9 +14,8 @@ launcher starts.
 `redact.file "/run/secrets/x"` and `redact.command "/abs/program"` return the
 markers `{_redact.file = path;}` and `{_redact.command = path;}`.
 `redact.concat ["Bearer " ref]` holds literal strings and references, for a
-header prefix or a token inside a URL. It is the intended replacement for the
-`prefix`/`suffix` fields of `secretValue.nix` once consumers move over. A concat
-needs at least one reference and cannot nest.
+header prefix or a token inside a URL. MCP consumers use it for composed URLs
+and headers. A concat needs at least one reference and cannot nest.
 
 A path must be an absolute string without an empty, `.` or `..` segment. A file
 path must also have no string context: `./secret` and `"${./secret}"` have

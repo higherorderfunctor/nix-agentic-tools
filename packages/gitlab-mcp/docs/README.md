@@ -9,19 +9,21 @@ self-hosted instances are configured per the "Instance URL" section below.
 ## Quick start (HM)
 
 ```nix
-{ config, ... }: {
+{ config, inputs, ... }: let
+  inherit (inputs.nix-agentic-tools.lib) redact;
+in {
   services.mcp-servers.servers.gitlab-mcp = {
     enable = true;
-    settings.pat.file = config.sops.secrets."gitlab-personal-access-token".path;
+    settings.pat = redact.file config.sops.secrets."gitlab-personal-access-token".path;
   };
 }
 ```
 
 The PAT (`GITLAB_PERSONAL_ACCESS_TOKEN`) is the only required credential. The
-`settings.pat` option is the standard sops-nix / agenix surface — `.file` reads
-a decrypted file at service start, `.helper` reads from a credential-helper
-script. Exactly one must be set; raw inline tokens are intentionally not
-supported (they would land in the Nix store).
+`settings.pat` option accepts `redact.file "/run/secrets/token"` or
+`redact.command "/absolute/token-helper"`. They resolve at service start; raw
+inline tokens are refused without printing the value. Use
+`redact.concat ["Bearer " reference]` when a value needs literal parts.
 
 ## Instance URL
 
@@ -37,8 +39,8 @@ services.mcp-servers.servers.gitlab-mcp.settings.instanceUrl =
 ```nix
 # Credential form — keeps the URL out of the store. Use when the
 # instance URL itself is sensitive.
-services.mcp-servers.servers.gitlab-mcp.settings.apiUrl.file =
-  config.sops.secrets."gitlab-instance-url".path;
+services.mcp-servers.servers.gitlab-mcp.settings.apiUrl =
+  redact.file config.sops.secrets."gitlab-instance-url".path;
 ```
 
 Setting both raises an eval-time error. Both forms end up as `GITLAB_API_URL`
@@ -80,8 +82,8 @@ environment variable is omitted).
   default to keep the default tool list small.
 - `caCertPath = "/etc/ssl/certs/ca.pem"` — path to a CA bundle for self-signed
   GitLab instances (`GITLAB_CA_CERT_PATH`).
-- `jobToken.file` — set `GITLAB_JOB_TOKEN` for CI-scoped operations that prefer
-  the job token over the PAT.
+- `jobToken = redact.file "/run/secrets/job-token"` — set `GITLAB_JOB_TOKEN` for
+  CI-scoped operations that prefer the job token over the PAT.
 
 ## OAuth and other deferred env vars
 

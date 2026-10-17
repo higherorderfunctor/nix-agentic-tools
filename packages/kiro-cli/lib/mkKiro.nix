@@ -1012,46 +1012,19 @@
     urlSecretEnv,
   }: let
     hasUrlSecret = urlSecretEnv != {};
-    # A BARE assignment, then a SEPARATE `export`. `export VAR="$(cmd)"` is a
-    # silent-failure trap: the exit status of that line is `export`'s — always
-    # 0 — so a failed read does NOT trip errexit, not even with
-    # `inherit_errexit` set. The empty value then flows into envsubst, which
-    # cheerfully writes `"url": ""`, producing an MCP server that never loads
-    # and reports nothing. A plain `VAR="$(cmd)"` takes the command
-    # substitution's status instead, so an unreadable secret aborts activation.
-    #
-    # Measured 2026-08-04: a gateway url whose secret was not yet readable when
-    # this block ran wrote `"url": ""` into ~/.kiro/settings/mcp.json, and the
-    # only symptom was jira/confluence quietly failing to load.
-    #
-    # The emptiness check covers the other half of the same failure: a secret
-    # file that EXISTS but is empty reads successfully and is just as broken,
-    # so length is checked rather than trusting the exit status alone.
-    exports = lib.concatStrings (lib.mapAttrsToList (var: cred: let
-        isFile = (cred.file or null) != null;
-        reader =
-          if isFile
-          then ''"$(${pkgs.coreutils}/bin/cat ${lib.escapeShellArg cred.file})"''
-          else ''"$(${lib.escapeShellArg cred.helper})"'';
-        source =
-          if isFile
-          then cred.file
-          else cred.helper;
-      in ''
-        ${var}=${reader}
-        if [ -z "''${${var}}" ]; then
-          echo "kiro mcp: credential for ${var} (${source}) is empty — refusing to write $TARGET with a blank url" >&2
-          false
-        fi
-        export ${var}
-      '')
-      urlSecretEnv);
+    exports = lib.concatMapStringsSep "\n" (variable:
+      (import ../../../lib/redact {inherit lib;}).assign {
+        inherit pkgs variable;
+        option = "ai.kiro.mcpServers URL ${variable}";
+        value = urlSecretEnv.${variable};
+        export = true;
+      }) (builtins.attrNames urlSecretEnv);
     envsubstVars =
       lib.concatMapStringsSep " " (v: "\${${v}}") (builtins.attrNames urlSecretEnv);
     # Emit the template (envsubst only URL vars, leaving header placeholders).
     assemble =
       if hasUrlSecret
-      then "${exports}${pkgs.gettext}/bin/envsubst ${lib.escapeShellArg envsubstVars} < ${templateFile}"
+      then "${exports}\n${pkgs.gettext}/bin/envsubst ${lib.escapeShellArg envsubstVars} < ${templateFile}"
       else ''${pkgs.coreutils}/bin/cat ${templateFile}'';
     # Runs as `content.run` in the files engine's own `bash -c`, which adds the
     # strict header. The subshell only confines the exported secret (and the
@@ -1061,6 +1034,7 @@
     aiCommon.scopedActivation ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      export PATH="${lib.makeBinPath [pkgs.coreutils]}''${PATH:+:$PATH}"
       export NAT_OWN_ROOT="${
         if anchorRoot
         then "$DEVENV_ROOT"
@@ -1107,11 +1081,8 @@
         lib.foldl' (acc: entry:
           acc // {${entry.name} = lib.concatStringsSep ", " (lib.unique ((lib.optional (acc ? ${entry.name}) acc.${entry.name}) ++ [entry.value]));}) {}
         (lib.concatLists (lib.mapAttrsToList (name: server:
-          lib.mapAttrsToList (header: credential: {
-            name =
-              if (credential.var or null) != null
-              then credential.var
-              else (import ./mcpSecrets.nix {inherit lib;}).deriveEnvVar name header;
+          lib.mapAttrsToList (header: _: {
+            name = (import ./mcpSecrets.nix {inherit lib;}).deriveEnvVar name "header_${header}";
             value = "${
               if builtins.hasAttr name cfg.mcpServers
               then "ai.kiro.mcpServers"

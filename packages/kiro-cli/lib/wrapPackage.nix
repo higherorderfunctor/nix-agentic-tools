@@ -135,42 +135,16 @@
         (k: v: "export ${lib.escapeShellArg k}=${lib.escapeShellArg v}")
         environmentVariables);
 
-    # SOPS/agenix secrets read at RUNTIME — the decrypted file is `cat`ed into
-    # the env just before `exec`, so the VALUE never enters the world-readable
-    # store (only the file PATH does). kiro-cli-chat's MCP client then
-    # substitutes `${env:VAR}` into http header values at launch.
-    #
-    # These are emitted AFTER `envExports` so a secret always wins over a
-    # same-named static value rather than being silently overwritten by it.
-    #
-    # Absolute coreutils path is mandatory (nix-standards): this wrapper can be
-    # spawned with a replaced or empty PATH, where a bare `cat` fails and the
-    # credential would silently end up empty. Check the assignment before
-    # exporting: export itself masks a failed credential reader's exit code.
-    # Keep launching, but warn with the consumer option rather than the token.
-    #
-    # The reader's own stderr passes THROUGH. An interactive helper prompts for
-    # a passphrase there, and swallowing it turns a launch that is waiting for
-    # input into one that looks hung. Only the value is captured.
+    # Header references resolve at launch; a failed reader aborts before Kiro.
     secretExports =
       lib.concatStringsSep "\n"
       (lib.mapAttrsToList
-        (var: cred: let
-          reader =
-            if (cred.file or null) != null
-            then "${pkgs.coreutils}/bin/cat ${lib.escapeShellArg cred.file}"
-            else lib.escapeShellArg cred.helper;
-          optionPath = secretOptionPaths.${var} or "ai.kiro.mcpServers";
-        in ''
-          if ! nat_mcp_secret="$(${reader})"; then
-            printf '%s\n' ${lib.escapeShellArg "WARNING: ${optionPath}: credential reader failed; launching without this MCP credential"} >&2
-            nat_mcp_secret=""
-          elif [ -z "$nat_mcp_secret" ]; then
-            printf '%s\n' ${lib.escapeShellArg "WARNING: ${optionPath}: credential reader returned an empty value; launching without this MCP credential"} >&2
-          fi
-          export ${lib.escapeShellArg var}="$nat_mcp_secret"
-          unset nat_mcp_secret
-        '')
+        (variable: value:
+          (import ../../../lib/redact {inherit lib;}).assign {
+            inherit pkgs value variable;
+            option = secretOptionPaths.${variable} or "ai.kiro.mcpServers";
+            export = true;
+          })
         secretEnv);
 
     # The Linux buildFHSEnv wrapper preserves PATH and bind-mounts /nix, so a
@@ -294,7 +268,10 @@
         lib.concatStringsSep "\n" (
           ["set -euETo pipefail" "shopt -s inherit_errexit 2>/dev/null || :"]
           ++ lib.optional (envExports != "") envExports
-          ++ lib.optional (secretExports != "") secretExports
+          ++ lib.optionals (secretExports != "") [
+            ''export PATH="''${PATH-${pkgs.coreutils}/bin}"''
+            secretExports
+          ]
           ++ lib.optional (pathExport != "") pathExport
           ++ lib.optional (injection != "") injection
           ++ ["exec -a \"$0\" ${lib.escapeShellArg realBin} \"$@\""]
