@@ -966,10 +966,10 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-14 — `checks-matrix` is the seventh required
+> **Last verified:** 2026-10-17 — `checks-matrix` is the seventh required
 > context; `test` evaluates only. The worker and three review roles run inside a
 > loop of at most 3 rounds; unsettled findings go back to the orchestrator to
-> validate.
+> validate. Merge teardown deletes the PR's `archive/*` backups.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -1289,16 +1289,22 @@ silently resolves one level too deep, into
 6. Merges are squash merges. The operator performs them for **human** PRs; the
    bot's `update/*` PRs land themselves (next section).
 
-7. **Always tear the worktree and local branch down once the PR is merged.**
-   This cleanup belongs to the agent that implemented the change; do not hand it
-   back to the operator or declare the task complete while either remains:
+7. **Always tear the worktree, local branch and backup refs down once the PR is
+   merged.** This cleanup belongs to the agent that implemented the change; do
+   not hand it back to the operator or declare the task complete while any of
+   them remains:
 
    ```bash
    git worktree remove "$worktrees/<slug>"   # re-derive $worktrees if needed
    git branch -D <type>/<slug>   # squash-merged: -d refuses, -D is correct
+   git ls-remote --heads origin "refs/heads/archive/<slug>/*" \
+     | awk '{print $2}' | xargs -r git push origin --delete  # this PR's backups
    ```
 
-   The remote branch auto-deletes on merge.
+   The remote branch auto-deletes on merge; the `archive/*` backups do not. The
+   merge is what makes them redundant, so it is also what authorizes deleting
+   them — no separate approval is needed. A PR closed unmerged keeps its backups
+   until the operator says otherwise.
 
 ### Put a follow-up in the PR it belongs to
 
@@ -1424,7 +1430,7 @@ hazards, and there is no way to tell from the tag alone whether the local config
 has `pruneTags` set, so write backup guidance that holds regardless:
 
 ```bash
-git push origin HEAD:refs/heads/archive/<slug>   # create + push in one step
+git push origin HEAD:refs/heads/archive/<slug>/pre-rebase   # create + push in one step
 ```
 
 Push the backup **in the same command sequence as the rebase**, before running
@@ -1432,6 +1438,12 @@ it — not after, and not as a "verify it's there" step, because the fetch that
 verifies it is exactly the kind of operation that can delete a local-only tag.
 Only a ref that has actually reached `origin` survives both a rebase with
 `--update-refs` and a prune-on-fetch.
+
+A backup lives until its PR merges, then step 7 of the worktree recipe deletes
+it. Name each one `archive/<slug>/<what>`, with `<slug>` the PR's worktree slug,
+so teardown's `archive/<slug>/*` pattern finds every backup that PR made and no
+other PR's. Nothing else deletes them: 349 had piled up by 2026-10-17, when the
+operator cleared them.
 
 Lockfile conflicts (`flake.lock`, `devenv.lock`) during a rebase are
 **regenerated, never hand-merged**: take the base's copy, then re-run
