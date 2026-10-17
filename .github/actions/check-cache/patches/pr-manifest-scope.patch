@@ -777,18 +777,21 @@ index ce57e60..d5151e1 100644
 
 diff --git a/tests/pr_manifest_scope.rs b/tests/pr_manifest_scope.rs
 new file mode 100644
-index 0000000..67ee00f
+index 0000000..8929ec6
 --- /dev/null
 +++ b/tests/pr_manifest_scope.rs
-@@ -0,0 +1,546 @@
+@@ -0,0 +1,534 @@
 +//! Manifest families are selected by key, independent of GitHub ref precedence.
 +mod support;
 +
++use std::collections::BTreeSet;
 +use std::time::Duration;
 +
 +use bytes::Bytes;
 +use hestia::gha::{savemutable::SaveMutable, twirp::Reservation};
 +use hestia::manifest::{ChunkHash, ChunkLocation, Manifest, PackHash, PackInfo, Root};
++use hestia::pipeline::PipelineContext;
++use support::common::{path_hash_of, pipeline_context, to_path_set};
 +use support::fake_gha::FakeGha;
 +
 +fn manifest(name: &str, repacks_survived: u32) -> Manifest {
@@ -1005,6 +1008,18 @@ index 0000000..67ee00f
 +    }
 +}
 +
++/// Populate the default family with the fixture's top path and dependency.
++async fn populated_fixture() -> (Fixture, FakeGha, reqwest::Client, PipelineContext) {
++    let fixture = Fixture::new().await;
++    let fake = FakeGha::start().await;
++    let http = reqwest::Client::new();
++    let ctx = pipeline_context(&fake, &http, fixture.database.clone());
++    ctx.run(to_path_set(&[&fixture.top]), BTreeSet::new(), 10)
++        .await
++        .unwrap();
++    (fixture, fake, http, ctx)
++}
++
 +/// Read the real HTTP body to completion, then validate each Nix export frame
 +/// against the local file's NAR and metadata, including the final terminator.
 +/// Every assertion runs without nix-store, including in the Nix build sandbox.
@@ -1017,7 +1032,6 @@ index 0000000..67ee00f
 +    use hestia::pipeline::AccessLog;
 +    use hestia::refnorm::RefTable;
 +    use hestia::substituter::Substituter;
-+    use support::common::path_hash_of;
 +
 +    let router = Substituter::new(
 +        fixture.database.store_dir().clone(),
@@ -1110,8 +1124,6 @@ index 0000000..67ee00f
 +
 +async fn repair_and_export(stale_base: bool, lagging: bool) {
 +    use hestia::substituter::ManifestStore;
-+    use std::collections::BTreeSet;
-+    use support::common::{pipeline_context, to_path_set};
 +
 +    for published in [false, true] {
 +        let fixture = Fixture::new().await;
@@ -1206,15 +1218,7 @@ index 0000000..67ee00f
 +
 +#[tokio::test]
 +async fn dedup_checks_only_reused_packs_once_per_drain() {
-+    use std::collections::BTreeSet;
-+    use support::common::{path_hash_of, pipeline_context, to_path_set};
-+    let fixture = Fixture::new().await;
-+    let fake = FakeGha::start().await;
-+    let http = reqwest::Client::new();
-+    let ctx = pipeline_context(&fake, &http, fixture.database.clone());
-+    ctx.run(to_path_set(&[&fixture.top]), BTreeSet::new(), 10)
-+        .await
-+        .unwrap();
++    let (fixture, fake, http, ctx) = populated_fixture().await;
 +    let mut current = ctx.load_manifest().await.unwrap();
 +    // Unrelated stale chunks must not cause any availability requests.
 +    current = current.merge(manifest("unrelated-missing", 9));
@@ -1276,15 +1280,7 @@ index 0000000..67ee00f
 +
 +#[tokio::test]
 +async fn new_path_does_not_reuse_evicted_chunks() {
-+    use std::collections::BTreeSet;
-+    use support::common::{path_hash_of, pipeline_context, to_path_set};
-+    let fixture = Fixture::new().await;
-+    let fake = FakeGha::start().await;
-+    let http = reqwest::Client::new();
-+    let ctx = pipeline_context(&fake, &http, fixture.database.clone());
-+    ctx.run(to_path_set(&[&fixture.top]), BTreeSet::new(), 10)
-+        .await
-+        .unwrap();
++    let (fixture, fake, http, ctx) = populated_fixture().await;
 +    let mut current = ctx.load_manifest().await.unwrap();
 +    current.paths.remove(&path_hash_of(&fixture.top));
 +    current.paths.remove(&path_hash_of(&fixture.dep));
@@ -1310,15 +1306,7 @@ index 0000000..67ee00f
 +
 +#[tokio::test]
 +async fn pack_lookup_errors_remain_fatal() {
-+    use std::collections::BTreeSet;
-+    use support::common::{pipeline_context, to_path_set};
-+    let fixture = Fixture::new().await;
-+    let fake = FakeGha::start().await;
-+    let http = reqwest::Client::new();
-+    let ctx = pipeline_context(&fake, &http, fixture.database.clone());
-+    ctx.run(to_path_set(&[&fixture.top]), BTreeSet::new(), 10)
-+        .await
-+        .unwrap();
++    let (fixture, fake, http, ctx) = populated_fixture().await;
 +    // The family lookup succeeds; the dedup pack lookup gets HTTP 401.
 +    fake.expire_token_after(&http, 1).await;
 +    let err = ctx
