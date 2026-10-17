@@ -8,7 +8,7 @@ applyTo: ".github/actions/check-cache/**,.github/workflows/hestia-gc.yml,flake.n
 ## Binary Cache Maintenance
 
 > **Last verified:** 2026-10-16 — drains heal missing packs, family loads
-> preserve live locations, and GC retains manifest heads with reader grace
+> preserve live locations, and GC retains manifest heads with supersession grace
 > before planning.
 
 When adding or removing flake inputs, check whether the input has a public
@@ -111,13 +111,16 @@ by concurrent writers after the checks.
 
 GC cleanup retains the highest numeric index per ref in each of `m3#` and
 `m3pr#`, restricted to Hestia's cache version namespace. Superseded entries are
-deleted by cache ID, since key deletion spans refs and namespaces. Both families
-reuse upstream's creation-age grace (`min_age`, one hour by default); recent
-entries and entries with unknown creation times or missing identity survive.
-Cleanup runs before planning and repacking, so slow pack work cannot starve
-metadata reclamation or force planning to download the entire manifest backlog.
-It preserves heads and reader grace; planning and commit reload their inputs.
-Dry runs never delete.
+deleted by cache ID, since key deletion spans refs and namespaces. In both
+families, an older entry is deleted only when the next-higher index in the same
+family, ref and version namespace has a known creation time older than `min_age`
+(one hour by default). An unknown successor creation time or missing identity
+keeps the entry. A fresh higher index, including a REST-visible reservation not
+yet finalized, keeps its predecessor. Cleanup runs before planning and
+repacking, so slow pack work cannot starve metadata reclamation or force
+planning to download the entire manifest backlog. It preserves heads and
+measures reader grace from the successor's creation; planning and commit reload
+their inputs. Dry runs never delete.
 
 Pack handling still runs on the default branch, whose token cannot read
 PR-scoped caches: packs only a PR references remain orphans to upstream GC and
