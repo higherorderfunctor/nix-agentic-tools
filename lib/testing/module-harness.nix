@@ -227,10 +227,14 @@
   # platform's lowering (systemd units exist only on Linux) evaluates the same
   # on every CI host.
   pkgsOn = platform: pkgs // {stdenv = pkgs.stdenv // {hostPlatform = pkgs.stdenv.hostPlatform // platform;};};
-  linuxPkgs = pkgsOn {
-    isDarwin = false;
-    isLinux = true;
-  };
+  # The real systemd package refuses to evaluate on a Darwin host, and the
+  # Linux lowering only needs its path, so the pinned set carries a stub.
+  linuxPkgs =
+    pkgsOn {
+      isDarwin = false;
+      isLinux = true;
+    }
+    // {systemd = pkgs.writeShellScriptBin "systemctl" ":";};
   evalHmLinux = evalHmWithSpecialArgs {pkgs = linuxPkgs;};
   # A whole module rather than a config attrset, for a configuration that
   # declares options of its own (a stand-in for an upstream module).

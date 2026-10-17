@@ -12,13 +12,6 @@
   # hmStubs pattern in lib/testing/module-harness.nix.
   hmStubs = {
     options = {
-      # sharedOptions detects this option path to select the Home Manager
-      # managed-proxy lifecycle. The real module supplies it; the factory
-      # harness declares the same boundary without importing Home Manager.
-      systemd.user.services = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
-      };
       assertions = lib.mkOption {
         type = lib.types.listOf lib.types.anything;
         default = [];
@@ -51,6 +44,11 @@
       assertions = lib.mkOption {
         type = lib.types.listOf lib.types.anything;
         default = [];
+      };
+      # sharedOptions selects the devenv lifecycle by this option's presence.
+      devenv = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
       };
       files = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
