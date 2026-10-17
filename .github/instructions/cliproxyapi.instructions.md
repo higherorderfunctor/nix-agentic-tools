@@ -42,12 +42,15 @@ the extractor test and runs it with the package's Go toolchain. `GOPROXY=off`,
 Each node holds its measured `type`, its field's Go doc `description` parsed
 with `go/parser`, and the `template` comment at the same path in
 `config.example.yaml`. Path grammar uses `.` between keys, `[]` for a list
-element and `.<name>` for a map value. Structs that flatten into the same
-mapping join their descriptions; conflicting leaves fail extraction. A type with
-a custom YAML decoder is `any`, because its accepted shapes can exceed its
-reflected Go type. Custom structs retain their known child fields:
-`plugins.configs.<name>` accepts arbitrary YAML, while its mapping form has the
-measured `enabled` and `priority` fields.
+element and `.<name>` for a map value. Every ancestor of a node is a node: v8
+sections that no Go struct declares (`server`, `access`, `upstream`, ...) are
+`object` nodes carrying the template's section comment. A key the template sets
+with no node fails extraction, except below an `any` node. Structs that flatten
+into the same mapping join their descriptions; conflicting leaves fail
+extraction. A type with a custom YAML decoder is `any`, because its accepted
+shapes can exceed its reflected Go type. Custom structs retain their known child
+fields: `plugins.configs.<name>` accepts arbitrary YAML, while its mapping form
+has the measured `enabled` and `priority` fields.
 
 The raw has one `config` tree. `extracted/facts.json` declares it as an opaque
 `object` because its keys contain dots, with one Linux measurement because the
@@ -57,17 +60,16 @@ declared object directly.
 
 ## Hand annotations
 
-`extract/annotations.json` supplies string enums and reasons for
-credential-bearing config paths. It contains descriptions of credentials, never
-credential values. `extract/rules.nix` reconciles these rows against `config`
-through the shared facts loader and `reconcile`.
+`extract/annotations.json` supplies reasons for credential-bearing config paths.
+It contains descriptions of credentials, never credential values.
+`extract/rules.nix` reconciles these rows against `config` through the shared
+facts loader and `reconcile`.
 
 A `*` pattern matches one key made of letters, digits, `_` or `-`, allowing a
 single row such as `api-keys.*[].keys[].api-key` to cover every family. A stale
 literal or pattern fails, overlapping rows fail, and a new credential-shaped
 string path requires a reason. The shared classifier is
-`lib/redact/classify.nix`; enum annotations use non-empty lists of non-blank
-strings.
+`lib/redact/classify.nix`.
 
 ## Checks and updates
 

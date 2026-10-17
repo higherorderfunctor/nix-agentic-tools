@@ -48,14 +48,6 @@
       };
       kinds = ["bad-row" "secret"];
     };
-    blank-list = {
-      input.rows.value.description = [];
-      kinds = ["bad-row"];
-    };
-    blank-list-item = {
-      input.rows.value.description = ["kept" " "];
-      kinds = ["bad-row"];
-    };
     blank-non-secret-excluded = {
       input.rows.value.excluded = "";
       kinds = ["bad-row"];
@@ -82,19 +74,6 @@
       };
       entries = [];
       kinds = [];
-    };
-    ignored-list = {
-      input.rows.value.ignored = ["reason"];
-      kinds = ["bad-row"];
-    };
-    list-fill = {
-      input.rows.value.description = ["fill-first" "round-robin"];
-      description = ["fill-first" "round-robin"];
-      kinds = [];
-    };
-    list-non-string = {
-      input.rows.value.description = ["kept" 1];
-      kinds = ["bad-row"];
     };
     needs-human = {
       input.facts.value.type = null;

@@ -1,9 +1,8 @@
 # Extracted facts: the architecture
 
 > **Last verified:** 2026-10-17 — CLIProxyAPI measures its v8 config shape as
-> one opaque fact; shared reconciliation accepts list-valued hand fields and
-> single-key pattern rows. Every owner keeps one carried file; probes are not on
-> the contract yet.
+> one opaque fact; shared reconciliation accepts single-key pattern rows. Every
+> owner keeps one carried file; probes are not on the contract yet.
 
 The contract (`facts-contract.md`, same category) is the spec: file shapes,
 functions, failure kinds. This file is the why and the rules that keep the
@@ -30,19 +29,18 @@ row fails the build. Owners without hand prose (Claude, Codex, glab, semble)
 have no annotations file; owners measured on one platform (every owner except
 Kiro and Codex) have no decisions file.
 
-Reconciliation hand fields are non-blank prose or non-empty lists of it (for
-example a string enum). Owners may pass `patterns` for repeated paths: `*`
-matches one key made of letters, digits, `_` or `-`. A pattern matching no fact
-is stale; a fact claimed by multiple rows fails, including overlaps between
-patterns and literal rows. `ignored` remains a prose reason. The classifier
-stays in `lib/redact/classify.nix`.
+Reconciliation hand fields are non-blank prose. Owners may pass `patterns` for
+repeated paths: `*` matches one key made of letters, digits, `_` or `-`. A
+pattern matching no fact is stale; a fact claimed by multiple rows fails,
+including overlaps between patterns and literal rows. The classifier stays in
+`lib/redact/classify.nix`.
 
 CLIProxyAPI's `config` fact holds its v8 path-to-node mapping as an opaque
 object because paths contain dots. Its Go extractor reflects the pinned config
 structs and reads the package's relocation and key-family tables; its
-reconciliation reader consumes `config` for enums and credential reasons. The
-owner fragment `packages/cliproxyapi/docs/cliproxyapi-extraction.md` describes
-that extraction.
+reconciliation reader consumes `config` for credential reasons. The owner
+fragment `packages/cliproxyapi/docs/cliproxyapi-extraction.md` describes that
+extraction.
 
 Consumers read the aggregate with `get` and `children`, at the place the value
 is used. Nothing else reads a raw: the guard (`checks.extracted-contract-guard`)

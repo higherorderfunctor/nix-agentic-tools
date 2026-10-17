@@ -3,12 +3,7 @@
 # option modules) can call it.
 {lib}: let
   inherit (import ../redact/classify.nix {inherit lib;}) classify;
-  prose = value: builtins.isString value && builtins.match "[[:space:]]*" value == null;
-  # A hand field is prose, or a non-empty list of it (an enum's values).
-  nonBlank = value:
-    if builtins.isList value
-    then value != [] && lib.all prose value
-    else prose value;
+  nonBlank = value: builtins.isString value && builtins.match "[[:space:]]*" value == null;
 in {
   # Facts carry upstream types. Only string leaves and string-to-string maps
   # enter the classifier; objects and booleans are outside its contract.
@@ -56,7 +51,7 @@ in {
           || !nonBlank hand.${field}
           || (fact.${field} or null != null && !(replaceValid && builtins.elem field replace)))
         (builtins.attrNames hand);
-        ignored = row ? ignored && prose row.ignored;
+        ignored = row ? ignored && nonBlank row.ignored;
         entry = fact // lib.filterAttrs (field: _: !(builtins.elem field badFields)) hand;
         missing = lib.filter (field: entry.${field} or null == null) needs;
         # An explicit type replacement must not hide a known string secret.

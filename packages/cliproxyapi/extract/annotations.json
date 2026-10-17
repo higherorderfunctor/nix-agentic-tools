@@ -4,22 +4,19 @@
       "secret": "A client key the proxy accepts; it grants use of every login behind the proxy."
     },
     "api-keys.*[].headers.<name>": {
-      "secret": "An upstream request header, which can carry a credential (an Authorization value): it reaches the store unless given as a file or helper."
+      "secret": "An upstream request header, which can carry a credential (an Authorization value)."
     },
     "api-keys.*[].keys[].api-key": {
-      "secret": "An upstream credential: it reaches the store unless given as a file or helper."
+      "secret": "An upstream credential."
     },
     "api-keys.*[].keys[].headers.<name>": {
-      "secret": "An upstream request header, which can carry a credential (an Authorization value): it reaches the store unless given as a file or helper."
+      "secret": "An upstream request header, which can carry a credential (an Authorization value)."
     },
     "api-keys.*[].keys[].proxy-url": {
-      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port): it reaches the store unless given as a file or helper."
+      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port)."
     },
     "api-keys.*[].proxy-url": {
-      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port): it reaches the store unless given as a file or helper."
-    },
-    "api-keys.claude[].keys[].cloak.mode": {
-      "enum": ["always", "auto", "never"]
+      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port)."
     },
     "management.secret-key": {
       "secret": "The management API key; CPA hashes a plaintext value into its own config at start."
@@ -28,13 +25,7 @@
       "secret": "A TURN server credential."
     },
     "requests.proxy-url": {
-      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port): it reaches the store unless given as a file or helper."
-    },
-    "routing.session-affinity-rebind-on": {
-      "enum": ["any", "quota"]
-    },
-    "routing.strategy": {
-      "enum": ["fill-first", "round-robin", "weighted-round-robin"]
+      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port)."
     },
     "server.github-token": {
       "secret": "A GitHub token CPA sends with its release and asset downloads."

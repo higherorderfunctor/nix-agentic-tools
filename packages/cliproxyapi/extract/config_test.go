@@ -271,10 +271,52 @@ func (x *natExtractor) family(field reflect.StructField, owner reflect.Type, cur
 	})
 }
 
+// The parent of a path and the type that parent must have.
+func natParent(path string) (string, string, bool) {
+	if strings.HasSuffix(path, "[]") {
+		return strings.TrimSuffix(path, "[]"), "list", true
+	}
+	i := strings.LastIndex(path, ".")
+	if i < 0 {
+		return "", "", false
+	}
+	if path[i+1:] == "<name>" {
+		return path[:i], "map", true
+	}
+	return path[:i], "object", true
+}
+
+// v8 nests relocated fields under sections no Go struct declares (server,
+// access, upstream, ...); each such section is an object node.
+func (x *natExtractor) ancestors() {
+	paths := make([]string, 0, len(x.nodes))
+	for path := range x.nodes {
+		paths = append(paths, path)
+	}
+	for _, path := range paths {
+		for parent, kind, ok := natParent(path); ok; parent, kind, ok = natParent(parent) {
+			if _, exists := x.nodes[parent]; !exists {
+				x.nodes[parent] = natNode{Type: kind}
+			}
+		}
+	}
+}
+
+// Whether `path` sits below an `any` node, whose contents are not measured.
+func (x *natExtractor) opaque(path string) bool {
+	for parent, _, ok := natParent(path); ok; parent, _, ok = natParent(parent) {
+		if x.nodes[parent].Type == "any" {
+			return true
+		}
+	}
+	return false
+}
+
 // The comment config.example.yaml carries above or beside each key it sets,
 // by the key's v8 path. Unreflected scalar roots accepted by v8 come from
 // this canonical template (config-version is boundary metadata, not a Config
-// field). Commented-out examples are not keys and carry none.
+// field). Commented-out examples are not keys and carry none. Any other key
+// the template sets without a node is a missed path.
 func (x *natExtractor) template(node *yaml.Node, path string) {
 	switch node.Kind {
 	case yaml.DocumentNode:
@@ -299,6 +341,9 @@ func (x *natExtractor) template(node *yaml.Node, path string) {
 					x.t.Fatal(err)
 				}
 				x.emit(child, natNode{Type: x.kind(reflect.TypeOf(decoded), child)})
+			}
+			if _, exists := x.nodes[child]; !exists && !x.opaque(child) {
+				x.t.Fatalf("%s: config.example.yaml sets a key with no node", child)
 			}
 			text := natComment(node.Content[i].HeadComment, node.Content[i].LineComment, node.Content[i+1].LineComment)
 			if existing, ok := x.nodes[child]; ok && text != "" && existing.Template == "" {
@@ -372,6 +417,7 @@ func TestNatExtract(t *testing.T) {
 	if err := yaml.Unmarshal(example, &document); err != nil {
 		t.Fatal(err)
 	}
+	x.ancestors()
 	x.template(&document, "")
 	out, err := json.MarshalIndent(x.nodes, "", "  ")
 	if err != nil {
