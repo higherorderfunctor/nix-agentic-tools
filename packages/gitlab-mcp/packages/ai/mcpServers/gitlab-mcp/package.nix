@@ -8,11 +8,11 @@
   bun = pkgs.ai.generic.bun;
   vu = packageLib;
 
-  rev = "e2101f6d3ac032fd065c338e56e567d8825a700b";
+  rev = "95edb4901e7dfa1b6d35b6e48548a0b782521ac9";
   src = fetchgit {
     url = "https://github.com/zereight/gitlab-mcp.git";
     inherit rev;
-    hash = "sha256-tv2LaFpKadar/kSOa6ebpeFc6Vvr3ZGjmGhvjrbuOis=";
+    hash = "sha256-GsiNKr43Cg88QsOtvO9wiarVixdiUSmDCJVsF+5lTWc=";
   };
 in
   buildNpmPackage {
