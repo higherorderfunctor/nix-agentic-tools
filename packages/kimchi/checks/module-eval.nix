@@ -9,6 +9,7 @@
 }: let
   inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownedDocument;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
+  redact = import ../../../lib/redact {inherit lib;};
   workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
   workflowsHarness = ".config/kimchi/harness";
   # Reuse these module evaluations for the structural check and runtime smoke.
@@ -1260,21 +1261,22 @@ in {
         hm = evalHm {
           ai.kimchi = {
             enable = true;
-            gitTokens."github.com".file = "/run/secrets/kimchi-github";
+            gitTokens."github.com" = redact.file "/run/secrets/kimchi-github";
           };
         };
         target = hm.config.ai.files.".config/kimchi/config.json";
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
-            gitTokens."github.com".file = "/run/secrets/kimchi-github";
+            gitTokens."github.com" = redact.file "/run/secrets/kimchi-github";
           };
         };
       in
         target.method
         == "ro"
         && target.mode == "0400"
-        && lib.hasInfix ''cat "/run/secrets/kimchi-github"'' target.content.run
+        && lib.hasInfix "redact-read" target.content.run
+        && lib.hasInfix "file /run/secrets/kimchi-github" target.content.run
         && lib.hasInfix ''"github.com": env.kimchi_git_token_0'' target.content.run
         && builtins.any (lib.hasInfix "ai.kimchi.gitTokens is user scope") (failedAssertions rejected)
         && !(builtins.tryEval (builtins.deepSeq
@@ -1462,14 +1464,14 @@ in {
         echo PASS > "$out"
       '';
 
-    # The Cast AI key is a runtime credential ({file|helper}); setting
-    # apiKey.file must evaluate and must never become a static env var.
+    # References must evaluate without becoming shell environment entries;
+    # literals and the retired credential records fail on both backends.
     module-kimchi-credential = mkTest "kimchi-credential" (
       let
         result = evalDevenv {
           ai.kimchi = {
             enable = true;
-            apiKey.file = "/run/secrets/kimchi-key";
+            apiKey = redact.file "/run/secrets/kimchi-key";
           };
         };
       in
@@ -1478,12 +1480,28 @@ in {
         # The cross-harness SSH default is exercised separately; this assertion
         # guards only against baking the Kimchi credential into the environment.
         && removeAttrs result.config.env ["GIT_SSH_COMMAND"] == {}
+        && lib.all (evaluate:
+          lib.all (value:
+            (evaluate {ai.kimchi.apiKey = value;}).config.ai.kimchi.apiKey
+            == value
+            && (evaluate {ai.kimchi.gitTokens."github.com" = value;}).config.ai.kimchi.gitTokens."github.com" == value)
+          [
+            null
+            (redact.file "/run/secrets/kimchi-key")
+            (redact.command "/run/kimchi-key")
+            (redact.concat ["prefix-" (redact.file "/run/secrets/kimchi-key")])
+          ]
+          && lib.all (value:
+            !(builtins.tryEval (builtins.deepSeq (evaluate {ai.kimchi.apiKey = value;}).config.ai.kimchi.apiKey true)).success
+            && !(builtins.tryEval (builtins.deepSeq (evaluate {ai.kimchi.gitTokens."github.com" = value;}).config.ai.kimchi.gitTokens true)).success)
+          ["literal-secret" {file = "/run/secrets/kimchi-key";} {helper = "/run/kimchi-key";}])
+        [evalHm evalDevenv]
     );
 
     # Real-execution gate for the wrapProgram blocker (#1) + secret handling
     # (#3): build the wrapped package (over the tiny aiStubs.kimchi bin) with
     # a second env var plus a credential, and assert the wrapper sets static
-    # env via --set and reads the key from its file at runtime (cat), never
+    # env via --set and resolves the key through the shared reader, never
     # baking the secret literal into the store. The old backslash-newline
     # separator made this build fail with exit 127 once >=2 args were present.
     # Home Manager supplies region and telemetry through global config.json,
@@ -1496,7 +1514,7 @@ in {
       result = evalHm {
         ai.kimchi = {
           enable = true;
-          apiKey.file = "/run/secrets/kimchi-test";
+          apiKey = redact.file "/run/secrets/kimchi-test";
           environmentVariables.KIMCHI_EXTRA = "yes";
           native.harnessSettings.resources."extensions.todos" = true;
         };
@@ -1537,12 +1555,9 @@ in {
 
         bin=${wrapped}/bin/kimchi
         grep -q "KIMCHI_EXTRA" "$bin"
-        grep -q 'cat "/run/secrets/kimchi-test"' "$bin"
-        # An empty credential file must abort the wrapper rather than let the
-        # program start with the variable unset. Asserted on a REAL MCP
-        # wrapper, not only glab's, because the guard lives in the shared
-        # lib/credentials.nix and every server inherits it.
-        grep -q 'KIMCHI_API_KEY resolved empty' "$bin"
+        grep -q 'redact-read ai.kimchi.apiKey file /run/secrets/kimchi-test' "$bin"
+        # Failed reads must abort even without errexit in makeWrapper's shell.
+        grep -q '|| exit 1' "$bin"
         grep -q "KIMCHI_REGION.*eu" ${devenvConfigured}/bin/kimchi
         grep -q "KIMCHI_TELEMETRY_ENABLED.*0" ${devenvConfigured}/bin/kimchi
         expect_resources() {
