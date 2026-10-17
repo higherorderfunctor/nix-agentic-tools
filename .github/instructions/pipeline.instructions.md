@@ -7,9 +7,8 @@ applyTo: ".github/actions/check-cache/**,.github/actions/warm-ifd/**,.github/rep
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-15 — native extracted-facts CI uses one planner and
-> selects Codex alone; Kiro's facts are static reads on Linux; the check-cache
-> jobs consume a Hestia binary published by an early CI job.
+> **Last verified:** 2026-10-17 — devenv input preparation checks shell entry
+> before publication, within the existing preparation budget.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -52,7 +51,10 @@ files, and formatting. Branch CI only validates; it never mutates a branch to
 finish an update.** The package worker skips only the final informational full
 build (`NAT_UPDATE_VERIFY_PACKAGES=0`). Hash derivation and embedded-file
 extraction still run before publication. Input workers retain build verification
-and its hash-repair pass because those repairs can mutate the prepared branch. A
+and its hash-repair pass because those repairs can mutate the prepared branch.
+After successful package verification, the `devenv` input alone must also enter
+its updated shell with the installed CLI (`devenv --no-tui shell true`); failure
+holds the bump back. This runs inside the existing preparation deadline. A
 writable update may open with failing build checks; an incomplete update is held
 back and its existing PR is preserved. A worker whose build verification failed
 still publishes and arms auto-merge, uploads its receipt, and then fails in
@@ -677,8 +679,8 @@ are ignored.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-16 — the MCP group update script regenerates
-> Semble's SDK-generated extracted surface in the same update.
+> **Last verified:** 2026-10-17 — devenv input bumps verify shell entry after
+> successful package verification and hold back on entry failure.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -741,7 +743,10 @@ Targets fall into three categories:
   `lib.extracted.regenCommand`) of every package whose
   `passthru.updateFlakeInput` names the input, and stages the `sidecars` each
   one lists. Git-branchless's config census follows its input through this path.
-  A failed regeneration holds the input back.
+  A failed regeneration holds the input back. After successful package
+  verification, only the `devenv` input runs `devenv --no-tui shell true` with
+  the installed CLI in its updated worktree. A failed shell entry holds the bump
+  back before commit and publication.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages.
   Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
@@ -941,14 +946,15 @@ Every target writes exactly one line to `.update-report.txt`:
 - `NO UPDATES: <name>` — already at latest.
 - `HELD BACK: <name> | <version-detail> (<reason>)` — the update was found but
   could not be WRITTEN: the lock update failed, a hash could not be derived, the
-  formatter errored, or the commit failed. A failing BUILD is deliberately not
-  on this list — see "What holds a target back" below.
+  formatter errored, devenv shell entry failed, or the commit failed. A failing
+  BUILD is deliberately not on this list — see "What holds a target back" below.
 
 `update-report.sh` sorts entries by status and prints a summary.
 
 ### What holds a target back
 
-One rule: **hold back only when the PR cannot be written.**
+Hold back when the PR cannot be written. The `devenv` input also requires
+successful shell entry after passing package verification.
 
 | Failure                             | PR writable?                                  | Outcome                             |
 | ----------------------------------- | --------------------------------------------- | ----------------------------------- |
@@ -958,6 +964,7 @@ One rule: **hold back only when the PR cannot be written.**
 | verifier setup cannot start         | no — validation never ran                     | `HELD BACK`                         |
 | verifier result coverage incomplete | no — validation may have terminated early     | `HELD BACK`                         |
 | formatter errors                    | no — tree left non-canonical                  | `HELD BACK`                         |
+| devenv shell entry fails            | shell-entry preparation requirement failed    | `HELD BACK`                         |
 | `git add` / `git commit` fails      | no                                            | `HELD BACK`                         |
 | everything written, build fails     | **yes**                                       | `UPDATED` — red PR, then a red lane |
 

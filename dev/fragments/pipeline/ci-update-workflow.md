@@ -1,8 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-15 — native extracted-facts CI uses one planner and
-> selects Codex alone; Kiro's facts are static reads on Linux; the check-cache
-> jobs consume a Hestia binary published by an early CI job.
+> **Last verified:** 2026-10-17 — devenv input preparation checks shell entry
+> before publication, within the existing preparation budget.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -45,7 +44,10 @@ files, and formatting. Branch CI only validates; it never mutates a branch to
 finish an update.** The package worker skips only the final informational full
 build (`NAT_UPDATE_VERIFY_PACKAGES=0`). Hash derivation and embedded-file
 extraction still run before publication. Input workers retain build verification
-and its hash-repair pass because those repairs can mutate the prepared branch. A
+and its hash-repair pass because those repairs can mutate the prepared branch.
+After successful package verification, the `devenv` input alone must also enter
+its updated shell with the installed CLI (`devenv --no-tui shell true`); failure
+holds the bump back. This runs inside the existing preparation deadline. A
 writable update may open with failing build checks; an incomplete update is held
 back and its existing PR is preserved. A worker whose build verification failed
 still publishes and arms auto-merge, uploads its receipt, and then fails in
