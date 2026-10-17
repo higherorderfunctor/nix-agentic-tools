@@ -1,8 +1,8 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-16 — Codex extracts the prebuilt voice resource;
-> Kiro parses embedded rollout JSON, preserving state fields; copies must agree.
-> The byte-preserving patcher remains strict.
+> **Last verified:** 2026-10-16 — Codex pins source commits and extracts
+> matching release voice; Kiro parses embedded rollout JSON, preserving state
+> fields; copies must agree. The byte-preserving patcher remains strict.
 
 ### Overview
 
@@ -37,8 +37,8 @@ derivation to pin the version and `src` from a per-platform `sources.json`, then
 re-composes the public package through upstream's wrapper.
 
 **Source override** (chatgpt-codex): `pkgs.codex.override` swaps in the locked
-`mkRustPlatform`, and `overrideAttrs` moves `version`, `src` and `cargoDeps` to
-the `sources.json` pins (nixpkgs' version is not an argument, and
+`mkRustPlatform`, and `overrideAttrs` moves `buildCommit`, `version`, `src` and
+`cargoDeps` to the `sources.json` pins (nixpkgs' version is not an argument, and
 `buildRustPackage` reads its argument `cargoHash`, so `cargoDeps` is restated).
 nixpkgs' `no-daemon_auto_start.patch` is dropped: our modules write that setting
 and declared facts under `extracted/` record the binary's own defaults.
@@ -53,15 +53,15 @@ and declared facts under `extracted/` record the binary's own defaults.
   glibc build), and it copies `<root>` into `CODEX_HOME` rejecting any symlink
   that leaves it. bwrap is looked up on PATH first and the bundled copy is the
   fallback; rg is looked up in `codex-path` first. Neither needs a PATH wrapper.
-- The optional `codex-resources/voice` is built upstream with Bazel and
-  extracted as real files from the same release's
+- The optional `codex-resources/voice` is extracted as real files from the
+  release archive so its build commit matches that archive. It comes from
   `codex-package-<target>.tar.gz` (both platforms' archives carry it). That
-  happens in postFixup, so strip never touches them (it would break the macOS
-  signatures), and on Linux a scoped `autoPatchelf` repoints them at the nix
-  glibc while the source-built binaries are left alone. The voice host refuses
-  any CLI whose compiled-in `STABLE_GIT_COMMIT` differs from its own (unset
-  means `"dev"`), so preBuild exports the voice manifest's `buildCommit` from
-  the same archive. The fully prebuilt recipe is
+  happens in postFixup, so strip never touches it (it would break the macOS
+  signatures), and on Linux a scoped `autoPatchelf` repoints it at the nix glibc
+  while the source-built binaries are left alone. The voice host refuses any CLI
+  whose compiled-in `STABLE_GIT_COMMIT` differs from its own (unset means
+  `"dev"`), so preBuild exports the voice manifest's `buildCommit` from the same
+  archive. The fully prebuilt recipe is
   `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
   `checks/chatgpt-codex-package-layout.nix` starts and stops the real daemon to
   hold this. Its daemon policy is in
@@ -88,14 +88,16 @@ These packages pin versions in their recipe or release `sources.json` sidecar.
 Each uses an update strategy managed by `config.update.targets` (see owner
 `registry.nix`):
 
-- `chatgpt-codex` — `sources.json` {version, srcHash, cargoHash, per-platform
-  release archive `{url, hash}`} + `mkUpdateScript`; version via
+- `chatgpt-codex` — `sources.json` {buildCommit, cargoHash, srcHash, version,
+  per-platform release archive `{url, hash}`} + `mkUpdateScript`; version via
   `ghLatestVersionCmd` with `tagPrefix = "rust-v"` (openai/codex cuts several
   tag series, so the prefix is load-bearing). The script prefetches each
-  platform's archive, then `passthru.fixVendorHash` restores the source and
-  cargo vendor hashes the rewrite dropped. Not automated: the V8 library comes
-  from nixpkgs' `librusty_v8` pin, so a codex bump that moves the `v8` crate
-  fails to build until nixpkgs catches up or we pin `librusty_v8` ourselves
+  platform's archive and resolves `buildCommit` from the `rust-v<version>` tag
+  (dereferencing annotated tags), then `passthru.fixVendorHash` restores the
+  source and cargo vendor hashes the rewrite dropped. Not automated: the V8
+  library comes from nixpkgs' `librusty_v8` pin, so a codex bump that moves the
+  `v8` crate fails to build until nixpkgs catches up or we pin `librusty_v8`
+  ourselves
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   GitHub release and prefetches per-platform binaries
 - `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release
