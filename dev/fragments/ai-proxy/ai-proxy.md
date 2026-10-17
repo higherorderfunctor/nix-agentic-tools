@@ -1,9 +1,9 @@
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
 > **Last verified:** 2026-10-17 — root and per-runtime `url` + redacted `key`
-> selection, resolved into `ai.<runtime>.normalized.proxy`. No runtime declares
-> `proxy` in `surfaceSupport` yet, so delivery policy and the generated warning
-> cases derive its absence everywhere.
+> selection, resolved into `ai.<runtime>.normalized.proxy`; Claude consumes it
+> through a reference-reading `apiKeyHelper`. Other runtimes declare no proxy
+> support and warn through delivery policy.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -17,8 +17,8 @@ credential proxy.
 - `sharedOptions.nix` registers the root option and asserts the root selection.
 - `proxy` is a key of `sharedSurfaceOptions`, so it is a delivery-policy surface
   and every enabled runtime whose `surfaceSupport` omits `proxy` gets the
-  standard decomposition warning. No runtime declares it yet, so a selection
-  warns on every enabled runtime rather than being dropped silently.
+  standard decomposition warning. Claude declares support; the other runtimes
+  warn rather than dropping a selection silently.
 - `mkBackendTransform.nix`, for a record whose `surfaceSupport` declares
   `proxy`, declares `ai.<runtime>.proxy` (same selection options as the root)
   and `ai.<runtime>.normalized.proxy`. The callbacks get it as
@@ -43,10 +43,10 @@ upstream subscriptions, so cleartext has no harmless use here. Root and
 per-runtime options use the same type as the normalized endpoint.
 
 References remain unresolved during evaluation. A consuming runtime must use
-`redact.assign` when its launcher starts and escape the resolved value for its
-destination format. A key's contents cannot be charset-checked at evaluation;
-never substitute the runtime value unescaped into JSON, TOML or shell source.
-The `url` pattern validates only the proxy origin.
+`redact.assign` when its launcher or credential helper starts and escape the
+resolved value for its destination format. A key's contents cannot be
+charset-checked at evaluation; never substitute the runtime value unescaped into
+JSON, TOML or shell source. The `url` pattern validates only the proxy origin.
 
 ### Checks
 
@@ -55,4 +55,5 @@ refusal and the per-runtime override through a test runtime that declares
 `proxy`. The unsupported-runtime warnings are `ai-warnings-delivery`'s generated
 cases, driven by its `proxy` sample (the url form).
 `checks/ai-factory/factory-eval.nix` carries `proxy` in its every-surface
-request set.
+request set. `packages/claude-code/checks/claude-proxy.nix` checks settings and
+runs the file, command and concat helpers on both backends.

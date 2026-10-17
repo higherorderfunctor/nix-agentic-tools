@@ -8,26 +8,32 @@
   lib,
   pkgs,
 }: let
-  # The endpoint as Claude settings. The url is the origin: Claude appends
-  # `/v1/messages` itself. Every proxy writes BOTH key methods, the unused one
-  # blank, because settings merge per key across scopes: a helper left in a
-  # lower scope beside a token here (or the reverse) would send that other
-  # key to this proxy too. `ANTHROPIC_API_KEY` is blanked, never set: an
-  # interactive session asks before using a value, and declining sends the
-  # claude.ai login instead; left unset, one inherited from the process env or
-  # another scope rides along as `x-api-key`, an upstream credential sent to
-  # the proxy.
+  redact = import ../../../lib/redact {inherit lib;};
+  # Settings env overrides inherited credentials. Clear both methods so a
+  # lower-scope token cannot accompany the reference resolved by apiKeyHelper.
   render = {
     key,
     url,
-  }: {
-    apiKeyHelper =
-      if key ? file
-      then "${pkgs.coreutils}/bin/cat ${lib.escapeShellArg key.file}"
-      else key.helper or "";
+  }: let
+    helper = import ../../../lib/strict-shell-application.nix pkgs {
+      name = "claude-proxy-key";
+      text = ''
+        # Reference paths and concat literals are already shell-escaped.
+        # shellcheck disable=SC2016
+        ${redact.assign {
+          inherit pkgs;
+          option = "ai.claude.proxy.key";
+          value = key;
+          variable = "key";
+        }}
+        printf '%s' "$key"
+      '';
+    };
+  in {
+    apiKeyHelper = lib.escapeShellArg (lib.getExe helper);
     env = {
       ANTHROPIC_API_KEY = "";
-      ANTHROPIC_AUTH_TOKEN = key.plain or "";
+      ANTHROPIC_AUTH_TOKEN = "";
       ANTHROPIC_BASE_URL = url;
     };
   };
