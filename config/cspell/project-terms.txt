@@ -227,7 +227,6 @@ librt
 librusty
 libsecret
 libstdc
-libtinfo
 libx
 libzstd
 licence

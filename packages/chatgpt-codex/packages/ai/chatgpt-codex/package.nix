@@ -1,7 +1,7 @@
 # ChatGPT Codex CLI — nixpkgs' source-built `codex`, compiled with this
 # repo's locked Rust platform at the version, source and cargo hashes in
 # ../../../sources.json, and installed as upstream's COMPLETE PACKAGE with
-# the two optional resources taken from upstream's release.
+# the optional voice resource taken from upstream's release.
 #
 # nixpkgs owns the build: cargo flags (codex-cli + codex-code-mode-host), the
 # postPatch, the prebuilt V8 library, the env and the shell completions. We move only the
@@ -30,22 +30,22 @@
 # check is compiled in only when CODEX_BWRAP_SHA256 is set at build time, which
 # this build does not set. So no PATH wrapper is needed, and none is added.
 #
-# PREBUILT RESOURCES. The optional `codex-resources/zsh` (upstream's patched
-# zsh fork) and `codex-resources/voice` (the voice host plus its private
-# GStreamer runtime) are not built here: upstream fetches the first prebuilt
-# and builds the second with Bazel outside cargo. They are extracted from the
-# same release's `codex-package-<target>.tar.gz`, pinned per platform in the
-# sidecar; both platforms' archives carry both. They go in during postFixup, so
-# strip and the ELF shrinker never see them: stripping would break the macOS
-# code signatures. On Linux they are glibc-linked, so a scoped autoPatchelf
-# repoints their interpreter and rpath at the nix glibc; the source-built
-# binaries are left alone. The voice `manifest.json` lists upstream's digests,
-# including its own `bin/codex`; codex does not check them at runtime. It
-# does check the build commit: the CLI's `Hello` must carry the commit the
-# voice host was compiled with, or the host refuses the session as an
-# incompatible helper (codex-rs/voice-host). Both read it from
-# STABLE_GIT_COMMIT at compile time, defaulting to "dev", so preBuild stamps
-# this build with the `buildCommit` of the archive's voice manifest.
+# PREBUILT VOICE. The optional `codex-resources/voice` (the voice host plus
+# its private GStreamer runtime) is taken from the release archive so its
+# build commit matches that archive. The `codex-package-<target>.tar.gz` is
+# pinned per platform in the sidecar; both platforms' archives carry the voice
+# directory, which goes in during postFixup, so strip and the ELF shrinker
+# never see it:
+# stripping would break the macOS code signatures. On Linux it is glibc-linked,
+# so a scoped autoPatchelf repoints its interpreter and rpath at the nix glibc;
+# the source-built binaries are left alone. The voice `manifest.json` lists
+# upstream's digests, including its own `bin/codex`; codex does not check them
+# at runtime. It does check the build commit: the CLI's `Hello` must carry
+# the commit the voice host was compiled with, or the host refuses the session
+# as an incompatible helper (codex-rs/voice-host). Both read it from
+# STABLE_GIT_COMMIT at compile time, defaulting to "dev". nixpkgs stamps
+# STABLE_GIT_COMMIT and CODEX_BUILD_COMMIT from the tracked buildCommit; the
+# layout check fails when the archive's voice build commit differs.
 #
 # Fully prebuilt history (musl tarball installed verbatim):
 # `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
@@ -66,7 +66,7 @@
   packageRoot = (import ../../../lib/packageLayout.nix).root;
 
   # Nix system -> the Rust target naming upstream's release archive. Only the
-  # resources come from it, so this is not the package's `target` below.
+  # voice resource comes from it, so this is not the package's `target` below.
   releaseTargets = {
     "aarch64-darwin" = "aarch64-apple-darwin";
     "x86_64-linux" = "x86_64-unknown-linux-musl";
@@ -74,13 +74,7 @@
   releaseArchive = pkgs.fetchurl {
     inherit (sources.${system} or (throw "chatgpt-codex: no release archive pinned for ${system}")) url hash;
   };
-  # Present in both platforms' archives: each resource and its entrypoint.
-  resources = {
-    voice = "bin/codex-voice-host";
-    zsh = "bin/zsh";
-  };
-  resourceDirs = map (r: "codex-resources/${r}") (lib.attrNames resources);
-  resourcePaths = lib.concatMapStringsSep " " (d: ''"$out/${packageRoot}/${d}"'') resourceDirs;
+  voiceDir = "codex-resources/voice";
   # What the daemon's `platform_target()` reports for this build, and so what
   # `codex-package.json` must record: x86_64-unknown-linux-gnu for this glibc
   # build, aarch64-apple-darwin on darwin.
@@ -96,8 +90,9 @@
   };
 
   # mkUpdateScript writes a candidate with the version and the release archive
-  # pins only; fake hashes let the fixer evaluate it, then restore source
-  # before deriving its cargo vendor tree.
+  # pins; extraExtract resolves the source commit before fixing hashes. Fake
+  # hashes let the fixer evaluate it, then restore source before deriving its
+  # cargo vendor tree.
   fixVendorHash = vu.mkHashFix {
     inherit pkgs sourcesFile;
     attr = "chatgpt-codex";
@@ -115,8 +110,8 @@
 in
   (pkgs.codex.override {inherit rustPlatform;}).overrideAttrs (finalAttrs: prev: {
     pname = "chatgpt-codex";
-    # prev.src already reads its tag from finalAttrs.version.
-    inherit (sources) version;
+    # nixpkgs uses buildCommit for src, STABLE_GIT_COMMIT and CODEX_BUILD_COMMIT.
+    inherit (sources) buildCommit version;
     src = prev.src.override {hash = sources.srcHash or lib.fakeHash;};
     # buildRustPackage derives cargoDeps from its ARGUMENT cargoHash, which
     # overrideAttrs cannot reach, so the vendor tree is restated over the
@@ -147,23 +142,6 @@ in
     # modules write that setting explicitly, so the binary keeps upstream's.
     patches = [];
 
-    # The voice handshake's commit, read from the archive the voice host
-    # comes from. Exported in this shell so cargoBuildHook compiles it in.
-    preBuild =
-      (prev.preBuild or "")
-      + ''
-        STABLE_GIT_COMMIT=$(
-          set -euETo pipefail
-          tar -xzOf ${releaseArchive} codex-resources/voice/manifest.json \
-            | sed -n 's/.*"buildCommit": *"\([0-9a-f]\{40\}\)".*/\1/p'
-        )
-        if [ -z "$STABLE_GIT_COMMIT" ]; then
-          echo "chatgpt-codex: no buildCommit in the voice manifest of ${releaseArchive}" >&2
-          false
-        fi
-        export STABLE_GIT_COMMIT
-      '';
-
     postInstall =
       (prev.postInstall or "")
       + ''
@@ -193,14 +171,13 @@ in
       (
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      tar -xzf ${releaseArchive} -C "$out/${packageRoot}" ${lib.escapeShellArgs resourceDirs}
+      tar -xzf ${releaseArchive} -C "$out/${packageRoot}" ${lib.escapeShellArg voiceDir}
       ${lib.optionalString isLinux ''
         # The archive ships the voice libraries read-only; patchelf rewrites
-        # in place. zsh needs libtinfo; the voice host brings its own
-        # GStreamer and glib and needs nothing beyond glibc.
-        chmod -R u+w ${resourcePaths}
-        addAutoPatchelfSearchPath ${lib.getLib pkgs.ncurses}/lib
-        autoPatchelf ${resourcePaths}
+        # in place. The voice host brings its own GStreamer and glib
+        # and needs nothing beyond glibc.
+        chmod -R u+w "$out/${packageRoot}/${voiceDir}"
+        autoPatchelf "$out/${packageRoot}/${voiceDir}"
       ''}
       )
     '';
@@ -226,8 +203,8 @@ in
         # Read by checks/chatgpt-codex-package-layout.nix, so the check asserts
         # the layout this recipe says it produces rather than a copy of it.
         codexPackage = {
-          # The prebuilt resources' entrypoints, relative to `root`.
-          resources = lib.mapAttrsToList (r: exe: "codex-resources/${r}/${exe}") resources;
+          # The prebuilt voice entrypoint, relative to `root`.
+          resources = ["${voiceDir}/bin/codex-voice-host"];
           root = packageRoot;
           inherit target;
         };
@@ -237,9 +214,9 @@ in
         updateScript = vu.mkUpdateScript {
           inherit pkgs sourcesFile;
           pname = "chatgpt-codex";
-          # One archive per platform, for the prebuilt resources. Its entries
-          # replace the sidecar, so the fixer below restores srcHash and
-          # cargoHash afterwards.
+          # One archive per platform, for the prebuilt voice resource. Its
+          # entries replace the sidecar, so extraExtract restores buildCommit,
+          # srcHash and cargoHash afterwards.
           platforms =
             lib.mapAttrs (
               _: target: ver: "https://github.com/openai/codex/releases/download/rust-v${ver}/codex-package-${target}.tar.gz"
@@ -250,10 +227,23 @@ in
             repo = "openai/codex";
             tagPrefix = "rust-v";
           };
-          # Restore the source and vendor hashes, then regenerate the
+          # Resolve the source commit and hashes, then regenerate the
           # committed sidecar from the freshly-bumped binary in the SAME
           # update/chatgpt-codex PR (no intra-PR drift).
           extraExtract = ''
+            buildCommit=$(
+              ${pkgs.git}/bin/git ls-remote --exit-code https://github.com/openai/codex \
+                "refs/tags/rust-v$latest" "refs/tags/rust-v$latest^{}" \
+                | ${pkgs.gawk}/bin/awk 'NR == 1 {commit = $1} /\^\{\}$/ {commit = $1} END {print commit}'
+            )
+            if [[ ! "$buildCommit" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "chatgpt-codex: no commit for rust-v$latest" >&2
+              exit 1
+            fi
+            tmp=$(${pkgs.coreutils}/bin/mktemp)
+            ${pkgs.jq}/bin/jq --arg commit "$buildCommit" '. + {buildCommit: $commit}' \
+              "${sourcesFile}" > "$tmp"
+            ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
             ${fixVendorHash}
             ${(extractedLib {inherit pkgs;}).regenCommand {name = "chatgpt-codex";}}
           '';
