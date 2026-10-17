@@ -31,8 +31,9 @@ in
     pkgs.symlinkJoin {
       inherit name;
       paths = [unwrapped];
-      # Preserve package metadata used by Codex's daemon selector when a
-      # consumer selects this launcher as its package.
+      # `launcherPackage` lets a consumer that selects this launcher as its
+      # package, Codex's daemon selector and install flattening among them,
+      # recover the original package.
       passthru = (unwrapped.passthru or {}) // {launcherPackage = unwrapped;};
       nativeBuildInputs = [pkgs.makeWrapper];
       postBuild = ''
