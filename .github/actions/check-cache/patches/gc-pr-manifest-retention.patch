@@ -201,10 +201,10 @@ index c62900e..80aa1df 100644
          );
 diff --git a/tests/gc_pr_retention.rs b/tests/gc_pr_retention.rs
 new file mode 100644
-index 0000000..1597d8f
+index 0000000..07bf8b1
 --- /dev/null
 +++ b/tests/gc_pr_retention.rs
-@@ -0,0 +1,191 @@
+@@ -0,0 +1,184 @@
 +//! Manifest retention uses repository-wide REST identities, never key deletion.
 +mod support;
 +
@@ -213,18 +213,14 @@ index 0000000..1597d8f
 +
 +use hestia::gc::{GcContext, GcPolicy, SECS_PER_HOUR};
 +use support::fake_gha::FakeGha;
++use support::sim::SimCache;
 +
 +const NOW: u64 = 1_800_000_000;
 +
-+fn context(fake: &FakeGha) -> GcContext {
-+    let http = reqwest::Client::new();
-+    GcContext {
-+        twirp: fake.twirp(&http),
-+        rest: fake.rest(&http),
-+        http,
-+        manifest_prefix: "m3".to_string(),
-+        policy: GcPolicy::default(),
-+    }
++async fn fixture() -> (FakeGha, GcContext) {
++    let fake = FakeGha::start().await;
++    let gc = SimCache::new(&fake, &reqwest::Client::new()).gc(GcPolicy::default());
++    (fake, gc)
 +}
 +
 +async fn ids(gc: &GcContext) -> BTreeSet<u64> {
@@ -240,8 +236,7 @@ index 0000000..1597d8f
 +#[tokio::test]
 +async fn retains_each_ref_head_and_supersession_grace_in_own_namespace() {
 +    tokio::time::timeout(Duration::from_secs(30), async {
-+        let fake = FakeGha::start().await;
-+        let gc = context(&fake);
++        let (fake, gc) = fixture().await;
 +        let version = gc.twirp.version();
 +        let old = NOW - 2 * SECS_PER_HOUR;
 +        let a = "refs/pull/1/merge";
@@ -298,8 +293,7 @@ index 0000000..1597d8f
 +#[tokio::test]
 +async fn cleanup_precedes_failed_planning_but_dry_run_never_deletes() {
 +    tokio::time::timeout(Duration::from_secs(30), async {
-+        let fake = FakeGha::start().await;
-+        let gc = context(&fake);
++        let (fake, gc) = fixture().await;
 +        let version = gc.twirp.version();
 +        let old = NOW - 2 * SECS_PER_HOUR;
 +        fake.insert_cache_entry("m3#1", "refs/heads/main", version, b"bad manifest", old);
@@ -348,8 +342,7 @@ index 0000000..1597d8f
 +async fn successor_grace(created: u64, reserved: bool, delete: bool) {
 +    tokio::time::timeout(Duration::from_secs(30), async {
 +        for family in ["m3", "m3pr"] {
-+            let fake = FakeGha::start().await;
-+            let gc = context(&fake);
++            let (fake, gc) = fixture().await;
 +            let version = gc.twirp.version();
 +            let cache_ref = "refs/heads/main";
 +            let predecessor = fake.insert_cache_entry(
