@@ -5,30 +5,24 @@ base. Live main locations win; a live own location survives a stale base.
 Pack checks are limited to family conflicts and dedup candidates, memoized
 per drain; absence is rechecked before known-missing locations are pruned.
 
---- a/Cargo.lock
-+++ b/Cargo.lock
-@@ -1005,6 +1005,7 @@
-  "bytes",
-  "clap",
-  "futures-util",
-+ "harmonia-store-db",
-  "harmonia-store-nar-info",
-  "harmonia-store-path",
-  "harmonia-store-path-info",
---- a/Cargo.toml
-+++ b/Cargo.toml
-@@ -74,6 +74,8 @@
- harmonia-utils-signature = { git = "https://github.com/nix-community/harmonia", rev = "bba51756f92a488d440e4c426747fb681abce4a7" }
+diff --git a/hestia-core/src/pathinfo.rs b/hestia-core/src/pathinfo.rs
+index eb55bf9..486d028 100644
+--- a/hestia-core/src/pathinfo.rs
++++ b/hestia-core/src/pathinfo.rs
+@@ -15,7 +15,7 @@
+ use std::collections::{BTreeSet, VecDeque};
+ use std::path::{Path, PathBuf};
 
- [dev-dependencies]
-+# Build hermetic store database fixtures without nix-store or a daemon.
-+harmonia-store-db = { git = "https://github.com/nix-community/harmonia", rev = "bba51756f92a488d440e4c426747fb681abce4a7" }
- # Integration tests spawn the hestia binary and nix tooling
- tokio = { version = "1", features = ["process"] }
- # Property-based tests for manifest merge laws
+-use harmonia_store_db::StoreDb;
++pub use harmonia_store_db::{OpenMode, StoreDb};
+ use harmonia_store_path::StorePath;
+ use harmonia_store_path_info::UnkeyedValidPathInfo;
+ use harmonia_utils_signature::Signature;
+diff --git a/src/cli.rs b/src/cli.rs
+index fc94639..5171066 100644
 --- a/src/cli.rs
 +++ b/src/cli.rs
-@@ -34,6 +34,14 @@
+@@ -34,6 +34,14 @@ pub enum Command {
 
  #[derive(Args, Debug)]
  pub struct ServeArgs {
@@ -43,7 +37,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
      /// Unix socket path for the post-build-hook listener.
      #[arg(long, default_value = DEFAULT_SOCKET)]
      pub socket: PathBuf,
-@@ -204,6 +212,8 @@
+@@ -204,6 +212,8 @@ mod tests {
          assert_eq!(args.listen, DEFAULT_LISTEN);
          assert_eq!(args.socket, PathBuf::from(DEFAULT_SOCKET));
          assert_eq!(args.idle_exit, None);
@@ -52,10 +46,11 @@ per drain; absence is rechecked before known-missing locations are pruned.
 
          assert_eq!(args.branch, None);
          assert_eq!(args.system, None);
-@@ -264,6 +274,23 @@
+@@ -263,6 +273,23 @@ mod tests {
+         assert_eq!(args.db_path, PathBuf::from("/custom/db.sqlite"));
      }
 
-     #[test]
++    #[test]
 +    fn explicit_manifest_families() {
 +        let cli = parse(&[
 +            "hestia",
@@ -72,10 +67,11 @@ per drain; absence is rechecked before known-missing locations are pruned.
 +        assert_eq!(args.base_manifest_prefix.as_deref(), Some("m3"));
 +    }
 +
-+    #[test]
+     #[test]
      fn upstream_key_names_require_the_filter_flag() {
          // Without `requires`, an explicit key name would parse fine and be
-         // silently discarded by serve::run's empty-filter branch.
+diff --git a/src/gha/mod.rs b/src/gha/mod.rs
+index c689ddb..74f27d1 100644
 --- a/src/gha/mod.rs
 +++ b/src/gha/mod.rs
 @@ -11,6 +11,7 @@
@@ -86,6 +82,9 @@ per drain; absence is rechecked before known-missing locations are pruned.
  pub mod rest;
  pub mod savemutable;
  pub mod twirp;
+diff --git a/src/gha/packs.rs b/src/gha/packs.rs
+new file mode 100644
+index 0000000..a4ea831
 --- /dev/null
 +++ b/src/gha/packs.rs
 @@ -0,0 +1,73 @@
@@ -162,9 +161,11 @@ per drain; absence is rechecked before known-missing locations are pruned.
 +            .collect()
 +    }
 +}
+diff --git a/src/gha/savemutable.rs b/src/gha/savemutable.rs
+index 769053a..91b3c01 100644
 --- a/src/gha/savemutable.rs
 +++ b/src/gha/savemutable.rs
-@@ -32,8 +32,11 @@
+@@ -32,8 +32,11 @@ use std::time::Duration;
 
  use bytes::Bytes;
 
@@ -176,7 +177,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
 
  /// Cache key for version `index` of family `prefix`, e.g. `m#5`.
  fn key_for(prefix: &str, index: u64) -> String {
-@@ -74,6 +77,7 @@
+@@ -74,6 +77,7 @@ pub struct SaveMutable<'a> {
      twirp: &'a TwirpClient,
      http: &'a reqwest::Client,
      prefix: String,
@@ -184,7 +185,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
      /// Delay between conflict retries.
      retry_delay: Duration,
      /// Give up after this many conflicting save attempts.
-@@ -93,6 +97,7 @@
+@@ -93,6 +97,7 @@ impl<'a> SaveMutable<'a> {
              twirp,
              http,
              prefix: prefix.into(),
@@ -192,7 +193,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
              retry_delay: Duration::from_secs(3),
              max_attempts: 60,
              // 20 conflicts x 3s = 60s before an index is judged abandoned:
-@@ -115,9 +120,39 @@
+@@ -115,9 +120,39 @@ impl<'a> SaveMutable<'a> {
          self
      }
 
@@ -233,7 +234,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
          let lookup = self
              .twirp
              .get_download_url(&prefix, &[prefix.as_str()])
-@@ -126,7 +161,7 @@
+@@ -126,7 +161,7 @@ impl<'a> SaveMutable<'a> {
              DownloadUrl::Miss => return Ok(None),
              DownloadUrl::Hit { url, matched_key } => (url, matched_key),
          };
@@ -242,7 +243,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
 
          // The signed URL was just issued, but refresh anyway if it raced
          // with an expiry. The refresh re-runs the prefix lookup, which may
-@@ -151,7 +186,7 @@
+@@ -151,7 +186,7 @@ impl<'a> SaveMutable<'a> {
 
          let (key, index) = match refreshed_key.lock().expect("not poisoned").take() {
              Some(key) => {
@@ -251,7 +252,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
                  (key, index)
              }
              None => (matched_key, index),
-@@ -180,7 +215,24 @@
+@@ -180,7 +215,24 @@ impl<'a> SaveMutable<'a> {
      /// — which may still return an older version — does not make the
      /// writer reserve an index that is already taken and spin in the
      /// conflict loop until the lookup catches up.
@@ -277,7 +278,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
      where
          F: FnMut(Option<&MutableEntry>) -> Result<Vec<u8>, Error>,
      {
-@@ -198,14 +250,35 @@
+@@ -198,14 +250,35 @@ impl<'a> SaveMutable<'a> {
          // that version's changes from every later one (docs/savemutable.als,
          // NoLostUpdate).
          let mut newest: Option<MutableEntry> = None;
@@ -315,7 +316,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
 
              let base = newest.as_ref().map(|entry| entry.index).unwrap_or(0);
              let index = base.max(skip_through) + 1;
-@@ -241,6 +314,69 @@
+@@ -241,6 +314,69 @@ impl<'a> SaveMutable<'a> {
      }
  }
 
@@ -385,9 +386,11 @@ per drain; absence is rechecked before known-missing locations are pruned.
  #[cfg(test)]
  mod tests {
      use super::*;
+diff --git a/src/pipeline.rs b/src/pipeline.rs
+index 7458e49..2e5b17d 100644
 --- a/src/pipeline.rs
 +++ b/src/pipeline.rs
-@@ -24,13 +24,14 @@
+@@ -24,13 +24,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
  use crate::chunker::{self, PackBuilder, chunk_path, compress_chunks, nar_hash_from_chunks};
  use crate::gha::Error as GhaError;
  use crate::gha::blob;
@@ -404,7 +407,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
  use crate::upstream::UpstreamFilter;
  use futures_util::{StreamExt as _, TryStreamExt as _};
 
-@@ -205,6 +206,20 @@
+@@ -205,6 +206,20 @@ pub async fn upload_pack(
      }
  }
 
@@ -425,7 +428,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
  /// Everything the pipeline needs to talk to the world.
  pub struct PipelineContext {
      pub twirp: TwirpClient,
-@@ -222,9 +237,10 @@
+@@ -222,9 +237,10 @@ pub struct PipelineContext {
      pub root_key: String,
      /// Workflow run id (`$GITHUB_RUN_ID`); see [`Root::merge`].
      pub run_id: Option<String>,
@@ -438,7 +441,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
      /// Compressed bytes per pack ([`PACK_TARGET_SIZE`] in production; tests
      /// use small values to exercise pack splitting).
      pub pack_target_size: u64,
-@@ -270,6 +286,7 @@
+@@ -270,6 +286,7 @@ enum Verified {
  impl PipelineContext {
      fn save_mutable(&self) -> SaveMutable<'_> {
          SaveMutable::new(&self.twirp, &self.http, &self.manifest_prefix)
@@ -446,7 +449,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
      }
 
      /// Load the current manifest, or an empty one if none exists yet or
-@@ -312,7 +329,12 @@
+@@ -312,7 +329,12 @@ impl PipelineContext {
          }
 
          let load_started = std::time::Instant::now();
@@ -460,7 +463,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
 
          // Read-your-writes: cache lookups may lag behind this daemon's own
          // commits, so fold in the manifest we are currently serving (it is
-@@ -323,7 +345,17 @@
+@@ -323,7 +345,17 @@ impl PipelineContext {
          };
          // `current` is the basis for every dedup decision below; the commit
          // at the end must include all of it (see the merge closure).
@@ -479,7 +482,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
          // Reservation floor: never reserve at or below a version we have
          // already seen, even when commit-time lookups regress below it
          // (non-monotonic eventually consistent reads).
-@@ -388,7 +420,20 @@
+@@ -388,7 +420,20 @@ impl PipelineContext {
 
              let hash = info.path_hash();
 
@@ -501,7 +504,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
                  // Already stored: bump the push clock so push-TTL-based
                  // liveness keeps protecting it.
                  root_paths.insert(hash);
-@@ -510,13 +555,18 @@
+@@ -510,13 +555,18 @@ impl PipelineContext {
                  } = *ready;
                  chunk_time += elapsed;
 
@@ -527,7 +530,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
 
                  prepared.push(PreparedPath {
                      hash: info.path_hash(),
-@@ -622,6 +672,8 @@
+@@ -622,6 +672,8 @@ impl PipelineContext {
          // upload is the wall time of the whole pipelined section.
          stats.upload_ms = upload_started.elapsed().as_millis() as u64;
 
@@ -536,7 +539,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
          let mut delta = Manifest::new();
          let mut packs: Vec<(u64, chunker::Pack)> = Vec::new();
          for (uploaded, size, pack) in uploads {
-@@ -698,29 +750,33 @@
+@@ -698,29 +750,33 @@ impl PipelineContext {
          // version can be published without re-loading it from the cache.
          let commit_started = std::time::Instant::now();
          let mut committed: Option<Manifest> = None;
@@ -593,9 +596,11 @@ per drain; absence is rechecked before known-missing locations are pruned.
              .await?;
          stats.commit_ms = commit_started.elapsed().as_millis() as u64;
          stats.manifest_version = version;
+diff --git a/src/serve.rs b/src/serve.rs
+index 5fcf064..a59d96c 100644
 --- a/src/serve.rs
 +++ b/src/serve.rs
-@@ -49,7 +49,7 @@
+@@ -49,7 +49,7 @@ const MAX_PACK_VERIFY_ENTRIES: u64 = 1000;
  use crate::cli::ServeArgs;
  use crate::gha::twirp::TwirpClient;
  use crate::pathinfo::StoreDatabase;
@@ -604,7 +609,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
  use crate::protocol::{DrainStats, Request, Response, encode_line};
  use crate::substituter::{ManifestStore, Substituter, verify_packs};
  use crate::upstream::UpstreamFilter;
-@@ -425,14 +425,19 @@
+@@ -425,14 +425,19 @@ impl Daemon {
  /// win. Recording the version makes drains start their reservations above
  /// it even when cache lookups lag.
  async fn load_published_manifest(
@@ -629,7 +634,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
          Ok(None) => {}
          Err(err) => {
              eprintln!("hestia serve: cannot load the manifest, substituting nothing: {err}");
-@@ -605,7 +610,8 @@
+@@ -605,7 +610,8 @@ pub async fn run(args: &ServeArgs) -> ExitCode {
          run_id: std::env::var("GITHUB_RUN_ID")
              .ok()
              .filter(|id| !id.is_empty()),
@@ -639,7 +644,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
          pack_target_size: pipeline::PACK_TARGET_SIZE,
          read_only: read_only.clone(),
          // Replaced by Daemon::bind with the daemon's shared ManifestStore.
-@@ -663,15 +669,23 @@
+@@ -663,15 +669,23 @@ pub async fn run(args: &ServeArgs) -> ExitCode {
      .with_activity_hook(daemon.activity_hook())
      .with_manifest_ready(manifest_ready_rx)
      .with_manifest_reload({
@@ -664,7 +669,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
              })
          })
      });
-@@ -692,12 +706,16 @@
+@@ -692,12 +706,16 @@ pub async fn run(args: &ServeArgs) -> ExitCode {
          let http = http.clone();
          let manifest_store = manifest_store.clone();
          let min_version = args.wait_manifest_version;
@@ -684,9 +689,11 @@ per drain; absence is rechecked before known-missing locations are pruned.
              };
              wait_for_manifest_version(&manifest_store, min_version, reload).await;
              let _ = manifest_ready_tx.send(true);
+diff --git a/src/substituter.rs b/src/substituter.rs
+index ce57e60..d5151e1 100644
 --- a/src/substituter.rs
 +++ b/src/substituter.rs
-@@ -189,6 +189,14 @@
+@@ -189,6 +189,14 @@ pub struct ManifestStore {
      inner: Arc<RwLock<Arc<ManifestView>>>,
  }
 
@@ -701,7 +708,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
  impl ManifestStore {
      pub fn new() -> Self {
          Self::default()
-@@ -219,6 +227,20 @@
+@@ -219,6 +227,20 @@ impl ManifestStore {
          }
      }
 
@@ -722,7 +729,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
      /// The served manifest and its version (clone; manifests are small).
      pub fn versioned(&self) -> (u64, Manifest) {
          let view = self.view();
-@@ -925,7 +947,7 @@
+@@ -925,7 +947,7 @@ async fn nar(
  }
 
  /// All chunks referenced by an entry's file tree (deduplicated).
@@ -731,7 +738,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
      flatten_tree(&entry.tree)
          .into_iter()
          .filter_map(|(_, node)| match node {
-@@ -1204,6 +1226,36 @@
+@@ -1204,6 +1226,36 @@ async fn closure_external_references(
 
  #[cfg(test)]
  mod tests {
@@ -768,9 +775,12 @@ per drain; absence is rechecked before known-missing locations are pruned.
      use super::*;
      use crate::manifest::{ChunkList, FileTree, Regular};
 
+diff --git a/tests/pr_manifest_scope.rs b/tests/pr_manifest_scope.rs
+new file mode 100644
+index 0000000..67ee00f
 --- /dev/null
 +++ b/tests/pr_manifest_scope.rs
-@@ -0,0 +1,553 @@
+@@ -0,0 +1,546 @@
 +//! Manifest families are selected by key, independent of GitHub ref precedence.
 +mod support;
 +
@@ -947,9 +957,8 @@ per drain; absence is rechecked before known-missing locations are pruned.
 +
 +impl Fixture {
 +    async fn new() -> Self {
-+        use harmonia_store_db::{OpenMode, StoreDb};
 +        use harmonia_store_path_info::{NarHash, UnkeyedValidPathInfo};
-+        use hestia::pathinfo::{StoreDatabase, StoreDir};
++        use hestia::pathinfo::{OpenMode, StoreDatabase, StoreDb, StoreDir};
 +
 +        let dir = tempfile::tempdir().unwrap();
 +        let store_dir = StoreDir::new(dir.path().join("store")).unwrap();
@@ -1230,11 +1239,6 @@ per drain; absence is rechecked before known-missing locations are pruned.
 +            .count(),
 +        1
 +    );
-+    println!(
-+        "evaluator fixture: {} pack lookups, 1 range GET; {} total lookups",
-+        packs.len(),
-+        requests.len()
-+    );
 +    // An access-only worker drain relies on no pack for write dedup.
 +    let start = fake.download_requests().len();
 +    ctx.run(
@@ -1249,7 +1253,6 @@ per drain; absence is rechecked before known-missing locations are pruned.
 +            .iter()
 +            .all(|key| !key.starts_with("pack-"))
 +    );
-+    println!("access-only worker fixture: 0 pack lookups, 0 range GETs");
 +    // Remove just one path entry: its newly prepared chunks reuse the same
 +    // checked pack as the skipped dependency (no second request).
 +    current.paths.remove(&path_hash_of(&fixture.top));
@@ -1324,9 +1327,11 @@ per drain; absence is rechecked before known-missing locations are pruned.
 +        .unwrap_err();
 +    assert!(err.to_string().contains("expired"), "{err}");
 +}
+diff --git a/tests/support/common.rs b/tests/support/common.rs
+index 7018ea4..ac58096 100644
 --- a/tests/support/common.rs
 +++ b/tests/support/common.rs
-@@ -50,6 +50,7 @@
+@@ -50,6 +50,7 @@ pub fn pipeline_context_with(
          root_key: TEST_ROOT_KEY.to_string(),
          run_id: Some("test-run".to_string()),
          manifest_prefix: MANIFEST_PREFIX.to_string(),
@@ -1334,9 +1339,11 @@ per drain; absence is rechecked before known-missing locations are pruned.
          pack_target_size: PACK_TARGET_SIZE,
          read_only: Arc::new(AtomicBool::new(false)),
          publish: None,
+diff --git a/tests/support/fake_gha.rs b/tests/support/fake_gha.rs
+index eb2e5cd..c2c7a7b 100644
 --- a/tests/support/fake_gha.rs
 +++ b/tests/support/fake_gha.rs
-@@ -83,6 +83,7 @@
+@@ -83,6 +83,7 @@ struct Inner {
      valid_sigs: HashSet<String>,
      clock: u64,
      blob_requests: Vec<BlobRequest>,
@@ -1344,7 +1351,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
      /// `Some(n)`: n more Twirp calls succeed, then everything gets 401.
      twirp_calls_until_401: Option<u64>,
      /// `Some(n)`: n more CreateCacheEntry calls succeed, then quota errors.
-@@ -247,6 +248,8 @@
+@@ -247,6 +248,8 @@ async fn twirp_download_url(State(state): State<AppState>, body: Bytes) -> Respo
      };
      let mut inner = state.inner.lock().unwrap();
 
@@ -1353,7 +1360,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
      // Fidelity note (verified against the production service): only
      // `restore_keys` are consulted, as ordered prefix matches with the
      // newest entry winning per prefix. The `key` field alone matches
-@@ -621,6 +624,7 @@
+@@ -621,6 +624,7 @@ impl FakeGha {
              valid_sigs: HashSet::new(),
              clock: 0,
              blob_requests: Vec::new(),
@@ -1361,7 +1368,7 @@ per drain; absence is rechecked before known-missing locations are pruned.
              twirp_calls_until_401: None,
              creates_until_quota: None,
              deny_writes: false,
-@@ -682,6 +686,11 @@
+@@ -682,6 +686,11 @@ impl FakeGha {
          self.inner.lock().unwrap().blob_requests.clone()
      }
 
