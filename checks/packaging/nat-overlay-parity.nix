@@ -20,15 +20,13 @@
 #      `meta.available`, and so do the module roots (`rootsFor`); `allowUnfree`
 #      and `allowUnfreePredicate` each admit claude-code with that drv;
 #      `.overrideAttrs` and `.overrideDerivation` are checked again
-#   D  positive controls: the foreign nixpkgs differs, and building on it
-#      (buildOverlay) gives a different drv
 #   E  every module package default, both backends, with and without the
 #      overlay, over a base with NO `ai` attribute
 #   F  the fallback (non-native triple) still builds on `final`
 #   G  no module file reads a root (`pkgs.ai`, `pkgs.docs`, ...) from raw pkgs
 #
-# Linux only: F uses pkgsStatic, and the foreign nixpkgs imports are paid once
-# where `nix flake check` runs in CI.
+# Linux only: F uses pkgsStatic. The foreign set uses this flake's nixpkgs
+# with a marked stdenv, so building on it changes derivations by construction.
 #
 # B's refusal rows assume a pure evaluation. Under `--impure` with
 # NIXPKGS_ALLOW_UNFREE=1, or a ~/.config/nixpkgs/config.nix allowing unfree,
@@ -55,11 +53,21 @@
   overlay = self.overlays.default;
 
   # ── Foreign nixpkgs ────────────────────────────────────────────────
-  # devenv's rolling nixpkgs exercises consumers on a different revision.
-  foreignSource = assert lib.assertMsg (inputs.devenv.inputs.nixpkgs.narHash != inputs.nixpkgs.narHash)
-  "nat-overlay-parity: devenv's nixpkgs must differ from this flake's revision";
-    inputs.devenv.inputs.nixpkgs;
-  foreignWith = config: import foreignSource {inherit config system;};
+  # A harmless environment attribute changes every derivation built with the
+  # foreign stdenv without fetching or depending on a second nixpkgs revision.
+  foreignWith = config:
+    import inputs.nixpkgs {
+      inherit system;
+      config =
+        config
+        // {
+          replaceStdenv = {pkgs}:
+            pkgs.stdenvAdapters.addAttrsToDerivation {
+              natOverlayParityForeign = "1";
+            }
+            pkgs.stdenv;
+        };
+    };
   foreign = foreignWith {allowUnfree = true;};
   foreignFree = foreignWith {};
   overlaid = foreign.extend overlay;
@@ -401,10 +409,6 @@
     ++ lib.optional (sorted (lib.subtractLists (ciOnlyNames ++ publicNames) (builtins.attrNames ciPackages)) != unfreeNames)
     "B: ciPackages minus packages is not exactly the unfree leaves ${toString unfreeNames}"
     ++ map (message: "C: ${message}") consumerMismatches
-    ++ lib.optional (drvOf foreign.hello == drvOf pkgs.hello)
-    "D: the foreign nixpkgs builds the same hello; it is not foreign"
-    ++ lib.optional (drvOf (foreign.extend buildOverlay).ai.devTools.rumdl == drvOf publicPackages.rumdl)
-    "D: buildOverlay on the foreign nixpkgs matches packages.rumdl; parity would pass vacuously"
     ++ map (message: "E: ${message}") defaultMismatches
     ++ lib.optional (natSystemOf pkgs != system) "F: natSystemOf rejects this flake's own native set"
     ++ lib.optional (natSystemOf staticPkgs != null) "F: natSystemOf accepts pkgsStatic"

@@ -7,9 +7,8 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,lib/toolchains.nix,pack
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-16 — MCP updates follow pinned parent dependency
-> bounds; the MCP group update script regenerates Semble's extracted SDK
-> surface.
+> **Last verified:** 2026-10-17 — overlay parity uses this flake's nixpkgs with
+> a marked stdenv to make foreign derivations differ by construction.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -165,8 +164,11 @@ the module defaults. The consumer then owns the recipe breakage above.
 ### `checks.nat-overlay-parity`
 
 Eval-only; every assertion compares drvPath or out path strings, or whether one
-evaluates. The foreign nixpkgs is devenv's rolling input, asserted to differ
-from this flake's revision, so no new input is fetched.
+evaluates. The foreign set imports this flake's nixpkgs with
+`config.replaceStdenv`: `stdenvAdapters.addAttrsToDerivation` adds a harmless
+`natOverlayParityForeign` environment attribute. Packages built on that set have
+different derivations by construction, without another nixpkgs input. Each
+import retains its caller's license configuration.
 
 - **A** the overlay over the foreign nixpkgs gives `ciPackages`' drv for every
   claimed leaf, and the claim list equals the `ciPackages` leaves except the
@@ -187,7 +189,6 @@ from this flake's revision, so no new input is fetched.
   `ciPackages`' rumdl. Disabling the probe, any override re-check, the
   `meta.available` copy or `rootsFor`'s `checkedBy` fails C (measured
   2026-10-04).
-- **D** positive controls: foreign `hello` and `buildOverlay`'s rumdl differ.
 - **E** every module package default, both backends, over a base with none of
   this flake's roots (the harness's `injectAi = false`), equals `ciPackages`,
   and with the overlay equals the overlay attribute. Sites that build from a

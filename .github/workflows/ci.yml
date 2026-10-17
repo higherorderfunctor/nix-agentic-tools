@@ -642,20 +642,6 @@ jobs:
         with:
           read-only: ${{ env.HESTIA_READ_ONLY }}
 
-      - name: Retain original patched evaluation input
-        if: ${{ env.HESTIA_READ_ONLY != 'true' }}
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          eval_input="$(nix eval --raw .#.ciEvaluationInputs.x86_64-linux.devenv-nixpkgs)"
-          nix path-info "$eval_input"
-          "$HESTIA_BIN" hook --socket "$HESTIA_SOCKET" "$eval_input"
-          "$HESTIA_BIN" drain --socket "$HESTIA_SOCKET"
-          eval_name="${eval_input##*/}"
-          curl --fail --silent --show-error \
-            "http://${HESTIA_LISTEN}/${eval_name%%-*}.narinfo" > "$RUNNER_TEMP/evaluation-input.narinfo"
-          command grep -Fx "StorePath: $eval_input" "$RUNNER_TEMP/evaluation-input.narinfo"
-
       # Warm the flake eval cache BEFORE the check. Same IFD-fetch flake as
       # the build job: overlays read fetchFromGitHub sources at eval time,
       # and a transient fetch blip fails the whole job. Best-effort: flake

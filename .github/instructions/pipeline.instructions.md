@@ -7,9 +7,8 @@ applyTo: ".github/actions/check-cache/**,.github/actions/warm-ifd/**,.github/rep
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-15 — native extracted-facts CI uses one planner and
-> selects Codex alone; Kiro's facts are static reads on Linux; the check-cache
-> jobs consume a Hestia binary published by an early CI job.
+> **Last verified:** 2026-10-17 — the test job warms and checks this flake's own
+> nixpkgs; no separate evaluation input needs cache registration.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -306,10 +305,9 @@ multi-user Nix installer fixed.
 The Linux `publish-hestia` job builds and publishes the patched Hestia binary
 before the test and check evaluator jobs. The package shards exclude that
 CI-only derivation. The `test` job installs the pinned Hestia action with that
-binary before IFD warming, explicitly registers and verifies the original
-patched devenv nixpkgs source, then runs the unchanged `nix flake check`
-entrypoint. The daily `hestia-gc.yml` job bounds stale CI-only roots and packs.
-Cache filters, source identity, scope and fallback limitations are documented in
+binary before IFD warming, then runs the unchanged `nix flake check` entrypoint.
+The daily `hestia-gc.yml` job bounds stale CI-only roots and packs. Cache
+filters, scope and fallback limitations are documented in
 `dev/fragments/flake/binary-cache.md`.
 
 Beside it, three jobs perform eval-once check building; `checks-matrix` is a
