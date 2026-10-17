@@ -23,12 +23,12 @@
   ...
 }: let
   rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
-  version = "0.2.79";
+  version = "0.3.0";
   src = pkgs.fetchFromGitHub {
     owner = "rvben";
     repo = "rumdl";
     tag = "v${version}";
-    hash = "sha256-0eGnjlSLCM0/8pcNfIf4KF9hljtdR2LwaFbU944R12o=";
+    hash = "sha256-8NwDXhFHb2Vtw60+uqIjgr6mpXvq6YnZc0cM4hGkJEM=";
   };
 in
   (pkgs.rumdl.override {inherit rustPlatform;}).overrideAttrs (finalAttrs: _: {
@@ -37,6 +37,6 @@ in
       # pname and version name the output, so a stale hash cannot reuse the
       # previous release's cached vendor set after a bump.
       inherit (finalAttrs) pname version src;
-      hash = "sha256-HMe/bQvLmZkcQbZv1U6eymxLWTVbhi+gbJueRsV8wu4=";
+      hash = "sha256-YteF5h1LzeoTnC6179JrOjTEPzq8K3ZWOt719G+JXy4=";
     };
   })
