@@ -57,7 +57,7 @@ packages/
     docs/                             Shared typed Git configuration
   peer-communication/
     modules/, checks.nix, checks/
-    skills/                           Default-on guide and its router rule
+    skills/                           Opt-in guide and its router rule
   stacked-workflows/
     packages/stacked-workflows-content/package.nix
     modules/, lib/, checks.nix, checks/

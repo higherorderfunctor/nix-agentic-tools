@@ -59,135 +59,139 @@ in {
       };
     };
 
-    programs.delegate-routing = {
-      enable = true;
-      # The package ships no Kimchi-served families.
-      families = {
-        deepseek.deepseek-flash = {
-          avoidFor = "review, building code, correctness judgment; knowledge-heavy questions";
-          effort = "thinks by default; low for reads, high for tracing; never cap output tokens small (returns empty)";
-          match = "deepseek-v*-flash*";
-          tier = "small";
-          useFor = "codebase exploration, research reads, compaction, trivial re-verification";
-        };
-        minimax.minimax = {
-          avoidFor = "judging or review (abstains, weak abstract reasoning)";
-          effort = "no documented knob; expect long reasoning traces";
-          match = "minimax-m*";
-          tier = "mid";
-          useFor = "well-scoped code to a spec; screenshot or image input";
-        };
-        moonshot = {
-          kimi-k2 = {
-            avoidFor = "build subagents on a time budget (slow, times out); mixed-goal prompts";
-            effort = "always thinks";
-            match = "kimi-k2*";
+    programs = {
+      delegate-routing = {
+        enable = true;
+        # The package ships no Kimchi-served families.
+        families = {
+          deepseek.deepseek-flash = {
+            avoidFor = "review, building code, correctness judgment; knowledge-heavy questions";
+            effort = "thinks by default; low for reads, high for tracing; never cap output tokens small (returns empty)";
+            match = "deepseek-v*-flash*";
+            tier = "small";
+            useFor = "codebase exploration, research reads, compaction, trivial re-verification";
+          };
+          minimax.minimax = {
+            avoidFor = "judging or review (abstains, weak abstract reasoning)";
+            effort = "no documented knob; expect long reasoning traces";
+            match = "minimax-m*";
             tier = "mid";
-            useFor = "coding with image input";
+            useFor = "well-scoped code to a spec; screenshot or image input";
           };
-          kimi-k3 = {
-            avoidFor = "simple or latency-bound work (slow, always thinks); ambiguous briefs; mid-session model switches";
-            effort = "always thinks; treat effort as fixed";
-            match = "kimi-k3*";
-            tier = "strong";
-            useFor = "orchestration and review; frontend and browsing-heavy agentic work";
+          moonshot = {
+            kimi-k2 = {
+              avoidFor = "build subagents on a time budget (slow, times out); mixed-goal prompts";
+              effort = "always thinks";
+              match = "kimi-k2*";
+              tier = "mid";
+              useFor = "coding with image input";
+            };
+            kimi-k3 = {
+              avoidFor = "simple or latency-bound work (slow, always thinks); ambiguous briefs; mid-session model switches";
+              effort = "always thinks; treat effort as fixed";
+              match = "kimi-k3*";
+              tier = "strong";
+              useFor = "orchestration and review; frontend and browsing-heavy agentic work";
+            };
+          };
+          nvidia.nemotron-ultra = {
+            avoidFor = "review, building code, multi-file edits, long-horizon planning";
+            effort = "keep the reasoning budget low; the value is speed";
+            match = "nemotron-*-ultra*";
+            tier = "small";
+            useFor = "cheapest, fastest long-context reads: exploration, doc ingestion, confirming tests pass";
+          };
+          zhipu = {
+            glm = {
+              avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
+              effort = "low, high or max; high default, max for judging";
+              match = "glm-[0-9]*.[0-9]";
+              tier = "strong";
+              useFor = "planning, spec writing, judging; hard multi-file coding";
+            };
+            glm-flash = {
+              avoidFor = "edits near untested working code; flaky tasks (extra time does not help); hard reasoning";
+              effort = "token-hungry thinking; keep the default effort";
+              match = "glm-*-flash";
+              tier = "mid";
+              useFor = "code to a spec; the writer in a writer-judge loop with glm; image or document input";
+            };
           };
         };
-        nvidia.nemotron-ultra = {
-          avoidFor = "review, building code, multi-file edits, long-horizon planning";
-          effort = "keep the reasoning budget low; the value is speed";
-          match = "nemotron-*-ultra*";
-          tier = "small";
-          useFor = "cheapest, fastest long-context reads: exploration, doc ingestion, confirming tests pass";
-        };
-        zhipu = {
-          glm = {
-            avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
-            effort = "low, high or max; high default, max for judging";
-            match = "glm-[0-9]*.[0-9]";
-            tier = "strong";
-            useFor = "planning, spec writing, judging; hard multi-file coding";
-          };
-          glm-flash = {
-            avoidFor = "edits near untested working code; flaky tasks (extra time does not help); hard reasoning";
-            effort = "token-hungry thinking; keep the default effort";
-            match = "glm-*-flash";
-            tier = "mid";
-            useFor = "code to a spec; the writer in a writer-judge loop with glm; image or document input";
-          };
-        };
-      };
-      routing = {
-        "Local limits" = {
-          always = true;
-          source = ./house-rules/local-limits.md;
-        };
-        "Orchestrator session".enable = true;
-      };
-      runtimes = {
-        claude = {
-          extraRuntimes = ["codex"];
-          manualExternalDelegates = ["kimchi" "kiro"];
-          routing."Pool drain" = {
-            after = ["Size the work"];
+        routing = {
+          "Local limits" = {
             always = true;
-            source = ./house-rules/pool-drain.md;
+            source = ./house-rules/local-limits.md;
+          };
+          "Orchestrator session".enable = true;
+        };
+        runtimes = {
+          claude = {
+            extraRuntimes = ["codex"];
+            manualExternalDelegates = ["kimchi" "kiro"];
+            routing."Pool drain" = {
+              after = ["Size the work"];
+              always = true;
+              source = ./house-rules/pool-drain.md;
+            };
+          };
+          kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
+          # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
+          # only, and not Fable, which this account does not have.
+          kiro = {
+            models = [{families = ["haiku" "opus" "sonnet"];}];
           };
         };
-        kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
-        # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
-        # only, and not Fable, which this account does not have.
-        kiro = {
-          models = [{families = ["haiku" "opus" "sonnet"];}];
-        };
       };
-    };
 
-    # Only installation reads isCI, so committed instructions never depend on it.
-    programs.semble = {
-      enable = true;
-      install = !isCI;
-      # Grammars Semble recognizes but its bundled archive does not ship.
-      grammars = with pkgs.tree-sitter-grammars; [
-        tree-sitter-awk
-        tree-sitter-jq
-      ];
-      # First match wins; list narrower patterns first.
-      pathMappings = [
-        {
-          language = "bash";
-          content = "code";
-          patterns = [
-            ".envrc"
-            "packages/claude-code/checks/fixtures/claude-hooks/post-edit"
-            "packages/claude-code/checks/fixtures/claude-hooks/pre-edit"
-          ];
-        }
-        {
-          language = "gitignore";
-          content = "config";
-          patterns = [
-            ".gitignore"
-            ".sembleignore"
-            "docs/.gitignore"
-          ];
-        }
-        {
-          language = "json";
-          content = "config";
-          patterns = [
-            "devenv.lock"
-            "flake.lock"
-          ];
-        }
-        {
-          language = "markdown";
-          content = "docs";
-          patterns = ["*.md.fixture"];
-        }
-      ];
-      cli.instructions.enable = true;
-      mcp.enable = false;
+      peer-communication.enable = true;
+
+      # Only installation reads isCI, so committed instructions never depend on it.
+      semble = {
+        enable = true;
+        install = !isCI;
+        # Grammars Semble recognizes but its bundled archive does not ship.
+        grammars = with pkgs.tree-sitter-grammars; [
+          tree-sitter-awk
+          tree-sitter-jq
+        ];
+        # First match wins; list narrower patterns first.
+        pathMappings = [
+          {
+            language = "bash";
+            content = "code";
+            patterns = [
+              ".envrc"
+              "packages/claude-code/checks/fixtures/claude-hooks/post-edit"
+              "packages/claude-code/checks/fixtures/claude-hooks/pre-edit"
+            ];
+          }
+          {
+            language = "gitignore";
+            content = "config";
+            patterns = [
+              ".gitignore"
+              ".sembleignore"
+              "docs/.gitignore"
+            ];
+          }
+          {
+            language = "json";
+            content = "config";
+            patterns = [
+              "devenv.lock"
+              "flake.lock"
+            ];
+          }
+          {
+            language = "markdown";
+            content = "docs";
+            patterns = ["*.md.fixture"];
+          }
+        ];
+        cli.instructions.enable = true;
+        mcp.enable = false;
+      };
     };
 
     claude = {

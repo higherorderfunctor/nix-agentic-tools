@@ -7,12 +7,10 @@
 # orchestrator and never write for a person. The router keeps the always-on
 # cost to two sentences and lets those delegates skip the skill.
 #
-# The program is ENABLED BY DEFAULT (the factory's `enableDefault`): importing
-# the module is the opt-in. `ai.programs.peer-communication.enable = false`
-# turns it off everywhere, and
-# `ai.programs.peer-communication.runtimes.<runtime>.enable = false` turns it
-# off for one runtime. Text overrides use the factory's per-runtime pools:
-# `ai.<runtime>.skills.peer-communication` and
+# Enable with `ai.programs.peer-communication.enable = true`.
+# `ai.programs.peer-communication.runtimes.<runtime>.enable = false` disables
+# one runtime; null inherits the portable enable value. Text overrides use
+# the per-runtime pools: `ai.<runtime>.skills.peer-communication` and
 # `ai.<runtime>.rules.peer-communication-router`.
 #
 # The shared skill-package factory gates router rules by backend delivery
@@ -22,7 +20,6 @@
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       inherit backend;
       name = "peer-communication";
-      enableDefault = true;
       enableDescription = "the peer-communication skill and its router rule in each enabled runtime";
       skills = _: {
         # A store-path string, the form the other skill packages hand over.
