@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-17 — parity imports the ordinary stable nixpkgs
 > input without patched-source cache registration; devenv input preparation
-> checks shell entry before publication within its existing budget.
+> checks shell entry before publication within its existing budget, and that
+> lane pushes nothing to Cachix.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -48,10 +49,12 @@ extraction still run before publication. Input workers retain build verification
 and its hash-repair pass because those repairs can mutate the prepared branch.
 After successful package verification, the `devenv` input alone must also enter
 its updated shell with the installed CLI (`devenv --no-tui shell true`); failure
-holds the bump back. This runs inside the existing preparation deadline. A
-writable update may open with failing build checks; an incomplete update is held
-back and its existing PR is preserved. A worker whose build verification failed
-still publishes and arms auto-merge, uploads its receipt, and then fails in
+holds the bump back. This runs inside the existing preparation deadline. The
+shell's closure holds the patched Kiro, which `pushFilter` does not catch inside
+a closure, so the `devenv` lane sets `skipPush`. A writable update may open with
+failing build checks; an incomplete update is held back and its existing PR is
+preserved. A worker whose build verification failed still publishes and arms
+auto-merge, uploads its receipt, and then fails in
 `Fail on failed build verification` (`update-matrix.py verdict`) with an
 `::error::` naming the target, failed attributes and PR -- when that PR is new
 or its patch changed. A PR that already proposed the same patch, and a branch
