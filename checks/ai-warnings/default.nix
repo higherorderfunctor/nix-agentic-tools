@@ -209,8 +209,7 @@
     then map (mode: case // {inherit mode;}) policy.modes
     else [case])
   requestedCases;
-  rootAi = (harness.evalDevenv {}).config.ai;
-  sharedSurfaces = rootAi.internal.sharedSurfaces;
+  sharedSurfaces = (harness.evalDevenv {}).config.ai.internal.sharedSurfaces;
   # Refuse a newly registered surface or nested gap without a populated probe.
   gapSamples.hooks.PermissionRequest = sample.hooks.PreToolUse;
   sampleAt = surface: path:
@@ -486,22 +485,19 @@
       };
     }
   ];
-  # The hand-built config carries the module-derived shared-surface list and
-  # each surface's root default, so the decomposition reads real surfaces (all
-  # absent here) instead of none, including one Claude does not deliver.
+  # The hand-built config carries the module-derived shared-surface list, so
+  # the decomposition reads real surfaces (all absent here) instead of none.
   mcpFieldWarnings = enable: fixture:
     deliveryWarnings {
       appRecord = records.claude;
       backend = "devenv";
-      config.ai =
-        lib.getAttrs sharedSurfaces rootAi
-        // {
-          claude = {
-            inherit enable;
-            mcpServers.probe = fixture;
-          };
-          internal = {inherit sharedSurfaces;};
+      config.ai = {
+        claude = {
+          inherit enable;
+          mcpServers.probe = fixture;
         };
+        internal.sharedSurfaces = (harness.evalDevenv {}).config.ai.internal.sharedSurfaces;
+      };
     };
   mcpFieldCasesPass =
     lib.all (case: let

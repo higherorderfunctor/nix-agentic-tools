@@ -1,0 +1,59 @@
+# `ai.proxy` → Claude Code: point Claude at a local CLIProxyAPI through its
+# settings files, never through process env, which any settings `env` beats.
+#
+# The resolved endpoint (see lib/ai/proxy/default.nix) lands in
+# `native.settings`, so the settings.json each backend already writes (user on
+# Home Manager, project on devenv).
+{
+  lib,
+  pkgs,
+}: let
+  redact = import ../../../lib/redact {inherit lib;};
+  # Settings env overrides inherited credentials. Clear both methods so a
+  # lower-scope token cannot accompany the reference resolved by apiKeyHelper.
+  render = {
+    key,
+    url,
+  }: let
+    helper = import ../../../lib/strict-shell-application.nix pkgs {
+      name = "claude-proxy-key";
+      text = ''
+        # Reference paths and concat literals are already shell-escaped.
+        # shellcheck disable=SC2016
+        ${redact.assign {
+          inherit pkgs;
+          option = "ai.claude.proxy.key";
+          value = key;
+          variable = "key";
+        }}
+        printf '%s' "$key"
+      '';
+    };
+  in {
+    apiKeyHelper = lib.escapeShellArg (lib.getExe helper);
+    env = {
+      ANTHROPIC_API_KEY = "";
+      ANTHROPIC_AUTH_TOKEN = "";
+      ANTHROPIC_BASE_URL = url;
+    };
+  };
+
+  # Without a proxy these reach api.anthropic.com and downloads.claude.ai
+  # directly. Defaults, so a consumer can turn either back on.
+  quietEnv = {
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
+    DISABLE_AUTOUPDATER = "1";
+  };
+in {
+  config = {resolvedProxy}:
+    lib.mkMerge [
+      (lib.mkIf (resolvedProxy != null) {
+        ai.claude.native.settings.env = lib.mapAttrs (_: lib.mkDefault) quietEnv;
+      })
+      # At ordinary priority: a consumer's own value for one of these leaves
+      # is a definition conflict, not a silent override either way.
+      (lib.mkIf (resolvedProxy ? endpoint) {
+        ai.claude.native.settings = render resolvedProxy.endpoint;
+      })
+    ];
+}
