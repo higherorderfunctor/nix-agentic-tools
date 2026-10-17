@@ -191,7 +191,6 @@
         # Secrets kept out of the Nix store: references, sealed types, and the
         # launch-time `assign` (lib/redact).
         redact = import ./lib/redact {inherit lib;};
-        runtimeValues = import ./lib/runtime-values {inherit lib;};
       };
     in
       repository.libraryFor baseLib;

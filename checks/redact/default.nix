@@ -1,1 +1,1 @@
-{imports = [./eval.nix ./messages.nix ./runtime.nix];}
+{imports = [./classify.nix ./eval.nix ./messages.nix ./runtime.nix];}

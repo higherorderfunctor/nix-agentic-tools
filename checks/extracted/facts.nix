@@ -438,7 +438,7 @@
   # facts.nix and what it imports, for the evaluator in divergent-fix.
   source = lib.fileset.toSource {
     root = ../..;
-    fileset = lib.fileset.unions [../../lib/extracted/facts.nix ../../lib/extracted/platforms.nix ../../lib/open-keys ../../lib/runtime-values];
+    fileset = lib.fileset.unions [../../lib/extracted/facts.nix ../../lib/extracted/platforms.nix ../../lib/open-keys ../../lib/redact/classify.nix];
   };
   vocabulary = ["and" "equal" "ignore" "intersection" "max" "min" "or" "per-platform" "union"] ++ map (system: "prefer:${system}") systems;
 in {

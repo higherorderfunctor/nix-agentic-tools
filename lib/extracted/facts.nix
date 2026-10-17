@@ -2,7 +2,7 @@
 # load, merge, children, get and expect need only lib, like reconcile; an
 # option module can call them before `pkgs` exists; index takes `pkgs` itself.
 {lib}: let
-  inherit (import ../runtime-values {inherit lib;}) classify;
+  inherit (import ../redact/classify.nix {inherit lib;}) classify;
   platforms = import ./platforms.nix;
   nonBlank = value: builtins.isString value && builtins.match "[[:space:]]*" value == null;
   # Well-formed only: `decided` is provenance, nothing reads it as a date.
