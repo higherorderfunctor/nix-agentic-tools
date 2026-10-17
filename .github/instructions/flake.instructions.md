@@ -7,9 +7,8 @@ applyTo: ".github/actions/check-cache/**,.github/workflows/hestia-gc.yml,flake.n
 
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-15 — CI builds a patched Hestia before cache
-> consumers, publishes it to Cachix, and uses separate key families for PR and
-> main manifests.
+> **Last verified:** 2026-10-16 — dedup checks only reused packs; family loads
+> preserve live own locations when main points at absent storage.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -87,22 +86,43 @@ entry and write only `m3pr#N`. GitHub's PR-first lookup can shadow an identical
 prefix, so the distinct prefixes make new reads unambiguous. Refs that already
 hold PR-scoped `m3#` entries keep loading those as their base until every such
 entry is deleted; the orchestrator performs a one-time deletion after merge. The
-merged view takes main's chunk, path, and pack entries where present, keeps
-PR-only entries, and merges roots with Hestia's upstream rule. This lets a main
-reupload at `repacks_survived = 0` replace a stale PR location at a higher
-count. Reservation and wait indices count only the own family. GC is upstream's,
-unchanged: it runs on the default branch, whose token cannot read PR-scoped
-caches, so packs only a PR references are orphans to it and are deleted after
-Hestia's `min_age`; a later PR run rebuilds them. That was already true of
-PR-scoped `m3#` manifests before this patch. GC cleanup deletes only superseded
-`m3#` entries. The daemon logs both loaded keys. Fork PRs explicitly use
-read-only mode and skip registration and its positive narinfo guard. They can
-restore accessible entries or fall back upstream without needing cache write
-access. No live warm-cache result or speedup is established by local validation.
-`hestia-gc.yml` runs daily on the default branch with the helper in read-only
-mode and `actions: write` for garbage collection, limiting stale roots and packs
-within GitHub's shared cache quota. Garbage collection does not prevent GitHub's
-own expiry or LRU eviction. This cache carries no Cachix publishing token.
+merged view takes main's path and pack entries where present, keeps PR-only
+entries, and merges roots with Hestia's upstream rule. For differing chunk
+locations only, family loads check main's pack: live main still wins regardless
+of repack counters; if main's pack is absent and own's is live, own wins. Equal
+own-index published refreshes preserve those resolved locations over stale
+repack counters. Reservation and wait indices count only the own family.
+
+Drains check packs used by existing paths they would skip and chunk locations
+they would reuse for newly prepared paths, through Twirp and a one-byte blob
+read. Dedup does not scan unrelated manifest packs; family conflicts use the
+checks above. Results are memoized within the drain. One lookup miss is
+insufficient: absence requires two responses indicating a miss or blob 404,
+separated by 100 ms. Other errors propagate after normal URL refresh/retry.
+Known-missing locations and their dependent paths are pruned from working and
+commit snapshots before merging fresh uploads, so old repack counters cannot
+defeat those repairs. This applies to evaluator registration and worker drains
+without relying on background verification, which runs after manifest readiness.
+A later family load preserves the repaired own location while main remains
+stale, and closure export can read those packs. These are checks at the time of
+reuse/load, not a guarantee against subsequent eviction or locations introduced
+by concurrent writers after the checks.
+
+GC is upstream's, unchanged: it runs on the default branch, whose token cannot
+read PR-scoped caches, so packs only a PR references are orphans to it and are
+deleted after Hestia's `min_age`; the next PR run re-uploads only paths it has
+locally and supplies to the drain (including expanded local dependencies),
+through the healing above. Unrelated missing paths are not reconstructed. That
+was already true of PR-scoped `m3#` manifests before this patch. GC cleanup
+deletes only superseded `m3#` entries. The daemon logs both loaded keys. Fork
+PRs explicitly use read-only mode and skip registration and its positive narinfo
+guard. They can restore accessible entries or fall back upstream without needing
+cache write access. No live warm-cache result or speedup is established by local
+validation. `hestia-gc.yml` runs daily on the default branch with the helper in
+read-only mode and `actions: write` for garbage collection, limiting stale roots
+and packs within GitHub's shared cache quota. Garbage collection does not
+prevent GitHub's own expiry or LRU eviction. This cache carries no Cachix
+publishing token.
 
 The `checks-eval` job registers every evaluated `.drv` closure in the same
 cache. Its workers pass the eval job's `manifest-version` through the helper's
