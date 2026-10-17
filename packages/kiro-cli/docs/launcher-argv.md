@@ -1,10 +1,11 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-14 — KAS patch selection takes only the two
+> **Last verified:** 2026-10-17 — KAS patch selection takes only the two
 > fixed-text workflow prompt tweaks; the native package binds one KAS extracted
 > from its release input; selected prompt replacements fail closed at build
-> time. Darwin packaging points both the executable filename and argv0 at the
-> app binary; native CI verifies fresh-home dispatch.
+> time; KAS 0.66.43 (Kiro 2.32.0) ships no image module, so the drift check
+> loads ONNX alone. Darwin packaging points both the executable filename and
+> argv0 at the app binary; native CI verifies fresh-home dispatch.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -159,8 +160,8 @@ at evaluation from a derivation output.
 `kiro-kas-extraction` covers discovery/architecture/checksum and unsafe archive
 refusals. `kiro-bundle-patch` covers strict selected-anchor refusal and decoded
 synthetic JavaScript behavior. `kiro-bundle-patch-drift` checks every vendor
-selection, real native image/ONNX modules, WASM solving, shipped ripgrep, and
-ACP initialization. `kiro-kas-dispatch` exercises real launcher/direct chat,
+selection, the real native ONNX module, WASM solving, shipped ripgrep, and ACP
+initialization. `kiro-kas-dispatch` exercises real launcher/direct chat,
 CLI/ACP, fresh/stale homes, override precedence and explicit V2 selection. The
 FHS contract check separately inspects the command paths inside the synthesized
 root; nested bubblewrap execution is not portable inside a Nix build sandbox.

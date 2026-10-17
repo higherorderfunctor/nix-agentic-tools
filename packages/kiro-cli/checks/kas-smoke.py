@@ -35,20 +35,17 @@ def initialize(command, env):
 
 def main():
     node, server = sys.argv[1:]
-    # Imports alone can leave optional native modules deferred. Exercise image
-    # creation and the WASM solver, and explicitly load ONNX's native backend.
+    # Imports alone can leave optional native modules deferred. Exercise the
+    # WASM solver and explicitly load ONNX's native backend.
     script = """
       const require = (await import('node:module')).createRequire(process.argv[1]);
-      const sharp = require('sharp');
-      const image = await sharp({create:{width:1,height:1,channels:3,background:'#fff'}}).png().toBuffer();
-      if (!image.length) throw Error('empty PNG');
       const ort = require('onnxruntime-node');
       if (!ort.listSupportedBackends().length) throw Error('no ONNX backend');
       const {Context} = await require('z3-solver').init();
       const {Solver,Int} = new Context('smoke');
       const solver = new Solver(); const x = Int.const('x'); solver.add(x.eq(1));
       if (await solver.check() !== 'sat') throw Error('WASM solver failed');
-      console.log('PASS: native image/ONNX dependencies and WASM solver');
+      console.log('PASS: native ONNX dependency and WASM solver');
       process.exit(0);
     """
     with tempfile.TemporaryDirectory() as home:
