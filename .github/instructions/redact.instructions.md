@@ -8,8 +8,8 @@ applyTo: "checks/redact/**,lib/redact/**"
 ## Redact: secrets kept out of the Nix store
 
 > **Last verified:** 2026-10-17 — packaged MCP credentials, HTTP values, proxy
-> injection and Kiro MCP delivery consume redact references; legacy credentials
-> serve remaining Kimchi and glab consumers.
+> injection, Kiro MCP delivery and glab credentials consume redact references;
+> legacy credentials serve remaining Kimchi consumers.
 
 `lib/redact` is a pure `{lib}` import, exported as `lib.redact`. A value either
 is cleartext, which is visible and lands in the store, or names where a secret

@@ -33,7 +33,7 @@
   pkgs,
   cfg,
 }: let
-  credentialsLib = import ../../../lib/credentials.nix {inherit lib;};
+  redact = import ../../../lib/redact {inherit lib;};
 
   # Key partitioning + env-var mapping live in ONE place, shared with
   # ../modules/options.nix, which declares the options these exports
@@ -53,7 +53,15 @@
   secretExports =
     lib.concatStringsSep "\n"
     (builtins.filter (s: s != "")
-      (map (n: credentialsLib.mkSecretExport pkgs (envVarOf n) (cfg.${n} or null)) invocationSecretKeys));
+      (map (name:
+        redact.assign {
+          inherit pkgs;
+          export = true;
+          option = "glab.${name}";
+          value = cfg.${name} or null;
+          variable = envVarOf name;
+        })
+      invocationSecretKeys));
 
   # Non-secret settings: plain exports, no store-visibility concern.
   # Booleans become "true"/"false", which is what glab's own bool parser

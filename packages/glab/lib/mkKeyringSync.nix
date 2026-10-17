@@ -8,10 +8,20 @@
   pendingFile,
   pkgs,
 }: let
-  credentialsLib = import ../../../lib/credentials.nix {inherit lib;};
+  redact = import ../../../lib/redact {inherit lib;};
 
-  hostAssignment = credentialsLib.mkSecretAssignment pkgs "glab_sync_host" cfg.host;
-  tokenAssignment = credentialsLib.mkSecretAssignment pkgs "glab_sync_token" cfg.token;
+  hostAssignment = redact.assign {
+    inherit pkgs;
+    option = "glab.host";
+    value = cfg.host;
+    variable = "glab_sync_host";
+  };
+  tokenAssignment = redact.assign {
+    inherit pkgs;
+    option = "glab.token";
+    value = cfg.token;
+    variable = "glab_sync_token";
+  };
 
   apiHost = cfg.settings.api_host or null;
   apiProtocol = cfg.settings.api_protocol or null;

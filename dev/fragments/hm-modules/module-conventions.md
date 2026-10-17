@@ -1,16 +1,17 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-16 — non-AI owners use the layer-1 helper; Claude
-> uses engine-backed `rw` ownership, Kiro stages settings and hooks and drains
-> all three legacy ledgers through the engine; Kimchi stages every surface and
-> drains all legacy ledgers, and Claude has an ordered activation mode command;
-> Codex stages daemon JSON as `ro` and drains legacy ledgers even while
-> disabled; `mkSkillFiles` interpolates every skill source before the files
-> engine walks it; Kiro is gated by `ai.kiro.cli.enable`; factories read the
-> derived, read-only `ai.kiro.enable`; `ai.copilot` is github.com Copilot, with
-> pools under `ai.copilot.github` and no launcher. ai-module supplies the sole
-> file writer and its ordered prune and apply entries; legacy ledgers remain
-> available for upgrades.
+> **Last verified:** 2026-10-17 — glab resolves redact references at service
+> runtime; non-AI owners use the layer-1 helper; Claude uses engine-backed `rw`
+> ownership, Kiro stages settings and hooks and drains all three legacy ledgers
+> through the engine; Kimchi stages every surface and drains all legacy ledgers,
+> and Claude has an ordered activation mode command; Codex stages daemon JSON as
+> `ro` and drains legacy ledgers even while disabled; `mkSkillFiles`
+> interpolates every skill source before the files engine walks it; Kiro is
+> gated by `ai.kiro.cli.enable`; factories read the derived, read-only
+> `ai.kiro.enable`; `ai.copilot` is github.com Copilot, with pools under
+> `ai.copilot.github` and no launcher. ai-module supplies the sole file writer
+> and its ordered prune and apply entries; legacy ledgers remain available for
+> upgrades.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -290,9 +291,9 @@ keyring unlock prompt into a loop.
 Probe Secret Service BEFORE reading the real secret. glab deliberately falls
 back to plaintext `config.yml` storage when no keyring backend is available. The
 synchronizer therefore writes and removes a harmless libsecret sentinel first;
-cancellation fails before the sops/helper token is read. The ordinary wrapper
-also omits `GITLAB_TOKEN` in this mode because environment credentials take
-precedence over the stored keyring value.
+cancellation fails before the redact token reference is resolved. The ordinary
+wrapper also omits `GITLAB_TOKEN` in this mode because environment credentials
+take precedence over the stored keyring value.
 
 ### Files and activation through ai-module
 
