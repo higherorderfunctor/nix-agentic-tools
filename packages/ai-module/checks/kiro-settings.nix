@@ -76,7 +76,6 @@
         inherit backend;
         files = config.ai.files;
         namespace = "ai";
-        owners = config.ai.filesOwners;
       };
       expected =
         map (hook: ".kiro/hooks/${hook}.json") hookNames

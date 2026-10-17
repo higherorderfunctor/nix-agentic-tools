@@ -40,7 +40,6 @@
         backend = "hm";
         files = config.ai.files;
         namespace = "ai";
-        owners = config.ai.filesOwners;
       };
     in {
       inherit plan;

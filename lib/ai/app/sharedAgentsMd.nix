@@ -159,6 +159,7 @@ in {
       '';
     };
     files = lib.mkOption {visible = false;};
+    services = lib.mkOption {visible = false;};
   };
 
   config = lib.mkMerge [

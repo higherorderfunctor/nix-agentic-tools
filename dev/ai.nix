@@ -119,6 +119,10 @@ in {
           };
         };
         routing = {
+          "Architecture" = {
+            always = true;
+            source = ./house-rules/architecture.md;
+          };
           "Local limits" = {
             always = true;
             source = ./house-rules/local-limits.md;

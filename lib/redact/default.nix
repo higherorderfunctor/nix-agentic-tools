@@ -128,6 +128,15 @@ in {
   command = path: sealed "redact.command" {_redact.command = path;};
   concat = parts: sealed "redact.concat" {_redact.concat = parts;};
   file = path: sealed "redact.file" {_redact.file = path;};
+  # Every `redact.file` path a value reads: the reference itself, or the file
+  # parts of a concat. A literal or null reads none.
+  filePaths = value: let
+    parts =
+      if value == null || builtins.isString value
+      then []
+      else value._redact.concat or [value];
+  in
+    lib.concatMap (part: lib.optional (builtins.isAttrs part && part._redact ? file) part._redact.file) parts;
   types = {
     # Secret-classified names (classify.nix) take `redacted`, any other
     # name `maybeRedacted str`. null drops the definition and `assign` emits

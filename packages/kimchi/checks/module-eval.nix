@@ -348,7 +348,7 @@ in {
               && !(file.recursive or false)
               && evaluated.config.ai.kimchi._generatedFiles ? ${path}
               && evaluated.config.ai.files.${path}.method == "symlink"
-              && evaluated.config.ai.filesOwners.${path} == ["kimchi"])
+              && evaluated.config.ai.claims.path.${path} == ["kimchi"])
             names;
           rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "${workflows}";}).config.ai.kimchi.extensions true);
         in
@@ -1023,7 +1023,7 @@ in {
         && (fileValue ".kimchi/mcp.json" result).mcpServers.example.command == "hello"
         && !(result.config.files ? ".kimchi/mcp.json")
         && files ? ".kimchi/skills/example/SKILL.md"
-        && result.config.ai.filesOwners.".kimchi/skills/example" == ["kimchi"]
+        && result.config.ai.claims.path.".kimchi/skills/example" == ["kimchi"]
         && files ? "AGENTS.md"
         && !(files ? "custom.md")
         && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))

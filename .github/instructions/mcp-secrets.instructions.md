@@ -10,7 +10,8 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 > **Last verified:** 2026-10-17 — MCP credential settings and HTTP references
 > use redact; consumers derive environment names, resolve full concat values
 > with redact.assign, and abort on failed reads. Kiro headers resolve at launch,
-> URLs during files-engine apply after the secrets point.
+> URLs during files-engine apply after the secrets point. Proxy daemons use
+> ai.services and scoped service claims.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -41,7 +42,7 @@ world-readable store or in committed config. Files:
   internal normalized-pool marker is the dynamic discovery boundary for custom
   app records.
 - `lib/ai/sharedOptions.nix` — cross-record owner aggregation, validation, and
-  Home Manager unit materialization.
+  ordinary `ai.internal.services` declarations.
 - `lib/mcp.nix` `renderServer` — the shared renderer + non-Kiro throw.
 - `packages/kiro-cli/lib/mcpSecrets.nix` — Kiro preprocessor.
 - `packages/kiro-cli/lib/mkKiro.nix` — `mkMcpJsonScript` + wiring.
@@ -52,10 +53,11 @@ world-readable store or in committed config. Files:
 
 `proxy.enable` on a `type = "http"` server moves the credential OFF the client
 entirely. `lib/ai/mcpProxy.nix` builds the Caddy daemon and its lowered client
-entry; `lib/ai/sharedOptions.nix` owns declaration identity and materializes
-`systemd.user.services.mcp-proxy-<name>`. The daemon reads each secret from its
-file at START, injects the headers outbound, and listens UNAUTHENTICATED on
-loopback. Clients get `{ type = "http"; url = "http://127.0.0.1:<port>/"; }`.
+entry; `lib/ai/sharedOptions.nix` owns declaration identity and declares
+`ai.internal.services.mcp-proxy-<name>`. ai-module lowers its ordinary service
+lifecycle. The daemon reads each secret from its file at START, injects the
+headers outbound, and listens UNAUTHENTICATED on loopback. Clients get
+`{ type = "http"; url = "http://127.0.0.1:<port>/"; }`.
 
 Ownership is explicit and keyed by the MCP server attribute name:
 
@@ -68,12 +70,11 @@ Ownership is explicit and keyed by the MCP server attribute name:
   owners must use different server keys; and
 - a top-level proxy inherited by no enabled capable runtime is not materialized.
 
-The ownership guard omits every conflicted unit before module merging, so a
-generic duplicate-definition failure cannot hide the actionable key/scope
-diagnostic. Runtime-scoped daemon lifetime follows its declaration, while the
-top-level owner is lazy because it exists solely to serve its enabled fanout
-consumers. `sharedOptions.nix` discovers every runtime option subtree carrying
-the internal `_normalizedPools.mcpServers` capability marker;
+`ai.claims.service` rejects duplicate native identities with their scoped owners
+before backend emission. Runtime-scoped daemon lifetime follows its declaration,
+while the top-level owner is lazy because it exists solely to serve its enabled
+fanout consumers. `sharedOptions.nix` discovers every runtime option subtree
+carrying the internal `_normalizedPools.mcpServers` capability marker;
 `mkBackendTransform.nix` declares it exactly when the app record's
 `surfaceSupport.mcpServers` declares a non-empty backend list, with the pool's
 option path as its value, since a record's `optionNamespaces.pools` may nest the
@@ -97,7 +98,6 @@ ecosystems can consume it.
 | `/proc/<pid>/cmdline`                  | **never**                              |
 | the Caddyfile (Nix store)              | never — `{$VAR}` tokens only           |
 | Caddy's adapted in-memory JSON         | yes                                    |
-| per-unit runtime XDG directories       | no persistent config; stop cleans      |
 | `$XDG_CONFIG_HOME/caddy/autosave.json` | not newly written; old file may remain |
 | `mcp.json`                             | never                                  |
 | the systemd journal                    | never — but only since 2026-08-13      |
@@ -111,11 +111,12 @@ and are outside this proxy fix.
 
 Caddy expands `{$VAR}` while adapting the Caddyfile, so its active JSON contains
 the literal headers and upstream origin/path. `admin off` does not disable
-autosave. `persist_config off` does, and each unit points `XDG_CONFIG_HOME` and
-`XDG_DATA_HOME` into its own systemd `RuntimeDirectory`, which is removed when
-the unit stops. This both keeps Caddy state out of the user's persistent XDG
-directories and prevents proxy units from sharing a state path. The module does
-not remove a user's pre-existing Caddy files.
+autosave. `persist_config off` does. The proxy's run script points
+`XDG_CONFIG_HOME` and `XDG_DATA_HOME` at `$XDG_RUNTIME_DIR/mcp-proxy-<name>`
+(mode 0700), so instance state never reaches the user's persistent XDG
+directories and two proxies never share a Caddy state path; the ordinary
+`ai.services` launcher starts it with no proxy-specific systemd fields. The
+module does not remove a user's pre-existing Caddy files.
 
 Measured with Caddy 2.11.4: replacing parse-time `{$VAR}` header tokens with
 runtime `{env.VAR}` placeholders keeps the value out of adapted JSON. It does
@@ -283,9 +284,7 @@ leaky.
 `proto`, `method`, `host`, `uri`, and the error. Only headers go.
 
 **Per-server attribution comes from the UNIT, not from a logged header.** There
-is one `mcp-proxy-<name>.service` per server, and each sets an explicit
-`SyslogIdentifier`. Without it the visible identifier is the ExecStart store
-basename — the server name behind a 32-char hash that changes on every rebuild.
+is one ordinary `ai.services` unit, `mcp-proxy-<name>.service`, per server.
 `journalctl --user -u mcp-proxy-jira` is how you tell two proxies apart.
 
 **Reproducing the leak needs the right failure.** A dead upstream
@@ -300,9 +299,10 @@ logged. That is deliberate (it is the single most useful field when debugging a
 remote 4xx) and is a hostname, not a bearer token, but it is worth knowing
 before treating a secret `url` as fully hidden.
 
-SCOPE — Home Manager on Linux only. devenv (process-compose) and Darwin
-(launchd) are deferred and **explicitly not WONTFIX**; the devenv transform
-asserts rather than dropping the daemon silently.
+SCOPE — Home Manager runs the daemon on Linux and warns per service on Darwin
+because launchd is unsupported. Devenv has no proxy lifecycle; a devenv
+declaration with `proxy.enable` fails an assertion rather than silently pointing
+clients at a port nothing serves.
 
 ### Two secret paths, because Kiro treats headers and url differently
 

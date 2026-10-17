@@ -1,6 +1,6 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-16 — runtime factories stage surfaces in
+> **Last verified:** 2026-10-17 — runtime factories stage surfaces in
 > `_generatedFiles` (every runtime surface included) and forward them through
 > the ai-module layer-1 helper over one generated tree, which every staged
 > entry's delivery requires; the shared AGENTS.md composer is the layer-1 owner
@@ -934,9 +934,9 @@ ownership. The `rootPoolViolations` provenance guard in
 option's `definitionsWithLocations`. The declaring module is exempt, which lets
 `sharedOptions.nix` perform its root L1→L2 Dir reshape. So is
 `packages/ai-module/lib/runtime.nix`, for `ai.activation`, `ai.files`,
-`ai.filesOwners` and `ai.legacyLedgers` only: it re-publishes each owner's
-layer-1 options at the root and sets `_file`, so its definitions report the
-helper instead of the importing owner.
+`ai.claims`, `ai.legacyLedgers` and `ai.services` only: it re-publishes each
+owner's layer-1 options at the root and sets `_file`, so its definitions report
+the helper instead of the importing owner.
 
 Two consequences to know before changing it. Consumer override keys are
 `ai.<runtime>.skills.<name>` and `ai.<runtime>.rules.<name>`; package entries

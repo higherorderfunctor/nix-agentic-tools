@@ -31,7 +31,6 @@
         inherit backend;
         files = config.ai.files;
         namespace = "ai";
-        owners = config.ai.filesOwners;
       });
     in {
       inherit (config.ai.kiro) legacyLedgers;

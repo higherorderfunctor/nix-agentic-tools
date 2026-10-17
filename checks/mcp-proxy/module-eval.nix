@@ -83,66 +83,62 @@ in {
         && !(entry ? proxy)
     );
 
-    # "Directly" means declaration lifetime, not enabled-client lifetime. This
-    # preserves the existing runtime-owner contract while moving ownership out
-    # of the per-runtime fanout transform.
-    module-mcp-proxy-disabled-runtime-owner-emits-directly = mkTest "mcp-proxy-disabled-runtime-owner-emits-directly" (
+    # A runtime-scoped declaration is that runtime's service, so a disabled
+    # runtime runs no proxy and claims nothing.
+    module-mcp-proxy-disabled-runtime-owner-emits-nothing = mkTest "mcp-proxy-disabled-runtime-owner-emits-nothing" (
       let
         result = evalHm {
           ai.claude.mcpServers.direct = proxySampleServer;
         };
       in
-        result.config.systemd.user.services ? mcp-proxy-direct
+        !(result.config.systemd.user.services ? mcp-proxy-direct)
+        && result.config.ai.claims.service == {}
         && claudeMcpServers "hm" result == {}
         && !(result.config.home.file ? ${claudeMcpPath "hm"})
     );
 
-    # The MCP key is the managed-unit ownership key. Reusing it at two runtime
-    # scopes must produce the dedicated actionable assertion and must suppress
-    # the conflicted unit so a generic module merge error cannot hide it.
+    # Each proxy declaration is a service of the layer that owns it, so two
+    # scopes with one key collide in the claims registry, identical records
+    # included, on the service key and on the port it carries.
     module-mcp-proxy-reused-owner-key-fails-explicitly = mkTest "mcp-proxy-reused-owner-key-fails-explicitly" (
       let
         result = evalHm {
           ai = {
-            claude.mcpServers.shared = proxySampleServer;
-            kiro.mcpServers.shared = lib.recursiveUpdate proxySampleServer {
-              proxy.port = 9502;
+            claude = {
+              enable = true;
+              mcpServers.shared = proxySampleServer;
+            };
+            kiro = {
+              cli.enable = true;
+              mcpServers.shared = proxySampleServer;
             };
           };
         };
-        failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
       in
-        !(result.config.systemd.user.services ? mcp-proxy-shared)
-        && builtins.any
-        (assertion:
-          lib.hasInfix "MCP proxy ownership keys are reused" assertion.message
-          && lib.hasInfix "ai.claude.mcpServers.shared" assertion.message
-          && lib.hasInfix "ai.kiro.mcpServers.shared" assertion.message
-          && lib.hasInfix "different MCP server key" assertion.message)
-        failed
+        map (item: item.message) (builtins.filter (item: !item.assertion) result.config.assertions)
+        == [
+          "ai.claims.port.9501: claimed by claude:mcp-proxy-shared.ports.main and kiro:mcp-proxy-shared.ports.main"
+          "ai.claims.service.mcp-proxy-shared: claimed by claude and kiro"
+        ]
     );
-
-    # The ownership namespace spans declaration layers, not just sibling
-    # runtimes: a top-level owner and a runtime-direct owner cannot share a key.
     module-mcp-proxy-root-runtime-reused-owner-key-fails-explicitly = mkTest "mcp-proxy-root-runtime-reused-owner-key-fails-explicitly" (
       let
         result = evalHm {
           ai = {
-            mcpServers.shared = proxySampleServer;
-            claude.mcpServers.shared = lib.recursiveUpdate proxySampleServer {
-              proxy.port = 9502;
+            claude = {
+              enable = true;
+              mcpServers.shared = proxySampleServer;
             };
+            codex.enable = true;
+            mcpServers.shared = proxySampleServer;
           };
         };
-        failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
       in
-        !(result.config.systemd.user.services ? mcp-proxy-shared)
-        && builtins.any
-        (assertion:
-          lib.hasInfix "MCP proxy ownership keys are reused" assertion.message
-          && lib.hasInfix "ai.mcpServers.shared" assertion.message
-          && lib.hasInfix "ai.claude.mcpServers.shared" assertion.message)
-        failed
+        map (item: item.message) (builtins.filter (item: !item.assertion) result.config.assertions)
+        == [
+          "ai.claims.port.9501: claimed by claude:mcp-proxy-shared.ports.main and internal:mcp-proxy-shared.ports.main"
+          "ai.claims.service.mcp-proxy-shared: claimed by claude and internal"
+        ]
     );
 
     # A runtime's ordinary same-key replacement remains normal pool precedence,
@@ -165,35 +161,33 @@ in {
         };
         claudeEntry = (claudeMcpServers "hm" result).shared;
         codexEntry = (hmCodexSettings result).mcp_servers.shared;
-        failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
       in
         result.config.systemd.user.services ? mcp-proxy-shared
         && claudeEntry.url == "https://runtime.example.test/mcp"
         && codexEntry.url == "http://127.0.0.1:9501/"
-        && builtins.all
-        (assertion: !(lib.hasInfix "MCP proxy ownership keys are reused" assertion.message))
-        failed
     );
 
     # Positive control for the ownership failure: two direct owners with distinct
-    # keys produce two units and no ownership assertion.
+    # keys produce two ordinary service units.
     module-mcp-proxy-distinct-owner-keys-pass = mkTest "mcp-proxy-distinct-owner-keys-pass" (
       let
         result = evalHm {
           ai = {
-            claude.mcpServers.alpha = proxySampleServer;
-            kiro.mcpServers.beta = lib.recursiveUpdate proxySampleServer {
-              proxy.port = 9502;
+            claude = {
+              enable = true;
+              mcpServers.alpha = proxySampleServer;
+            };
+            kiro = {
+              cli.enable = true;
+              mcpServers.beta = lib.recursiveUpdate proxySampleServer {
+                proxy.port = 9502;
+              };
             };
           };
         };
-        failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
       in
         result.config.systemd.user.services ? mcp-proxy-alpha
         && result.config.systemd.user.services ? mcp-proxy-beta
-        && builtins.all
-        (assertion: !(lib.hasInfix "MCP proxy ownership keys are reused" assertion.message))
-        failed
     );
 
     # Devenv lifecycle remains deliberately separate. A used top-level owner is
@@ -488,32 +482,7 @@ in {
         builtins.all (a: !(lib.hasInfix "proxy.headers" a.message)) failed
     );
 
-    # With no request headers in the logs, the UNIT is the only thing that
-    # says which proxy a line came from. Without an explicit identifier the
-    # visible one is the ExecStart store basename, whose hash changes on
-    # every rebuild.
-    module-mcp-proxy-unit-has-stable-syslog-identifier = mkTest "mcp-proxy-unit-has-stable-syslog-identifier" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            mcpServers.jira = {
-              type = "http";
-              url = redact.file "/run/secrets/jira-url";
-              proxy = {
-                enable = true;
-                port = 9501;
-                headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
-              };
-            };
-          };
-        };
-        svc = result.config.systemd.user.services.mcp-proxy-jira.Service;
-      in
-        svc.SyslogIdentifier == "mcp-proxy-jira"
-    );
-
-    module-mcp-proxy-unit-isolates-caddy-state = mkTest "mcp-proxy-unit-isolates-caddy-state" (
+    module-mcp-proxy-unit-uses-services-launcher = mkTest "mcp-proxy-unit-uses-services-launcher" (
       let
         result = evalHm {
           ai.kiro = {
@@ -521,39 +490,128 @@ in {
             mcpServers.jira = proxySampleServer;
           };
         };
-        svc = result.config.systemd.user.services.mcp-proxy-jira.Service;
+        unit = result.config.systemd.user.services.mcp-proxy-jira;
+        service = result.config.ai.services.mcp-proxy-jira;
       in
-        svc.RuntimeDirectory
-        == "mcp-proxy-jira"
-        && svc.RuntimeDirectoryMode == "0700"
-        && svc.Environment
-        == [
-          "XDG_CONFIG_HOME=%t/mcp-proxy-jira/config"
-          "XDG_DATA_HOME=%t/mcp-proxy-jira/data"
-        ]
+        lib.hasSuffix "/bin/ai-service-mcp-proxy-jira" unit.Service.ExecStart
+        && unit.Unit.Description == "mcp-proxy-jira (ai.services)"
+        && !(unit.Service ? Environment)
+        && service.command == [(lib.getExe (mcpProxyLib.runScriptFor (mcpProxyLib.specFor "jira" proxySampleServer)))]
+        && result.config.ai.claims.service.mcp-proxy-jira == ["kiro"]
+        && result.config.ai.claims.port."9501" == ["kiro:mcp-proxy-jira.ports.main"]
     );
+
+    module-mcp-proxy-darwin-warns = mkTest "mcp-proxy-darwin-warns" (
+      let
+        result =
+          harness.evalHmWithSpecialArgs {
+            pkgs =
+              pkgs
+              // {
+                stdenv =
+                  pkgs.stdenv
+                  // {
+                    hostPlatform =
+                      pkgs.stdenv.hostPlatform
+                      // {
+                        isDarwin = true;
+                        isLinux = false;
+                      };
+                  };
+              };
+          } {
+            ai.claude = {
+              enable = true;
+              mcpServers.example = proxySampleServer;
+            };
+          };
+      in
+        result.config.systemd.user.services
+        == {}
+        && builtins.elem "ai.services.mcp-proxy-example: Home Manager writes services as systemd user units, which this platform lacks; the service is not written" result.config.warnings
+    );
+
+    # The launcher resolves the upstream url (a secret or a literal), then
+    # the proxy's run script splits it into the origin and path Caddy needs,
+    # points Caddy's state at a per-proxy runtime directory and execs it. A
+    # failed secret read aborts before anything starts.
+    module-mcp-proxy-run-script-splits-url-and-isolates-state = let
+      services = import ../../packages/ai-module/lib/services.nix {inherit lib;};
+      strictShellApplication = import ../../lib/strict-shell-application.nix;
+      urlReader = strictShellApplication pkgs {
+        name = "mcp-proxy-test-url";
+        text = ''
+          test -z "''${PROXY_READER_FAIL:-}"
+          printf 'https://upstream.example.test/path'
+        '';
+      };
+      caddy = strictShellApplication pkgs {
+        name = "caddy";
+        text = ''
+          env | ${pkgs.gnugrep}/bin/grep -E '^MCP_PROXY_[A-Z]+_(ORIGIN|PATH)=' | ${pkgs.coreutils}/bin/sort
+          printf '%s\n' "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$*"
+        '';
+      };
+      proxyLib = import ../../lib/ai/mcpProxy.nix {
+        inherit lib;
+        pkgs = pkgs // {inherit caddy;};
+      };
+      sample = proxySampleServer // {proxy = proxySampleServer.proxy // {headers = {};};};
+      launcher = name: url:
+        services.mkLauncher {
+          inherit pkgs;
+          name = "mcp-proxy-${name}";
+          entry = proxyLib.serviceFor name (sample // {inherit url;});
+        };
+      secret = launcher "secret" (redact.command "${urlReader}/bin/mcp-proxy-test-url");
+      plain = launcher "plain" "https://upstream.example.test";
+      caddyfile = name: proxyLib.caddyfileFor (proxyLib.specFor name (sample // {url = "https://upstream.example.test";}));
+    in
+      pkgs.runCommandLocal "mcp-proxy-run-script-splits-url-and-isolates-state" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export XDG_RUNTIME_DIR="$TMPDIR/runtime"
+        ${pkgs.coreutils}/bin/mkdir -p "$XDG_RUNTIME_DIR"
+        ${secret}/bin/ai-service-mcp-proxy-secret > actual
+        ${pkgs.diffutils}/bin/diff -u ${pkgs.writeText "proxy-url-expected" "MCP_PROXY_SECRET_ORIGIN=https://upstream.example.test\nMCP_PROXY_SECRET_PATH=/path\n"} <(${pkgs.coreutils}/bin/head -2 actual)
+        ${plain}/bin/ai-service-mcp-proxy-plain > actual
+        printf '%s\n' MCP_PROXY_PLAIN_ORIGIN=https://upstream.example.test MCP_PROXY_PLAIN_PATH=/ "$XDG_RUNTIME_DIR/mcp-proxy-plain/config" "$XDG_RUNTIME_DIR/mcp-proxy-plain/data" 'run --config ${caddyfile "plain"} --adapter caddyfile' > expected
+        ${pkgs.diffutils}/bin/diff -u expected actual
+        test "$(${pkgs.coreutils}/bin/stat -c %a "$XDG_RUNTIME_DIR/mcp-proxy-plain")" = 700
+        if PROXY_READER_FAIL=1 ${secret}/bin/ai-service-mcp-proxy-secret > failed; then
+          echo "a failed secret read started the proxy" >&2
+          exit 1
+        fi
+        test ! -s failed
+        touch "$out"
+      '';
 
     # Secrets must be read at RUNTIME from their files and never appear in
     # argv — /proc/<pid>/cmdline is world-readable. The environment is still
     # readable by same-uid processes, so this is not a process-isolation
     # boundary. Also pins the absolute-coreutils-path rule and fail-closed.
-    module-mcp-proxy-start-script-reads-secrets-at-runtime = mkTest "mcp-proxy-start-script-reads-secrets-at-runtime" (
-      let
-        s = builtins.readFile (mcpProxyLib.startScriptFor (mcpProxyLib.specFor "example" proxySampleServer));
-      in
-        lib.hasInfix "redact-read" s
-        && lib.hasInfix "/run/secrets/service-token" s
-        && lib.hasInfix "export MCP_PROXY_EXAMPLE_HEADER_X_SERVICE_TOKEN" s
-        && lib.hasInfix "set -euETo pipefail" s
-        && lib.hasInfix "shopt -s inherit_errexit" s
-        # Fail closed: an empty or unreadable secret must not start a proxy
-        # that would answer every client with the upstream's 401.
-        && lib.hasInfix "|| exit 1" s
-        # Never a bare `cat` — this wrapper can be spawned with no PATH.
-        && !(lib.hasInfix "\ncat " s)
-        # The secret must not be an ARGUMENT to caddy.
-        && !(lib.hasInfix "--header" s)
-    );
+    module-mcp-proxy-start-script-reads-secrets-at-runtime = pkgs.runCommandLocal "mcp-proxy-start-script-reads-secrets-at-runtime" {} (let
+      services = import ../../packages/ai-module/lib/services.nix {inherit lib;};
+      entry =
+        (evalHm {
+          ai.kiro = {
+            cli.enable = true;
+            mcpServers.example = proxySampleServer;
+          };
+        }).config.ai.services.mcp-proxy-example;
+      launcher = services.mkLauncher {
+        inherit pkgs entry;
+        name = "mcp-proxy-example";
+      };
+    in ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${pkgs.gnugrep}/bin/grep -F 'redact-read' ${launcher}/bin/ai-service-mcp-proxy-example
+      ${pkgs.gnugrep}/bin/grep -F '/run/secrets/service-token' ${launcher}/bin/ai-service-mcp-proxy-example
+      ${pkgs.gnugrep}/bin/grep -F 'export MCP_PROXY_EXAMPLE_HEADER_X_SERVICE_TOKEN' ${launcher}/bin/ai-service-mcp-proxy-example
+      ${pkgs.gnugrep}/bin/grep -F '|| exit 1' ${launcher}/bin/ai-service-mcp-proxy-example
+      touch "$out"
+    '');
 
     # A credential-valued http header reaching the shared renderServer via a
     # non-Kiro path throws — non-Kiro ecosystems do not inject secret

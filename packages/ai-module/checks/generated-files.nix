@@ -100,7 +100,7 @@
     lib.optional (files."doc.md".content.source != source || files."doc.md".method != "ro") "formatted source reaches ai.files"
     ++ lib.optional (files."settings.json".content.value != document) "value leaves merge"
     ++ lib.optional (files."override.txt".content._choice != "text" || files."override.txt".content.text != "consumer") "consumer layer-1 content wins"
-    ++ lib.optional (disabled.config.ai.probe.files != {} || disabled.config.ai.probe._generatedTree != null || disabled.config.ai.files != {} || disabled.config.ai.filesOwners != {}) "disabled runtime forwards nothing"
+    ++ lib.optional (disabled.config.ai.probe.files != {} || disabled.config.ai.probe._generatedTree != null || disabled.config.ai.files != {} || disabled.config.ai.claims.path != {}) "disabled runtime forwards nothing"
     ++ lib.optional (!lib.any (lib.hasInfix ''ai.probe.files."doc.md".enable = false'') switchedOff.config.warnings) "warnings read layer-1 enable"
     ++ lib.optional (map (target: target.path) (harness.ownPlan "probe" "files-apply" enabled).targets != ["doc.md" "settings.json"]) "ownPlan"
     ++ lib.optional ((harness.ownedDocument "probe" "settings.json" enabled).value != document) "ownedDocument"

@@ -91,12 +91,12 @@
   #
   # `packages/ai-module/lib/runtime.nix` re-publishes each owner's
   # `ai.<owner>.{activation,files,legacyLedgers}` at the root and records its
-  # claims in `ai.filesOwners`. It sets `_file`, so its definitions report the
+  # claims in `ai.claims`. It sets `_file`, so its definitions report the
   # helper rather than the importing owner, and only it matches the exemption;
   # any other root option it wrote would still be reported.
   rootPoolSrcRoot = toString ../..;
   forwardingHelper = toString ../../packages/ai-module/lib/runtime.nix;
-  forwardedOptions = ["activation" "files" "filesOwners" "legacyLedgers"];
+  forwardedOptions = ["activation" "claims" "files" "legacyLedgers" "services"];
 
   runtimePoolProbeConfig = {
     inherit (lib.foldl' lib.recursiveUpdate {} (map (runtime: setEnable runtime true) harnessNames)) ai;

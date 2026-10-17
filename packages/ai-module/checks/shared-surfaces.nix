@@ -64,7 +64,6 @@
       inherit backend;
       files = config.ai.files;
       namespace = "ai";
-      owners = config.ai.filesOwners;
     };
   backends = ["devenv" "hm"];
   summary = item: {
@@ -91,7 +90,7 @@
       ]);
   in
     lib.optional (lib.any (path: lib.hasPrefix ".retired/" path) (builtins.attrNames config.ai.files)) "disabled runtime reached layer 2"
-    ++ lib.optional (config.ai.filesOwners != lib.listToAttrs (map (runtime: lib.nameValuePair (skillPath runtime) [runtime.name]) enabled)) "owners"
+    ++ lib.optional (config.ai.claims.path != lib.listToAttrs (map (runtime: lib.nameValuePair (skillPath runtime) [runtime.name]) enabled)) "owners"
     ++ lib.concatMap (backend: lib.optional (map summary (plan backend config) != expected) "${backend}: plan") backends;
   failures = check "A\nB";
 in {

@@ -85,15 +85,7 @@
     any (optName: settings.${optName} != null) (builtins.attrNames credentialVars);
 
   credentialFilePaths = credentialVars: settings:
-    lib.concatMap (optName: let
-      value = settings.${optName};
-      parts =
-        if value == null
-        then []
-        else value._redact.concat or [value];
-    in
-      lib.concatMap (part: lib.optional (builtins.isAttrs part && part._redact ? file) part._redact.file) parts)
-    (builtins.attrNames credentialVars);
+    lib.concatMap (optName: redact.filePaths settings.${optName}) (builtins.attrNames credentialVars);
 
   mkCredentialAssignments = pkgs: credentialVars: settings:
     lib.concatStringsSep "\n" (mapAttrsToList (optName: spec:

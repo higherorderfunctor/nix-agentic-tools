@@ -519,9 +519,9 @@ noted above.
 
 <!-- Fragment: packages/ai-module/docs/contract.md -->
 
-## ai-module Files and Activation Contract
+## ai-module Files, Activation and Services Contract
 
-> **Last verified:** 2026-10-16 — repository modules reach Home Manager and
+> **Last verified:** 2026-10-17 — repository modules reach Home Manager and
 > devenv file and activation sinks only through ai-module's three layers, apart
 > from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`.
 
@@ -535,7 +535,7 @@ editing ai-module or any owner that writes through it.
 | Layer | Option                                           | Written by                                                                                                                                      |
 | ----- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | `ai.<owner>.files`                               | The owner, through `packages/ai-module/lib/runtime.nix`                                                                                         |
-| 2     | `ai.files` (claims in internal `ai.filesOwners`) | The layer-1 helper's forwarding; a consumer may override                                                                                        |
+| 2     | `ai.files` (claims in internal `ai.claims.path`) | The layer-1 helper's forwarding; a consumer may override                                                                                        |
 | 3     | `ai.activation`                                  | The helper's forwarding of the owner's `ai.<owner>.activation`; generated engine entries are added at lowering, they are not option definitions |
 
 Keys are final backend-root-relative paths (`$HOME` or `$DEVENV_ROOT`); nothing
@@ -545,17 +545,17 @@ tree; a non-AI owner writes layer 1 directly.
 
 ### Owner rule
 
-- Owners write only `ai.<owner>.files` and `ai.<owner>.activation`, plus
-  `ai.<owner>.legacyLedgers` for an earlier writer's ledger. Native sinks
-  (`home.file`, `home.activation`, devenv `files`, `tasks`, `enterTest`) are
-  reached only through ai-module; `ai-module-no-direct-sink-writes` fails a line
-  in a library or owner module that starts with one of those sink names (or
-  `home = {`), except the exact path/line pairs exempted in
-  `packages/ai-module/checks/sink-guard.nix`. Manual devenv tasks, such as
-  Beads', are out of scope.
+- Owners write `ai.<owner>.files`, `ai.<owner>.activation` and
+  `ai.<owner>.services`, plus `ai.<owner>.legacyLedgers` for an earlier writer's
+  ledger. Native sinks (`home.file`, `home.activation`, devenv `files`, `tasks`,
+  `enterTest`) are reached only through ai-module;
+  `ai-module-no-direct-sink-writes` fails a line in a library or owner module
+  that starts with one of those sink names (or `home = {`), except the exact
+  path/line pairs exempted in `packages/ai-module/checks/sink-guard.nix`. Manual
+  devenv tasks, such as Beads', are out of scope.
 - Root `ai.*` options are defined only in their declaring file; the
   module-provenance guard (`rootPoolViolations`) exempts `lib/runtime.nix` alone
-  for `activation`, `files`, `filesOwners` and `legacyLedgers`.
+  for `activation`, `files`, `claims`, `legacyLedgers` and `services`.
 - A disabled owner forwards no files. Commands default to the owner's state;
   `runWhenDisabled = true` keeps a release or retirement command running.
   `legacyLedgers` and `runWhenDisabled` commands must be declared outside the
@@ -587,12 +587,32 @@ unless `name` sets one. Both backends reserve the keys `files-apply` and
 
 ### Collisions
 
-Two runtime owners claiming one path fail, even with identical bytes, with
-`files."<path>": runtime owners <a> and <b> claim one destination`; a disabled
-entry still claims. Ancestor/descendant paths fail as overlapping destinations.
-A key in the helper's `shared` list (root `AGENTS.md`) forwards unclaimed, so
-its composer stays the single owner; divergent equal-priority definitions there
-fail with conflict text naming `lib/runtime.nix`, not the owners.
+Exclusive paths, services and ports use the hidden `ai.claims.<group>.<key>`
+registry. Two claims fail, even with identical values, with
+`ai.claims.<group>.<key>: claimed by <a> and <b>`; owners are sorted and a
+disabled entry still claims. Port owners name `<owner>:<service>.ports.<name>`.
+Owners register resources; one registry validates every group.
+Ancestor/descendant paths fail as overlapping destinations. A key in the
+helper's `shared` list (root `AGENTS.md`) forwards unclaimed, so its composer
+stays the single owner; divergent equal-priority definitions there fail with
+conflict text naming `lib/runtime.nix`, not the owners.
+
+### Services
+
+Declare a daemon through `ai.<owner>.services`; enabled owners forward to
+`ai.services`. Keys match `^[a-z0-9][a-z0-9_-]*$`. Fields are `command`
+(nonempty argv), `enable`, `environment` (strings or redact references),
+`ports`, `restart` and `restartOnChange` (absolute paths). A strict launcher
+reads secrets at start and execs argv on both backends. Services read store
+paths and secrets, never engine-written files; oneshot and file-watch units
+remain outside this surface.
+
+Linux Home Manager lowers to user units, devenv to processes. Darwin Home
+Manager emits one warning per enabled service, since it has no systemd user
+units. File references in the environment join explicit restart triggers, which
+behave differently per backend: Linux Home Manager fingerprints them in one
+generated `services-restart-on-change` activation entry after `files` and
+`secrets`; devenv uses `watch.paths`. Only ai-module writes these daemon sinks.
 
 ### State and ownership
 

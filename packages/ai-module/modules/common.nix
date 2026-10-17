@@ -1,11 +1,13 @@
 {
   config,
   lib,
+  options,
   pkgs ? null,
   ...
 }: let
   activation = import ../lib/activation.nix {inherit lib;};
   fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
+  services = import ../lib/services.nix {inherit lib;};
 in {
   options.ai = {
     activation = lib.mkOption {
@@ -15,6 +17,16 @@ in {
     activationOrder.secretNodes = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [];
+    };
+    claims = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.attrsOf (lib.types.listOf lib.types.str));
+      default = {
+        path = {};
+        port = {};
+        service = {};
+      };
+      internal = true;
+      visible = false;
     };
     deliveredPaths = lib.mkOption {
       type = lib.types.listOf lib.types.str;
@@ -30,12 +42,6 @@ in {
       type = lib.types.attrsOf fileLib.entryType;
       default = {};
     };
-    # Destination -> declaring runtimes; written by `runtimeModule` only.
-    filesOwners = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.listOf lib.types.str);
-      default = {};
-      internal = true;
-    };
     # Old ledgers to import; written by `runtimeModule` only.
     legacyLedgers = lib.mkOption {
       type = lib.types.listOf fileLib.legacyLedgerType;
@@ -44,12 +50,28 @@ in {
       # Internal alone still lists the entry's sub-options in option docs.
       visible = false;
     };
+    services = lib.mkOption {
+      type = lib.types.attrsOf services.serviceEntry;
+      default = {};
+      apply = entries: let
+        invalid = lib.findFirst (name: builtins.match "[a-z0-9][a-z0-9_-]*" name == null) null (builtins.attrNames entries);
+      in
+        if invalid == null
+        then entries
+        else throw "ai.services.${invalid}: service names must match ^[a-z0-9][a-z0-9_-]*$";
+    };
   };
-  config.ai.deliveredPaths =
-    lib.mapAttrsToList
-    (path: entry:
-      if entry.recursive
-      then "${path}/**"
-      else path)
-    (lib.filterAttrs (_path: entry: entry.enable) config.ai.files);
+  config =
+    {
+      ai.deliveredPaths =
+        lib.mapAttrsToList
+        (path: entry:
+          if entry.recursive
+          then "${path}/**"
+          else path)
+        (lib.filterAttrs (_path: entry: entry.enable) config.ai.files);
+    }
+    // lib.optionalAttrs (options ? assertions) {
+      assertions = services.claimAssertions config.ai.claims;
+    };
 }

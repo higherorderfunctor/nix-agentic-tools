@@ -4,6 +4,7 @@
   ...
 }: let
   fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
+  services = import ../lib/services.nix {inherit lib;};
   runtimeModule = import ../lib/runtime.nix;
   path = "settings.json";
   source = ./fixtures/a/b/c.md;
@@ -37,7 +38,6 @@
       backend = "hm";
       files = config.ai.files;
       namespace = "ai";
-      owners = config.ai.filesOwners;
     };
   selected = config: lib.findFirst (item: item.path == path) null (plan config);
   # Compare only what a case states; `rendered` is a derivation of `value`.
@@ -172,7 +172,6 @@
     ];
   collision = twoRuntimes true;
   gated = twoRuntimes false;
-  collisionIssue = ''files."${path}": runtime owners alpha and beta claim one destination'';
   # Commands and old ledgers forward in either owner state; a command's
   # `enable` follows the owner unless its producer sets it. `wrap` repeats the
   # commands under an option-wide default, which must not drop them.
@@ -245,15 +244,21 @@
   sharedEntry = lib.findFirst (item: item.path == sharedKey) null (plan composed);
   failures =
     lib.concatMap checkCase cases
-    ++ lib.optional (map (item: item.path) (plan disabled) != ["program.txt"] || disabled.ai.filesOwners != {}) "disabled runtime"
-    ++ lib.optional (gated.ai.filesOwners != {${path} = ["alpha"];} || (selected gated).content != {text = "same";}) "disabled runtime owner"
-    ++ lib.optional (fileLib.validateOwners collision.ai.filesOwners != collisionIssue || (builtins.tryEval (builtins.deepSeq (plan collision) true)).success) "runtime collision"
+    ++ lib.optional (map (item: item.path) (plan disabled) != ["program.txt"] || disabled.ai.claims.path != {}) "disabled runtime"
+    ++ lib.optional (gated.ai.claims.path != {${path} = ["alpha"];} || (selected gated).content != {text = "same";}) "disabled runtime owner"
+    ++ lib.optional (services.claimAssertions collision.ai.claims
+      != [
+        {
+          assertion = false;
+          message = "ai.claims.path.${path}: claimed by alpha and beta";
+        }
+      ]) "runtime collision"
     ++ lib.concatMap ownerCase (lib.cartesianProduct {
       enabled = [false true];
       wrap = [lib.id lib.mkDefault];
     })
     ++ lib.optional (
-      composed.ai.filesOwners
+      composed.ai.claims.path
       != {
         ${path} = ["alpha"];
         ${sharedKey} = ["internal"];

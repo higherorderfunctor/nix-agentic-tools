@@ -505,7 +505,7 @@ in {
           evaluated = evalDevenv cfg;
           emptied = evalDevenv {ai.claude.enable = true;};
           disabled = evalDevenv (lib.recursiveUpdate cfg {ai.claude.enable = false;});
-          claimsNoRule = result: !(lib.any (lib.hasPrefix ".claude/rules/") (builtins.attrNames result.config.ai.filesOwners));
+          claimsNoRule = result: !(lib.any (lib.hasPrefix ".claude/rules/") (builtins.attrNames result.config.ai.claims.path));
           composed = (markdownInput evaluated ".claude/CLAUDE.md").text;
           # Project rules are read-only copies, not links: see mkClaude's rules
           # entry. The engine copies each one's file in the generated tree.

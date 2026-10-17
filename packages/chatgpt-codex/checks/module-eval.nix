@@ -18,7 +18,6 @@
         else "devenv";
       files = evaluated.config.ai.files;
       namespace = "ai";
-      owners = evaluated.config.ai.filesOwners;
     };
   targetAt = evaluated: path:
     lib.findFirst (target: target.path == path) null (engineTargets evaluated);
@@ -402,7 +401,7 @@ in {
         fromGeneratedTree ".agents/skills/local" hm.config.home.file.".agents/skills/local"
         && (markdownInput hm ".agents/skills/local").source == "${../../claude-code/checks/fixtures/claude-skills/skill-b}"
         && !(hm.config.home.file.".agents/skills/local" ? recursive)
-        && hm.config.ai.filesOwners.".agents/skills/local" == ["codex"]
+        && hm.config.ai.claims.path.".agents/skills/local" == ["codex"]
         && hm.config.ai.codex.files ? ".agents/skills/local"
         && fromGeneratedTree ".agents/skills/shared" hm.config.home.file.".agents/skills/shared"
         && (markdownInput hm ".agents/skills/shared").source == "${../../claude-code/checks/fixtures/claude-skills/skill-a}"
