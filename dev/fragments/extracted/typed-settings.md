@@ -68,8 +68,8 @@ rule.
 
 ## Loader checks
 
-`goTest { env; files; name; package; packagePath; postTest; run; }` in
-`lib/extracted/default.nix` joins `files` to a Go package of a buildGoModule
+`goTest { env; name; package; packagePath; postTest; run; sources; }` in
+`lib/extracted/default.nix` joins `sources` to a Go package of a buildGoModule
 source and runs one test offline; `goTestExtract` is it with the shared
 extractor file. Each owner's `<owner>-settings` check evaluates `sample` through
 `settingsType`, renders it, fills each placeholder with a dummy that needs JSON

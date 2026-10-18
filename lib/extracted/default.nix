@@ -82,14 +82,14 @@
       '';
   };
 
-  # One test of a buildGoModule package: `files` (name → file) join the Go
+  # One test of a buildGoModule package: `sources` (name → file) join the Go
   # package directory `packagePath` (relative to `modRoot`), and `go test`
   # runs the test named `run` there, offline, with the package's own
   # toolchain and vendor tree and the `env` given. The test reads a joined
   # file by its name, from its working directory; `postTest` writes `$out`.
   goTest = {
     env ? {},
-    files,
+    sources,
     name,
     package,
     packagePath,
@@ -108,7 +108,7 @@
       ${lib.concatStrings (lib.mapAttrsToList (file: source: ''
           cp ${source} ${packagePath}/${file} # bare-commands: ok (runCommand builder PATH)
         '')
-        files)}${lib.concatStrings (lib.mapAttrsToList (variable: value: "export ${variable}=${lib.escapeShellArg value}\n") env)}go test -count=1 -run '^${run}$' ./${packagePath}/
+        sources)}${lib.concatStrings (lib.mapAttrsToList (variable: value: "export ${variable}=${lib.escapeShellArg value}\n") env)}go test -count=1 -run '^${run}$' ./${packagePath}/
       ${postTest}
     '';
 in {
@@ -130,7 +130,7 @@ in {
   in
     goTest {
       env.NAT_EXTRACT_OUT = "raw.json";
-      files = {
+      sources = {
         "nat_extract_test.go" = testFile;
         "nat_shared_test.go" = pkgs.writeText "nat_shared_test.go" (builtins.replaceStrings ["\npackage nat\n"] ["\n${clause}\n"] (builtins.readFile ./go/nat_shared_test.go));
       };

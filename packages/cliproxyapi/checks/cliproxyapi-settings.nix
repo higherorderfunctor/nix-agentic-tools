@@ -62,7 +62,7 @@
 in {
   checks.cliproxyapi-settings = (extractedLib {inherit pkgs;}).goTest {
     env.NAT_PROXY_URL = dummy "CLIPROXYAPI_REQUESTS_PROXY_URL";
-    files = {
+    sources = {
       "nat_config.yaml" = pkgs.writeText "cliproxyapi-settings-sample.yaml" (fill (lib.mapAttrs (name: _: dummy name) rendered.secrets) rendered.content);
       "nat_load_test.go" = ./settings_test.go;
     };

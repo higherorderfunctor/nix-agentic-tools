@@ -33,7 +33,7 @@
   dummy = name: "dummy-${name}";
 in {
   checks.cpa-manager-plus-settings = (extractedLib {inherit pkgs;}).goTest {
-    files = {
+    sources = {
       "nat_config.json" = pkgs.writeText "cpa-manager-plus-settings-sample.json" (fill (lib.mapAttrs (name: _: dummy name) rendered.secrets) rendered.content);
       "nat_environment.json" = pkgs.writeText "cpa-manager-plus-settings-environment.json" (builtins.toJSON (lib.mapAttrs (name: value:
         if builtins.isString value
