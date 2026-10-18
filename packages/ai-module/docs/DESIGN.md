@@ -354,15 +354,16 @@ Two checks keep owners on the layers:
 - **Direct native sinks.** `ai-module-no-direct-sink-writes`
   (`packages/ai-module/checks/sink-guard.nix`) scans `lib/**/*.nix` and
   `packages/*/{lib,modules}/**/*.nix`, excluding `packages/ai-module/`, for
-  writes of `home.file`, `home.activation`, `files`, `tasks` or `enterTest` at
-  the start of a line, and for a nested `home = {`, and fails with "route direct
-  native sink writes through ai.<owner>.files or ai.<owner>.activation".
-  Exceptions are exact path/line-text pairs, never whole files: option
-  declarations in `lib/options-doc.nix` and the testing harnesses, file-plan
-  data in `generatedFiles.nix`, the shared composer and `module-harness.nix`,
-  Semble's model filename list, and Beads' manual tasks. Negative fixtures put
-  each of the five sink forms in `lib/` and in each of the six non-AI owner
-  module trees.
+  writes of `home.file`, `home.activation`, `files`, `tasks`, `enterTest`,
+  `systemd.user`, `launchd.agents` or `processes` at the start of a line, and
+  for a nested `home = {`, and fails with "route direct native sink writes
+  through ai.<owner>.files or ai.<owner>.activation". Exceptions are exact
+  path/line-text pairs, never whole files: option declarations in
+  `lib/options-doc.nix` and the testing harnesses, file-plan data in
+  `generatedFiles.nix`, the shared composer and `module-harness.nix`, Semble's
+  model filename list, and Beads' manual tasks. Negative fixtures put each of
+  the five sink forms in `lib/` and in each of the six non-AI owner module
+  trees.
 
 ## Decisions
 

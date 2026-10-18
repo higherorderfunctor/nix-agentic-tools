@@ -26,12 +26,14 @@ tree; a non-AI owner writes layer 1 directly.
 
 - Owners write `ai.<owner>.files`, `ai.<owner>.activation` and
   `ai.<owner>.services`, plus `ai.<owner>.legacyLedgers` for an earlier writer's
-  ledger. Native sinks (`home.file`, `home.activation`, devenv `files`, `tasks`,
-  `enterTest`) are reached only through ai-module;
-  `ai-module-no-direct-sink-writes` fails a line in a library or owner module
-  that starts with one of those sink names (or `home = {`), except the exact
-  path/line pairs exempted in `packages/ai-module/checks/sink-guard.nix`. Manual
-  devenv tasks, such as Beads', are out of scope.
+  ledger. Native sinks (`home.file`, `home.activation`, `systemd.user`,
+  `launchd.agents`, devenv `files`, `tasks`, `enterTest`, `processes`) are
+  reached only through ai-module; `ai-module-no-direct-sink-writes` fails a line
+  in a library or owner module that starts with one of those sink names (or
+  `home = {`), except the exact path/line pairs exempted in
+  `packages/ai-module/checks/sink-guard.nix`: option stubs, Beads' manual tasks
+  and glab's oneshot keyring units. A lifecycle the three layers cannot express
+  reopens this design; it is never a new exemption.
 - Root `ai.*` options are defined only in their declaring file; the
   module-provenance guard (`rootPoolViolations`) exempts `lib/runtime.nix` alone
   for `activation`, `files`, `claims`, `legacyLedgers` and `services`.
