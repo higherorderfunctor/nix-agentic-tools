@@ -132,6 +132,7 @@ for it. When several entries match, their guidance composes.
     - `packages/cpa-manager-plus/**`
   - Read:
     - [`packages/cpa-manager-plus/docs/cpa-manager-plus-extraction.md`](packages/cpa-manager-plus/docs/cpa-manager-plus-extraction.md)
+    - [`packages/cpa-manager-plus/docs/cpa-manager-plus-settings.md`](packages/cpa-manager-plus/docs/cpa-manager-plus-settings.md)
 - **`delegate-routing`**
   - Match:
     - `packages/delegate-routing/**`
