@@ -22,6 +22,7 @@ renders the settings to `config.json` at each start and the run script, inside
 `stateDir` so the `.env` and `logs/` CLIProxyAPI resolves against its working
 directory are its own, execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's
 rewrites of its config reach only that copy and are lost at restart.
+`ai.proxy.instance` points the harnesses at an instance by name.
 
 ## Secrets
 

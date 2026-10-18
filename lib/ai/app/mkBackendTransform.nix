@@ -167,6 +167,7 @@
     if supportsPool "proxy"
     then
       proxyLib.resolve {
+        instances = config.ai.cliproxyapi.instances or {};
         root = config.ai.proxy;
         runtime = poolCfg.proxy;
       }
@@ -440,7 +441,7 @@
         default = {};
         description = ''
           ${appRecord.name}'s proxy selection. When it selects anything
-          (a `url`), it replaces `ai.proxy`'s selection as a whole for this
+          (a `url` or an `instance`), it replaces `ai.proxy`'s selection as a whole for this
           runtime; otherwise the root selection applies. The resolved
           endpoint is `${lib.showOption (["ai" appRecord.name] ++ normalizedPath "proxy")}`.
         '';
@@ -773,7 +774,7 @@ in {
     # Outside the enable gate, like every fanout validation: an invalid
     # selection must not hide behind a disabled runtime.
     (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
-      assertions = proxyLib.assertionsFor (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
+      assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
     })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let

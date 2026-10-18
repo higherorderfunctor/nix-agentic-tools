@@ -9,6 +9,19 @@
   inherit (harness) aiBase evalDevenv evalDevenvModules evalHm evalHmModules mkTest;
 
   redact = import ../../lib/redact {inherit lib;};
+  # The key a selected CLIProxyAPI instance accepts: one reference on both
+  # sides, in the instance's access list and in the selection.
+  instanceKey = redact.file "/run/secrets/ai-proxy-key";
+  instances.cliproxyapi.instances = {
+    main = {
+      port = 8400;
+      settings.access.api-keys = [instanceKey];
+    };
+    off = {
+      enable = false;
+      port = 8401;
+    };
+  };
 
   failedMessages = result: map (assertion: assertion.message) (builtins.filter (assertion: !assertion.assertion) result.config.assertions);
   failsWith = fragments: result:
@@ -74,6 +87,30 @@ in {
         };
       })
       == []
+      # An instance selection: valid with a key, refused without one, beside
+      # a url, or naming a missing or disabled instance.
+      && lib.all (evaluate: let
+        select = proxy: evaluate {ai = instances // {inherit proxy;};};
+      in
+        failedMessages (select {
+          instance = "main";
+          key = instanceKey;
+        })
+        == []
+        && failsWith ["ai.proxy.instance needs `key`"] (select {instance = "main";})
+        && failsWith ["ai.proxy.url and ai.proxy.instance both select a proxy"] (select {
+          instance = "main";
+          key = instanceKey;
+          url = "http://127.0.0.1:8317";
+        })
+        && failsWith ["ai.proxy.instance names `missing`, which is not an `ai.cliproxyapi.instances` entry."] (select {
+          instance = "missing";
+          key = instanceKey;
+        })
+        && failsWith ["ai.proxy.instance names `ai.cliproxyapi.instances.off`, which is disabled."] (select {
+          instance = "off";
+          key = instanceKey;
+        })) [evalDevenv evalHm]
     );
 
     # The root selection reaches a consuming runtime as the resolved endpoint;
@@ -110,6 +147,43 @@ in {
         }
         == work
         && resolved {ai.testapp.proxy = work;} == work
+        # An instance resolves to its loopback origin at either scope, and a
+        # runtime instance replaces a root url whole.
+        && resolved {
+          ai =
+            instances
+            // {
+              proxy = {
+                instance = "main";
+                key = instanceKey;
+              };
+            };
+        }
+        == {
+          key = instanceKey;
+          url = "http://127.0.0.1:8400";
+        }
+        && resolved {
+          ai =
+            instances
+            // {
+              proxy = root;
+              testapp.proxy = {
+                instance = "main";
+                inherit (work) key;
+              };
+            };
+        }
+        == {
+          inherit (work) key;
+          url = "http://127.0.0.1:8400";
+        }
+        && failsWith ["ai.testapp.proxy.instance names `missing`"] (evalApp backend {
+          ai.testapp.proxy = {
+            instance = "missing";
+            inherit (work) key;
+          };
+        })
         && resolved keyOnly == root
         && failsWith ["ai.testapp.proxy.key is set without `url`"] (evalApp backend keyOnly)
         && failsWith ["ai.testapp.proxy.url needs `key`"] (evalApp backend {
