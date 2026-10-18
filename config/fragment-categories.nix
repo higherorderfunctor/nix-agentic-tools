@@ -219,6 +219,8 @@ _: {
         "packages/*/extracted/**"
         "packages/chatgpt-codex/lib/**"
         "packages/claude-code/lib/**"
+        "packages/cliproxyapi/lib/**"
+        "packages/cpa-manager-plus/lib/**"
         "packages/delegate-routing/probes/**"
         "packages/git-absorb/lib/**"
         "packages/git-branchless/lib/**"
@@ -228,7 +230,7 @@ _: {
         "packages/kiro-cli/lib/**"
         "packages/semble/lib/**"
       ];
-      sources = ["extraction-method" "facts-architecture" "facts-contract"];
+      sources = ["extraction-method" "facts-architecture" "facts-contract" "typed-settings"];
     };
     facets = {
       scopes = [

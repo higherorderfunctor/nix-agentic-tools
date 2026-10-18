@@ -81,23 +81,22 @@
         echo "ok — ${name} sidecar matches the fresh extraction" > "$out"
       '';
   };
-in {
-  inherit (facts) children expect get hostRunOn load merge;
-  inherit (import ./reconcile.nix {inherit lib;}) reconcile;
-  inherit mkDriftCheck;
-  index = facts.index pkgs;
 
-  # A Go owner's raw: its extractor test, joined to one package of a
-  # buildGoModule package's source with ./go/nat_shared_test.go, run offline
-  # with the package's own toolchain and vendor tree. The test writes an object
-  # of surfaces to $NAT_EXTRACT_OUT; the shared file takes its package clause.
-  goTestExtract = {
+  # One test of a buildGoModule package: `files` (name → file) join the Go
+  # package directory `packagePath` (relative to `modRoot`), and `go test`
+  # runs the test named `run` there, offline, with the package's own
+  # toolchain and vendor tree and the `env` given. The test reads a joined
+  # file by its name, from its working directory; `postTest` writes `$out`.
+  goTest = {
+    env ? {},
+    files,
+    name,
     package,
-    # The Go package directory the test joins, relative to `modRoot`.
     packagePath,
-    testFile,
+    postTest,
+    run,
   }:
-    pkgs.runCommand "${package.pname}-extracted" {nativeBuildInputs = [package.go pkgs.jq];} ''
+    pkgs.runCommand name {nativeBuildInputs = [package.go pkgs.jq];} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       export HOME="$TMPDIR" GOCACHE="$TMPDIR/go-cache" GOFLAGS=-mod=vendor GOPROXY=off GOTOOLCHAIN=local
@@ -106,12 +105,40 @@ in {
       cp -r --no-preserve=mode,ownership ${package.src} src # bare-commands: ok (runCommand builder PATH)
       cd src/${package.modRoot}
       cp -r --no-preserve=mode,ownership ${package.goModules} vendor # bare-commands: ok (runCommand builder PATH)
-      cp ${testFile} ${packagePath}/nat_extract_test.go # bare-commands: ok (runCommand builder PATH)
-      goPackage=$(sed -n 's/^package //p' ${testFile} | head -n 1) # bare-commands: ok (runCommand builder PATH)
-      sed "s/^package nat$/package $goPackage/" ${./go/nat_shared_test.go} >${packagePath}/nat_shared_test.go
-      NAT_EXTRACT_OUT="$TMPDIR/raw.json" go test -count=1 -run '^TestNatExtract$' ./${packagePath}/
-      jq -S . "$TMPDIR/raw.json" >"$out"
+      ${lib.concatStrings (lib.mapAttrsToList (file: source: ''
+          cp ${source} ${packagePath}/${file} # bare-commands: ok (runCommand builder PATH)
+        '')
+        files)}${lib.concatStrings (lib.mapAttrsToList (variable: value: "export ${variable}=${lib.escapeShellArg value}\n") env)}go test -count=1 -run '^${run}$' ./${packagePath}/
+      ${postTest}
     '';
+in {
+  inherit (facts) children expect get hostRunOn load merge;
+  inherit (import ./reconcile.nix {inherit lib;}) reconcile;
+  inherit goTest mkDriftCheck;
+  index = facts.index pkgs;
+
+  # A Go owner's raw: its extractor test, joined to one package of a
+  # buildGoModule package's source with ./go/nat_shared_test.go, which takes
+  # the test's package clause. The test writes an object of surfaces to
+  # $NAT_EXTRACT_OUT.
+  goTestExtract = {
+    package,
+    packagePath,
+    testFile,
+  }: let
+    clause = lib.findFirst (lib.hasPrefix "package ") (throw "${toString testFile}: no package clause") (lib.splitString "\n" (builtins.readFile testFile));
+  in
+    goTest {
+      env.NAT_EXTRACT_OUT = "raw.json";
+      files = {
+        "nat_extract_test.go" = testFile;
+        "nat_shared_test.go" = pkgs.writeText "nat_shared_test.go" (builtins.replaceStrings ["\npackage nat\n"] ["\n${clause}\n"] (builtins.readFile ./go/nat_shared_test.go));
+      };
+      name = "${package.pname}-extracted";
+      inherit package packagePath;
+      postTest = ''jq -S . ${packagePath}/raw.json >"$out"'';
+      run = "TestNatExtract";
+    };
 
   mkOwnerCheck = {
     dir,
