@@ -1,4 +1,4 @@
-# Layer 1: `ai.<name>.{activation,files,legacyLedgers}` forward to the root.
+# Layer 1: `ai.<name>.{activation,files,legacyLedgers,services}` forward to the root.
 # `_file` attributes the forwarded definitions to this file, the one root
 # writer the module-provenance guard exempts. Keys in `shared` forward without
 # a claim, so their composer stays the single owner.
@@ -15,6 +15,7 @@
 }: let
   activation = import ./activation.nix {inherit lib;};
   fileLib = import ./files/default.nix {inherit lib pkgs;};
+  services = import ./services.nix {inherit lib;};
   own = config.ai.${name};
   # Nested priority wrappers travel with the definitions; the wrapper keeps an
   # option-wide `mkDefault`/`mkForce` from re-entering at ordinary priority.
@@ -41,6 +42,10 @@ in {
       # Internal alone still lists the entry's sub-options in option docs.
       visible = false;
     };
+    services = lib.mkOption {
+      type = lib.types.attrsOf services.serviceEntry;
+      default = {};
+    };
   };
 
   config = lib.mkMerge [
@@ -57,10 +62,18 @@ in {
       ai.legacyLedgers = forward "legacyLedgers";
     }
     (lib.mkIf enabled {
-      ai.files = forward "files";
-      # Every declared key is a claim, a disabled one included: its `enable =
-      # false` would otherwise silently disable another runtime's entry.
-      ai.filesOwners = lib.genAttrs (lib.subtractLists shared (builtins.attrNames own.files)) (_: [name]);
+      ai = {
+        # Every declared key claims its resources, disabled entries included.
+        claims = {
+          path = lib.genAttrs (lib.subtractLists shared (builtins.attrNames own.files)) (_: [name]);
+          port = lib.mkMerge (lib.mapAttrsToList (service: entry:
+            lib.mkMerge (lib.mapAttrsToList (port: value: {${toString value} = ["${name}:${service}.ports.${port}"];}) entry.ports))
+          own.services);
+          service = lib.genAttrs (builtins.attrNames own.services) (_: [name]);
+        };
+        files = forward "files";
+        services = forward "services";
+      };
     })
   ];
 }

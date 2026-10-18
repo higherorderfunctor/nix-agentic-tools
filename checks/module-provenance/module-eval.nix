@@ -252,6 +252,7 @@ in {
             ai.probe = {
               activation.probe.command = "true";
               files."probe.txt".content.text = "probe";
+              services.probe.command = ["/bin/probe"];
               legacyLedgers = [
                 {
                   codec = "dir";

@@ -1,4 +1,4 @@
-# ai-module: files and activation layers
+# ai-module: files, activation and services
 
 `ai-module` is the base for every repository module, including non-AI programs.
 The three layers are `ai.<owner>.files` → `ai.files` → `ai.activation`. Native
@@ -46,7 +46,7 @@ outside the `enabled` gate into `ai.activation` and the internal root
 commands and drains its old ledgers. Each forwarded command gets
 `enable = mkDefault enabled` at the forwarded priority; a producer that sets
 `enable` overrides it. Keys listed in `shared` forward without a claim in
-`ai.filesOwners`, which leaves their composer the single claimant. Runtime
+`ai.claims.path`, which leaves their composer the single claimant. Runtime
 factories and non-AI owners import the helper. Semble exposes it on both
 backends; glab and mcp-services expose it on Home Manager; beads, git and
 git-branchless expose it on devenv. These lifecycle namespaces remain visible in
@@ -100,12 +100,12 @@ examines only the highest-priority defined alternative, so a discarded source is
 never evaluated.
 
 The helper also records each declared key, including one with `enable = false`,
-in the internal `ai.filesOwners.<path>` list; a disabled entry would otherwise
-override another runtime's entry unseen. Normalization fails with
-`files."<path>": runtime owners <a> and <b> claim one destination` when a path
-has two runtime claims. Overlapping (ancestor/descendant) paths from distinct
-runtimes fail through the expanded-destination overlap check, which names the
-paths, not the owners.
+in the internal `ai.claims.path.<path>` list; a disabled entry would otherwise
+override another runtime's entry unseen. The claims registry fails with
+`ai.claims.path.<path>: claimed by <a> and <b>` when a path has two runtime
+claims. Overlapping (ancestor/descendant) paths from distinct runtimes fail
+through the expanded-destination overlap check, which names the paths, not the
+owners.
 
 ### Layer 2: generic files
 
@@ -186,7 +186,7 @@ paths of devenv's previous link list into
 output. It warns for an owned link that is absent or replaced by a file, a
 directory or a stale link, and for a remembered path no longer delivered that is
 still on disk. Ownership is the normalized plan, each path named by its
-`ai.filesOwners` claim or else `ai.files`. Native links come from the backend
+`ai.claims.path` claim or else `ai.files`. Native links come from the backend
 file map.
 
 ### Layer 3: generic activation
@@ -222,6 +222,57 @@ repo may not define root `ai.*` defaults); devenv has no standard provider.
 Integrations can register additional native preparation nodes once, outside
 individual file entries. These nodes supply the `secrets` point for commands and
 `content.run`.
+
+## Services
+
+`ai.services` is an `attrsOf serviceEntry`, default `{}`. Owners declare
+`ai.<owner>.services` through `runtimeModule`; enabled owners forward
+definitions with the same priorities as files. Disabled services still claim
+their key and ports; disabled owners forward nothing. Names match
+`^[a-z0-9][a-z0-9_-]*$` and become native unit or process keys verbatim.
+
+| Field             | Type / default                                | Behavior                                                                                              |
+| ----------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `command`         | Nonempty argv list of strings, required       | The launcher execs the escaped arguments.                                                             |
+| `enable`          | Boolean, true                                 | Suppress native emission when false.                                                                  |
+| `environment`     | `redact.types.environment`, `{}`              | Resolve and export through `redact.assign` at launch; a secret-named variable takes only a reference. |
+| `ports`           | Named ports, `{}`                             | Register exclusive port claims.                                                                       |
+| `restart`         | `never`, `always`, `on-failure`; `on-failure` | Map to the backend restart policy.                                                                    |
+| `restartOnChange` | Absolute file paths, `[]`                     | Union with file references in environment values, including concat parts.                             |
+
+`lib/services.nix` builds one strict `writeShellApplication`,
+`ai-service-<key>`, for both backends. Native environment fields are never used.
+A daemon reads store paths and secrets at start, never files written by the
+files engine, so there are no service dependency edges into file activation or
+Home Manager's systemd reload.
+
+| Backend             | Lowering                                                                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Home Manager Linux  | User unit: `After = network.target`, `WantedBy = default.target`, `RestartSec = 5`; `never` becomes `no`.                                 |
+| Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                     |
+| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `watch.paths` is present only for nonempty triggers. |
+
+Home Manager Linux reserves `services-restart-on-change`. When enabled services
+have triggers, one generated activation entry runs after `files` and `secrets`.
+It runs only while the user manager reports `running` or `degraded`,
+fingerprints the readable regular files among the triggers under
+`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/services/<key>.sha256`,
+`try-restart`s a service whose recorded fingerprint changed (the first record
+restarts nothing and a stopped unit stays stopped) and saves each fingerprint
+only after that succeeds. The two backends differ: Home Manager compares content
+at activation, devenv's `watch.paths` restarts live on any change and accepts
+directories.
+
+Exclusive resources share `ai.claims.<group>.<key>`, a hidden registry of owner
+lists validated once in `modules/common.nix`. Runtime helpers register
+non-shared paths in `path`, service names in `service` and decimal ports in
+`port`. Port owners are `<owner>:<service>.ports.<name>`. A list with more than
+one owner fails with `ai.claims.<group>.<key>: claimed by <a> and <b>`, sorted
+by owner. Adding a resource group needs no new validation code; owners register
+resources and never assert uniqueness. The internal shared owner accepts scoped
+service claims for proxies (`proxy:root`, `proxy:<runtime>`), so identical proxy
+declarations fail the shared ownership assertion at the native assertion
+boundary.
 
 ## Backend graph and execution
 
@@ -297,9 +348,9 @@ Two checks keep owners on the layers:
 - **Root `ai.*` definitions.** `rootPoolViolations` in
   `checks/module-provenance/helpers.nix` reports any repository file that
   defines a root `ai.*` option outside the file declaring it. The one exemption
-  is `packages/ai-module/lib/runtime.nix` for `activation`, `files`,
-  `filesOwners` and `legacyLedgers`; any other root option it defined would
-  still be reported.
+  is `packages/ai-module/lib/runtime.nix` for `activation`, `files`, `claims`,
+  `legacyLedgers` and `services`; any other root option it defined would still
+  be reported.
 - **Direct native sinks.** `ai-module-no-direct-sink-writes`
   (`packages/ai-module/checks/sink-guard.nix`) scans `lib/**/*.nix` and
   `packages/*/{lib,modules}/**/*.nix`, excluding `packages/ai-module/`, for
@@ -324,10 +375,10 @@ Two checks keep owners on the layers:
   desired-link preparation above covers them. This is separate from legacy copy
   import.
 - **Out of scope.** Manual tasks and apps (bootstrap, checkpoint, diagnostics,
-  status), services (`processes.*`, systemd user units), runtime I/O and CI keep
-  their own lifecycles. Hook configuration reaches layer 1; wrappers stay native
-  package installation. No seed method, formatting framework or renderer
-  framework exists in this layer.
+  status), oneshot and file-watch units, runtime I/O and CI keep their own
+  lifecycles. Hook configuration reaches layer 1; wrappers stay native package
+  installation. No seed method, formatting framework or renderer framework
+  exists in this layer.
 
 ## Known limitations
 
@@ -355,7 +406,7 @@ Two checks keep owners on the layers:
   that lists `lib/runtime.nix` for each forwarded definition, not the owners.
 - **Non-AI owners get option groups.** `ai.beads`, `ai.git`,
   `ai.git-branchless`, `ai.glab`, `ai.mcp-services` and `ai.semble` appear in
-  the public option tree as `ai.<owner>.{files,activation}`.
+  the public option tree as `ai.<owner>.{activation,files,services}`.
 - **Replacing a generated `value` document needs `mkForce`.** Its leaves are
   defaults but the document itself is not, so a consumer `text` or `source` for
   that path ties at priority 100 and fails with `content alternatives tie`.

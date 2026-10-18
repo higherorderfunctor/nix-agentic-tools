@@ -45,7 +45,6 @@
           inherit backend;
           files = config.ai.files;
           namespace = "ai";
-          owners = config.ai.filesOwners;
         });
         texts = lib.mapAttrs (_: entry: entry.content.text) config.ai.kimchi._generatedFiles;
       })
@@ -157,7 +156,7 @@ in {
         lib.all (path:
           staged ? ${path}
           && config.ai.kimchi.files ? ${path}
-          && config.ai.filesOwners.${path} == ["kimchi"]
+          && config.ai.claims.path.${path} == ["kimchi"]
           && config.ai.files.${path}.mode == null
           && config.ai.files.${path}.executable == null)
         moved

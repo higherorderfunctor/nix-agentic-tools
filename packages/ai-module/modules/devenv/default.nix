@@ -11,6 +11,7 @@
     root = "$DEVENV_ROOT";
     stateRoot = "$DEVENV_STATE/nix-agentic-tools";
   };
+  services = import ../../lib/services.nix {inherit lib;};
   nativeTargets = builtins.listToAttrs (map (item: {
       name = item.path;
       value = "${config.files.${item.path}.file}";
@@ -26,7 +27,7 @@
   enabledKeys = builtins.filter (key: config.ai.files.${key}.enable) (builtins.attrNames config.ai.files);
   optionFor = path: let
     key = lib.findFirst (key: key == path || lib.hasPrefix "${key}/" path) path enabledKeys;
-    claim = config.ai.filesOwners.${key} or [];
+    claim = config.ai.claims.path.${key} or [];
   in "ai.${lib.concatMapStrings (owner: "${owner}.") claim}files.${builtins.toJSON key}";
   owned = lib.genAttrs (map (item: item.path) files.plan) optionFor;
   observed = pkgs.writeText "files-ai-observed.json" (builtins.toJSON {
@@ -89,6 +90,7 @@ in {
   config = lib.mkMerge [
     {
       files = files.native;
+      processes = services.devenvProcesses pkgs config.ai.services;
       tasks = assert lib.assertMsg (duplicate == null) "ai.activation.${duplicate}: reserved generated entry";
       assert lib.assertMsg (copyOverride == null) "ai.files.\"${copyOverride}\": native copyMode override refused";
         import ../../lib/lower-devenv.nix {inherit lib;} {

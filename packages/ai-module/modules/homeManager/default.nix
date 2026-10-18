@@ -10,9 +10,12 @@
     root = "$HOME";
     stateRoot = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools";
   };
-  duplicate = files.duplicate ["files-apply" "files-prune"];
+  services = import ../../lib/services.nix {inherit lib;};
+  restart = services.hmRestart pkgs config.ai.services;
+  duplicate = files.duplicate ["files-apply" "files-prune" "services-restart-on-change"];
   generated =
     {files-prune = files.prune;}
+    // lib.mapAttrs (_: files.generatedEntry) restart
     // lib.optionalAttrs (files.plan != []) {
       files-apply = files.generatedEntry {
         after = ["files"] ++ lib.optionals files.usesRun ["secrets"];
@@ -36,5 +39,7 @@ in {
         secretNodes = lib.unique (["sops-nix"] ++ config.ai.activationOrder.secretNodes);
       };
     home.file = files.native;
+    systemd.user.services = services.hmUnits pkgs config.ai.services;
+    warnings = services.hmWarnings pkgs config.ai.services;
   };
 }

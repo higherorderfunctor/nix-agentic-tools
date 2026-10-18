@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-16 — non-AI owners use the same layer-1 helper;
+> **Last verified:** 2026-10-17 — non-AI owners use the same layer-1 helper;
 > delivery facts derive delivered and absent cells, keyed withdrawal and
 > normalized gaps from option and runtime declarations; `poolOptions` covers
 > `agentsDir` and `environmentVariables` only; `optionNamespaces` places
@@ -114,10 +114,10 @@ rather than a second path field: a runtime names exactly the groups it moves.
 
 - **Artifact routing/rendering lives at L4; physical emission lives at L5.**
   L1/L2/L2b are pure fanout — they never touch `ai.<runtime>.files`,
-  `home.file.*`, or devenv `files.*`. The one sidecar exception is managed MCP
-  proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes and
-  emits unique active systemd units, while only lowered client entries traverse
-  this five-stage pipeline.
+  `home.file.*`, or devenv `files.*`. Managed MCP proxy declarations use the
+  ordinary `ai.internal.services` owner: `sharedOptions.nix` aggregates
+  declaration scopes while ai-module lowers the daemons. Only lowered client
+  entries traverse this five-stage pipeline.
 - **One owner per physical path.** Enabled runtime file maps supply layer-1
   claims on both backends. Disabled entries still claim their path; disabled
   owners forward nothing. Shared repository context forwards unclaimed through
@@ -414,9 +414,9 @@ reshape data; they read no final file map or backend sink and write none either.
 If you find yourself reaching for `home.file.*` in `sharedOptions.nix` or in a
 transform's `config` block, something is off — route and render into the
 per-runtime file map at L4, then let the generic L5 sink lower it. Managed MCP
-proxy units are the explicit sidecar exception because their lifetime and
-ownership cannot belong to any one runtime view; do not generalize it to emitted
-client configuration.
+proxies use `ai.internal.services` with explicit scoped claims because their
+lifetime and ownership span runtime views. Native daemon sinks remain owned by
+ai-module.
 
 ### Why five stages instead of inline
 

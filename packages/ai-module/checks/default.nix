@@ -20,6 +20,7 @@
     ./runtime.nix
     ./runtime-forward.nix
     ./rw.nix
+    ./services.nix
     ./shared-agents-md.nix
     ./shared-surfaces.nix
     ./sink-guard.nix

@@ -557,7 +557,9 @@ in {
 
     # Public mkRuntime records participate in centralized proxy ownership without
     # appearing in the repo's first-party runtime registry. A used inherited
-    # owner must therefore materialize once and lower for the custom client.
+    # owner is therefore the shared `internal` service, lowered for the custom
+    # client. The harness stubs carry no ai-module lowering, so these cases
+    # assert the owning service layer; unit shape is ai-module's own contract.
     factory-mkRuntime-custom-runtime-uses-shared-proxy-owner = mkTest "mkRuntime-custom-runtime-uses-shared-proxy-owner" (
       let
         record = mkProxyTestRecord "testapp";
@@ -576,7 +578,8 @@ in {
           ];
         };
       in
-        evaluated.config.systemd.user.services ? mcp-proxy-shared
+        evaluated.config.ai.internal.services ? mcp-proxy-shared
+        && evaluated.config.ai.claims.service.mcp-proxy-shared == ["internal"]
         && evaluated.config.ai.testapp._observedServers.shared.url == "http://127.0.0.1:9509/"
     );
 
@@ -600,7 +603,8 @@ in {
           ];
         };
       in
-        evaluated.config.systemd.user.services ? mcp-proxy-direct
+        evaluated.config.ai.testapp.services ? mcp-proxy-direct
+        && evaluated.config.ai.claims.service.mcp-proxy-direct == ["testapp"]
         && evaluated.config.ai.testapp._observedServers.direct.url == "http://127.0.0.1:9510/"
     );
 
@@ -617,20 +621,21 @@ in {
             (ai.app.hmTransform (mkProxyTestRecord "second"))
             {
               config.ai = {
-                first.mcpServers.shared = factoryProxyServer 9511;
-                second.mcpServers.shared = factoryProxyServer 9512;
+                first = {
+                  enable = true;
+                  mcpServers.shared = factoryProxyServer 9511;
+                };
+                second = {
+                  enable = true;
+                  mcpServers.shared = factoryProxyServer 9512;
+                };
               };
             }
           ];
         };
-        failed = builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions;
+        failed = map (assertion: assertion.message) (builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions);
       in
-        !(evaluated.config.systemd.user.services ? mcp-proxy-shared)
-        && builtins.any
-        (assertion:
-          lib.hasInfix "ai.first.mcpServers.shared" assertion.message
-          && lib.hasInfix "ai.second.mcpServers.shared" assertion.message)
-        failed
+        builtins.elem "ai.claims.service.mcp-proxy-shared: claimed by first and second" failed
     );
 
     # Custom devenv runtimes fail closed at the same explicit lifecycle boundary
@@ -685,11 +690,11 @@ in {
             {config.ai.testapp.mcpServers = ["native-only"];}
           ];
         };
-        proxyServices = lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) evaluated.config.systemd.user.services;
       in
         evaluated.config.ai.testapp.mcpServers
         == ["native-only"]
-        && proxyServices == {}
+        && evaluated.config.ai.internal.services == {}
+        && evaluated.config.ai.testapp.services == {}
         && builtins.all (assertion: assertion.assertion) evaluated.config.assertions
     );
 

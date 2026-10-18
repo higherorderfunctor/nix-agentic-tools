@@ -27,7 +27,7 @@
   };
   # The files engine's copies Copilot claims, by path.
   copies = evaluated: lib.listToAttrs (map (target: lib.nameValuePair target.path target) (ownPlan "copilot" "files-apply" evaluated).targets);
-  claims = evaluated: lib.filterAttrs (_path: owners: builtins.elem "copilot" owners) evaluated.config.ai.filesOwners;
+  claims = evaluated: lib.filterAttrs (_path: owners: builtins.elem "copilot" owners) evaluated.config.ai.claims.path;
   # The old writer's ledgers, one per directory under `projectDir`, are
   # Copilot's and reach the engine's root list.
   declaresLedgers = projectDir: evaluated: let

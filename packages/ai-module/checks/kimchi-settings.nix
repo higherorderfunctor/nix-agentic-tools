@@ -75,7 +75,6 @@
           inherit backend;
           files = config.ai.files;
           namespace = "ai";
-          owners = config.ai.filesOwners;
         };
         copies = lib.filter (item: item.method != "symlink") plan;
         graph =
@@ -138,7 +137,7 @@
         hasRun = lib.any (item: item.content ? run) copies;
       in
         assert builtins.attrNames config.ai.kimchi.files == lib.sort builtins.lessThan expected;
-        assert lib.all (path: config.ai.filesOwners.${path} == ["kimchi"]) expected;
+        assert lib.all (path: config.ai.claims.path.${path} == ["kimchi"]) expected;
         assert lib.all (item:
           item.format
           == "json"

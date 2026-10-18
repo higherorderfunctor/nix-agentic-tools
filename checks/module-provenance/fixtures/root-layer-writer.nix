@@ -6,8 +6,8 @@
 {
   config.ai = {
     activation.direct.command = "true";
+    claims.path."direct.txt" = ["direct"];
     files."direct.txt".content.text = "direct";
-    filesOwners."direct.txt" = ["direct"];
     legacyLedgers = [
       {
         codec = "dir";
@@ -15,5 +15,6 @@
         path = ".";
       }
     ];
+    services.direct.command = ["/bin/direct"];
   };
 }

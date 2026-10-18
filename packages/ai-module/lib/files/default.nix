@@ -298,24 +298,13 @@
     backend,
     files,
     namespace,
-    owners ? {},
   }: let
-    ownerIssue = validateOwners owners;
     issue = validate {inherit backend files namespace;};
     entries = lib.concatMap (path: (inspect backend path files.${path}).entries) (builtins.attrNames files);
   in
-    if ownerIssue != null
-    then throw ownerIssue
-    else if issue != null
+    if issue != null
     then throw issue
     else builtins.sort (a: b: a.path < b.path) entries;
-  # `owners` maps each layer-1 destination to the runtimes declaring it.
-  validateOwners = owners: let
-    shared = lib.findFirst (path: builtins.length owners.${path} > 1) null (builtins.attrNames owners);
-  in
-    if shared == null
-    then null
-    else error shared "runtime owners ${lib.concatStringsSep " and " (lib.sort lib.lessThan owners.${shared})} claim one destination";
 in {
-  inherit entryType legacyLedgerType normalize validate validateOwners;
+  inherit entryType legacyLedgerType normalize validate;
 }

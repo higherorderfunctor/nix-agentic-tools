@@ -78,6 +78,7 @@
         "ai.codex.projectDocMaxBytes"
         "ai.codex.rules"
         "ai.codex.rulesDir"
+        "ai.codex.services"
         "ai.codex.settings"
         "ai.codex.shell"
         "ai.codex.skills"
@@ -217,7 +218,7 @@
           if backend == "hm"
           then devenvJsonDoc
           else hmJsonDoc;
-        names = lib.concatMap (owner: ["ai.${owner}.activation.<name>.command" "ai.${owner}.files.<name>.enable"]) localOwners.${backend};
+        names = lib.concatMap (owner: ["ai.${owner}.activation.<name>.command" "ai.${owner}.files.<name>.enable" "ai.${owner}.services.<name>.command"]) localOwners.${backend};
       in
         guardEach "require_key" [own] [] names + "\n" + guardEach "forbid_key" [other] [] names) ["devenv" "hm"]}
 

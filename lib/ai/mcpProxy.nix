@@ -15,8 +15,7 @@
 # UNAUTHENTICATED loopback endpoint. Proxy ownership is keyed by the MCP
 # server attribute name: a used top-level declaration owns one shared unit,
 # while a runtime-scoped declaration owns its unit directly. Reusing a key
-# across proxy declarations is rejected by sharedOptions.nix before any unit
-# is emitted. The client entry becomes a plain
+# across proxy declarations is rejected by ai.claims.service. The client entry becomes a plain
 # `{ type = "http"; url = "http://127.0.0.1:<port>/"; }` carrying no
 # credential at all, so it is harness-agnostic: kiro, Claude Code,
 # Copilot, wrapped or not, it makes no difference.
@@ -42,9 +41,11 @@
 #
 # Caddy substitutes `{$VAR}` while PARSING the config, so the adapted JSON
 # holds literal values. `persist_config off` prevents Caddy from writing that
-# active config to autosave.json. The per-unit runtime XDG directories below
-# keep any other Caddy state out of the user's persistent XDG directories and
-# stop proxy units from sharing a Caddy state path.
+# active config to autosave.json. The run script below points Caddy's
+# config and data directories at a per-proxy runtime directory, so instance
+# state never lands in the user's persistent XDG directories and two proxies
+# never share a Caddy state path. The process itself is an ordinary
+# `ai.services` entry; no proxy-specific service writer exists.
 #
 # The upstream request is BYTE-IDENTICAL to the un-proxied one plus the
 # injected `proxy.headers` — see `strippedHopHeaders` for what that costs
@@ -81,23 +82,20 @@
 # that no rule mentioned did not appear in the log.
 #
 # Per-server attribution therefore does NOT come from a logged header. It
-# comes from the unit — one `mcp-proxy-<name>.service` per server, with an
-# explicit `SyslogIdentifier` so an unfiltered `journalctl` shows a stable
-# name rather than the ExecStart store hash. Use
+# comes from the unit — one `mcp-proxy-<name>.service` per server. Use
 # `journalctl --user -u mcp-proxy-<name>` to tell two proxies apart.
 #
 # ── Scope ─────────────────────────────────────────────────────────────
-# Home Manager on Linux only. devenv parity (process-compose) and Darwin
-# (launchd) are deliberately OUT OF SCOPE and explicitly NOT decided
-# against — a deferral, not a WONTFIX. `devenvTransform` throws rather
-# than silently ignoring `proxy.enable`.
+# Home Manager runs the proxy through `ai.services` on Linux and warns on
+# Darwin, where launchd is unsupported. Devenv has no proxy lifecycle;
+# `sharedOptions.nix` refuses a devenv declaration through assertions.
 {
   lib,
   pkgs,
 }: let
-  inherit (lib) concatStringsSep filterAttrs foldl' mapAttrs mapAttrs' mapAttrsToList;
+  inherit (lib) concatStringsSep filterAttrs foldl' mapAttrs mapAttrsToList;
 
-  redact = import ../redact {inherit lib;};
+  strictShellApplication = import ../strict-shell-application.nix;
 
   # Upper-case; every non-alphanumeric becomes '_'. Same shape as the
   # Kiro preprocessor's `deriveEnvVar`, deliberately NOT shared with it:
@@ -273,7 +271,7 @@
 
   # ── Per-server proxy spec ───────────────────────────────────────────
   # The upstream url is split into ORIGIN and PATH at RUNTIME by the
-  # wrapper rather than here, because it may itself be a credential and
+  # redact reader rather than here, because it may itself be a credential and
   # so is unknown at eval time. Caddy's `reverse_proxy` accepts a scheme
   # and host in its upstream but NOT a path, which is why the split plus
   # a `rewrite` is needed at all.
@@ -303,7 +301,7 @@
     urlVar = envVarFor serverName "url";
 
     # Exactly one of these is set. A literal url is exported by the
-    # wrapper the same way a secret one is, so the runtime split has a
+    # service launcher the same way a secret one is, so the split has a
     # single shape instead of an eval-time and a runtime variant.
     urlSecret =
       if urlCred
@@ -408,101 +406,57 @@
       }
     '';
 
-  # ── ExecStart wrapper ───────────────────────────────────────────────
-  # Resolves redact references at launch, then splits the upstream
-  # url into origin and path, then execs Caddy. Nothing lands in argv.
-  #
-  # A failed read aborts before a daemon can answer clients with upstream 401s.
-  startScriptFor = spec: let
-    secretExports =
-      concatStringsSep "\n"
-      (mapAttrsToList
-        (variable: value:
-          redact.assign {
-            inherit pkgs value variable;
-            option = "MCP proxy ${spec.name}.${variable}";
-            export = true;
-          })
-        (spec.headerSecrets
-          // lib.optionalAttrs (spec.urlSecret != null) {
-            ${spec.urlVar} = spec.urlSecret;
-          }));
+  # ── Run script ──────────────────────────────────────────────────────
+  # The launcher exports the resolved url and header secrets; this script
+  # splits "<scheme>://<host>[/<path>]" into the two pieces Caddy needs
+  # (`reverse_proxy` rejects a path in its upstream, so the path is applied
+  # with `rewrite`), isolates Caddy's state, then execs it. The `case` is
+  # load bearing: with no '/' after the host, "''${_rest#*/}" returns _rest
+  # unchanged and the path would silently become the hostname.
+  runScriptFor = spec:
+    strictShellApplication pkgs {
+      name = "mcp-proxy-${spec.name}";
+      text = ''
+        _url="''${${spec.urlVar}}"
+        _scheme="''${_url%%://*}"
+        _rest="''${_url#*://}"
+        case "$_rest" in
+          */*)
+            _host="''${_rest%%/*}"
+            _path="/''${_rest#*/}"
+            ;;
+          *)
+            _host="$_rest"
+            _path="/"
+            ;;
+        esac
+        export ${spec.originVar}="$_scheme://$_host" ${spec.pathVar}="$_path"
 
-    literalUrlAssignment = lib.optionalString (spec.urlLiteral != null) ''
-      ${spec.urlVar}=${lib.escapeShellArg spec.urlLiteral}
-      export ${spec.urlVar}
-    '';
-  in
-    pkgs.writeShellScript "mcp-proxy-${spec.name}" ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
+        _state="''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}/mcp-proxy-${spec.name}"
+        ${pkgs.coreutils}/bin/mkdir -p "$_state"
+        ${pkgs.coreutils}/bin/chmod 0700 "$_state"
+        export XDG_CONFIG_HOME="$_state/config" XDG_DATA_HOME="$_state/data"
 
-      export PATH="${lib.makeBinPath [pkgs.coreutils]}''${PATH:+:$PATH}"
-      ${secretExports}
-      ${literalUrlAssignment}
+        exec ${lib.getExe pkgs.caddy} run --config ${caddyfileFor spec} --adapter caddyfile
+      '';
+    };
 
-      # Split "<scheme>://<host>[/<path>]" into the two pieces Caddy
-      # needs. `reverse_proxy` rejects a path in its upstream, so the
-      # path is applied with `rewrite` instead. The `case` is load
-      # bearing: with no '/' after the host, "''${_rest#*/}" returns
-      # _rest unchanged and the path would silently become the hostname.
-      _url="''${${spec.urlVar}}"
-      _scheme="''${_url%%://*}"
-      _rest="''${_url#*://}"
-      case "$_rest" in
-        */*)
-          _host="''${_rest%%/*}"
-          _path="/''${_rest#*/}"
-          ;;
-        *)
-          _host="$_rest"
-          _path="/"
-          ;;
-      esac
-
-      ${spec.originVar}="$_scheme://$_host"
-      ${spec.pathVar}="$_path"
-      export ${spec.originVar} ${spec.pathVar}
-
-      exec ${lib.getExe pkgs.caddy} run \
-        --config ${caddyfileFor spec} \
-        --adapter caddyfile
-    '';
-
-  # One managed unit for one explicit proxy owner. Ownership aggregation and
-  # duplicate-key diagnostics live in sharedOptions.nix, so callers pass only
-  # the unique declarations that are safe to materialize.
-  systemdUnitFor = name: srv: let
-    spec = specFor name srv;
+  # The `ai.services` entry for one proxy declaration. Secrets stay
+  # references: the generic launcher resolves them at start.
+  serviceFor = name: server: let
+    spec = specFor name server;
   in {
-    Unit = {
-      Description = "Credential-injecting MCP proxy for ${name}";
-      After = ["network.target"];
-    };
-    Service = {
-      Environment = [
-        "XDG_CONFIG_HOME=%t/mcp-proxy-${name}/config"
-        "XDG_DATA_HOME=%t/mcp-proxy-${name}/data"
-      ];
-      ExecStart = "${startScriptFor spec}";
-      PrivateTmp = true;
-      Restart = "on-failure";
-      RestartSec = 5;
-      RuntimeDirectory = "mcp-proxy-${name}";
-      RuntimeDirectoryMode = "0700";
-      # Per-server attribution in the journal. The proxy drops the whole
-      # request-header map, so the unit is the stable source of identity.
-      SyslogIdentifier = "mcp-proxy-${name}";
-      # A same-uid process can read /proc/<pid>/environ even with Yama
-      # ptrace_scope=1; nothing secret enters world-readable argv.
-    };
-    Install.WantedBy = ["default.target"];
+    command = [(lib.getExe (runScriptFor spec))];
+    environment =
+      spec.headerSecrets
+      // {
+        ${spec.urlVar} =
+          if spec.urlSecret != null
+          then spec.urlSecret
+          else spec.urlLiteral;
+      };
+    ports.main = spec.port;
   };
-
-  systemdUnitsFor = servers:
-    mapAttrs'
-    (name: srv: lib.nameValuePair "mcp-proxy-${name}" (systemdUnitFor name srv))
-    servers;
 in {
   inherit
     assertionsFor
@@ -512,9 +466,8 @@ in {
     isProxied
     lowerClientEntries
     proxiedServers
+    runScriptFor
+    serviceFor
     specFor
-    startScriptFor
-    systemdUnitFor
-    systemdUnitsFor
     ;
 }

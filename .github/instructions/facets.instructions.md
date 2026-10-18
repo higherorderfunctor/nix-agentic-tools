@@ -8,8 +8,8 @@ applyTo: "checks/**,flake.nix,lib/facets.nix,lib/facets/**,lib/testing/**,packag
 ## Package ownership and native composition
 
 > **Last verified:** 2026-10-18 — check-name laziness is gated by the
-> `check-laziness` assertion in facet-mock; reading a check forces its package
-> type and value.
+> `check-laziness` assertion in facet-mock; platform-specific checks use host
+> packages and gate their names.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -50,7 +50,11 @@ A check asserting a Linux-only lowering belongs inside
 its name is absent on other systems. Never use a host-dependent branch that
 passes vacuously, or `lib.mkIf` on a single check name: the `checks` option is
 lazy (`lazyAttrsOf`), and a lazy map keeps a `mkIf`-wrapped name and throws when
-it is read. Nothing gates a vacuous branch; review does.
+it is read. Never override `hostPlatform` or stub a Linux-only package such as
+systemd so that a Linux lowering evaluates on Darwin; a contract about the
+Darwin side of that lowering, such as its warning, belongs under
+`lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin` with the host's packages.
+Nothing gates a vacuous branch; review does.
 
 Root and owner check names share an exclusive claim boundary. Each contributor
 supplies isolated definitions for claim discovery, while its conditions and

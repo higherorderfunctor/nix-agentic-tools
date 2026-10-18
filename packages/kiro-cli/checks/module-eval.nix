@@ -1808,7 +1808,7 @@ in {
             ai.skills.stack-fix = src;
           };
         in
-          result.config.ai.filesOwners.".kiro/skills/stack-fix"
+          result.config.ai.claims.path.".kiro/skills/stack-fix"
           == ["kiro"]
           && result.config.home.file.".kiro/skills/stack-fix/SKILL.md".source == "${src}/SKILL.md"
       );

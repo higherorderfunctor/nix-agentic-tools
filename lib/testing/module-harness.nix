@@ -343,11 +343,10 @@
         else "devenv";
       files = config.ai.files;
       namespace = "ai";
-      owners = config.ai.filesOwners;
     });
   claimedBy = runtime: config: item:
     lib.any (key: item.path == key || lib.hasPrefix "${key}/" item.path)
-    (builtins.attrNames (lib.filterAttrs (_path: owners: lib.elem runtime owners) config.ai.filesOwners));
+    (builtins.attrNames (lib.filterAttrs (_path: owners: lib.elem runtime owners) config.ai.claims.path));
   # The engine's normalized `ro`/`rw` entries claimed by one runtime.
   # Keep the explicit phase argument so a stale writer name fails its check.
   ownPlan = runtime: entry: evaluated: let
@@ -423,7 +422,7 @@
   # (`evalHm …`, `evalDevenv …`).
   markdownInput = evaluated: path: let
     inherit (evaluated) config;
-    claims = config.ai.filesOwners.${path} or [];
+    claims = config.ai.claims.path.${path} or [];
     staged =
       config.ai.${lib.head claims}._generatedFiles.${path}
       or (throw "module-test: \"${path}\" is not a staged generated entry of ai.${lib.head claims}");

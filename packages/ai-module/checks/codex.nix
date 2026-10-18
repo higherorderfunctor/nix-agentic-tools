@@ -41,7 +41,6 @@
           inherit backend;
           files = config.ai.files;
           namespace = "ai";
-          owners = config.ai.filesOwners;
         });
         expected =
           [".agents/skills/probe" "${prefix}/agents/reviewer.toml" "${prefix}/config.toml" "${prefix}/hooks.json"]
@@ -77,7 +76,7 @@
         assert lib.all (entry: lib.elem entry config.ai.legacyLedgers) legacy;
         assert !enable
         || lib.all (path:
-          config.ai.filesOwners.${path}
+          config.ai.claims.path.${path}
           == ["codex"]
           && config.ai.files.${path}.requires == ["${config.ai.codex._generatedTree}"]
           && config.ai.files.${path}.mode == null
@@ -161,13 +160,7 @@
       }
     ];
   in
-    builtins.tryEval (builtins.deepSeq (files.normalize {
-        backend = "hm";
-        files = evaluated.config.ai.files;
-        namespace = "ai";
-        owners = evaluated.config.ai.filesOwners;
-      })
-      true);
+    map (item: item.message) (builtins.filter (item: !item.assertion) evaluated.config.assertions);
   fixtureJson = builtins.toJSON fixture;
 in {
   checks = {
@@ -175,9 +168,8 @@ in {
       !((evaluate {
         ai.codex.files."literal/codex".content.text = "disabled";
       }).config.ai.files ? "literal/codex")) [evalHm evalDevenv];
-    assert (collision false true).success;
-    assert !(collision true true).success;
-    assert !(collision true false).success;
+    assert collision false true == [];
+    assert lib.all (entryEnabled: collision true entryEnabled == ["ai.claims.path.literal/codex: claimed by codex and probe"]) [false true];
       pkgs.runCommandLocal "ai-module-codex" {passthru = {inherit fixtureJson;};} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

@@ -41,7 +41,7 @@
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
-  hasHomeManagerSystemd = lib.hasAttrByPath ["systemd" "user" "services"] options;
+  isDevenv = options ? devenv;
 
   # ── Managed MCP proxy ownership ─────────────────────────────────────
   # A top-level proxied declaration is one shared owner, not one owner per
@@ -71,62 +71,34 @@
 
   mkProxyDeclaration = optionPath: key: server: {
     inherit key optionPath server;
-    scope = "${optionPath}.${key}";
   };
-  topLevelProxyDeclarations =
-    lib.mapAttrsToList (mkProxyDeclaration "ai.mcpServers") topLevelProxiedServers;
   usedTopLevelProxyDeclarations =
     lib.mapAttrsToList (mkProxyDeclaration "ai.mcpServers") usedTopLevelProxiedServers;
-  runtimeProxyDeclarations =
-    lib.concatMap
-    (name:
-      lib.mapAttrsToList
-      (mkProxyDeclaration (lib.showOption (runtimeMcpPath name)))
-      (mcpProxy.proxiedServers (runtimeMcpServers name)))
-    mcpRuntimeNames;
+  runtimeProxyDeclarationsFor = name:
+    lib.mapAttrsToList
+    (mkProxyDeclaration (lib.showOption (runtimeMcpPath name)))
+    (mcpProxy.proxiedServers (runtimeMcpServers name));
+  runtimeProxyDeclarations = lib.concatMap runtimeProxyDeclarationsFor mcpRuntimeNames;
 
-  # The server key is the managed-unit identity. Refuse every reused key up
-  # front, including byte-identical definitions, and omit conflicted units so
-  # the module system cannot preempt this actionable assertion with a generic
-  # duplicate-definition error.
-  proxyDeclarationsByKey = lib.groupBy (declaration: declaration.key) (
-    topLevelProxyDeclarations ++ runtimeProxyDeclarations
-  );
-  duplicateProxyDeclarations = lib.filterAttrs (_: declarations: builtins.length declarations > 1) proxyDeclarationsByKey;
-  duplicateProxyKeys = builtins.attrNames duplicateProxyDeclarations;
   activeProxyDeclarations = usedTopLevelProxyDeclarations ++ runtimeProxyDeclarations;
-  uniqueActiveProxyDeclarations =
-    builtins.filter
-    (declaration: !(builtins.elem declaration.key duplicateProxyKeys))
-    activeProxyDeclarations;
-  managedProxyServers = builtins.listToAttrs (map
-    (declaration: lib.nameValuePair declaration.key declaration.server)
-    uniqueActiveProxyDeclarations);
-
-  duplicateProxyDescription = key: declarations: "'${key}' (${lib.concatStringsSep ", " (map (declaration: declaration.scope) declarations)})";
-  proxyOwnershipAssertions = [
-    {
-      assertion = duplicateProxyKeys == [];
-      message = ''
-        MCP proxy ownership keys are reused: ${lib.concatStringsSep "; " (lib.mapAttrsToList duplicateProxyDescription duplicateProxyDeclarations)}.
-        A managed proxy key names one systemd user service. A top-level
-        `ai.mcpServers.<key>` declaration is its single shared owner; each
-        runtime-scoped `ai.<runtime>.mcpServers.<key>` declaration is a direct
-        owner. Reusing a key across owners is ambiguous even when definitions
-        are identical. Give every direct owner a different MCP server key.
-      '';
-    }
-  ];
+  # Each declaration becomes the service of the layer that owns it: a used
+  # top-level entry under the shared `internal` owner, a runtime entry under
+  # that runtime. The claims registry then rejects one key declared twice,
+  # byte-identical or not. Devenv has no proxy lifecycle yet; its assertion
+  # below refuses the declaration before any service is written.
+  proxyServices = declarations:
+    lib.optionalAttrs (!isDevenv) (builtins.listToAttrs (map (declaration:
+      lib.nameValuePair "mcp-proxy-${declaration.key}" (mcpProxy.serviceFor declaration.key declaration.server))
+    declarations));
   proxyValidationAssertions =
     lib.concatMap
     (declaration:
       mcpProxy.assertionsFor {
         inherit (declaration) optionPath;
-        backendSupported = hasHomeManagerSystemd;
+        backendSupported = !isDevenv;
         servers = {${declaration.key} = declaration.server;};
       })
     activeProxyDeclarations;
-  proxyAssertions = proxyOwnershipAssertions ++ proxyValidationAssertions;
 
   # OpenSSH rejects Home Manager's otherwise-safe ~/.ssh/config symlink inside
   # Linux user-namespace sandboxes: the root-owned Nix-store target is exposed
@@ -591,14 +563,12 @@ in {
   # Emission logic lives at L4 inside each per-CLI factory. This
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
-    (lib.optionalAttrs hasAssertions {assertions = proxyAssertions;})
-    # Drop the systemd path entirely in devenv. `mkIf false` would still define
-    # an unknown option there; the option-tree probe is a build-time condition
-    # and does not force config. Unsupported active declarations fail through
-    # proxyValidationAssertions instead of disappearing silently.
-    (lib.optionalAttrs hasHomeManagerSystemd {
-      systemd.user.services = mcpProxy.systemdUnitsFor managedProxyServers;
-    })
+    (lib.optionalAttrs hasAssertions {assertions = proxyValidationAssertions;})
+    {
+      ai =
+        {internal.services = proxyServices usedTopLevelProxyDeclarations;}
+        // lib.genAttrs mcpRuntimeNames (name: {services = proxyServices (runtimeProxyDeclarationsFor name);});
+    }
     {
       # Root-pool writes are sanctioned only from the module that declares
       # the option: these `*Dir` expansions. Every other module writes

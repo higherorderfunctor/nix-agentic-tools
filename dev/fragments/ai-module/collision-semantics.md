@@ -1,6 +1,6 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-16 — claim rules defer to the ai-module contract;
+> **Last verified:** 2026-10-17 — claim rules defer to the ai-module contract;
 > every runtime stages its generated files; layer-1 defaults preserve structured
 > siblings and discarded-source laziness; runtime surfaceSupport declarations
 > own normalized backend reach; ai-module alone validates and lowers the final
@@ -85,11 +85,12 @@ Unsupported per-runtime options remain absent. Root fanout to an unsupported
 runtime warns for a non-empty request and lowers to `{}` before merging, based
 on the app record's `surfaceSupport` declaration.
 
-### Managed-proxy ownership exception
+### Managed-proxy service claims
 
-An MCP pool entry with `proxy.enable` has a managed systemd unit in addition to
-its client value. The pool value still follows ordinary atomic replacement and
-null negation, but the unit needs one unambiguous owner:
+An MCP pool entry with `proxy.enable` declares an ordinary
+`ai.internal.services` daemon in addition to its client value. The pool value
+still follows ordinary atomic replacement and null negation, but the unit needs
+one unambiguous owner:
 
 - a used top-level proxy declaration owns one shared unit and fans out only its
   lowered credential-free client entry;
@@ -102,11 +103,14 @@ This is not a return of the retired root↔runtime pool collision assertion. A
 top-level proxied entry may still be replaced by an ordinary non-proxied runtime
 entry or suppressed by null. The failure applies only when two declarations both
 claim the same managed-proxy identity. A top-level owner inherited by no enabled
-capable runtime is not materialized. The shared owner aggregator dynamically
-discovers every runtime option subtree carrying the internal normalized-MCP
-capability marker. Do not infer capability from the `mcpServers` name alone: the
-generic public `mkRuntime` factory permits an unrelated same-named native option
-when the normalized pool is unsupported.
+capable runtime is not materialized. Scoped owners (`proxy:root`,
+`proxy:<runtime>`) register the native `mcp-proxy-<name>` identity in
+`ai.claims.service`; the common registry rejects duplicates, including identical
+declarations. The shared owner aggregator dynamically discovers every runtime
+option subtree carrying the internal normalized-MCP capability marker. Do not
+infer capability from the `mcpServers` name alone: the generic public
+`mkRuntime` factory permits an unrelated same-named native option when the
+normalized pool is unsupported.
 
 ### Package ownership rule
 

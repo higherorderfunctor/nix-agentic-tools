@@ -100,7 +100,7 @@
       if expect == "composed"
       then {source = "${config.ai.internal._generatedTree}/${path}";}
       else expect;
-    shape = lib.optional (config.ai.filesOwners.${path} or [] != ["internal"]) "claimant";
+    shape = lib.optional (config.ai.claims.path.${path} or [] != ["internal"]) "claimant";
     outcome =
       if expect == "fails"
       then lib.optional (builtins.tryEval (builtins.deepSeq delivered.${path} true)).success "evaluates"

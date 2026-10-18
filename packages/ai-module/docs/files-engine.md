@@ -1,5 +1,8 @@
 # files engine
 
+> **Last verified:** 2026-10-17 — path ownership collisions use the shared
+> ai.claims assertions.
+
 ## Boundary and caller schema
 
 The file schema and engine rules below are the contract of the files engine.
@@ -50,22 +53,22 @@ source strings fail the option type check, which names
 from Nix's enum or `strMatching` type checker name the option path for malformed
 enum and mode strings.
 
-| Refused input                                                                                           | Evaluation error                                                                                             |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Empty, absolute, repeated slash, `.` or `..` target segment                                             | `files."<path>": target must be a normalized relative path without empty, . or .. segments`                  |
-| Enabled entry with no non-null content field                                                            | `files."<path>": set one of content.text, content.source, content.value, content.run`                        |
-| Two non-null content fields at the winning priority                                                     | `files."<path>": content alternatives tie at priority <priority>: <fields>`                                  |
-| `content.value` with markdown/raw                                                                       | `files."<path>": content.value requires json, toml or yaml format`                                           |
-| `method = rw` with markdown/raw                                                                         | `files."<path>": rw requires json, toml or yaml format`                                                      |
-| `recursive` without a directory source                                                                  | `files."<path>": recursive requires content.source to be a directory`                                        |
-| `recursive` with `rw`                                                                                   | `files."<path>": rw cannot be recursive`                                                                     |
-| `content.run` with symlink                                                                              | `files."<path>": content.run requires ro or rw method`                                                       |
-| `mode` with symlink                                                                                     | `files."<path>": mode requires ro or rw method`                                                              |
-| `mode` and non-null `executable` together                                                               | `files."<path>": mode and executable cannot both be set`                                                     |
-| `ro` mode without owner read permission                                                                 | `files."<path>": ro mode must grant owner read permission`                                                   |
-| Expanded leaf duplicates another leaf or explicit target, or a directory target contains another target | `files."<path>": destination overlaps "<other>"`                                                             |
-| Two or more runtimes declare one destination at layer 1 (an `enable = false` entry counts as a claim)   | `files."<path>": runtime owners <a> and <b> claim one destination` (all owners, sorted, joined with " and ") |
-| Recursive `ro` source with a symlink that resolves to a directory (a copy has no file bytes for it)     | `files."<path>": recursive ro source contains a directory symlink at "<leaf>"`                               |
+| Refused input                                                                                           | Evaluation error                                                                                                           |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Empty, absolute, repeated slash, `.` or `..` target segment                                             | `files."<path>": target must be a normalized relative path without empty, . or .. segments`                                |
+| Enabled entry with no non-null content field                                                            | `files."<path>": set one of content.text, content.source, content.value, content.run`                                      |
+| Two non-null content fields at the winning priority                                                     | `files."<path>": content alternatives tie at priority <priority>: <fields>`                                                |
+| `content.value` with markdown/raw                                                                       | `files."<path>": content.value requires json, toml or yaml format`                                                         |
+| `method = rw` with markdown/raw                                                                         | `files."<path>": rw requires json, toml or yaml format`                                                                    |
+| `recursive` without a directory source                                                                  | `files."<path>": recursive requires content.source to be a directory`                                                      |
+| `recursive` with `rw`                                                                                   | `files."<path>": rw cannot be recursive`                                                                                   |
+| `content.run` with symlink                                                                              | `files."<path>": content.run requires ro or rw method`                                                                     |
+| `mode` with symlink                                                                                     | `files."<path>": mode requires ro or rw method`                                                                            |
+| `mode` and non-null `executable` together                                                               | `files."<path>": mode and executable cannot both be set`                                                                   |
+| `ro` mode without owner read permission                                                                 | `files."<path>": ro mode must grant owner read permission`                                                                 |
+| Expanded leaf duplicates another leaf or explicit target, or a directory target contains another target | `files."<path>": destination overlaps "<other>"`                                                                           |
+| Two or more runtimes declare one destination at layer 1 (an `enable = false` entry counts as a claim)   | `ai.claims.path.<path>: claimed by <a> and <b>` (all owners, sorted, joined with " and "); a failed assertion, not a throw |
+| Recursive `ro` source with a symlink that resolves to a directory (a copy has no file bytes for it)     | `files."<path>": recursive ro source contains a directory symlink at "<leaf>"`                                             |
 
 For `rw`, text/source/run bytes must decode as the selected codec's root map;
 failure is a runtime error naming the path and codec, before changing disk.
