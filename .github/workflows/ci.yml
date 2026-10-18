@@ -822,7 +822,8 @@ jobs:
           cat > "$RUNNER_TEMP/matrix.json" <<'JSON'
           ${{ steps.matrix.outputs.matrix }}
           JSON
-          nix eval --json .#.checks.x86_64-linux --apply builtins.attrNames > "$RUNNER_TEMP/checks.json"
+          NIX_SHOW_STATS=1 NIX_SHOW_STATS_PATH="$RUNNER_TEMP/checks-eval-stats.json" \
+            nix eval --no-eval-cache --json .#.checks.x86_64-linux --apply builtins.attrNames > "$RUNNER_TEMP/checks.json"
           jq -n \
             --slurpfile rows "$CHECK_ROWS" \
             --slurpfile names "$RUNNER_TEMP/checks.json" \
@@ -857,12 +858,20 @@ jobs:
             exit 1
           fi
 
+      # Function-call count of the names evaluation above, against a fixed
+      # ceiling; the action's description carries the measurements.
+      - name: Check the Linux name evaluation stays within budget
+        uses: ./.github/actions/check-eval-budget
+        with:
+          label: x86_64-linux check names
+          stats: ${{ runner.temp }}/checks-eval-stats.json
       - name: Upload check plan evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: checks-plan
           path: |
+            ${{ runner.temp }}/checks-eval-stats.json
             ${{ runner.temp }}/checks.json
             ${{ runner.temp }}/matrix.json
             ${{ runner.temp }}/plan-report.json
@@ -972,11 +981,14 @@ jobs:
       # BSD time on macOS reports maximum resident set size in BYTES and writes
       # its report to stderr, so nix's own stderr lands in the same .time file.
       - name: Evaluate aarch64-darwin check names
+        env:
+          NIX_SHOW_STATS: "1"
+          NIX_SHOW_STATS_PATH: ${{ runner.temp }}/darwin-check-names.stats.json
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           status=0
-          /usr/bin/time -l nix eval --json .#.checks.aarch64-darwin --apply builtins.attrNames \
+          /usr/bin/time -l nix eval --no-eval-cache --json .#.checks.aarch64-darwin --apply builtins.attrNames \
             > "$RUNNER_TEMP/darwin-check-names.json" 2> "$RUNNER_TEMP/darwin-check-names.time" || status=$?
           if [ "$status" -ne 0 ]; then
             tail -n 40 "$RUNNER_TEMP/darwin-check-names.time" >&2
@@ -987,6 +999,11 @@ jobs:
           wall="$(awk '/ real / {print $1}' "$RUNNER_TEMP/darwin-check-names.time")"
           printf '| Darwin check names | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n| Wall time (s) | %s |\n' \
             "$count" "$rss" "$wall" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Check the Darwin name evaluation stays within budget
+        uses: ./.github/actions/check-eval-budget
+        with:
+          label: aarch64-darwin check names
+          stats: ${{ runner.temp }}/darwin-check-names.stats.json
       # Force every drvPath as a hard failure: a Linux-only check leaking into
       # Darwin fails this job when its evaluation fails there; one that only
       # fails when built is not caught here. macOS swaps rather than killing an
@@ -1018,6 +1035,7 @@ jobs:
           path: |
             ${{ runner.temp }}/darwin-check-drvs.json
             ${{ runner.temp }}/darwin-check-names.json
+            ${{ runner.temp }}/darwin-check-names.stats.json
             ${{ runner.temp }}/darwin-check-drvs.time
             ${{ runner.temp }}/darwin-check-names.time
           if-no-files-found: warn
