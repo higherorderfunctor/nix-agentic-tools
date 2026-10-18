@@ -31,12 +31,13 @@
   checks = let
     vu = import ../../lib/packaging.nix;
 
-    declared = import ./go-floor-packages.nix {
-      inherit lib;
-      inherit (pkgs.stdenv.hostPlatform) isLinux;
-    };
     pkgSet = self.ciPackages.${pkgs.stdenv.hostPlatform.system};
-    goPackages = lib.genAttrs (builtins.attrNames (builtins.removeAttrs declared ["beads.dolt"])) (name: pkgSet.${name});
+    # Rows absent from this system's package set (gluetun off x86_64-linux)
+    # are not checks here; `hasAttrByPath` reads only the set's names.
+    declared = lib.filterAttrs (name: _: lib.hasAttrByPath (lib.splitString "." name) pkgSet) (import ./go-floor-packages.nix);
+    # beads.dolt is nested under beads, so the top-level goFloor scan below
+    # never sees it; its floor is guarded through the extract-order check.
+    goPackages = lib.mapAttrs (name: _: lib.getAttrFromPath (lib.splitString "." name) pkgSet) (builtins.removeAttrs declared ["beads.dolt"]);
 
     declaredListCheck = let
       discoveredDrift = lib.filterAttrs (_: p: (p.passthru or {}) ? goFloor) pkgSet;
@@ -46,6 +47,7 @@
           (p.passthru or {}) ? fixGoFloor
           && (p.passthru.fixGoFloor.goFloorDestination or null) == "sidecar")
         pkgSet
+        # beads.dolt carries its own sidecar floor one level down.
         // lib.optionalAttrs ((pkgSet.beads.passthru or {}) ? dolt) {
           "beads.dolt" = pkgSet.beads.dolt;
         };

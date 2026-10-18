@@ -70,10 +70,9 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     pkgSet = self.ciPackages.${system};
 
-    declared = import ./go-floor-packages.nix {
-      inherit lib;
-      inherit (pkgs.stdenv.hostPlatform) isLinux;
-    };
+    # Rows absent from this system's package set (gluetun off x86_64-linux)
+    # are not checks here; `hasAttrByPath` reads only the set's names.
+    declared = lib.filterAttrs (name: _: lib.hasAttrByPath (lib.splitString "." name) pkgSet) (import ./go-floor-packages.nix);
     subjects =
       lib.mapAttrs (name: _: lib.getAttrFromPath (lib.splitString "." name) pkgSet)
       (lib.filterAttrs (_: destination: destination == "sidecar") declared);
