@@ -8,8 +8,7 @@
 }: let
   redact = import ../../lib/redact {inherit lib;};
   inherit (import ../../lib/testing/mcp-fixtures.nix {inherit lib pkgs harness;}) mcpProxyLib proxySampleServer;
-  inherit (harness) claudeMcpPath claudeMcpServers evalDevenv mcpLib mkTest;
-  inherit (harness) evalHm;
+  inherit (harness) claudeMcpPath claudeMcpServers evalDevenv evalHm mcpLib mkTest;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
 in {
   checks =
@@ -619,14 +618,6 @@ in {
           && entry.url == "http://127.0.0.1:9501/"
           && !(entry ? proxy)
       );
-
-      # Kiro content pipeline: a credential http HEADER renders to a
-      # `${env:VAR}` placeholder (Kiro expands it at launch) and a credential
-      # URL to a bare `${VAR}` envsubst sentinel (WE expand it at activation)
-      # — the raw secret file path is NEVER serialized, and the `Bearer `
-      # header prefix + `https://` url prefix compose. Content-level (the
-      # shared render both backends feed into). See mcpSecrets.nix.
-      # ── Local credential-injecting proxy (lib/ai/mcpProxy.nix) ─────────
 
       # A top-level proxied declaration owns ONE shared daemon. The runtimes see
       # only the credential-free client entry, so enabling a second consumer must

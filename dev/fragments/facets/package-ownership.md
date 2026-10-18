@@ -43,10 +43,11 @@ A check asserting a Linux-only lowering belongs inside
 its name is absent on other systems. Never use a host-dependent branch that
 passes vacuously, or `lib.mkIf` on a single check name: the `checks` option is
 lazy (`lazyAttrsOf`), and a lazy map keeps a `mkIf`-wrapped name and throws when
-it is read. Use the host `pkgs` unchanged; never override `hostPlatform` or stub
-systemd to make Linux lowering evaluate on Darwin. Darwin warning contracts
-belong under `lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin`, evaluated
-with that host’s packages. Nothing gates a vacuous branch; review does.
+it is read. Never override `hostPlatform` or stub a Linux-only package such as
+systemd so that a Linux lowering evaluates on Darwin; a contract about the
+Darwin side of that lowering, such as its warning, belongs under
+`lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin` with the host's packages.
+Nothing gates a vacuous branch; review does.
 
 Root and owner check names share an exclusive claim boundary. Each contributor
 supplies isolated definitions for claim discovery, while its conditions and

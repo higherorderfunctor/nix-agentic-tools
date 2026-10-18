@@ -132,7 +132,23 @@
       '';
 in {
   checks =
-    lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+    {
+      ai-module-services-launcher = pkgs.runCommandLocal "ai-module-services-launcher" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-test > failed; then
+          echo "failed reader started the receiver" >&2
+          exit 1
+        fi
+        test ! -s failed
+        ${launcher}/bin/ai-service-test > actual
+        ${pkgs.diffutils}/bin/diff -u ${pkgs.writeText "services-expected" "literal $(false) ' quote\nsecret value\nargument $(false)\nspace ' quote\n"} actual
+        ${pkgs.gnugrep}/bin/grep -F 'export PRIVATE' ${launcher}/bin/ai-service-test
+        ${pkgs.gnugrep}/bin/grep -F 'redact-read' ${launcher}/bin/ai-service-test
+        touch "$out"
+      '';
+    }
+    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       ai-module-services-backends = mkCheck "ai-module-services-backends" (
         lib.all (restart: let
           unit = hm.systemd.user.services.${restart};
@@ -208,24 +224,6 @@ in {
         && disabled.systemd.user.services == {}
         && !(succeeds (backends.evaluate "hm" {services."bad.name" = daemon;}).ai.services)
       );
-    }
-    // {
-      ai-module-services-launcher = pkgs.runCommandLocal "ai-module-services-launcher" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-test > failed; then
-          echo "failed reader started the receiver" >&2
-          exit 1
-        fi
-        test ! -s failed
-        ${launcher}/bin/ai-service-test > actual
-        ${pkgs.diffutils}/bin/diff -u ${pkgs.writeText "services-expected" "literal $(false) ' quote\nsecret value\nargument $(false)\nspace ' quote\n"} actual
-        ${pkgs.gnugrep}/bin/grep -F 'export PRIVATE' ${launcher}/bin/ai-service-test
-        ${pkgs.gnugrep}/bin/grep -F 'redact-read' ${launcher}/bin/ai-service-test
-        touch "$out"
-      '';
-    }
-    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       ai-module-services-rotation = pkgs.runCommandLocal "ai-module-services-rotation" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
