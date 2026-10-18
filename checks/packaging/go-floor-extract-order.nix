@@ -36,20 +36,10 @@
 # updateScript would silently pass for beads and beads-dolt while proving
 # nothing about either.
 #
-# NO REGISTRY, for the reason `go-floor-drift.nix` gives at length: a
-# list a new Go package could be added without touching is precisely how
-# a package ends up unprotected. Subjects are discovered by filtering for
-# `passthru.fixGoFloor.goFloorDestination == "sidecar"`, which distinguishes
-# this release-update contract from recipe-owned trunk floors. A sidecar fixer
-# with NO `goUpdateExtract` FAILS, because that is exactly the shape of
-# hand-rolling the chain again.
-#
-# `beads.dolt` is walked EXPLICITLY. It is a ninth Go package, and it is
-# NOT A TOP-LEVEL ENTRY of `self.ciPackages.<system>` — it is reachable
-# only as a nested attribute of one, `self.ciPackages.<system>.beads.dolt`.
-# `lib.filterAttrs` over that set therefore never visits it, which is the
-# same blind spot `packages/beads/checks/beads-contracts.nix` exists to cover for its
-# floor. Any future discovery-based check inherits it.
+# Subjects are the sidecar rows of go-floor-packages.nix, including the
+# nested beads.dolt package. go-floor-declared-list checks this table against
+# the original passthru discovery so missing declarations fail CI.
+# A sidecar fixer with NO goUpdateExtract still FAILS below.
 #
 # TWO THINGS THIS ASSERTS, and the second one is why reading the flat
 # chain is not enough on its own:
@@ -80,19 +70,12 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     pkgSet = self.ciPackages.${system};
 
-    discovered =
-      lib.filterAttrs
-      (_: p:
-        (p.passthru or {}) ? fixGoFloor
-        && (p.passthru.fixGoFloor.goFloorDestination or null) == "sidecar")
-      pkgSet;
-
-    # Not in `self.ciPackages` — see the header.
-    extras = lib.optionalAttrs ((pkgSet.beads.passthru or {}) ? dolt) {
-      "beads.dolt" = pkgSet.beads.dolt;
-    };
-
-    subjects = discovered // extras;
+    # Rows absent from this system's package set (gluetun off x86_64-linux)
+    # are not checks here; `hasAttrByPath` reads only the set's names.
+    declared = lib.filterAttrs (name: _: lib.hasAttrByPath (lib.splitString "." name) pkgSet) (import ./go-floor-packages.nix);
+    subjects =
+      lib.mapAttrs (name: _: lib.getAttrFromPath (lib.splitString "." name) pkgSet)
+      (lib.filterAttrs (_: destination: destination == "sidecar") declared);
 
     # The ONE definition of the ordering rule. Emitted as a shell function
     # so the real check and the positive control run the SAME comparison —
@@ -247,11 +230,12 @@
     '';
 
     positiveControl = pkgs.runCommand "go-floor-extract-order-positive-control" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
       ${orderAssertFn}
 
-      # `set -e` is NOT armed in a runCommand's shell by default for these
-      # branches, but be explicit: each call is expected to return non-zero,
-      # so guard it rather than letting it abort.
+      # Each call is expected to fail, so guard it against errexit.
       if assert_chain_order "${misordered}" "control-vendor-first" 2>/dev/null; then
         echo "FAIL: a floor-AFTER-vendor chain was accepted. The ordering assertion" >&2
         echo "no longer detects the bug this check exists for, so every green result" >&2
