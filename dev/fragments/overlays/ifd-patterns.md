@@ -1,8 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-17 — Kiro's rollout manifest, KAS and TUI are
-> decoded statically on Linux; extracted reconciliation shares the private
-> redact classifier.
+> **Last verified:** 2026-10-17 — explicit Darwin check names gate and full
+> drvPath measurement supplement required native builds.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -96,15 +95,18 @@ before it builds:
   half is NOT there because the check needs it. Plain `nix flake check` reports
   "The check omitted these incompatible systems: aarch64-darwin", and the job
   does not pass `--all-systems`, so it evaluates x86_64-linux ONLY. The repo's
-  UNCONDITIONAL darwin coverage — evaluation included — is the required
-  `aarch64-darwin` leg of the BUILD job; nothing in the check job covers it.
-  (`kiro-patched`'s darwin leg is a second required darwin evaluator, but it is
-  scope-gated, so it cannot be relied on for coverage.) The darwin warm entry is
-  kept because IFD source fetches are system-agnostic and content-addressed, so
-  it is nearly free and stays correct if `--all-systems` is ever adopted.
-  Adopting it is an open operator decision, not an oversight: it changes what a
-  required check does.
+  required Darwin build coverage is the `aarch64-darwin` leg of the BUILD job;
+  nothing in the test job covers it. (`kiro-patched`'s darwin leg is a second
+  required darwin evaluator, but it is scope-gated, so it cannot be relied on
+  for coverage.) The darwin warm entry is kept because IFD source fetches are
+  system-agnostic and content-addressed, so it is nearly free and stays correct
+  if `--all-systems` is ever adopted. Adopting it is an open operator decision,
+  not an oversight: it changes what a required check does.
 
+- `ci.yml` checks-eval-darwin job — `systems: aarch64-darwin` (defaults). Darwin
+  builds are no longer the only unconditional evaluation: this informational,
+  non-required job gates on full-set names and measures full `drvPath` forcing,
+  replacing accidental weak head normal form coverage as the set becomes lazy.
 - `ci.yml` kiro-patched job — `systems: ${{ matrix.system }}` (defaults), gated
   on `steps.scope.outputs.needed`. It warms only what its own eval needs; it
   holds no Cachix credentials and its build deliberately drops the project cache

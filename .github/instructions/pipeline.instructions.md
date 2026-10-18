@@ -7,10 +7,8 @@ applyTo: ".github/actions/check-cache/**,.github/actions/warm-ifd/**,.github/rep
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-17 — parity imports the ordinary stable nixpkgs
-> input without patched-source cache registration; devenv input preparation
-> checks shell entry before publication within its existing budget, and that
-> lane pushes nothing to Cachix.
+> **Last verified:** 2026-10-17 — Darwin check names gate and full drvPath
+> measurement run separately from the required Linux check cache.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -330,6 +328,14 @@ ones.
 
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
 `dev/ci-check-evaluator.nix` records why.
+
+The informational, non-required `checks-eval-darwin` job explicitly evaluates
+the full Darwin check set, supplementing native builds and replacing accidental
+weak head normal form coverage as the set becomes lazy. Names gate the job and
+are saved before full `drvPath` forcing, which may fail while measuring macOS
+resource fit. Counts, peak RSS and timing appear in logs and the step summary;
+both JSON results and stderr/timing logs are uploaded as an artifact. Actual
+Darwin runner fit remains unmeasured.
 
 ### Reports and deliberate manual updates
 
