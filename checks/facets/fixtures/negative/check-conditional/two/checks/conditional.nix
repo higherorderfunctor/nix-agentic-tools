@@ -6,9 +6,13 @@
   pkgs,
   ...
 }: {
-  checks.shared = lib.mkIf (config.testing.moduleProbes != []) (
-    assert activateConditionalCheck;
+  checks = lib.mkIf (config.testing.moduleProbes != []) {
+    shared = assert activateConditionalCheck;
     assert options ? testing.moduleProbes;
-      lib.mkForce (pkgs.runCommandLocal "facet-conditional-two" {} "touch $out")
-  );
+      lib.mkForce (pkgs.runCommandLocal "facet-conditional-two" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        touch "$out"
+      '');
+  };
 }
