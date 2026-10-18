@@ -4,7 +4,8 @@
 > use redact; consumers derive environment names, resolve full concat values
 > with redact.assign, and abort on failed reads. Kiro headers resolve at launch,
 > URLs during files-engine apply after the secrets point. Proxy daemons use
-> ai.services and scoped service claims.
+> ai.services and scoped service claims on both backends; devenv up starts the
+> generated proxy process.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -293,9 +294,8 @@ remote 4xx) and is a hostname, not a bearer token, but it is worth knowing
 before treating a secret `url` as fully hidden.
 
 SCOPE — Home Manager runs the daemon on Linux and warns per service on Darwin
-because launchd is unsupported. Devenv has no proxy lifecycle; a devenv
-declaration with `proxy.enable` fails an assertion rather than silently pointing
-clients at a port nothing serves.
+because launchd is unsupported. Devenv emits each proxy as an ordinary
+`ai.services` process; start it with `devenv up` before connecting clients.
 
 ### Two secret paths, because Kiro treats headers and url differently
 

@@ -638,9 +638,10 @@ in {
         builtins.elem "ai.claims.service.mcp-proxy-shared: claimed by first and second" failed
     );
 
-    # Custom devenv runtimes fail closed at the same explicit lifecycle boundary
-    # as first-party ones; a lowered client entry cannot silently survive alone.
-    factory-mkRuntime-custom-runtime-devenv-proxy-rejected = mkTest "mkRuntime-custom-runtime-devenv-proxy-rejected" (
+    # A custom devenv runtime owns its proxy service the same way a first-party
+    # one does; the factory's devenv stubs have no `processes`, so the service
+    # entry stands in for the lowered process.
+    factory-mkRuntime-custom-runtime-devenv-emits-direct-proxy-owner = mkTest "mkRuntime-custom-runtime-devenv-emits-direct-proxy-owner" (
       let
         record = mkProxyTestRecord "testapp";
         evaluated = lib.evalModules {
@@ -657,13 +658,10 @@ in {
             }
           ];
         };
-        failed = builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions;
       in
-        builtins.any
-        (assertion:
-          lib.hasInfix "ai.testapp.mcpServers" assertion.message
-          && lib.hasInfix "devenv lifecycle is tracked separately" assertion.message)
-        failed
+        builtins.all (assertion: assertion.assertion) evaluated.config.assertions
+        && evaluated.config.ai.testapp.services ? mcp-proxy-direct
+        && evaluated.config.ai.testapp._observedServers.direct.url == "http://127.0.0.1:9513/"
     );
 
     # Same-named native options are independent when a normalized pool is not in

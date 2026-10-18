@@ -7,10 +7,9 @@ applyTo: "packages/beads/**"
 
 # Beads devenv lifecycle
 
-> **Last verified:** 2026-10-16 — automatic prepare uses layer-1 activation;
-> manual tasks remain native; the Beads overlay owns and updates the nested Dolt
-> derivation exposed as `passthru.dolt`, so the lifecycle no longer depends on
-> whatever Dolt version nixpkgs happens to ship.
+> **Last verified:** 2026-10-17 — automatic prepare uses layer-1 activation;
+> daemons use ai.beads.services with a claimed Dolt port; manual tasks remain
+> native. The package exposes its paired Dolt runtime as passthru.dolt.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show db6df0dd:packages/beads/docs/beads-lifecycle.md`.
@@ -99,5 +98,8 @@ client or publisher for operator diagnosis.
 
 The public entry points are `beads-bootstrap`, `beads-checkpoint`,
 `beads-status`, `beads-diagnostics`, and the one-shot `beads-publish`. The
-devenv process entries are `beads-server` and `beads-publisher`; the matching
-tasks use the `beads:*` namespace.
+daemons are declared under `ai.beads.services` as `beads-server` and
+`beads-publisher`, lowered to devenv processes with generated
+`ai-service-beads-server` and `ai-service-beads-publisher` launchers. Start them
+with `devenv up`; both restart on failure, and the server claims
+`services.beads.port`. Manual tasks use the `beads:*` namespace.

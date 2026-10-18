@@ -53,8 +53,8 @@ in {
         && builtins.filter (lib.hasPrefix "beads:") (builtins.attrNames ev.config.tasks)
         == ["beads:bootstrap" "beads:checkpoint" "beads:diagnostics" "beads:status"]
         && ev.config.tasks."ai:beads-prepare".before == ["devenv:enterShell"]
-        && lib.hasInfix " publisher" ev.config.processes.beads-publisher.exec
-        && lib.hasInfix " server" ev.config.processes.beads-server.exec
+        && lib.hasSuffix "/bin/ai-service-beads-publisher" ev.config.processes.beads-publisher.exec
+        && lib.hasSuffix "/bin/ai-service-beads-server" ev.config.processes.beads-server.exec
     );
 
     module-beads-invalid-dolt-passthru-rejected = mkTest "beads-invalid-dolt-passthru-rejected" (

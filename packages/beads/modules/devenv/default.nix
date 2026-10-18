@@ -79,9 +79,12 @@ in {
     (lib.mkIf (cfg.enable && lifecycleReady) {
       packages = [lifecycle.package];
 
-      processes = {
-        beads-publisher.exec = "${lifecycleExe} publisher";
-        beads-server.exec = "${lifecycleExe} server";
+      ai.beads.services = {
+        beads-publisher.command = [lifecycleExe "publisher"];
+        beads-server = {
+          command = [lifecycleExe "server"];
+          ports.main = cfg.port;
+        };
       };
 
       ai.beads.activation.beads-prepare.command = "${lifecycleExe} prepare";

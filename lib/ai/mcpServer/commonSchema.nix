@@ -248,12 +248,11 @@ in {
               proxied entry carries neither, so Claude Code and Copilot
               can use it too.
 
-              SCOPE — Home Manager on Linux only today. devenv parity and
-              Darwin (launchd) are deliberately OUT OF SCOPE for this
-              change and are explicitly NOT decided against — this is a
-              deferral, not a WONTFIX. See
-              `dev/fragments/mcp-secrets/mcp-secrets.md`. The devenv
-              transform throws rather than silently ignoring the option.
+              Home Manager runs the proxy as a systemd user service on
+              Linux and warns on Darwin, where launchd is unsupported.
+              Devenv emits a process that `devenv up` starts; the client
+              entry is written at shell entry, so nothing listens on its
+              port until the processes are up.
             '';
           };
           host = lib.mkOption {
