@@ -102,17 +102,17 @@ func (x *natExtractor) doc(owner reflect.Type, name string) string {
 	return docs[owner.Name()+"."+name]
 }
 
-// A custom YAML decoder's node type is measured, not assumed: each probe is
-// decoded into the type through yaml.v3, the library CPA decodes with. A
-// decoder that accepts a non-mapping probe is `any`: PluginInstanceConfig
+// A custom YAML decoder's node type is measured through yaml.v3, CPA's
+// decoding library. Try `true` then `[]` until one succeeds: accepting a
+// non-mapping makes the type `any`. PluginInstanceConfig
 // (plugins.configs.<name>) keeps any YAML subtree, and
-// DisableImageGenerationMode (multimedia.disable-image-generation) reads the
-// scalar `true`. One that rejects both and accepts the empty mapping is an
-// `object` with its reflected fields as children:
+// DisableImageGenerationMode (multimedia.disable-image-generation) reads `true`.
+// If both reject, require `{}` to succeed before walk publishes `object`
+// with reflected children; otherwise extraction fails. The empty mapping
+// avoids inventing valid values for tagged fields such as durations.
 // CredentialConcurrencyConfig (credentials.concurrency) and
-// CodexLiveMediaRelayConfig (oauth.providers.codex.live-media-relay) decode
-// into a plain struct, which refuses `true` and `[]`. A decoder never seen to
-// accept a mapping is not measured as one and stays `any`.
+// CodexLiveMediaRelayConfig (oauth.providers.codex.live-media-relay) first
+// decode ordinary structs, which reject both non-mappings and accept `{}`.
 var natNonMappings = []string{"true", "[]"}
 
 func natDecodes(t reflect.Type, probe string) bool {
@@ -134,7 +134,7 @@ func (x *natExtractor) kind(t reflect.Type, path string) string {
 			}
 		}
 		if !natDecodes(t, "{}") {
-			return "any"
+			x.t.Fatalf("%s: Go type %s rejects YAML mapping probe {}", path, t)
 		}
 		return "object"
 	}

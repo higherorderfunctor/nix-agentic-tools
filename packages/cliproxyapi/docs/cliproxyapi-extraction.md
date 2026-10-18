@@ -1,9 +1,7 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-18 — CPA 8.0.33 config is measured offline with its
-> pinned source, vendor tree and toolchain, including canonical boundary
-> metadata; a custom YAML decoder's node type is probed, not assumed; shared
-> drift and reconciliation guard the committed facts.
+> **Last verified:** 2026-10-18 — CPA 8.0.33 custom YAML decoders are probed
+> through yaml.v3; mapping rejection fails extraction.
 
 ## Why reflection also needs the v8 tables
 
@@ -41,15 +39,16 @@ sections that no Go struct declares (`server`, `access`, `upstream`, ...) are
 with no node fails extraction, except below an `any` node. Structs that flatten
 into the same mapping join their descriptions; conflicting leaves fail
 extraction. A type with a custom YAML decoder is typed by probing that decoder
-through yaml.v3: the scalar `true`, the sequence `[]` and the mapping `{}` are
-each decoded into it. Accepting a non-mapping probe makes it `any`, and so does
-rejecting the mapping. Otherwise it is an `object` whose reflected fields are
-its children, as for a plain struct. `credentials.concurrency` and
-`oauth.providers.codex.live-media-relay` decode into plain structs and are
-`object`; `multimedia.disable-image-generation` reads `true` and
-`plugins.configs.<name>` keeps any YAML subtree, so both are `any`. An `any`
-struct still retains its known child fields: the mapping form of
-`plugins.configs.<name>` has the measured `enabled` and `priority` fields.
+through yaml.v3: try the scalar `true`, then the sequence `[]`, stopping at the
+first success, which makes it `any`. Only if both reject, decode the mapping
+`{}`; acceptance makes it an `object` whose reflected fields are its children,
+as for a plain struct. Rejection fails extraction with the path, Go type and
+probe. `credentials.concurrency` and `oauth.providers.codex.live-media-relay`
+decode into plain structs and are `object`;
+`multimedia.disable-image-generation` reads `true` and `plugins.configs.<name>`
+keeps any YAML subtree, so both are `any`. An `any` struct still retains its
+known child fields: the mapping form of `plugins.configs.<name>` has the
+measured `enabled` and `priority` fields.
 
 The raw has one `config` tree. `extracted/facts.json` declares it as an opaque
 `object` because its keys contain dots, with one Linux measurement because the
