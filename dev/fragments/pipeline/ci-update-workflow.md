@@ -1,9 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-17 — parity imports the ordinary stable nixpkgs
-> input without patched-source cache registration; devenv input preparation
-> checks shell entry before publication within its existing budget, and that
-> lane pushes nothing to Cachix.
+> **Last verified:** 2026-10-17 — Darwin check names gate and full drvPath
+> measurement run separately from the required Linux check cache.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -323,6 +321,22 @@ ones.
 
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
 `dev/ci-check-evaluator.nix` records why.
+
+### Darwin check evaluation
+
+`checks-eval-darwin` is the one job that evaluates `checks.aarch64-darwin` on
+purpose. It is informational and not required, and it waits for the package
+shards so it never takes a macOS runner ahead of a required Darwin leg. Its
+names step is the gate: a failure fails the job, and the name list is the
+per-system baseline for platform-declared checks. Its drvPath step forces every
+Darwin check derivation under `continue-on-error` and its own timeout, because
+macOS swaps rather than kills an oversized evaluator. Counts, peak RSS and wall
+time go to the log and the step summary; both JSON results and both `time -l`
+outputs are uploaded as the `checks-eval-aarch64-darwin` artifact. First run,
+2026-10-18: 997 names in 51 s at 1.98 GB; forcing every drvPath reached 2.93 GB
+in 161 s and failed on `module-glab-keyring-sync-hm-wiring`, a Linux-only
+assertion no CI leg had evaluated before. The platform-gate PR fixes that check
+and makes the drvPath step a hard failure.
 
 ### Reports and deliberate manual updates
 
