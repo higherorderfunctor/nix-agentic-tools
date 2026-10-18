@@ -9,7 +9,7 @@ in {
   meta = {
     modes = {
       stdio = "mcp-nixos";
-      http = "env MCP_NIXOS_TRANSPORT=http mcp-nixos";
+      http = "mcp-nixos";
     };
     scope = "remote";
     defaultPort = 19752;
@@ -35,6 +35,7 @@ in {
     optionalAttrs (mode == "http") (
       {
         MCP_NIXOS_PORT = toString cfg.service.port;
+        MCP_NIXOS_TRANSPORT = "http";
       }
       // optionalAttrs (cfg.service.host != "127.0.0.1") {
         MCP_NIXOS_HOST = cfg.service.host;

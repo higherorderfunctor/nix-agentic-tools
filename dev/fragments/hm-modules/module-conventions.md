@@ -302,11 +302,11 @@ format and method in `ai.<owner>.files` or finite commands in
 `ai.<owner>.activation`. Only ai-module writes native file and activation sinks;
 `ai-module-no-direct-sink-writes` fails a library or owner module line that
 starts with one. The layer contract is `packages/ai-module/docs/contract.md`.
-Semble's cache guard follows `materialized`; glab's keyring marker and MCP
-credential-rotation checks follow `files` and `secrets`. HM lowering wraps the
-whole command in `run`; child command bodies use ordinary external commands, not
-activation-shell functions. Package installs and systemd units keep their native
-configuration surfaces. `outOfStoreSymlink` is not used.
+Semble's cache guard follows `materialized`; glab's keyring marker and the
+services restart-on-change entry follow `files` and `secrets`. HM lowering wraps
+the whole command in `run`; child command bodies use ordinary external commands,
+not activation-shell functions. Package installs keep their native configuration
+surfaces; daemons go through `ai.services`. `outOfStoreSymlink` is not used.
 
 ### Config parity rule (HM ↔ devenv)
 

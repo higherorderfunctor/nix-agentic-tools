@@ -812,7 +812,8 @@ in {
           != null
           && !(rendered ? package)
           && rendered.type == "stdio"
-          && lib.hasSuffix "/bin/hello" rendered.command
+          # The mode names the binary; the package override supplies its prefix.
+          && rendered.command == "${pkgs.hello}/bin/context7-mcp"
           && lib.take 2 rendered.args == ["--transport" "stdio"]
       );
 

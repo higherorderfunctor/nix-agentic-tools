@@ -258,7 +258,7 @@
       "guard tableCells in the ${writer} tree is not built from this flake's rumdl")
     (guardPaths backend));
   # Sites whose value is not a root's leaf but is built from a root: a
-  # launcher with mcp-proxy on its PATH, a skill rendered from a content
+  # service command naming mcp-proxy, a skill rendered from a content
   # package, a skill linking a docs snapshot. Each is pinned by its source:
   # the value must equal the one evaluated with `expectedRoots` forced as
   # `ai.internal.roots`, and must change when `mark` swaps the root it reads
@@ -291,7 +291,7 @@
     ]
     ++ lib.optional (backend == "hm") {
       name = "mcp-servers bridge launcher";
-      read = config: config.systemd.user.services.mcp-context7-mcp.Service.ExecStart;
+      read = config: builtins.head config.ai.services.mcp-context7-mcp.command;
       mark = roots: roots // {ai = roots.ai // {mcpServers = roots.ai.mcpServers // {mcp-proxy = marker;};};};
     };
   textOf = value: builtins.unsafeDiscardStringContext (toString value);

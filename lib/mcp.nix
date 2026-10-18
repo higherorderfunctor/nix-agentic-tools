@@ -81,11 +81,15 @@
   in
     (serverDef.settingsToArgs cfgShim mode) ++ extraArgs;
 
+  # A mode string is the upstream binary and its fixed arguments, space
+  # separated; the binary resolves from the selected package.
+  modeArgv = package: mode: let
+    parts = lib.splitString " " mode;
+  in
+    ["${package}/bin/${builtins.head parts}"] ++ builtins.tail parts;
+
   hasCredentials = credentialVars: settings:
     any (optName: settings.${optName} != null) (builtins.attrNames credentialVars);
-
-  credentialFilePaths = credentialVars: settings:
-    lib.concatMap (optName: redact.filePaths settings.${optName}) (builtins.attrNames credentialVars);
 
   mkCredentialAssignments = pkgs: credentialVars: settings:
     lib.concatStringsSep "\n" (mapAttrsToList (optName: spec:
@@ -204,11 +208,7 @@
     else if package != null
     then let
       serverDef = loadServer name;
-      # Mode string is e.g. "github-mcp-server stdio" — split into
-      # parts, drop the binary name (first element), keep only
-      # subcommand/flags.
-      stdioParts = lib.splitString " " serverDef.meta.modes.stdio;
-      stdioArgs = builtins.tail stdioParts;
+      stdioArgv = modeArgv package serverDef.meta.modes.stdio;
       evaluatedSettings = evalSettings name settings;
       cfgShim = mkCfgShim {inherit evaluatedSettings;};
       srvEnv = effectiveEnv name cfgShim "stdio" env;
@@ -224,8 +224,8 @@
       command =
         if needsWrapper
         then wrappedCommand
-        else getExe package;
-      args = stdioArgs ++ srvArgs;
+        else builtins.head stdioArgv;
+      args = builtins.tail stdioArgv ++ srvArgs;
       # Prevent Python path pollution from parent process (e.g.,
       # nixos-mcp sets PYTHONPATH for Python 3.13 which breaks
       # Python 3.14 servers).
@@ -296,7 +296,6 @@
   };
 in {
   inherit
-    credentialFilePaths
     effectiveArgs
     effectiveEnv
     evalSettings
@@ -310,6 +309,7 @@ in {
     mkSecretsWrapper
     mkStdioConfig
     mkStdioEntry
+    modeArgv
     renderServer
     ;
 }
