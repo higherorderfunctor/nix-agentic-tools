@@ -20,6 +20,14 @@ hoc machinery beside an existing abstraction.
   systemd or devenv. It reads store paths and secrets at start, never
   engine-written files. One-shot jobs and file-watch units are outside this
   surface; glab keyring keeps its native mechanism.
+- **Rendered service files use `serviceEntry.files`.** A daemon that reads
+  secrets from a config file declares `files.<key>` on its `ai.services` entry:
+  JSON content with `{$NAME}` placeholders, the redact references that fill
+  them, and the variable that carries the path. The generic launcher renders the
+  file at each start, so secrets stay out of the store and no tool needs a
+  secret-file patch or its own start script. See
+  `packages/ai-module/lib/services.nix` and `packages/ai-module/docs/DESIGN.md`,
+  Services.
 - **Typed settings come from the extracted generator.** An owner with extracted
   settings facts gets its option type from `lib/extracted/options.nix` and its
   config file from `lib/extracted/render.nix`, which lifts secrets into

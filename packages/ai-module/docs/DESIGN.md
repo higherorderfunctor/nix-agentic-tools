@@ -236,15 +236,31 @@ their key and ports; disabled owners forward nothing. Names match
 | `command`         | Nonempty argv list of strings, required       | The launcher execs the escaped arguments.                                                             |
 | `enable`          | Boolean, true                                 | Suppress native emission when false.                                                                  |
 | `environment`     | `redact.types.environment`, `{}`              | Resolve and export through `redact.assign` at launch; a secret-named variable takes only a reference. |
+| `files`           | Named rendered files, `{}`                    | Write `<key>.json` at launch; see below.                                                              |
 | `ports`           | Named ports, `{}`                             | Register exclusive port claims.                                                                       |
 | `restart`         | `never`, `always`, `on-failure`; `on-failure` | Map to the backend restart policy.                                                                    |
-| `restartOnChange` | Absolute file paths, `[]`                     | Union with file references in environment values, including concat parts.                             |
+| `restartOnChange` | Absolute file paths, `[]`                     | Union with file references in environment values and file secrets, including concat parts.            |
 
 `lib/services.nix` builds one strict `writeShellApplication`,
 `ai-service-<key>`, for both backends. Native environment fields are never used.
 A daemon reads store paths and secrets at start, never files written by the
 files engine, so there are no service dependency edges into file activation or
 Home Manager's systemd reload.
+
+A `files.<key>` entry is a config file the launcher renders at each start, for a
+daemon that reads its secrets from a file rather than its environment. Its
+`content` is JSON text whose secrets are whole-string `{$NAME}` placeholders
+(`lib/extracted/render.nix` produces them), so the text is safe in the store;
+`secrets` maps each NAME to a redact reference; `variable` names the exported
+path. The launcher reads each secret into an unexported variable, creates
+`${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/ai-service-<key>` 0700, has jq replace
+every placeholder string with its secret as a JSON string (the secret reaches jq
+through its environment, never argv), writes a 0600 temporary file, renames it
+to `<file key>.json` and exports `variable` with that path. Content and secrets
+are both known at evaluation, so the launcher refuses to build when a
+placeholder has no secret, a secret has no placeholder, or a `variable` repeats
+another file's or an environment name. JSON is the one format: YAML 1.2 readers
+take it as is. A daemon's own writes to the file are lost at the next start.
 
 | Backend             | Lowering                                                                                                                                  |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |

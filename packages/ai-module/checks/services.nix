@@ -18,9 +18,14 @@
         DIRECT = redact.file "/run/secrets/first";
         LITERAL = "literal $(false) ' quote";
       };
+      files.config = {
+        content = builtins.toJSON {key = "{" + "$" + "KEY}";};
+        secrets.KEY = redact.file "/run/secrets/third";
+        variable = "CONFIG";
+      };
       restartOnChange = ["/etc/daemon.conf" "/run/secrets/first"];
     };
-  expectedTriggers = ["/etc/daemon.conf" "/run/secrets/first" "/run/secrets/second"];
+  expectedTriggers = ["/etc/daemon.conf" "/run/secrets/first" "/run/secrets/second" "/run/secrets/third"];
   hm = backends.evaluate "hm" {services = entries // {inherit watched;};};
   devenv = backends.evaluate "devenv" {services = entries // {inherit watched;};};
   darwin = backends.evaluate "hm" {
@@ -104,6 +109,43 @@
       };
     };
   };
+  # A rendered file: two secrets, one needing JSON escapes and read from a
+  # `redact.file` the check writes under the Linux sandbox's /build.
+  placeholder = name: "{" + "$" + name + "}";
+  fileContent = builtins.toJSON {
+    access.api-keys = [(placeholder "KEY")];
+    literal = "plain {$text}";
+    nested = [{token = placeholder "TOKEN";}];
+    port = 8317;
+  };
+  fileReceiver = strictShellApplication pkgs {
+    name = "services-test-file-receiver";
+    text = ''
+      printf '%s\n' "$SERVICE_CONFIG" > "$RECEIVED/path"
+      ${pkgs.coreutils}/bin/stat -c '%a' "$SERVICE_CONFIG" "''${SERVICE_CONFIG%/*}" > "$RECEIVED/modes"
+      ${pkgs.coreutils}/bin/cp "$SERVICE_CONFIG" "$RECEIVED/config.json"
+      ${pkgs.coreutils}/bin/env > "$RECEIVED/environment"
+    '';
+  };
+  fileEntry = files: {
+    command = ["${fileReceiver}/bin/services-test-file-receiver"];
+    environment = {};
+    inherit files;
+  };
+  fileLauncher = entry:
+    services.mkLauncher {
+      inherit entry pkgs;
+      name = "files-test";
+    };
+  config = {
+    content = fileContent;
+    secrets = {
+      KEY = redact.file "/build/secret";
+      TOKEN = redact.command "${launcherReader}/bin/services-test-reader";
+    };
+    variable = "SERVICE_CONFIG";
+  };
+  refused = entry: !(succeeds (fileLauncher entry).drvPath);
   restartRecorder = strictShellApplication pkgs {
     name = "systemctl";
     text = ''
@@ -120,6 +162,7 @@
       help = {
         enable = true;
         environment = {};
+        files = {};
         restartOnChange = ["/build/missing-trigger" "/build/trigger"];
       };
     }).services-restart-on-change.command;
@@ -224,6 +267,49 @@ in {
         && disabled.systemd.user.services == {}
         && !(succeeds (backends.evaluate "hm" {services."bad.name" = daemon;}).ai.services)
       );
+      # The launcher renders a file at start: placeholders filled as JSON
+      # strings, 0600 in a 0700 directory, path exported, secrets never
+      # exported; the store copy holds placeholders only. A mismatch between
+      # placeholders and secrets, or a reused variable, fails evaluation.
+      ai-module-services-files = let
+        launcher = fileLauncher (fileEntry {inherit config;});
+      in
+        assert lib.assertMsg (
+          refused (fileEntry {config = config // {secrets = builtins.removeAttrs config.secrets ["TOKEN"];};})
+          && refused (fileEntry {config = config // {secrets = config.secrets // {UNUSED = redact.file "/run/secrets/unused";};};})
+          && refused (fileEntry {
+            inherit config;
+            other =
+              config
+              // {
+                content = "{}";
+                secrets = {};
+              };
+          })
+          && refused (fileEntry {"../escape" = config;})
+        ) "ai-module-services-files: a mismatched file was accepted";
+          pkgs.runCommandLocal "ai-module-services-files" {} ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            printf '%s' 'marker "quoted" \\ value
+            line two' > /build/secret
+            export XDG_RUNTIME_DIR="$TMPDIR/run" RECEIVED="$TMPDIR/received"
+            mkdir -p -m 0755 "$XDG_RUNTIME_DIR/ai-service-files-test" "$RECEIVED"
+            touch "$XDG_RUNTIME_DIR/ai-service-files-test/config.json"
+            ${launcher}/bin/ai-service-files-test
+            test "$(cat "$RECEIVED/path")" = "$XDG_RUNTIME_DIR/ai-service-files-test/config.json"
+            test "$(${pkgs.coreutils}/bin/tr '\n' ' ' < "$RECEIVED/modes")" = '600 700 '
+            ${pkgs.jq}/bin/jq -e --rawfile key /build/secret \
+              '. == {access: {"api-keys": [$key]}, literal: "plain {$text}", nested: [{token: "secret value"}], port: 8317}' "$RECEIVED/config.json"
+            test "$(ls -A "$XDG_RUNTIME_DIR/ai-service-files-test")" = config.json
+            if ${pkgs.gnugrep}/bin/grep -Fe marker -e 'secret value' "$RECEIVED/environment"; then
+              echo "a file secret reached the daemon environment" >&2
+              exit 1
+            fi
+            content="$(${pkgs.gnugrep}/bin/grep -o '/nix/store/[a-z0-9]*-ai-service-files-test-config.json' ${launcher}/bin/ai-service-files-test)"
+            ${pkgs.diffutils}/bin/cmp "$content" ${pkgs.writeText "expected-content" fileContent}
+            touch "$out"
+          '';
       ai-module-services-rotation = pkgs.runCommandLocal "ai-module-services-rotation" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

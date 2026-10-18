@@ -7,9 +7,10 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 
 ## ai-module Files, Activation and Services Contract
 
-> **Last verified:** 2026-10-17 — repository modules reach Home Manager and
+> **Last verified:** 2026-10-18 — repository modules reach Home Manager and
 > devenv file and activation sinks only through ai-module's three layers, apart
-> from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`.
+> from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
+> service's `files` are rendered by its launcher at start.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -89,18 +90,21 @@ conflict text naming `lib/runtime.nix`, not the owners.
 
 Declare a daemon through `ai.<owner>.services`; enabled owners forward to
 `ai.services`. Keys match `^[a-z0-9][a-z0-9_-]*$`. Fields are `command`
-(nonempty argv), `enable`, `environment` (strings or redact references),
-`ports`, `restart` and `restartOnChange` (absolute paths). A strict launcher
-reads secrets at start and execs argv on both backends. Services read store
-paths and secrets, never engine-written files; oneshot and file-watch units
-remain outside this surface.
+(nonempty argv), `enable`, `environment` (strings or redact references), `files`
+(JSON `content` with `{$NAME}` placeholders, `secrets` NAME → reference, and the
+`variable` exported with the path), `ports`, `restart` and `restartOnChange`
+(absolute paths). A strict launcher reads secrets at start, renders each file
+0600 into a 0700 `ai-service-<key>` runtime directory, and execs argv on both
+backends. Services read store paths and secrets, never engine-written files;
+oneshot and file-watch units remain outside this surface.
 
 Linux Home Manager lowers to user units, devenv to processes. Darwin Home
 Manager emits one warning per enabled service, since it has no systemd user
-units. File references in the environment join explicit restart triggers, which
-behave differently per backend: Linux Home Manager fingerprints them in one
-generated `services-restart-on-change` activation entry after `files` and
-`secrets`; devenv uses `watch.paths`. Only ai-module writes these daemon sinks.
+units. File references in the environment and in file secrets join explicit
+restart triggers, which behave differently per backend: Linux Home Manager
+fingerprints them in one generated `services-restart-on-change` activation entry
+after `files` and `secrets`; devenv uses `watch.paths`. Only ai-module writes
+these daemon sinks.
 
 ### State and ownership
 
