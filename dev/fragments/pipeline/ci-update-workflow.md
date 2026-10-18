@@ -1,7 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-17 — Darwin check names gate and full drvPath
-> measurement run separately from the required Linux check cache.
+> **Last verified:** 2026-10-18 — Darwin check names and every drvPath both gate
+> their job, separately from the required Linux check cache.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -324,19 +324,20 @@ ones.
 
 ### Darwin check evaluation
 
-`checks-eval-darwin` is the one job that evaluates `checks.aarch64-darwin` on
-purpose. It is informational and not required, and it waits for the package
-shards so it never takes a macOS runner ahead of a required Darwin leg. Its
-names step is the gate: a failure fails the job, and the name list is the
-per-system baseline for platform-declared checks. Its drvPath step forces every
-Darwin check derivation under `continue-on-error` and its own timeout, because
-macOS swaps rather than kills an oversized evaluator. Counts, peak RSS and wall
-time go to the log and the step summary; both JSON results and both `time -l`
-outputs are uploaded as the `checks-eval-aarch64-darwin` artifact. First run,
-2026-10-18: 997 names in 51 s at 1.98 GB; forcing every drvPath reached 2.93 GB
-in 161 s and failed on `module-glab-keyring-sync-hm-wiring`, a Linux-only
-assertion no CI leg had evaluated before. The platform-gate PR fixes that check
-and makes the drvPath step a hard failure.
+`checks-eval-darwin` evaluates `checks.aarch64-darwin` explicitly. It is not a
+required context and waits for the package shards so it never takes a macOS
+runner ahead of a required Darwin leg. Both its names step and its drvPath step
+gate the job: either failure fails the job. The name list is the per-system
+baseline for platform-declared checks. Forcing every drvPath has its own
+25-minute timeout because macOS swaps rather than kills an oversized evaluator.
+Counts, peak RSS and wall time go to the log and the step summary; both JSON
+results and both `time -l` outputs are uploaded as the
+`checks-eval-aarch64-darwin` artifact. First run, 2026-10-18: 997 names in 51 s
+at 1984 MiB; forcing every drvPath reached 2928 MiB in 161 s and failed on
+`module-glab-keyring-sync-hm-wiring`, a Linux-only assertion no CI leg had
+evaluated before. A second run reached 3064 MiB. Linux-only checks now omit
+their names on Darwin; a later leak whose evaluation fails on Darwin fails the
+drvPath step. A leak that only fails when built is not caught here.
 
 ### Reports and deliberate manual updates
 

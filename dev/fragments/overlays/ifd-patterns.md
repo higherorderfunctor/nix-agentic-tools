@@ -1,7 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-17 — explicit Darwin check names gate and full
-> drvPath measurement supplement required native builds.
+> **Last verified:** 2026-10-18 — Darwin check names and every drvPath both gate
+> explicit evaluation; the job remains outside required contexts.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -105,10 +105,10 @@ before it builds:
 
 - `ci.yml` checks-eval-darwin job — `systems: aarch64-darwin` (defaults). The
   one job that evaluates `checks.aarch64-darwin` on purpose: it lists the names
-  (the gate, and the per-system baseline for platform-declared checks) and then
-  forces every drvPath as a measurement that may fail. Informational and not
-  required; it runs after the package shards so it never delays a required
-  Darwin leg.
+  (the per-system baseline for platform-declared checks) and forces every
+  drvPath. Both steps gate the job; drvPath failures are hard failures. The job
+  is not a required context and runs after the package shards so it never delays
+  a required Darwin leg.
 - `ci.yml` kiro-patched job — `systems: ${{ matrix.system }}` (defaults), gated
   on `steps.scope.outputs.needed`. It warms only what its own eval needs; it
   holds no Cachix credentials and its build deliberately drops the project cache
@@ -132,14 +132,13 @@ today. Measured 2026-07-25 on a linux host:
 - That cost is roughly +43s wall and a ~7.8 GB RSS ceiling for the darwin check
   set, against 36s / 6.2 GB for the linux one (282 checks, eval cache disabled,
   warm store).
-- But instantiating the darwin checks on a linux host FAILS, twice over. The
-  `stacked-workflows-skills.drv` check performs IFD on a derivation that must be
-  BUILT for `aarch64-darwin`, which a linux runner cannot do without a darwin
-  builder; and `module-mcp-services-rotation-restart-entry` is a genuine darwin
-  assertion failure. `builtins.tryEval` does not catch the first class, so they
-  surface as hard eval errors.
+- Instantiating the Darwin checks on a Linux host needs a Darwin builder
+  (measured 2026-07-25 and again 2026-10-17): the `stacked-workflows-skills.drv`
+  check performs IFD on a derivation that must be built for `aarch64-darwin`.
+  `builtins.tryEval` does not catch that build failure, so it surfaces as a hard
+  eval error.
 
-Fixing those is the prerequisite. The flag is the last step, not the first.
+A Darwin builder is one prerequisite. The flag is the last step, not the first.
 
 The composite runs, per system with backoff:
 

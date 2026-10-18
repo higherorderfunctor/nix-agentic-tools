@@ -933,20 +933,14 @@ jobs:
   # contracts live in the flake checks above, so no automatic PR or push path
   # pulls the interactive shell closure.
 
-  # Darwin never evaluated its check set on purpose. The macOS steps that
-  # build one named check force every Darwin check to weak head normal form as
-  # a side effect, which is today's whole Darwin coverage, and it goes away
-  # once the check set becomes lazy. This job is the explicit replacement: the
-  # names step is the gate and the per-system baseline for platform-declared
-  # checks; the drvPath step forces the full set. Informational and not
-  # required. First run, 2026-10-18 on macos-latest: 997 names in 51 s at
-  # 1.98 GB; forcing every drvPath reached 2.93 GB in 161 s and then failed on
-  # module-glab-keyring-sync-hm-wiring, a Linux-only assertion no CI leg had
-  # ever evaluated. Memory fits the ~7 GB runner; the platform-gate PR fixes
-  # that check and turns the drvPath step into a hard failure. Comparison
-  # point: `checks.x86_64-linux` names were 1011 at 35 s / 3.7 GB on a Linux
-  # host the same day. It waits for the package shards so it never takes a
-  # macOS runner slot ahead of a required Darwin leg (5 concurrent on this plan).
+  # Explicit Darwin evaluation keeps coverage when check values become lazy:
+  # names and every drvPath both gate this job, which is not a required context.
+  # First run, 2026-10-18 on macos-latest: 997 names in 51 s at 1984 MiB;
+  # forcing every drvPath reached 2928 MiB in 161 s and then failed on the
+  # Linux-only module-glab-keyring-sync-hm-wiring. A second run reached 3064 MiB.
+  # Linux names were 1011 at 35 s / 3.7 GB on a Linux host the same day.
+  # Waiting for package shards keeps this job from taking a macOS runner slot
+  # ahead of a required Darwin leg (5 concurrent on this plan).
   checks-eval-darwin:
     needs: build-packages
     if: ${{ !cancelled() }}
@@ -993,13 +987,12 @@ jobs:
           wall="$(awk '/ real / {print $1}' "$RUNNER_TEMP/darwin-check-names.time")"
           printf '| Darwin check names | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n| Wall time (s) | %s |\n' \
             "$count" "$rss" "$wall" | tee -a "$GITHUB_STEP_SUMMARY"
-      # Names gate this job; drvPath forcing is tolerated until the
-      # platform-gate PR fixes the one Darwin failure it found. macOS does not
-      # kill an oversized process, it swaps, so a misfit shows up as this step
-      # hitting its own timeout, which continue-on-error covers; a job timeout
-      # would not be covered and would lose the names result.
+      # Force every drvPath as a hard failure: a Linux-only check leaking into
+      # Darwin fails this job when its evaluation fails there; one that only
+      # fails when built is not caught here. macOS swaps rather than killing an
+      # oversized evaluator, so bound this step to 25 minutes as well as the job
+      # timeout.
       - name: Force every aarch64-darwin check derivation
-        continue-on-error: true
         timeout-minutes: 25
         run: |
           set -euETo pipefail
@@ -1008,18 +1001,15 @@ jobs:
           /usr/bin/time -l nix eval --json .#.checks.aarch64-darwin \
             --apply 'checks: builtins.mapAttrs (_: check: check.drvPath) checks' \
             > "$RUNNER_TEMP/darwin-check-drvs.json" 2> "$RUNNER_TEMP/darwin-check-drvs.time" || status=$?
-          count=unavailable
-          if [ "$status" -eq 0 ]; then
-            count="$(jq 'keys | length' "$RUNNER_TEMP/darwin-check-drvs.json")"
-          else
-            echo '::warning::forcing every aarch64-darwin check drvPath failed (likely memory); see the uploaded log'
-            tail -n 40 "$RUNNER_TEMP/darwin-check-drvs.time"
+          if [ "$status" -ne 0 ]; then
+            tail -n 40 "$RUNNER_TEMP/darwin-check-drvs.time" >&2
+            exit "$status"
           fi
+          count="$(jq 'keys | length' "$RUNNER_TEMP/darwin-check-drvs.json")"
           rss="$(awk '/maximum resident set size/ {printf "%.1f", $1 / 1048576}' "$RUNNER_TEMP/darwin-check-drvs.time")"
           wall="$(awk '/ real / {print $1}' "$RUNNER_TEMP/darwin-check-drvs.time")"
           printf '\n| Darwin check drvPaths | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n| Wall time (s) | %s |\n' \
             "$count" "$rss" "$wall" | tee -a "$GITHUB_STEP_SUMMARY"
-          exit "$status"
       - name: Upload aarch64-darwin check evaluation
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

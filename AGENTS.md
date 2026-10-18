@@ -142,13 +142,13 @@ for it. When several entries match, their guidance composes.
     - [`dev/fragments/extracted/facts-contract.md`](dev/fragments/extracted/facts-contract.md)
 - **`facets`**
   - Match:
-    - `checks/*/default.nix`
-    - `checks/facets/**`
+    - `checks/**`
     - `flake.nix`
     - `lib/facets.nix`
     - `lib/facets/**`
     - `lib/testing/**`
     - `packages/*/checks.nix`
+    - `packages/*/checks/**`
     - `packages/*/packages/**`
     - `packages/*/registry.nix`
   - Read:
