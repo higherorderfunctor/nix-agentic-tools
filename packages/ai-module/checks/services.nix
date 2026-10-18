@@ -49,7 +49,7 @@
     (lib.evalModules {
       specialArgs = {
         inherit (backends.sinks.${backend}) lib;
-        inherit pkgs;
+        pkgs = harness.linuxPkgs;
       };
       modules = [
         backends.sinks.${backend}.stubs
@@ -226,7 +226,7 @@ in {
       && disabled.ai.claims.service.one == ["alpha"]
       && disabled.ai.claims.port."9200" == ["alpha:one.ports.http"]
       && disabled.systemd.user.services == {}
-      && !(succeeds (backends.evaluate "hm" {services."bad.name" = daemon;}).systemd.user.services)
+      && !(succeeds (backends.evaluate "hm" {services."bad.name" = daemon;}).ai.services)
     );
     ai-module-services-launcher = pkgs.runCommandLocal "ai-module-services-launcher" {} ''
       set -euETo pipefail

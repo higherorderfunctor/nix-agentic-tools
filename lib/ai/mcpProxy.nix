@@ -416,7 +416,6 @@
   runScriptFor = spec:
     strictShellApplication pkgs {
       name = "mcp-proxy-${spec.name}";
-      runtimeInputs = [pkgs.coreutils];
       text = ''
         _url="''${${spec.urlVar}}"
         _scheme="''${_url%%://*}"
@@ -434,8 +433,8 @@
         export ${spec.originVar}="$_scheme://$_host" ${spec.pathVar}="$_path"
 
         _state="''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}/mcp-proxy-${spec.name}"
-        mkdir -p "$_state"
-        chmod 0700 "$_state"
+        ${pkgs.coreutils}/bin/mkdir -p "$_state"
+        ${pkgs.coreutils}/bin/chmod 0700 "$_state"
         export XDG_CONFIG_HOME="$_state/config" XDG_DATA_HOME="$_state/data"
 
         exec ${lib.getExe pkgs.caddy} run --config ${caddyfileFor spec} --adapter caddyfile
