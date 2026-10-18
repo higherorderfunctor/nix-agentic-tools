@@ -3,14 +3,25 @@
 > **Last verified:** 2026-10-18 — 905 config nodes give the settings type
 > through `lib/extracted/options.nix`, with four refinements; the clean render
 > passes native v8 validation and loads through CPA 8.0.33's `LoadConfig` in
-> `cliproxyapi-settings`.
+> `cliproxyapi-settings`; `ai.cliproxyapi.instances` renders it at start.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
 generated from `config`'s reconciled entries (`extract/rules.nix`), so a path
 the extraction adds or drops moves the type with the next regeneration; the
-shared rules are in `dev/fragments/extracted/typed-settings.md`. No module
-option uses it yet: a service instance renders it at start.
+shared rules are in `dev/fragments/extracted/typed-settings.md`.
+
+## Instances
+
+`ai.cliproxyapi.instances.<name>` (`modules/instances.nix`, through
+`packages/ai-module/lib/instances.nix`) runs CLIProxyAPI as the service
+`cliproxyapi-<name>` on both backends. `port` (8317) fixes `server.port`;
+`stateDir` (`<state root>/cliproxyapi/<name>`) fixes `oauth.auth-dir` to
+`<stateDir>/auth`, where CLIProxyAPI writes its OAuth logins. The launcher
+renders the settings to `config.json` at each start and the run script, inside
+`stateDir` so the `.env` and `logs/` CLIProxyAPI resolves against its working
+directory are its own, execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's
+rewrites of its config reach only that copy and are lost at restart.
 
 ## Secrets
 

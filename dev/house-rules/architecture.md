@@ -28,6 +28,13 @@ hoc machinery beside an existing abstraction.
   secret-file patch or its own start script. See
   `packages/ai-module/lib/services.nix` and `packages/ai-module/docs/DESIGN.md`,
   Services.
+- **Tool instances use the instances helper.** A tool with typed settings that
+  runs as a daemon declares `ai.<owner>.instances.<name>` through
+  `packages/ai-module/lib/instances.nix`: one service and port claim per
+  instance, its settings rendered through `serviceEntry.files`, the same owner
+  module on Home Manager and devenv. Selecting an instance by name goes through
+  its `select`. This keeps every instance-shaped tool on one option shape and
+  one lowering. See `packages/ai-module/docs/DESIGN.md`, Services.
 - **Typed settings come from the extracted generator.** An owner with extracted
   settings facts gets its option type from `lib/extracted/options.nix` and its
   config file from `lib/extracted/render.nix`, which lifts secrets into

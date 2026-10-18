@@ -524,7 +524,8 @@ noted above.
 > **Last verified:** 2026-10-18 — repository modules reach Home Manager and
 > devenv file and activation sinks only through ai-module's three layers, apart
 > from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
-> service's `files` are rendered by its launcher at start.
+> service's `files` are rendered by its launcher at start, and tool instances
+> lower to services through `lib/instances.nix`.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -610,7 +611,9 @@ Declare a daemon through `ai.<owner>.services`; enabled owners forward to
 (absolute paths). A strict launcher reads secrets at start, renders each file
 0600 into a 0700 `ai-service-<key>` runtime directory, and execs argv on both
 backends. Services read store paths and secrets, never engine-written files;
-oneshot and file-watch units remain outside this surface.
+oneshot and file-watch units remain outside this surface. A tool with typed
+settings declares named instances through `lib/instances.nix`, which lowers each
+`ai.<owner>.instances.<name>` to the service `<owner>-<name>`.
 
 Linux Home Manager lowers to user units, devenv to processes. Darwin Home
 Manager emits one warning per enabled service, since it has no systemd user

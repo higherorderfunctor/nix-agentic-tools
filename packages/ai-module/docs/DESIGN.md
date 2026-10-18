@@ -20,8 +20,10 @@ sinks.
 | `lib/files/backend.nix`                                         | What both backend modules derive from `ai.files`: the plan, native link map, engine invocation and generated `files-prune`/`files-apply` entries.     |
 | `lib/files/engine.py`, `lib/files/files_codecs.py`              | The runtime engine and its codecs.                                                                                                                    |
 | `lib/files/guard.py`, `lib/files/observe.py`                    | Devenv's native-link guard and its never-failing observer.                                                                                            |
+| `lib/instances.nix`                                             | The owner module for named tool instances (`ai.<owner>.instances`), each lowered to one service, and the loopback selection of an instance by name.   |
 | `lib/lower-devenv.nix`, `lib/lower-hm.nix`                      | One lowering function per backend; each receives the complete activation graph, generated entries included.                                           |
 | `lib/runtime.nix`                                               | The layer-1 helper (`runtimeModule`).                                                                                                                 |
+| `lib/services.nix`                                              | The service entry type, the generic launcher and the backend lowerings.                                                                               |
 | `modules/common.nix`                                            | Declares the root options and computes `ai.deliveredPaths`; shared by both backends.                                                                  |
 | `modules/devenv/default.nix`, `modules/homeManager/default.nix` | Generate the backend's engine entries (and devenv's guard and observer), write the native file map and call the corresponding lowering function once. |
 
@@ -261,6 +263,20 @@ are both known at evaluation, so the launcher refuses to build when a
 placeholder has no secret, a secret has no placeholder, or a `variable` repeats
 another file's or an environment name. JSON is the one format: YAML 1.2 readers
 take it as is. A daemon's own writes to the file are lost at the next start.
+
+`lib/instances.nix` gives a tool with typed settings named instances:
+`ai.<owner>.instances.<name>` with `enable`, `package`, `port`, `settings` and
+`stateDir`, declared through one owner module per backend that differs only in
+the default state root (`xdg.stateHome` on Home Manager, `devenv.state` on
+devenv, so a repository's instance keeps its own logins). Each instance becomes
+the service `<owner>-<name>`: its port is `ports.main`, its settings render to
+`files.config`, and a strict run script creates `stateDir` (and the owner's
+state subdirectories) 0700, enters it and execs the package. The owner fixes the
+settings an instance derives (the listen port, state paths) as ordinary
+definitions, so a consumer value that disagrees fails evaluation. `select`
+resolves an instance name to `http://127.0.0.1:<port>` or to the reason it
+cannot: the name is missing or the instance is disabled. CLIProxyAPI and CPA
+Manager Plus use it.
 
 | Backend             | Lowering                                                                                                                                  |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
