@@ -103,11 +103,11 @@ in {
       export HOME="$TMPDIR" GOCACHE="$TMPDIR/go-cache" GOFLAGS=-mod=vendor GOPROXY=off GOTOOLCHAIN=local
       # Pure Go avoids the test binary's runtime/cgo dependency on gcc.
       export CGO_ENABLED=0
-      cp -r --no-preserve=mode,ownership ${package.src} src
+      cp -r --no-preserve=mode,ownership ${package.src} src # bare-commands: ok (runCommand builder PATH)
       cd src/${package.modRoot}
-      cp -r --no-preserve=mode,ownership ${package.goModules} vendor
-      cp ${testFile} ${packagePath}/nat_extract_test.go
-      goPackage=$(sed -n 's/^package //p' ${testFile} | head -n 1)
+      cp -r --no-preserve=mode,ownership ${package.goModules} vendor # bare-commands: ok (runCommand builder PATH)
+      cp ${testFile} ${packagePath}/nat_extract_test.go # bare-commands: ok (runCommand builder PATH)
+      goPackage=$(sed -n 's/^package //p' ${testFile} | head -n 1) # bare-commands: ok (runCommand builder PATH)
       sed "s/^package nat$/package $goPackage/" ${./go/nat_shared_test.go} >${packagePath}/nat_shared_test.go
       NAT_EXTRACT_OUT="$TMPDIR/raw.json" go test -count=1 -run '^TestNatExtract$' ./${packagePath}/
       jq -S . "$TMPDIR/raw.json" >"$out"
