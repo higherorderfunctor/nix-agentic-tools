@@ -13,12 +13,9 @@
 # So eval stays permissive and THIS gates. Same division of labour as the
 # extracted sidecars (`checks/<pkg>-extracted.nix`).
 #
-# NO REGISTRY. The check discovers its own subjects by filtering
-# `self.ciPackages.<system>` for `passthru.goFloor`. A registry listing the
-# Go packages would be a second source of truth that a new Go package
-# could be added without touching — which is precisely how a package ends
-# up unprotected. Packages carry the metadata; this consumer derives the
-# work list from it.
+# Names come from go-floor-packages.nix so listing checks does not evaluate
+# packages. go-floor-declared-list checks both original discovery predicates,
+# so an undeclared package cannot silently escape either family of checks.
 #
 # The comparison itself is `vu.goModFloorFn`, the SAME shell function
 # `mkGoFloorFix` uses to write the floor. Writer and gate share one parse
@@ -34,10 +31,36 @@
   checks = let
     vu = import ../../lib/packaging.nix;
 
-    goPackages =
-      lib.filterAttrs
-      (_: p: (p.passthru or {}) ? goFloor)
-      self.ciPackages.${pkgs.stdenv.hostPlatform.system};
+    declared = import ./go-floor-packages.nix {
+      inherit lib;
+      inherit (pkgs.stdenv.hostPlatform) isLinux;
+    };
+    pkgSet = self.ciPackages.${pkgs.stdenv.hostPlatform.system};
+    goPackages = lib.genAttrs (builtins.attrNames (builtins.removeAttrs declared ["beads.dolt"])) (name: pkgSet.${name});
+
+    declaredListCheck = let
+      discoveredDrift = lib.filterAttrs (_: p: (p.passthru or {}) ? goFloor) pkgSet;
+      discoveredExtract =
+        lib.filterAttrs
+        (_: p:
+          (p.passthru or {}) ? fixGoFloor
+          && (p.passthru.fixGoFloor.goFloorDestination or null) == "sidecar")
+        pkgSet
+        // lib.optionalAttrs ((pkgSet.beads.passthru or {}) ? dolt) {
+          "beads.dolt" = pkgSet.beads.dolt;
+        };
+      declaredDriftNames = builtins.attrNames goPackages;
+      declaredExtractNames = builtins.attrNames (lib.filterAttrs (_: destination: destination == "sidecar") declared);
+      discoveredDriftNames = builtins.attrNames discoveredDrift;
+      discoveredExtractNames = builtins.attrNames discoveredExtract;
+    in
+      assert lib.assertMsg (declaredDriftNames == discoveredDriftNames && declaredExtractNames == discoveredExtractNames)
+      "go-floor-declared-list: update go-floor-packages.nix; drift declared=${builtins.toJSON declaredDriftNames}, discovered=${builtins.toJSON discoveredDriftNames}; extract-order declared=${builtins.toJSON declaredExtractNames}, discovered=${builtins.toJSON discoveredExtractNames}";
+        pkgs.runCommand "go-floor-declared-list" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          touch "$out"
+        '';
 
     mkCheck = name: p: let
       # NOT always the repo root — oh-my-posh keeps its module under `src/`.
@@ -173,7 +196,10 @@
     };
   in
     parserTests
-    // {go-floor-parse-rejects-missing = parserRejectsMissing;}
+    // {
+      go-floor-declared-list = declaredListCheck;
+      go-floor-parse-rejects-missing = parserRejectsMissing;
+    }
     // lib.mapAttrs'
     (name: p: lib.nameValuePair "go-floor-drift-${name}" (mkCheck name p))
     goPackages;

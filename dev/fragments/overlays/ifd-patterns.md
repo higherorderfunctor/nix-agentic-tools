@@ -1,7 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-18 — Darwin check names and every drvPath both gate
-> explicit evaluation; the job remains outside required contexts.
+> **Last verified:** 2026-10-18 — CI package and check paths are absolute,
+> including IFD warming, so Nix skips package namespace lookup.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -51,9 +51,9 @@ Key properties of IFD in nix:
   substituters.
 - **`builtins.attrNames` is lazy.** It does NOT trigger IFD. Only accessing a
   value that depends on a `builtins.readFile` inside a derivation output forces
-  the fetch. This cost hours of debugging — `nix eval .#ciPackages.x86_64-linux`
-  with `builtins.attrNames` succeeds on cold runners but produces no source
-  fetches.
+  the fetch. This cost hours of debugging —
+  `nix eval .#.ciPackages.x86_64-linux` with `builtins.attrNames` succeeds on
+  cold runners but produces no source fetches.
 - **`NIX_CONFIG="eval-cache = false"` does not help.** Tools like
   `nix-instantiate` (used internally by nix-update) predate the eval cache and
   are not affected by it.
@@ -145,15 +145,16 @@ The composite runs, per system with backoff:
 nix eval --json \
   --option allow-import-from-derivation true \
   --apply 'pkgs: builtins.mapAttrs (_: p: p.drvPath or p.name or "unknown") pkgs' \
-  ".#ciPackages.${system}" >/dev/null
+  ".#.ciPackages.${system}" >/dev/null
 ```
 
 `builtins.mapAttrs` forcing `p.drvPath` puts every package through
 `derivationStrict`, which forces every IFD on its path — the `builtins.readFile`
 version extractors AND anything else that reads a file out of a fetched source.
 The cachix daemon pushes fetched sources so subsequent evaluations (PR CI) can
-substitute them. The `--apply` expression is the load-bearing detail — keep the
-composite and this fragment in sync.
+substitute them. Keep the composite and this fragment in sync: both the
+`--apply` expression and the absolute `.#.ciPackages` path are load-bearing. The
+leading dot skips the package namespace lookup described above.
 
 **It forces `drvPath` and not `version`, deliberately.** A sidecar version can
 resolve without touching build inputs, so it is insufficient to warm those

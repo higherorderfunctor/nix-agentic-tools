@@ -64,14 +64,14 @@ runs:
         # sidecar-versioned packages at all, and it is bounded eval work
         # the consuming job would do anyway.
         #
-        # The `--apply` expression is load-bearing and shared by ci.yml,
-        # devenv-test.yml and update.yml — keep it in sync with
+        # ci.yml, devenv-test.yml and update.yml share this action. Keep
+        # --apply and the absolute attribute path in sync with
         # dev/fragments/overlays/ifd-patterns.md.
         warm() {
           nix eval --json \
             --option allow-import-from-derivation true \
             --apply 'pkgs: builtins.mapAttrs (_: p: p.drvPath or p.name or "unknown") pkgs' \
-            ".#ciPackages.$1" >/dev/null
+            ".#.ciPackages.$1" >/dev/null
         }
 
         warm_system() {
