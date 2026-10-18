@@ -64,9 +64,10 @@ Extractors write through the facts contract in `lib/extracted/` (see
 
 # Extracted facts: the architecture
 
-> **Last verified:** 2026-10-17 — CLIProxyAPI measures its v8 config shape as
-> one opaque fact; shared reconciliation accepts single-key pattern rows. Every
-> owner keeps one carried file; probes are not on the contract yet.
+> **Last verified:** 2026-10-18 — Go owners run in-package extractor tests
+> through the shared `goTestExtract`; shared reconciliation accepts single-key
+> pattern rows. Every owner keeps one carried file; probes are not on the
+> contract yet.
 
 The contract (`facts-contract.md`, same category) is the spec: file shapes,
 functions, failure kinds. This file is the why and the rules that keep the
@@ -99,12 +100,14 @@ pattern matching no fact is stale; a fact claimed by multiple rows fails,
 including overlaps between patterns and literal rows. The classifier stays in
 `lib/redact/classify.nix`.
 
-CLIProxyAPI's `config` fact holds its v8 path-to-node mapping as an opaque
-object because paths contain dots. Its Go extractor reflects the pinned config
-structs and reads the package's relocation and key-family tables; its
-reconciliation reader consumes `config` for credential reasons. The owner
-fragment `packages/cliproxyapi/docs/cliproxyapi-extraction.md` describes that
-extraction.
+Go owners measure unexported structs and tables with a `_test.go` file copied
+into the pinned source's package. `goTestExtract` runs it offline beside
+`lib/extracted/go/nat_shared_test.go`, which holds the node type vocabulary, the
+field walk and the output every Go owner shares; codec-specific typing stays in
+the owner's test. CLIProxyAPI's `config` fact holds its v8 path-to-node mapping
+as an opaque object because paths contain dots. Its reconciliation reader
+consumes `config` for credential reasons. The owner fragment
+`packages/cliproxyapi/docs/cliproxyapi-extraction.md` describes that extraction.
 
 Consumers read the aggregate with `get` and `children`, at the place the value
 is used. Nothing else reads a raw: the guard (`checks.extracted-contract-guard`)
@@ -226,9 +229,10 @@ never as a fact source for Nix. The probe work owns the rewrite of this section.
 
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-17 — owners commit forked `extracted.json`; Linux
-> carries make other systems follow; owner checks use `mkOwnerCheck`; facts and
-> reconciliation share the private redact classifier.
+> **Last verified:** 2026-10-18 — owners commit forked `extracted.json`; Linux
+> carries make other systems follow; owner checks use `mkOwnerCheck`; Go owners
+> extract with `goTestExtract`; facts and reconciliation share the private
+> redact classifier.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -542,6 +546,13 @@ side, forming a fork wherever it now differs.
 
 Owner update scripts use `regenCommand { name; }` to build and run that
 regenerator on the current host.
+
+A Go owner's `passthru.extracted` is
+`goTestExtract { package; packagePath; testFile; }`: it joins `testFile` and
+`go/nat_shared_test.go` (given the test's package clause) to `packagePath` under
+the buildGoModule `package`'s `modRoot`, runs `TestNatExtract` offline with the
+package's toolchain and vendor tree, and keeps the object of surfaces the test
+writes to `$NAT_EXTRACT_OUT`.
 
 ## The guard
 

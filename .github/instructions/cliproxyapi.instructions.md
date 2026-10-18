@@ -8,7 +8,7 @@ applyTo: "packages/cliproxyapi/**"
 # CLIProxyAPI extraction: the v8 configuration shape
 
 > **Last verified:** 2026-10-18 — CPA 8.0.33 custom YAML decoders are probed
-> through yaml.v3; mapping rejection fails extraction.
+> through yaml.v3; the shared `goTestExtract` runs the extractor.
 
 ## Why reflection also needs the v8 tables
 
@@ -33,9 +33,12 @@ The v8 group loader does not read `auth-index`, so those fields are omitted.
 
 ## Measured data
 
-`extract/default.nix` copies the source and the package's `goModules`, installs
-the extractor test and runs it with the package's Go toolchain. `GOPROXY=off`,
-`GOFLAGS=-mod=vendor` and `GOTOOLCHAIN=local` keep extraction offline.
+The package's `passthru.extracted` is `lib/extracted`'s `goTestExtract`: it
+copies the source and the package's `goModules`, installs the extractor test
+beside the shared `lib/extracted/go/nat_shared_test.go` (node types, the field
+walk, the output) and runs it with the package's Go toolchain. `GOPROXY=off`,
+`GOFLAGS=-mod=vendor` and `GOTOOLCHAIN=local` keep extraction offline. The
+YAML-specific typing (durations, `yaml.Node`, decoder probes) stays here.
 
 Each node holds its measured `type`, its field's Go doc `description` parsed
 with `go/parser`, and the `template` comment at the same path in

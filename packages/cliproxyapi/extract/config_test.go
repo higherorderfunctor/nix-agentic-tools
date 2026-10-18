@@ -1,8 +1,10 @@
 // cspell:ignore fset
-// Copied into a copy of CLIProxyAPI's internal/config by ./default.nix; it is
-// not part of CLIProxyAPI. In-package, so it reads the v8 layout from CPA's
-// own tables (v8Paths, v8StructPaths, v8KeyFamilies, sharedKeyFields,
-// v8AllowedRoots) instead of restating them.
+// Copied into a copy of CLIProxyAPI's internal/config by lib/extracted's
+// goTestExtract; it is not part of CLIProxyAPI. In-package, so it reads the v8
+// layout from CPA's own tables (v8Paths, v8StructPaths, v8KeyFamilies,
+// sharedKeyFields, v8AllowedRoots) instead of restating them. The node type
+// vocabulary, field walk and output come from
+// lib/extracted/go/nat_shared_test.go.
 //
 // TestNatExtract writes the v8 configuration tree to $NAT_EXTRACT_OUT: one
 // node per path, typed by reflect over the runtime structs, described by the
@@ -14,7 +16,6 @@
 package config
 
 import (
-	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -40,6 +41,7 @@ type natNode struct {
 var (
 	natDuration    = reflect.TypeOf(time.Duration(0))
 	natUnmarshaler = reflect.TypeOf((*yaml.Unmarshaler)(nil)).Elem()
+	natYAML        = natCodec{tag: "yaml", untagged: strings.ToLower}
 	natYAMLNode    = reflect.TypeOf(yaml.Node{})
 )
 
@@ -138,29 +140,11 @@ func (x *natExtractor) kind(t reflect.Type, path string) string {
 		}
 		return "object"
 	}
-	switch t.Kind() {
-	case reflect.Struct:
-		return "object"
-	case reflect.Interface:
-		return "any"
-	case reflect.Bool:
-		return "bool"
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return "int"
-	case reflect.Float32, reflect.Float64:
-		return "number"
-	case reflect.String:
-		return "string"
-	case reflect.Array, reflect.Slice:
-		return "list"
-	case reflect.Map:
-		if t.Key().Kind() == reflect.String {
-			return "map"
-		}
+	kind, ok := natKind(t)
+	if !ok {
+		x.t.Fatalf("%s: no node type for Go type %s", path, t)
 	}
-	x.t.Fatalf("%s: no node type for Go type %s", path, t)
-	return ""
+	return kind
 }
 
 // Two structs may flatten into one v8 mapping (`claude` and its
@@ -175,40 +159,6 @@ func (x *natExtractor) emit(path string, node natNode) {
 		node.Description = strings.TrimSpace(old.Description + "\n\n" + node.Description)
 	}
 	x.nodes[path] = node
-}
-
-func natJoin(path, key string) string {
-	if path == "" {
-		return key
-	}
-	return path + "." + key
-}
-
-// Visits the YAML-tagged fields of struct `t`, inlining anonymous ones, with
-// the struct that declares each field (for its doc comment).
-func natFields(t reflect.Type, visit func(tag string, field reflect.StructField, owner reflect.Type)) {
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := strings.Split(field.Tag.Get("yaml"), ",")[0]
-		if tag == "-" || field.PkgPath != "" {
-			continue
-		}
-		if field.Anonymous {
-			natFields(field.Type, visit)
-			continue
-		}
-		if tag == "" {
-			tag = strings.ToLower(field.Name)
-		}
-		visit(tag, field, t)
-	}
-}
-
-func natDeref(t reflect.Type) reflect.Type {
-	for t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
-	return t
 }
 
 // Emits `path` and every node below it. `skip` drops direct fields of an
@@ -230,7 +180,7 @@ func (x *natExtractor) walk(t reflect.Type, path, doc string, emit func(string, 
 			x.t.Fatalf("%s: recursive type %s", path, t)
 		}
 		x.active[t] = true
-		natFields(t, func(tag string, field reflect.StructField, owner reflect.Type) {
+		natFields(t, natYAML, func(tag string, field reflect.StructField, owner reflect.Type) {
 			if skip == nil || !skip(tag) {
 				x.walk(field.Type, natJoin(path, tag), x.doc(owner, field.Name), emit, nil)
 			}
@@ -284,7 +234,7 @@ func (x *natExtractor) family(field reflect.StructField, owner reflect.Type, cur
 	x.emit(base+"[].keys", natNode{Type: "list"})
 	x.emit(base+"[].keys[]", natNode{Type: "object"})
 	x.emit(base+"[].name", natNode{Type: "string"})
-	natFields(elem, func(tag string, keyField reflect.StructField, keyOwner reflect.Type) {
+	natFields(elem, natYAML, func(tag string, keyField reflect.StructField, keyOwner reflect.Type) {
 		if authIndex(tag) {
 			return
 		}
@@ -416,7 +366,7 @@ func TestNatExtract(t *testing.T) {
 		families[family.old] = family.current
 	}
 	config := reflect.TypeOf(Config{})
-	natFields(config, func(tag string, field reflect.StructField, owner reflect.Type) {
+	natFields(config, natYAML, func(tag string, field reflect.StructField, owner reflect.Type) {
 		if current, ok := families[tag]; ok {
 			x.family(field, owner, current)
 			delete(families, tag)
@@ -446,11 +396,5 @@ func TestNatExtract(t *testing.T) {
 	}
 	x.ancestors()
 	x.template(&document, "")
-	out, err := json.MarshalIndent(x.nodes, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(os.Getenv("NAT_EXTRACT_OUT"), out, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	natWrite(t, map[string]any{"config": x.nodes})
 }

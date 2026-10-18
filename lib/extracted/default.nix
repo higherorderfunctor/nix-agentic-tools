@@ -87,6 +87,32 @@ in {
   inherit mkDriftCheck;
   index = facts.index pkgs;
 
+  # A Go owner's raw: its extractor test, joined to one package of a
+  # buildGoModule package's source with ./go/nat_shared_test.go, run offline
+  # with the package's own toolchain and vendor tree. The test writes an object
+  # of surfaces to $NAT_EXTRACT_OUT; the shared file takes its package clause.
+  goTestExtract = {
+    package,
+    # The Go package directory the test joins, relative to `modRoot`.
+    packagePath,
+    testFile,
+  }:
+    pkgs.runCommand "${package.pname}-extracted" {nativeBuildInputs = [package.go pkgs.jq];} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      export HOME="$TMPDIR" GOCACHE="$TMPDIR/go-cache" GOFLAGS=-mod=vendor GOPROXY=off GOTOOLCHAIN=local
+      # Pure Go avoids the test binary's runtime/cgo dependency on gcc.
+      export CGO_ENABLED=0
+      cp -r --no-preserve=mode,ownership ${package.src} src
+      cd src/${package.modRoot}
+      cp -r --no-preserve=mode,ownership ${package.goModules} vendor
+      cp ${testFile} ${packagePath}/nat_extract_test.go
+      goPackage=$(sed -n 's/^package //p' ${testFile} | head -n 1)
+      sed "s/^package nat$/package $goPackage/" ${./go/nat_shared_test.go} >${packagePath}/nat_shared_test.go
+      NAT_EXTRACT_OUT="$TMPDIR/raw.json" go test -count=1 -run '^TestNatExtract$' ./${packagePath}/
+      jq -S . "$TMPDIR/raw.json" >"$out"
+    '';
+
   mkOwnerCheck = {
     dir,
     name,
