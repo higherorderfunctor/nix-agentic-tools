@@ -30,6 +30,8 @@
         native = "git:config";
         owner = "git";
       }
+    ]
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
       {
         after = ["files" "secrets"];
         backend = "hm";
@@ -40,7 +42,6 @@
           token.file = "/run/secrets/gitlab-token";
         };
         key = "glab-keyring-sync";
-        linuxOnly = true;
         owner = "glab";
       }
       {
@@ -51,7 +52,6 @@
           settings.credentials = redact.file "/run/secrets/gh-token";
         };
         key = "mcp-restart-on-secret-rotation";
-        linuxOnly = true;
         owner = "mcp-services";
       }
     ]
@@ -129,5 +129,5 @@ in {
       inherit name;
       value = harness.mkTest name (check case);
     })
-    (lib.filter (case: !(case.linuxOnly or false) || pkgs.stdenv.hostPlatform.isLinux) cases));
+    cases);
 }

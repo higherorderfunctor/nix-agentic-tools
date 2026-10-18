@@ -205,13 +205,13 @@ _: {
     };
     facets = {
       scopes = [
-        "checks/*/default.nix"
-        "checks/facets/**"
+        "checks/**"
         "flake.nix"
         "lib/facets.nix"
         "lib/facets/**"
         "lib/testing/**"
         "packages/*/checks.nix"
+        "packages/*/checks/**"
         "packages/*/packages/**"
         "packages/*/registry.nix"
       ];

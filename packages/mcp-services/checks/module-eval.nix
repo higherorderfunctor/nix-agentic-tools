@@ -196,7 +196,8 @@ in {
         in
           result.config.services.mcp-servers.mcpConfig.mcpServers == {}
       );
-
+    }
+    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       # Helper-based credentials have no stable file to fingerprint, so they
       # contribute no rotation entry (the path-based restart cannot apply).
       module-mcp-services-rotation-skips-helper-creds = mkTest "mcp-services-rotation-skips-helper-creds" (
@@ -218,8 +219,6 @@ in {
         in
           !(result.config.home.activation ? ai-mcp-restart-on-secret-rotation)
       );
-    }
-    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       # Credential rotation: enabling a file-credentialed HTTP server emits a
       # restart-on-rotation activation entry that fingerprints the secret path
       # and targets the matching systemd user unit.

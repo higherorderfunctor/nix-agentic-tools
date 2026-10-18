@@ -935,9 +935,9 @@ jobs:
 
   # Explicit Darwin evaluation keeps coverage when check values become lazy:
   # names and every drvPath both gate this job, which is not a required context.
-  # First run, 2026-10-18 on macos-latest: 997 names in 51 s at 1.98 GB;
-  # forcing every drvPath reached 2.93 GB in 161 s and then failed on the
-  # Linux-only module-glab-keyring-sync-hm-wiring. A second run reached 3.06 GB.
+  # First run, 2026-10-18 on macos-latest: 997 names in 51 s at 1984 MiB;
+  # forcing every drvPath reached 2928 MiB in 161 s and then failed on the
+  # Linux-only module-glab-keyring-sync-hm-wiring. A second run reached 3064 MiB.
   # Linux names were 1011 at 35 s / 3.7 GB on a Linux host the same day.
   # Waiting for package shards keeps this job from taking a macOS runner slot
   # ahead of a required Darwin leg (5 concurrent on this plan).
@@ -988,21 +988,24 @@ jobs:
           printf '| Darwin check names | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n| Wall time (s) | %s |\n' \
             "$count" "$rss" "$wall" | tee -a "$GITHUB_STEP_SUMMARY"
       # Force every drvPath as a hard failure: a Linux-only check leaking into
-      # Darwin must fail this job. macOS swaps rather than killing an oversized
-      # evaluator, so bound this step to 25 minutes as well as the job timeout.
+      # Darwin fails this job when its evaluation fails there; one that only
+      # fails when built is not caught here. macOS swaps rather than killing an
+      # oversized evaluator, so bound this step to 25 minutes as well as the job
+      # timeout.
       - name: Force every aarch64-darwin check derivation
         timeout-minutes: 25
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          if /usr/bin/time -l nix eval --json .#.checks.aarch64-darwin \
+          status=0
+          /usr/bin/time -l nix eval --json .#.checks.aarch64-darwin \
             --apply 'checks: builtins.mapAttrs (_: check: check.drvPath) checks' \
-            > "$RUNNER_TEMP/darwin-check-drvs.json" 2> "$RUNNER_TEMP/darwin-check-drvs.time"; then
-            count="$(jq 'keys | length' "$RUNNER_TEMP/darwin-check-drvs.json")"
-          else
+            > "$RUNNER_TEMP/darwin-check-drvs.json" 2> "$RUNNER_TEMP/darwin-check-drvs.time" || status=$?
+          if [ "$status" -ne 0 ]; then
             tail -n 40 "$RUNNER_TEMP/darwin-check-drvs.time" >&2
-            exit 1
+            exit "$status"
           fi
+          count="$(jq 'keys | length' "$RUNNER_TEMP/darwin-check-drvs.json")"
           rss="$(awk '/maximum resident set size/ {printf "%.1f", $1 / 1048576}' "$RUNNER_TEMP/darwin-check-drvs.time")"
           wall="$(awk '/ real / {print $1}' "$RUNNER_TEMP/darwin-check-drvs.time")"
           printf '\n| Darwin check drvPaths | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n| Wall time (s) | %s |\n' \

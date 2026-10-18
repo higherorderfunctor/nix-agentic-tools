@@ -340,10 +340,11 @@ baseline for platform-declared checks. Forcing every drvPath has its own
 Counts, peak RSS and wall time go to the log and the step summary; both JSON
 results and both `time -l` outputs are uploaded as the
 `checks-eval-aarch64-darwin` artifact. First run, 2026-10-18: 997 names in 51 s
-at 1.98 GB; forcing every drvPath reached 2.93 GB in 161 s and failed on
+at 1984 MiB; forcing every drvPath reached 2928 MiB in 161 s and failed on
 `module-glab-keyring-sync-hm-wiring`, a Linux-only assertion no CI leg had
-evaluated before. A second run reached 3.06 GB. Linux-only checks now omit their
-names on Darwin; any later leak fails drvPath forcing.
+evaluated before. A second run reached 3064 MiB. Linux-only checks now omit
+their names on Darwin; a later leak whose evaluation fails on Darwin fails the
+drvPath step. A leak that only fails when built is not caught here.
 
 ### Reports and deliberate manual updates
 

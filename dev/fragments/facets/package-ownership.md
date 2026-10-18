@@ -40,8 +40,9 @@ needs no flake export-list edit. The Agnix role identity check
 A check asserting a Linux-only lowering belongs inside
 `lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux` in its own check module, so
 its name is absent on other systems. Never use a host-dependent branch that
-passes vacuously, or `lib.mkIf` on a single check name: `lazyAttrsOf` retains
-that name and throws when it is read.
+passes vacuously, or `lib.mkIf` on a single check name: the `checks` option is
+becoming lazy (`lazyAttrsOf`, the next change), and a lazy map keeps a
+`mkIf`-wrapped name and throws when it is read.
 
 Root and owner check names share an exclusive claim boundary. Each contributor
 supplies isolated definitions for claim discovery, while its conditions and

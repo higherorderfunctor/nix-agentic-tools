@@ -139,12 +139,13 @@ today. Measured 2026-07-25 on a linux host:
 - That cost is roughly +43s wall and a ~7.8 GB RSS ceiling for the darwin check
   set, against 36s / 6.2 GB for the linux one (282 checks, eval cache disabled,
   warm store).
-- Instantiating the Darwin checks on a Linux host still needs a Darwin builder:
-  the `stacked-workflows-skills.drv` check performs IFD on a derivation that
-  must be built for `aarch64-darwin`. `builtins.tryEval` does not catch that
-  build failure, so it surfaces as a hard eval error.
+- Instantiating the Darwin checks on a Linux host needs a Darwin builder
+  (measured 2026-07-25 and again 2026-10-17): the `stacked-workflows-skills.drv`
+  check performs IFD on a derivation that must be built for `aarch64-darwin`.
+  `builtins.tryEval` does not catch that build failure, so it surfaces as a hard
+  eval error.
 
-A Darwin builder is the prerequisite. The flag is the last step, not the first.
+A Darwin builder is one prerequisite. The flag is the last step, not the first.
 
 The composite runs, per system with backoff:
 

@@ -12,10 +12,7 @@
     kiro-fhs-contract = let
       kiroPackage = pkgs.ai.kiro-cli;
       wrapKiroPackage =
-        (import ../lib/wrapPackage.nix {
-          inherit (pkgs) lib;
-          inherit pkgs;
-        }).wrapPackage;
+        (import ../lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage;
       selectedKiroPackage = (kiroPackage.withBundlePatches {
         replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
       }).withRolloutFeatures ["background_execution"];
