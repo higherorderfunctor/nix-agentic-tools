@@ -7,8 +7,8 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,lib/toolchains.nix,pack
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-17 — overlay parity uses a stable nixpkgs input
-> independent of devenv, with a cheap foreign hello positive control.
+> **Last verified:** 2026-10-18 — Go check names come from one declared table; a
+> completeness check compares both original passthru discoveries.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -950,12 +950,17 @@ the missing key would deadlock the fixer that repairs it.
 recorded floor against the real go.mod and names the package, actual requirement
 and automated fixer when it fails.
 
-That check takes **NO REGISTRY**: it filters `self.ciPackages.<system>` for
-`passthru.goFloor`. A list of Go packages would be a second source of truth a
-new package could be added without touching, which is exactly how one ends up
-unprotected. It shares `vu.goModFloorFn` with the writer, so gate and writer
-cannot disagree about what the floor is. `goModPath` is a parameter, not a
-constant — `oh-my-posh` keeps its module under `src/`.
+The drift and extract-order check names come from one declared table,
+`checks/packaging/go-floor-packages.nix`, so listing names never forces package
+values. `go-floor-declared-list` compares the drift subjects to
+`self.ciPackages.<system>` filtered for `passthru.goFloor`, and the
+extract-order subjects to packages whose
+`passthru.fixGoFloor.goFloorDestination` is `sidecar`, including nested
+`beads.dolt`. A new Go package omitted from the table therefore fails CI. The
+table keeps gluetun Linux-only, matching the package set. Drift shares
+`vu.goModFloorFn` with the writer, so gate and writer cannot disagree about what
+the floor is. `goModPath` is a parameter, not a constant — `oh-my-posh` keeps
+its module under `src/`.
 
 ### A genuinely platform-specific package is gated at the ATTRIBUTE
 
