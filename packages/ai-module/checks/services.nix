@@ -21,35 +21,19 @@
       restartOnChange = ["/etc/daemon.conf" "/run/secrets/first"];
     };
   expectedTriggers = ["/etc/daemon.conf" "/run/secrets/first" "/run/secrets/second"];
-  hm = backends.evaluateWith harness.linuxPkgs "hm" {services = entries // {inherit watched;};};
+  hm = backends.evaluate "hm" {services = entries // {inherit watched;};};
   devenv = backends.evaluate "devenv" {services = entries // {inherit watched;};};
-  unsupported = isDarwin:
-    (lib.evalModules {
-      specialArgs = {
-        inherit (backends.sinks.hm) lib;
-        pkgs = harness.pkgsOn {
-          inherit isDarwin;
-          isLinux = false;
-        };
-      };
-      modules = [
-        harness.hmStubs
-        ../modules/homeManager/default.nix
-        {
-          ai.services = {
-            live = watched;
-            stopped = daemon // {enable = false;};
-          };
-        }
-      ];
-    }).config;
-  darwin = unsupported true;
-  other = unsupported false;
+  darwin = backends.evaluate "hm" {
+    services = {
+      live = watched;
+      stopped = daemon // {enable = false;};
+    };
+  };
   evaluateOwners = backend: definitions:
     (lib.evalModules {
       specialArgs = {
         inherit (backends.sinks.${backend}) lib;
-        pkgs = harness.linuxPkgs;
+        inherit pkgs;
       };
       modules = [
         backends.sinks.${backend}.stubs
@@ -147,131 +131,139 @@
         touch "$out"
       '';
 in {
-  checks = {
-    ai-module-services-backends = mkCheck "ai-module-services-backends" (
-      lib.all (restart: let
-        unit = hm.systemd.user.services.${restart};
-        process = devenv.processes.${restart};
-      in
-        unit
-        == {
-          Install.WantedBy = ["default.target"];
-          Service = {
-            ExecStart = process.exec;
-            Restart =
-              if restart == "never"
-              then "no"
-              else restart;
-            RestartSec = 5;
-          };
-          Unit = {
-            After = ["network.target"];
-            Description = "${restart} (ai.services)";
-          };
-        }
-        && process.restart.on
-        == (
-          if restart == "on-failure"
-          then "on_failure"
-          else restart
-        )
-        && !(process ? watch)) (builtins.attrNames entries)
-      && devenv.processes.watched.watch.paths == expectedTriggers
-      && services.triggers hm.ai.services.watched == expectedTriggers
-      && hm.home.activation.ai-services-restart-on-change.after == ["linkGeneration" "sops-nix" "vault:ready"]
-      && !(devenv.tasks ? "ai:services-restart-on-change")
-      && !((backends.evaluateWith harness.linuxPkgs "hm" {services.plain = daemon;}).home.activation ? ai-services-restart-on-change)
-      && darwin.systemd.user.services == {}
-      && darwin.warnings == ["ai.services.live: Home Manager writes services as systemd user units, which this platform lacks; the service is not written"]
-      && other.warnings == darwin.warnings
-      && other.systemd.user.services == {}
-      && !(darwin.home.activation ? ai-services-restart-on-change)
-    );
-    ai-module-services-claims = mkCheck "ai-module-services-claims" (
-      lib.all (
-        backend:
-          positive backend
-          && collision backend {
-            alpha.services.same = daemon;
-            beta.services.same = daemon;
+  checks =
+    lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      ai-module-services-backends = mkCheck "ai-module-services-backends" (
+        lib.all (restart: let
+          unit = hm.systemd.user.services.${restart};
+          process = devenv.processes.${restart};
+        in
+          unit
+          == {
+            Install.WantedBy = ["default.target"];
+            Service = {
+              ExecStart = process.exec;
+              Restart =
+                if restart == "never"
+                then "no"
+                else restart;
+              RestartSec = 5;
+            };
+            Unit = {
+              After = ["network.target"];
+              Description = "${restart} (ai.services)";
+            };
           }
-          "ai.claims.service.same: claimed by alpha and beta"
-          && collision backend {
-            alpha.services.same = daemon // {enable = false;};
-            beta.services.same = daemon;
-          }
-          "ai.claims.service.same: claimed by alpha and beta"
-          && collision backend {
-            alpha.services.one = daemon // {ports.main = 9200;};
-            beta.services.two = daemon // {ports.main = 9200;};
-          }
-          "ai.claims.port.9200: claimed by alpha:one.ports.main and beta:two.ports.main"
-          && collision backend {
-            alpha.services.one =
-              daemon
-              // {
-                ports = {
-                  http = 9200;
-                  metrics = 9200;
+          && process.restart.on
+          == (
+            if restart == "on-failure"
+            then "on_failure"
+            else restart
+          )
+          && !(process ? watch)) (builtins.attrNames entries)
+        && devenv.processes.watched.watch.paths == expectedTriggers
+        && services.triggers hm.ai.services.watched == expectedTriggers
+        && hm.home.activation.ai-services-restart-on-change.after == ["linkGeneration" "sops-nix" "vault:ready"]
+        && !(devenv.tasks ? "ai:services-restart-on-change")
+        && !((backends.evaluate "hm" {services.plain = daemon;}).home.activation ? ai-services-restart-on-change)
+      );
+      ai-module-services-claims = mkCheck "ai-module-services-claims" (
+        lib.all (
+          backend:
+            positive backend
+            && collision backend {
+              alpha.services.same = daemon;
+              beta.services.same = daemon;
+            }
+            "ai.claims.service.same: claimed by alpha and beta"
+            && collision backend {
+              alpha.services.same = daemon // {enable = false;};
+              beta.services.same = daemon;
+            }
+            "ai.claims.service.same: claimed by alpha and beta"
+            && collision backend {
+              alpha.services.one = daemon // {ports.main = 9200;};
+              beta.services.two = daemon // {ports.main = 9200;};
+            }
+            "ai.claims.port.9200: claimed by alpha:one.ports.main and beta:two.ports.main"
+            && collision backend {
+              alpha.services.one =
+                daemon
+                // {
+                  ports = {
+                    http = 9200;
+                    metrics = 9200;
+                  };
                 };
-              };
-          }
-          "ai.claims.port.9200: claimed by alpha:one.ports.http and alpha:one.ports.metrics"
-          && collision backend {
-            alpha.files.same = {enable = false;};
-            beta.files.same = {content.text = "different";};
-          }
-          "ai.claims.path.same: claimed by alpha and beta"
-      ) ["devenv" "hm"]
-      && disabled.ai.claims.service.one == ["alpha"]
-      && disabled.ai.claims.port."9200" == ["alpha:one.ports.http"]
-      && disabled.systemd.user.services == {}
-      && !(succeeds (backends.evaluate "hm" {services."bad.name" = daemon;}).ai.services)
-    );
-    ai-module-services-launcher = pkgs.runCommandLocal "ai-module-services-launcher" {} ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-test > failed; then
-        echo "failed reader started the receiver" >&2
-        exit 1
-      fi
-      test ! -s failed
-      ${launcher}/bin/ai-service-test > actual
-      ${pkgs.diffutils}/bin/diff -u ${pkgs.writeText "services-expected" "literal $(false) ' quote\nsecret value\nargument $(false)\nspace ' quote\n"} actual
-      ${pkgs.gnugrep}/bin/grep -F 'export PRIVATE' ${launcher}/bin/ai-service-test
-      ${pkgs.gnugrep}/bin/grep -F 'redact-read' ${launcher}/bin/ai-service-test
-      touch "$out"
-    '';
-    ai-module-services-rotation = pkgs.runCommandLocal "ai-module-services-rotation" {} ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      export XDG_STATE_HOME="$TMPDIR/state"
-      export SERVICE_RESTART_LOG="$TMPDIR/restarts"
-      hash_file="$XDG_STATE_HOME/nix-agentic-tools/services/help.sha256"
-      run() { ${pkgs.bash}/bin/bash -euETo pipefail -c ${lib.escapeShellArg restartCommand}; }
-      touch "$SERVICE_RESTART_LOG"
-      printf '%s' first > /build/trigger
-      SERVICE_MANAGER_STATE=offline run
-      test ! -e "$hash_file"
-      run
-      test -s "$hash_file"
-      test ! -s "$SERVICE_RESTART_LOG"
-      run
-      test ! -s "$SERVICE_RESTART_LOG"
-      printf '%s' second > /build/trigger
-      run
-      test "$(${pkgs.coreutils}/bin/wc -l < "$SERVICE_RESTART_LOG")" -eq 1
-      test "$(${pkgs.coreutils}/bin/head -1 "$SERVICE_RESTART_LOG")" = '--user try-restart help'
-      ${pkgs.coreutils}/bin/cp "$hash_file" previous
-      printf '%s' third > /build/trigger
-      if SERVICE_RESTART_FAIL=1 run; then
-        echo "restart failure was swallowed" >&2
-        exit 1
-      fi
-      ${pkgs.diffutils}/bin/cmp previous "$hash_file"
-      run
-      test "$(${pkgs.coreutils}/bin/wc -l < "$SERVICE_RESTART_LOG")" -eq 3
-      touch "$out"
-    '';
-  };
+            }
+            "ai.claims.port.9200: claimed by alpha:one.ports.http and alpha:one.ports.metrics"
+            && collision backend {
+              alpha.files.same = {enable = false;};
+              beta.files.same = {content.text = "different";};
+            }
+            "ai.claims.path.same: claimed by alpha and beta"
+        ) ["devenv" "hm"]
+        && disabled.ai.claims.service.one == ["alpha"]
+        && disabled.ai.claims.port."9200" == ["alpha:one.ports.http"]
+        && disabled.systemd.user.services == {}
+        && !(succeeds (backends.evaluate "hm" {services."bad.name" = daemon;}).ai.services)
+      );
+    }
+    // {
+      ai-module-services-launcher = pkgs.runCommandLocal "ai-module-services-launcher" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-test > failed; then
+          echo "failed reader started the receiver" >&2
+          exit 1
+        fi
+        test ! -s failed
+        ${launcher}/bin/ai-service-test > actual
+        ${pkgs.diffutils}/bin/diff -u ${pkgs.writeText "services-expected" "literal $(false) ' quote\nsecret value\nargument $(false)\nspace ' quote\n"} actual
+        ${pkgs.gnugrep}/bin/grep -F 'export PRIVATE' ${launcher}/bin/ai-service-test
+        ${pkgs.gnugrep}/bin/grep -F 'redact-read' ${launcher}/bin/ai-service-test
+        touch "$out"
+      '';
+    }
+    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      ai-module-services-rotation = pkgs.runCommandLocal "ai-module-services-rotation" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export XDG_STATE_HOME="$TMPDIR/state"
+        export SERVICE_RESTART_LOG="$TMPDIR/restarts"
+        hash_file="$XDG_STATE_HOME/nix-agentic-tools/services/help.sha256"
+        run() { ${pkgs.bash}/bin/bash -euETo pipefail -c ${lib.escapeShellArg restartCommand}; }
+        touch "$SERVICE_RESTART_LOG"
+        printf '%s' first > /build/trigger
+        SERVICE_MANAGER_STATE=offline run
+        test ! -e "$hash_file"
+        run
+        test -s "$hash_file"
+        test ! -s "$SERVICE_RESTART_LOG"
+        run
+        test ! -s "$SERVICE_RESTART_LOG"
+        printf '%s' second > /build/trigger
+        run
+        test "$(${pkgs.coreutils}/bin/wc -l < "$SERVICE_RESTART_LOG")" -eq 1
+        test "$(${pkgs.coreutils}/bin/head -1 "$SERVICE_RESTART_LOG")" = '--user try-restart help'
+        ${pkgs.coreutils}/bin/cp "$hash_file" previous
+        printf '%s' third > /build/trigger
+        if SERVICE_RESTART_FAIL=1 run; then
+          echo "restart failure was swallowed" >&2
+          exit 1
+        fi
+        ${pkgs.diffutils}/bin/cmp previous "$hash_file"
+        run
+        test "$(${pkgs.coreutils}/bin/wc -l < "$SERVICE_RESTART_LOG")" -eq 3
+        touch "$out"
+      '';
+    }
+    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
+      ai-module-services-darwin-warns = mkCheck "ai-module-services-darwin-warns" (
+        darwin.systemd.user.services
+        == {}
+        && darwin.warnings == ["ai.services.live: Home Manager writes services as systemd user units, which this platform lacks; the service is not written"]
+        && !(darwin.home.activation ? ai-services-restart-on-change)
+      );
+    };
 }

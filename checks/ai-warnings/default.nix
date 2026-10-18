@@ -508,12 +508,8 @@
       {url = "https://example.invalid";}
       {command = "probe";}
     ];
-  # `isDarwin` is forced in BOTH directions rather than left to the host: this
-  # check runs on x86_64-linux and aarch64-darwin, so reading the real platform
-  # would make the non-Darwin arms assert nothing on the Darwin runner.
   trustWarnings = {
     backend,
-    darwin ? false,
     trustedMcpTools ? ["@probe"],
     v3 ? false,
   }: let
@@ -523,18 +519,9 @@
         cli = {inherit trustedMcpTools v3;};
       };
     };
-    platformPkgs =
-      pkgs
-      // {
-        stdenv =
-          pkgs.stdenv
-          // {
-            hostPlatform = pkgs.stdenv.hostPlatform // {isDarwin = darwin;};
-          };
-      };
     record = import ../../packages/kiro-cli/lib/mkKiro.nix {
       lib = harness.hmLib;
-      pkgs = platformPkgs;
+      inherit pkgs;
     };
   in
     (lib.evalModules {
@@ -551,305 +538,304 @@
     }).config.warnings;
 in {
   imports = [./runtime.nix];
-  checks = {
-    ai-warnings-darwin-trust = harness.mkTest "ai-warnings-darwin-trust" (
-      # Withheld: Darwin under either engine, and the v3 `acp` arm anywhere.
-      contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
-        backend = "hm";
-        darwin = true;
-      })
-      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
-        backend = "devenv";
-        darwin = true;
-        v3 = true;
-      })
-      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
-        backend = "devenv";
-        v3 = true;
-      })
-      # Recovered, or never withheld.
-      && trustWarnings {
-        backend = "hm";
-        darwin = true;
-        v3 = true;
-      }
-      == []
-      && trustWarnings {
-        backend = "hm";
-        darwin = true;
-        trustedMcpTools = [];
-      }
-      == []
-      && trustWarnings {backend = "devenv";} == []
-      && trustWarnings {backend = "hm";} == []
-    );
-    ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
-      lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
-      && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
-      && lib.all (case: assert lib.assertMsg (casePass case) "warning gap ${case.runtime}/${case.mode}/${lib.showOption case.path}"; true) gapCases
-      && declarationsCovered
-      && conditionalCovered
-      && lib.assertMsg portableEventSilent "Claude delivers the portable PermissionRequest event"
-      && lib.assertMsg consumedRootsQuiet "consumed shared surfaces must not warn"
-      && lib.assertMsg mcpFieldCasesPass "Claude MCP field warnings match their paths, backend, runtime, count, and disabled/absent controls"
-      && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
-      && lib.assertMsg effortSilent "delivered or withheld reasoning effort must not warn"
-      && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
-    );
-    ai-warnings-delivery-input-options = harness.mkTest "ai-warnings-delivery-input-options" inputsDeclared;
-    ai-warnings-kiro-hook-prompts = harness.mkTest "ai-warnings-kiro-hook-prompts" (
-      lib.all (mode: let
-        warningsFor = extra:
-          evaluate mode {
+  checks =
+    {
+      ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
+        lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
+        && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
+        && lib.all (case: assert lib.assertMsg (casePass case) "warning gap ${case.runtime}/${case.mode}/${lib.showOption case.path}"; true) gapCases
+        && declarationsCovered
+        && conditionalCovered
+        && lib.assertMsg portableEventSilent "Claude delivers the portable PermissionRequest event"
+        && lib.assertMsg consumedRootsQuiet "consumed shared surfaces must not warn"
+        && lib.assertMsg mcpFieldCasesPass "Claude MCP field warnings match their paths, backend, runtime, count, and disabled/absent controls"
+        && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
+        && lib.assertMsg effortSilent "delivered or withheld reasoning effort must not warn"
+        && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
+      );
+      ai-warnings-delivery-input-options = harness.mkTest "ai-warnings-delivery-input-options" inputsDeclared;
+      ai-warnings-kiro-hook-prompts = harness.mkTest "ai-warnings-kiro-hook-prompts" (
+        lib.all (mode: let
+          warningsFor = extra:
+            evaluate mode {
+              ai.kiro = {
+                cli.enable = true;
+                hooks.probe =
+                  lib.recursiveUpdate {
+                    trigger = "UserPromptSubmit";
+                    action.command = "true";
+                  }
+                  extra;
+              };
+            };
+          unset = warningsFor {};
+          withPrompt = warningsFor {action.prompt.text = "probe";};
+        in
+          assert lib.assertMsg (unset == []) "${mode}: command hook with no prompt warned: ${builtins.toJSON unset}";
+            contains "ai.kiro.hooks.probe.action.prompt" withPrompt)
+        ["devenv" "hm"]
+      );
+      ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
+        let
+          valid = mcp.evalSettings "gitlab-mcp" {
+            assertions = [
+              {
+                assertion = true;
+                message = "positive control";
+              }
+            ];
+          };
+          invalid = builtins.tryEval (mcp.evalSettings "gitlab-mcp" {
+            assertions = [
+              {
+                assertion = false;
+                message = "first settings failure";
+              }
+              {
+                assertion = false;
+                message = "second settings failure";
+              }
+            ];
+          });
+        in
+          valid.instanceUrl == null && !(valid ? assertions) && !invalid.success
+      );
+      # A context or rule unit whose file is switched off (`enable =
+      # false`) or replaced with the consumer's own bytes warns, naming the
+      # unit, the file option that dropped it and a per-runtime way to withhold
+      # it; the warning is what makes the drop visible. Withholding the unit or
+      # having nothing to carry is quiet.
+      ai-warnings-switched-off-files = harness.mkTest "ai-warnings-switched-off-files" (
+        let
+          offMessage = messages: unit: file: remedy:
+            lib.any (message:
+              lib.hasInfix "${unit} is set but" message
+              # A layer-1 (`files`) entry has `enable` of its own.
+              && lib.hasInfix "${file}${lib.optionalString (!lib.hasInfix ".files." file) ".content"}.enable = false switches off" message
+              && lib.hasInfix remedy message)
+            messages;
+          # Shared context and rules warn when another runtime overrides the
+          # final AGENTS.md entry.
+          sharedRuntimes = ["codex" "copilot" "kimchi" "kiro"];
+          sharedWarnings = extra:
+            evaluate "devenv" (lib.foldl' lib.recursiveUpdate {
+                ai = {
+                  context.text = "CTX";
+                  rules.probe.text = "RULE";
+                };
+              }
+              (map (runtime: harness.setEnable runtime true) sharedRuntimes ++ [extra]));
+          sharedCodexOff = sharedWarnings {ai.codex.files."AGENTS.md".enable = false;};
+          sharedOff = sharedWarnings {ai.kiro.files."AGENTS.md".enable = false;};
+          sharedReplaced = sharedWarnings {ai.kiro.files."AGENTS.md".content.text = "MINE";};
+          # Codex's user AGENTS.md on Home Manager.
+          hmCodexOff = evaluate "hm" {
+            ai = {
+              codex = {
+                enable = true;
+                files.".codex/AGENTS.md".enable = false;
+                rules.local.text = "LOCAL";
+              };
+              rules.probe.text = "RULE";
+            };
+          };
+          # One scoped Kiro steering file on devenv; Claude rule file on HM.
+          steeringOff = evaluate "devenv" {
             ai.kiro = {
               cli.enable = true;
-              hooks.probe =
-                lib.recursiveUpdate {
-                  trigger = "UserPromptSubmit";
-                  action.command = "true";
-                }
-                extra;
-            };
-          };
-        unset = warningsFor {};
-        withPrompt = warningsFor {action.prompt.text = "probe";};
-      in
-        assert lib.assertMsg (unset == []) "${mode}: command hook with no prompt warned: ${builtins.toJSON unset}";
-          contains "ai.kiro.hooks.probe.action.prompt" withPrompt)
-      ["devenv" "hm"]
-    );
-    ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
-      let
-        valid = mcp.evalSettings "gitlab-mcp" {
-          assertions = [
-            {
-              assertion = true;
-              message = "positive control";
-            }
-          ];
-        };
-        invalid = builtins.tryEval (mcp.evalSettings "gitlab-mcp" {
-          assertions = [
-            {
-              assertion = false;
-              message = "first settings failure";
-            }
-            {
-              assertion = false;
-              message = "second settings failure";
-            }
-          ];
-        });
-      in
-        valid.instanceUrl == null && !(valid ? assertions) && !invalid.success
-    );
-    # A context or rule unit whose file is switched off (`enable =
-    # false`) or replaced with the consumer's own bytes warns, naming the
-    # unit, the file option that dropped it and a per-runtime way to withhold
-    # it; the warning is what makes the drop visible. Withholding the unit or
-    # having nothing to carry is quiet.
-    ai-warnings-switched-off-files = harness.mkTest "ai-warnings-switched-off-files" (
-      let
-        offMessage = messages: unit: file: remedy:
-          lib.any (message:
-            lib.hasInfix "${unit} is set but" message
-            # A layer-1 (`files`) entry has `enable` of its own.
-            && lib.hasInfix "${file}${lib.optionalString (!lib.hasInfix ".files." file) ".content"}.enable = false switches off" message
-            && lib.hasInfix remedy message)
-          messages;
-        # Shared context and rules warn when another runtime overrides the
-        # final AGENTS.md entry.
-        sharedRuntimes = ["codex" "copilot" "kimchi" "kiro"];
-        sharedWarnings = extra:
-          evaluate "devenv" (lib.foldl' lib.recursiveUpdate {
-              ai = {
-                context.text = "CTX";
-                rules.probe.text = "RULE";
+              files.".kiro/steering/scoped.md".enable = false;
+              rules.scoped = {
+                matcher = ["src/**"];
+                text = "SCOPED";
               };
-            }
-            (map (runtime: harness.setEnable runtime true) sharedRuntimes ++ [extra]));
-        sharedCodexOff = sharedWarnings {ai.codex.files."AGENTS.md".enable = false;};
-        sharedOff = sharedWarnings {ai.kiro.files."AGENTS.md".enable = false;};
-        sharedReplaced = sharedWarnings {ai.kiro.files."AGENTS.md".content.text = "MINE";};
-        # Codex's user AGENTS.md on Home Manager.
-        hmCodexOff = evaluate "hm" {
-          ai = {
-            codex = {
-              enable = true;
-              files.".codex/AGENTS.md".enable = false;
-              rules.local.text = "LOCAL";
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        # One scoped Kiro steering file on devenv; Claude rule file on HM.
-        steeringOff = evaluate "devenv" {
-          ai.kiro = {
-            cli.enable = true;
-            files.".kiro/steering/scoped.md".enable = false;
-            rules.scoped = {
-              matcher = ["src/**"];
-              text = "SCOPED";
             };
           };
-        };
-        claudeOff = evaluate "hm" {
-          ai = {
-            claude = {
-              enable = true;
-              files.".claude/rules/probe.md".enable = false;
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        # Quiet controls.
-        withheld = evaluate "devenv" {
-          ai = {
-            codex = {
-              enable = true;
-              files."AGENTS.md".enable = false;
-              normalized.context = lib.mkForce null;
-              rules.probe.enable = false;
-            };
-            context.text = "CTX";
-            rules.probe.text = "RULE";
-          };
-        };
-        # A whole-file replacement drops the units the generated file carried,
-        # on the shared devenv AGENTS.md and on each backend's own files.
-        replacedMessage = messages: unit: file: remedy:
-          lib.any (message:
-            lib.hasInfix "${unit} is set but" message
-            && lib.hasInfix "${file}.content replaces" message
-            && lib.hasInfix remedy message)
-          messages;
-        replaced = evaluate "devenv" {
-          ai = {
-            codex = {
-              enable = true;
-              files."AGENTS.md".content.text = "MINE";
-            };
-            context.text = "CTX";
-            rules.probe.text = "RULE";
-          };
-        };
-        hmCodexReplaced = evaluate "hm" {
-          ai = {
-            codex = {
-              enable = true;
-              files.".codex/AGENTS.md".content.text = "MINE";
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        claudeReplaced = evaluate "devenv" {
-          ai = {
-            claude = {
-              enable = true;
-              files.".claude/rules/probe.md".content.source = pkgs.writeText "mine" "MINE";
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        # Changing how a generated file lands keeps its bytes: quiet.
-        symlinked = evaluate "hm" {
-          ai = {
-            claude = {
-              enable = true;
-              files.".claude/rules/probe.md".method = "symlink";
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        # Ordinary generated entries never warn about replacement when no
-        # final content override was declared.
-        ordinary = mode:
-          evaluate mode {
+          claudeOff = evaluate "hm" {
             ai = {
-              claude.enable = true;
-              codex.enable = true;
+              claude = {
+                enable = true;
+                files.".claude/rules/probe.md".enable = false;
+              };
+              rules.probe.text = "RULE";
+            };
+          };
+          # Quiet controls.
+          withheld = evaluate "devenv" {
+            ai = {
+              codex = {
+                enable = true;
+                files."AGENTS.md".enable = false;
+                normalized.context = lib.mkForce null;
+                rules.probe.enable = false;
+              };
               context.text = "CTX";
-              copilot.enable = true;
-              kimchi.enable = true;
-              kiro.cli.enable = true;
-              rules = {
-                probe.text = "RULE";
-                scoped = {
-                  matcher = ["src/**"];
-                  text = "SCOPED";
+              rules.probe.text = "RULE";
+            };
+          };
+          # A whole-file replacement drops the units the generated file carried,
+          # on the shared devenv AGENTS.md and on each backend's own files.
+          replacedMessage = messages: unit: file: remedy:
+            lib.any (message:
+              lib.hasInfix "${unit} is set but" message
+              && lib.hasInfix "${file}.content replaces" message
+              && lib.hasInfix remedy message)
+            messages;
+          replaced = evaluate "devenv" {
+            ai = {
+              codex = {
+                enable = true;
+                files."AGENTS.md".content.text = "MINE";
+              };
+              context.text = "CTX";
+              rules.probe.text = "RULE";
+            };
+          };
+          hmCodexReplaced = evaluate "hm" {
+            ai = {
+              codex = {
+                enable = true;
+                files.".codex/AGENTS.md".content.text = "MINE";
+              };
+              rules.probe.text = "RULE";
+            };
+          };
+          claudeReplaced = evaluate "devenv" {
+            ai = {
+              claude = {
+                enable = true;
+                files.".claude/rules/probe.md".content.source = pkgs.writeText "mine" "MINE";
+              };
+              rules.probe.text = "RULE";
+            };
+          };
+          # Changing how a generated file lands keeps its bytes: quiet.
+          symlinked = evaluate "hm" {
+            ai = {
+              claude = {
+                enable = true;
+                files.".claude/rules/probe.md".method = "symlink";
+              };
+              rules.probe.text = "RULE";
+            };
+          };
+          # Ordinary generated entries never warn about replacement when no
+          # final content override was declared.
+          ordinary = mode:
+            evaluate mode {
+              ai = {
+                claude.enable = true;
+                codex.enable = true;
+                context.text = "CTX";
+                copilot.enable = true;
+                kimchi.enable = true;
+                kiro.cli.enable = true;
+                rules = {
+                  probe.text = "RULE";
+                  scoped = {
+                    matcher = ["src/**"];
+                    text = "SCOPED";
+                  };
                 };
               };
             };
+          nothing = evaluate "devenv" {
+            ai.codex = {
+              enable = true;
+              files."AGENTS.md".enable = false;
+            };
           };
-        nothing = evaluate "devenv" {
-          ai.codex = {
-            enable = true;
-            files."AGENTS.md".enable = false;
+          nothingReplaced = evaluate "devenv" {
+            ai.codex = {
+              enable = true;
+              files."AGENTS.md".content.text = "MINE";
+            };
           };
-        };
-        nothingReplaced = evaluate "devenv" {
-          ai.codex = {
-            enable = true;
-            files."AGENTS.md".content.text = "MINE";
-          };
-        };
-      in
-        lib.all (runtime: let
-          contextRemedy = "${lib.showOption (lib.init (optionPaths.pool runtime "context") ++ ["normalized" "context"])} = lib.mkForce null";
-          rulesRemedy = "${lib.showOption (optionPaths.pool runtime "rules" ++ ["probe" "enable"])} = false";
         in
-          offMessage sharedOff "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
-          && offMessage sharedCodexOff "ai.context" ''ai.codex.files."AGENTS.md"'' contextRemedy
-          && replacedMessage sharedReplaced "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
-          # Copilot's rules have their own instruction files; only its context
-          # shares AGENTS.md with the other three runtimes.
-          && (
-            if runtime == "copilot"
-            then !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (sharedOff ++ sharedCodexOff ++ sharedReplaced))
-            else
-              offMessage sharedOff "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
-              && offMessage sharedCodexOff "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' rulesRemedy
-              && replacedMessage sharedReplaced "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
-          ))
-        sharedRuntimes
-        && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
-        && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
-        && offMessage claudeOff "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
-        && replacedMessage replaced "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && replacedMessage replaced "ai.context" ''ai.codex.files."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
-        && replacedMessage hmCodexReplaced "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && replacedMessage claudeReplaced "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
-        && !(contains "switches off" replaced)
-        && !(contains "the file that carries it" withheld)
-        && !(contains "the file that carries it" symlinked)
-        && !(contains "the file that carries it" nothing)
-        && !(contains "the file that carries it" (ordinary "hm"))
-        && !(contains "the file that carries it" (ordinary "devenv"))
-        && !(contains "the file that carries it" nothingReplaced)
-    );
+          lib.all (runtime: let
+            contextRemedy = "${lib.showOption (lib.init (optionPaths.pool runtime "context") ++ ["normalized" "context"])} = lib.mkForce null";
+            rulesRemedy = "${lib.showOption (optionPaths.pool runtime "rules" ++ ["probe" "enable"])} = false";
+          in
+            offMessage sharedOff "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
+            && offMessage sharedCodexOff "ai.context" ''ai.codex.files."AGENTS.md"'' contextRemedy
+            && replacedMessage sharedReplaced "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
+            # Copilot's rules have their own instruction files; only its context
+            # shares AGENTS.md with the other three runtimes.
+            && (
+              if runtime == "copilot"
+              then !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (sharedOff ++ sharedCodexOff ++ sharedReplaced))
+              else
+                offMessage sharedOff "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
+                && offMessage sharedCodexOff "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' rulesRemedy
+                && replacedMessage sharedReplaced "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
+            ))
+          sharedRuntimes
+          && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+          && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
+          && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
+          && offMessage claudeOff "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
+          && replacedMessage replaced "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+          && replacedMessage replaced "ai.context" ''ai.codex.files."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
+          && replacedMessage hmCodexReplaced "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+          && replacedMessage claudeReplaced "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
+          && !(contains "switches off" replaced)
+          && !(contains "the file that carries it" withheld)
+          && !(contains "the file that carries it" symlinked)
+          && !(contains "the file that carries it" nothing)
+          && !(contains "the file that carries it" (ordinary "hm"))
+          && !(contains "the file that carries it" (ordinary "devenv"))
+          && !(contains "the file that carries it" nothingReplaced)
+      );
 
-    ai-warnings-tombstones = harness.mkTest "ai-warnings-tombstones" (
-      evaluate "hm" {
-        ai.copilot = {
-          enable = true;
-          github.rules.probe.enable = false;
-        };
-        ai.rules.probe.text = "probe";
-      }
-      == []
-      && evaluate "hm" {
-        ai.kimchi.enable = true;
-        ai.rules.probe.enable = false;
-      }
-      == []
-      && evaluate "hm" {
-        ai.copilot = {
-          enable = true;
-          github.context.text = "";
-        };
-      }
-      == []
-    );
-  };
+      ai-warnings-tombstones = harness.mkTest "ai-warnings-tombstones" (
+        evaluate "hm" {
+          ai.copilot = {
+            enable = true;
+            github.rules.probe.enable = false;
+          };
+          ai.rules.probe.text = "probe";
+        }
+        == []
+        && evaluate "hm" {
+          ai.kimchi.enable = true;
+          ai.rules.probe.enable = false;
+        }
+        == []
+        && evaluate "hm" {
+          ai.copilot = {
+            enable = true;
+            github.context.text = "";
+          };
+        }
+        == []
+      );
+    }
+    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
+      ai-warnings-darwin-trust = harness.mkTest "ai-warnings-darwin-trust" (
+        contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {backend = "hm";})
+        && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
+          backend = "devenv";
+          v3 = true;
+        })
+        && trustWarnings {
+          backend = "hm";
+          v3 = true;
+        }
+        == []
+        && trustWarnings {
+          backend = "hm";
+          trustedMcpTools = [];
+        }
+        == []
+      );
+    }
+    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      ai-warnings-linux-trust = harness.mkTest "ai-warnings-linux-trust" (
+        contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
+          backend = "devenv";
+          v3 = true;
+        })
+        && trustWarnings {backend = "devenv";} == []
+        && trustWarnings {backend = "hm";} == []
+      );
+    };
 }

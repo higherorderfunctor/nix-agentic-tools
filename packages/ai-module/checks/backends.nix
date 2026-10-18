@@ -37,7 +37,7 @@
       target = item: "${item.source}";
     };
   };
-  evaluateWith = pkgs: backend: ai: let
+  evaluate = backend: ai: let
     sink = sinks.${backend};
   in
     (lib.evalModules {
@@ -52,7 +52,6 @@
         {inherit ai;}
       ];
     }).config;
-  evaluate = evaluateWith pkgs;
 in {
-  inherit evaluate evaluateWith sinks;
+  inherit evaluate sinks;
 }
