@@ -116,6 +116,10 @@
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
     },
+    "api-keys.claude[].keys[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
+    },
     "api-keys.claude[].keys[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
       "type": "bool"
@@ -224,6 +228,10 @@
     "api-keys.claude[].models[].thinking": {
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
+    },
+    "api-keys.claude[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
     },
     "api-keys.claude[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
@@ -376,6 +384,10 @@
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
     },
+    "api-keys.codex[].keys[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
+    },
     "api-keys.codex[].keys[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
       "type": "bool"
@@ -484,6 +496,10 @@
     "api-keys.codex[].models[].thinking": {
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
+    },
+    "api-keys.codex[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
     },
     "api-keys.codex[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
@@ -624,6 +640,10 @@
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
     },
+    "api-keys.gemini[].keys[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
+    },
     "api-keys.gemini[].keys[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
       "type": "bool"
@@ -724,6 +744,10 @@
     "api-keys.gemini[].models[].thinking": {
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
+    },
+    "api-keys.gemini[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
     },
     "api-keys.gemini[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
@@ -864,6 +888,10 @@
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
     },
+    "api-keys.interactions[].keys[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
+    },
     "api-keys.interactions[].keys[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
       "type": "bool"
@@ -968,6 +996,10 @@
     "api-keys.interactions[].models[].thinking": {
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
+    },
+    "api-keys.interactions[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
     },
     "api-keys.interactions[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
@@ -1122,6 +1154,10 @@
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
     },
+    "api-keys.meta[].keys[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
+    },
     "api-keys.meta[].keys[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
       "type": "bool"
@@ -1230,6 +1266,10 @@
     "api-keys.meta[].models[].thinking": {
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
+    },
+    "api-keys.meta[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
     },
     "api-keys.meta[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
@@ -1384,6 +1424,10 @@
       "description": "Thinking configures the thinking/reasoning capability for this model.\nIf nil, the model defaults to level-based reasoning with levels [\"low\", \"medium\", \"high\"].",
       "type": "object"
     },
+    "api-keys.openai-compatibility[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
+    },
     "api-keys.openai-compatibility[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
       "type": "bool"
@@ -1532,6 +1576,10 @@
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
     },
+    "api-keys.vertex[].keys[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
+    },
     "api-keys.vertex[].keys[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
       "type": "bool"
@@ -1597,6 +1645,10 @@
     "api-keys.vertex[].models[].thinking": {
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
+    },
+    "api-keys.vertex[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
     },
     "api-keys.vertex[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
@@ -1724,6 +1776,10 @@
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
     },
+    "api-keys.xai[].keys[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
+    },
     "api-keys.xai[].keys[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
       "type": "bool"
@@ -1833,6 +1889,10 @@
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
     },
+    "api-keys.xai[].models[].thinking.disable-type": {
+      "description": "DisableType is the Claude thinking.type sent when thinking is turned off.\nEmpty means \"disabled\"; claude-sonnet-5-5 needs \"between_tools\".",
+      "type": "string"
+    },
     "api-keys.xai[].models[].thinking.dynamic-allowed": {
       "description": "DynamicAllowed indicates whether -1 is a valid value (dynamic thinking budget).",
       "type": "bool"
@@ -1919,7 +1979,7 @@
     "credentials": { "type": "object" },
     "credentials.concurrency": {
       "description": "CredentialConcurrency contains Home-authoritative credential lifecycle settings.",
-      "type": "any"
+      "type": "object"
     },
     "credentials.concurrency.busy-retry-max": { "type": "duration" },
     "credentials.concurrency.busy-retry-min": { "type": "duration" },
@@ -2094,7 +2154,7 @@
     "oauth.providers.codex.live-media-relay": {
       "description": "LiveMediaRelay terminates and relays Codex Live WebRTC media in this process.",
       "template": "Terminate and relay Codex Live WebRTC audio and DataChannel traffic in this process.\nThis requires inbound UDP reachability. Keep disabled to preserve direct media behavior.",
-      "type": "any"
+      "type": "object"
     },
     "oauth.providers.codex.live-media-relay.disable-private-remote-ips": {
       "template": "Reject downstream SDP candidates that target private, loopback, link-local, or unspecified IPs.\nKeep false for local or trusted-network Codex Desktop connections.",
