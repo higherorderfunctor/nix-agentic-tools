@@ -1115,30 +1115,6 @@ in {
           absentNeedles = ["${pkgs.ai.kiro-cli}/bin/kiro-cli"];
         };
 
-      # #956's exact backend: with no unrelated wrapper reason, trustedMcpTools
-      # must fork the FHS payload itself. The former outer symlinkJoin had no
-      # `fhsenv` passthru and was unreachable during launcher dispatch.
-      module-kiro-devenv-trusted-tools-fork-fhs-payload = mkTest "kiro-devenv-trusted-tools-fork-fhs-payload" (
-        let
-          result = evalDevenv {
-            ai.gitSshConfigWorkaround = false;
-            ai.kiro = {
-              cli = {
-                enable = true;
-                trustedMcpTools = ["fs_read"];
-              };
-            };
-          };
-          packages = result.config.packages;
-          configured = builtins.head packages;
-        in
-          builtins.length packages
-          == 1
-          && configured ? fhsenv
-          && configured.fhsenv.drvPath != pkgs.ai.kiro-cli.fhsenv.drvPath
-          && configured.name != "kiro-cli-wrapped"
-      );
-
       # A custom package without a supported unwrapped route must fail by the
       # named assertion instead of silently leaving the FHS wrapper enabled.
       module-kiro-fhs-opt-out-rejects-package-without-unwrapped = mkTest "kiro-fhs-opt-out-rejects-package-without-unwrapped" (
@@ -3228,6 +3204,30 @@ in {
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      # #956's exact backend: with no unrelated wrapper reason, trustedMcpTools
+      # must fork the FHS payload itself. The former outer symlinkJoin had no
+      # `fhsenv` passthru and was unreachable during launcher dispatch.
+      module-kiro-devenv-trusted-tools-fork-fhs-payload = mkTest "kiro-devenv-trusted-tools-fork-fhs-payload" (
+        let
+          result = evalDevenv {
+            ai.gitSshConfigWorkaround = false;
+            ai.kiro = {
+              cli = {
+                enable = true;
+                trustedMcpTools = ["fs_read"];
+              };
+            };
+          };
+          packages = result.config.packages;
+          configured = builtins.head packages;
+        in
+          builtins.length packages
+          == 1
+          && configured ? fhsenv
+          && configured.fhsenv.drvPath != pkgs.ai.kiro-cli.fhsenv.drvPath
+          && configured.name != "kiro-cli-wrapped"
+      );
+
       # A detectable custom FHS package without the payload-composition seam would
       # recreate #956. Reject it rather than silently leaving trust injection in an
       # outer wrapper that launcher dispatch cannot reach.
