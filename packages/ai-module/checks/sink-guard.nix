@@ -8,10 +8,13 @@
   nonWriters = {
     "lib/ai/app/generatedFiles.nix" = ["files = lib.mapAttrs (path: entry:"];
     "lib/ai/app/sharedAgentsMd.nix" = ["files = lib.mkMerge [" "files = lib.mkOption {visible = false;};"];
-    "lib/options-doc.nix" = ["enterTest = lib.mkOption {" "files = lib.mkOption {" "home = {" "tasks = lib.mkOption {"];
+    "lib/options-doc.nix" = ["enterTest = lib.mkOption {" "files = lib.mkOption {" "home = {" "processes = lib.mkOption {" "systemd.user = {" "tasks = lib.mkOption {"];
     "lib/testing/factory-harness.nix" = ["files = lib.mkOption {" "home = {"];
-    "lib/testing/module-harness.nix" = ["enterTest = lib.mkOption {" "files = config.ai.files;" "files = lib.mkOption {" "home = {" "tasks = lib.mkOption {"];
+    "lib/testing/module-harness.nix" = ["enterTest = lib.mkOption {" "files = config.ai.files;" "files = lib.mkOption {" "home = {" "processes = lib.mkOption {" "systemd.user = {" "tasks = lib.mkOption {"];
     "packages/beads/modules/devenv/default.nix" = ["tasks ="];
+    # glab's keyring sync is a oneshot behind a path unit, outside ai.services
+    # by decision (daemons only); it keeps its native units.
+    "packages/glab/modules/homeManager/default.nix" = ["systemd.user.paths.glab-keyring-sync = {" "systemd.user.services.glab-keyring-sync = {"];
     "packages/semble/modules/options.nix" = [''files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];''];
   };
   exceptions = pkgs.writeText "native-sink-non-writers" (lib.concatStringsSep "\n" (lib.concatLists (lib.mapAttrsToList (path: map (line: "${path}:${line}")) nonWriters)) + "\n");
@@ -22,7 +25,7 @@
     work="$PWD"
     scan() (
       cd "$1"
-      anchored='^[[:space:]]*(home\.file|home\.activation|files|tasks|enterTest)([."[]|[[:space:]]*=)'
+      anchored='^[[:space:]]*(home\.file|home\.activation|files|tasks|enterTest|systemd\.user|launchd\.agents|processes)([."[]|[[:space:]]*=)'
       nested='^[[:space:]]*home[[:space:]]*=[[:space:]]*\{'
       ${pkgs.findutils}/bin/find lib packages -type f -name '*.nix' \
         \( -path 'lib/*' -o -path 'packages/*/lib/*' -o -path 'packages/*/modules/*' \) \
@@ -47,7 +50,7 @@
         done < "$work/hits"
       done < "$work/corpus"
       if [ -s "$work/actual" ]; then
-        echo "ai-module: route direct native sink writes through ai.<owner>.files or ai.<owner>.activation." >&2
+        echo "ai-module: route direct native sink writes through ai.<owner>.files, ai.<owner>.activation or ai.<owner>.services; a lifecycle those cannot express reopens the design in packages/ai-module/docs/DESIGN.md rather than exempting the line." >&2
         ${pkgs.coreutils}/bin/cat "$work/actual" >&2
         exit 1
       fi
@@ -57,7 +60,7 @@
     # Each forbidden form must fail in every newly covered location. A fixture
     # goes through the same corpus discovery, exception filter and failure path.
     for path in ${lib.escapeShellArgs negatives}; do
-      for sink in home.file home.activation files tasks enterTest; do
+      for sink in home.file home.activation files tasks enterTest systemd.user launchd.agents processes; do
         fixture="$work/negative"
         ${pkgs.coreutils}/bin/mkdir -p "$fixture/lib" "$fixture/packages" "$fixture/''${path%/*}"
         printf '  %s.probe = {};\n' "$sink" > "$fixture/$path"
@@ -69,7 +72,7 @@
         ${pkgs.coreutils}/bin/rm "$fixture/$path"
       done
     done
-    echo "PASS: 35 direct native sink fixtures refused" > "$out"
+    echo "PASS: 56 direct native sink fixtures refused" > "$out"
   '';
 in {
   checks.ai-module-no-direct-sink-writes =
