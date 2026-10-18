@@ -77,6 +77,7 @@
     slots = lib.imap0 (index: slot: slot // {variable = "_ai_secret_${toString index}";}) (lib.concatLists (lib.mapAttrsToList (key: file:
       lib.mapAttrsToList (secret: value: {inherit key secret value;}) (checkFile "ai.services.${name}.files.${key}" file).secrets)
     files));
+    slotNames = lib.concatMapStringsSep " " (slot: slot.variable) slots;
     render = key: file: let
       own = lib.filter (slot: slot.key == key) slots;
       tokens = builtins.listToAttrs (map (slot: lib.nameValuePair ("{" + "$" + slot.secret + "}") slot.variable) own);
@@ -96,6 +97,9 @@
       '';
   in
     lib.optionalString (files != {}) ''
+      # Inherited exported slots must lose both their value and export flag
+      # before any reader runs; resolved slots are private to this launcher.
+      ${lib.optionalString (slots != []) "unset ${slotNames}"}
       {
       ${lib.concatMapStringsSep "\n" (slot:
         redact.assign {
@@ -106,21 +110,36 @@
       slots}
       :
       }
-      _ai_dir="''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}"/${lib.escapeShellArg "ai-service-${name}"}
-      ${coreutils}/mkdir -p "$_ai_dir"
+      if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
+        _ai_dir="$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}"}
+      else
+        _ai_dir="''${TMPDIR:-/tmp}/ai-service-$(${coreutils}/id -u)-"${lib.escapeShellArg name}
+      fi
+      umask 077
+      if ! ${coreutils}/mkdir -m 0700 -- "$_ai_dir" 2>/dev/null; then
+        if [ -L "$_ai_dir" ] || [ ! -d "$_ai_dir" ] || [ ! -O "$_ai_dir" ]; then
+          printf '%s\n' ${lib.escapeShellArg "ai.services.${name}.files: runtime directory must be an owned directory, not a symlink:"} "$_ai_dir" >&2
+          exit 1
+        fi
+      fi
       ${coreutils}/chmod 0700 "$_ai_dir"
-      ${lib.concatStrings (lib.mapAttrsToList render files)}'';
+      ${lib.concatStrings (lib.mapAttrsToList render files)}
+      ${lib.optionalString (slots != []) "unset ${slotNames}"}'';
   mkLauncher = {
     pkgs,
     name,
     entry,
   }: let
-    # Checks launch untyped entries, which carry no `files`.
-    files = entry.files or {};
+    inherit (entry) files;
     variables = builtins.attrNames entry.environment ++ lib.mapAttrsToList (_: file: file.variable) files;
     clashes = lib.unique (lib.filter (variable: lib.count (other: other == variable) variables > 1) variables);
+    reserved =
+      map (variable: "ai.services.${name}.environment.${variable}") (lib.filter (lib.hasPrefix "_ai_") (builtins.attrNames entry.environment))
+      ++ lib.mapAttrsToList (key: _: "ai.services.${name}.files.${key}.variable") (lib.filterAttrs (_: file: lib.hasPrefix "_ai_" file.variable) files);
   in
-    if clashes != []
+    if reserved != []
+    then throw "${lib.concatStringsSep ", " reserved}: the _ai_ variable prefix is reserved for the service launcher"
+    else if clashes != []
     then throw "ai.services.${name}: a file variable repeats another file's or an environment variable: ${lib.concatStringsSep ", " clashes}"
     else
       strictShellApplication pkgs {

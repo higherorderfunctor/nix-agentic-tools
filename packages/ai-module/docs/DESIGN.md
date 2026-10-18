@@ -254,15 +254,22 @@ daemon that reads its secrets from a file rather than its environment. Its
 `content` is JSON text whose secrets are whole-string `{$NAME}` placeholders
 (`lib/extracted/render.nix` produces them), so the text is safe in the store;
 `secrets` maps each NAME to a redact reference; `variable` names the exported
-path. The launcher reads each secret into an unexported variable, creates
-`${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/ai-service-<key>` 0700, has jq replace
-every placeholder string with its secret as a JSON string (the secret reaches jq
-through its environment, never argv), writes a 0600 temporary file, renames it
-to `<file key>.json` and exports `variable` with that path. Content and secrets
-are both known at evaluation, so the launcher refuses to build when a
-placeholder has no secret, a secret has no placeholder, or a `variable` repeats
-another file's or an environment name. JSON is the one format: YAML 1.2 readers
-take it as is. A daemon's own writes to the file are lost at the next start.
+path. The launcher clears inherited private secret slots before reading any
+secret and clears resolved slots before exec. Secret readers and the daemon
+never inherit those values; jq alone receives the needed slots in its
+environment, never argv. The launcher atomically creates a 0700 directory at
+`$XDG_RUNTIME_DIR/ai-service-<key>`, or, without XDG_RUNTIME_DIR,
+`${TMPDIR:-/tmp}/ai-service-<uid>-<key>` (numeric user ID). An existing
+directory must be owned by the current user and must not be a symlink; other
+inputs fail before chmod or writes. The runtime root must already exist. jq
+replaces every placeholder string with its secret as a JSON string, writes a
+0600 temporary file, renames it to `<file key>.json` and exports `variable` with
+that path. Content and secrets are both known at evaluation, so the launcher
+refuses to build when a placeholder has no secret, a secret has no placeholder,
+or a `variable` repeats another file's or an environment name. Declared
+environment names and file variables cannot start with `_ai_`, the launcher's
+private namespace. JSON is the one format: YAML 1.2 readers take it as is. A
+daemon's own writes to the file are lost at the next start.
 
 `lib/instances.nix` gives a tool with typed settings named instances:
 `ai.<owner>.instances.<name>` with `enable`, `package`, `port`, `settings` and

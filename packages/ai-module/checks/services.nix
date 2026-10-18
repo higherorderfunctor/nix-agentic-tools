@@ -89,6 +89,9 @@
     name = "services-test-reader";
     text = ''
       if [ -n "''${SERVICE_READER_FAIL:-}" ]; then exit 1; fi
+      if [ -n "''${SERVICE_READER_CHECK_SLOTS:-}" ]; then
+        test -z "''${_ai_secret_0+x}''${_ai_secret_1+x}"
+      fi
       printf '%s' 'secret value'
     '';
   };
@@ -107,6 +110,7 @@
         LITERAL = "literal $(false) ' quote";
         PRIVATE = redact.command "${launcherReader}/bin/services-test-reader";
       };
+      files = {};
     };
   };
   # A rendered file: two secrets, one needing JSON escapes and read from a
@@ -274,6 +278,8 @@ in {
       ai-module-services-files = let
         launcher = fileLauncher (fileEntry {inherit config;});
       in
+        assert lib.assertMsg (refused ((fileEntry {inherit config;}) // {environment._ai_dir = "collision";})) "ai-module-services-files: reserved environment variable was accepted";
+        assert lib.assertMsg (refused (fileEntry {config = config // {variable = "_ai_dir";};})) "ai-module-services-files: reserved file variable was accepted";
         assert lib.assertMsg (
           refused (fileEntry {config = config // {secrets = builtins.removeAttrs config.secrets ["TOKEN"];};})
           && refused (fileEntry {config = config // {secrets = config.secrets // {UNUSED = redact.file "/run/secrets/unused";};};})
@@ -296,18 +302,40 @@ in {
             export XDG_RUNTIME_DIR="$TMPDIR/run" RECEIVED="$TMPDIR/received"
             mkdir -p -m 0755 "$XDG_RUNTIME_DIR/ai-service-files-test" "$RECEIVED"
             touch "$XDG_RUNTIME_DIR/ai-service-files-test/config.json"
-            ${launcher}/bin/ai-service-files-test
+            _ai_secret_0=inherited _ai_secret_1=inherited SERVICE_READER_CHECK_SLOTS=1 ${launcher}/bin/ai-service-files-test
             test "$(cat "$RECEIVED/path")" = "$XDG_RUNTIME_DIR/ai-service-files-test/config.json"
             test "$(${pkgs.coreutils}/bin/tr '\n' ' ' < "$RECEIVED/modes")" = '600 700 '
             ${pkgs.jq}/bin/jq -e --rawfile key /build/secret \
               '. == {access: {"api-keys": [$key]}, literal: "plain {$text}", nested: [{token: "secret value"}], port: 8317}' "$RECEIVED/config.json"
             test "$(ls -A "$XDG_RUNTIME_DIR/ai-service-files-test")" = config.json
-            if ${pkgs.gnugrep}/bin/grep -Fe marker -e 'secret value' "$RECEIVED/environment"; then
+            if ${pkgs.gnugrep}/bin/grep -Ee '^_ai_secret_[0-9]+=' -e marker -e 'secret value' "$RECEIVED/environment"; then
               echo "a file secret reached the daemon environment" >&2
               exit 1
             fi
             content="$(${pkgs.gnugrep}/bin/grep -o '/nix/store/[a-z0-9]*-ai-service-files-test-config.json' ${launcher}/bin/ai-service-files-test)"
             ${pkgs.diffutils}/bin/cmp "$content" ${pkgs.writeText "expected-content" fileContent}
+            # An existing owned directory remains reusable after restart.
+            ${launcher}/bin/ai-service-files-test
+            # A pre-existing symlink or regular file must fail before writes
+            # or chmod on its target.
+            mv "$XDG_RUNTIME_DIR/ai-service-files-test" "$TMPDIR/redirect"
+            chmod 0755 "$TMPDIR/redirect"
+            ln -s "$TMPDIR/redirect" "$XDG_RUNTIME_DIR/ai-service-files-test"
+            if ${launcher}/bin/ai-service-files-test; then
+              echo "a symlink runtime directory was accepted" >&2
+              exit 1
+            fi
+            test "$(stat -c '%a' "$TMPDIR/redirect")" = 755
+            unlink "$XDG_RUNTIME_DIR/ai-service-files-test"
+            touch "$XDG_RUNTIME_DIR/ai-service-files-test"
+            if ${launcher}/bin/ai-service-files-test; then
+              echo "a regular-file runtime directory was accepted" >&2
+              exit 1
+            fi
+            # A shared fallback root separates users by numeric uid.
+            mkdir "$TMPDIR/fallback"
+            XDG_RUNTIME_DIR= TMPDIR="$TMPDIR/fallback" ${launcher}/bin/ai-service-files-test
+            test "$(cat "$RECEIVED/path")" = "$TMPDIR/fallback/ai-service-$(id -u)-files-test/config.json"
             touch "$out"
           '';
       ai-module-services-rotation = pkgs.runCommandLocal "ai-module-services-rotation" {} ''

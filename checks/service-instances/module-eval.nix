@@ -152,7 +152,7 @@ in {
             printf '%s' client-secret > /build/client-key
             printf '%s' management-secret > /build/management-key
             export XDG_RUNTIME_DIR="$TMPDIR/run" RECEIVED="$TMPDIR/received"
-            mkdir -p "$RECEIVED"
+            mkdir -p "$RECEIVED" "$XDG_RUNTIME_DIR"
             ${launcher}/bin/ai-service-cliproxyapi-main
             printf '%s\n' "--config $XDG_RUNTIME_DIR/ai-service-cliproxyapi-main/config.json" /build/state/main > expected
             ${pkgs.diffutils}/bin/diff -u expected "$RECEIVED/argv"
