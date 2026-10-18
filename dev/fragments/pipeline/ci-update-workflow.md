@@ -1,7 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-18 — both systems' name evaluations are budgeted by
-> function count; Darwin names and every drvPath gate their job.
+> **Last verified:** 2026-10-18 — `checks-eval-darwin` is a required context;
+> both systems' name evaluations are budgeted by function count.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -245,10 +245,11 @@ receipts must agree on the package universe and assign every package exactly
 once. The existing required `build (x86_64-linux, ubuntu-latest)` and
 `build (aarch64-darwin, macos-latest)` contexts check worker outcomes and
 complete native coverage. Both fail if any worker fails, including a failure
-after receipt upload. The two dedicated `kiro-patched` jobs, `checks-matrix`,
-`test`, and `gitleaks` are the other five required contexts; since 2026-10-14
-`checks-matrix` builds every flake check and `test` only runs the workflow gate
-scripts. The full Devenv Diagnostic remains manual-only.
+after receipt upload. The two dedicated `kiro-patched` jobs,
+`checks-eval-darwin`, `checks-matrix`, `test`, and `gitleaks` are the other six
+required contexts; since 2026-10-14 `checks-matrix` builds every flake check and
+`test` only runs the workflow gate scripts. The full Devenv Diagnostic remains
+manual-only.
 
 Generated documents stay in the flake checks. Kiro's scoped native jobs build
 the extracted-metadata drift check and packaged KAS checks on both Linux and
@@ -324,16 +325,18 @@ ones.
 
 ### Darwin check evaluation
 
-`checks-eval-darwin` evaluates `checks.aarch64-darwin` explicitly. It is not a
-required context and waits for the package shards so it never takes a macOS
-runner ahead of a required Darwin leg. Both its names step and its drvPath step
-gate the job: either failure fails the job. The name list is the per-system
-baseline for platform-declared checks. Forcing every drvPath has its own
-25-minute timeout because macOS swaps rather than kills an oversized evaluator.
-Counts, peak RSS and wall time go to the log and the step summary; both JSON
-results and both `time -l` outputs are uploaded as the
-`checks-eval-aarch64-darwin` artifact. First run, 2026-10-18: 997 names in 51 s
-at 1984 MiB; forcing every drvPath reached 2928 MiB in 161 s and failed on
+`checks-eval-darwin` evaluates `checks.aarch64-darwin` explicitly. It is a
+required context since 2026-10-18: with the lazy `checks` option nothing else
+forces every Darwin check value, so this job is the only place a Linux-only
+check leaking onto Darwin fails. It waits for the package shards so it does not
+take a macOS runner ahead of them. Both its names step and its drvPath step gate
+the job: either failure fails the job. The name list is the per-system baseline
+for platform-declared checks. Forcing every drvPath has its own 25-minute
+timeout because macOS swaps rather than kills an oversized evaluator. Counts,
+peak RSS and wall time go to the log and the step summary; both JSON results and
+both `time -l` outputs are uploaded as the `checks-eval-aarch64-darwin`
+artifact. First run, 2026-10-18: 997 names in 51 s at 1984 MiB; forcing every
+drvPath reached 2928 MiB in 161 s and failed on
 `module-glab-keyring-sync-hm-wiring`, a Linux-only assertion no CI leg had
 evaluated before. A second run reached 3064 MiB. Linux-only checks now omit
 their names on Darwin; a later leak whose evaluation fails on Darwin fails the

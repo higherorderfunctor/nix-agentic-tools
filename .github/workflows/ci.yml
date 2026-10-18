@@ -942,14 +942,15 @@ jobs:
   # contracts live in the flake checks above, so no automatic PR or push path
   # pulls the interactive shell closure.
 
-  # Explicit Darwin evaluation keeps coverage when check values become lazy:
-  # names and every drvPath both gate this job, which is not a required context.
+  # Explicit Darwin evaluation keeps coverage now that check values are lazy:
+  # names and every drvPath both gate this job, a required context since
+  # 2026-10-18 (nothing else forces every Darwin check value any more).
   # First run, 2026-10-18 on macos-latest: 997 names in 51 s at 1984 MiB;
   # forcing every drvPath reached 2928 MiB in 161 s and then failed on the
   # Linux-only module-glab-keyring-sync-hm-wiring. A second run reached 3064 MiB.
   # Linux names were 1011 at 35 s / 3.7 GB on a Linux host the same day.
   # Waiting for package shards keeps this job from taking a macOS runner slot
-  # ahead of a required Darwin leg (5 concurrent on this plan).
+  # ahead of the package shards (5 concurrent on this plan).
   checks-eval-darwin:
     needs: build-packages
     if: ${{ !cancelled() }}

@@ -966,7 +966,7 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-17 — `checks-matrix` is the seventh required
+> **Last verified:** 2026-10-18 — `checks-eval-darwin` is the eighth required
 > context; `test` evaluates only. The worker and three review roles run inside a
 > loop of at most 3 rounds; unsettled findings go back to the orchestrator to
 > validate. Merge teardown deletes the PR's `archive/*` backups.
@@ -1011,14 +1011,18 @@ the repo before committing.
 >   costs a paid review re-establishing a trigger that fires on readiness only.
 
 `main` is the trunk. Its branch-protection ruleset requires a pull request, no
-force-push, no deletion, and seven required status checks —
+force-push, no deletion, and eight required status checks —
 `build (x86_64-linux, ubuntu-latest)`, `build (aarch64-darwin, macos-latest)`,
-`checks-matrix`, `kiro-patched (x86_64-linux, ubuntu-latest)`,
+`checks-eval-darwin`, `checks-matrix`,
+`kiro-patched (x86_64-linux, ubuntu-latest)`,
 `kiro-patched (aarch64-darwin, macos-latest)`, `test`, and `gitleaks`.
 `checks-matrix` was promoted 2026-10-14: it builds every flake check through
-Hestia's evaluate-once matrix, and `test` only evaluates. Both `kiro-patched`
-contexts were promoted 2026-08-13 with PR #895. It requires **zero approving
-reviews** but it DOES require **every review thread to be resolved**
+Hestia's evaluate-once matrix, and `test` only evaluates. `checks-eval-darwin`
+was promoted 2026-10-18 after six green runs: since the `checks` option became
+lazy (#2675) no other Darwin context forces every check value, so without it a
+Linux-only check leaking onto Darwin merges green. Both `kiro-patched` contexts
+were promoted 2026-08-13 with PR #895. It requires **zero approving reviews**
+but it DOES require **every review thread to be resolved**
 (`required_review_thread_resolution`, enabled 2026-07-29).
 
 The full Devenv Diagnostic is now `workflow_dispatch` only. It was promoted to a
@@ -1328,8 +1332,8 @@ Open a separate PR when the change is genuinely unrelated to any open one.
 `.github/workflows/update.yml` sweeps dependencies 4x/day (00:00, 06:00, 12:00,
 18:00 UTC) and opens one PR per dependency that actually moved. Each is armed
 with GitHub-native **auto-merge (squash)** as it is created, and re-armed on
-every later sweep, so it merges itself once the seven required checks go green.
-Safe precisely because the ruleset requires no approving review, all seven
+every later sweep, so it merges itself once the eight required checks go green.
+Safe precisely because the ruleset requires no approving review, all eight
 status checks must pass, and an unresolved Copilot thread still holds the merge
 through the separate review-thread rule.
 
