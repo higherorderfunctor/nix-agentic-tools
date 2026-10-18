@@ -103,10 +103,12 @@ before it builds:
   if `--all-systems` is ever adopted. Adopting it is an open operator decision,
   not an oversight: it changes what a required check does.
 
-- `ci.yml` checks-eval-darwin job — `systems: aarch64-darwin` (defaults). Darwin
-  builds are no longer the only unconditional evaluation: this informational,
-  non-required job gates on full-set names and measures full `drvPath` forcing,
-  replacing accidental weak head normal form coverage as the set becomes lazy.
+- `ci.yml` checks-eval-darwin job — `systems: aarch64-darwin` (defaults). The
+  one job that evaluates `checks.aarch64-darwin` on purpose: it lists the names
+  (the gate, and the per-system baseline for platform-declared checks) and then
+  forces every drvPath as a measurement that may fail. Informational and not
+  required; it runs after the package shards so it never delays a required
+  Darwin leg.
 - `ci.yml` kiro-patched job — `systems: ${{ matrix.system }}` (defaults), gated
   on `steps.scope.outputs.needed`. It warms only what its own eval needs; it
   holds no Cachix credentials and its build deliberately drops the project cache

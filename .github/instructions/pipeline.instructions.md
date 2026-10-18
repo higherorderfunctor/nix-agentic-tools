@@ -329,13 +329,21 @@ ones.
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
 `dev/ci-check-evaluator.nix` records why.
 
-The informational, non-required `checks-eval-darwin` job explicitly evaluates
-the full Darwin check set, supplementing native builds and replacing accidental
-weak head normal form coverage as the set becomes lazy. Names gate the job and
-are saved before full `drvPath` forcing, which may fail while measuring macOS
-resource fit. Counts, peak RSS and timing appear in logs and the step summary;
-both JSON results and stderr/timing logs are uploaded as an artifact. Actual
-Darwin runner fit remains unmeasured.
+### Darwin check evaluation
+
+`checks-eval-darwin` is the one job that evaluates `checks.aarch64-darwin` on
+purpose. It is informational and not required, and it waits for the package
+shards so it never takes a macOS runner ahead of a required Darwin leg. Its
+names step is the gate: a failure fails the job, and the name list is the
+per-system baseline for platform-declared checks. Its drvPath step forces every
+Darwin check derivation under `continue-on-error` and its own timeout, because
+macOS swaps rather than kills an oversized evaluator. Counts, peak RSS and wall
+time go to the log and the step summary; both JSON results and both `time -l`
+outputs are uploaded as the `checks-eval-aarch64-darwin` artifact. First run,
+2026-10-18: 997 names in 51 s at 1.98 GB; forcing every drvPath reached 2.93 GB
+in 161 s and failed on `module-glab-keyring-sync-hm-wiring`, a Linux-only
+assertion no CI leg had evaluated before. The platform-gate PR fixes that check
+and makes the drvPath step a hard failure.
 
 ### Reports and deliberate manual updates
 

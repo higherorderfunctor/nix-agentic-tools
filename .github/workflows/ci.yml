@@ -869,84 +869,6 @@ jobs:
             ${{ runner.temp }}/rows.jsonl
           if-no-files-found: warn
 
-  # Explicit full Darwin evaluation replaces the accidental weak head normal form coverage
-  # that disappears when the check set becomes lazy. Record names first so
-  # they survive a drvPath OOM, then measure whether full forcing fits the
-  # roughly 7 GB macOS runner; that fit is not yet known.
-  # Informational, non-required: Linux names measured 35 s / 3.7 GB for 1011
-  # checks on 2026-10-17. Use nix-eval-jobs if memory binds; do not infer
-  # Darwin runner memory use from the Linux measurement.
-  checks-eval-darwin:
-    runs-on: macos-latest
-    timeout-minutes: 60
-    env:
-      NIX_CONFIG: |
-        max-jobs = 1
-        cores = 2
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
-      - uses: ./.github/actions/assert-nix-config
-        with:
-          require: |
-            ^accept-flake-config = true
-      - name: Warm IFD sources (retry, best-effort)
-        uses: ./.github/actions/warm-ifd
-        with:
-          systems: aarch64-darwin
-      - name: Evaluate aarch64-darwin check names
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          /usr/bin/time -l nix eval --json .#.checks.aarch64-darwin --apply builtins.attrNames \
-            > "$RUNNER_TEMP/darwin-check-names.json" 2> "$RUNNER_TEMP/darwin-check-names.time"
-          count="$(jq length "$RUNNER_TEMP/darwin-check-names.json")"
-          # BSD time on macOS reports maximum resident set size in BYTES.
-          rss="$(awk '/maximum resident set size/ {printf "%.1f", $1 / 1048576}' "$RUNNER_TEMP/darwin-check-names.time")"
-          printf '| Darwin check names | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n' \
-            "$count" "$rss" | tee -a "$GITHUB_STEP_SUMMARY"
-      # Names gate this job; drvPath forcing measures resource fit. A later
-      # PR can make forcing a hard failure once it is known to fit.
-      - name: Force every aarch64-darwin check derivation
-        id: force-drvs
-        continue-on-error: true
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          status=0
-          /usr/bin/time -l nix eval --json .#.checks.aarch64-darwin \
-            --apply 'checks: builtins.mapAttrs (_: check: check.drvPath) checks' \
-            > "$RUNNER_TEMP/darwin-check-drvs.json" 2> "$RUNNER_TEMP/darwin-check-drvs.time" || status=$?
-          count=unavailable
-          if [ "$status" -eq 0 ]; then
-            count="$(jq 'keys | length' "$RUNNER_TEMP/darwin-check-drvs.json")"
-          else
-            echo '::warning::forcing every aarch64-darwin check drvPath failed (likely memory); see the uploaded log'
-            tail -n 40 "$RUNNER_TEMP/darwin-check-drvs.time"
-          fi
-          # BSD time on macOS reports maximum resident set size in BYTES.
-          rss="$(awk '/maximum resident set size/ {printf "%.1f", $1 / 1048576}' "$RUNNER_TEMP/darwin-check-drvs.time")"
-          wall="$(awk '/ real / {print $1}' "$RUNNER_TEMP/darwin-check-drvs.time")"
-          printf '\n| Darwin check drvPaths | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n| Wall time (s) | %s |\n' \
-            "$count" "$rss" "$wall" | tee -a "$GITHUB_STEP_SUMMARY"
-          exit "$status"
-      - name: Upload aarch64-darwin check evaluation
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: checks-eval-aarch64-darwin
-          path: |
-            ${{ runner.temp }}/darwin-check-drvs.json
-            ${{ runner.temp }}/darwin-check-names.json
-            ${{ runner.temp }}/darwin-check-drvs.time
-            ${{ runner.temp }}/darwin-check-names.time
-          if-no-files-found: error
-
   checks-build:
     name: checks (${{ matrix.name }})
     needs: checks-eval
@@ -1010,6 +932,105 @@ jobs:
   # the manual Devenv Diagnostic workflow. Its extracted deterministic
   # contracts live in the flake checks above, so no automatic PR or push path
   # pulls the interactive shell closure.
+
+  # Darwin never evaluated its check set on purpose. The macOS steps that
+  # build one named check force every Darwin check to weak head normal form as
+  # a side effect, which is today's whole Darwin coverage, and it goes away
+  # once the check set becomes lazy. This job is the explicit replacement: the
+  # names step is the gate and the per-system baseline for platform-declared
+  # checks; the drvPath step forces the full set. Informational and not
+  # required. First run, 2026-10-18 on macos-latest: 997 names in 51 s at
+  # 1.98 GB; forcing every drvPath reached 2.93 GB in 161 s and then failed on
+  # module-glab-keyring-sync-hm-wiring, a Linux-only assertion no CI leg had
+  # ever evaluated. Memory fits the ~7 GB runner; the platform-gate PR fixes
+  # that check and turns the drvPath step into a hard failure. Comparison
+  # point: `checks.x86_64-linux` names were 1011 at 35 s / 3.7 GB on a Linux
+  # host the same day. It waits for the package shards so it never takes a
+  # macOS runner slot ahead of a required Darwin leg (5 concurrent on this plan).
+  checks-eval-darwin:
+    needs: build-packages
+    if: ${{ !cancelled() }}
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      # The IFD builds this evaluation triggers run in the daemon on the same
+      # 7 GB; keep them to one job on two cores, as extracted-facts does.
+      NIX_CONFIG: |
+        max-jobs = 1
+        cores = 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - uses: ./.github/actions/assert-nix-config
+        with:
+          require: |
+            ^accept-flake-config = true
+            ^max-jobs = 1
+      - name: Warm IFD sources (retry, best-effort)
+        uses: ./.github/actions/warm-ifd
+        with:
+          systems: aarch64-darwin
+      # BSD time on macOS reports maximum resident set size in BYTES and writes
+      # its report to stderr, so nix's own stderr lands in the same .time file.
+      - name: Evaluate aarch64-darwin check names
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          status=0
+          /usr/bin/time -l nix eval --json .#.checks.aarch64-darwin --apply builtins.attrNames \
+            > "$RUNNER_TEMP/darwin-check-names.json" 2> "$RUNNER_TEMP/darwin-check-names.time" || status=$?
+          if [ "$status" -ne 0 ]; then
+            tail -n 40 "$RUNNER_TEMP/darwin-check-names.time" >&2
+            exit "$status"
+          fi
+          count="$(jq length "$RUNNER_TEMP/darwin-check-names.json")"
+          rss="$(awk '/maximum resident set size/ {printf "%.1f", $1 / 1048576}' "$RUNNER_TEMP/darwin-check-names.time")"
+          wall="$(awk '/ real / {print $1}' "$RUNNER_TEMP/darwin-check-names.time")"
+          printf '| Darwin check names | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n| Wall time (s) | %s |\n' \
+            "$count" "$rss" "$wall" | tee -a "$GITHUB_STEP_SUMMARY"
+      # Names gate this job; drvPath forcing is tolerated until the
+      # platform-gate PR fixes the one Darwin failure it found. macOS does not
+      # kill an oversized process, it swaps, so a misfit shows up as this step
+      # hitting its own timeout, which continue-on-error covers; a job timeout
+      # would not be covered and would lose the names result.
+      - name: Force every aarch64-darwin check derivation
+        continue-on-error: true
+        timeout-minutes: 25
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          status=0
+          /usr/bin/time -l nix eval --json .#.checks.aarch64-darwin \
+            --apply 'checks: builtins.mapAttrs (_: check: check.drvPath) checks' \
+            > "$RUNNER_TEMP/darwin-check-drvs.json" 2> "$RUNNER_TEMP/darwin-check-drvs.time" || status=$?
+          count=unavailable
+          if [ "$status" -eq 0 ]; then
+            count="$(jq 'keys | length' "$RUNNER_TEMP/darwin-check-drvs.json")"
+          else
+            echo '::warning::forcing every aarch64-darwin check drvPath failed (likely memory); see the uploaded log'
+            tail -n 40 "$RUNNER_TEMP/darwin-check-drvs.time"
+          fi
+          rss="$(awk '/maximum resident set size/ {printf "%.1f", $1 / 1048576}' "$RUNNER_TEMP/darwin-check-drvs.time")"
+          wall="$(awk '/ real / {print $1}' "$RUNNER_TEMP/darwin-check-drvs.time")"
+          printf '\n| Darwin check drvPaths | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n| Wall time (s) | %s |\n' \
+            "$count" "$rss" "$wall" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Upload aarch64-darwin check evaluation
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checks-eval-aarch64-darwin
+          path: |
+            ${{ runner.temp }}/darwin-check-drvs.json
+            ${{ runner.temp }}/darwin-check-names.json
+            ${{ runner.temp }}/darwin-check-drvs.time
+            ${{ runner.temp }}/darwin-check-names.time
+          if-no-files-found: warn
 
   # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
   # CI job is the safety net for the `--no-verify` path: even when
