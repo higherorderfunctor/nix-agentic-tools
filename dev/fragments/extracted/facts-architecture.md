@@ -41,9 +41,12 @@ into the pinned source's package. `goTestExtract` runs it offline beside
 `lib/extracted/go/nat_shared_test.go`, which holds the node type vocabulary, the
 field walk and the output every Go owner shares; codec-specific typing stays in
 the owner's test. CLIProxyAPI's `config` fact holds its v8 path-to-node mapping
-as an opaque object because paths contain dots. Its reconciliation reader
-consumes `config` for credential reasons. The owner fragment
-`packages/cliproxyapi/docs/cliproxyapi-extraction.md` describes that extraction.
+as an opaque object because paths contain dots; CPA Manager Plus records
+`config` and `environment` the same way. Their reconciliation readers consume
+those facts for credential reasons. The owner fragments
+`packages/cliproxyapi/docs/cliproxyapi-extraction.md` and
+`packages/cpa-manager-plus/docs/cpa-manager-plus-extraction.md` describe each
+extraction.
 
 Consumers read the aggregate with `get` and `children`, at the place the value
 is used. Nothing else reads a raw: the guard (`checks.extracted-contract-guard`)

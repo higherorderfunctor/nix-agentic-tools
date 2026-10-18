@@ -3,6 +3,7 @@
   chatgpt-codex = ../../packages/chatgpt-codex/extracted;
   claude-code = ../../packages/claude-code/extracted;
   cliproxyapi = ../../packages/cliproxyapi/extracted;
+  cpa-manager-plus = ../../packages/cpa-manager-plus/extracted;
   git-absorb = ../../packages/git-absorb/extracted;
   git-branchless = ../../packages/git-branchless/extracted;
   git-revise = ../../packages/git-revise/extracted;
