@@ -102,14 +102,41 @@ func (x *natExtractor) doc(owner reflect.Type, name string) string {
 	return docs[owner.Name()+"."+name]
 }
 
-// A YAML-decoded Go type as a node type. A custom decoder may accept shapes
-// beyond the reflected fields, so its type is `any`.
+// A custom YAML decoder's node type is measured, not assumed: each probe is
+// decoded into the type through yaml.v3, the library CPA decodes with. A
+// decoder that accepts a non-mapping probe is `any`: PluginInstanceConfig
+// (plugins.configs.<name>) keeps any YAML subtree, and
+// DisableImageGenerationMode (multimedia.disable-image-generation) reads the
+// scalar `true`. One that rejects both and accepts the empty mapping is an
+// `object` with its reflected fields as children:
+// CredentialConcurrencyConfig (credentials.concurrency) and
+// CodexLiveMediaRelayConfig (oauth.providers.codex.live-media-relay) decode
+// into a plain struct, which refuses `true` and `[]`. A decoder never seen to
+// accept a mapping is not measured as one and stays `any`.
+var natNonMappings = []string{"true", "[]"}
+
+func natDecodes(t reflect.Type, probe string) bool {
+	return yaml.Unmarshal([]byte(probe), reflect.New(t).Interface()) == nil
+}
+
+// A YAML-decoded Go type as a node type.
 func (x *natExtractor) kind(t reflect.Type, path string) string {
 	if t == natDuration {
 		return "duration"
 	}
-	if t == natYAMLNode || t.Implements(natUnmarshaler) || reflect.PointerTo(t).Implements(natUnmarshaler) {
+	if t == natYAMLNode {
 		return "any"
+	}
+	if t.Implements(natUnmarshaler) || reflect.PointerTo(t).Implements(natUnmarshaler) {
+		for _, probe := range natNonMappings {
+			if natDecodes(t, probe) {
+				return "any"
+			}
+		}
+		if !natDecodes(t, "{}") {
+			return "any"
+		}
+		return "object"
 	}
 	switch t.Kind() {
 	case reflect.Struct:
@@ -185,8 +212,8 @@ func natDeref(t reflect.Type) reflect.Type {
 }
 
 // Emits `path` and every node below it. `skip` drops direct fields of an
-// object at `path` by tag. Custom structs keep known field measurements even
-// though their decoder can accept non-object YAML.
+// object at `path` by tag. A struct whose custom decoder makes it `any` keeps
+// its reflected fields as children.
 func (x *natExtractor) walk(t reflect.Type, path, doc string, emit func(string, natNode), skip func(string) bool) {
 	t = natDeref(t)
 	kind := x.kind(t, path)

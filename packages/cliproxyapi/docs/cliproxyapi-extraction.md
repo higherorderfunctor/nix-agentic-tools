@@ -1,9 +1,9 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-17 — CPA 8.0.32 config is measured offline with its
+> **Last verified:** 2026-10-18 — CPA 8.0.33 config is measured offline with its
 > pinned source, vendor tree and toolchain, including canonical boundary
-> metadata and custom-decoder uncertainty; shared drift and reconciliation guard
-> the committed facts.
+> metadata; a custom YAML decoder's node type is probed, not assumed; shared
+> drift and reconciliation guard the committed facts.
 
 ## Why reflection also needs the v8 tables
 
@@ -40,10 +40,16 @@ sections that no Go struct declares (`server`, `access`, `upstream`, ...) are
 `object` nodes carrying the template's section comment. A key the template sets
 with no node fails extraction, except below an `any` node. Structs that flatten
 into the same mapping join their descriptions; conflicting leaves fail
-extraction. A type with a custom YAML decoder is `any`, because its accepted
-shapes can exceed its reflected Go type. Custom structs retain their known child
-fields: `plugins.configs.<name>` accepts arbitrary YAML, while its mapping form
-has the measured `enabled` and `priority` fields.
+extraction. A type with a custom YAML decoder is typed by probing that decoder
+through yaml.v3: the scalar `true`, the sequence `[]` and the mapping `{}` are
+each decoded into it. Accepting a non-mapping probe makes it `any`, and so does
+rejecting the mapping. Otherwise it is an `object` whose reflected fields are
+its children, as for a plain struct. `credentials.concurrency` and
+`oauth.providers.codex.live-media-relay` decode into plain structs and are
+`object`; `multimedia.disable-image-generation` reads `true` and
+`plugins.configs.<name>` keeps any YAML subtree, so both are `any`. An `any`
+struct still retains its known child fields: the mapping form of
+`plugins.configs.<name>` has the measured `enabled` and `priority` fields.
 
 The raw has one `config` tree. `extracted/facts.json` declares it as an opaque
 `object` because its keys contain dots, with one Linux measurement because the
