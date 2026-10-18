@@ -1,8 +1,9 @@
 # CLIProxyAPI typed settings
 
 > **Last verified:** 2026-10-18 — 905 config nodes give the settings type
-> through `lib/extracted/options.nix`, with four refinements; the render loads
-> through CPA 8.0.33's `LoadConfig` in `cliproxyapi-settings`.
+> through `lib/extracted/options.nix`, with four refinements; the clean render
+> passes native v8 validation and loads through CPA 8.0.33's `LoadConfig` in
+> `cliproxyapi-settings`.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -29,16 +30,17 @@ be a writable copy, never the store path.
 
 ## Refinements
 
-Each narrows a measured type to what the loader accepts, citing the refusal in
-`internal/config/`:
+Each narrows a measured type using a native constraint in `internal/config/`:
 
 - `config-version`: `enum [8]` (`config_v8.go`, "unsupported config-version
   (expected 8)").
 - `credentials.in-flight.{snapshot-interval,stale-after,staging-retention}`:
   measured `string`, typed as a Go duration, because `Durations` in
   `credential_in_flight.go` refuses the config when `time.ParseDuration` fails.
-- `multimedia.disable-image-generation`: measured `any` (its custom decoder),
-  typed `bool` or `"chat"`/`"passthrough"` (`disable_image_generation_mode.go`).
+
+The duration refinement checks grammar only; positivity, numeric bounds and
+overflow remain native validation. `multimedia.disable-image-generation` keeps
+the extracted `any` type, including native string aliases such as `"off"`.
 
 Cross-field rules stay outside the type: `stale-after` at least three snapshot
 intervals, in-flight byte bounds, live media relay port ranges, trusted proxies
@@ -46,8 +48,13 @@ as IPs or CIDRs, catalogs as http(s) URLs or absolute paths.
 
 ## Check
 
-`cliproxyapi-settings` evaluates `sample` through `settingsType` with overrides
-for those cross-field rules, renders it, fills each placeholder with a dummy
-holding `"`, `'` and `\`, and runs `checks/settings_test.go` in
-`internal/config`: `LoadConfig` twice (the second load reads the first one's
-rewrite, as a restart does), and `requests.proxy-url` must read back verbatim.
+`cliproxyapi-settings` evaluates `sample` through `settingsType`, with valid
+overrides for raw JSON payload params, the Claude client-request-id mode and
+cross-field rules. It renders and substitutes dummy secrets, including a proxy
+URL with quotes, backslash, colon, hash, brackets, newline and a literal
+placeholder. `checks/settings_test.go` validates the clean v8 sample with native
+`ValidateV8Config` and rejects an unknown-key control, then injects a
+conflicting legacy proxy key and calls `LoadConfig` twice on a writable copy. It
+checks both raw payload rules survive, the rewritten file persists the bcrypt
+hash and removes the legacy key, every other document value stays equal after
+JSON normalization, and the hash and secret remain unchanged on reload.

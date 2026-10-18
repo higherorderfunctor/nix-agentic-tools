@@ -16,7 +16,6 @@
   overrides = {
     # refinements: the values they admit
     config-version = 8;
-    "multimedia.disable-image-generation" = "chat";
     # config/credential_in_flight.go: stale-after at least three snapshot
     # intervals, part bytes at least 1024, revision bytes at least one part
     "credentials.in-flight.max-part-bytes" = 1024;
@@ -28,12 +27,19 @@
     "models.catalog" = "/catalog.json";
     "models.codex-catalog" = "/catalog.json";
     "models.devin-catalog" = "/catalog.json";
+    # config/disable_image_generation_mode.go: the custom decoder accepts off
+    "multimedia.disable-image-generation" = "off";
     # config/codex_live.go: an IP, two UDP ports per session, STUN/TURN URLs
     "oauth.providers.codex.live-media-relay.ice-servers[].urls[]" = "stun:127.0.0.1";
     "oauth.providers.codex.live-media-relay.public-ip" = "127.0.0.1";
     "oauth.providers.codex.live-media-relay.udp-port-max" = 2;
+    # config/config_validation.go: raw params must contain valid JSON text
+    "requests.payload.default-raw[].params.<name>" = "{}";
+    "requests.payload.override-raw[].params.<name>" = "{}";
     # config/trusted_proxies.go: an IP or CIDR
     "server.trusted-proxies[]" = "127.0.0.1";
+    # config/config_normalization.go: supported client-request-id mode
+    "upstream.claude.header-defaults.client-request-id" = "on";
   };
   typed =
     (lib.evalModules {
@@ -47,8 +53,12 @@
     .config
     .settings;
   rendered = cliproxyapi.render typed;
-  # Carries every character a JSON string escapes.
-  dummy = name: "dummy\"'\\-${name}";
+  # YAML-significant characters and a literal placeholder survive substitution
+  # and the native loader's writable-file rewrite.
+  dummy = name:
+    if name == "CLIPROXYAPI_REQUESTS_PROXY_URL"
+    then "{$CLIPROXYAPI_LITERAL}: # ' \" \\ !tag [x] {y}\nnext"
+    else "dummy\"'\\-${name}";
 in {
   checks.cliproxyapi-settings = (extractedLib {inherit pkgs;}).goTest {
     env.NAT_PROXY_URL = dummy "CLIPROXYAPI_REQUESTS_PROXY_URL";

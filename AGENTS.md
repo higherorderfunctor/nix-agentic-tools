@@ -478,7 +478,8 @@ hoc machinery beside an existing abstraction.
 - **Typed settings come from the extracted generator.** An owner with extracted
   settings facts gets its option type from `lib/extracted/options.nix` and its
   config file from `lib/extracted/render.nix`, which lifts secrets into
-  placeholders. The four older generators (claude-code, kimchi, glab, git tools)
+  placeholders. This avoids duplicating type and render logic over extracted
+  facts. The four older generators (claude-code, kimchi, glab, git tools)
   migrate to it as separate work; never add another. See
   `dev/fragments/extracted/typed-settings.md`.
 - **Exclusive resources use claims.** Owners register `ai.claims.<group>.<key>`

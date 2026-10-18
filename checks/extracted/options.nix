@@ -45,6 +45,16 @@
     "items[].name".type = "string";
     labels.type = "map";
     "labels.<name>".type = "string";
+    secret-items.type = "list";
+    "secret-items[]" = {
+      secret = "a credential";
+      type = "string";
+    };
+    secret-labels.type = "map";
+    "secret-labels.<name>" = {
+      secret = "a credential";
+      type = "string";
+    };
     extra.type = "any";
     "extra.known".type = "bool";
   };
@@ -166,6 +176,44 @@
       == {
         PROBE_B_1 = file;
         PROBE_D_TOKEN_X = file;
+      };
+    typed-container-nulls-render-unset = let
+      typed =
+        (lib.evalModules {
+          modules = [
+            {
+              options.value = lib.mkOption {type = settings;};
+              config.value = {
+                items = [null {name = "x";}];
+                labels = {
+                  absent = null;
+                  present = "x";
+                };
+                secret-items = [null file];
+                secret-labels = {
+                  absent = null;
+                  present = file;
+                };
+              };
+            }
+          ];
+        }).config.value;
+      rendered = render {
+        prefix = "PROBE";
+        settings = typed;
+      };
+    in
+      builtins.fromJSON rendered.content
+      == {
+        items = [{name = "x";}];
+        labels.present = "x";
+        secret-items = [("{" + "$" + "PROBE_SECRET_ITEMS_0}")];
+        secret-labels.present = "{" + "$" + "PROBE_SECRET_LABELS_PRESENT}";
+      }
+      && rendered.secrets
+      == {
+        PROBE_SECRET_ITEMS_0 = file;
+        PROBE_SECRET_LABELS_PRESENT = file;
       };
     render-refuses-a-shared-name = throws (render {
       prefix = "PROBE";

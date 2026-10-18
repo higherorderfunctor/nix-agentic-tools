@@ -21,13 +21,6 @@
     "credentials.in-flight.snapshot-interval" = duration;
     "credentials.in-flight.stale-after" = duration;
     "credentials.in-flight.staging-retention" = duration;
-    # A bool, or one of two modes (internal/config/
-    # disable_image_generation_mode.go: "allowed: true, false, chat,
-    # passthrough").
-    "multimedia.disable-image-generation" = {
-      type = "any";
-      refine = {types, ...}: types.either types.bool (types.enum ["chat" "passthrough"]);
-    };
   };
   generated = import ../../../lib/extracted/options.nix {inherit lib;} {
     inherit refinements;

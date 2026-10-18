@@ -1,8 +1,9 @@
 # Extracted facts: typed settings and their render
 
 > **Last verified:** 2026-10-18 — `lib/extracted/options.nix` types the
-> CLIProxyAPI and CPA Manager Plus node trees; `render.nix` lifts secrets into
-> `{$NAME}` placeholders; `goTest` runs each owner's loader check.
+> CLIProxyAPI and CPA Manager Plus node trees with nullable container children;
+> `render.nix` lifts secrets into `{$NAME}` placeholders; `goTest` runs each
+> owner's loader check.
 
 Two owners, CLIProxyAPI and CPA Manager Plus, get typed settings from their
 reconciled facts through one generator. The four older generators
@@ -19,15 +20,19 @@ path → node in the Go extractors' grammar (`.` between keys, `[]` for a list
 element, `.<name>` for a map value). It needs only `lib`.
 
 - Every option is `nullOr T` with `default = null`; null drops the key, so the
-  tool's own default applies. Objects are closed submodules; a list is `listOf`
-  its `[]` node's type, a map `attrsOf` its `.<name>` node's type.
+  tool's own default applies. Objects are closed submodules; a list is
+  `listOf (nullOr T)` for its `[]` node, a map `attrsOf (nullOr T)` for its
+  `.<name>` node. Null list elements and map values are accepted and dropped by
+  the render.
 - `bool`, `int`, `number`, `string` map to the obvious types; `enum` on a node
   gives `types.enum`; `duration` is `strMatching` time.ParseDuration's grammar;
   `any` is a JSON value (the type of `pkgs.formats.json`), and its child nodes
   are consumed by it.
 - A node carrying `secret` (the reason an annotations.json row gives, which
-  reconcile requires for every classifier hit) is `redact.types.redacted`. No
-  refinement row widens a secret: a row on one is reported stale.
+  reconcile requires for every classifier hit) is
+  `nullOr redact.types.redacted`, including list elements and map values. Its
+  non-null type accepts references only. No refinement row widens a secret: a
+  row on one is reported stale.
 - Node fields it does not read fail evaluation unless the owner lists them in
   `unread`, so an extractor that learns a fact must teach the generator.
 

@@ -132,14 +132,16 @@ in
       else if t == "object"
       then types.submodule {options = optionsOf path;}
       else if t == "list"
-      then types.listOf (typeOf (element path))
+      then types.listOf (nullableTypeOf (element path))
       else if t == "map"
-      then types.attrsOf (typeOf (value path))
+      then types.attrsOf (nullableTypeOf (value path))
       else if t == "any"
       then json
       else if node ? enum
       then types.enum node.enum
       else scalars.${t} or types.unspecified;
+
+    nullableTypeOf = path: types.nullOr (typeOf path);
 
     code = v: "`${builtins.toJSON v}`";
     describe = path: let
@@ -159,7 +161,7 @@ in
       lib.listToAttrs (map (path: {
           name = lib.removePrefix "${lib.optionalString (parent != "") "${parent}."}" path;
           value = lib.mkOption {
-            type = types.nullOr (typeOf path);
+            type = nullableTypeOf path;
             default = null;
             description = describe path;
           };
