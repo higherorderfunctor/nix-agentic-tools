@@ -1,7 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-18 — Darwin check names and every drvPath both gate
-> their job, separately from the required Linux check cache.
+> **Last verified:** 2026-10-18 — both systems' name evaluations are budgeted by
+> function count; Darwin names and every drvPath gate their job.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -338,6 +338,17 @@ at 1984 MiB; forcing every drvPath reached 2928 MiB in 161 s and failed on
 evaluated before. A second run reached 3064 MiB. Linux-only checks now omit
 their names on Darwin; a later leak whose evaluation fails on Darwin fails the
 drvPath step. A leak that only fails when built is not caught here.
+
+### Name evaluation budget
+
+Both names evaluations, Linux in `checks-eval` and Darwin here, run uncached
+with `NIX_SHOW_STATS` written to a file, and `check-eval-budget` fails the job
+when `nrFunctionCalls` passes 6,000,000. The count is deterministic per commit,
+so it never flakes on runner speed. The strict `checks` option made 54.8 million
+calls to list the Linux names; the lazy one makes 2.8 million. The ceiling
+catches that class, not one file reading package metadata at name time (3% of
+the calls in the measured case). The measurements and the re-measure command
+live in the action's description; raise the ceiling only with a new one.
 
 ### Reports and deliberate manual updates
 

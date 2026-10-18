@@ -1,0 +1,70 @@
+name: Check evaluation budget
+description: >-
+  Fail when listing the check names did more evaluator work than the budget
+  allows. The caller runs its names evaluation with `NIX_SHOW_STATS=1` and
+  `NIX_SHOW_STATS_PATH` pointing at a file; this reads that file and compares
+  its `nrFunctionCalls` against a fixed ceiling.
+
+  Function calls, not wall time or RSS: the count is the same for the same
+  commit on every runner, so the ceiling never flakes on a slow machine and a
+  red step always means the evaluation itself changed. Measured on x86_64-linux
+  with `--no-eval-cache` and IFD off, 2026-10-18: the strict `attrsOf` checks
+  option on main 089a67ef made 54.8 million calls (60 s, 3.7 GB) to list 1011
+  names; the lazy option at 5e31e6cf makes 2.83 million for 1012 names and 2.71
+  million for the 986 Darwin names. The ceiling is about twice the lazy figure,
+  so it catches the class that forces check values while names are listed (a
+  strict option, a `mkIf` around whole check sets, a fixture assertion before
+  every derivation), with headroom for roughly 80 more check modules at the
+  measured 35 thousand calls each.
+
+  It does NOT catch one file reading package metadata at name time: the three
+  files PR #2676 fixed were 58% of the profile samples but only 3% of the calls
+  (2.92 million before, 2.83 million after). That class is still a review rule
+  in dev/fragments/facets/package-ownership.md.
+
+  Re-measure locally with the same command the callers use: `NIX_SHOW_STATS=1
+  NIX_SHOW_STATS_PATH=stats.json nix eval --no-eval-cache --json
+  .#.checks.x86_64-linux --apply builtins.attrNames`, then `jq .nrFunctionCalls
+  stats.json`. Raise the ceiling only with a new measurement in this
+  description.
+
+inputs:
+  label:
+    description: What was evaluated, for the log and the step summary.
+    required: true
+  stats:
+    description: Path of the `NIX_SHOW_STATS_PATH` file the evaluation wrote.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        LABEL: ${{ inputs.label }}
+        STATS: ${{ inputs.stats }}
+      run: |
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        ceiling=6000000
+
+        if [ ! -s "$STATS" ]; then
+          echo "::error::$LABEL: no evaluator statistics at $STATS; the evaluation must run with NIX_SHOW_STATS=1 and NIX_SHOW_STATS_PATH" >&2
+          exit 1
+        fi
+        calls="$(jq -r '.nrFunctionCalls' "$STATS")"
+        case "$calls" in
+          '' | *[!0-9]*)
+            echo "::error::$LABEL: nrFunctionCalls missing from $STATS" >&2
+            exit 1
+            ;;
+        esac
+
+        printf '\n| %s | Value |\n| --- | --- |\n| Function calls | %s |\n| Budget | %s |\n' \
+          "$LABEL" "$calls" "$ceiling" | tee -a "$GITHUB_STEP_SUMMARY"
+
+        if [ "$calls" -gt "$ceiling" ]; then
+          echo "::error::$LABEL: listing the check names made $calls function calls, over the $ceiling budget. Something forces check values while names are listed; see .github/actions/check-eval-budget/action.yml" >&2
+          exit 1
+        fi

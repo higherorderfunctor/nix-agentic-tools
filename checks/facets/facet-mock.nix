@@ -50,9 +50,14 @@
       index = facetIndex;
       rootLibrary.ai.rootControl = "root";
     };
+    lazyIndex = loader.index {facetsDir = fixtureRoot + "/lazy";};
     lazyWorld = loader.realizePackages {
       inherit inputs pkgs system;
-      index = loader.index {facetsDir = fixtureRoot + "/lazy";};
+      index = lazyIndex;
+    };
+    lazyCheckWorld = loader.realizeChecks {
+      context = {inherit inputs lib pkgs self system;};
+      index = lazyIndex;
     };
     overlayWorld = loader.realizeOverlay {
       context = {
@@ -184,6 +189,10 @@
       package-laziness =
         lib.isDerivation lazyWorld.packages.ai.available
         && builtins.attrNames lazyWorld.packages.ai == ["available" "unavailable"];
+      check-laziness =
+        lib.isDerivation lazyCheckWorld.checks.available
+        && builtins.attrNames lazyCheckWorld.checks == ["available" "unavailable"]
+        && builtins.attrNames lazyCheckWorld.claims == ["available" "unavailable"];
       overlay-order-and-namespace =
         overlayResult.ai.seed
         == inputs.fixture.sentinel

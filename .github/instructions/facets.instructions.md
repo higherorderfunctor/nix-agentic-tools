@@ -7,8 +7,9 @@ applyTo: "checks/**,flake.nix,lib/facets.nix,lib/facets/**,lib/testing/**,packag
 
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-18 — check names stay lazy; reading a check forces
-> its package type and value.
+> **Last verified:** 2026-10-18 — check-name laziness is gated by the
+> `check-laziness` assertion in facet-mock; reading a check forces its package
+> type and value.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -48,8 +49,8 @@ A check asserting a Linux-only lowering belongs inside
 `lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux` in its own check module, so
 its name is absent on other systems. Never use a host-dependent branch that
 passes vacuously, or `lib.mkIf` on a single check name: the `checks` option is
-becoming lazy (`lazyAttrsOf`, the next change), and a lazy map keeps a
-`mkIf`-wrapped name and throws when it is read.
+lazy (`lazyAttrsOf`), and a lazy map keeps a `mkIf`-wrapped name and throws when
+it is read. Nothing gates a vacuous branch; review does.
 
 Root and owner check names share an exclusive claim boundary. Each contributor
 supplies isolated definitions for claim discovery, while its conditions and
@@ -57,8 +58,14 @@ imported module arguments see the combined `config`, `options`, and
 `_module.args`. This keeps conditional checks visible without letting `mkForce`
 hide another owner's claim. The `checks` option uses `lazyAttrsOf package`:
 listing names leaves values unevaluated; reading a check forces its value and
-rejects non-derivations. Root groups cover workspace policy and genuine
-cross-owner contracts.
+rejects non-derivations. `checks/facets/fixtures/lazy/one/checks.nix` holds a
+check that throws when read; facet-mock's `check-laziness` assertion lists that
+owner's check names and claims, so a strict option or any name-time forcing
+fails `nix flake check`. CI also budgets the function calls of each system's
+names evaluation (`.github/actions/check-eval-budget`). Neither catches one file
+reading package metadata at name time: keep package reads, `assert` and `throw`
+out of check-module top level and name derivation. Root groups cover workspace
+policy and genuine cross-owner contracts.
 
 `repository.checkWorldFor` realizes the checks once and returns `checks` plus
 `claims`, each check's `{owner, source}` (`owner = "<root>"` for a root
