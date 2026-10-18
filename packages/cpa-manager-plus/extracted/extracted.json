@@ -1,0 +1,228 @@
+{
+  "config": {
+    "accountActionsAutoDisable": { "type": "bool" },
+    "accountActionsEnabled": { "type": "bool" },
+    "adminKeyFile": { "type": "string" },
+    "batchSize": { "type": "int" },
+    "collectorMode": { "type": "string" },
+    "corsOrigins": { "type": "list" },
+    "corsOrigins[]": { "type": "string" },
+    "cpaUpstreamUrl": { "type": "string" },
+    "dataDir": { "type": "string" },
+    "dataKeyFile": { "type": "string" },
+    "dataKeyPath": { "type": "string" },
+    "dbPath": { "type": "string" },
+    "httpAddr": { "type": "string" },
+    "managementKeyFile": { "type": "string" },
+    "panelPath": { "type": "string" },
+    "pollIntervalMs": { "type": "int" },
+    "popSide": { "type": "string" },
+    "pprofAddr": { "type": "string" },
+    "queryLimit": { "type": "int" },
+    "queue": { "type": "string" },
+    "quotaCooldownEnabled": { "type": "bool" },
+    "tlsSkipVerify": { "type": "bool" },
+    "usageArchiveRetentionDays": { "type": "int" },
+    "usageArchiveRetentionEnabled": { "type": "bool" },
+    "usageImportChunkBytes": { "type": "int" },
+    "usageImportDiskQuotaBytes": { "type": "int" },
+    "usageImportMaxSessions": { "type": "int" },
+    "usageImportSessionTTLMinutes": { "type": "int" }
+  },
+  "environment": {
+    "CPAMP_UPDATE_CHECK_ENABLED": {
+      "readBy": ["app.fromExisting"],
+      "type": "string"
+    },
+    "CPA_MANAGEMENT_KEY": {
+      "configKeys": ["managementKeyFile"],
+      "description": "Optional environment-managed CPA Management Key.",
+      "readBy": ["config.readSecret"],
+      "type": "string"
+    },
+    "CPA_MANAGEMENT_KEY_FILE": {
+      "configKeys": ["managementKeyFile"],
+      "description": "Optional CPA Management Key file.",
+      "readBy": ["config.readSecret"],
+      "type": "string"
+    },
+    "CPA_MANAGER_ADMIN_KEY": {
+      "configKeys": ["adminKeyFile"],
+      "description": "Optional admin key.",
+      "readBy": ["config.readSecret"],
+      "type": "string"
+    },
+    "CPA_MANAGER_ADMIN_KEY_FILE": {
+      "configKeys": ["adminKeyFile"],
+      "description": "Optional admin key file.",
+      "readBy": ["config.readSecret"],
+      "type": "string"
+    },
+    "CPA_MANAGER_CONFIG": {
+      "description": "Optional config file path. Native packages default to `config.json` next to the binary.",
+      "readBy": ["config.loadFileConfig"],
+      "type": "string"
+    },
+    "CPA_MANAGER_DATA_KEY": {
+      "configKeys": ["dataKeyFile"],
+      "description": "Optional data encryption key.",
+      "readBy": ["config.readSecret"],
+      "type": "string"
+    },
+    "CPA_MANAGER_DATA_KEY_FILE": {
+      "configKeys": ["dataKeyFile"],
+      "description": "Optional data encryption key file.",
+      "readBy": ["config.readSecret"],
+      "type": "string"
+    },
+    "CPA_MANAGER_DATA_KEY_PATH": {
+      "configKeys": ["dataKeyPath"],
+      "description": "Generated data key path.",
+      "readBy": ["config.env"],
+      "type": "string"
+    },
+    "CPA_MANAGER_PPROF_ADDR": {
+      "configKeys": ["pprofAddr"],
+      "description": "Optional Go pprof listen address; only `localhost`, `127.0.0.1`, or `::1` is accepted.",
+      "readBy": ["config.env"],
+      "type": "string"
+    },
+    "CPA_UPSTREAM_URL": {
+      "configKeys": ["cpaUpstreamUrl"],
+      "description": "Optional environment-managed CPA URL.",
+      "readBy": ["config.env"],
+      "type": "string"
+    },
+    "HTTP_ADDR": {
+      "configKeys": ["httpAddr"],
+      "description": "Manager Server listen address.",
+      "readBy": ["config.env"],
+      "type": "string"
+    },
+    "PANEL_PATH": {
+      "configKeys": ["panelPath"],
+      "description": "Optional custom `management.html`.",
+      "readBy": ["config.env"],
+      "type": "string"
+    },
+    "USAGE_ACCOUNT_ACTIONS_AUTO_DISABLE": {
+      "configKeys": ["accountActionsAutoDisable"],
+      "description": "Enable automatic disabling for auth issues. This only takes effect when the account action queue is enabled.",
+      "readBy": ["config.envBool", "config.hasEnv"],
+      "type": "string"
+    },
+    "USAGE_ACCOUNT_ACTIONS_ENABLED": {
+      "configKeys": ["accountActionsEnabled"],
+      "description": "Enable the account action queue for auth issues that need review.",
+      "readBy": ["config.envBool", "config.hasEnv"],
+      "type": "string"
+    },
+    "USAGE_ARCHIVE_RETENTION_DAYS": {
+      "configKeys": ["usageArchiveRetentionDays"],
+      "description": "Age in days used by automatic retention; effective only when retention and hourly rollup are both enabled.",
+      "readBy": ["config.resolveUsageArchiveRetentionDays"],
+      "type": "string"
+    },
+    "USAGE_ARCHIVE_RETENTION_ENABLED": {
+      "configKeys": ["usageArchiveRetentionEnabled"],
+      "description": "Enable the startup-and-daily archive, verification, and bounded-delete worker. It is disabled by default, requires hourly rollup to remain enabled, and requires a Manager Server restart after changes.",
+      "readBy": ["config.envBool"],
+      "type": "string"
+    },
+    "USAGE_BATCH_SIZE": {
+      "configKeys": ["batchSize"],
+      "description": "Max records per batch.",
+      "readBy": ["config.envInt"],
+      "type": "string"
+    },
+    "USAGE_COLLECTOR_MODE": {
+      "configKeys": ["collectorMode"],
+      "description": "`auto`, `subscribe`, `http`, or `resp`.",
+      "readBy": ["config.env"],
+      "type": "string"
+    },
+    "USAGE_CORS_ORIGINS": {
+      "configKeys": ["corsOrigins"],
+      "description": "CORS origins for compatibility endpoints.",
+      "readBy": ["config.env"],
+      "type": "string"
+    },
+    "USAGE_DASHBOARD_HOURLY_ROLLUP_ENABLED": {
+      "description": "Enable the hourly rollup worker plus the Dashboard and strictly unfiltered Usage Analytics query paths. Temporarily set it to `false` when diagnosing SQLite write contention or rollup failures; queries fall back to raw events.",
+      "readBy": ["config.envBool"],
+      "type": "string"
+    },
+    "USAGE_DATA_DIR": {
+      "configKeys": ["dataDir"],
+      "description": "Base data directory.",
+      "readBy": ["config.env", "config.hasEnv"],
+      "type": "string"
+    },
+    "USAGE_DB_PATH": {
+      "configKeys": ["dbPath"],
+      "description": "SQLite database path.",
+      "readBy": ["config.env", "config.hasEnv"],
+      "type": "string"
+    },
+    "USAGE_IMPORT_CHUNK_BYTES": {
+      "configKeys": ["usageImportChunkBytes"],
+      "description": "Server chunk size for resumable imports; the panel displays each session's `chunk_size_bytes`, not a fixed label.",
+      "readBy": ["config.envInt64"],
+      "type": "string"
+    },
+    "USAGE_IMPORT_DISK_QUOTA_BYTES": {
+      "configKeys": ["usageImportDiskQuotaBytes"],
+      "description": "Total disk quota reserved by active import temporary files; it is not silently expanded.",
+      "readBy": ["config.envInt64"],
+      "type": "string"
+    },
+    "USAGE_IMPORT_MAX_SESSIONS": {
+      "configKeys": ["usageImportMaxSessions"],
+      "description": "Maximum number of active import sessions.",
+      "readBy": ["config.envInt"],
+      "type": "string"
+    },
+    "USAGE_IMPORT_SESSION_TTL_MINUTES": {
+      "configKeys": ["usageImportSessionTTLMinutes"],
+      "description": "Import-session and temporary-file TTL in minutes; expired sessions are cleaned by the server.",
+      "readBy": ["config.envInt"],
+      "type": "string"
+    },
+    "USAGE_POLL_INTERVAL_MS": {
+      "configKeys": ["pollIntervalMs"],
+      "description": "Idle poll interval.",
+      "readBy": ["config.envInt"],
+      "type": "string"
+    },
+    "USAGE_QUERY_LIMIT": {
+      "configKeys": ["queryLimit"],
+      "description": "Max recent usage events.",
+      "readBy": ["config.envInt"],
+      "type": "string"
+    },
+    "USAGE_QUOTA_COOLDOWN_ENABLED": {
+      "configKeys": ["quotaCooldownEnabled"],
+      "description": "Enable the provider quota cooldown worker for strict Codex usage-limit and xAI free-usage-exhausted signals.",
+      "readBy": ["config.envBool", "config.hasEnv"],
+      "type": "string"
+    },
+    "USAGE_RESP_POP_SIDE": {
+      "configKeys": ["popSide"],
+      "description": "`right` uses `RPOP`; `left` uses `LPOP`.",
+      "readBy": ["config.env"],
+      "type": "string"
+    },
+    "USAGE_RESP_QUEUE": {
+      "configKeys": ["queue"],
+      "description": "RESP key argument; normally leave unchanged.",
+      "readBy": ["config.env"],
+      "type": "string"
+    },
+    "USAGE_RESP_TLS_SKIP_VERIFY": {
+      "configKeys": ["tlsSkipVerify"],
+      "description": "Skip TLS verification for RESP connection.",
+      "readBy": ["config.envBool"],
+      "type": "string"
+    }
+  }
+}
