@@ -1,7 +1,7 @@
 {lib, ...}: {
   options = {
     checks = lib.mkOption {
-      type = lib.types.attrsOf lib.types.package;
+      type = lib.types.lazyAttrsOf lib.types.package;
       default = {};
       description = "Derivation checks contributed by package and workspace modules.";
     };

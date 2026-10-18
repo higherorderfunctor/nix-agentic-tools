@@ -7,8 +7,8 @@ applyTo: "checks/**,flake.nix,lib/facets.nix,lib/facets/**,lib/testing/**,packag
 
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-18 — Linux-only checks omit their names on other
-> systems with `optionalAttrs` in their own check modules.
+> **Last verified:** 2026-10-18 — check names stay lazy; reading a check forces
+> its package type and value.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -55,9 +55,10 @@ Root and owner check names share an exclusive claim boundary. Each contributor
 supplies isolated definitions for claim discovery, while its conditions and
 imported module arguments see the combined `config`, `options`, and
 `_module.args`. This keeps conditional checks visible without letting `mkForce`
-hide another owner's claim. Native package option types reject non-derivation
-check values. Root groups cover workspace policy and genuine cross-owner
-contracts.
+hide another owner's claim. The `checks` option uses `lazyAttrsOf package`:
+listing names leaves values unevaluated; reading a check forces its value and
+rejects non-derivations. Root groups cover workspace policy and genuine
+cross-owner contracts.
 
 `repository.checkWorldFor` realizes the checks once and returns `checks` plus
 `claims`, each check's `{owner, source}` (`owner = "<root>"` for a root

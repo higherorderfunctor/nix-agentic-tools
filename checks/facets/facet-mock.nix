@@ -285,7 +285,9 @@
           };
         in
           ${
-          if probe.force == "checks"
+          if probe.force == "check-invalid"
+          then "(loader.realizeChecks { inherit context index; }).checks.invalid"
+          else if probe.force == "checks"
           then "builtins.deepSeq (loader.realizeChecks { inherit context index; }) true"
           else if probe.force == "checks-root"
           then ''
@@ -473,7 +475,7 @@
       })
       (probe {
         name = "check-non-derivation";
-        force = "checks";
+        force = "check-invalid";
         expected = [
           "checks.invalid"
           "/one/checks.nix"
