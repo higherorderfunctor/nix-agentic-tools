@@ -20,8 +20,7 @@
   };
 in {
   # `http://127.0.0.1:<port>` of the enabled instance `name`, or why `option`
-  # cannot select it. A selection reaches the instance on loopback, which is
-  # where every instance listens.
+  # cannot select it. Selection uses loopback, matching owner bind defaults.
   select = {
     instances,
     name,

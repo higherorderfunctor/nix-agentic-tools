@@ -13,7 +13,10 @@ in {
       defaultPort = 8317;
       derived = {instance, ...}: {
         oauth.auth-dir = "${instance.stateDir}/auth";
-        server.port = instance.port;
+        server = {
+          host = lib.mkDefault "127.0.0.1";
+          inherit (instance) port;
+        };
       };
       directories = instance: ["${instance.stateDir}/auth"];
       owner = "cliproxyapi";

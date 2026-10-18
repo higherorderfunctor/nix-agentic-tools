@@ -5,6 +5,7 @@
   harness,
   lib,
   pkgs,
+  self,
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
@@ -59,8 +60,12 @@
       access.api-keys = [(placeholder "CLIPROXYAPI_ACCESS_API_KEYS_0")];
       management.secret-key = placeholder "CLIPROXYAPI_MANAGEMENT_SECRET_KEY";
       oauth.auth-dir = "${root}/cliproxyapi/main/auth";
-      server.port = 8400;
+      server = {
+        host = "127.0.0.1";
+        port = 8400;
+      };
     }
+    && (evaluate backend (withInstances {cliproxyapi.instances.main.settings.server.host = "192.0.2.1";})).config.ai.cliproxyapi.instances.main.settings.server.host == "192.0.2.1"
     && proxy.environment == {}
     && lib.hasSuffix "/bin/cliproxyapi-main" (lib.head proxy.command)
     && services.triggers proxy == ["/run/secrets/cpa-client-key" "/run/secrets/cpa-management-key"]
@@ -133,6 +138,75 @@ in {
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      # Start the packaged daemons through the actual instance-derived units,
+      # with file references whose dummy values exist only at build time.
+      module-service-instances-real-daemons = let
+        real =
+          (evalHm (withInstances {
+            cliproxyapi.instances.main = {
+              package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi;
+              port = 28417;
+              settings = {
+                access.api-keys = [(redact.file "/build/client-key")];
+                management.secret-key = redact.file "/build/management-key";
+              };
+              stateDir = "/build/state/cpa";
+            };
+            cpa-manager-plus.instances.main = {
+              package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cpa-manager-plus;
+              port = 28418;
+              stateDir = "/build/state/manager";
+            };
+          })).config;
+      in
+        pkgs.runCommandLocal "module-test-service-instances-real-daemons" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          printf '%s' client-test-secret > /build/client-key
+          printf '%s' management-test-secret > /build/management-key
+          export HOME="$TMPDIR/home" XDG_RUNTIME_DIR="$TMPDIR/run"
+          mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
+          processes=()
+          cleanup() {
+            for pid in "''${processes[@]}"; do kill -KILL "$pid" 2>/dev/null || :; done
+            wait || :
+          }
+          trap cleanup EXIT
+          ready() {
+            local pid=$1 url=$2 log=$3
+            for attempt in {1..100}; do
+              # cspell:ignore noproxy
+              if ${pkgs.curl}/bin/curl --noproxy '*' --max-time 1 --silent --fail "$url" > health.json; then
+                return 0
+              fi
+              if ! kill -0 "$pid" 2>/dev/null; then break; fi
+              sleep 0.1
+            done
+            cat "$log" >&2
+            echo "service did not become ready: $url" >&2
+            return 1
+          }
+          ${real.systemd.user.services.cliproxyapi-main.Service.ExecStart} > cpa.log 2>&1 &
+          processes+=("$!")
+          ready "''${processes[0]}" http://127.0.0.1:28417/healthz cpa.log
+          ${pkgs.jq}/bin/jq -e '.status == "ok"' health.json
+          ${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart} > manager.log 2>&1 &
+          processes+=("$!")
+          ready "''${processes[1]}" http://127.0.0.1:28418/health manager.log
+          ${pkgs.jq}/bin/jq -e '.ok == true and .service == "cpa-manager-plus"' health.json
+          # Each port has exactly one listener, bound to IPv4 loopback.
+          for port in 6F01 6F02; do
+            ${pkgs.gawk}/bin/awk -v port="$port" '
+              $4 == "0A" && $2 ~ ":" port "$" {
+                count++
+                if ($2 != "0100007F:" port) exit 1
+                print "loopback listener: " $2
+              }
+              END { if (count != 1) exit 1 }
+            ' /proc/net/tcp /proc/net/tcp6
+          done
+          touch "$out"
+        '';
       # Linux Home Manager emits the units, and the launcher renders the
       # config the run script hands to CLIProxyAPI from inside its state.
       module-service-instances-run = let

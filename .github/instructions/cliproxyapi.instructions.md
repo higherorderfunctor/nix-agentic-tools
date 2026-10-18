@@ -100,7 +100,8 @@ before publication.
 > **Last verified:** 2026-10-18 — 905 config nodes give the settings type
 > through `lib/extracted/options.nix`, with four refinements; the clean render
 > passes native v8 validation and loads through CPA 8.0.33's `LoadConfig` in
-> `cliproxyapi-settings`; `ai.cliproxyapi.instances` renders it at start.
+> `cliproxyapi-settings`; `ai.cliproxyapi.instances` renders it at start and
+> defaults its listener to loopback.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -113,13 +114,15 @@ shared rules are in `dev/fragments/extracted/typed-settings.md`.
 `ai.cliproxyapi.instances.<name>` (`modules/instances.nix`, through
 `packages/ai-module/lib/instances.nix`) runs CLIProxyAPI as the service
 `cliproxyapi-<name>` on both backends. `port` (8317) fixes `server.port`;
-`stateDir` (`<state root>/cliproxyapi/<name>`) fixes `oauth.auth-dir` to
-`<stateDir>/auth`, where CLIProxyAPI writes its OAuth logins. The launcher
-renders the settings to `config.json` at each start and the run script, inside
-`stateDir` so the `.env` and `logs/` CLIProxyAPI resolves against its working
-directory are its own, execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's
-rewrites of its config reach only that copy and are lost at restart.
-`ai.proxy.instance` points the harnesses at an instance by name.
+`settings.server.host` defaults to `127.0.0.1` through `mkDefault`, so a
+consumer can explicitly override the bind address. `stateDir`
+(`<state root>/cliproxyapi/<name>`) fixes `oauth.auth-dir` to `<stateDir>/auth`,
+where CLIProxyAPI writes its OAuth logins. The launcher renders the settings to
+`config.json` at each start and the run script, inside `stateDir` so the `.env`
+and `logs/` CLIProxyAPI resolves against its working directory are its own,
+execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
+reach only that copy and are lost at restart. `ai.proxy.instance` points the
+harnesses at an instance by name.
 
 ## Secrets
 
@@ -167,3 +170,9 @@ conflicting legacy proxy key and calls `LoadConfig` twice on a writable copy. It
 checks both raw payload rules survive, the rewritten file persists the bcrypt
 hash and removes the legacy key, every other document value stays equal after
 JSON normalization, and the hash and secret remain unchanged on reload.
+
+`module-service-instances-real-daemons` starts the packaged CPA and Manager Plus
+through their evaluated Home Manager instance units with runtime dummy secret
+files, polls both health endpoints, and checks both listeners are on loopback.
+It exists only on Linux. The stand-in instance check separately pins argv,
+working directory and state-directory modes.
