@@ -1,9 +1,7 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-14 — `checkWorldFor` returns checks with their
-> ownership claims; the flake derives `checks` and the CI-only `ciChecks` from
-> it; module containers permit a regular README.md; shared documentation
-> snapshots use the injected `webDocsLib` builder.
+> **Last verified:** 2026-10-18 — Linux-only checks omit their names on other
+> systems with `optionalAttrs` in their own check modules.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -38,6 +36,12 @@ registered. Adding a package check needs only owner edits; adding a root concern
 needs no flake export-list edit. The Agnix role identity check
 (`packages/agnix/checks/role-identity.nix`) and Semble package identity check
 (`packages/semble/checks/package-identity.nix`) are owner-local.
+
+A check asserting a Linux-only lowering belongs inside
+`lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux` in its own check module, so
+its name is absent on other systems. Never use a host-dependent branch that
+passes vacuously, or `lib.mkIf` on a single check name: `lazyAttrsOf` retains
+that name and throws when it is read.
 
 Root and owner check names share an exclusive claim boundary. Each contributor
 supplies isolated definitions for claim discovery, while its conditions and

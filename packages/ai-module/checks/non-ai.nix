@@ -81,49 +81,47 @@
       key = "semble-cache-guard";
       owner = "semble";
     }) ["devenv" "hm"];
-  check = case:
-    ((case.linuxOnly or false) && !pkgs.stdenv.hostPlatform.isLinux)
-    || (let
-      hm = case.backend == "hm";
-      evaluated =
-        if case ? modules
-        then harness.evalDevenvModules (case.modules ++ [{inherit (case) config;}])
-        else evaluate case.backend case.config;
-      inherit (evaluated) config;
-      entry = config.ai.${case.owner}.activation.${case.key};
-      root = config.ai.activation.${case.key};
-      native =
-        case.native or (
-          if hm
-          then "ai-${case.key}"
-          else "ai:${case.key}"
-        );
-      graph =
+  check = case: let
+    hm = case.backend == "hm";
+    evaluated =
+      if case ? modules
+      then harness.evalDevenvModules (case.modules ++ [{inherit (case) config;}])
+      else evaluate case.backend case.config;
+    inherit (evaluated) config;
+    entry = config.ai.${case.owner}.activation.${case.key};
+    root = config.ai.activation.${case.key};
+    native =
+      case.native or (
         if hm
-        then config.home.activation
-        else config.tasks;
-      disabled = (evaluate case.backend {}).config;
-      disabledGraph =
-        if hm
-        then disabled.home.activation
-        else disabled.tasks;
-      expectedAfter = case.after or ["files"];
-      nodesFor = (import ../lib/activation.nix {inherit lib;}).pointNodes case.backend (
-        if hm
-        then ["sops-nix"]
-        else []
+        then "ai-${case.key}"
+        else "ai:${case.key}"
       );
-    in
-      entry.command
-      == root.command
-      && root.enable
-      && root.after == expectedAfter
-      && root.beforeNodes.devenv == (case.beforeNodes or [])
-      && graph.${native}.after == lib.concatMap nodesFor expectedAfter
-      && graph.${native}.before == lib.concatMap nodesFor ["shell"] ++ (case.beforeNodes or [])
-      && config.ai.${case.owner}.files == {}
-      && (case.owner == "git" || !(builtins.hasAttr native disabledGraph))
-      && (case.owner != "beads" || lib.all (task: !(task ? after) && !(task ? before)) (lib.attrValues (lib.filterAttrs (name: _: lib.hasPrefix "beads:" name) graph))));
+    graph =
+      if hm
+      then config.home.activation
+      else config.tasks;
+    disabled = (evaluate case.backend {}).config;
+    disabledGraph =
+      if hm
+      then disabled.home.activation
+      else disabled.tasks;
+    expectedAfter = case.after or ["files"];
+    nodesFor = (import ../lib/activation.nix {inherit lib;}).pointNodes case.backend (
+      if hm
+      then ["sops-nix"]
+      else []
+    );
+  in
+    entry.command
+    == root.command
+    && root.enable
+    && root.after == expectedAfter
+    && root.beforeNodes.devenv == (case.beforeNodes or [])
+    && graph.${native}.after == lib.concatMap nodesFor expectedAfter
+    && graph.${native}.before == lib.concatMap nodesFor ["shell"] ++ (case.beforeNodes or [])
+    && config.ai.${case.owner}.files == {}
+    && (case.owner == "git" || !(builtins.hasAttr native disabledGraph))
+    && (case.owner != "beads" || lib.all (task: !(task ? after) && !(task ? before)) (lib.attrValues (lib.filterAttrs (name: _: lib.hasPrefix "beads:" name) graph)));
 in {
   checks = builtins.listToAttrs (map (case: let
       name = "ai-module-${case.owner}-${case.backend}${lib.optionalString (case ? suffix) "-${case.suffix}"}";
@@ -131,5 +129,5 @@ in {
       inherit name;
       value = harness.mkTest name (check case);
     })
-    cases);
+    (lib.filter (case: !(case.linuxOnly or false) || pkgs.stdenv.hostPlatform.isLinux) cases));
 }
