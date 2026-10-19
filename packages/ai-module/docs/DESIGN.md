@@ -20,8 +20,10 @@ sinks.
 | `lib/files/backend.nix`                                         | What both backend modules derive from `ai.files`: the plan, native link map, engine invocation and generated `files-prune`/`files-apply` entries.     |
 | `lib/files/engine.py`, `lib/files/files_codecs.py`              | The runtime engine and its codecs.                                                                                                                    |
 | `lib/files/guard.py`, `lib/files/observe.py`                    | Devenv's native-link guard and its never-failing observer.                                                                                            |
+| `lib/instances.nix`                                             | The owner module for named tool instances (`ai.<owner>.instances`), each lowered to one service, and the loopback selection of an instance by name.   |
 | `lib/lower-devenv.nix`, `lib/lower-hm.nix`                      | One lowering function per backend; each receives the complete activation graph, generated entries included.                                           |
 | `lib/runtime.nix`                                               | The layer-1 helper (`runtimeModule`).                                                                                                                 |
+| `lib/services.nix`                                              | The service entry type, the generic launcher and the backend lowerings.                                                                               |
 | `modules/common.nix`                                            | Declares the root options and computes `ai.deliveredPaths`; shared by both backends.                                                                  |
 | `modules/devenv/default.nix`, `modules/homeManager/default.nix` | Generate the backend's engine entries (and devenv's guard and observer), write the native file map and call the corresponding lowering function once. |
 
@@ -236,15 +238,52 @@ their key and ports; disabled owners forward nothing. Names match
 | `command`         | Nonempty argv list of strings, required       | The launcher execs the escaped arguments.                                                             |
 | `enable`          | Boolean, true                                 | Suppress native emission when false.                                                                  |
 | `environment`     | `redact.types.environment`, `{}`              | Resolve and export through `redact.assign` at launch; a secret-named variable takes only a reference. |
+| `files`           | Named rendered files, `{}`                    | Write `<key>.json` at launch; see below.                                                              |
 | `ports`           | Named ports, `{}`                             | Register exclusive port claims.                                                                       |
 | `restart`         | `never`, `always`, `on-failure`; `on-failure` | Map to the backend restart policy.                                                                    |
-| `restartOnChange` | Absolute file paths, `[]`                     | Union with file references in environment values, including concat parts.                             |
+| `restartOnChange` | Absolute file paths, `[]`                     | Union with file references in environment values and file secrets, including concat parts.            |
 
 `lib/services.nix` builds one strict `writeShellApplication`,
 `ai-service-<key>`, for both backends. Native environment fields are never used.
 A daemon reads store paths and secrets at start, never files written by the
 files engine, so there are no service dependency edges into file activation or
 Home Manager's systemd reload.
+
+A `files.<key>` entry is a config file the launcher renders at each start, for a
+daemon that reads its secrets from a file rather than its environment. Its
+`content` is JSON text whose secrets are whole-string `{$NAME}` placeholders
+(`lib/extracted/render.nix` produces them), so the text is safe in the store;
+`secrets` maps each NAME to a redact reference; `variable` names the exported
+path. The launcher clears inherited private secret slots before reading any
+secret and clears resolved slots before exec. Secret readers and the daemon
+never inherit those values; jq alone receives the needed slots in its
+environment, never argv. The launcher atomically creates a 0700 directory at
+`$XDG_RUNTIME_DIR/ai-service-<key>`, or, without XDG_RUNTIME_DIR,
+`${TMPDIR:-/tmp}/ai-service-<uid>-<key>` (numeric user ID). An existing
+directory must be owned by the current user and must not be a symlink; other
+inputs fail before chmod or writes. The runtime root must already exist. jq
+replaces every placeholder string with its secret as a JSON string, writes a
+0600 temporary file, renames it to `<file key>.json` and exports `variable` with
+that path. Content and secrets are both known at evaluation, so the launcher
+refuses to build when a placeholder has no secret, a secret has no placeholder,
+or a `variable` repeats another file's or an environment name. Declared
+environment names and file variables cannot start with `_ai_`, the launcher's
+private namespace. JSON is the one format: YAML 1.2 readers take it as is. A
+daemon's own writes to the file are lost at the next start.
+
+`lib/instances.nix` gives a tool with typed settings named instances:
+`ai.<owner>.instances.<name>` with `enable`, `package`, `port`, `settings` and
+`stateDir`, declared through one owner module per backend that differs only in
+the default state root (`xdg.stateHome` on Home Manager, `devenv.state` on
+devenv, so a repository's instance keeps its own logins). Each instance becomes
+the service `<owner>-<name>`: its port is `ports.main`, its settings render to
+`files.config`, and a strict run script creates `stateDir` (and the owner's
+state subdirectories) 0700, enters it and execs the package. The owner fixes the
+settings an instance derives (the listen port, state paths) as ordinary
+definitions, so a consumer value that disagrees fails evaluation. `select`
+resolves an instance name to `http://127.0.0.1:<port>` or to the reason it
+cannot: the name is missing or the instance is disabled. CLIProxyAPI and CPA
+Manager Plus use it.
 
 | Backend             | Lowering                                                                                                                                  |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |

@@ -478,7 +478,7 @@ in {
           services.mkLauncher {
             inherit pkgs;
             name = "mcp-proxy-${name}";
-            entry = proxyLib.serviceFor name (sample // {inherit url;});
+            entry = (proxyLib.serviceFor name (sample // {inherit url;})) // {files = {};};
           };
         secret = launcher "secret" (redact.command "${urlReader}/bin/mcp-proxy-test-url");
         plain = launcher "plain" "https://upstream.example.test";

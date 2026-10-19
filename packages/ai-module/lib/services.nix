@@ -11,43 +11,157 @@
       keys)
     claims);
   defaulted = type: default: lib.mkOption {inherit type default;};
+  identifier = "[A-Za-z_][A-Za-z0-9_]*";
+  # A config file rendered at start: JSON text whose secrets are whole-string
+  # `{$NAME}` placeholders (lib/extracted/render.nix), so the text is safe in
+  # the store; `secrets` maps each NAME to the reference that fills it.
+  fileEntry = lib.types.submodule {
+    options = {
+      content = lib.mkOption {type = lib.types.str;};
+      secrets = defaulted (lib.types.attrsOf redact.types.redacted) {};
+      variable = lib.mkOption {type = lib.types.strMatching identifier;};
+    };
+  };
   serviceEntry = lib.types.submodule {
     options = {
       command = lib.mkOption {type = lib.types.nonEmptyListOf lib.types.str;};
       enable = defaulted lib.types.bool true;
       environment = defaulted redact.types.environment {};
+      files = defaulted (lib.types.attrsOf fileEntry) {};
       ports = defaulted (lib.types.attrsOf lib.types.port) {};
       restart = defaulted (lib.types.enum ["always" "never" "on-failure"]) "on-failure";
       restartOnChange = defaulted (lib.types.listOf (lib.types.strMatching "/.*")) [];
     };
   };
   # Files whose content change restarts the service: the declared paths plus
-  # every `redact.file` the environment reads.
-  triggers = entry: lib.sort lib.lessThan (lib.unique (entry.restartOnChange ++ lib.concatMap redact.filePaths (builtins.attrValues entry.environment)));
+  # every `redact.file` the environment and the rendered files read.
+  triggers = entry: let
+    values = builtins.attrValues entry.environment ++ lib.concatMap (file: builtins.attrValues file.secrets) (builtins.attrValues entry.files);
+  in
+    lib.sort lib.lessThan (lib.unique (entry.restartOnChange ++ lib.concatMap redact.filePaths values));
+  # Every NAME of a `{$NAME}` string in a JSON value. Bracket expressions,
+  # since libstdc++'s ERE rejects an escaped brace.
+  placeholderPattern = "[{][$](" + identifier + ")[}]";
+  placeholders = value:
+    if builtins.isString value
+    then let
+      match = builtins.match placeholderPattern value;
+    in
+      lib.optionals (match != null) match
+    else if builtins.isAttrs value
+    then lib.concatMap placeholders (builtins.attrValues value)
+    else if builtins.isList value
+    then lib.concatMap placeholders value
+    else [];
+  # Content and secrets are both known at evaluation, so a mismatch fails the
+  # build instead of a start: a placeholder with no secret would reach the
+  # daemon as literal text, and a secret with no placeholder is never read.
+  checkFile = option: file: let
+    used = lib.unique (placeholders (builtins.fromJSON file.content));
+    missing = lib.subtractLists (builtins.attrNames file.secrets) used;
+    unused = lib.subtractLists used (builtins.attrNames file.secrets);
+  in
+    if missing != []
+    then throw "${option}: placeholders with no secret: ${lib.concatStringsSep ", " missing}"
+    else if unused != []
+    then throw "${option}: secrets with no placeholder: ${lib.concatStringsSep ", " unused}"
+    else file;
+  # Each file is written to `<key>.json` in a 0700 per-service runtime
+  # directory: a 0600 temporary copy with every placeholder replaced by its
+  # secret as a JSON string, then a same-directory rename, so the daemon never
+  # reads a partial file. A secret goes into a launcher-named variable that is
+  # never exported; only jq's own environment carries it, since argv is
+  # world-readable in /proc. The daemon gets the path in `variable`.
+  renderFiles = pkgs: name: files: let
+    coreutils = "${pkgs.coreutils}/bin";
+    slots = lib.imap0 (index: slot: slot // {variable = "_ai_secret_${toString index}";}) (lib.concatLists (lib.mapAttrsToList (key: file:
+      lib.mapAttrsToList (secret: value: {inherit key secret value;}) (checkFile "ai.services.${name}.files.${key}" file).secrets)
+    files));
+    slotNames = lib.concatMapStringsSep " " (slot: slot.variable) slots;
+    render = key: file: let
+      own = lib.filter (slot: slot.key == key) slots;
+      tokens = builtins.listToAttrs (map (slot: lib.nameValuePair ("{" + "$" + slot.secret + "}") slot.variable) own);
+      target = ''"$_ai_dir"/${lib.escapeShellArg "${key}.json"}'';
+    in
+      if builtins.match "[A-Za-z0-9][A-Za-z0-9_.-]*" key == null
+      then throw "ai.services.${name}.files.${key}: file keys must match [A-Za-z0-9][A-Za-z0-9_.-]*"
+      else ''
+        _ai_file="$(${coreutils}/mktemp "$_ai_dir/.${key}.XXXXXX")"
+        # jq's filter and token names are literal text.
+        # shellcheck disable=SC2016
+        ${lib.concatMapStrings (slot: slot.variable + "=\"$" + slot.variable + "\" ") own}${pkgs.jq}/bin/jq --argjson tokens ${lib.escapeShellArg (builtins.toJSON tokens)} \
+          'walk(. as $value | if type == "string" and ($tokens | has($value)) then $ENV[$tokens[$value]] else . end)' \
+          ${pkgs.writeText "ai-service-${name}-${key}.json" file.content} > "$_ai_file"
+        ${coreutils}/mv -f -- "$_ai_file" ${target}
+        export ${file.variable}=${target}
+      '';
+  in
+    lib.optionalString (files != {}) ''
+      # Inherited exported slots must lose both their value and export flag
+      # before any reader runs; resolved slots are private to this launcher.
+      ${lib.optionalString (slots != []) "unset ${slotNames}"}
+      {
+      ${lib.concatMapStringsSep "\n" (slot:
+        redact.assign {
+          inherit pkgs;
+          inherit (slot) value variable;
+          option = "ai.services.${name}.files.${slot.key}.secrets.${slot.secret}";
+        })
+      slots}
+      :
+      }
+      if [ -n "''${XDG_RUNTIME_DIR:-}" ]; then
+        _ai_dir="$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}"}
+      else
+        _ai_dir="''${TMPDIR:-/tmp}/ai-service-$(${coreutils}/id -u)-"${lib.escapeShellArg name}
+      fi
+      umask 077
+      if ! ${coreutils}/mkdir -m 0700 -- "$_ai_dir" 2>/dev/null; then
+        if [ -L "$_ai_dir" ] || [ ! -d "$_ai_dir" ] || [ ! -O "$_ai_dir" ]; then
+          printf '%s\n' ${lib.escapeShellArg "ai.services.${name}.files: runtime directory must be an owned directory, not a symlink:"} "$_ai_dir" >&2
+          exit 1
+        fi
+      fi
+      ${coreutils}/chmod 0700 "$_ai_dir"
+      ${lib.concatStrings (lib.mapAttrsToList render files)}
+      ${lib.optionalString (slots != []) "unset ${slotNames}"}'';
   mkLauncher = {
     pkgs,
     name,
     entry,
-  }:
-    strictShellApplication pkgs {
-      name = "ai-service-${name}";
-      text = ''
-        # Generated literal assignments: dollar signs and quotes are data.
-        # shellcheck disable=SC2016,SC2089,SC2090
-        {
-        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (variable: value:
-          redact.assign {
-            inherit pkgs value variable;
-            export = true;
-            option = "ai.services.${name}.environment.${variable}";
-          })
-        entry.environment)}
-        :
-        }
-        # shellcheck disable=SC2016
-        exec ${lib.escapeShellArgs entry.command}
-      '';
-    };
+  }: let
+    inherit (entry) files;
+    variables = builtins.attrNames entry.environment ++ lib.mapAttrsToList (_: file: file.variable) files;
+    clashes = lib.unique (lib.filter (variable: lib.count (other: other == variable) variables > 1) variables);
+    reserved =
+      map (variable: "ai.services.${name}.environment.${variable}") (lib.filter (lib.hasPrefix "_ai_") (builtins.attrNames entry.environment))
+      ++ lib.mapAttrsToList (key: _: "ai.services.${name}.files.${key}.variable") (lib.filterAttrs (_: file: lib.hasPrefix "_ai_" file.variable) files);
+  in
+    if reserved != []
+    then throw "${lib.concatStringsSep ", " reserved}: the _ai_ variable prefix is reserved for the service launcher"
+    else if clashes != []
+    then throw "ai.services.${name}: a file variable repeats another file's or an environment variable: ${lib.concatStringsSep ", " clashes}"
+    else
+      strictShellApplication pkgs {
+        name = "ai-service-${name}";
+        text = ''
+          # Generated literal assignments: dollar signs and quotes are data.
+          # shellcheck disable=SC2016,SC2089,SC2090
+          {
+          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (variable: value:
+            redact.assign {
+              inherit pkgs value variable;
+              export = true;
+              option = "ai.services.${name}.environment.${variable}";
+            })
+          entry.environment)}
+          :
+          }
+          ${renderFiles pkgs name files}
+          # shellcheck disable=SC2016
+          exec ${lib.escapeShellArgs entry.command}
+        '';
+      };
   enabled = lib.filterAttrs (_: entry: entry.enable);
   launch = pkgs: name: entry: "${mkLauncher {inherit pkgs name entry;}}/bin/ai-service-${name}";
   hmUnits = pkgs: services:
