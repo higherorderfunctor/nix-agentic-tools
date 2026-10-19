@@ -1,7 +1,7 @@
 # jail.nix library
 
-> **Last verified:** 2026-10-19 (commit 2c04311c) — `lib.ai.jail` re-exports
-> jail.nix at 7cd53ace; its checks are Linux-only.
+> **Last verified:** 2026-10-19 — Linux execution probes share the network
+> namespace; `reset` can remove base permissions.
 
 ## What it is
 
@@ -43,30 +43,16 @@ adds `--new-session` and `--die-with-parent`. `share-ns`, `network`,
 
 ## The extend seam
 
-`basePermissions` is the one hook that replaces what every jail starts from. A
-jail's own `permissions` run after it and can only add to that state, so a
-per-jail list cannot take back a `--tmpfs ~` or a `--clearenv`. An
-exclusion-only profile (the full host view and the environment kept, with
-credential paths masked) therefore replaces `basePermissions` through `extend`.
+`basePermissions` replaces what every jail starts from. A jail's own
+`permissions` run after it; upstream's `reset` combinator can remove the base
+contributions by restoring the initial state. For a reusable exclusion-only
+profile (the full host view and the environment kept, with credential paths
+masked), use `extend` to replace `basePermissions`.
 
 `additionalCombinators` receives the built-in combinators and returns raw
 `state -> state` functions, not the `{sig; doc; impl}` records in upstream's
 `lib/combinators/*.nix`. `compose` chains them. jail.nix has no combinator for
 `--unsetenv`; `unsafe-add-raw-args` emits it.
-
-## Facts measured on the development host (2026-10-19)
-
-- A single bwrap from `pkgs.bubblewrap` works. Nested user namespaces work when
-  the OUTER bwrap is the Nix-store binary, and fail when it is `/usr/bin/bwrap`:
-  Ubuntu's AppArmor profile `bwrap-userns-restrict` confines that one. jail.nix
-  uses `pkgs.bubblewrap`, so a harness's own bwrap or FHS launcher can run
-  inside a jail here. Other hosts may differ.
-- `--unsetenv VAR` works.
-- `--tmpfs <dir>` masks a directory. `--ro-bind /dev/null <file>` does not mask
-  a file readably: the bind is nodev, so `open` fails with `EACCES`. Bind
-  `pkgs.emptyFile` over the file instead.
-- `kernel.apparmor_restrict_unprivileged_userns = 0`,
-  `user.max_user_namespaces = 121707`.
 
 ## Pinning and bumps
 
@@ -103,9 +89,11 @@ Both live in `checks/jail-nix.nix` under
 on Darwin.
 
 - `jail-nix-trivial` renders a jail around coreutils' `true` and requires the
-  bubblewrap store path and `-- <exe>` in the wrapper. It then runs the wrapper
-  only when an independent `bwrap --unshare-all --ro-bind / / -- true` succeeds
-  inside the build sandbox. The log and `$out` say which branch ran:
+  bubblewrap store path and `-- <exe>` in the wrapper. The jail uses
+  `share-ns "net"`. It runs only when an independent
+  `bwrap --unshare-user --unshare-pid --ro-bind / / -- true` succeeds inside the
+  build sandbox; neither probe unshares the network namespace. Structural
+  assertions run unconditionally. The log and `$out` say which branch ran:
   `JAIL-NIX-TRIVIAL: executed …` or `JAIL-NIX-TRIVIAL: structural-only …`. A
   cached result prints neither; read `$out`.
 - `jail-nix-extend` adds a `probe` combinator through `extend` and requires

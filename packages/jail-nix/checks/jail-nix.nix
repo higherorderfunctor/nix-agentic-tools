@@ -10,7 +10,7 @@
   exe = "${pkgs.coreutils}/bin/true";
   bwrap = lib.getExe pkgs.bubblewrap;
 
-  trivial = jail.init pkgs "jail-nix-probe" exe (_: []);
+  trivial = jail.init pkgs "jail-nix-probe" exe (combinators: [(combinators.share-ns "net")]);
   extended =
     jail.extend {
       inherit pkgs;
@@ -55,7 +55,7 @@ in {
         ${structural "jail-nix-probe" trivial [bwrap "-- ${exe}"]}
         export HOME="$TMPDIR/home"
         mkdir -p "$HOME"
-        if ${bwrap} --unshare-all --ro-bind / / -- ${exe} 2>"$TMPDIR/control.log"; then
+        if ${bwrap} --unshare-user --unshare-pid --ro-bind / / -- ${exe} 2>"$TMPDIR/control.log"; then
           "$script"
           echo "JAIL-NIX-TRIVIAL: executed true inside the jail" | tee "$out"
         else

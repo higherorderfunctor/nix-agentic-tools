@@ -3,9 +3,9 @@
     scopes = ["packages/${facetOwner}/**"];
     sources = [
       {
+        dir = facetOwner;
         location = "package";
         name = "jail-nix";
-        dir = facetOwner;
       }
     ];
   };
