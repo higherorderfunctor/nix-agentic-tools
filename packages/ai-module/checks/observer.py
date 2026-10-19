@@ -77,23 +77,27 @@ def main():
                 run(bash, before["inspect"], root, state, [f"{option} is set but devenv did not deliver {target}"])
             link(root, {name: before["links"][name]})
 
-        # Retired: user content in place of each link is reported, kept, and
+        # Retired: a store link cleanup left behind is reported, kept, and
         # reported again. The engine's owned `moved.json` copy is not a removal.
         retired = [name for name in OPTIONS if name != "moved.json"]
-        # What devenv cleanup does to the links `after` no longer declares.
-        for name in set(before["links"]) - set(after["links"]):
-            clear(root / name)
         assert "moved.json" not in after["links"], after["links"]
-        for name in retired + ["moved.json"]:
-            (root / name).write_text("user edit")
+        (root / "moved.json").write_text("user edit")
+        for name in retired:
+            clear(root / name)
+            (root / name).symlink_to("/nix/store/old")
         link(root, after["links"])
         for _ in range(2):
-            run(bash, after["inspect"], root, state, [f"{OPTIONS[name]} was removed but devenv retained {root / name}" for name in retired])
-        assert all((root / name).read_text() == "user edit" for name in retired)
-        for name in retired:
-            (root / name).unlink()
+            run(bash, after["inspect"], root, state, [f"{OPTIONS[name]} was removed but devenv left its store link at {root / name}" for name in retired])
+        assert set(retired) <= set(json.loads(ledger.read_text()))
+        # A path the user took over, or removed, is forgotten silently and kept.
+        taken, gone = retired
+        clear(root / taken)
+        (root / taken).write_text("user edit")
+        clear(root / gone)
         run(bash, after["inspect"], root, state)
         assert not set(retired) & set(json.loads(ledger.read_text()))
+        assert (root / taken).read_text() == "user edit"
+        run(bash, after["inspect"], root, state)
 
         # A malformed ledger is reported, never fatal.
         ledger.write_text("bad json")

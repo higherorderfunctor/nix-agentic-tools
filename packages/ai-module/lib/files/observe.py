@@ -54,10 +54,12 @@ def inspect(root, state, manifest):
         if name in links or name in current:
             continue
         target = root / name
-        if target.exists() or target.is_symlink():
+        # Devenv only ever wrote a store link here. Anything else on disk is
+        # the user's, taken over on purpose, and is forgotten without a word.
+        if target.is_symlink() and os.readlink(target).startswith("/nix/store/"):
             print(
-                f"WARNING: {spec['option']} was removed but devenv retained "
-                f"{target}: cleanup only removes managed store symlinks.",
+                f"WARNING: {spec['option']} was removed but devenv left its "
+                f"store link at {target}: remove the link by hand.",
                 file=sys.stderr,
             )
             retained[name] = spec
