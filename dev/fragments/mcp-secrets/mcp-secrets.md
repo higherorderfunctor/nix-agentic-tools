@@ -1,12 +1,9 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-10-17 — MCP credential settings and HTTP references
-> use redact; consumers derive environment names, resolve full concat values
-> with redact.assign, and abort on failed reads. Kiro headers resolve at launch,
-> URLs during files-engine apply after the secrets point. Proxy daemons use
-> ai.services and scoped service claims on both backends; devenv up starts the
-> generated proxy process; managed MCP daemons use the shared launcher and
-> derive rotation triggers from credential file references.
+> **Last verified:** 2026-10-19 — a remote server owner declares a
+> `meta.external` module whose reserved `settings` `lib/mcp.nix:resolveRemote`
+> turns into `url` plus an `Authorization` header in `proxy.headers` or the
+> client `headers`; the paths below deliver it unchanged.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -23,6 +20,12 @@
 >   the headers are plain undici defaults that identify no harness, the
 >   `Mcp-Protocol-Version` header can't be stripped anyway, and normalizing made
 >   the traffic MORE distinctive, not less.
+> - **Slack authenticates with the consumer's own app token, not Slack's
+>   published OAuth client.** The Claude/Cursor plugin
+>   (`slackapi/slack-skills-plugin`, its `oauth.clientId`/`callbackPort` and
+>   skills) was rejected by the operator on 2026-10-19: Kiro has no OAuth MCP
+>   flow and the machinery is generic. A user-installed internal app's `xoxp-`
+>   token is the bearer.
 
 A `type = "http"` MCP server (`ai.mcpServers` / `ai.kiro.mcpServers`) can take
 SOPS/agenix-injected `headers` and `url` so secrets never land in the
@@ -43,6 +46,18 @@ world-readable store or in committed config. Files:
 - `packages/kiro-cli/lib/mkKiro.nix` — `mkMcpJsonScript` + wiring.
 - `packages/kiro-cli/lib/wrapPackage.nix` — `secretEnv` → the runtime `export`
   that puts the decrypted value in the launcher's env.
+
+A remote server owner needs no factory and no `services.mcp-servers` row:
+`packages/slack-mcp/modules/mcp-server.nix` sets `meta.external`, declares a
+required `redact.types.redacted` `settings.token`, and a `settingsToHeaders`.
+`lib/mcp.nix:resolveRemote` is the one place an entry keyed by such a server
+(`ai.mcpServers.slack-mcp.settings.token = …`) becomes its generic http fields:
+`url` (an explicit entry `url` wins over the module default) and the credential
+header, in `proxy.headers` when `proxy.enable` and in `headers` otherwise.
+`mcpProxy.proxiedServers` and `lowerClientEntries` call it before reading an
+entry, so the service, assertions and every runtime's fanout see the resolved
+shape. It adds no validation: a missing token fails module evaluation, and the
+paths in this document refuse or deliver the resolved entry.
 
 ### Managed MCP daemon credentials
 

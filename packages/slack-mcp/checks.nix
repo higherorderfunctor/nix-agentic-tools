@@ -1,1 +1,6 @@
-{imports = [./checks/extraction.nix];}
+{
+  imports = [
+    ./checks/extraction.nix
+    ./checks/factory-eval.nix
+  ];
+}

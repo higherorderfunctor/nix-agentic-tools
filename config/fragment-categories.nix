@@ -380,8 +380,8 @@ _: {
     # `${env:VAR}` / activation-envsubst delivery, the read-only mcp.json,
     # and managed proxy ownership/lowering. Scoped to the ownership and
     # transform paths, schema, shared renderer, proxy checks, Kiro secret
-    # preprocessor, and the launcher wrapper that exports the decrypted
-    # values at runtime.
+    # preprocessor, the launcher wrapper that exports the decrypted values
+    # at runtime, and the remote server module that places a token header.
     mcp-secrets = {
       scopes = [
         "checks/*/factory-eval.nix"
@@ -398,6 +398,7 @@ _: {
         "packages/kiro-cli/lib/mcpSecrets.nix"
         "packages/kiro-cli/lib/mkKiro.nix"
         "packages/kiro-cli/lib/wrapPackage.nix"
+        "packages/slack-mcp/modules/mcp-server.nix"
       ];
       sources = ["mcp-secrets"];
     };

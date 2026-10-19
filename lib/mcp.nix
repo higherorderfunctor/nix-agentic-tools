@@ -25,6 +25,18 @@
 
   isExternal = serverDef: serverDef.meta ? external && serverDef.meta.external;
 
+  # The typed module of a REMOTE server keyed `name` (`meta.external`), or
+  # null when `name` is not one.
+  externalServer = name:
+    if builtins.pathExists ../packages/${name}/modules/mcp-server.nix
+    then let
+      serverDef = loadServer name;
+    in
+      if isExternal serverDef
+      then serverDef
+      else null
+    else null;
+
   # ── Evaluate settings through the module system ──────────────────
   evalSettings = name: settings: let
     serverDef = loadServer name;
@@ -238,29 +250,54 @@
     }
     else throw "renderServer: server '${name}' must specify one of: package, command, or url";
 
+  # ── Resolve a typed remote entry ───────────────────────────────────
+  # An entry keyed by a `meta.external` server (no package, no command) carries
+  # its typed values under the reserved `settings` key. This is the ONE place
+  # they become the generic http fields: `url` (an explicit entry `url` wins
+  # over the module default) and the module's credential headers. The headers
+  # go to `proxy.headers` when the entry is proxied and to the client's
+  # `headers` otherwise, where the existing Kiro-native and non-Kiro-throw
+  # rules apply unchanged. Every pool reader (proxy lowering, services, client
+  # fanout) calls this before looking at the entry. Anything else, including a
+  # null tombstone, passes through.
+  resolveRemote = name: srv: let
+    serverDef = externalServer name;
+    evaluatedSettings = evalSettings name (srv.settings or {});
+    headers = serverDef.settingsToHeaders (mkCfgShim {inherit evaluatedSettings;});
+  in
+    if !(builtins.isAttrs srv) || (srv.package or null) != null || (srv.command or null) != null || serverDef == null
+    then srv
+    else
+      removeAttrs srv ["settings"]
+      // {
+        type = "http";
+        url =
+          if (srv.url or null) != null
+          then srv.url
+          else evaluatedSettings.url;
+      }
+      // (
+        if (srv.proxy or null) != null && srv.proxy.enable
+        then {proxy = srv.proxy // {headers = srv.proxy.headers // headers;};}
+        else {headers = (srv.headers or {}) // headers;}
+      );
+
   mkHttpEntry = {
     name,
     host ? "127.0.0.1",
     port ? null,
     settings ? {},
   }: let
-    serverDef = loadServer name;
     evaluatedSettings = evalSettings name settings;
-  in
-    if isExternal serverDef
-    then {
-      type = "http";
-      inherit (evaluatedSettings) url;
-    }
-    else {
-      type = "http";
-      url =
-        "http://"
-        + host
-        + ":"
-        + toString port
-        + (evaluatedSettings.path or "");
-    };
+  in {
+    type = "http";
+    url =
+      "http://"
+      + host
+      + ":"
+      + toString port
+      + (evaluatedSettings.path or "");
+  };
 
   # ── Derive MCP entry from package passthru ─────────────────────────
   # Packages carry mcpBinary/mcpArgs in passthru; this function derives
@@ -311,5 +348,6 @@ in {
     mkStdioEntry
     modeArgv
     renderServer
+    resolveRemote
     ;
 }
