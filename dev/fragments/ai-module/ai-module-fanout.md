@@ -19,7 +19,9 @@
 > `reason` only; ai-module owns the delivered-path inventory and backend
 > lowering; `ai.proxy` selects a shared endpoint with a whole per-runtime
 > override, gated by runtime capability; Claude consumes it and suppresses its
-> inherited API-key descriptor through the installed launcher.
+> inherited API-key descriptor through the installed launcher; `ai.jail` folds
+> field by field and jails the finished launcher in place at the install seam on
+> Linux, warning elsewhere.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -138,30 +140,35 @@ nothing installs the selected launcher package; one that wraps its binary
 supplies an `installPackage` callback taking the same arguments as `config`, on
 the record or on one backend spec, which wins. Setting the launcher
 `package = null` explicitly skips installation without disabling any generated
-configuration; the transform does not call `installPackage` in that case. A
-setting that needs the managed binary path or wrapper WARNS, not asserts, and
-only once the consumer actually wrote it — the test is that setting's own option
-priority landing below the bare declared default (1500), the same idiom
-`lib/ai/delivery-warnings.nix` uses. A default-on feature (Kiro's
-`gitSshConfigWorkaround`, Codex's Home Manager-only `pinDaemonToPackage`) stays
-silent at its default value and names itself only once explicitly set. Kiro
-folds every inert setting into one warning naming each option; Codex's
-`pinDaemonToPackage` gets the same treatment on its own.
+configuration; the transform does not call `installPackage` in that case. When
+the resolved `ai.<runtime>.jail` enables a jail, the transform wraps that
+finished launcher outermost and in place, one bubblewrap jail per name in the
+record's `executables` (`lib/ai/jail/default.nix`); on a non-Linux host it
+installs the plain launcher and warns on both backends. A setting that needs the
+managed binary path or wrapper WARNS, not asserts, and only once the consumer
+actually wrote it — the test is that setting's own option priority landing below
+the bare declared default (1500), the same idiom `lib/ai/delivery-warnings.nix`
+uses. A default-on feature (Kiro's `gitSshConfigWorkaround`, Codex's Home
+Manager-only `pinDaemonToPackage`) stays silent at its default value and names
+itself only once explicitly set. Kiro folds every inert setting into one warning
+naming each option; Codex's `pinDaemonToPackage` gets the same treatment on its
+own.
 
 Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
-`shell`, `extraPackages`, `native.settings`, `trustedMcpTools`, `tweaks`,
-`features.<name>.enable`, `useFhsSandbox` and `v3`, plus the friendly
+`jail`, `shell`, `extraPackages`, `native.settings`, `trustedMcpTools`,
+`tweaks`, `features.<name>.enable`, `useFhsSandbox` and `v3`, plus the friendly
 `backgroundExecution`, `codeToSpec`, `kvim`, `sandbox` and `workflows` switches.
 Rollout names and typed `native.settings.chat.keybindings` keys come from the
 extracted registry. Friendly workflows select the GA stock package and imply
 their global client setting on Home Manager; Code-to-Spec also implies its
 global setting there. Devenv warns when either requested global setting is
 missing, and refuses explicit project-only writes of global keys. The
-environment and shell folds live at `cli.normalized.environmentVariables` and
-`cli.normalized.shell`. All other normalized pools, native agents, permissions,
-hooks, MCP, files and activation remain shared under `ai.kiro`. There are no
-old-path aliases. `ai.kiro.cli.enable = true; ai.kiro.cli.package = null;` keeps
-shared files without installing a CLI.
+environment, jail and shell folds live at `cli.normalized.environmentVariables`,
+`cli.normalized.jail` and `cli.normalized.shell`. All other normalized pools,
+native agents, permissions, hooks, MCP, files and activation remain shared under
+`ai.kiro`. There are no old-path aliases.
+`ai.kiro.cli.enable = true; ai.kiro.cli.package = null;` keeps shared files
+without installing a CLI.
 
 The direction of that default is load-bearing. Installation used to be a
 per-factory `home.packages` / `packages` write with no shared requirement, and

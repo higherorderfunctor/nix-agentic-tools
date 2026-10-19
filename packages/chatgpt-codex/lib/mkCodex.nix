@@ -1053,6 +1053,9 @@ in
     inherit pkgs;
     name = "codex";
     contextFilename = "AGENTS.md";
+    # Codex resolves codex-code-mode-host from its own package root, not
+    # PATH; it is jailed too so the installed bin/ keeps both names.
+    executables = ["codex" "codex-code-mode-host"];
     surfaceSupport = {
       agents = {
         gaps = [
@@ -1072,6 +1075,7 @@ in
       context = {};
       environmentVariables = {};
       hooks = {};
+      jail = {};
       mcpServers = {};
       proxy = {};
       rules = {};

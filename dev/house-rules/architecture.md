@@ -46,3 +46,10 @@ hoc machinery beside an existing abstraction.
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
+- **PROPOSAL (not yet vetted): harness sandboxing uses `ai.jail`.** Jail a
+  harness launcher through `ai.jail` / `ai.<runtime>.jail`, an exclusion-only
+  bubblewrap profile over jail.nix applied once at the shared install seam, so
+  every runtime and both backends get one mechanism and the command keeps its
+  name. A per-factory wrapper or a second sandbox layer would duplicate the seam
+  and drift per runtime. See `lib/ai/jail/default.nix`,
+  `lib/ai/app/mkBackendTransform.nix` and `packages/jail-nix/docs/jail-nix.md`.

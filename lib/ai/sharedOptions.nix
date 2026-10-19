@@ -1,4 +1,4 @@
-# Declares cross-app options (ai.context, ai.mcpServers, ai.proxy,
+# Declares cross-app options (ai.context, ai.jail, ai.mcpServers, ai.proxy,
 # ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and formatting and guards: how
 # every runtime's generated files are formatted and checked.
 #
@@ -37,6 +37,7 @@
     (import ../markdown/guards.nix {inherit lib;}).table
     (pkgs // {ai = config.ai.internal.packages;})
     formatter.programs.prettier.enable;
+  jailLib = import ./jail {inherit lib;};
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   proxyLib = import ./proxy {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
@@ -227,6 +228,7 @@
         v3 trigger schema is not semantically interchangeable.
       '';
     };
+    jail = jailLib.rootOption;
     mcpServers = keyedOption {
       type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
         modules = [(import ./mcpServer/commonSchema.nix)];
@@ -482,6 +484,13 @@ in {
           readOnly = true;
           visible = false;
           description = "Evaluated generated-file treefmt configuration.";
+        };
+        jail = lib.mkOption {
+          default = throw "ai.internal.jail: compose this flake's homeManagerModules.default or devenvModules.nix-agentic-tools";
+          internal = true;
+          type = lib.types.raw;
+          visible = false;
+          description = "The jail.nix library (`lib.ai.jail`) bound to this flake's pinned source, for `ai.<runtime>.jail`.";
         };
         mkSandbox = lib.mkOption {
           default = throw "ai.internal.mkSandbox: compose this flake's homeManagerModules.default or devenvModules.nix-agentic-tools";

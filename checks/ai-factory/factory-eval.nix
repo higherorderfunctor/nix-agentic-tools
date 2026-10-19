@@ -15,6 +15,7 @@
     context.text = "probe";
     environmentVariables.PROBE = "value";
     hooks.PreToolUse = [{hooks = [{command = "true";}];}];
+    jail.enable = true;
     # A wholly unsupported MCP surface gets one surface diagnostic, even
     # when its transport would also drop fields on a capable runtime.
     mcpServers.probe = {

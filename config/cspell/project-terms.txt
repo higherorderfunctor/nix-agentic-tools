@@ -288,6 +288,7 @@ nixos
 nixpkgs
 nobuiltin
 nodev
+noescape
 noexplore
 nohup
 nomodel
@@ -379,6 +380,7 @@ rtrimstr
 rumdl
 rvben
 sandboxed
+sandboxing
 sarif
 scriptable
 scrutinee

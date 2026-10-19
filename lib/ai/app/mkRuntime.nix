@@ -15,6 +15,9 @@
 #     defaults ? {};                 # {package?, packageText?} — shared across
 #                                    #   backends; packageText is the package
 #                                    #   option's defaultText
+#     executables ? [];              # the launcher package's bin/ names, which
+#                                    #   `ai.<name>.jail` jails one by one; a
+#                                    #   record consuming `jail` must list them
 #     optionNamespaces ? {};        # {launcher?; pools?;}: relative option paths
 #                                    #   for the builder's launcher options and
 #                                    #   per-runtime pools; omitted = runtime root.
@@ -94,7 +97,7 @@
 # `callbackArgs` in `mkBackendTransform.nix` — and read it rather than
 # trusting a list here. It carries `backend`, `cfg`, `config`, `normalized`,
 # every `merged*` pool, `rawAgents` and `nativeAgents` (a native-agent
-# runtime's raw files and native records), `resolvedProxy`,
+# runtime's raw files and native records), `resolvedJail`, `resolvedProxy`,
 # `resolvedSettings`, `resolvedShell`, `mergedContext`,
 # `launcherEnvironment` and `topHooks`;
 # every callback takes `...`, so a
@@ -102,6 +105,7 @@
 {lib}: args @ {
   name,
   defaults ? {},
+  executables ? [],
   optionNamespaces ? {},
   options ? {},
   surfaceSupport ? {},
@@ -146,7 +150,7 @@
 }: let
   declaredSupport = lib.mapAttrs (_: support: {backends = ["devenv" "hm"];} // support) surfaceSupport;
 in
-  assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults hm devenv optionNamespaces poolOptions;}
+  assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults executables hm devenv optionNamespaces poolOptions;}
     // {surfaceSupport = declaredSupport;}
     // builtins.intersectAttrs {
       agentNativeType = null;
@@ -156,7 +160,7 @@ in
     }
     args);
     {
-      inherit name defaults optionNamespaces options poolOptions hm devenv pkgs;
+      inherit name defaults executables optionNamespaces options poolOptions hm devenv pkgs;
       surfaceSupport = declaredSupport;
     }
     // lib.optionalAttrs (config != null) {inherit config;}

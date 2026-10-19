@@ -698,6 +698,7 @@ in
     inherit pkgs;
     name = "kimchi";
     contextFilename = projectContextFilename;
+    executables = ["kimchi"];
     contextDescription = ''
       Kimchi-specific context appended after `ai.context`. Home Manager emits
       the configured filename under its harness directory, although pinned
@@ -726,6 +727,7 @@ in
           })
           (lib.subtractLists (import ./hook-events.nix) sharedHooks.portableEvents);
       };
+      jail = {};
       mcpServers.gaps = [
         {
           each = true;

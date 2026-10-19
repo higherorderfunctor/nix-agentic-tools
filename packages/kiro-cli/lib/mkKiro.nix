@@ -1138,6 +1138,7 @@ in
     # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kiro";
+    executables = ["kiro-cli" "kiro-cli-chat" "kiro-cli-term"];
     optionNamespaces.launcher = ["cli"];
     # The native agent layer (see mkRuntime.nix): each normalized agent
     # lowers into `ai.kiro.native.agents.<name>`, a typed agent record.
@@ -1178,6 +1179,7 @@ in
         backends = [];
         reason = "Kiro's v3 trigger schema has no lossless mapping from portable command hooks; its native hooks are a separate surface (packages/kiro-cli/lib/mkKiro.nix).";
       };
+      jail = {};
       mcpServers.gaps = [
         {
           each = true;

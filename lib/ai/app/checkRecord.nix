@@ -20,6 +20,9 @@
 # the `agents` pool; and `agentsDirSuffixes` must be a non-empty list of
 # strings, since an empty one makes `agentsDir` expand nothing.
 #
+# `executables` names the launcher package's binaries for the jail, so a
+# record that consumes `jail` must have a launcher and list at least one.
+#
 # `record` returns true, or throws naming the offending fields.
 # `sharedAgentsMd` checks the value that record callback returns, which exists
 # only once the transform calls it: true, or a throw naming stray fields.
@@ -60,6 +63,7 @@ in {
   record = record @ {
     name,
     defaults ? {},
+    executables ? [],
     hm ? {},
     devenv ? {},
     optionNamespaces ? {},
@@ -86,6 +90,10 @@ in {
     && checkBackend "devenv" devenv
     && lib.assertMsg (builtins.isAttrs optionNamespaces && unknownNamespaces == [] && lib.all validPath (builtins.attrValues optionNamespaces))
     "ai runtime ${name}: optionNamespaces maps ${listed namespaceGroups} to a list of nonempty strings (an omitted group keeps its options at the runtime root)."
+    && lib.assertMsg (builtins.isList executables && lib.all (exe: builtins.isString exe && builtins.match "[^/]+" exe != null) executables)
+    "ai runtime ${name}: executables must be a list of bin/ names (strings without `/`)."
+    && lib.assertMsg (!(lib.elem "jail" supportedSurfaces) || (defaults ? package && executables != []))
+    "ai runtime ${name}: surfaceSupport includes jail, which wraps the launcher package's executables; the record needs defaults.package and a non-empty executables list."
     && lib.assertMsg (unknownDefaults == [])
     "ai runtime ${name}: defaults carries ${listed unknownDefaults}; it takes only ${listed defaultsKeys}."
     && lib.assertMsg (unknownPoolOptions == [])
