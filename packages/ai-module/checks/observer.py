@@ -81,6 +81,9 @@ def main():
         # reported again. The engine's owned `moved.json` copy is not a removal.
         retired = [name for name in OPTIONS if name != "moved.json"]
         assert "moved.json" not in after["links"], after["links"]
+        # What devenv cleanup does to the links `after` no longer declares.
+        for name in set(before["links"]) - set(after["links"]):
+            clear(root / name)
         (root / "moved.json").write_text("user edit")
         for name in retired:
             clear(root / name)
