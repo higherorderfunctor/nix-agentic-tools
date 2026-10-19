@@ -23,10 +23,10 @@ do not authorize another sweep. Paths in the table are relative to `docs/`.
 | `plans/typed-model-and-thinking-config-convergence.md`        | COMPLETE (`94d2262`). ⚠ memory cites it as canonical handoff — update memory if path changes. |
 | `plans/typed-model-and-thinking-config-implementation.md`     | COMPLETE — 7+1 commits landed.                                                                |
 
-The original audit also proposed removing `spiral-context.md` and reviewing the
-`grill-me` skill, while retaining the harness work and unrelated plans. Those
-separate proposals are unchanged by this cleanup. Its description of `plan.md`
-as absent from main was stale; the file is tracked and was not changed here.
+The original audit also proposed removing `spiral-context.md` (since removed)
+and reviewing the `grill-me` skill, while retaining the harness work and
+unrelated plans. Its description of `plan.md` as absent from main was stale; the
+file is tracked and was not changed here.
 
 The
 [complete original ledger](https://github.com/higherorderfunctor/nix-agentic-tools/blob/3510a5dbc816a1598e0ff0c357c0c237dc78b267/docs/backlog-grooming-ledger.md),
