@@ -8,9 +8,14 @@
 #     settings.token = redact.file "…";
 #     proxy = {enable = true; port = 9503;};  # optional service path
 #   };
+#
+# `settings.manifest` selects the rows of Slack's tool-to-scope table whose
+# scopes the app manifest requests (`../lib/tools.nix`); it renders nothing
+# into the entry.
 {lib, ...}: let
   redact = import ../../../lib/redact {inherit lib;};
   extracted = import ../lib/extracted.nix {inherit lib;};
+  tools = import ../lib/tools.nix {inherit lib;};
 in {
   meta = {
     external = true;
@@ -18,6 +23,7 @@ in {
   };
 
   settingsOptions = {
+    manifest = tools.option;
     token = lib.mkOption {
       type = redact.types.redacted;
       description = ''

@@ -11,6 +11,7 @@
   inherit (harness) claudeMcpServers evalDevenv evalHm mcpLib;
   inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) renderedMcpJson;
   extracted = import ../lib/extracted.nix {inherit lib;};
+  manifestLib = import ../lib/manifest.nix {inherit lib;};
   mcpProxy = import ../../../lib/ai/mcpProxy.nix {inherit lib pkgs;};
   redact = import ../../../lib/redact {inherit lib;};
   token = redact.file "/run/secrets/slack-user-token";
@@ -32,6 +33,8 @@
     inherit proxy;
   });
   evaluates = value: (builtins.tryEval (builtins.deepSeq value true)).success;
+  manifestOf = settings: manifestLib.slackManifest {inherit pkgs settings;};
+  manifest = manifestOf {inherit token;};
   mcpFile = ev: ev.config.ai.kiro.files."${ev.config.ai.kiro.configDir}/settings/mcp.json";
 in {
   checks =
@@ -63,6 +66,58 @@ in {
           url = "https://slack.example.test/mcp";
         })).url
         == "https://slack.example.test/mcp"
+      );
+
+      # One file printed by a flake app and a devenv task, nothing installed.
+      factory-slack-mcp-manifest-app = mkTest "slack-mcp-manifest-app" (
+        let
+          app = manifestLib.mkManifestApp pkgs manifest;
+          task = manifestLib.mkManifestTask pkgs manifest;
+        in
+          app.type
+          == "app"
+          && lib.hasPrefix "${builtins.storeDir}/" app.program
+          && task.exec == app.program
+          && task.description == "Print slack-mcp-manifest.yaml"
+          && manifest.name == "slack-mcp-manifest.yaml"
+      );
+
+      # By default every extracted row is selected, so the manifest requests
+      # every documented scope.
+      factory-slack-mcp-manifest-default-rows = mkTest "slack-mcp-manifest-default-rows" (
+        (mcpLib.evalSettings "slack-mcp" {inherit token;}).manifest.rows
+        == builtins.attrNames extracted.tools
+        && manifest.manifest.oauth_config.scopes.user
+        == lib.naturalSort (lib.unique (lib.concatLists (builtins.attrValues extracted.tools)))
+      );
+
+      # User scopes are the sorted union of the selected rows' scopes less
+      # omitScopes. No token is needed or kept.
+      factory-slack-mcp-manifest-scopes = mkTest "slack-mcp-manifest-scopes" (
+        let
+          trimmed =
+            (manifestOf {
+              manifest = {
+                omitScopes = ["im:history" "mpim:history"];
+                rows = ["Lists" "Read a channel/thread" "Search users"];
+              };
+            }).manifest;
+        in
+          trimmed.oauth_config.scopes.user
+          == ["channels:history" "groups:history" "lists:read" "lists:write" "search:read.users"]
+          && trimmed.oauth_config.scopes.bot == ["users:read"]
+          && trimmed.settings.org_deploy_enabled == false
+          && trimmed.settings.is_mcp_enabled
+          && trimmed.oauth_config.pkce_enabled
+          && !(lib.hasInfix "mcp.slack.com" (builtins.toJSON manifest.manifest))
+          && !(lib.hasInfix "slack-user-token" (builtins.toJSON manifest.manifest))
+      );
+
+      # A row or scope the docs do not list is refused by the option type.
+      factory-slack-mcp-manifest-unknown = mkTest "slack-mcp-manifest-unknown" (
+        evaluates (manifestOf {manifest.rows = ["Search users"];}).manifest
+        && !(evaluates (manifestOf {manifest.rows = ["Delete workspace"];}).manifest)
+        && !(evaluates (manifestOf {manifest.omitScopes = ["admin:read"];}).manifest)
       );
 
       factory-slack-mcp-native-bearer = mkTest "slack-mcp-native-bearer" (
