@@ -7,14 +7,15 @@ applyTo: "packages/chatgpt-codex/**"
 
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-16 — the package uses nixpkgs' source-built voice
-> and store-linked runtime at its output root; daemon pins unwrap selected
-> launchers; settings stage through the files engine and selection uses an
-> ungated layer-3 command; devenv can opt into runtime project trust; launcher
-> flags are checked as root-command `uses`; Home Manager owns daemon selection
-> and settings; both backends run the offline project-document and
-> project-config preflight before it execs the original binary, isolated by the
-> shared `lib/ai/launcher-preflight.nix`.
+> **Last verified:** 2026-10-17 — proxy session flags carry a reference-reading
+> auth helper; the package uses nixpkgs' source-built voice and store-linked
+> runtime at its output root; daemon pins unwrap selected launchers; settings
+> stage through the files engine and selection uses an ungated layer-3 command;
+> devenv can opt into runtime project trust; launcher flags are checked as
+> root-command `uses`; Home Manager owns daemon selection and settings; both
+> backends run the offline project-document and project-config preflight before
+> it execs the original binary, isolated by the shared
+> `lib/ai/launcher-preflight.nix`.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -98,9 +99,11 @@ sandbox will own that home.
 
 Home Manager and devenv always install a launcher. It sets the configured
 process environment, runs `lib/projectDocPreflight.nix`, then execs the original
-package binary. `lib.ai.mkLauncher` preserves that binary's package as
-`launcherPackage`; selecting an existing launcher flattens it rather than
-nesting wrappers and running the preflight twice.
+package binary. devenv's launcher also passes an `ai.proxy` selection as `-c`
+session flags, because project config cannot carry a provider; the
+`ai-proxy-runtimes` fragment has the shape. `lib.ai.mkLauncher` preserves that
+binary's package as `launcherPackage`; selecting an existing launcher flattens
+it rather than nesting wrappers and running the preflight twice.
 
 `debug prompt-input` needs no auth and succeeds in an offline Nix sandbox.
 Measured on 0.161.0 with an empty Codex home: five repo calls took 34.5, 23.0,
