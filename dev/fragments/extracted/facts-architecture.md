@@ -160,6 +160,7 @@ never as a fact source for Nix. The probe work owns the rewrite of this section.
 ## Where the rest lives
 
 - `facts-contract.md`: the spec (same category, loads with this file).
+- `typed-settings.md`: the generic option generator and render (same category).
 - `dev/fragments/git-tool-settings/git-tool-settings.md`: annotations and the
   option generator for git-absorb, git-branchless, git-revise.
 - `packages/kimchi/docs/kimchi-factory.md`: Kimchi's hand tables and reconcile.

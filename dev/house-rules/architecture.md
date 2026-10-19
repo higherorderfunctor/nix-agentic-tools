@@ -20,6 +20,13 @@ hoc machinery beside an existing abstraction.
   systemd or devenv. It reads store paths and secrets at start, never
   engine-written files. One-shot jobs and file-watch units are outside this
   surface; glab keyring keeps its native mechanism.
+- **Typed settings come from the extracted generator.** An owner with extracted
+  settings facts gets its option type from `lib/extracted/options.nix` and its
+  config file from `lib/extracted/render.nix`, which lifts secrets into
+  placeholders. This avoids duplicating type and render logic over extracted
+  facts. The four older generators (claude-code, kimchi, glab, git tools)
+  migrate to it as separate work; never add another. See
+  `dev/fragments/extracted/typed-settings.md`.
 - **Exclusive resources use claims.** Owners register `ai.claims.<group>.<key>`
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See

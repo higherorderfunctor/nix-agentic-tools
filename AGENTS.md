@@ -121,6 +121,7 @@ for it. When several entries match, their guidance composes.
     - `packages/cliproxyapi/**`
   - Read:
     - [`packages/cliproxyapi/docs/cliproxyapi-extraction.md`](packages/cliproxyapi/docs/cliproxyapi-extraction.md)
+    - [`packages/cliproxyapi/docs/cliproxyapi-settings.md`](packages/cliproxyapi/docs/cliproxyapi-settings.md)
 - **`codex-daemon`**
   - Match:
     - `packages/chatgpt-codex/**`
@@ -131,6 +132,7 @@ for it. When several entries match, their guidance composes.
     - `packages/cpa-manager-plus/**`
   - Read:
     - [`packages/cpa-manager-plus/docs/cpa-manager-plus-extraction.md`](packages/cpa-manager-plus/docs/cpa-manager-plus-extraction.md)
+    - [`packages/cpa-manager-plus/docs/cpa-manager-plus-settings.md`](packages/cpa-manager-plus/docs/cpa-manager-plus-settings.md)
 - **`delegate-routing`**
   - Match:
     - `packages/delegate-routing/**`
@@ -155,6 +157,8 @@ for it. When several entries match, their guidance composes.
     - `packages/*/extracted/**`
     - `packages/chatgpt-codex/lib/**`
     - `packages/claude-code/lib/**`
+    - `packages/cliproxyapi/lib/**`
+    - `packages/cpa-manager-plus/lib/**`
     - `packages/delegate-routing/probes/**`
     - `packages/git-absorb/lib/**`
     - `packages/git-branchless/lib/**`
@@ -167,6 +171,7 @@ for it. When several entries match, their guidance composes.
     - [`dev/fragments/extracted/extraction-method.md`](dev/fragments/extracted/extraction-method.md)
     - [`dev/fragments/extracted/facts-architecture.md`](dev/fragments/extracted/facts-architecture.md)
     - [`dev/fragments/extracted/facts-contract.md`](dev/fragments/extracted/facts-contract.md)
+    - [`dev/fragments/extracted/typed-settings.md`](dev/fragments/extracted/typed-settings.md)
 - **`facets`**
   - Match:
     - `checks/**`
@@ -470,6 +475,13 @@ hoc machinery beside an existing abstraction.
   systemd or devenv. It reads store paths and secrets at start, never
   engine-written files. One-shot jobs and file-watch units are outside this
   surface; glab keyring keeps its native mechanism.
+- **Typed settings come from the extracted generator.** An owner with extracted
+  settings facts gets its option type from `lib/extracted/options.nix` and its
+  config file from `lib/extracted/render.nix`, which lifts secrets into
+  placeholders. This avoids duplicating type and render logic over extracted
+  facts. The four older generators (claude-code, kimchi, glab, git tools)
+  migrate to it as separate work; never add another. See
+  `dev/fragments/extracted/typed-settings.md`.
 - **Exclusive resources use claims.** Owners register `ai.claims.<group>.<key>`
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See

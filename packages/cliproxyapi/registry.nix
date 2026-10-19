@@ -12,6 +12,11 @@
         location = "package";
         name = "cliproxyapi-extraction";
       }
+      {
+        dir = facetOwner;
+        location = "package";
+        name = "cliproxyapi-settings";
+      }
     ];
   };
   update.targets.cliproxyapi = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/generic/cliproxyapi/package.nix)];};

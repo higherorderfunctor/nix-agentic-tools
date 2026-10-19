@@ -2,8 +2,8 @@
 
 > **Last verified:** 2026-10-18 — owners commit forked `extracted.json`; Linux
 > carries make other systems follow; owner checks use `mkOwnerCheck`; Go owners
-> extract with `goTestExtract`; facts and reconciliation share the private
-> redact classifier.
+> extract with `goTestExtract` over the generic `goTest`; facts and
+> reconciliation share the private redact classifier.
 
 A fact is something the repo measured about a tool it packages: a settings key,
 a model id, a hook trigger, a byte limit, whether a patch applies. Facts are
@@ -319,11 +319,11 @@ Owner update scripts use `regenCommand { name; }` to build and run that
 regenerator on the current host.
 
 A Go owner's `passthru.extracted` is
-`goTestExtract { package; packagePath; testFile; }`: it joins `testFile` and
-`go/nat_shared_test.go` (given the test's package clause) to `packagePath` under
-the buildGoModule `package`'s `modRoot`, runs `TestNatExtract` offline with the
-package's toolchain and vendor tree, and keeps the object of surfaces the test
-writes to `$NAT_EXTRACT_OUT`.
+`goTestExtract { package; packagePath; testFile; }`: through `goTest` it joins
+`testFile` and `go/nat_shared_test.go` (given the test's package clause) to
+`packagePath` under the buildGoModule `package`'s `modRoot`, runs
+`TestNatExtract` offline with the package's toolchain and vendor tree, and keeps
+the object of surfaces the test writes to `$NAT_EXTRACT_OUT`.
 
 ## The guard
 

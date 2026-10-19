@@ -1,3 +1,6 @@
 {
-  imports = [./checks/cpa-manager-plus-extracted.nix];
+  imports = [
+    ./checks/cpa-manager-plus-extracted.nix
+    ./checks/cpa-manager-plus-settings.nix
+  ];
 }
