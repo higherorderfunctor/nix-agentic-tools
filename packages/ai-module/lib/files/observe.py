@@ -54,9 +54,12 @@ def inspect(root, state, manifest):
         if name in links or name in current:
             continue
         target = root / name
-        # Devenv only ever wrote a store link here. Anything else on disk is
-        # the user's, taken over on purpose, and is forgotten without a word.
-        if target.is_symlink() and os.readlink(target).startswith("/nix/store/"):
+        # Devenv only ever wrote a store link here: the remembered source when
+        # an inspection recorded one, else some store path. Anything else on
+        # disk is the user's, taken over on purpose, and is forgotten silently.
+        link = os.readlink(target) if target.is_symlink() else None
+        source = spec.get("source")
+        if link is not None and (link == source if source else link.startswith("/nix/store/")):
             print(
                 f"WARNING: {spec['option']} was removed but devenv left its "
                 f"store link at {target}: remove the link by hand.",
