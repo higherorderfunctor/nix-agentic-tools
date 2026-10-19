@@ -20,8 +20,10 @@
 # the `agents` pool; and `agentsDirSuffixes` must be a non-empty list of
 # strings, since an empty one makes `agentsDir` expand nothing.
 #
-# `executables` names the launcher package's binaries for the jail, so a
-# record that consumes `jail` must have a launcher and list at least one.
+# `executables` names the launcher package's user entry points, each of which
+# gets its own jail; every other bin is passed through and runs inside the
+# jail that spawned it. A record that consumes `jail` must have a launcher and
+# list at least one.
 #
 # `record` returns true, or throws naming the offending fields.
 # `sharedAgentsMd` checks the value that record callback returns, which exists

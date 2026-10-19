@@ -110,8 +110,11 @@
 
   # Jail each of `executables` from `package` in place: one jail per binary,
   # under the same name, joined with the package's `share/` when it has one.
-  # Nothing else of the package is forwarded (none of its passthru, so a
-  # later `launcherPackage` flatten cannot unwrap the jail).
+  # `executables` are the user entry points. Every other `bin/` entry is
+  # linked through unchanged: a helper the harness spawns by name (Codex's
+  # `codex-code-mode-host`) runs inside the jail that spawned it, so jailing
+  # it too would nest a second bubblewrap. No passthru is forwarded, so a
+  # later `launcherPackage` flatten cannot unwrap the jail.
   wrap = {
     executables,
     jail,
@@ -138,6 +141,11 @@
         if [ -d ${package}/share ]; then
           ln -s ${package}/share "$out/share"
         fi
+        for bin in ${package}/bin/*; do
+          [ -e "$bin" ] || [ -L "$bin" ] || continue
+          target="$out/bin/''${bin##*/}"
+          [ -e "$target" ] || [ -L "$target" ] || ln -s "$bin" "$target"
+        done
       '';
       meta.mainProgram = builtins.head executables;
     };

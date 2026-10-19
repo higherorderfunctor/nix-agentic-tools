@@ -15,9 +15,12 @@
 #     defaults ? {};                 # {package?, packageText?} — shared across
 #                                    #   backends; packageText is the package
 #                                    #   option's defaultText
-#     executables ? [];              # the launcher package's bin/ names, which
-#                                    #   `ai.<name>.jail` jails one by one; a
-#                                    #   record consuming `jail` must list them
+#     executables ? [];              # user entry points: the launcher bin/
+#                                    #   names that each get their own
+#                                    #   `ai.<name>.jail`; every other bin is
+#                                    #   passed through and runs inside the
+#                                    #   jail that spawned it; a record
+#                                    #   consuming `jail` must list one
 #     optionNamespaces ? {};        # {launcher?; pools?;}: relative option paths
 #                                    #   for the builder's launcher options and
 #                                    #   per-runtime pools; omitted = runtime root.

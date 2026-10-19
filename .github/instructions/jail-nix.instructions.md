@@ -7,9 +7,9 @@ applyTo: "checks/ai-jail/**,lib/ai/jail/**,packages/jail-nix/**"
 
 # jail.nix library
 
-> **Last verified:** 2026-10-19 — PATH exclusions follow caller-PATH
-> restoration; final permissions can restore variables; Kiro FHS dispatch stays
-> inside the outer jail.
+> **Last verified:** 2026-10-19 — only entry points are jailed, helper bins pass
+> through; PATH exclusions follow caller-PATH restoration; Kiro FHS dispatch
+> stays inside the outer jail.
 
 jail.nix (`sourcehut:~alexdavid/jail.nix`) is a pure Nix library that wraps a
 program in bubblewrap. It is not a NixOS module, so Home Manager and devenv need
@@ -110,9 +110,10 @@ unless it enables the jail. Nothing is jailed and nothing is excluded unless the
 consumer sets it.
 
 The install seam in `lib/ai/app/mkBackendTransform.nix` wraps the finished
-launcher, outermost and in place: one jail per name in the record's
-`executables`, joined with the package's `share/`, so `claude` is the jailed one
-and the factory wrapper's environment and launch-time reads run inside.
+launcher, outermost and in place: one jail per entry point in `executables`,
+joined with `share/`, so `claude` is the jailed one and the factory wrapper runs
+inside. Other `bin/` entries, such as `codex-code-mode-host`, pass through with
+no jail of their own and run inside the jail that spawned them.
 
 The profile replaces `basePermissions`: `--dev-bind / /`, a fresh `/proc` and a
 minimal `/dev`, the environment kept, `share-ns "net"` for a loopback proxy,

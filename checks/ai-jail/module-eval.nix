@@ -110,15 +110,20 @@ in {
         backends
       );
 
-      # Codex's helper keeps its bin name alongside the main launcher.
+      # Only the `codex` entry point is jailed; its helper keeps its bin
+      # name, with no jail of its own, and runs inside the jail that spawns it.
       module-ai-jail-codex-bins = pkgs.runCommand "ai-jail-codex-bins" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        for bin in codex codex-code-mode-host; do
-          script=${codexJailed}/bin/"$bin"
-          test -x "$script"
-          grep -qF -- ${lib.escapeShellArg bwrap} "$script"
-        done
+        test -x ${codexJailed}/bin/codex
+        grep -qF -- ${lib.escapeShellArg bwrap} ${codexJailed}/bin/codex
+        helper=${codexJailed}/bin/codex-code-mode-host
+        test -L "$helper"
+        test -x "$helper"
+        if grep -qF -- ${lib.escapeShellArg bwrap} "$helper"; then
+          echo "FAIL: codex-code-mode-host has its own jail" >&2
+          exit 1
+        fi
         touch "$out"
       '';
 

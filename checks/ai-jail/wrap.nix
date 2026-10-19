@@ -70,6 +70,42 @@
           ++ extraPermissions c;
       };
     };
+  # A launcher with a helper bin: only the entry point is jailed, and the
+  # helper is linked through from the package unchanged.
+  helper = pkgs.writeShellScriptBin "jail-helper" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    echo helper
+  '';
+  withHelper = pkgs.symlinkJoin {
+    name = "jail-probe-with-helper";
+    paths = [probe helper];
+  };
+  helperWrapped = jailLib.wrap {
+    executables = ["jail-probe"];
+    jail = self.lib.ai.jail;
+    name = "jail-probe";
+    package = withHelper;
+    inherit pkgs;
+    profile = {
+      exclude = {
+        environment = null;
+        paths = null;
+      };
+      permissions = null;
+    };
+  };
+  helperPassThrough = let
+    postBuild = builtins.unsafeDiscardStringContext helperWrapped.buildCommand;
+  in
+    builtins.length helperWrapped.paths
+    == 1
+    # The one path is the jail, not the package it wraps.
+    && lib.hasSuffix "-jail-probe" (builtins.head helperWrapped.paths)
+    && builtins.head helperWrapped.paths != "${withHelper}"
+    && builtins.head helperWrapped.paths != "${probe}"
+    && lib.hasInfix (builtins.unsafeDiscardStringContext "for bin in ${withHelper}/bin/*; do") postBuild
+    && lib.hasInfix ''ln -s "$bin" "$target"'' postBuild;
   expected = path:
     pkgs.writeText "ai-jail-wrap-expected" ''
       file=
@@ -86,6 +122,8 @@ in {
     ai-jail-environment-order = harness.mkTest "ai-jail-environment-order" (
       environmentOrder false && environmentOrder true
     );
+
+    ai-jail-helper-pass-through = harness.mkTest "ai-jail-helper-pass-through" helperPassThrough;
 
     ai-jail-wrap-masks = pkgs.runCommand "ai-jail-wrap-masks" {} ''
       set -euETo pipefail
