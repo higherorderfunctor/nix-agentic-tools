@@ -97,7 +97,11 @@ in
   ai.mkManifestTask pkgs (ai.mcpServers.slackManifest {inherit pkgs settings;});
 ```
 
-Then `devenv tasks run slack-mcp:manifest`.
+Then `devenv tasks run --show-output slack-mcp:manifest`. devenv captures a
+task's stdout and prints `{}` without that flag; with it the YAML appears in the
+run log, indented by two spaces. Inside this repository a gitignored
+`devenv.local.nix` can declare the same task by importing
+`packages/slack-mcp/lib/manifest.nix` and `lib/redact` directly.
 
 ## The token
 
