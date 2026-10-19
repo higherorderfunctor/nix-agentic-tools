@@ -131,7 +131,8 @@ import once into that state and are then deleted.
 > the runtime pool or its normalized option, and record gaps are `path`, `each`,
 > `when` and `reason` only; ai-module owns the delivered-path inventory and
 > backend lowering; `ai.proxy` selects a shared endpoint with a whole
-> per-runtime override, gated by runtime capability.
+> per-runtime override, gated by runtime capability; Claude consumes it and
+> suppresses its inherited API-key descriptor through the installed launcher.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -689,8 +690,9 @@ non-empty list for `fileMatch` content.
   2026-08-10 when it gained a wrapper; its `shell_environment_policy` is a
   different thing and still is — that filters what SPAWNED commands inherit,
   while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.native.settings.env` is its
-  native equivalent.
+  exclusion: `ai.claude.native.settings.env` is its native equivalent and beats
+  process env. Its optional proxy launcher only suppresses the inherited API-key
+  descriptor before startup.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
   runtime variable** — not for Codex, not for anything. An earlier revision of
@@ -703,7 +705,7 @@ non-empty list for `fileMatch` content.
 - `ai.proxy` — a client selection (`url` + `key`) pointing harnesses at a local
   CLIProxyAPI. A runtime that declares `proxy` gets `ai.<runtime>.proxy`, which
   replaces the root selection whole when it selects anything, and consumes the
-  resolved `normalized.proxy`; none does yet. See the `ai-proxy` fragment.
+  resolved `normalized.proxy`; only Claude does. See the `ai-proxy` fragment.
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools
@@ -1907,7 +1909,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-16 — shell delivery cells derive from each runtime
+> **Last verified:** 2026-10-17 — Claude's proxy launcher suppresses only the
+> inherited API-key descriptor; shell delivery cells derive from each runtime
 > record's `surfaceSupport`, with Copilot's absence and reason from its record;
 > `optionNamespaces.launcher` places `shell`; Copilot is github.com Copilot.
 >
@@ -2117,8 +2120,9 @@ three runtimes demonstrably do not perform.
   launcher carries the same document check without that flag.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
-  fans out to Codex, Kimchi and Kiro. Claude is still outside it — it has no
-  wrapper here and `native.settings.env` is its native equivalent.
+  fans out to Codex, Kimchi and Kiro. Claude is still outside it;
+  `native.settings.env` is its native equivalent. Its optional proxy launcher
+  only suppresses the inherited API-key descriptor.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more
