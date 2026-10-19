@@ -130,7 +130,8 @@ import once into that state and are then deleted.
 > an undelivered surface warns once per runtime and backend, set at the root,
 > the runtime pool or its normalized option, and record gaps are `path`, `each`,
 > `when` and `reason` only; ai-module owns the delivered-path inventory and
-> backend lowering.
+> backend lowering; `ai.proxy` selects a shared endpoint with a whole
+> per-runtime override, gated by runtime capability.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -698,6 +699,11 @@ non-empty list for `fileMatch` content.
   own session and every other process in it. Wrappers are inherited across
   `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
   NEVER write the shell environment.
+
+- `ai.proxy` — a client selection (`url` + `key`) pointing harnesses at a local
+  CLIProxyAPI. A runtime that declares `proxy` gets `ai.<runtime>.proxy`, which
+  replaces the root selection whole when it selects anything, and consumes the
+  resolved `normalized.proxy`; none does yet. See the `ai-proxy` fragment.
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools
