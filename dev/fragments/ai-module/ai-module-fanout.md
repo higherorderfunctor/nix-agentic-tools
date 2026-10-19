@@ -1,24 +1,25 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-17 — runtime factories stage surfaces in
-> `_generatedFiles` (every runtime surface included) and forward them through
-> the ai-module layer-1 helper over one generated tree, which every staged
-> entry's delivery requires; the shared AGENTS.md composer is the layer-1 owner
-> `internal` and the ai-module devenv module writes the treefmt excludes;
-> Copilot stages its instructions, declares an agents gap and keeps both old
-> ledgers, and Claude every surface including HM `.claude.json` with both legacy
-> ledgers; the root-option provenance guard exempts the ai-module layer-1
-> forwarding helper for its forwarded options; option declarations supply policy
-> surfaces and keyed withdrawal; runtime declarations supply normalized policy
-> gaps and the warning suite generates coverage for every runtime, surface and
-> backend; a record's `optionNamespaces` places launcher and pool options, and
-> `ai.copilot` is github.com Copilot with its pools under `ai.copilot.github`;
-> an undelivered surface warns once per runtime and backend, set at the root,
-> the runtime pool or its normalized option, and record gaps are `path`, `each`,
-> `when` and `reason` only; ai-module owns the delivered-path inventory and
-> backend lowering; `ai.proxy` selects a shared endpoint with a whole
-> per-runtime override, gated by runtime capability; Claude consumes it and
-> suppresses its inherited API-key descriptor through the installed launcher.
+> **Last verified:** 2026-10-19 — gap predicates and dynamic reasons also
+> receive the backend; runtime factories stage surfaces in `_generatedFiles`
+> (every runtime surface included) and forward them through the ai-module
+> layer-1 helper over one generated tree, which every staged entry's delivery
+> requires; the shared AGENTS.md composer is the layer-1 owner `internal` and
+> the ai-module devenv module writes the treefmt excludes; Copilot stages its
+> instructions, declares an agents gap and keeps both old ledgers, and Claude
+> every surface including HM `.claude.json` with both legacy ledgers; the
+> root-option provenance guard exempts the ai-module layer-1 forwarding helper
+> for its forwarded options; option declarations supply policy surfaces and
+> keyed withdrawal; runtime declarations supply normalized policy gaps and the
+> warning suite generates coverage for every runtime, surface and backend; a
+> record's `optionNamespaces` places launcher and pool options, and `ai.copilot`
+> is github.com Copilot with its pools under `ai.copilot.github`; an undelivered
+> surface warns once per runtime and backend, set at the root, the runtime pool
+> or its normalized option, and record gaps are `path`, `each`, `when` and
+> `reason` only; ai-module owns the delivered-path inventory and backend
+> lowering; `ai.proxy` selects a shared endpoint with a whole per-runtime
+> override, gated by runtime capability; Claude consumes it and suppresses its
+> inherited API-key descriptor through the installed launcher.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -633,9 +634,9 @@ never forces it once an earlier input warns. Silencing it takes a visible record
 edit with a reason, never a stub writer. A gap is one field a delivered surface
 drops: a nonempty `path`, a reason and an optional `when` predicate. With `each`
 it checks every keyed entry, root or runtime pool; without, the portable root
-field. Predicates and dynamic reasons receive the runtime cfg and the entry's
-name, path and value. Keyed runtime replacements and tombstones withdraw
-inherited entries before warnings.
+field. Predicates and dynamic reasons receive the backend, the runtime cfg and
+the entry's name, path and value. Keyed runtime replacements and tombstones
+withdraw inherited entries before warnings.
 
 `checks/ai-warnings` generates populated, empty and disabled probes from the
 real runtime records, the evaluated shared-surface registry and both backends.

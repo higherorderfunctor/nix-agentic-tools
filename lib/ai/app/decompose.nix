@@ -47,7 +47,7 @@
       then entries surface
       else [(root surface)];
     warnings = entry: let
-      args = entry // {inherit cfg;};
+      args = entry // {inherit backend cfg;};
       reason =
         if builtins.isFunction gap.reason
         then gap.reason args

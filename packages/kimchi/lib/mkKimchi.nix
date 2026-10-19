@@ -726,7 +726,13 @@ in
           })
           (lib.subtractLists (import ./hook-events.nix) sharedHooks.portableEvents);
       };
-      mcpServers = {};
+      mcpServers.gaps = [
+        {
+          each = true;
+          path = ["toolPolicy"];
+          reason = "Kimchi's permissions.json has allow and deny lists but no ask list, and the pinned source establishes no rule spelling for an MCP tool, so the policy is not rendered and every tool keeps Kimchi's default.";
+        }
+      ];
       rules = {};
       settings = {};
       shell = {};

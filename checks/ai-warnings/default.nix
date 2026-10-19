@@ -126,6 +126,17 @@
         then ["args" "package" "settings"]
         else ["settings"]
       )) [false true]
+    # A tool policy value with no surface on the runtime or backend.
+    ++ map (runtime: {
+      inherit runtime;
+      surface = "mcpServers";
+      gapPath = ["toolPolicy"];
+      path = ["ai" "mcpServers" "probe"];
+      value = {
+        command = "probe";
+        toolPolicy.probe = "disabled";
+      };
+    }) ["kimchi" "kiro"]
     ++ [
       {
         runtime = "claude";
@@ -391,6 +402,7 @@
       if builtins.isFunction recordedReason
       then
         recordedReason {
+          backend = mode;
           cfg = evaluation.ai.${case.runtime};
           name = lib.last case.path;
           inherit (case) path value;

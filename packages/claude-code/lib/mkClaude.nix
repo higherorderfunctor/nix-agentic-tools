@@ -183,6 +183,18 @@
   # consumers that pin tool names.
   personalPlugin = "home-manager";
   personalPluginManifest = "hm";
+  # The generic `toolPolicy` as Claude permission rules, named the way Claude
+  # names the tool: plugin-scoped for the Home Manager personal plugin, plain
+  # for the project `.mcp.json`.
+  claudeToolRules = {
+    auto = "allow";
+    disabled = "deny";
+    prompt = "ask";
+  };
+  claudeToolName = isHm: row:
+    if isHm
+    then "mcp__plugin_${personalPluginManifest}_${row.server}__${row.tool}"
+    else "mcp__${row.server}__${row.tool}";
 
   # Claude Markdown surfaces, one `.claude/<dir>/<name>.md` each. A path-like
   # value (path, store string, derivation) is linked as a `source`, anything
@@ -632,6 +644,11 @@ in
             enableWorkflows = lib.mkDefault true;
           };
         })
+        {
+          ai.claude.native.settings.permissions = lib.mkMerge (lib.mapAttrsToList (mode: rows:
+            lib.mkIf (rows != []) {${claudeToolRules.${mode}} = map (claudeToolName isHm) rows;})
+          (aiCommon.mcpToolPolicy mergedServers));
+        }
         # Settings are configuration, so Nix owns the whole file and links it
         # read-only on both backends: an in-app change such as `/tui` does not
         # persist, by design. `$schema` gives editors validation and completion
