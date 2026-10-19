@@ -52,13 +52,15 @@ tool rows of Slack's documented scope table (`Search messages/channels`,
 
 ```nix
 ai.mcpServers.slack-mcp.settings.manifest = {
-  rows = ["Read a channel/thread" "Search messages/channels" "Search users" "Send message"];
+  writes = ["Lists"];
   omitScopes = ["im:history" "mpim:history" "search:read.im" "search:read.mpim"];
 };
 ```
 
-- `rows` are the rows whose user scopes the app requests. By default every row
-  is selected. A row the docs do not name is refused at evaluation.
+- `reads` are the rows with no `:write` scope; every one is selected by default.
+  `writes` are the rows with a `:write` scope (Lists, Send message, Canvas
+  create/update, and so on); none is selected until you name it. A row the docs
+  do not name, or a write row under `reads`, is refused at evaluation.
 - `omitScopes` removes scopes a selected row would otherwise request. A scope
   the docs do not name is refused. The row's tools still run, but see less.
 
@@ -142,4 +144,4 @@ mcp -H "Mcp-Session-Id: $session" -d '{"jsonrpc":"2.0","id":2,"method":"tools/li
   daemon's or Kiro launcher's environment, and DM and email scopes.
 - Leave `im:*`, `mpim:*`, `search:read.im`, `search:read.mpim` and
   `users:read.email` off the app unless a row you need requests them: put them
-  in `omitScopes`, or leave the rows that need them out of `rows`.
+  in `omitScopes`, or leave the rows that need them out of `reads` and `writes`.

@@ -82,13 +82,27 @@ in {
           && manifest.name == "slack-mcp-manifest.yaml"
       );
 
-      # By default every extracted row is selected, so the manifest requests
-      # every documented scope.
-      factory-slack-mcp-manifest-default-rows = mkTest "slack-mcp-manifest-default-rows" (
-        (mcpLib.evalSettings "slack-mcp" {inherit token;}).manifest.rows
-        == builtins.attrNames extracted.tools
-        && manifest.manifest.oauth_config.scopes.user
-        == lib.naturalSort (lib.unique (lib.concatLists (builtins.attrValues extracted.tools)))
+      # Read rows are selected by default and write rows are opt in: the
+      # default manifest holds no `:write` scope; naming Lists adds its pair.
+      factory-slack-mcp-manifest-rows = mkTest "slack-mcp-manifest-rows" (
+        let
+          defaults = manifest.manifest.oauth_config.scopes.user;
+          withLists =
+            (manifestOf {
+              inherit token;
+              manifest.writes = ["Lists"];
+            }).manifest.oauth_config.scopes.user;
+        in
+          !(lib.any (lib.hasSuffix ":write") defaults)
+          && builtins.elem "search:read.public" defaults
+          && !(builtins.elem "lists:write" defaults)
+          && builtins.elem "lists:write" withLists
+          && builtins.elem "lists:read" withLists
+          && !(evaluates
+            (manifestOf {
+              inherit token;
+              manifest.reads = ["Lists"];
+            }).manifest)
       );
 
       # User scopes are the sorted union of the selected rows' scopes less
@@ -99,7 +113,8 @@ in {
             (manifestOf {
               manifest = {
                 omitScopes = ["im:history" "mpim:history"];
-                rows = ["Lists" "Read a channel/thread" "Search users"];
+                reads = ["Read a channel/thread" "Search users"];
+                writes = ["Lists"];
               };
             }).manifest;
         in
@@ -115,8 +130,8 @@ in {
 
       # A row or scope the docs do not list is refused by the option type.
       factory-slack-mcp-manifest-unknown = mkTest "slack-mcp-manifest-unknown" (
-        evaluates (manifestOf {manifest.rows = ["Search users"];}).manifest
-        && !(evaluates (manifestOf {manifest.rows = ["Delete workspace"];}).manifest)
+        evaluates (manifestOf {manifest.reads = ["Search users"];}).manifest
+        && !(evaluates (manifestOf {manifest.reads = ["Delete workspace"];}).manifest)
         && !(evaluates (manifestOf {manifest.omitScopes = ["admin:read"];}).manifest)
       );
 
