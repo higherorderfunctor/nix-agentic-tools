@@ -56,7 +56,8 @@
       description = ''
         A function from jail.nix's combinator set to a list of permissions,
         appended after the exclusion profile and the masks: the escape hatch
-        into jail.nix's full vocabulary. The set includes the repository's
+        into jail.nix's full vocabulary. An explicit `set-env` can restore an
+        excluded variable, including `PATH`. The set includes the repository's
         `mask-path` and `unset-env`.
       '';
     };
@@ -110,8 +111,7 @@
   # Jail each of `executables` from `package` in place: one jail per binary,
   # under the same name, joined with the package's `share/` when it has one.
   # Nothing else of the package is forwarded (none of its passthru, so a
-  # later `launcherPackage` flatten cannot unwrap the jail); `jails` exposes
-  # each wrapper by name for inspection.
+  # later `launcherPackage` flatten cannot unwrap the jail).
   wrap = {
     executables,
     jail,
@@ -128,12 +128,10 @@
       map c.mask-path (lib.defaultTo [] profile.exclude.paths)
       ++ map c.unset-env (lib.defaultTo [] profile.exclude.environment)
       ++ lib.optionals (profile.permissions != null) (profile.permissions c);
-    jails = lib.genAttrs executables (exe: jailed exe "${package}/bin/${exe}" permissions);
   in
     pkgs.symlinkJoin {
       name = "${name}-jail";
-      paths = map (exe: jails.${exe}) executables;
-      passthru = {inherit jails;};
+      paths = map (exe: jailed exe "${package}/bin/${exe}" permissions) executables;
       postBuild = ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

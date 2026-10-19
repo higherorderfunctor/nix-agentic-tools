@@ -27,10 +27,10 @@ in {
 
   # jail.nix's wrapper is a writeShellApplication with coreutils as its only
   # runtime input, so it prepends coreutils to PATH. Hand the jailed program
-  # the PATH its caller had.
-  restore-path = add-runtime ''
-    RUNTIME_ARGS+=(--setenv PATH "''${PATH#${pkgs.coreutils}/bin:}")
-  '';
+  # the PATH its caller had. Expand at exec, after the runtime snippets have
+  # used coreutils. Keep this argument before later unset-env permissions;
+  # upstream finalizes explicit set-env permissions after both.
+  restore-path = unsafe-add-raw-args ''--setenv PATH "''${PATH#${pkgs.coreutils}/bin:}"'';
 
   # The repository's strict header for the runtime snippets after it. The
   # wrapper is its own process, so the header governs only that script.

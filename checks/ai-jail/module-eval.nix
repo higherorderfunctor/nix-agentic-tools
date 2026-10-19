@@ -40,6 +40,12 @@
     jail = claudeJail;
   };
   bwrap = lib.getExe pkgs.bubblewrap;
+  codexJailed = jailOf "codex" (installed "hm" {
+    ai.codex = {
+      enable = true;
+      jail.enable = true;
+    };
+  });
 in {
   checks =
     {
@@ -65,9 +71,6 @@ in {
           plain = installed backend {ai.claude.enable = true;};
           jailedPackages = installed backend jailedClaude;
           jailed = jailOf "claude" jailedPackages;
-          script = jailed.jails.claude;
-          # Text matching compares bytes; store-path context is irrelevant.
-          text = builtins.unsafeDiscardStringContext script.text;
           both = installed backend {ai = enabled ["claude" "codex"] // {jail.enable = true;};};
           optedOut = installed backend {
             ai = {
@@ -81,20 +84,15 @@ in {
           };
           codexPlain = installed backend {ai.codex.enable = true;};
         in
-          # The jailed launcher replaces the plain one under the same name,
-          # carrying the masks, the unset variable and the exclusion base.
+          # The jailed package replaces the plain launcher. Installed bin
+          # names and arguments are checked on the actual built wrappers below.
           jailed
           != null
           && outPaths jailedPackages != outPaths plain
-          && builtins.attrNames jailed.jails == ["claude"]
-          && script.destination == "/bin/claude"
-          && lib.all (needle: lib.hasInfix (builtins.unsafeDiscardStringContext needle) text) ([bwrap "--unsetenv SSH_AUTH_SOCK" "--chdir" "--dev-bind / /"] ++ excludePaths)
-          && !(lib.hasInfix "--clearenv" text)
           && !(lib.any (lib.hasInfix "Linux-only") (warningsOf backend jailedClaude))
           # The root enables every consuming runtime ...
           && jailOf "claude" both != null
           && jailOf "codex" both != null
-          && builtins.attrNames (jailOf "codex" both).jails == ["codex" "codex-code-mode-host"]
           # ... and a runtime `enable = false` keeps that one plain.
           && jailOf "claude" optedOut == null
           && jailOf "codex" optedOut != null
@@ -112,13 +110,25 @@ in {
         backends
       );
 
+      # Codex's helper keeps its bin name alongside the main launcher.
+      module-ai-jail-codex-bins = pkgs.runCommand "ai-jail-codex-bins" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        for bin in codex codex-code-mode-host; do
+          script=${codexJailed}/bin/"$bin"
+          test -x "$script"
+          grep -qF -- ${lib.escapeShellArg bwrap} "$script"
+        done
+        touch "$out"
+      '';
+
       # Builds the jailed launcher, which runs the wrapper's shellcheck, and
       # reads the installed `bin/claude` through the profile's symlink.
       module-ai-jail-wrapper = mkWrapperGrepTest {
         name = "ai-jail-wrapper";
         package = jailOf "claude" (installed "hm" jailedClaude);
         bin = "claude";
-        needles = [bwrap "--unsetenv SSH_AUTH_SOCK" "--chdir"] ++ excludePaths;
+        needles = [bwrap "--unsetenv SSH_AUTH_SOCK" "--chdir" "--dev-bind / /"] ++ excludePaths;
         # `no-new-session` keeps the controlling terminal.
         absentNeedles = ["--clearenv" "--new-session"];
       };

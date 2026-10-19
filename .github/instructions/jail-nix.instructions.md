@@ -7,12 +7,9 @@ applyTo: "checks/ai-jail/**,lib/ai/jail/**,packages/jail-nix/**"
 
 # jail.nix library
 
-> **Last verified:** 2026-10-19 — Linux execution probes share the network
-> namespace; `reset` can remove base permissions; `lib.ai.jail` adds the
-> repository combinators, and `ai.jail` / `ai.<runtime>.jail` jail the installed
-> launchers on Linux and warn elsewhere.
-
-## What it is
+> **Last verified:** 2026-10-19 — PATH exclusions follow caller-PATH
+> restoration; final permissions can restore variables; Kiro FHS dispatch stays
+> inside the outer jail.
 
 jail.nix (`sourcehut:~alexdavid/jail.nix`) is a pure Nix library that wraps a
 program in bubblewrap. It is not a NixOS module, so Home Manager and devenv need
@@ -57,9 +54,7 @@ adds `--new-session` and `--die-with-parent`. `share-ns`, `network`,
 
 `basePermissions` replaces what every jail starts from. A jail's own
 `permissions` run after it; upstream's `reset` combinator can remove the base
-contributions by restoring the initial state. For a reusable exclusion-only
-profile (the full host view and the environment kept, with credential paths
-masked), use `extend` to replace `basePermissions`.
+contributions by restoring the initial state.
 
 `additionalCombinators` receives the built-in combinators and returns raw
 `state -> state` functions, not upstream's `{sig; doc; impl}` records. jail.nix
@@ -83,12 +78,8 @@ To bump:
 4. `checks.devenv-inputs-drift` compares all three, and the checks below
    exercise the new rev.
 
-## No patch seam, no pkgs pin
-
-There are no patches; an `applyPatches` seam would import from a derivation on
-every evaluation for nothing. When one is needed, point `src`, `init` and
-`extend` at a patched tree. Nothing built from the library is published, so it
-pins no `pkgs`.
+There are no patches or `pkgs` pin. Add an `applyPatches` seam only when needed,
+pointing `src`, `init` and `extend` at the patched tree.
 
 ## Checks
 
@@ -121,15 +112,15 @@ consumer sets it.
 The install seam in `lib/ai/app/mkBackendTransform.nix` wraps the finished
 launcher, outermost and in place: one jail per name in the record's
 `executables`, joined with the package's `share/`, so `claude` is the jailed one
-and the factory wrapper's environment and launch-time reads run inside. The
-result forwards no passthru except `jails`, one wrapper per name.
+and the factory wrapper's environment and launch-time reads run inside.
 
 The profile replaces `basePermissions`: `--dev-bind / /`, a fresh `/proc` and a
 minimal `/dev`, the environment kept, `share-ns "net"` for a loopback proxy,
-`no-new-session` for the TUIs, `--chdir "$PWD"`, then the masks, the unset
-variables and `permissions`. Masks resolve through `realpath` at launch: a
-directory becomes a tmpfs, a file an empty read-only file, a missing path is
-skipped.
+`no-new-session` for the TUIs, `--chdir "$PWD"`, then the masks, caller-PATH
+restoration, variable exclusions and `permissions`. Final permissions can
+deliberately restore an excluded variable with `set-env`, including `PATH`.
+Masks resolve through `realpath` at launch: a directory becomes a tmpfs, a file
+an empty read-only file, a missing path is skipped.
 
 On Darwin the option evaluates, installs the plain launcher, and both backends
 warn:
@@ -158,8 +149,7 @@ Known interactions, not solved here:
 - Kimchi's wrapper exports `KIMCHI_API_KEY` from its redact reference inside the
   jail, so masking that secret file breaks launch, and the real key still
   reaches the harness.
-- Kiro's `kiro-cli` finds `kiro-cli-chat` through `PATH`, which is the jailed
-  one, so chat runs in a nested jail.
-
-`checks/ai-jail/` holds the module contracts and `ai-jail-wrap-masks`, a jailed
-probe against masked fixtures behind a bubblewrap positive control.
+- Kiro's default FHS launcher selects its internal `/usr/bin/kiro-cli-chat`
+  before inherited `PATH`. With FHS disabled, the PATH lookup can select the
+  installed chat wrapper and add another `ai.jail`. Both routes remain inside
+  the outer jail.
