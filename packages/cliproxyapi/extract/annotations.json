@@ -1,0 +1,34 @@
+{
+  "config": {
+    "access.api-keys[]": {
+      "secret": "A client key the proxy accepts; it grants use of every login behind the proxy."
+    },
+    "api-keys.*[].headers.<name>": {
+      "secret": "An upstream request header, which can carry a credential (an Authorization value)."
+    },
+    "api-keys.*[].keys[].api-key": {
+      "secret": "An upstream credential."
+    },
+    "api-keys.*[].keys[].headers.<name>": {
+      "secret": "An upstream request header, which can carry a credential (an Authorization value)."
+    },
+    "api-keys.*[].keys[].proxy-url": {
+      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port)."
+    },
+    "api-keys.*[].proxy-url": {
+      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port)."
+    },
+    "management.secret-key": {
+      "secret": "The management API key; CPA hashes a plaintext value into its own config at start."
+    },
+    "oauth.providers.codex.live-media-relay.ice-servers[].credential": {
+      "secret": "A TURN server credential."
+    },
+    "requests.proxy-url": {
+      "secret": "A proxy URL, which can carry a user and password (socks5://user:pass@host:port)."
+    },
+    "server.github-token": {
+      "secret": "A GitHub token CPA sends with its release and asset downloads."
+    }
+  }
+}

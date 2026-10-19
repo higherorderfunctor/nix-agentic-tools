@@ -1,7 +1,8 @@
 ## IFD Patterns and Gotchas
 
 > **Last verified:** 2026-10-18 — CI package and check paths are absolute,
-> including IFD warming, so Nix skips package namespace lookup.
+> including IFD warming, so Nix skips package namespace lookup; extracted
+> reconciliation takes single-key pattern rows.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -191,16 +192,19 @@ Optional reconciliation `results` come from committed files; their failures fail
 the build after drift passes.
 
 `reconcile` takes one table per surface with `facts`, hand `rows`, optional
-`needs`, allowed hand `fields`, explicit `secretNeeds`, and named `uses`. New
-ordinary names need no row. Removed names disappear unless a hand row or named
-use still refers to them. Supplied hand fields must be non-blank strings; rows
-fill absent or null facts, while replacing a fact requires its field in
-`replace`. Required types and secret handling remain enforced: a secret needs a
-recorded row and its required secret fields. `ignored = "<reason>"` omits a name
-and skips required fields. The shared redact classifier handles only strings and
-string-to-string maps. Failures are `removed`, `needs-human`, `secret`, and
-`bad-row`; descriptions and ordinary controls prose are optional. Kimchi secret
-environment rows must state what they control.
+`needs`, allowed hand `fields`, explicit `secretNeeds`, named `uses`, and
+optional `patterns`: rows whose `*` matches one key and that fill every fact
+they match. A pattern matching nothing is stale, and a fact claimed by two rows
+is a bad row. New ordinary names need no row. Removed names disappear unless a
+hand row or named use still refers to them. Supplied hand fields must be
+non-blank strings; rows fill absent or null facts, while replacing a fact
+requires its field in `replace`. Required types and secret handling remain
+enforced: a secret needs a recorded row and its required secret fields.
+`ignored = "<reason>"` omits a name and skips required fields. The shared redact
+classifier handles only strings and string-to-string maps. Failures are
+`removed`, `needs-human`, `secret`, and `bad-row`; descriptions and ordinary
+controls prose are optional. Kimchi secret environment rows must state what they
+control.
 
 Owner update scripts run `lib.extracted.regenCommand { name; }`, which invokes
 the owner check's `passthru.regenerate`. Packages with discovery-driven
