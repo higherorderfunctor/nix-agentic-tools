@@ -32,6 +32,10 @@
         nixpkgs.follows = "nixpkgs";
       };
     };
+    # The rev is in the URL on purpose. Every root input is an auto-merging
+    # update lane; a sandbox-policy library must not move through it. Bump it
+    # by editing this line.
+    jail-nix.url = "sourcehut:~alexdavid/jail.nix/7cd53acef3ad51b9c775be759f5643f8d3bcf6eb";
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";

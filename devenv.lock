@@ -321,6 +321,22 @@
         "type": "github"
       }
     },
+    "jail-nix": {
+      "locked": {
+        "lastModified": 1788928033,
+        "narHash": "sha256-UQRytK4SsshV1CeX6aKF+P855Sbcqg9aA731eYTakNg=",
+        "owner": "~alexdavid",
+        "repo": "jail.nix",
+        "rev": "7cd53acef3ad51b9c775be759f5643f8d3bcf6eb",
+        "type": "sourcehut"
+      },
+      "original": {
+        "owner": "~alexdavid",
+        "repo": "jail.nix",
+        "rev": "7cd53acef3ad51b9c775be759f5643f8d3bcf6eb",
+        "type": "sourcehut"
+      }
+    },
     "mcp-nixos": {
       "inputs": {
         "devshell": "devshell",
@@ -566,6 +582,7 @@
         "git-branchless": "git-branchless",
         "git-hooks": "git-hooks_2",
         "go-overlay": "go-overlay",
+        "jail-nix": "jail-nix",
         "mcp-nixos": "mcp-nixos",
         "microvm": "microvm",
         "nix-fast-build": "nix-fast-build",
