@@ -126,6 +126,11 @@ for it. When several entries match, their guidance composes.
     - `packages/chatgpt-codex/**`
   - Read:
     - [`packages/chatgpt-codex/docs/codex-daemon.md`](packages/chatgpt-codex/docs/codex-daemon.md)
+- **`cpa-manager-plus`**
+  - Match:
+    - `packages/cpa-manager-plus/**`
+  - Read:
+    - [`packages/cpa-manager-plus/docs/cpa-manager-plus-extraction.md`](packages/cpa-manager-plus/docs/cpa-manager-plus-extraction.md)
 - **`delegate-routing`**
   - Match:
     - `packages/delegate-routing/**`

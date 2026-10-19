@@ -1,5 +1,6 @@
 # cspell:ignore buildinfo httpapi seakee
 {
+  extractedLib,
   packageLib,
   pkgs,
   repoPath,
@@ -26,8 +27,10 @@
     attr = "${pname}.frontend";
     inherit pkgs pname sourcesFile;
   };
+  extraction = extractedLib {inherit pkgs;};
   goUpdate = packageLib.mkGoUpdateExtract {
     attr = pname;
+    extraAfter = extraction.regenCommand {name = pname;};
     inherit goModPath pkgs pname sourcesFile;
   };
   frontend = pkgs.buildNpmPackage {
@@ -53,8 +56,7 @@
     })
     buildGoModule
     ;
-in
-  buildGoModule {
+  package = buildGoModule {
     inherit modRoot pname src version;
     vendorHash = sources.vendorHash or lib.fakeHash;
     subPackages = ["cmd/cpa-manager-plus"];
@@ -82,6 +84,11 @@ in
     passthru = {
       inherit frontend goFloor goModPath;
       inherit (goUpdate) fixGoFloor fixVendorHash;
+      extracted = extraction.goTestExtract {
+        inherit package;
+        packagePath = "internal/config";
+        testFile = ../../../../extract/config_test.go;
+      };
       goUpdateExtract = goUpdate.extract;
       fixNpmDepsHash = npmDepsFix;
       updateScript = packageLib.mkUpdateScript {
@@ -103,4 +110,6 @@ in
       license = lib.licenses.mit;
       mainProgram = pname;
     };
-  }
+  };
+in
+  package

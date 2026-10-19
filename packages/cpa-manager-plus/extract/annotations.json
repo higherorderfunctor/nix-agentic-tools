@@ -1,0 +1,13 @@
+{
+  "environment": {
+    "CPA_MANAGEMENT_KEY": {
+      "secret": "The CPA management key Manager Plus sends to CPA's management API; it grants control of CPA and every login behind it."
+    },
+    "CPA_MANAGER_ADMIN_KEY": {
+      "secret": "The Manager Plus admin key (cpamp_...); it logs in to the panel and its management API."
+    },
+    "CPA_MANAGER_DATA_KEY": {
+      "secret": "The key that encrypts the CPA connection Manager Plus stores in SQLite."
+    }
+  }
+}

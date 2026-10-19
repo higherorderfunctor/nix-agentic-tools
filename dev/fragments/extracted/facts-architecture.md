@@ -1,8 +1,9 @@
 # Extracted facts: the architecture
 
-> **Last verified:** 2026-10-17 — CLIProxyAPI measures its v8 config shape as
-> one opaque fact; shared reconciliation accepts single-key pattern rows. Every
-> owner keeps one carried file; probes are not on the contract yet.
+> **Last verified:** 2026-10-18 — Go owners run in-package extractor tests
+> through the shared `goTestExtract`; shared reconciliation accepts single-key
+> pattern rows. Every owner keeps one carried file; probes are not on the
+> contract yet.
 
 The contract (`facts-contract.md`, same category) is the spec: file shapes,
 functions, failure kinds. This file is the why and the rules that keep the
@@ -35,11 +36,16 @@ pattern matching no fact is stale; a fact claimed by multiple rows fails,
 including overlaps between patterns and literal rows. The classifier stays in
 `lib/redact/classify.nix`.
 
-CLIProxyAPI's `config` fact holds its v8 path-to-node mapping as an opaque
-object because paths contain dots. Its Go extractor reflects the pinned config
-structs and reads the package's relocation and key-family tables; its
-reconciliation reader consumes `config` for credential reasons. The owner
-fragment `packages/cliproxyapi/docs/cliproxyapi-extraction.md` describes that
+Go owners measure unexported structs and tables with a `_test.go` file copied
+into the pinned source's package. `goTestExtract` runs it offline beside
+`lib/extracted/go/nat_shared_test.go`, which holds the node type vocabulary, the
+field walk and the output every Go owner shares; codec-specific typing stays in
+the owner's test. CLIProxyAPI's `config` fact holds its v8 path-to-node mapping
+as an opaque object because paths contain dots; CPA Manager Plus records
+`config` and `environment` the same way. Their reconciliation readers consume
+those facts for credential reasons. The owner fragments
+`packages/cliproxyapi/docs/cliproxyapi-extraction.md` and
+`packages/cpa-manager-plus/docs/cpa-manager-plus-extraction.md` describe each
 extraction.
 
 Consumers read the aggregate with `get` and `children`, at the place the value

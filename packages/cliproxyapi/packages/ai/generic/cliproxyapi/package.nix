@@ -10,9 +10,10 @@
   pname = "cliproxyapi";
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
   sourcesFile = repoPath ../../../../sources.json;
+  extraction = extractedLib {inherit pkgs;};
   goUpdate = vu.mkGoUpdateExtract {
     attr = pname;
-    extraAfter = (extractedLib {inherit pkgs;}).regenCommand {name = pname;};
+    extraAfter = extraction.regenCommand {name = pname;};
     inherit pkgs pname sourcesFile;
   };
   inherit (goUpdate) fixGoFloor fixVendorHash;
@@ -31,7 +32,11 @@
         (prev.passthru or {})
         // {
           inherit fixGoFloor fixVendorHash goFloor;
-          extracted = import ../../../../extract {inherit pkgs;} package;
+          extracted = extraction.goTestExtract {
+            inherit package;
+            packagePath = "internal/config";
+            testFile = ../../../../extract/config_test.go;
+          };
           goUpdateExtract = goUpdate.extract;
           updateScript = vu.ghArchiveUpdateScript {
             extraExtract = "${goUpdate.extract}";

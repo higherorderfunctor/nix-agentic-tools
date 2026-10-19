@@ -97,6 +97,7 @@ commondir
 configdir
 convco
 coreutils
+cpamp
 creds
 customisation
 datamodels
