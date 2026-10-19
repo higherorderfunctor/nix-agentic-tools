@@ -1,0 +1,12 @@
+{
+  "tools": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "url": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  }
+}
