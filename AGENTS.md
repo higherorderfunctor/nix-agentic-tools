@@ -1064,7 +1064,8 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-18 — `checks-eval-darwin` is the eighth required
+> **Last verified:** 2026-10-19 — CI watching exits on the first failure through
+> the `pr-review-loop` watcher; `checks-eval-darwin` is the eighth required
 > context; `test` evaluates only. The worker and three review roles run inside a
 > loop of at most 3 rounds; unsettled findings go back to the orchestrator to
 > validate. Merge teardown deletes the PR's `archive/*` backups.
@@ -1163,9 +1164,13 @@ session — and only then report. Kill it once the signal arrives.
 
 On every push, including the first:
 
-1. **Watch CI to completion.** Read the exit status of the tool, not a
-   notification's summary — a pipeline's status is the last command's, so
-   `nix flake check | tail` reports the tail's success. Capture the real code.
+1. **Watch CI until the first failure or until every check finishes.** Use the
+   `pr-review-loop` skill's watcher, in the background: it waits for checks on
+   the commit you pushed and exits on the first red (`--fail-fast`). A watcher
+   that waits for every check reports a failure only after the slowest job. Read
+   the exit status of the tool, not a notification's summary — a pipeline's
+   status is the last command's, so `nix flake check | tail` reports the tail's
+   success. Capture the real code.
 2. **A conflicted PR gets ZERO check runs and reads exactly like slow CI.**
    `mergeStateStatus: DIRTY` with an empty check list means rebase, not wait.
    The same shape appears when the base moves under a long-running branch.
