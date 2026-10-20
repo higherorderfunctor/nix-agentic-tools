@@ -53,7 +53,8 @@
       };
     }
   ];
-  # Providers wanted by different targets cannot both be waited for.
+  # Providers wanted by different targets: a reader under both would start one
+  # provider early, under the other's target.
   withMismatchedUnits = backends.evaluateWith "hm" providerServices [
     noLegacyNodes
     {
@@ -222,26 +223,65 @@
     variable = "SERVICE_CONFIG";
   };
   refused = entry: !(succeeds (fileLauncher entry).drvPath);
-  restartRecorder = strictShellApplication pkgs {
+  stampEntry = {
+    command = ["${pkgs.coreutils}/bin/true"];
+    enable = true;
+    environment = {};
+    files = {};
+    restartOnChange = ["/build/trigger"];
+  };
+  stampLauncher = services.mkLauncher {
+    inherit pkgs;
+    entry = stampEntry;
+    name = "help";
+    stamp = true;
+  };
+  # A user manager with one provider and one reader, `help.service`, whose
+  # state lives in files under $SERVICE_UNIT. A restart is a new invocation
+  # that runs the stamping launcher unless SERVICE_NO_STAMP is set.
+  managerDouble = strictShellApplication pkgs {
     name = "systemctl";
     text = ''
-      if [ "$2" = is-system-running ]; then
-        printf '%s\n' "''${SERVICE_MANAGER_STATE:-running}"
-        exit 0
-      fi
-      printf '%s\n' "$*" >> "$SERVICE_RESTART_LOG"
-      test -z "''${SERVICE_RESTART_FAIL:-}"
+      printf '%s\n' "$*" >> "$SERVICE_LOG"
+      case "$*" in
+        '--user is-system-running') printf '%s\n' "''${SERVICE_MANAGER:-running}" ;;
+        "--system show --property=ActiveState --value user@$(${pkgs.coreutils}/bin/id -u).service")
+          if [ -n "''${SERVICE_NO_SYSTEM_MANAGER:-}" ]; then
+            echo 'System has not been booted with systemd as init system (PID 1).' >&2
+            false
+          fi
+          printf '%s\n' "''${SERVICE_USER_UNIT:-active}"
+          ;;
+        '--user show --property=LoadState --value provider.service') printf '%s\n' "''${SERVICE_PROVIDER_LOAD:-loaded}" ;;
+        '--user show --property=Result --value provider.service') printf '%s\n' "''${SERVICE_PROVIDER_RESULT:-success}" ;;
+        '--user show --property=ActiveState --value help.service') ${pkgs.coreutils}/bin/cat "$SERVICE_UNIT/active" ;;
+        '--user show --property=SubState --value help.service') ${pkgs.coreutils}/bin/cat "$SERVICE_UNIT/sub" ;;
+        '--user show --property=InvocationID --value help.service') ${pkgs.coreutils}/bin/cat "$SERVICE_UNIT/invocation" ;;
+        '--user try-restart help.service')
+          if [ -n "''${SERVICE_RESTART_FAIL:-}" ]; then
+            echo 'Job for help.service failed' >&2
+            false
+          fi
+          invocation="$(( $(${pkgs.coreutils}/bin/cat "$SERVICE_UNIT/invocation") + 1 ))"
+          printf '%s\n' "$invocation" > "$SERVICE_UNIT/invocation"
+          if [ -z "''${SERVICE_NO_STAMP:-}" ]; then
+            INVOCATION_ID="$invocation" ${stampLauncher}/bin/ai-service-help
+          fi
+          ;;
+        *)
+          printf 'unexpected systemctl arguments: %s\n' "$*" >&2
+          false
+          ;;
+      esac
     '';
   };
-  restartCommand =
-    (services.hmRestart (pkgs // {systemd = restartRecorder;}) {
-      help = {
-        enable = true;
-        environment = {};
-        files = {};
-        restartOnChange = ["/build/missing-trigger" "/build/trigger"];
-      };
-    }).services-restart-on-change.command;
+  reconcileCommand =
+    (services.hmReconcile pkgs {help = stampEntry;} {
+      providerUnits = ["provider.service"];
+      systemctlPath = "${managerDouble}/bin/systemctl";
+      # Long enough for the in-flight start below, which stamps after 1 s.
+      stampTimeout = 5;
+    }).services-reconcile.command;
   mkCheck = name: condition:
     assert lib.assertMsg condition "${name}: service contract failed";
       pkgs.runCommandLocal name {} ''
@@ -299,6 +339,8 @@ in {
         && devenv.processes.watched.watch.paths == expectedTriggers
         && services.triggers hm.ai.services.watched == expectedTriggers
         && hm.systemd.user.services.watched.Unit.After == ["network.target" "sops-nix.service"]
+        && hm.systemd.user.services.watched.Unit.Wants == ["sops-nix.service"]
+        && hm.systemd.user.services.watched.Service.ExecStart != devenv.processes.watched.exec
         && hm.systemd.user.services.watched.Install.WantedBy == ["default.target"]
         && fileOnly.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
         && fileOnly.systemd.user.services.secret.Install.WantedBy == ["default.target"]
@@ -308,6 +350,7 @@ in {
         && withSopsUnit.systemd.user.services.plain.Install.WantedBy == ["default.target"]
         && withSopsUnit.systemd.user.services.plain.Unit.After == ["network.target"]
         && withProvider.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service" "vault-agent.service"]
+        && withProvider.systemd.user.services.secret.Unit.Wants == ["sops-nix.service" "vault-agent.service"]
         && withProvider.systemd.user.services.secret.Install.WantedBy == ["default.target"]
         && withProviderUnits.systemd.user.services.secret.Install.WantedBy == ["graphical-session-pre.target"]
         && withOneDefinedUnit.systemd.user.services.secret.Install.WantedBy == ["graphical-session-pre.target"]
@@ -315,20 +358,20 @@ in {
         && withMismatchedUnits.systemd.user.services.plain.Install.WantedBy == ["default.target"]
         && withProviderUnits.systemd.user.services.plain.Install.WantedBy == ["default.target"]
         && withProvider.home.activation.ai-probe.after == ["sops-nix" "vault:ready"]
-        && withProvider.home.activation.ai-services-restart-on-change.after == ["linkGeneration" "sops-nix" "vault:ready"]
+        && withProvider.home.activation.ai-services-reconcile.after == ["linkGeneration" "sops-nix" "vault:ready" "reloadSystemd"]
         && withoutSopsUnit.systemd.user.services.secret.Unit.After == ["network.target"]
         && withoutSopsUnit.home.activation.ai-probe.after == ["custom:ready"]
         && withProviderDevenv.tasks."ai:probe".after == ["vault:ready"]
         && !(builtins.elem "vault-agent.service" withProviderDevenv.tasks."ai:probe".after)
-        && !(withProviderDevenv.tasks ? "ai:services-restart-on-change")
+        && !(withProviderDevenv.tasks ? "ai:services-reconcile")
         && !(succeeds
           (backends.evaluate "hm" {
             activationOrder.secretProviders.own.unit = "secret.service";
             services.secret = watched;
           }).systemd.user.services.secret.Install.WantedBy)
-        && hm.home.activation.ai-services-restart-on-change.after == ["linkGeneration" "sops-nix" "vault:ready"]
-        && !(devenv.tasks ? "ai:services-restart-on-change")
-        && !((backends.evaluate "hm" {services.plain = daemon;}).home.activation ? ai-services-restart-on-change)
+        && hm.home.activation.ai-services-reconcile.after == ["linkGeneration" "sops-nix" "vault:ready" "reloadSystemd"]
+        && !(devenv.tasks ? "ai:services-reconcile")
+        && !((backends.evaluate "hm" {services.plain = daemon;}).home.activation ? ai-services-reconcile)
       );
       ai-module-services-claims = mkCheck "ai-module-services-claims" (
         lib.all (
@@ -441,32 +484,83 @@ in {
       ai-module-services-rotation = pkgs.runCommandLocal "ai-module-services-rotation" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        export XDG_STATE_HOME="$TMPDIR/state"
-        export SERVICE_RESTART_LOG="$TMPDIR/restarts"
-        hash_file="$XDG_STATE_HOME/nix-agentic-tools/services/help.sha256"
-        run() { ${pkgs.bash}/bin/bash -euETo pipefail -c ${lib.escapeShellArg restartCommand}; }
-        touch "$SERVICE_RESTART_LOG"
+        export SERVICE_LOG="$TMPDIR/systemctl" SERVICE_UNIT="$TMPDIR/unit" XDG_RUNTIME_DIR="$TMPDIR/run"
+        mkdir "$SERVICE_UNIT" "$XDG_RUNTIME_DIR"
+        stamp="$XDG_RUNTIME_DIR/ai-service-help.stamp"
+        run() { ${pkgs.bash}/bin/bash -euETo pipefail -c ${lib.escapeShellArg reconcileCommand}; }
+        refused() {
+          if run 2> refused.log; then
+            echo "activation accepted: $1" >&2
+            exit 1
+          fi
+          grep -F -e "$2" refused.log
+        }
+        restarts() { grep -c -x -F -- '--user try-restart help.service' "$SERVICE_LOG" || :; }
+        unit() { printf '%s\n' "$1" > "$SERVICE_UNIT/active"; printf '%s\n' "$2" > "$SERVICE_UNIT/sub"; }
         printf '%s' first > /build/trigger
-        SERVICE_MANAGER_STATE=offline run
-        test ! -e "$hash_file"
-        run
-        test -s "$hash_file"
-        test ! -s "$SERVICE_RESTART_LOG"
-        run
-        test ! -s "$SERVICE_RESTART_LOG"
-        printf '%s' second > /build/trigger
-        run
-        test "$(${pkgs.coreutils}/bin/wc -l < "$SERVICE_RESTART_LOG")" -eq 1
-        test "$(${pkgs.coreutils}/bin/head -1 "$SERVICE_RESTART_LOG")" = '--user try-restart help'
-        ${pkgs.coreutils}/bin/cp "$hash_file" previous
-        printf '%s' third > /build/trigger
-        if SERVICE_RESTART_FAIL=1 run; then
-          echo "restart failure was swallowed" >&2
+        printf '%s\n' 1 > "$SERVICE_UNIT/invocation"
+        unit active running
+
+        # Before login: skipped only while the user manager's unit is inactive.
+        SERVICE_MANAGER=offline SERVICE_USER_UNIT=inactive run
+        test "$(cat "$SERVICE_LOG")" = "--user is-system-running
+        --system show --property=ActiveState --value user@$(id -u).service"
+        SERVICE_MANAGER=offline refused "unreachable manager" 'user@'"$(id -u)"'.service is active, but its manager reports: offline'
+        # No system manager to ask, or user@ coming up or going down: skipped.
+        SERVICE_MANAGER=offline SERVICE_NO_SYSTEM_MANAGER=1 run > skipped.log
+        grep -F 'skipping service reconciliation' skipped.log
+        SERVICE_MANAGER=offline SERVICE_USER_UNIT=activating run
+        SERVICE_MANAGER=offline SERVICE_USER_UNIT=deactivating run
+        # A user manager starting or stopping is skipped while user@ is active,
+        # as Home Manager's own reload skips.
+        SERVICE_MANAGER=starting run > starting.log
+        grep -F 'not running (starting); skipping service reconciliation' starting.log
+        SERVICE_MANAGER=stopping run
+        if grep -v -e '^--user is-system-running$' -e '^--system show ' "$SERVICE_LOG"; then
+          echo "a skipped reconcile queried a unit" >&2
           exit 1
         fi
-        ${pkgs.diffutils}/bin/cmp previous "$hash_file"
+
+        unit failed failed
+        refused "failed reader" 'help.service is failed (failed)'
+        unit activating auto-restart
+        refused "crash-looping reader" 'help.service is activating (auto-restart)'
+
+        # A stopped reader stays stopped, and an absent provider is not read.
+        unit inactive dead
+        SERVICE_PROVIDER_LOAD=not-found SERVICE_PROVIDER_RESULT=exit-code run
+        test "$(restarts)" -eq 0
+
+        # An active reader with no stamp waits, then restarts once and stamps.
+        unit active running
         run
-        test "$(${pkgs.coreutils}/bin/wc -l < "$SERVICE_RESTART_LOG")" -eq 3
+        test "$(restarts)" -eq 1
+        test "$(stat -c '%a' "$stamp")" = 600
+        test "$(cut -d ' ' -f2 "$stamp")" = 2
+
+        # A start still in flight is waited for, not restarted.
+        printf '%s\n' 3 > "$SERVICE_UNIT/invocation"
+        (sleep 1 && INVOCATION_ID=3 ${stampLauncher}/bin/ai-service-help) &
+        run
+        wait
+        test "$(restarts)" -eq 1
+
+        # A failed restart, or one that never stamps, fails activation.
+        cp "$stamp" previous
+        printf '%s' third > /build/trigger
+        SERVICE_RESTART_FAIL=1 refused "restart failure" 'Job for help.service failed'
+        ${pkgs.diffutils}/bin/cmp previous "$stamp"
+        SERVICE_NO_STAMP=1 refused "unstamped restart" 'help.service did not restart onto its current trigger files (unstamped)'
+        run
+
+        # A missing trigger fails both the check and the start, naming it.
+        rm /build/trigger
+        refused "missing trigger" /build/trigger
+        if INVOCATION_ID=9 ${stampLauncher}/bin/ai-service-help 2> missing.log; then
+          echo "a start with a missing trigger succeeded" >&2
+          exit 1
+        fi
+        grep -F /build/trigger missing.log
         touch "$out"
       '';
     }
@@ -475,7 +569,7 @@ in {
         darwin.systemd.user.services
         == {}
         && darwin.warnings == ["ai.services.live: Home Manager writes services as systemd user units, which this platform lacks; the service is not written"]
-        && !(darwin.home.activation ? ai-services-restart-on-change)
+        && !(darwin.home.activation ? ai-services-reconcile)
       );
     };
 }

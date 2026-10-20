@@ -253,18 +253,24 @@ their key and ports; disabled owners forward nothing. Names match
 `lib/services.nix` builds one strict `writeShellApplication`,
 `ai-service-<key>`, for both backends. Native environment fields are never used.
 A daemon reads store paths and secrets at start, never files written by the
-files engine, so there are no service dependency edges into file activation or
-Home Manager's systemd reload. Each Linux Home Manager unit orders after
-`network.target`. A service whose environment contains a redact reference or
-whose rendered file has secrets also orders after every registered provider
-unit. Its `WantedBy` is the targets those provider units are wanted by, read
-from the evaluated `systemd.user.services`; a provider unit not defined there
-contributes none, and with none left the service uses `default.target`. Defined
-provider units wanted by different targets fail evaluation: a target wants each
-unit independently, so a reader started with one provider would not wait for the
-other. A plain service uses `default.target`. Ordering after a provider lets a
-daemon starting in the same transaction read decrypted secrets; `After=` itself
-pulls no unit in.
+files engine, so no unit depends on file activation. Each Linux Home Manager
+unit orders after `network.target`. A service whose environment contains a
+redact reference or whose rendered file has secrets also has `Wants=` and
+`After=` on every registered provider unit. sd-switch submits each start as its
+own job, in unit-name order and without waiting, and `After=` orders only
+against a job already queued, so with `After=` alone a reader that sorts before
+its provider started first and read the previous secrets. `Wants=` puts the
+provider's start into the reader's own transaction. So every start of a reader,
+including each `Restart=` retry, re-runs a provider that is an inactive oneshot,
+as sops-nix's is: a crash-looping reader decrypts again every `RestartSec`. It
+is not `Requires=`: a provider restart, which sops-nix's own activation step
+performs, restarts no reader. Its `WantedBy` is the targets those provider units
+are wanted by, read from the evaluated `systemd.user.services`; a provider unit
+not defined there contributes none, and with none left the service uses
+`default.target`. Defined provider units wanted by different targets fail
+evaluation: a reader pulls in every provider, so under the union of their
+targets it would start one provider early, under the other's target. A plain
+service uses `default.target`.
 
 A `files.<key>` entry is a config file the launcher renders at each start, for a
 daemon that reads its secrets from a file rather than its environment. Its
@@ -304,19 +310,41 @@ Manager Plus use it.
 
 | Backend             | Lowering                                                                                                                                                                                                   |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home Manager Linux  | User unit: `After = network.target` plus provider units for secret readers; their `WantedBy` follows defined provider targets or defaults to `default.target`; `RestartSec = 5`, and `never` becomes `no`. |
+| Home Manager Linux  | User unit: `After = network.target`; secret readers get `Wants` and `After` on provider units, and `WantedBy` the providers' defined targets, or `default.target`; `RestartSec = 5`, `never` becomes `no`. |
 | Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                                                                                      |
 | devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `watch.paths` is present only for nonempty triggers.                                                                  |
 
-Home Manager Linux reserves `services-restart-on-change`. When enabled services
-have triggers, one generated activation entry runs after `files` and `secrets`.
-It runs only while the user manager reports `running` or `degraded`,
-fingerprints the readable regular files among the triggers under
-`${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/services/<key>.sha256`,
-`try-restart`s a service whose recorded fingerprint changed (the first record
-restarts nothing and a stopped unit stays stopped) and saves each fingerprint
-only after that succeeds. The two backends differ: Home Manager compares content
-at activation, devenv's `watch.paths` restarts live on any change and accepts
+Home Manager Linux reserves `services-reconcile`. The Home Manager launcher of a
+service with triggers hashes every trigger path and its bytes before it reads
+any secret, so a file replaced during a start leaves the stamp older than the
+daemon, never newer; a missing trigger fails the start. Immediately before exec
+it writes the digest and its `INVOCATION_ID` to
+`$XDG_RUNTIME_DIR/ai-service-<key>.stamp`. The devenv launcher writes no stamp.
+
+One generated activation entry runs after `files`, `secrets` and
+`reloadSystemd`, so it sees the units sd-switch started and the provider run
+sd-switch caused, and calls `systemd.user.systemctlPath`. Activation fails when
+a loaded provider unit's last `Result` is not `success`, or a reader is `failed`
+or in `auto-restart`. The entry waits for each active reader's running
+invocation to stamp, then one `try-restart` restarts every reader whose stamp
+differs from the trigger files now or that did not stamp in time; each must come
+back with a matching stamp, or activation fails naming it. Each of the two
+passes shares one 90-second deadline, room for a secret command that waits on a
+person, so the entry waits at most 180 seconds, under the 5-minute start timeout
+of Home Manager's NixOS unit. A match proves the reader read every secret and
+reached exec, not that it stays up; a reader that then crash-loops is refused by
+the next activation. A stopped reader stays stopped, although sd-switch itself
+starts a stopped unit an active target wants. A no-op activation, and a re-key
+that leaves the decrypted bytes alone, restart nothing.
+
+The entry acts only while the user manager reports `running` or `degraded`, the
+test Home Manager's own reload uses. `starting` and `stopping` skip with a
+message, since `user@<uid>.service` turns `active` before its manager finishes
+starting. For any other answer, or none, it fails activation only when the
+system manager reports `user@<uid>.service` `active`; every other state skips
+with a message naming it, including a failed query on a host whose init is not
+systemd. The two backends differ: Home Manager compares content after each
+switch, devenv's `watch.paths` restarts live on any change and accepts
 directories.
 
 Exclusive resources share `ai.claims.<group>.<key>`, a hidden registry of owner

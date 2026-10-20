@@ -106,16 +106,20 @@ file-watch units remain outside this surface. A tool with typed settings
 declares named instances through `lib/instances.nix`, which lowers each
 `ai.<owner>.instances.<name>` to the service `<owner>-<name>`.
 
-Linux Home Manager orders a secret-reading unit after registered provider units
-and starts it under the targets of provider units defined in the evaluated
-configuration, falling back to `default.target`; a plain service uses
-`network.target` ordering and `default.target`. Devenv lowers to processes and
-ignores provider units. Darwin Home Manager emits one warning per enabled
-service, since it has no systemd user units. File references in the environment
-and in file secrets join explicit restart triggers, which behave differently per
-backend: Linux Home Manager fingerprints them in one generated
-`services-restart-on-change` activation entry after `files` and `secrets`;
-devenv uses `watch.paths`. Only ai-module writes these daemon sinks.
+Linux Home Manager gives a secret-reading unit `Wants=` and `After=` on the
+registered provider units and starts it under the targets of provider units
+defined in the evaluated configuration, falling back to `default.target`; a
+plain service uses `network.target` ordering and `default.target`. Devenv lowers
+to processes and ignores provider units. Darwin Home Manager emits one warning
+per enabled service, since it has no systemd user units. File references in the
+environment and in file secrets join explicit restart triggers, which behave
+differently per backend. On Linux Home Manager the launcher stamps a digest of
+the triggers and its invocation ID under the runtime directory before exec, and
+one generated `services-reconcile` activation entry after `reloadSystemd`
+restarts each active reader whose stamp differs from the files, through
+`systemd.user.systemctlPath`; a failed provider or reader, a restart that does
+not stamp current bytes, or an unreachable running user manager fails
+activation. Devenv uses `watch.paths`. Only ai-module writes these daemon sinks.
 
 ### State and ownership
 

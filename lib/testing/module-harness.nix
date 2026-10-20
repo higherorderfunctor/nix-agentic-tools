@@ -86,6 +86,11 @@
           type = lib.types.attrsOf lib.types.anything;
           default = {};
         };
+        # Home Manager's own default; ai-module's service step runs it.
+        systemctlPath = lib.mkOption {
+          type = lib.types.str;
+          default = "${pkgs.systemd}/bin/systemctl";
+        };
       };
       warnings = lib.mkOption {
         type = lib.types.listOf lib.types.str;
