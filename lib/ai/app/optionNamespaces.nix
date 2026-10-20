@@ -3,7 +3,7 @@
 # The record's `optionNamespaces` maps each option group the builder declares
 # to a relative option path; an omitted group sits at the runtime root:
 #
-#   launcher  `package`, the launcher pools (`environmentVariables`, `shell`)
+#   launcher  `package`, the launcher pools (`environmentVariables`, `jail`, `shell`)
 #             and, when nested, the runtime switch `enable`
 #   pools     every other per-runtime pool option (`agents`, `context`,
 #             `rules`, `skills`, `mcpServers`, `settings`, their `*Dir`
@@ -22,7 +22,7 @@
 # the builder, the delivery diagnostics, `option-paths.nix` and the policy
 # facts all bind through here, so no caller re-derives a placement.
 {lib}: let
-  launcherPools = ["environmentVariables" "shell"];
+  launcherPools = ["environmentVariables" "jail" "shell"];
   namespace = record: group: (record.optionNamespaces or {}).${group} or [];
   hasLauncher = record: (record.defaults or {}) ? package;
 in {

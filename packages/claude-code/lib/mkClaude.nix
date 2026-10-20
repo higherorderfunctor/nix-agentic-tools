@@ -243,6 +243,7 @@ in
     inherit pkgs;
     name = "claude";
     contextFilename = "CLAUDE.md";
+    executables = ["claude"];
     inherit (claudeProxy) installPackage;
     surfaceSupport = {
       agents = {};
@@ -252,6 +253,7 @@ in
         reason = "Claude excludes the environmentVariables pool; native.settings.env is delivered through settings instead.";
       };
       hooks = {};
+      jail = {};
       mcpServers = {};
       proxy = {};
       rules = {};

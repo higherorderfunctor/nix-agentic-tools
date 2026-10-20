@@ -44,6 +44,7 @@
     context.text = "probe";
     environmentVariables.PROBE = "value";
     hooks.PreToolUse = [{hooks = [{command = "true";}];}];
+    jail.enable = true;
     mcpServers.probe.command = "probe";
     permissions = [
       {

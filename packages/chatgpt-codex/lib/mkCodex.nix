@@ -1053,6 +1053,9 @@ in
     inherit pkgs;
     name = "codex";
     contextFilename = "AGENTS.md";
+    # codex-code-mode-host is a helper codex spawns, not an entry point: the
+    # jail passes it through, so it runs inside codex's jail.
+    executables = ["codex"];
     surfaceSupport = {
       agents = {
         gaps = [
@@ -1072,6 +1075,7 @@ in
       context = {};
       environmentVariables = {};
       hooks = {};
+      jail = {};
       mcpServers = {};
       proxy = {};
       rules = {};

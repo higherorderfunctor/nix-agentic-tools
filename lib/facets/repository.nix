@@ -174,6 +174,7 @@
     lib.genAttrs packageRoots (root: pkgs.${root} or (rootOf root));
   # Flake values the exported modules receive as `ai.internal`.
   moduleInternals = {
+    jail = import ../../packages/jail-nix/lib/jail.nix {inherit inputs;};
     mkSandbox = import ../../packages/microvm/lib/mkSandbox.nix {inherit inputs lib;};
     inherit rootsFor;
     treefmtNix = inputs.treefmt-nix;

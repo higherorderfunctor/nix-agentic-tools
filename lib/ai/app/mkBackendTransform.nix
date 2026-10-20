@@ -35,6 +35,7 @@
     inherit (appRecord) pkgs;
   };
   hooks = import ../hooks.nix {inherit lib;};
+  jailLib = import ../jail {inherit lib;};
   pathProvenanceNotice = import ../runtime-path-provenance-notice.nix appRecord.pkgs;
   proxyLib = import ../proxy {inherit lib;};
   runtimeModule = import ../../../packages/ai-module/lib/runtime.nix;
@@ -173,6 +174,17 @@
       }
     else null;
 
+  # The jail folds field by field (`jailLib.resolve`). Null unless the result
+  # enables it, or when the runtime does not consume the pool.
+  resolvedJail =
+    if supportsPool "jail"
+    then
+      jailLib.resolve {
+        root = config.ai.jail;
+        runtime = launcherCfg.jail;
+      }
+    else null;
+
   # Module-contributed process env, delivered on the internal channel rather
   # than through `ai.<cli>.environmentVariables` — see the note on
   # `_sandboxSafeSshCommand` in sharedOptions.nix for why internal contributions
@@ -282,6 +294,10 @@
       default = topHooks;
       type = hooks.hooksType;
     };
+    jail = {
+      default = resolvedJail;
+      type = jailLib.resolvedType;
+    };
     # Proxy entries are already lowered here; applying the declaration schema
     # again would add defaults to the credential-free client record.
     mcpServers = {
@@ -389,6 +405,17 @@
     // poolOption "environmentVariables" {
       type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
       description = "Environment variables baked into the ${appRecord.name} launcher wrapper. Scoped to the ${lib.toSentenceCase appRecord.name} process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
+    }
+    // lib.optionalAttrs (supportsPool "jail") {
+      jail = lib.mkOption {
+        type = lib.types.submodule {options = jailLib.fields;};
+        default = {};
+        description = ''
+          ${appRecord.name}'s bubblewrap jail. Each non-null field replaces
+          the matching `ai.jail` field for this runtime; null inherits it.
+          The resolved jail is `${lib.showOption (["ai" appRecord.name] ++ normalizedPath "jail")}`.
+        '';
+      };
     }
     // lib.optionalAttrs (supportsPool "shell") {
       shell = lib.mkOption {
@@ -584,6 +611,7 @@
     mergedRules = normalizedPool "rules" {};
     mergedServers = normalizedPool "mcpServers" {};
     mergedSkills = normalizedPool "skills" {};
+    resolvedJail = normalizedPool "jail" null;
     resolvedProxy = normalizedPool "proxy" null;
     resolvedSettings = normalizedPool "settings" {};
     resolvedShell = normalizedPool "shell" null;
@@ -666,11 +694,32 @@
     then launcherCfg.package
     else null;
   installPackageFn = backendSpec.installPackage or appRecord.installPackage or (_: launcherPackage);
-  rawInstalledPackages = lib.optional (launcherPackage != null) (installPackageFn callbackArgs);
+  # The jail wraps the FINISHED launcher, outermost and in place, so every
+  # factory wrapper's baked environment and launch-time steps run inside it
+  # and the command keeps its name. bubblewrap is Linux-only: elsewhere an
+  # enabled jail lowers nothing and warns.
+  # A value forced onto the normalized option still needs `enable = true`.
+  jailRequested = launcherPackage != null && (callbackArgs.resolvedJail.enable or null) == true;
+  jailLowers = appRecord.pkgs.stdenv.hostPlatform.isLinux;
+  jailWarnings =
+    lib.optional (cfg.enable && jailRequested && !jailLowers)
+    "${poolOptionName "jail"} is enabled but bubblewrap is Linux-only; nothing is jailed on ${appRecord.pkgs.stdenv.hostPlatform.system}.";
+  jailPackage = package:
+    if jailRequested && jailLowers
+    then
+      jailLib.wrap {
+        inherit (appRecord) executables name pkgs;
+        inherit package;
+        jail = config.ai.internal.jail;
+        profile = callbackArgs.resolvedJail;
+      }
+    else package;
+  rawInstalledPackages = lib.optional (launcherPackage != null) (jailPackage (installPackageFn callbackArgs));
+  transformWarnings = deliveryWarnings ++ jailWarnings;
   installedPackages =
     if options ? warnings
     then rawInstalledPackages
-    else lib.foldr lib.warn rawInstalledPackages deliveryWarnings;
+    else lib.foldr lib.warn rawInstalledPackages transformWarnings;
   # `home.packages` on Home Manager, `packages` on devenv. The two option
   # names are the whole reason this cannot live in the factories without
   # being written twice per runtime.
@@ -758,7 +807,7 @@ in {
   config = lib.mkMerge [
     # Both real backends expose warnings. Minimal evalModules callers without
     # that option still see diagnostics when they force the installed packages.
-    (lib.optionalAttrs (options ? warnings) {warnings = deliveryWarnings;})
+    (lib.optionalAttrs (options ? warnings) {warnings = transformWarnings;})
     (lib.optionalAttrs harnessSwitched {
       ai.${appRecord.name}.enable = launcherCfg.enable;
     })
