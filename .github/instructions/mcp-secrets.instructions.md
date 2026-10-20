@@ -7,10 +7,15 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-10-19 — a remote server owner declares a
-> `meta.external` module whose reserved `settings` `lib/mcp.nix:resolveRemote`
-> turns into `url` plus an `Authorization` header in `proxy.headers` or the
-> client `headers`; the paths below deliver it unchanged.
+> **Last verified:** 2026-10-19 — MCP credential settings and HTTP references
+> use redact; consumers derive environment names, resolve full concat values
+> with redact.assign, and abort on failed reads. Kiro headers resolve at launch,
+> URLs during files-engine apply after the secrets point. Proxy daemons use
+> ai.services and scoped service claims on both backends; a generic `toolPolicy`
+> rides the client entry to each runtime's per-tool surface. A remote server
+> owner declares a `meta.external` module whose reserved `settings`
+> `lib/mcp.nix:resolveRemote` turns into `url` plus an `Authorization` header in
+> `proxy.headers` or the client `headers`; the paths below deliver it unchanged.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -450,6 +455,22 @@ over the path: the next activation or shell entry backs the edit up and restores
 the declaration. Home Manager always owns the user-global file (an empty server
 map when nothing is declared); devenv writes the project file only when a server
 is declared.
+
+### Per-tool policy rides the client entry, not the proxy
+
+`toolPolicy` (commonSchema, keyed by the tool name the server reports, values
+`auto | prompt | disabled`) is client behavior, like `timeout`:
+`mcpProxy.clientEntry` copies it onto the loopback entry, so a proxied server is
+gated exactly like a direct one. The proxy itself enforces nothing per tool.
+Each runtime spells it in its existing surface and never in the server entry:
+Claude `permissions.allow|ask|deny` with `mcp__plugin_hm_<server>__<tool>` (Home
+Manager personal plugin) or `mcp__<server>__<tool>` (project `.mcp.json`); Codex
+per-server `tools.<tool>.approval_mode` (`approve`, `prompt`) and
+`disabled_tools`, where a native `codex.tools` entry wins; Kiro `auto` as a
+trusted `@<server>/<tool>`, `prompt` and `disabled` as v3 ask/deny rules, which
+only Home Manager writes. Every value a runtime or backend cannot carry warns
+through its `surfaceSupport.mcpServers` gap (Kiro's undelivered rules, Kimchi
+always).
 
 ### Gotchas
 

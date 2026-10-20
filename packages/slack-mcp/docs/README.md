@@ -67,8 +67,8 @@ ai.mcpServers.slack-mcp.settings.manifest = {
 Neither field changes the rendered entry: the token's scopes are the limit Slack
 enforces. Which tools a runtime runs without asking is a client concern of the
 pool, keyed by the tool ids the server reports (see the `tools/list` probe
-below), and is being added for every MCP server as the generic `toolPolicy`
-field in PR #2711.
+below): set the generic `ai.mcpServers.<name>.toolPolicy` on the entry, which
+every MCP server has.
 
 ## The app manifest
 

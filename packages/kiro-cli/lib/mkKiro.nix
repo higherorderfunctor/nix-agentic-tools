@@ -862,6 +862,48 @@
       rules
     else rules;
 
+  # Kiro carries `prompt` and `disabled` only as v3 permission rules, which
+  # reach permissions.yaml on Home Manager alone.
+  kiroRulesDelivered = backend: cfg: cfg.cli.v3 && backend == "hm";
+  # The generic MCP `toolPolicy` in Kiro's spelling. `auto` joins the trusted
+  # tools (`--trust-tools`, and under v3 on Home Manager an allow rule through
+  # mkPermissionRules); where rules are delivered, `prompt` and `disabled`
+  # become ask and deny rules, which Kiro resolves by restrictiveness
+  # (deny > ask > allow). An empty list contributes no definition, so a
+  # consumer's own defaults survive.
+  kiroToolPolicy = {
+    backend,
+    cfg,
+    mergedServers,
+  }: let
+    policy = aiCommon.mcpToolPolicy mergedServers;
+    rule = effect: rows:
+      lib.optional (rows != []) {
+        capability = "mcp";
+        inherit effect;
+        match = map (row: "${row.server}/${row.tool}") rows;
+      };
+    trusted = map (row: "@${row.server}/${row.tool}") policy.auto;
+    rules = lib.optionals (kiroRulesDelivered backend cfg) (rule "ask" policy.prompt ++ rule "deny" policy.disabled);
+  in
+    lib.mkMerge [
+      (lib.mkIf (trusted != []) {ai.kiro.cli.trustedMcpTools = trusted;})
+      (lib.mkIf (rules != []) {ai.kiro.permissions = rules;})
+    ];
+  # The `prompt` and `disabled` tools no delivered Kiro surface carries on
+  # this backend. Without v3 rules a `prompt` tool may still run unasked under
+  # a broad `@server` trust, so it warns too.
+  kiroUndeliveredTools = {
+    backend,
+    cfg,
+    path,
+    value,
+    ...
+  }: let
+    policy = aiCommon.mcpToolPolicy {${lib.last path} = value;};
+  in
+    lib.optionals (!kiroRulesDelivered backend cfg) (lib.sort builtins.lessThan (map (row: row.tool) (policy.disabled ++ policy.prompt)));
+
   # Shared by the manual factory and both module backends. Applying either
   # selector first preserves the other through the package's passthru contract.
   resolveRolloutPackage = cfg:
@@ -1136,7 +1178,14 @@ in
         backends = [];
         reason = "Kiro's v3 trigger schema has no lossless mapping from portable command hooks; its native hooks are a separate surface (packages/kiro-cli/lib/mkKiro.nix).";
       };
-      mcpServers = {};
+      mcpServers.gaps = [
+        {
+          each = true;
+          path = ["toolPolicy"];
+          when = args: kiroUndeliveredTools args != [];
+          reason = args: "Kiro enforces `prompt` and `disabled` only through v3 permission rules in the global settings/permissions.yaml, which only Home Manager with ai.kiro.cli.v3 writes, so these tools keep Kiro's default: ${lib.concatStringsSep ", " (kiroUndeliveredTools args)}.";
+        }
+      ];
       rules = {
         gaps = [
           {
@@ -1568,7 +1617,7 @@ in
       trustToolsWarnings = lib.optional (cfg.cli.trustedMcpTools
         != []
         && (pkgs.stdenv.hostPlatform.isDarwin || cfg.cli.v3)
-        && !(cfg.cli.v3 && backend == "hm"))
+        && !kiroRulesDelivered backend cfg)
       (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
       nativeAgentPlans = lib.mapAttrs mkNativeAgentPlan nativeAgents;
       settingsDir = "${cfg.configDir}/settings";
@@ -1668,6 +1717,7 @@ in
     in
       lib.mkMerge ([
           (featureImplications backend cfg)
+          (kiroToolPolicy {inherit backend cfg mergedServers;})
           (lib.optionalAttrs (!isHm && options ? enterShell) {
             enterShell = lib.concatStrings (lib.mapAttrsToList (name: setting:
               lib.optionalString (cfg.cli.${name}.enable && needsGlobalNotice setting) ''

@@ -184,8 +184,9 @@
 
   # ── Client-facing entry ─────────────────────────────────────────────
   # The real `url` is replaced by the loopback one, so no credential url
-  # reaches the client. `timeout` survives: it is client behavior, not a
-  # credential, and some upstreams are slow on large result sets.
+  # reaches the client. `timeout` and `toolPolicy` survive: they are client
+  # behavior, not credentials, and some upstreams are slow on large result
+  # sets.
   #
   # Server-level `headers` DO reach the client, and that is the point of
   # the split: since 2026-08-13 they mean exactly one thing — what the
@@ -207,6 +208,9 @@
     }
     // lib.optionalAttrs ((srv.timeout or null) != null) {
       inherit (srv) timeout;
+    }
+    // lib.optionalAttrs ((srv.toolPolicy or {}) != {}) {
+      inherit (srv) toolPolicy;
     };
 
   # Lower proxy declarations at EACH ownership scope before root/runtime

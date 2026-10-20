@@ -343,5 +343,24 @@ in {
       default = null;
       description = "Request timeout in milliseconds for shape (C) http servers.";
     };
+    toolPolicy = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.enum ["auto" "disabled" "prompt"]);
+      default = {};
+      example = {
+        delete_message = "disabled";
+        search = "auto";
+        send_message = "prompt";
+      };
+      description = ''
+        Per-tool approval, keyed by the tool name the server reports in
+        `tools/list`: `auto` runs without asking, `prompt` asks on every
+        call, `disabled` never runs. A tool left out keeps the runtime's
+        default. Each runtime renders it through its own per-tool surface
+        (Claude permission rules, Codex per-server tool fields, Kiro trusted
+        tools and v3 permission rules); a runtime or backend without a
+        lossless surface warns. Codex-native `codex.*` tool fields win per
+        tool.
+      '';
+    };
   };
 }

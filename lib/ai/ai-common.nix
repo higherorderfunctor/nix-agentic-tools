@@ -410,4 +410,15 @@ in {
     cliPool,
   }:
     lib.filterAttrs (_name: value: value != null) (topPool // cliPool);
+
+  # ── Per-tool MCP policy ─────────────────────────────────────────
+  # The merged servers' `toolPolicy` (commonSchema) as one list of
+  # `{ mode; server; tool; }` per value, grouped by mode. Each runtime spells
+  # the rows in its own per-tool surface.
+  mcpToolPolicy = servers: let
+    rows = lib.concatLists (lib.mapAttrsToList (server: srv:
+      lib.mapAttrsToList (tool: mode: {inherit mode server tool;}) (srv.toolPolicy or {}))
+    servers);
+  in
+    lib.genAttrs ["auto" "disabled" "prompt"] (mode: builtins.filter (row: row.mode == mode) rows);
 }
