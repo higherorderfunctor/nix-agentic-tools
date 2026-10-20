@@ -626,6 +626,16 @@ excluded because they own reconciled leaves rather than a whole file.
 A consumer's replacement of a generated entry's content lands verbatim: it is
 not formatted, guarded, checked or byte-limited, whatever `format` it states.
 
+When a declaration is removed, what happens to the file depends on how it was
+delivered. Taking a file over, by replacing the link or editing the copy before
+the declaration goes, is safe in every row:
+
+| Delivered as                     | Unchanged on disk                                  | Replaced or edited by you                                                                                                                               |
+| -------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `symlink` (store link)           | Removed by the backend                             | Kept, silently; it is yours now. A store link the backend failed to remove warns on every devenv shell entry until you delete it                        |
+| `ro` (read-only copy)            | Removed by the files engine                        | Backed up, then removed. The backup is `ai-<digest>.bak` beside the engine state, `nix-agentic-tools/files/` under `$XDG_STATE_HOME` or `$DEVENV_STATE` |
+| `rw` (keys in a shared document) | Declared keys removed; the harness's own keys stay | Same, with a backup of the document first when a declared key changes. The file is deleted only when the engine created it and nothing is left in it    |
+
 `mkAgenticShell` generates no files through ai-module, so it has no
 corresponding option.
 

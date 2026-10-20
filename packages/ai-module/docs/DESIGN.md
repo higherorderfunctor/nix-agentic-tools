@@ -186,10 +186,12 @@ paths of devenv's previous link list into
 `$DEVENV_STATE/ai-delivery-observed.json`. `files-inspect` runs after
 `materialized` with devenv `showOutput`, because devenv hides a passing task's
 output. It warns for an owned link that is absent or replaced by a file, a
-directory or a stale link, and for a remembered path no longer delivered that is
-still on disk. Ownership is the normalized plan, each path named by its
-`ai.claims.path` claim or else `ai.files`. Native links come from the backend
-file map.
+directory or a stale link, and for a remembered path no longer delivered where
+the store link it delivered is still on disk, which cleanup should have removed.
+A remembered path that is absent, or holds anything else, is the user's and is
+forgotten silently: devenv only ever wrote that store link there. Ownership is
+the normalized plan, each path named by its `ai.claims.path` claim or else
+`ai.files`. Native links come from the backend file map.
 
 ### Layer 3: generic activation
 
