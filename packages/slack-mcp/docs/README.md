@@ -73,10 +73,13 @@ every MCP server has.
 ## The app manifest
 
 `lib.ai.mcpServers.slackManifest` derives the manifest for your Slack app from
-the same `settings`: a bot user stub with `users:read`, the sorted union of the
-selected rows' user scopes less `omitScopes`, PKCE and the MCP toggle on, and
-org deploy off. It holds no url, token or client id. Two helpers print it
-without installing anything.
+the same `settings`. `name` labels the app and its bot stub; `description` (140
+characters at most) is shown in the app directory and on the consent screen, and
+defaults to a sentence naming the write rows the selection grants. It renders: a
+bot user stub with `users:read`, the sorted union of the selected rows' user
+scopes less `omitScopes`, PKCE and the MCP toggle on, and org deploy off. It
+holds no url, token or client id. Two helpers print it without installing
+anything.
 
 In the flake that holds your Home Manager configuration:
 

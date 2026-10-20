@@ -105,6 +105,35 @@ in {
             }).manifest)
       );
 
+      # The description names what the selection grants, an override is kept
+      # verbatim, and Slack's 140-character limit is refused at evaluation.
+      factory-slack-mcp-manifest-description = mkTest "slack-mcp-manifest-description" (
+        let
+          described =
+            (manifestOf {
+              inherit token;
+              manifest.writes = ["Canvas create/update"];
+            }).manifest.display_information.description;
+          custom =
+            (manifestLib.slackManifest {
+              inherit pkgs;
+              description = "Reads channels and search only";
+              settings = {inherit token;};
+            }).manifest.display_information.description;
+        in
+          described
+          == "Personal MCP token acting as its user: read-only except Canvas create/update. The bot user never posts."
+          && manifest.manifest.display_information.description
+          == "Personal MCP token acting as its user: read-only. The bot user never posts."
+          && custom == "Reads channels and search only"
+          && !(evaluates
+            (manifestLib.slackManifest {
+              inherit pkgs;
+              description = lib.concatStrings (lib.replicate 141 "x");
+              settings = {inherit token;};
+            }).manifest.display_information)
+      );
+
       # User scopes are the sorted union of the selected rows' scopes less
       # omitScopes. No token is needed or kept.
       factory-slack-mcp-manifest-scopes = mkTest "slack-mcp-manifest-scopes" (

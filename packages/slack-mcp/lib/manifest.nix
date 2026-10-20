@@ -29,12 +29,31 @@ in {
   # `config.ai.mcpServers.slack-mcp.settings`); the server module evaluates it,
   # so defaults and refusals match the rendered entry. The token is not read.
   slackManifest = {
+    # Shown in the app directory and on the consent screen; at most 140
+    # characters (Slack's limit). The default states what the selection
+    # grants, so it stays true when `manifest.writes` changes.
+    description ? null,
     name ? "Agent MCP",
     pkgs,
     settings,
   }: let
+    selection = (evalSettings "slack-mcp" settings).manifest;
+    grants =
+      if selection.writes == []
+      then "read-only"
+      else "read-only except ${lib.concatStringsSep ", " selection.writes}";
+    text =
+      if description != null
+      then description
+      else "Personal MCP token acting as its user: ${grants}. The bot user never posts.";
     value = {
-      display_information = {inherit name;};
+      display_information = {
+        inherit name;
+        description =
+          if lib.stringLength text <= 140
+          then text
+          else throw "slackManifest: description is ${toString (lib.stringLength text)} characters; Slack allows 140";
+      };
       # Slack requires a bot user on an app; the stub needs only `users:read`.
       features.bot_user = {
         always_online = false;
@@ -47,7 +66,7 @@ in {
         pkce_enabled = true;
         scopes = {
           bot = ["users:read"];
-          user = tools.scopes (evalSettings "slack-mcp" settings).manifest;
+          user = tools.scopes selection;
         };
       };
       settings = {
