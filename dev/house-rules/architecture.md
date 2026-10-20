@@ -54,10 +54,14 @@ hoc machinery beside an existing abstraction.
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
-- **PROPOSAL (not yet vetted): harness sandboxing uses `ai.jail`.** Jail a
-  harness launcher through `ai.jail` / `ai.<runtime>.jail`, an exclusion-only
-  bubblewrap profile over jail.nix applied once at the shared install seam, so
-  every runtime and both backends get one mechanism and the command keeps its
-  name. A per-factory wrapper or a second sandbox layer would duplicate the seam
-  and drift per runtime. See `lib/ai/jail/default.nix`,
-  `lib/ai/app/mkBackendTransform.nix` and `packages/jail-nix/docs/jail-nix.md`.
+- **PROPOSAL (not yet vetted): harness sandboxing is ours.** The host sandbox
+  (the microvm) is the real protection. `ai.jail` / `ai.<runtime>.jail`
+  (jail.nix, bubblewrap) is an extra layer that keeps a harness from damaging
+  its own dev environment, mostly by accident while it debugs that environment;
+  the two may be layered. `ai.jail` wraps every harness launcher once, in
+  `lib/ai/app/mkBackendTransform.nix`, so every runtime and both backends share
+  it and the command keeps its name. Copilot is the exception: it ships no
+  launcher here, so it only gets a warning. Rejected: each runtime's built-in
+  sandbox, because they cannot be normalized across runtimes; and a per-factory
+  wrapper, which would drift per runtime. See `lib/ai/jail/default.nix` and
+  `packages/jail-nix/docs/jail-nix.md`.

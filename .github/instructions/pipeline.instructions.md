@@ -7,8 +7,9 @@ applyTo: ".github/actions/check-cache/**,.github/actions/warm-ifd/**,.github/rep
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-18 — `checks-eval-darwin` is a required context;
-> both systems' name evaluations are budgeted by function count.
+> **Last verified:** 2026-10-20 — the sweep's `mirror-health` job reports the
+> jail-nix mirror; ci.yml runs `jail-smoke`; `checks-eval-darwin` is a required
+> context; both systems' name evaluations are budgeted by function count.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -255,8 +256,10 @@ complete native coverage. Both fail if any worker fails, including a failure
 after receipt upload. The two dedicated `kiro-patched` jobs,
 `checks-eval-darwin`, `checks-matrix`, `test`, and `gitleaks` are the other six
 required contexts; since 2026-10-14 `checks-matrix` builds every flake check and
-`test` only runs the workflow gate scripts. The full Devenv Diagnostic remains
-manual-only.
+`test` only runs the workflow gate scripts. `jail-smoke` builds
+`checks.x86_64-linux.ai-jail-live` and runs it on the runner, because bubblewrap
+cannot run inside the Nix build sandbox there; read the ruleset for whether it
+is required yet. The full Devenv Diagnostic remains manual-only.
 
 Generated documents stay in the flake checks. Kiro's scoped native jobs build
 the extracted-metadata drift check and packaged KAS checks on both Linux and
@@ -359,6 +362,26 @@ calls to list the Linux names; the lazy one makes 2.8 million. The ceiling
 catches that class, not one file reading package metadata at name time (3% of
 the calls in the measured case). The measurements and the re-measure command
 live in the action's description; raise the ceiling only with a new one.
+
+### jail-nix mirror health
+
+The `jail-nix` input tracks a GitHub mirror whose own `mirror.yml` runs two
+hours before each sweep, syncs when upstream moved, and then runs upstream's
+test suite (`packages/jail-nix/docs/jail-nix.md`). The sweep's `mirror-health`
+job reads that workflow's runs with the default token, naming the mirror from
+`flake.lock`'s jail-nix node, and fails when:
+
+- no mirror run was created in the last 8 hours. A schedule GitHub disabled
+  after 60 days without repository activity shows up here.
+- the newest completed run whose `sync` job started did not succeed. A started
+  job has steps. A skipped `sync` and one cancelled while queued have none,
+  though the jobs API gives both a `started_at`, so neither is evidence either
+  way; none in the 100 listed runs passes with a notice.
+
+The listing has no `status=completed` filter, which has served a weeks-old
+snapshot (see the settled note above). The job blocks nothing: no job needs it,
+and the bump PR still opens. A failed sync stays red until upstream moves again
+or its failed jobs are re-run.
 
 ### Reports and deliberate manual updates
 

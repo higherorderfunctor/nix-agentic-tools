@@ -7,13 +7,14 @@ applyTo: "checks/ai-jail/**,lib/ai/jail/**,packages/jail-nix/**"
 
 # jail.nix library
 
-> **Last verified:** 2026-10-19 — only entry points are jailed, helper bins pass
-> through; PATH exclusions follow caller-PATH restoration; Kiro FHS dispatch
-> stays inside the outer jail.
+> **Last verified:** 2026-10-20 — the input tracks a tested GitHub mirror
+> through the dependency sweep; `ai-jail-live` proves on a CI runner that the
+> launcher runs inside bubblewrap.
 
-jail.nix (`sourcehut:~alexdavid/jail.nix`) is a pure Nix library that wraps a
-program in bubblewrap. It is not a NixOS module, so Home Manager and devenv need
-no polyfill: a jail is a package on `PATH`.
+jail.nix (`sourcehut:~alexdavid/jail.nix`, read through the GitHub mirror
+`higherorderfunctor/jail.nix`) is a pure Nix library that wraps a program in
+bubblewrap. It is not a NixOS module, so Home Manager and devenv need no
+polyfill: a jail is a package on `PATH`.
 
 `lib.ai.jail` (`lib/jail.nix`) re-exports it, and modules receive the same value
 as `ai.internal.jail`:
@@ -62,28 +63,35 @@ has no `--unsetenv` combinator; the repository's `unset-env` emits it.
 
 ## Pinning and bumps
 
-The input URL carries the rev. Every root flake input is an auto-merging update
-lane with no opt-out, and a sandbox-policy library must not move through it;
-with the rev in the URL, the sweep's `nix flake update jail-nix` is a no-op.
-Upstream has no inputs, so there is no `follows`.
+The input is `github:higherorderfunctor/jail.nix/main`, a mirror of sourcehut,
+and it moves through the 4x/day dependency sweep like any root input. The
+mirror's default branch, `gh-mirror-meta`, holds only its README and
+`mirror.yml`, so the URL names `main`. Upstream has no inputs, so there is no
+`follows`.
 
-To bump:
+`mirror.yml` runs two hours before each sweep. When an upstream branch or tag is
+missing or different on the mirror, it pushes heads and tags with `--force` and
+no pruning, never over `gh-mirror-meta`, and then runs upstream's own suite on
+`main`. The push comes first, so a failing suite fails the run, not the mirror.
 
-1. Edit the rev in the `jail-nix.url` line of `flake.nix`, then
-   `nix flake lock`.
-2. `devenv tasks run --mode before generate:all` regenerates `devenv.yaml`;
-   `config/generate-devenv-yaml.nix` projects a sourcehut node as
-   `sourcehut:<owner>/<repo>/<rev>`.
-3. `devenv update jail-nix` syncs `devenv.lock`.
-4. `checks.devenv-inputs-drift` compares all three, and the checks below
-   exercise the new rev.
+A bump is judged in three places:
+
+- The sweep's `mirror-health` job fails when the newest completed mirror run
+  whose `sync` job started did not succeed, or when no mirror run started in 8
+  hours. It only reports: no job needs it, and the bump PR still opens.
+- `ai-jail-live` (`checks/ai-jail/live.nix`), run by ci.yml's `jail-smoke` job,
+  jails a probe with nothing excluded on the runner. Its fresh `/proc` must list
+  only the jail's own processes, and the same probe outside must list the
+  runner's. Upstream's suite on the mirror covers combinator behavior.
+- The checks below and `checks.devenv-inputs-drift`, which compares `flake.nix`,
+  `devenv.yaml` and `devenv.lock`.
 
 There are no patches or `pkgs` pin. Add an `applyPatches` seam only when needed,
 pointing `src`, `init` and `extend` at the patched tree.
 
 ## Checks
 
-Both live in `checks/jail-nix.nix` under
+The structural pair lives in `checks/jail-nix.nix` under
 `lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux`, so their names are absent
 on Darwin.
 
@@ -127,20 +135,6 @@ On Darwin the option evaluates, installs the plain launcher, and both backends
 warn:
 `ai.<runtime>.jail is enabled but bubblewrap is Linux-only; nothing is jailed on <system>.`
 Copilot ships no launcher and gets the delivery warning.
-
-Suggested `exclude.paths`, set by hand and spelled absolute (`~` is not
-expanded; none is a default):
-
-| Harness | Credential paths                                                                              |
-| ------- | --------------------------------------------------------------------------------------------- |
-| Claude  | `~/.claude/.credentials.json`; `~/.claude.json` mixes login and config                        |
-| Codex   | `~/.codex/auth.json`; MCP OAuth defaults to the keyring                                       |
-| Kimchi  | `~/.config/kimchi/harness/auth.json`; `~/.config/kimchi/config.json` mixes key and config     |
-| Kiro    | `~/.local/share/kiro-cli/data.sqlite3` and its `-wal`/`-shm`; never all of `~/.aws/sso/cache` |
-
-Also consider `~/.ssh`, decrypted secrets such as `/run/user/<uid>/secrets`, and
-`SSH_AUTH_SOCK` in `exclude.environment`. Masking a mixed file hides its config
-too.
 
 Known interactions, not solved here:
 

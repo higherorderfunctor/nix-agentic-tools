@@ -517,13 +517,17 @@ hoc machinery beside an existing abstraction.
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
-- **PROPOSAL (not yet vetted): harness sandboxing uses `ai.jail`.** Jail a
-  harness launcher through `ai.jail` / `ai.<runtime>.jail`, an exclusion-only
-  bubblewrap profile over jail.nix applied once at the shared install seam, so
-  every runtime and both backends get one mechanism and the command keeps its
-  name. A per-factory wrapper or a second sandbox layer would duplicate the seam
-  and drift per runtime. See `lib/ai/jail/default.nix`,
-  `lib/ai/app/mkBackendTransform.nix` and `packages/jail-nix/docs/jail-nix.md`.
+- **PROPOSAL (not yet vetted): harness sandboxing is ours.** The host sandbox
+  (the microvm) is the real protection. `ai.jail` / `ai.<runtime>.jail`
+  (jail.nix, bubblewrap) is an extra layer that keeps a harness from damaging
+  its own dev environment, mostly by accident while it debugs that environment;
+  the two may be layered. `ai.jail` wraps every harness launcher once, in
+  `lib/ai/app/mkBackendTransform.nix`, so every runtime and both backends share
+  it and the command keeps its name. Copilot is the exception: it ships no
+  launcher here, so it only gets a warning. Rejected: each runtime's built-in
+  sandbox, because they cannot be normalized across runtimes; and a per-factory
+  wrapper, which would drift per runtime. See `lib/ai/jail/default.nix` and
+  `packages/jail-nix/docs/jail-nix.md`.
 
 ### Load delegate-routing
 
@@ -1072,11 +1076,12 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-19 — CI watching exits on the first failure through
-> the `pr-review-loop` watcher; `checks-eval-darwin` is the eighth required
-> context; `test` evaluates only. The worker and three review roles run inside a
-> loop of at most 3 rounds; unsettled findings go back to the orchestrator to
-> validate. Merge teardown deletes the PR's `archive/*` backups.
+> **Last verified:** 2026-10-20 — ci.yml gained `jail-smoke`; CI watching exits
+> on the first failure through the `pr-review-loop` watcher;
+> `checks-eval-darwin` is the eighth required context; `test` evaluates only.
+> The worker and three review roles run inside a loop of at most 3 rounds;
+> unsettled findings go back to the orchestrator to validate. Merge teardown
+> deletes the PR's `archive/*` backups.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -1128,9 +1133,11 @@ Hestia's evaluate-once matrix, and `test` only evaluates. `checks-eval-darwin`
 was promoted 2026-10-18 after six green runs: since the `checks` option became
 lazy (#2675) no other Darwin context forces every check value, so without it a
 Linux-only check leaking onto Darwin merges green. Both `kiro-patched` contexts
-were promoted 2026-08-13 with PR #895. It requires **zero approving reviews**
-but it DOES require **every review thread to be resolved**
-(`required_review_thread_resolution`, enabled 2026-07-29).
+were promoted 2026-08-13 with PR #895. `jail-smoke`, added 2026-10-20, runs
+`ai.jail` live on a runner; read the ruleset for whether it is required yet. The
+ruleset requires **zero approving reviews** but it DOES require **every review
+thread to be resolved** (`required_review_thread_resolution`, enabled
+2026-07-29).
 
 The full Devenv Diagnostic is now `workflow_dispatch` only. It was promoted to a
 required check on 2026-08-03, demoted on 2026-08-05 after becoming a

@@ -399,3 +399,59 @@ jobs:
           else
             echo "aihubmix-mcp: npm dist-tags.latest is ${upstream}; this repo carries ${ours}. No annotation."
           fi
+  # jail-nix tracks a GitHub mirror whose own workflow runs upstream's test
+  # suite whenever upstream moves, two hours before each sweep. This job only
+  # reports on that mirror: no job needs it, so a red mirror holds no bump back.
+  mirror-health:
+    runs-on: *runner
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          ref: main
+          persist-credentials: false
+      - name: Require a healthy jail-nix mirror
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          # The lock names the mirror, so flake.nix's URL stays its one statement.
+          repo="$(jq -er '.nodes[.nodes[.root].inputs["jail-nix"]].locked | select(.type == "github") | "\(.owner)/\(.repo)"' flake.lock)"
+          # Newest first. Filtering here rather than with `status=completed`:
+          # that listing has served a weeks-old snapshot.
+          runs="$(gh api "repos/${repo}/actions/workflows/mirror.yml/runs?per_page=100")"
+          status=0
+
+          # The mirror runs every 6 hours. GitHub disables a schedule after 60
+          # days without repository activity, and this is where that shows.
+          age="$(jq -r '.workflow_runs[0] // empty | now - (.created_at | fromdate) | floor' <<< "${runs}")"
+          if [ -z "${age}" ] || [ "${age}" -gt $((8 * 3600)) ]; then
+            latest="$(jq -r '.workflow_runs[0].html_url // "none"' <<< "${runs}")"
+            echo "::error::jail-nix mirror: no mirror run started in the last 8 hours (latest: ${latest}). Enable the workflow at https://github.com/${repo}/actions/workflows/mirror.yml and dispatch it."
+            status=1
+          fi
+
+          # The verdict is the newest completed run whose sync job started.
+          # A started job has steps. A skipped sync (nothing new to test) and
+          # one cancelled while queued have none, though GitHub still gives
+          # both a started_at, so neither is evidence.
+          synced=""
+          for id in $(jq -r '.workflow_runs[] | select(.status == "completed") | .id' <<< "${runs}"); do
+            started="$(gh api "repos/${repo}/actions/runs/${id}/jobs" --jq 'any(.jobs[]; .name == "sync" and (.steps | length) > 0)')"
+            if [ "${started}" = true ]; then
+              synced="${id}"
+              break
+            fi
+          done
+          if [ -z "${synced}" ]; then
+            echo "::notice::jail-nix mirror: none of the listed completed runs synced upstream, so there is no test result to judge."
+          else
+            conclusion="$(jq -r --argjson id "${synced}" '.workflow_runs[] | select(.id == $id) | .conclusion' <<< "${runs}")"
+            if [ "${conclusion}" != success ]; then
+              echo "::error::jail-nix mirror: the last sync, https://github.com/${repo}/actions/runs/${synced}, concluded ${conclusion}. The mirror already serves that upstream commit, so the next jail-nix bump carries it. Read the run's sync log; once the cause is fixed or judged harmless, re-run its failed jobs, or this stays red until upstream moves again."
+              status=1
+            fi
+          fi
+          exit "${status}"

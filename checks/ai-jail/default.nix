@@ -1,1 +1,1 @@
-{imports = [./module-eval.nix ./wrap.nix];}
+{imports = [./live.nix ./module-eval.nix ./wrap.nix];}
