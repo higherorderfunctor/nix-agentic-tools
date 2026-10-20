@@ -1,10 +1,11 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-19 — CI watching exits on the first failure through
-> the `pr-review-loop` watcher; `checks-eval-darwin` is the eighth required
-> context; `test` evaluates only. The worker and three review roles run inside a
-> loop of at most 3 rounds; unsettled findings go back to the orchestrator to
-> validate. Merge teardown deletes the PR's `archive/*` backups.
+> **Last verified:** 2026-10-20 — ci.yml gained `jail-smoke`; CI watching exits
+> on the first failure through the `pr-review-loop` watcher;
+> `checks-eval-darwin` is the eighth required context; `test` evaluates only.
+> The worker and three review roles run inside a loop of at most 3 rounds;
+> unsettled findings go back to the orchestrator to validate. Merge teardown
+> deletes the PR's `archive/*` backups.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -56,9 +57,11 @@ Hestia's evaluate-once matrix, and `test` only evaluates. `checks-eval-darwin`
 was promoted 2026-10-18 after six green runs: since the `checks` option became
 lazy (#2675) no other Darwin context forces every check value, so without it a
 Linux-only check leaking onto Darwin merges green. Both `kiro-patched` contexts
-were promoted 2026-08-13 with PR #895. It requires **zero approving reviews**
-but it DOES require **every review thread to be resolved**
-(`required_review_thread_resolution`, enabled 2026-07-29).
+were promoted 2026-08-13 with PR #895. `jail-smoke`, added 2026-10-20, runs
+`ai.jail` live on a runner; read the ruleset for whether it is required yet. The
+ruleset requires **zero approving reviews** but it DOES require **every review
+thread to be resolved** (`required_review_thread_resolution`, enabled
+2026-07-29).
 
 The full Devenv Diagnostic is now `workflow_dispatch` only. It was promoted to a
 required check on 2026-08-03, demoted on 2026-08-05 after becoming a

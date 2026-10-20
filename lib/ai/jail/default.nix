@@ -30,13 +30,13 @@
           environment = mkOption {
             type = types.nullOr (types.listOf (types.strMatching "[A-Za-z_][A-Za-z0-9_]*"));
             default = null;
-            example = ["SSH_AUTH_SOCK"];
+            example = ["EXAMPLE_TOKEN"];
             description = "Environment variable names removed from the jailed process (`--unsetenv`).";
           };
           paths = mkOption {
             type = types.nullOr (types.listOf (types.strMatching "/.*"));
             default = null;
-            example = ["/home/alice/.claude/.credentials.json" "/home/alice/.ssh"];
+            example = ["/home/alice/.claude/.credentials.json"];
             description = ''
               Absolute host paths masked in the jail, resolved through
               `realpath` at launch: a directory becomes an empty tmpfs, a

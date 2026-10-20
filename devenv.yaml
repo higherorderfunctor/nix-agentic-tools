@@ -22,7 +22,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   jail-nix:
-    url: sourcehut:~alexdavid/jail.nix/7cd53acef3ad51b9c775be759f5643f8d3bcf6eb
+    url: github:higherorderfunctor/jail.nix/7cd53acef3ad51b9c775be759f5643f8d3bcf6eb
   mcp-nixos:
     url: github:utensils/mcp-nixos/6a517811658c21f97bd7703b35546085117fc310
     inputs:

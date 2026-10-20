@@ -155,6 +155,7 @@ foldl
 foldr
 footgun
 frepo
+fromdate
 frontloaded
 frontmatter
 getconf

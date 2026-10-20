@@ -325,16 +325,16 @@
       "locked": {
         "lastModified": 1788928033,
         "narHash": "sha256-UQRytK4SsshV1CeX6aKF+P855Sbcqg9aA731eYTakNg=",
-        "owner": "~alexdavid",
+        "owner": "higherorderfunctor",
         "repo": "jail.nix",
         "rev": "7cd53acef3ad51b9c775be759f5643f8d3bcf6eb",
-        "type": "sourcehut"
+        "type": "github"
       },
       "original": {
-        "owner": "~alexdavid",
+        "owner": "higherorderfunctor",
         "repo": "jail.nix",
         "rev": "7cd53acef3ad51b9c775be759f5643f8d3bcf6eb",
-        "type": "sourcehut"
+        "type": "github"
       }
     },
     "mcp-nixos": {

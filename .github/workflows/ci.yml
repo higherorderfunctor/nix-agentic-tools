@@ -1038,6 +1038,30 @@ jobs:
             ${{ runner.temp }}/darwin-check-names.time
           if-no-files-found: warn
 
+  # `ai.jail` run for real (checks/ai-jail/live.nix), nothing excluded: a
+  # jailed probe's fresh /proc must list only the jail's own processes, and the
+  # same probe outside must list the runner's. bubblewrap cannot run inside the
+  # Nix build sandbox here, so the check only builds the script and this job
+  # runs it on the runner. A jail-nix bump that stops the launcher from jailing
+  # fails here.
+  jail-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - name: Run the live jail smoke test
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          # Ubuntu's AppArmor denies unprivileged user namespaces to binaries
+          # without a profile, such as the Nix store's bwrap the jail runs.
+          sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0
+          nix run .#.checks.x86_64-linux.ai-jail-live
+
   # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
   # CI job is the safety net for the `--no-verify` path: even when
   # damage is already done, the alert tells us to rotate credentials.
