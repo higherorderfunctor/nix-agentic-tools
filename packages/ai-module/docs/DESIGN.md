@@ -257,11 +257,14 @@ files engine, so there are no service dependency edges into file activation or
 Home Manager's systemd reload. Each Linux Home Manager unit orders after
 `network.target`. A service whose environment contains a redact reference or
 whose rendered file has secrets also orders after every registered provider
-unit. Its `WantedBy` is the sorted union of targets on those provider units
-defined in the evaluated `systemd.user.services`; an absent unit or empty union
-falls back to `default.target`. A plain service uses `default.target`. Ordering
-after a provider lets a daemon starting in the same transaction read decrypted
-secrets; `After=` itself pulls no unit in.
+unit. Its `WantedBy` is the targets those provider units are wanted by, read
+from the evaluated `systemd.user.services`; a provider unit not defined there
+contributes none, and with none left the service uses `default.target`. Defined
+provider units wanted by different targets fail evaluation: a target wants each
+unit independently, so a reader started with one provider would not wait for the
+other. A plain service uses `default.target`. Ordering after a provider lets a
+daemon starting in the same transaction read decrypted secrets; `After=` itself
+pulls no unit in.
 
 A `files.<key>` entry is a config file the launcher renders at each start, for a
 daemon that reads its secrets from a file rather than its environment. Its

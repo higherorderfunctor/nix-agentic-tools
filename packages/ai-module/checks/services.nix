@@ -49,9 +49,24 @@
     {
       systemd.user.services = {
         sops-nix.Install.WantedBy = ["graphical-session-pre.target"];
-        vault-agent.Install.WantedBy = ["default.target" "graphical-session-pre.target"];
+        vault-agent.Install.WantedBy = ["graphical-session-pre.target"];
       };
     }
+  ];
+  # Providers wanted by different targets cannot both be waited for.
+  withMismatchedUnits = backends.evaluateWith "hm" providerServices [
+    noLegacyNodes
+    {
+      systemd.user.services = {
+        sops-nix.Install.WantedBy = ["graphical-session-pre.target"];
+        vault-agent.Install.WantedBy = ["default.target"];
+      };
+    }
+  ];
+  # Only sops-nix is defined; the undefined vault unit adds no target.
+  withOneDefinedUnit = backends.evaluateWith "hm" providerServices [
+    noLegacyNodes
+    {systemd.user.services.sops-nix.Install.WantedBy = ["graphical-session-pre.target"];}
   ];
   withProviderDevenv = backends.evaluateWith "devenv" providerServices [noLegacyNodes];
   withSopsUnit = backends.evaluateWith "hm" {
@@ -294,7 +309,10 @@ in {
         && withSopsUnit.systemd.user.services.plain.Unit.After == ["network.target"]
         && withProvider.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service" "vault-agent.service"]
         && withProvider.systemd.user.services.secret.Install.WantedBy == ["default.target"]
-        && withProviderUnits.systemd.user.services.secret.Install.WantedBy == ["default.target" "graphical-session-pre.target"]
+        && withProviderUnits.systemd.user.services.secret.Install.WantedBy == ["graphical-session-pre.target"]
+        && withOneDefinedUnit.systemd.user.services.secret.Install.WantedBy == ["graphical-session-pre.target"]
+        && !(succeeds withMismatchedUnits.systemd.user.services.secret.Install.WantedBy)
+        && withMismatchedUnits.systemd.user.services.plain.Install.WantedBy == ["default.target"]
         && withProviderUnits.systemd.user.services.plain.Install.WantedBy == ["default.target"]
         && withProvider.home.activation.ai-probe.after == ["sops-nix" "vault:ready"]
         && withProvider.home.activation.ai-services-restart-on-change.after == ["linkGeneration" "sops-nix" "vault:ready"]

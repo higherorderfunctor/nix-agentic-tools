@@ -171,17 +171,26 @@
     providerUnits,
     userServices,
   }: let
-    providerTargets = lib.sort lib.lessThan (lib.unique (lib.concatMap (unit: let
+    # Each provider unit defined here, with the targets it is wanted by. A unit
+    # declared but not defined in this configuration contributes no target.
+    defined = lib.concatMap (unit: let
       name = lib.removeSuffix ".service" unit;
     in
-      if builtins.hasAttr name userServices
-      then userServices.${name}.Install.WantedBy or []
-      else [])
-    providerUnits));
+      lib.optional (builtins.hasAttr name userServices) {
+        inherit unit;
+        targets = lib.sort lib.lessThan (lib.unique (userServices.${name}.Install.WantedBy or []));
+      })
+    providerUnits;
+    # A target wants each provider independently, so a reader wanted by the
+    # union of two providers' targets could start with one of them and never
+    # wait for the other. Readers follow one target set or evaluation stops.
+    targetSets = lib.unique (map (provider: provider.targets) defined);
     wantedBy =
-      if providerTargets == []
+      if builtins.length targetSets > 1
+      then throw "ai.activationOrder.secretProviders: provider units ${lib.concatMapStringsSep ", " (provider: "${provider.unit} (${lib.concatStringsSep " " provider.targets})") defined} start under different targets, so a secret-reading service cannot start with all of them; give their units the same WantedBy or set `unit = null` on one"
+      else if targetSets == [] || builtins.head targetSets == []
       then ["default.target"]
-      else providerTargets;
+      else builtins.head targetSets;
   in
     lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (lib.mapAttrs (name: entry: let
       secretReader = readsSecrets entry;
