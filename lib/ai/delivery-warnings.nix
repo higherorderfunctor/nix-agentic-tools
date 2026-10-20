@@ -22,6 +22,7 @@
   generatedReplaced ? _path: false,
 }: let
   aiCommon = import ./ai-common.nix {inherit lib;};
+  mcp = import ../mcp.nix {inherit lib;};
   policy = import ../../config/ai-delivery.nix {inherit lib;};
   runtime = appRecord.name;
   cfg = config.ai.${runtime};
@@ -118,7 +119,10 @@
       then (entry.value.${field} or {}) != {}
       else nonEmpty (entry.value.${field} or null)
     ) (message (entry.path ++ [field]) reason);
-  mcpWarnings = lib.concatMap (entry: let
+  # A remote server owner's entry (`meta.external`) carries its url and header
+  # only after resolution, so its transport is judged on the resolved entry.
+  mcpWarnings = lib.concatMap (declared: let
+    entry = declared // {value = mcp.resolveRemote declared.name declared.value;};
     srv = entry.value;
     http = (srv.url or null) != null;
     raw = !http && (srv.command or null) != null;
