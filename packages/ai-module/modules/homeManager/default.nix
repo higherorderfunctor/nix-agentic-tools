@@ -11,6 +11,11 @@
     stateRoot = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools";
   };
   services = import ../../lib/services.nix {inherit lib;};
+  secrets = import ../../lib/secrets.nix {inherit lib;} {
+    backend = "hm";
+    providers = config.ai.activationOrder.secretProviders;
+    secretNodes = config.ai.activationOrder.secretNodes;
+  };
   restart = services.hmRestart pkgs config.ai.services;
   duplicate = files.duplicate ["files-apply" "files-prune" "services-restart-on-change"];
   generated =
@@ -34,12 +39,13 @@ in {
       import ../../lib/lower-hm.nix {inherit lib pkgs;} {
         entries = generated // config.ai.activation;
         hmLib = lib;
-        # HM's DAG tolerates a missing dependency, so the conventional sops-nix
-        # entry is always an edge; a module may not define root ai.* defaults.
-        secretNodes = lib.unique (["sops-nix"] ++ config.ai.activationOrder.secretNodes);
+        secretNodes = secrets.nodes;
       };
     home.file = files.native;
-    systemd.user.services = services.hmUnits pkgs config.ai.services;
+    systemd.user.services = services.hmUnits pkgs config.ai.services {
+      providerUnits = secrets.units;
+      userServices = config.systemd.user.services;
+    };
     warnings = services.hmWarnings pkgs config.ai.services;
   };
 }

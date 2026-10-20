@@ -28,6 +28,63 @@
   expectedTriggers = ["/etc/daemon.conf" "/run/secrets/first" "/run/secrets/second" "/run/secrets/third"];
   hm = backends.evaluate "hm" {services = entries // {inherit watched;};};
   devenv = backends.evaluate "devenv" {services = entries // {inherit watched;};};
+  providerServices = {
+    activation.probe = {
+      after = ["secrets"];
+      command = "true";
+    };
+    activationOrder.secretProviders.vault = {
+      nodes = ["vault:ready"];
+      unit = "vault-agent.service";
+    };
+    services = {
+      plain = daemon;
+      secret = watched;
+    };
+  };
+  noLegacyNodes = {ai.activationOrder.secretNodes = lib.mkForce [];};
+  withProvider = backends.evaluateWith "hm" providerServices [noLegacyNodes];
+  withProviderUnits = backends.evaluateWith "hm" providerServices [
+    noLegacyNodes
+    {
+      systemd.user.services = {
+        sops-nix.Install.WantedBy = ["graphical-session-pre.target"];
+        vault-agent.Install.WantedBy = ["default.target" "graphical-session-pre.target"];
+      };
+    }
+  ];
+  withProviderDevenv = backends.evaluateWith "devenv" providerServices [noLegacyNodes];
+  withSopsUnit = backends.evaluateWith "hm" {
+    services = {
+      plain = daemon // {environment.OPTIONAL = null;};
+      secret = watched;
+    };
+  } [{systemd.user.services.sops-nix.Install.WantedBy = ["graphical-session-pre.target"];}];
+  withoutSopsUnit = backends.evaluateWith "hm" {
+    activation.probe = {
+      after = ["secrets"];
+      command = "true";
+    };
+    activationOrder.secretProviders.sops-nix = {
+      nodes = ["custom:ready"];
+      unit = null;
+    };
+    services.secret = watched;
+  } [noLegacyNodes];
+  environmentOnly = backends.evaluate "hm" {
+    services.secret = daemon // {environment.TOKEN = redact.file "/run/secrets/env-only";};
+  };
+  fileOnly = backends.evaluate "hm" {
+    services.secret =
+      daemon
+      // {
+        files.config = {
+          content = builtins.toJSON {key = "{$KEY}";};
+          secrets.KEY = redact.file "/run/secrets/only-file";
+          variable = "CONFIG";
+        };
+      };
+  };
   darwin = backends.evaluate "hm" {
     services = {
       live = watched;
@@ -213,7 +270,7 @@ in {
               RestartSec = 5;
             };
             Unit = {
-              After = ["network.target" "sops-nix.service"];
+              After = ["network.target"];
               Description = "${restart} (ai.services)";
             };
           }
@@ -226,6 +283,31 @@ in {
           && !(process ? watch)) (builtins.attrNames entries)
         && devenv.processes.watched.watch.paths == expectedTriggers
         && services.triggers hm.ai.services.watched == expectedTriggers
+        && hm.systemd.user.services.watched.Unit.After == ["network.target" "sops-nix.service"]
+        && hm.systemd.user.services.watched.Install.WantedBy == ["default.target"]
+        && fileOnly.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
+        && fileOnly.systemd.user.services.secret.Install.WantedBy == ["default.target"]
+        && environmentOnly.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
+        && withSopsUnit.systemd.user.services.secret.Install.WantedBy == ["graphical-session-pre.target"]
+        && withSopsUnit.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
+        && withSopsUnit.systemd.user.services.plain.Install.WantedBy == ["default.target"]
+        && withSopsUnit.systemd.user.services.plain.Unit.After == ["network.target"]
+        && withProvider.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service" "vault-agent.service"]
+        && withProvider.systemd.user.services.secret.Install.WantedBy == ["default.target"]
+        && withProviderUnits.systemd.user.services.secret.Install.WantedBy == ["default.target" "graphical-session-pre.target"]
+        && withProviderUnits.systemd.user.services.plain.Install.WantedBy == ["default.target"]
+        && withProvider.home.activation.ai-probe.after == ["sops-nix" "vault:ready"]
+        && withProvider.home.activation.ai-services-restart-on-change.after == ["linkGeneration" "sops-nix" "vault:ready"]
+        && withoutSopsUnit.systemd.user.services.secret.Unit.After == ["network.target"]
+        && withoutSopsUnit.home.activation.ai-probe.after == ["custom:ready"]
+        && withProviderDevenv.tasks."ai:probe".after == ["vault:ready"]
+        && !(builtins.elem "vault-agent.service" withProviderDevenv.tasks."ai:probe".after)
+        && !(withProviderDevenv.tasks ? "ai:services-restart-on-change")
+        && !(succeeds
+          (backends.evaluate "hm" {
+            activationOrder.secretProviders.own.unit = "secret.service";
+            services.secret = watched;
+          }).systemd.user.services.secret.Install.WantedBy)
         && hm.home.activation.ai-services-restart-on-change.after == ["linkGeneration" "sops-nix" "vault:ready"]
         && !(devenv.tasks ? "ai:services-restart-on-change")
         && !((backends.evaluate "hm" {services.plain = daemon;}).home.activation ? ai-services-restart-on-change)

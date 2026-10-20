@@ -12,6 +12,11 @@
     stateRoot = "$DEVENV_STATE/nix-agentic-tools";
   };
   services = import ../../lib/services.nix {inherit lib;};
+  secrets = import ../../lib/secrets.nix {inherit lib;} {
+    backend = "devenv";
+    providers = config.ai.activationOrder.secretProviders;
+    secretNodes = config.ai.activationOrder.secretNodes;
+  };
   nativeTargets = builtins.listToAttrs (map (item: {
       name = item.path;
       value = "${config.files.${item.path}.file}";
@@ -96,7 +101,7 @@ in {
         import ../../lib/lower-devenv.nix {inherit lib;} {
           entries = generated // config.ai.activation;
           inherit nativeFiles;
-          secretNodes = config.ai.activationOrder.secretNodes;
+          secretNodes = secrets.nodes;
         };
     }
     # Repository formatting never rewrites a delivered file. A backend without

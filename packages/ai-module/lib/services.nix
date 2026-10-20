@@ -164,26 +164,49 @@
       };
   enabled = lib.filterAttrs (_: entry: entry.enable);
   launch = pkgs: name: entry: "${mkLauncher {inherit pkgs name entry;}}/bin/ai-service-${name}";
-  hmUnits = pkgs: services:
-    lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (lib.mapAttrs (name: entry: {
-      Install.WantedBy = ["default.target"];
-      Service = {
-        ExecStart = launch pkgs name entry;
-        Restart =
-          if entry.restart == "never"
-          then "no"
-          else entry.restart;
-        RestartSec = 5;
-      };
-      # The launcher reads its secrets at start. At login sops-nix decrypts in
-      # its own oneshot user unit, so a daemon started beside it finds no file
-      # and fails until a restart; ordering after it removes that race. After=
-      # on a unit that does not exist is ignored.
-      Unit = {
-        After = ["network.target" "sops-nix.service"];
-        Description = "${name} (ai.services)";
-      };
-    }) (enabled services));
+  readsSecrets = entry:
+    lib.any (value: value != null && !builtins.isString value) (builtins.attrValues entry.environment)
+    || lib.any (file: file.secrets != {}) (builtins.attrValues entry.files);
+  hmUnits = pkgs: services: {
+    providerUnits,
+    userServices,
+  }: let
+    providerTargets = lib.sort lib.lessThan (lib.unique (lib.concatMap (unit: let
+      name = lib.removeSuffix ".service" unit;
+    in
+      if builtins.hasAttr name userServices
+      then userServices.${name}.Install.WantedBy or []
+      else [])
+    providerUnits));
+    wantedBy =
+      if providerTargets == []
+      then ["default.target"]
+      else providerTargets;
+  in
+    lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (lib.mapAttrs (name: entry: let
+      secretReader = readsSecrets entry;
+    in
+      if secretReader && builtins.elem "${name}.service" providerUnits
+      then throw "ai.services.${name}: a secret-reading service cannot be its own provider unit"
+      else {
+        Install.WantedBy =
+          if secretReader
+          then wantedBy
+          else ["default.target"];
+        Service = {
+          ExecStart = launch pkgs name entry;
+          Restart =
+            if entry.restart == "never"
+            then "no"
+            else entry.restart;
+          RestartSec = 5;
+        };
+        # Secret readers start after provider units under the providers' targets.
+        Unit = {
+          After = ["network.target"] ++ lib.optionals secretReader providerUnits;
+          Description = "${name} (ai.services)";
+        };
+      }) (enabled services));
   hmWarnings = pkgs: services: lib.optionals (!pkgs.stdenv.hostPlatform.isLinux) (map (name: "ai.services.${name}: Home Manager writes services as systemd user units, which this platform lacks; the service is not written") (builtins.attrNames (enabled services)));
   devenvProcesses = pkgs: services:
     lib.mapAttrs (
