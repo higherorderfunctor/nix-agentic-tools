@@ -68,6 +68,32 @@ in {
         == "https://slack.example.test/mcp"
       );
 
+      # The field warnings judge the resolved entry: a remote server's timeout
+      # is an http field, delivered or proxied. A stdio entry still warns.
+      factory-slack-mcp-http-field-warnings = mkTest "slack-mcp-http-field-warnings" (
+        let
+          warningsFor = entry:
+            (evalHm {
+              ai.kiro.cli.enable = true;
+              ai.kiro.mcpServers.slack-mcp = entry;
+            }).config.warnings;
+          timeoutWarned = entry: lib.any (lib.hasInfix "slack-mcp.timeout") (warningsFor entry);
+        in
+          !(timeoutWarned {
+            settings = {inherit token;};
+            timeout = 300000;
+          })
+          && !(timeoutWarned {
+            settings = {inherit token;};
+            timeout = 300000;
+            inherit proxy;
+          })
+          && timeoutWarned {
+            command = "slack-mcp";
+            timeout = 300000;
+          }
+      );
+
       # One file printed by a flake app and a devenv task, nothing installed.
       factory-slack-mcp-manifest-app = mkTest "slack-mcp-manifest-app" (
         let
