@@ -8,8 +8,8 @@ applyTo: ".github/actions/check-cache/**,.github/actions/warm-ifd/**,.github/rep
 ## CI Update Workflow
 
 > **Last verified:** 2026-10-20 — the sweep's `mirror-health` job reports the
-> jail-nix mirror; ci.yml runs `jail-smoke`; `checks-eval-darwin` is a required
-> context; both systems' name evaluations are budgeted by function count.
+> jail-nix mirror; `jail-smoke` and `checks-eval-darwin` are required contexts;
+> both systems' name evaluations are budgeted by function count.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -254,12 +254,12 @@ once. The existing required `build (x86_64-linux, ubuntu-latest)` and
 `build (aarch64-darwin, macos-latest)` contexts check worker outcomes and
 complete native coverage. Both fail if any worker fails, including a failure
 after receipt upload. The two dedicated `kiro-patched` jobs,
-`checks-eval-darwin`, `checks-matrix`, `test`, and `gitleaks` are the other six
-required contexts; since 2026-10-14 `checks-matrix` builds every flake check and
-`test` only runs the workflow gate scripts. `jail-smoke` builds
+`checks-eval-darwin`, `checks-matrix`, `gitleaks`, `jail-smoke` and `test` are
+the other seven required contexts; since 2026-10-14 `checks-matrix` builds every
+flake check and `test` only runs the workflow gate scripts. `jail-smoke` builds
 `checks.x86_64-linux.ai-jail-live` and runs it on the runner, because bubblewrap
-cannot run inside the Nix build sandbox there; read the ruleset for whether it
-is required yet. The full Devenv Diagnostic remains manual-only.
+cannot run inside the Nix build sandbox there. The full Devenv Diagnostic
+remains manual-only.
 
 Generated documents stay in the flake checks. Kiro's scoped native jobs build
 the extracted-metadata drift check and packaged KAS checks on both Linux and
