@@ -6,7 +6,7 @@
 #
 #   ai.mcpServers.slack-mcp = {
 #     settings.token = redact.file "…";
-#     proxy = {enable = true; port = 9503;};  # optional service path
+#     proxy = {enable = true; port = 9600;};  # optional service path
 #   };
 #
 # `settings.manifest` selects the rows of Slack's tool-to-scope table whose

@@ -32,7 +32,7 @@ ai.mcpServers.slack-mcp = {
   settings.token = redact.file "/run/user/1000/secrets/slack-user-token";
   proxy = {
     enable = true;
-    port = 9503;
+    port = 9600;
   };
 };
 ```
@@ -47,18 +47,17 @@ its config.
 
 `settings.manifest` selects the scopes your Slack app asks for, keyed by the
 tool rows of Slack's documented scope table (`Search messages/channels`,
-`Send message`, `Lists`, and so on; the extracted list is in
+`Send message`, `Search users`, and so on; the extracted list is in
 `packages/slack-mcp/extracted/extracted.json`):
 
 ```nix
-ai.mcpServers.slack-mcp.settings.manifest = {
-  writes = ["Lists"];
-  omitScopes = ["im:history" "mpim:history" "search:read.im" "search:read.mpim"];
-};
+# Every read row, no write row, and no direct-message history or search.
+ai.mcpServers.slack-mcp.settings.manifest.omitScopes =
+  ["im:history" "mpim:history" "search:read.im" "search:read.mpim"];
 ```
 
 - `reads` are the rows with no `:write` scope; every one is selected by default.
-  `writes` are the rows with a `:write` scope (Lists, Send message, Canvas
+  `writes` are the rows with a `:write` scope (Send message, Canvas
   create/update, and so on); none is selected until you name it. A row the docs
   do not name, or a write row under `reads`, is refused at evaluation.
 - `omitScopes` removes scopes a selected row would otherwise request. A scope

@@ -18,7 +18,7 @@
   bearer = redact.concat ["Bearer " token];
   proxy = {
     enable = true;
-    port = 9503;
+    port = 9600;
   };
   # The declaration as the pool evaluates it, before and after resolution.
   declare = entry:
@@ -69,29 +69,30 @@ in {
       );
 
       # The field warnings judge the resolved entry: a remote server's timeout
-      # is an http field, delivered or proxied. A stdio entry still warns.
+      # is an http field, delivered or proxied, and its consumed settings are
+      # not an ignored field. Fields http ignores still warn, and so does a
+      # stdio entry's timeout.
       factory-slack-mcp-http-field-warnings = mkTest "slack-mcp-http-field-warnings" (
         let
-          warningsFor = entry:
+          warned = entry: field:
+            lib.any (lib.hasPrefix "ai.kiro.mcpServers.slack-mcp.${field} is set")
             (evalHm {
               ai.kiro.cli.enable = true;
               ai.kiro.mcpServers.slack-mcp = entry;
             }).config.warnings;
-          timeoutWarned = entry: lib.any (lib.hasInfix "slack-mcp.timeout") (warningsFor entry);
+          direct = {
+            settings = {inherit token;};
+            timeout = 300000;
+          };
+          proxied = direct // {inherit proxy;};
         in
-          !(timeoutWarned {
-            settings = {inherit token;};
-            timeout = 300000;
-          })
-          && !(timeoutWarned {
-            settings = {inherit token;};
-            timeout = 300000;
-            inherit proxy;
-          })
-          && timeoutWarned {
+          lib.all (entry: !(warned entry "timeout") && !(warned entry "settings")) [direct proxied]
+          && warned (direct // {args = ["--verbose"];}) "args"
+          && warned (proxied // {env.DEBUG = "1";}) "env"
+          && warned {
             command = "slack-mcp";
             timeout = 300000;
-          }
+          } "timeout"
       );
 
       # One file printed by a flake app and a devenv task, nothing installed.
@@ -109,25 +110,25 @@ in {
       );
 
       # Read rows are selected by default and write rows are opt in: the
-      # default manifest holds no `:write` scope; naming Lists adds its pair.
+      # default manifest holds no `:write` scope; naming Canvas create/update adds its pair.
       factory-slack-mcp-manifest-rows = mkTest "slack-mcp-manifest-rows" (
         let
           defaults = manifest.manifest.oauth_config.scopes.user;
-          withLists =
+          withCanvas =
             (manifestOf {
               inherit token;
-              manifest.writes = ["Lists"];
+              manifest.writes = ["Canvas create/update"];
             }).manifest.oauth_config.scopes.user;
         in
           !(lib.any (lib.hasSuffix ":write") defaults)
           && builtins.elem "search:read.public" defaults
-          && !(builtins.elem "lists:write" defaults)
-          && builtins.elem "lists:write" withLists
-          && builtins.elem "lists:read" withLists
+          && !(builtins.elem "canvases:write" defaults)
+          && builtins.elem "canvases:write" withCanvas
+          && builtins.elem "canvases:read" withCanvas
           && !(evaluates
             (manifestOf {
               inherit token;
-              manifest.reads = ["Lists"];
+              manifest.reads = ["Canvas create/update"];
             }).manifest)
       );
 
@@ -169,12 +170,12 @@ in {
               manifest = {
                 omitScopes = ["im:history" "mpim:history"];
                 reads = ["Read a channel/thread" "Search users"];
-                writes = ["Lists"];
+                writes = ["Canvas create/update"];
               };
             }).manifest;
         in
           trimmed.oauth_config.scopes.user
-          == ["channels:history" "groups:history" "lists:read" "lists:write" "search:read.users"]
+          == ["canvases:read" "canvases:write" "channels:history" "groups:history" "search:read.users"]
           && trimmed.oauth_config.scopes.bot == ["users:read"]
           && trimmed.settings.org_deploy_enabled == false
           && trimmed.settings.is_mcp_enabled
@@ -221,7 +222,7 @@ in {
           };
         in
           client.url
-          == "http://127.0.0.1:9503/"
+          == "http://127.0.0.1:9600/"
           && !((client.headers or {}) ? Authorization)
           && !(lib.hasInfix "mcp.slack.com" (builtins.toJSON client))
           && lib.all (a: a.assertion) assertions
@@ -257,7 +258,7 @@ in {
         in
           builtins.attrNames services
           == ["mcp-proxy-slack-mcp"]
-          && entry.url == "http://127.0.0.1:9503/"
+          && entry.url == "http://127.0.0.1:9600/"
           && !(lib.hasInfix "/run/secrets" (builtins.toJSON entry))
       );
     };

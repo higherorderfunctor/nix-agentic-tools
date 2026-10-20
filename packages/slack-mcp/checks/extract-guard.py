@@ -37,7 +37,8 @@ class SlackExtraction(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_degraded_pages_fail_with_their_reason(self):
-        lists_write = re.search(r", \[`lists:write`\]\([^)]*\)", document).group(0)
+        # The first link in its row, so it is removed with its trailing separator.
+        search_public = re.search(r"\[`search:read.public`\]\([^)]*\), ", document).group(0)
         last_scopes = SCOPE_LINE.findall(document)[-1]
         # The callout closing the table: a heading line, then one paragraph.
         callout = re.search(r"^Consider using PKCE\n\n.*\n", document, re.MULTILINE).group(0)
@@ -45,7 +46,7 @@ class SlackExtraction(unittest.TestCase):
             ("is not one https url", document.replace(
                 "https://mcp.slack.com/mcp\n```", "http://mcp.slack.com/mcp\n```"
             )),
-            ("missing required scopes ['lists:write']", document.replace(lists_write, "")),
+            ("missing required scopes ['search:read.public']", document.replace(search_public, "")),
             ("incomplete tool row before 'Consider using PKCE': 'Upload a file'", document.replace(
                 last_scopes, "", 1
             )),
