@@ -12,4 +12,5 @@
   kiro-cli = ../../packages/kiro-cli/extracted;
   kiro-model-catalog = ../../packages/kiro-model-catalog/extracted;
   semble = ../../packages/semble/extracted;
+  slack-mcp = ../../packages/slack-mcp/extracted;
 }

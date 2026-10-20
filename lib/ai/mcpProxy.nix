@@ -96,6 +96,7 @@
   inherit (lib) concatStringsSep filterAttrs foldl' mapAttrs mapAttrsToList;
 
   strictShellApplication = import ../strict-shell-application.nix;
+  mcp = import ../mcp.nix {inherit lib;};
 
   # Upper-case; every non-alphanumeric becomes '_'. Same shape as the
   # Kiro preprocessor's `deriveEnvVar`, deliberately NOT shared with it:
@@ -177,7 +178,9 @@
     in
       p != null && (p.enable or false));
 
-  proxiedServers = servers: filterAttrs (_: isProxied) servers;
+  # Typed remote entries (`mcp.resolveRemote`) are resolved first, so a
+  # reserved-`settings` declaration is proxied exactly like a hand-written one.
+  proxiedServers = servers: filterAttrs (_: isProxied) (mapAttrs mcp.resolveRemote servers);
 
   # ── Client-facing entry ─────────────────────────────────────────────
   # The real `url` is replaced by the loopback one, so no credential url
@@ -218,7 +221,9 @@
   # precedence.
   lowerClientEntries = servers:
     mapAttrs
-    (name: srv:
+    (name: declared: let
+      srv = mcp.resolveRemote name declared;
+    in
       if isProxied srv
       then clientEntry name srv
       else srv)

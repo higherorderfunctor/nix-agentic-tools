@@ -44,7 +44,7 @@ inputs.nix-agentic-tools = {
 # builds without it.
 nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 
-# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-model-catalog.
+# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
 # Allow them in the nixpkgs.config your pkgs comes from (NixOS's when
 # useGlobalPkgs is set).
 
@@ -87,7 +87,7 @@ services.mcp-servers.servers.github-mcp = {
 
 ```yaml
 # devenv.yaml
-# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-model-catalog.
+# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
 # Opt in as for nixpkgs.
 allowUnfree: true
 inputs:
@@ -203,7 +203,7 @@ git-branchless, git-absorb, and git-revise.
 ## Packages
 
 <details>
-<summary><strong>MCP Servers</strong> (11 servers)</summary>
+<summary><strong>MCP Servers</strong> (12 servers)</summary>
 
 <!-- prettier-ignore -->
 | Server | Description | Credentials |
@@ -219,6 +219,7 @@ git-branchless, git-absorb, and git-revise.
 | `mcp-proxy` | stdio-to-HTTP bridge proxy | None |
 | `nixos-mcp` | NixOS and Nix documentation | None |
 | `semble-mcp` | Local semantic and lexical code search | None |
+| `slack-mcp` | Slack search, messages, canvases and lists (remote) | Required |
 
 ```bash
 nix build .#github-mcp

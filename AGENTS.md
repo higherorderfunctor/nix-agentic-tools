@@ -336,6 +336,7 @@ for it. When several entries match, their guidance composes.
     - `packages/kiro-cli/lib/mcpSecrets.nix`
     - `packages/kiro-cli/lib/mkKiro.nix`
     - `packages/kiro-cli/lib/wrapPackage.nix`
+    - `packages/slack-mcp/modules/mcp-server.nix`
   - Read:
     - [`dev/fragments/mcp-secrets/mcp-secrets.md`](dev/fragments/mcp-secrets/mcp-secrets.md)
 - **`mcp-servers`**

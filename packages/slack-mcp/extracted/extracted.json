@@ -1,0 +1,42 @@
+{
+  "tools": {
+    "Add reactions": ["reactions:write"],
+    "Canvas create/update": ["canvases:read", "canvases:write"],
+    "Create conversation/channel": [
+      "channels:write",
+      "groups:write",
+      "im:write",
+      "mpim:write"
+    ],
+    "Get reactions": ["reactions:read"],
+    "List channel members": ["channels:read", "groups:read", "mpim:read"],
+    "List user channels": [
+      "channels:read",
+      "groups:read",
+      "im:read",
+      "mpim:read"
+    ],
+    "Lists": ["lists:read", "lists:write"],
+    "Read a channel/thread": [
+      "channels:history",
+      "groups:history",
+      "im:history",
+      "mpim:history"
+    ],
+    "Read files": ["files:read"],
+    "Schedule message": ["chat:write"],
+    "Search emoji": ["emoji:read"],
+    "Search files": ["search:read.files"],
+    "Search messages/channels": [
+      "search:read.im",
+      "search:read.mpim",
+      "search:read.private",
+      "search:read.public"
+    ],
+    "Search users": ["search:read.users"],
+    "Send message": ["chat:write"],
+    "Upload a file": ["files:write"],
+    "User profile/email": ["users:read", "users:read.email"]
+  },
+  "url": "https://mcp.slack.com/mcp"
+}

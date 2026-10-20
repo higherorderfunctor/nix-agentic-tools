@@ -1,6 +1,6 @@
 {pkgs, ...}: let
   certificateBundle = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-  snapshots = [pkgs.docs.kimchi-docs pkgs.docs.kiro-model-catalog.src];
+  snapshots = [pkgs.docs.kimchi-docs pkgs.docs.kiro-model-catalog.src pkgs.docs.slack-mcp.src];
 in {
   checks.web-docs-fixtures =
     # Both variables must be pinned: OpenSSL prefers NIX_SSL_CERT_FILE, and
