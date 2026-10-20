@@ -49,7 +49,7 @@
       "type": "bool"
     },
     "api-keys.claude[].keys[].cloak.mode": {
-      "description": "Mode controls cloaking behavior: \"auto\" (default), \"always\", or \"never\".\nSupplying this CloakConfig explicitly enables cloaking for an unprofiled API key.\n- \"auto\": cloak unless strong request signals identify a verified native entrypoint\n- \"always\": cloak every unconfirmed client; confirmed native Claude Code remains passthrough\n- \"never\": never apply cloaking",
+      "description": "Mode controls cloaking behavior: \"auto\" (default), \"always\", \"never\", or \"uncloak\".\nSupplying this CloakConfig explicitly enables cloaking for an unprofiled API key.\n- \"auto\": cloak unless strong request signals identify a verified native entrypoint\n- \"always\": cloak every unconfirmed client; confirmed native Claude Code remains passthrough\n- \"never\" / \"uncloak\": never apply cloaking; on non-CLI API keys, also strip incoming Claude Code identity and billing attribution",
       "type": "string"
     },
     "api-keys.claude[].keys[].cloak.sensitive-words": {
@@ -1971,6 +1971,23 @@
       "description": "OptimizeMultiAgentV2 optimizes official Codex multi-agent requests across providers.\nDefault false leaves the client's multi-agent behavior unchanged.",
       "template": "When true, optimize Codex Desktop, codex-tui, and codex_cli_rs requests for multi-agent v2.\nThis refreshes Codex spawn_agent model details, removes message parameter encryption,\nnormalizes encrypted agent_message content for Codex, and converts agent_message input\ninto standard user messages for non-Codex upstream protocols.\nDefault false. Applies to both OAuth and API-key credentials across providers.\nLegacy provider paths migrate here; this path wins conflicts, including explicit false.",
       "type": "bool"
+    },
+    "client.codex.web-search-result-cache": {
+      "description": "WebSearchResultCache configures caching of upstream web search results for\nCodex Responses clients that drop search results from replayed history.",
+      "template": "Cache upstream web search results per session so replayed Codex web_search_call items\nthat omit results still retain search results in later turns.",
+      "type": "object"
+    },
+    "client.codex.web-search-result-cache.enabled": {
+      "description": "Enabled controls whether web search results are cached and restored for Codex Responses requests.\nDefault is false (disabled).",
+      "type": "bool"
+    },
+    "client.codex.web-search-result-cache.limit": {
+      "description": "Limit specifies the maximum number of entries retained in the web search result cache.\nDefaults to 1024 when unset or zero.",
+      "type": "int"
+    },
+    "client.codex.web-search-result-cache.ttl": {
+      "description": "TTL specifies how long cached web search results remain valid (e.g. 1800, \"30m\", \"24h\").\nPure numbers are interpreted as seconds. Defaults to \"24h\" when unset.",
+      "type": "string"
     },
     "config-version": {
       "template": "Configuration template using the v8 layout.\nCopy this file to config.yaml and replace the client keys and any enabled examples.\nOptional upstream credentials and request rules remain commented until configured.\nExisting legacy configuration files and /v0/management requests remain supported.\nWhen both spellings of a field are present, the v8 value wins (including false,\n0, and empty collections), and the corresponding legacy field is removed on load/save.\nLegacy-only fields still work. GET requests and config-version: 8 alone do not\nmigrate a legacy file; a successful configuration write through /v8/management does.\nThe compatibility notes at the end show old spellings for existing deployments.",
