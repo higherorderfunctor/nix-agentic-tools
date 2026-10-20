@@ -187,7 +187,7 @@
     targetSets = lib.unique (map (provider: provider.targets) defined);
     wantedBy =
       if builtins.length targetSets > 1
-      then throw "ai.activationOrder.secretProviders: provider units ${lib.concatMapStringsSep ", " (provider: "${provider.unit} (${lib.concatStringsSep " " provider.targets})") defined} start under different targets, so a secret-reading service cannot start with all of them; give their units the same WantedBy or set `unit = null` on one"
+      then throw "ai.activationOrder.secretProviders: provider units ${lib.concatMapStringsSep ", " (provider: "${provider.unit} (${lib.concatStringsSep " " provider.targets})") defined} start under different targets, so a secret-reading service cannot start with all of them; give their units the same WantedBy"
       else if targetSets == [] || builtins.head targetSets == []
       then ["default.target"]
       else builtins.head targetSets;
