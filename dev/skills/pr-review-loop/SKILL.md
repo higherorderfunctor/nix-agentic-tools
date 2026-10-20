@@ -72,20 +72,36 @@ beats GitHub to creating them, which is the normal case right after a push. The
 watcher then exits successfully having watched nothing, and the turn ends on a
 green-looking result — the same silent-clean shape as everything else here.
 
-Wait for the checks to EXIST before watching, and gate on the count rather than
-on their state:
+Use this watcher after every push, run in the background so its exit is the one
+notification. It waits until the PR's head is the commit you pushed and that
+commit has checks, then exits on the FIRST failure or when every check is done:
 
 ```bash
+head=$(git rev-parse HEAD) # the commit you just pushed
 for _ in $(seq 1 40); do
-  n=$(gh pr checks <n> --repo OWNER/REPO --json name | jq 'length')
-  [ "$n" -gt 0 ] && break
+  pr=$(gh pr view <n> --repo OWNER/REPO --json headRefOid,mergeStateStatus)
+  [ "$(jq -r .mergeStateStatus <<<"$pr")" = DIRTY ] && { echo DIRTY; exit 1; }
+  n=$(gh pr checks <n> --repo OWNER/REPO --json name --jq length 2>/dev/null || echo 0)
+  [ "$(jq -r .headRefOid <<<"$pr")" = "$head" ] && [ "$n" -gt 0 ] && break
   sleep 15
 done
-gh pr checks <n> --repo OWNER/REPO --watch --interval 30
+gh pr checks <n> --repo OWNER/REPO --watch --fail-fast --interval 30
 ```
 
-Gating on "is anything PENDING" instead has the same bug with an extra step: an
-empty list has nothing pending, so it falls through just as fast.
+Each part closes a way a watcher has reported the wrong thing:
+
+- **The head gate.** Right after a push the count can still be the PREVIOUS
+  commit's checks, so a count alone can watch a run that is already over.
+- **The count gate.** Gating on "is anything PENDING" instead falls through on
+  an empty list, which has nothing pending.
+- **`--fail-fast`.** Without it `--watch` waits for every check, so a failure
+  two minutes in is reported only after the slowest job. Do not hand-roll a loop
+  that waits for "nothing pending" across several PRs: it has the same delay.
+- **`DIRTY`.** A conflicted PR gets no checks, so the count gate would wait out
+  its whole budget.
+
+`gh pr checks` exits non-zero on a failed check; read that code and then the
+failing job's log.
 
 `UNSTABLE` on the PR is not a failure — it means "not all green yet" and covers
 pending. `DIRTY` is the one that means stop waiting and rebase.
