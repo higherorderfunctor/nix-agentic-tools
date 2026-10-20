@@ -252,7 +252,10 @@ files engine, so there are no service dependency edges into file activation or
 Home Manager's systemd reload. Each Linux Home Manager unit is ordered after
 `network.target` and `sops-nix.service`: sops-nix decrypts in its own oneshot
 user unit at login, and a daemon started beside it would read a missing secret
-and fail until its restart. An absent sops-nix unit leaves the ordering inert.
+and fail until its restart. `After=` orders only jobs in the same start
+transaction and pulls nothing in: an absent sops-nix unit leaves it inert, and a
+sops-nix unit started under another target (sops-nix uses
+`graphical-session-pre.target` when `sops.gnupg.home` is set) is not waited for.
 
 A `files.<key>` entry is a config file the launcher renders at each start, for a
 daemon that reads its secrets from a file rather than its environment. Its
@@ -292,7 +295,7 @@ Manager Plus use it.
 
 | Backend             | Lowering                                                                                                                                  |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Home Manager Linux  | User unit: `After = network.target`, `WantedBy = default.target`, `RestartSec = 5`; `never` becomes `no`.                                 |
+| Home Manager Linux  | User unit: `After = network.target sops-nix.service`, `WantedBy = default.target`, `RestartSec = 5`; `never` becomes `no`.                |
 | Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                     |
 | devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `watch.paths` is present only for nonempty triggers. |
 

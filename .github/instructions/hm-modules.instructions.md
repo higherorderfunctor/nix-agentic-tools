@@ -623,7 +623,7 @@ declares named instances through `lib/instances.nix`, which lowers each
 `ai.<owner>.instances.<name>` to the service `<owner>-<name>`.
 
 Linux Home Manager lowers to user units ordered after `sops-nix.service`, so a
-daemon never starts before its secrets are decrypted; devenv lowers to
+daemon starting with it at login waits for decryption; devenv lowers to
 processes. Darwin Home Manager emits one warning per enabled service, since it
 has no systemd user units. File references in the environment and in file
 secrets join explicit restart triggers, which behave differently per backend:
