@@ -23,6 +23,7 @@ sinks.
 | `lib/instances.nix`                                             | The owner module for named tool instances (`ai.<owner>.instances`), each lowered to one service, and the loopback selection of an instance by name.   |
 | `lib/lower-devenv.nix`, `lib/lower-hm.nix`                      | One lowering function per backend; each receives the complete activation graph, generated entries included.                                           |
 | `lib/runtime.nix`                                               | The layer-1 helper (`runtimeModule`).                                                                                                                 |
+| `lib/secrets.nix`                                               | Resolves secret providers and legacy secret nodes for both backend lowerings.                                                                         |
 | `lib/services.nix`                                              | The service entry type, the generic launcher and the backend lowerings.                                                                               |
 | `modules/common.nix`                                            | Declares the root options and computes `ai.deliveredPaths`; shared by both backends.                                                                  |
 | `modules/devenv/default.nix`, `modules/homeManager/default.nix` | Generate the backend's engine entries (and devenv's guard and observer), write the native file map and call the corresponding lowering function once. |
@@ -220,12 +221,16 @@ also fail with the entry names. Native node strings are trusted integration
 edges, not guessed optional tasks; callers add conditional edges only when their
 provider exists.
 
-`ai.activationOrder.secretNodes` is `listOf str`, default `[]`. The HM lowering
-always adds `sops-nix` (its DAG tolerates a missing dependency; a module in this
-repo may not define root `ai.*` defaults); devenv has no standard provider.
-Integrations can register additional native preparation nodes once, outside
-individual file entries. These nodes supply the `secrets` point for commands and
-`content.run`.
+`ai.activationOrder.secretProviders` is an `attrsOf` submodule, default `{}`.
+Each provider declares `nodes` (`listOf str`, default `[]`) that mark when its
+secrets are readable and `unit` (`nullOr str`, default `null`) for its Home
+Manager user unit; devenv ignores units. The Home Manager lowering adds a
+built-in `sops-nix` provider with node `sops-nix` and unit `sops-nix.service`
+unless the consumer declares that key, which replaces the built-in whole. A
+module in this repo may not define root `ai.*` defaults.
+`ai.activationOrder.secretNodes` remains the node-only shorthand (`listOf str`,
+default `[]`); its nodes join the providers' nodes in the `secrets` point for
+commands and `content.run`. Devenv has no built-in provider.
 
 ## Services
 
@@ -249,13 +254,17 @@ their key and ports; disabled owners forward nothing. Names match
 `ai-service-<key>`, for both backends. Native environment fields are never used.
 A daemon reads store paths and secrets at start, never files written by the
 files engine, so there are no service dependency edges into file activation or
-Home Manager's systemd reload. Each Linux Home Manager unit is ordered after
-`network.target` and `sops-nix.service`: sops-nix decrypts in its own oneshot
-user unit at login, and a daemon started beside it would read a missing secret
-and fail until its restart. `After=` orders only jobs in the same start
-transaction and pulls nothing in: an absent sops-nix unit leaves it inert, and a
-sops-nix unit started under another target (sops-nix uses
-`graphical-session-pre.target` when `sops.gnupg.home` is set) is not waited for.
+Home Manager's systemd reload. Each Linux Home Manager unit orders after
+`network.target`. A service whose environment contains a redact reference or
+whose rendered file has secrets also orders after every registered provider
+unit. Its `WantedBy` is the targets those provider units are wanted by, read
+from the evaluated `systemd.user.services`; a provider unit not defined there
+contributes none, and with none left the service uses `default.target`. Defined
+provider units wanted by different targets fail evaluation: a target wants each
+unit independently, so a reader started with one provider would not wait for the
+other. A plain service uses `default.target`. Ordering after a provider lets a
+daemon starting in the same transaction read decrypted secrets; `After=` itself
+pulls no unit in.
 
 A `files.<key>` entry is a config file the launcher renders at each start, for a
 daemon that reads its secrets from a file rather than its environment. Its
@@ -293,11 +302,11 @@ resolves an instance name to `http://127.0.0.1:<port>` or to the reason it
 cannot: the name is missing or the instance is disabled. CLIProxyAPI and CPA
 Manager Plus use it.
 
-| Backend             | Lowering                                                                                                                                  |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Home Manager Linux  | User unit: `After = network.target sops-nix.service`, `WantedBy = default.target`, `RestartSec = 5`; `never` becomes `no`.                |
-| Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                     |
-| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `watch.paths` is present only for nonempty triggers. |
+| Backend             | Lowering                                                                                                                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home Manager Linux  | User unit: `After = network.target` plus provider units for secret readers; their `WantedBy` follows defined provider targets or defaults to `default.target`; `RestartSec = 5`, and `never` becomes `no`. |
+| Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                                                                                      |
+| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `watch.paths` is present only for nonempty triggers.                                                                  |
 
 Home Manager Linux reserves `services-restart-on-change`. When enabled services
 have triggers, one generated activation entry runs after `files` and `secrets`.
@@ -332,13 +341,13 @@ fragments while collecting definitions (`packages/ai-module/lib/lower-hm.nix`).
 `A → B` means B depends on A. Every abstract point resolves to the following
 node(s) for both `before` and `after` references:
 
-| Point          | HM node(s)                           | devenv node(s)              |
-| -------------- | ------------------------------------ | --------------------------- |
-| `files`        | `linkGeneration`                     | Internal `ai:files-linked`. |
-| `linkCheck`    | `checkLinkTargets`                   | Internal `ai:link-check`.   |
-| `materialized` | Internal `ai-files-ready`.           | Internal `ai:files-ready`.  |
-| `secrets`      | Registered `secretNodes`.            | Registered `secretNodes`.   |
-| `shell`        | Internal completion node `ai-ready`. | `devenv:enterShell`.        |
+| Point          | HM node(s)                                                                | devenv node(s)                             |
+| -------------- | ------------------------------------------------------------------------- | ------------------------------------------ |
+| `files`        | `linkGeneration`                                                          | Internal `ai:files-linked`.                |
+| `linkCheck`    | `checkLinkTargets`                                                        | Internal `ai:link-check`.                  |
+| `materialized` | Internal `ai-files-ready`.                                                | Internal `ai:files-ready`.                 |
+| `secrets`      | Resolved provider nodes and `secretNodes`, including built-in `sops-nix`. | Resolved provider nodes and `secretNodes`. |
+| `shell`        | Internal completion node `ai-ready`.                                      | `devenv:enterShell`.                       |
 
 The internal point nodes are empty DAG/task entries, not caller commands. HM
 adds `linkGeneration → ai-files-ready → ai-ready`; apply also precedes

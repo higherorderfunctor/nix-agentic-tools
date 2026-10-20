@@ -164,26 +164,58 @@
       };
   enabled = lib.filterAttrs (_: entry: entry.enable);
   launch = pkgs: name: entry: "${mkLauncher {inherit pkgs name entry;}}/bin/ai-service-${name}";
-  hmUnits = pkgs: services:
-    lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (lib.mapAttrs (name: entry: {
-      Install.WantedBy = ["default.target"];
-      Service = {
-        ExecStart = launch pkgs name entry;
-        Restart =
-          if entry.restart == "never"
-          then "no"
-          else entry.restart;
-        RestartSec = 5;
-      };
-      # The launcher reads its secrets at start. At login sops-nix decrypts in
-      # its own oneshot user unit, so a daemon started beside it finds no file
-      # and fails until a restart; ordering after it removes that race. After=
-      # on a unit that does not exist is ignored.
-      Unit = {
-        After = ["network.target" "sops-nix.service"];
-        Description = "${name} (ai.services)";
-      };
-    }) (enabled services));
+  readsSecrets = entry:
+    lib.any (value: value != null && !builtins.isString value) (builtins.attrValues entry.environment)
+    || lib.any (file: file.secrets != {}) (builtins.attrValues entry.files);
+  hmUnits = pkgs: services: {
+    providerUnits,
+    userServices,
+  }: let
+    # Each provider unit defined here, with the targets it is wanted by. A unit
+    # declared but not defined in this configuration contributes no target.
+    defined = lib.concatMap (unit: let
+      name = lib.removeSuffix ".service" unit;
+    in
+      lib.optional (builtins.hasAttr name userServices) {
+        inherit unit;
+        targets = lib.sort lib.lessThan (lib.unique (userServices.${name}.Install.WantedBy or []));
+      })
+    providerUnits;
+    # A target wants each provider independently, so a reader wanted by the
+    # union of two providers' targets could start with one of them and never
+    # wait for the other. Readers follow one target set or evaluation stops.
+    targetSets = lib.unique (map (provider: provider.targets) defined);
+    wantedBy =
+      if builtins.length targetSets > 1
+      then throw "ai.activationOrder.secretProviders: provider units ${lib.concatMapStringsSep ", " (provider: "${provider.unit} (${lib.concatStringsSep " " provider.targets})") defined} start under different targets, so a secret-reading service cannot start with all of them; give their units the same WantedBy"
+      else if targetSets == [] || builtins.head targetSets == []
+      then ["default.target"]
+      else builtins.head targetSets;
+  in
+    lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (lib.mapAttrs (name: entry: let
+      secretReader = readsSecrets entry;
+    in
+      if secretReader && builtins.elem "${name}.service" providerUnits
+      then throw "ai.services.${name}: a secret-reading service cannot be its own provider unit"
+      else {
+        Install.WantedBy =
+          if secretReader
+          then wantedBy
+          else ["default.target"];
+        Service = {
+          ExecStart = launch pkgs name entry;
+          Restart =
+            if entry.restart == "never"
+            then "no"
+            else entry.restart;
+          RestartSec = 5;
+        };
+        # Secret readers start after provider units under the providers' targets.
+        Unit = {
+          After = ["network.target"] ++ lib.optionals secretReader providerUnits;
+          Description = "${name} (ai.services)";
+        };
+      }) (enabled services));
   hmWarnings = pkgs: services: lib.optionals (!pkgs.stdenv.hostPlatform.isLinux) (map (name: "ai.services.${name}: Home Manager writes services as systemd user units, which this platform lacks; the service is not written") (builtins.attrNames (enabled services)));
   devenvProcesses = pkgs: services:
     lib.mapAttrs (

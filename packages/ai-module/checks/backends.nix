@@ -37,7 +37,7 @@
       target = item: "${item.source}";
     };
   };
-  evaluate = backend: ai: let
+  evaluateWith = backend: ai: extraModules: let
     sink = sinks.${backend};
   in
     (lib.evalModules {
@@ -45,13 +45,16 @@
         inherit (sink) lib;
         inherit pkgs;
       };
-      modules = [
-        sink.stubs
-        sink.module
-        {ai.activationOrder.secretNodes = ["vault:ready"];}
-        {inherit ai;}
-      ];
+      modules =
+        [
+          sink.stubs
+          sink.module
+          {ai.activationOrder.secretNodes = ["vault:ready"];}
+          {inherit ai;}
+        ]
+        ++ extraModules;
     }).config;
+  evaluate = backend: ai: evaluateWith backend ai [];
 in {
-  inherit evaluate sinks;
+  inherit evaluate evaluateWith sinks;
 }

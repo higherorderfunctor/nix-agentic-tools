@@ -17,6 +17,25 @@ in {
     activationOrder.secretNodes = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [];
+      description = "Native secret-ready activation nodes without a provider unit; these join secretProviders nodes.";
+    };
+    activationOrder.secretProviders = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.submodule {
+        options = {
+          nodes = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            description = "Native activation nodes after which this provider's secrets are readable.";
+          };
+          unit = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Systemd user unit that decrypts at login on Home Manager Linux; devenv ignores it.";
+          };
+        };
+      });
+      default = {};
+      description = "Secret readiness providers shared by activation and Home Manager services.";
     };
     claims = lib.mkOption {
       type = lib.types.attrsOf (lib.types.attrsOf (lib.types.listOf lib.types.str));
