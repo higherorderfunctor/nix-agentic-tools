@@ -12,8 +12,8 @@ SCOPE_LINK = r"\[`([^`]+)`\]\(https://[^)\s]+\)(?: for [^,\[\]`]+)?"
 SCOPE_LINE = re.compile(rf"{SCOPE_LINK}(?:, {SCOPE_LINK})*")
 # Any scope link, wherever it sits; used to refuse one outside the table.
 ANY_SCOPE_LINK = re.compile(r"\[`[^`]+`\]\(")
-# The scope table must name the scopes the Lists tools need.
-REQUIRED_SCOPES = {"lists:read", "lists:write"}
+# The scope table must name the scopes the baseline read tools need.
+REQUIRED_SCOPES = {"channels:history", "search:read.public"}
 MIN_TOOLS = 10
 # The callout heading that follows the last scope row.
 TABLE_END = "Consider using PKCE"
