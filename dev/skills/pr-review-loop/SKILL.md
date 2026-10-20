@@ -72,36 +72,66 @@ beats GitHub to creating them, which is the normal case right after a push. The
 watcher then exits successfully having watched nothing, and the turn ends on a
 green-looking result — the same silent-clean shape as everything else here.
 
-Use this watcher after every push, run in the background so its exit is the one
-notification. It waits until the PR's head is the commit you pushed and that
-commit has checks, then exits on the FIRST failure or when every check is done:
+Use this watcher after every push, run in the background from the worktree you
+pushed, so its exit is the one notification. It exits non-zero on the first
+failure, a conflict, a timeout or a moved head, and zero only when every check
+on the pushed commit has finished and the required ones passed:
 
 ```bash
+#!/usr/bin/env bash
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+pr=<n> repo=OWNER/REPO
 head=$(git rev-parse HEAD) # the commit you just pushed
+ready=
 for _ in $(seq 1 40); do
-  pr=$(gh pr view <n> --repo OWNER/REPO --json headRefOid,mergeStateStatus)
-  [ "$(jq -r .mergeStateStatus <<<"$pr")" = DIRTY ] && { echo DIRTY; exit 1; }
-  n=$(gh pr checks <n> --repo OWNER/REPO --json name --jq length 2>/dev/null || echo 0)
-  [ "$(jq -r .headRefOid <<<"$pr")" = "$head" ] && [ "$n" -gt 0 ] && break
+  state=$(gh pr view "$pr" --repo "$repo" --json headRefOid,mergeStateStatus)
+  if [ "$(jq -r .mergeStateStatus <<<"$state")" = DIRTY ]; then
+    echo "DIRTY: rebase"
+    exit 1
+  fi
+  n=$(gh pr checks "$pr" --repo "$repo" --json name --jq length 2>/dev/null || echo 0)
+  if [ "$(jq -r .headRefOid <<<"$state")" = "$head" ] && [ "$n" -gt 0 ]; then
+    ready=1
+    break
+  fi
   sleep 15
 done
-gh pr checks <n> --repo OWNER/REPO --watch --fail-fast --interval 30
+if [ -z "$ready" ]; then
+  echo "no checks on $head after 10 minutes"
+  exit 1
+fi
+while :; do
+  gh pr checks "$pr" --repo "$repo" --watch --fail-fast --interval 30
+  sleep 60
+  pending=$(gh pr checks "$pr" --repo "$repo" --json bucket --jq 'any(.bucket == "pending")')
+  [ "$pending" = true ] || break
+done
+if [ "$(gh pr view "$pr" --repo "$repo" --json headRefOid --jq .headRefOid)" != "$head" ]; then
+  echo "head moved past $head: re-arm on the new commit"
+  exit 1
+fi
+gh pr checks "$pr" --repo "$repo" --required
 ```
 
 Each part closes a way a watcher has reported the wrong thing:
 
 - **The head gate.** Right after a push the count can still be the PREVIOUS
   commit's checks, so a count alone can watch a run that is already over.
-- **The count gate.** Gating on "is anything PENDING" instead falls through on
-  an empty list, which has nothing pending.
+- **The count gate and its timeout.** Gating on "is anything PENDING" falls
+  through on an empty list; running out of attempts must fail, not carry on.
 - **`--fail-fast`.** Without it `--watch` waits for every check, so a failure
   two minutes in is reported only after the slowest job. Do not hand-roll a loop
   that waits for "nothing pending" across several PRs: it has the same delay.
+- **The re-watch loop.** Jobs that wait on other jobs create their checks later,
+  so `--watch` can return when only the first batch is done.
+- **The final head check and `--required`.** `gh pr checks` reads whatever the
+  PR's head is now; a later push would otherwise report the newer commit.
 - **`DIRTY`.** A conflicted PR gets no checks, so the count gate would wait out
   its whole budget.
 
-`gh pr checks` exits non-zero on a failed check; read that code and then the
-failing job's log.
+`gh pr checks` exits non-zero on a failed check, which ends the script under
+`set -e`; read the failing job's log next.
 
 `UNSTABLE` on the PR is not a failure — it means "not all green yet" and covers
 pending. `DIRTY` is the one that means stop waiting and rebase.
