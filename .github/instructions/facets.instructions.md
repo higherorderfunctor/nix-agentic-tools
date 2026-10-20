@@ -7,9 +7,9 @@ applyTo: "checks/**,flake.nix,lib/facets.nix,lib/facets/**,lib/testing/**,packag
 
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-18 — check-name laziness is gated by the
-> `check-laziness` assertion in facet-mock; platform-specific checks use host
-> packages and gate their names.
+> **Last verified:** 2026-10-20 — a `checks/` concern without `default.nix` (a
+> fixture flake) is not discovered; check-name laziness is gated by the
+> `check-laziness` assertion in facet-mock.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -40,8 +40,10 @@ to collision checks, even when a competing definition uses `mkForce`.
 `checks.<name>` derivations. Root check groups expose
 `checks/<concern>/default.nix`; the workspace discovers those entry points one
 directory deep. Supporting files and fixture trees are not recursively
-registered. Adding a package check needs only owner edits; adding a root concern
-needs no flake export-list edit. The Agnix role identity check
+registered, and a concern directory without `default.nix` is skipped: that is
+how `checks/service-secret-ordering/` holds a dev-only fixture flake that CI
+builds on its own. Adding a package check needs only owner edits; adding a root
+concern needs no flake export-list edit. The Agnix role identity check
 (`packages/agnix/checks/role-identity.nix`) and Semble package identity check
 (`packages/semble/checks/package-identity.nix`) are owner-local.
 
