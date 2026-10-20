@@ -2,8 +2,10 @@
 
 > **Last verified:** 2026-10-20 — the sweep is the only update entrypoint;
 > package workers never build; the `mirror-health` job reports the jail-nix
-> mirror; `jail-smoke` and `checks-eval-darwin` are required contexts; both
-> systems' name evaluations are budgeted by function count.
+> mirror; ci.yml runs the required KVM job `service-secret-ordering`, which
+> builds a dev-only fixture flake; `jail-smoke` and `checks-eval-darwin` are
+> required contexts; both systems' name evaluations are budgeted by function
+> count.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -324,6 +326,15 @@ ones.
 
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
 `dev/ci-check-evaluator.nix` records why.
+
+### Fixture flake VM test
+
+`service-secret-ordering` builds `checks/service-secret-ordering/flake.nix`, a
+dev-only flake with its own lock so home-manager and sops-nix never enter the
+root lock that consumers follow. It is not a `checks.*` attribute; it is a
+required context. A udev rule opens `/dev/kvm` to the Nix build users before the
+installer starts the daemon, and `system-features` adds `kvm` and `nixos-test`;
+the job asserts both. Its Cachix step holds no token, so it pushes nothing.
 
 ### Darwin check evaluation
 
