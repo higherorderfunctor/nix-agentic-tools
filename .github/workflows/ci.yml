@@ -1085,6 +1085,9 @@ jobs:
             | sudo tee /etc/udev/rules.d/99-kvm-nix-build.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          # trigger only queues the event; wait for the rule to apply.
+          sudo udevadm settle
+          ls -l /dev/kvm
           test -r /dev/kvm && test -w /dev/kvm
       - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
         with:
