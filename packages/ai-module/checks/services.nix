@@ -213,7 +213,7 @@ in {
               RestartSec = 5;
             };
             Unit = {
-              After = ["network.target"];
+              After = ["network.target" "sops-nix.service"];
               Description = "${restart} (ai.services)";
             };
           }

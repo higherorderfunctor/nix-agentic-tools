@@ -175,8 +175,12 @@
           else entry.restart;
         RestartSec = 5;
       };
+      # The launcher reads its secrets at start. At login sops-nix decrypts in
+      # its own oneshot user unit, so a daemon started beside it finds no file
+      # and fails until a restart; ordering after it removes that race. After=
+      # on a unit that does not exist is ignored.
       Unit = {
-        After = ["network.target"];
+        After = ["network.target" "sops-nix.service"];
         Description = "${name} (ai.services)";
       };
     }) (enabled services));

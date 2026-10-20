@@ -450,13 +450,13 @@ intentionally contributes one directory entry per skill.
 
 ## ai-module Files, Activation and Services Contract
 
-> **Last verified:** 2026-10-18 — repository modules reach Home Manager and
-> devenv file and activation sinks only through ai-module's three layers, apart
-> from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
-> service's `files` render at start in checked private runtime directories with
-> user-qualified fallbacks; private secret slots are cleared before reads and
-> exec, public variables reserve `_ai_`, and tool instances use
-> `lib/instances.nix`.
+> **Last verified:** 2026-10-19 — Linux Home Manager service units start after
+> `sops-nix.service`; repository modules reach Home Manager and devenv file and
+> activation sinks only through ai-module's three layers, apart from the exact
+> exemptions in `packages/ai-module/checks/sink-guard.nix`; a service's `files`
+> render at start in checked private runtime directories with user-qualified
+> fallbacks; private secret slots are cleared before reads and exec, public
+> variables reserve `_ai_`, and tool instances use `lib/instances.nix`.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -551,13 +551,14 @@ file-watch units remain outside this surface. A tool with typed settings
 declares named instances through `lib/instances.nix`, which lowers each
 `ai.<owner>.instances.<name>` to the service `<owner>-<name>`.
 
-Linux Home Manager lowers to user units, devenv to processes. Darwin Home
-Manager emits one warning per enabled service, since it has no systemd user
-units. File references in the environment and in file secrets join explicit
-restart triggers, which behave differently per backend: Linux Home Manager
-fingerprints them in one generated `services-restart-on-change` activation entry
-after `files` and `secrets`; devenv uses `watch.paths`. Only ai-module writes
-these daemon sinks.
+Linux Home Manager lowers to user units ordered after `sops-nix.service`, so a
+daemon starting with it at login waits for decryption; devenv lowers to
+processes. Darwin Home Manager emits one warning per enabled service, since it
+has no systemd user units. File references in the environment and in file
+secrets join explicit restart triggers, which behave differently per backend:
+Linux Home Manager fingerprints them in one generated
+`services-restart-on-change` activation entry after `files` and `secrets`;
+devenv uses `watch.paths`. Only ai-module writes these daemon sinks.
 
 ### State and ownership
 
