@@ -602,15 +602,28 @@
       settings)
     != {};
 
+  # The generic `toolPolicy` in Codex's per-server spelling (codex-rs
+  # config/src/mcp_types.rs `AppToolApproval`: `approve` never asks, `prompt`
+  # always asks). A native `codex.tools.<tool>` wins; `disabled` joins
+  # `codex.disabledTools`.
+  codexToolApproval = {
+    auto = "approve";
+    prompt = "prompt";
+  };
   renderCodexServer = name: server: let
     rendered = removeAttrs (lib.ai.renderServer pkgs name server) ["type"];
     native = aiCommon.filterNulls (server.codex or {});
+    policy = aiCommon.mcpToolPolicy {${name} = server;};
+    disabledTools = lib.unique ((native.disabledTools or []) ++ map (row: row.tool) policy.disabled);
+    tools =
+      builtins.listToAttrs (map (row: lib.nameValuePair row.tool {approval_mode = codexToolApproval.${row.mode};}) (policy.auto ++ policy.prompt))
+      // lib.mapAttrs (_: tool: {approval_mode = tool.approvalMode;}) (native.tools or {});
     translated =
       lib.optionalAttrs ((native.auth or null) != null) {inherit (native) auth;}
       // lib.optionalAttrs ((native.bearerTokenEnvVar or null) != null) {bearer_token_env_var = native.bearerTokenEnvVar;}
       // lib.optionalAttrs ((native.cwd or null) != null) {inherit (native) cwd;}
       // lib.optionalAttrs ((native.defaultToolsApprovalMode or null) != null) {default_tools_approval_mode = native.defaultToolsApprovalMode;}
-      // lib.optionalAttrs ((native.disabledTools or []) != []) {disabled_tools = native.disabledTools;}
+      // lib.optionalAttrs (disabledTools != []) {disabled_tools = disabledTools;}
       // lib.optionalAttrs ((native.enabled or null) != null) {inherit (native) enabled;}
       // lib.optionalAttrs ((native.enabledTools or []) != []) {enabled_tools = native.enabledTools;}
       // lib.optionalAttrs ((native.envHttpHeaders or {}) != {}) {env_http_headers = native.envHttpHeaders;}
@@ -622,9 +635,7 @@
       // lib.optionalAttrs ((native.scopes or []) != []) {inherit (native) scopes;}
       // lib.optionalAttrs ((native.startupTimeoutSec or null) != null) {startup_timeout_sec = native.startupTimeoutSec;}
       // lib.optionalAttrs ((native.toolTimeoutSec or null) != null) {tool_timeout_sec = native.toolTimeoutSec;}
-      // lib.optionalAttrs ((native.tools or {}) != {}) {
-        tools = lib.mapAttrs (_: tool: {approval_mode = tool.approvalMode;}) native.tools;
-      };
+      // lib.optionalAttrs (tools != {}) {inherit tools;};
   in
     removeAttrs native [
       "auth"
