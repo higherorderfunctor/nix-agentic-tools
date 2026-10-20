@@ -5,7 +5,7 @@ allowUnfree: true
 
 inputs:
   devenv:
-    url: github:cachix/devenv/a86a087d250cbae59adb95627bc4aa3069a87e6c
+    url: github:cachix/devenv/ff0d7e76dc83bef8eb4f83f7985ff2d792234440
   git-branchless:
     url: github:arxanas/git-branchless/03d6ab8dc1a2ff8a2bc44709b93ea6a9038147eb
     inputs:
@@ -21,6 +21,8 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+  jail-nix:
+    url: sourcehut:~alexdavid/jail.nix/7cd53acef3ad51b9c775be759f5643f8d3bcf6eb
   mcp-nixos:
     url: github:utensils/mcp-nixos/6a517811658c21f97bd7703b35546085117fc310
     inputs:
@@ -44,9 +46,9 @@ inputs:
   nixpkgs:
     url: github:NixOS/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df
   nixpkgs-stable:
-    url: github:NixOS/nixpkgs/8ce73368d1efd4d657e9064d29b144a52046b4e8
+    url: github:NixOS/nixpkgs/f3a73bcf5d1c5b75a66cf35a48957e30d41d647a
   rust-overlay:
-    url: github:oxalica/rust-overlay/42076d1c6a0fb405ed04f9a674e4a8f69de62ba3
+    url: github:oxalica/rust-overlay/550547cefc67e01a6fd11a09e4096a3c844ca840
     inputs:
       nixpkgs:
         follows: nixpkgs

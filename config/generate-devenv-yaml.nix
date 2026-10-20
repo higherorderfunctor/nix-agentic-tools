@@ -19,6 +19,8 @@
       or (
         if locked.type == "github"
         then "github:${locked.owner}/${locked.repo}"
+        else if locked.type == "sourcehut"
+        then "sourcehut:${locked.owner}/${locked.repo}"
         else if locked.type == "git"
         then locked.url
         else "unknown"

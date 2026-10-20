@@ -77,23 +77,43 @@ def main():
                 run(bash, before["inspect"], root, state, [f"{option} is set but devenv did not deliver {target}"])
             link(root, {name: before["links"][name]})
 
-        # Retired: user content in place of each link is reported, kept, and
+        # Retired: the store link cleanup left behind is reported, kept, and
         # reported again. The engine's owned `moved.json` copy is not a removal.
         retired = [name for name in OPTIONS if name != "moved.json"]
+        assert "moved.json" not in after["links"], after["links"]
         # What devenv cleanup does to the links `after` no longer declares.
         for name in set(before["links"]) - set(after["links"]):
             clear(root / name)
-        assert "moved.json" not in after["links"], after["links"]
-        for name in retired + ["moved.json"]:
-            (root / name).write_text("user edit")
+        (root / "moved.json").write_text("user edit")
+        for name in retired:
+            (root / name).symlink_to(before["links"][name])
         link(root, after["links"])
         for _ in range(2):
-            run(bash, after["inspect"], root, state, [f"{OPTIONS[name]} was removed but devenv retained {root / name}" for name in retired])
-        assert all((root / name).read_text() == "user edit" for name in retired)
+            run(bash, after["inspect"], root, state, [f"{OPTIONS[name]} was removed but devenv left its store link at {root / name}" for name in retired])
+        # A snapshot-only entry knows no source: any store link is reported.
+        ledger.write_text(json.dumps({name: {"option": OPTIONS[name]} for name in retired}))
         for name in retired:
-            (root / name).unlink()
-        run(bash, after["inspect"], root, state)
-        assert not set(retired) & set(json.loads(ledger.read_text()))
+            clear(root / name)
+            (root / name).symlink_to("/nix/store/other")
+        run(bash, after["inspect"], root, state, [f"{OPTIONS[name]} was removed but devenv left its store link at {root / name}" for name in retired])
+        # Whatever the user put there, or nothing, is forgotten silently and kept.
+        for kind in ["absent", "file", "directory", "other-store-link", "foreign-link"]:
+            ledger.write_text(json.dumps({name: {"option": OPTIONS[name], "source": before["links"][name]} for name in retired}))
+            for name in retired:
+                clear(root / name)
+                if kind == "file":
+                    (root / name).write_text("user edit")
+                elif kind == "directory":
+                    (root / name).mkdir()
+                elif kind == "other-store-link":
+                    (root / name).symlink_to("/nix/store/other")
+                elif kind == "foreign-link":
+                    (root / name).symlink_to("../elsewhere")
+            run(bash, after["inspect"], root, state)
+            assert not set(retired) & set(json.loads(ledger.read_text())), kind
+            assert kind != "file" or all((root / name).read_text() == "user edit" for name in retired)
+        for name in retired:
+            clear(root / name)
 
         # A malformed ledger is reported, never fatal.
         ledger.write_text("bad json")

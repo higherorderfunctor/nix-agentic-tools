@@ -37,6 +37,7 @@ agentsmd
 agnix
 aihubmix
 aioptimizer
+alexdavid
 anthropics
 applyto
 argjson
@@ -92,6 +93,7 @@ cmdbuilder
 codesign
 codewhisperer
 collab
+combinators
 commentchar
 commondir
 configdir
@@ -397,6 +399,7 @@ simpara
 skillsdir
 slurpfile
 smartlog
+sourcehut
 sourcepath
 sourcepos
 sparfenyuk
@@ -465,7 +468,9 @@ unredacted
 unrepresentable
 unresumable
 unscanned
+unsetenv
 unsets
+unshares
 unstages
 unstarted
 unstash

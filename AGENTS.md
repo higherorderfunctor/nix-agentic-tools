@@ -241,6 +241,11 @@ for it. When several entries match, their guidance composes.
     - `packages/*/packages/**`
   - Read:
     - [`dev/fragments/overlays/ifd-patterns.md`](dev/fragments/overlays/ifd-patterns.md)
+- **`jail-nix`**
+  - Match:
+    - `packages/jail-nix/**`
+  - Read:
+    - [`packages/jail-nix/docs/jail-nix.md`](packages/jail-nix/docs/jail-nix.md)
 - **`kimchi`**
   - Match:
     - `packages/kimchi/**`
