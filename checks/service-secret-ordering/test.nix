@@ -1,8 +1,8 @@
 # One VM boot that runs every named case in ./test.py against the real units:
 # standalone Home Manager generations built with sops-nix and this repository's
 # Home Manager module, activated as the user through their own `activate`
-# scripts, so sops-nix's restart step, ai-module's rotation check and
-# Home Manager's sd-switch run in the order they run on a real host.
+# scripts, so sops-nix's restart step, Home Manager's sd-switch and
+# ai-module's service reconcile step run in the order they run on a real host.
 #
 # Every generation shares two mock daemons from `ai.services`, named so one
 # sorts before `sops-nix` and one after it, because sd-switch dispatches its
@@ -102,6 +102,17 @@
     fresh.daemons = readers // {aa-fresh.secret = "fresh";};
     rotate-aa = {};
     rotate-zz = {};
+    # Logs every call to $HOME/systemctl-calls, then runs the real systemctl.
+    systemctl-path = {
+      secrets = "base";
+      extra.systemd.user.systemctlPath = "${strictShellApplication pkgs {
+        name = "systemctl";
+        text = ''
+          printf '%s\n' "$*" >> "$HOME/systemctl-calls"
+          exec ${pkgs.systemd}/bin/systemctl "$@"
+        '';
+      }}/bin/systemctl";
+    };
   };
 
   # A throwaway age identity and every set in fixtures/values.json encrypted to

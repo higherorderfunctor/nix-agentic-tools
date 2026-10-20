@@ -86,8 +86,8 @@ def switch(name: str) -> str:
 
 def settle(name: str) -> None:
     # A known start for each case whatever the previous case left: the first
-    # activation may be the one a lagging rotation check acts late on, the
-    # second must succeed, and each daemon is then restarted on purpose.
+    # activation absorbs it, the second must succeed, and each daemon is then
+    # restarted on purpose.
     activate(name)
     check(activate(name)[0] == 0, f"settling on {name}: activation failed")
     readers: dict = GENERATIONS[name]["readers"]
@@ -179,16 +179,34 @@ def case_new_secret() -> None:
 
 
 def case_stopped_daemon() -> None:
+    # sd-switch starts a stopped unit that an active target wants, on every
+    # switch; that is its behavior, not ai-module's. What ai-module owns: the
+    # activation starts the reader at most once, and it ends on the new value.
     settle("base")
     machine.succeed(f"{CTL} stop zz-reader.service")
-    mark = cursor()
-    # Twice: the second activation is where a rotation noticed late acts.
-    for attempt in (1, 2):
-        check(activate("rotate-zz")[0] == 0, f"activating rotate-zz (attempt {attempt}) failed")
-        wait_settled()
+    mark = switch("rotate-zz")
     state = prop("zz-reader.service", "ActiveState")
     lines = seen("zz-reader", mark)
-    check(state == "inactive" and not lines, f"the stopped zz-reader is {state} and saw {lines}")
+    rotated = GENERATIONS["rotate-zz"]["readers"]["zz-reader"]
+    check(
+        state == "active" and len(lines) <= 1 and lines[-1:] == [rotated],
+        f"the stopped zz-reader is {state} and saw {lines}, want at most one start that saw {[rotated]}",
+    )
+
+
+def case_systemctl_path() -> None:
+    # Calls only ai-module's step makes: Home Manager's own reload runs
+    # is-system-running, and sd-switch talks D-Bus.
+    settle("base")
+    machine.succeed(as_user('rm -f "$HOME/systemctl-calls"'))
+    check(activate("systemctl-path")[0] == 0, "activating systemctl-path failed")
+    calls = machine.succeed(as_user('cat "$HOME/systemctl-calls"')).splitlines()
+    wanted = [
+        "--user show --property=Result --value sops-nix.service",
+        "--user show --property=ActiveState --value aa-reader.service",
+    ]
+    missing = [call for call in wanted if call not in calls]
+    check(not missing, f"ai-module bypassed systemd.user.systemctlPath for {missing}; the wrapper logged {calls}")
 
 
 def case_decrypt_failure() -> None:
@@ -211,6 +229,7 @@ CASE_LIST: list[tuple[str, Callable[[], None]]] = [
     ("unit-and-secret-change", case_unit_and_secret_change),
     ("new-secret", case_new_secret),
     ("stopped-daemon", case_stopped_daemon),
+    ("systemctl-path", case_systemctl_path),
     ("decrypt-failure", case_decrypt_failure),
 ]
 
