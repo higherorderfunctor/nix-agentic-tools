@@ -1,8 +1,8 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-18 — 905 config nodes give the settings type
-> through `lib/extracted/options.nix`, with four refinements; the clean render
-> passes native v8 validation and loads through CPA 8.0.33's `LoadConfig` in
+> **Last verified:** 2026-10-19 — 909 config nodes give the settings type
+> through `lib/extracted/options.nix`, with five refinements; the clean render
+> passes native v8 validation and loads through CPA 8.0.35's `LoadConfig` in
 > `cliproxyapi-settings`; `ai.cliproxyapi.instances` renders it at start and
 > defaults its listener to loopback.
 
@@ -47,6 +47,9 @@ be a writable copy, never the store path.
 
 Each narrows a measured type using a native constraint in `internal/config/`:
 
+- `client.codex.web-search-result-cache.ttl`: measured `string`, typed as a Go
+  duration, because `Validate` in `sdk_config.go` refuses a TTL that is neither
+  a duration nor integer seconds; the type admits the duration form only.
 - `config-version`: `enum [8]` (`config_v8.go`, "unsupported config-version
   (expected 8)").
 - `credentials.in-flight.{snapshot-interval,stale-after,staging-retention}`:

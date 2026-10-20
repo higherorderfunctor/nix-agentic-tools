@@ -4,14 +4,17 @@
 # `passthru.extracted` here, which is import-from-derivation.
 {lib, ...}: let
   refinements = let
-    # credentials.in-flight's durations are strings CLIProxyAPI parses with
-    # time.ParseDuration at load, refusing the config when one fails
-    # (internal/config/credential_in_flight.go, Durations).
+    # Durations are strings CLIProxyAPI parses with time.ParseDuration at
+    # load, refusing the config when one fails: credentials.in-flight's in
+    # internal/config/credential_in_flight.go (Durations), and the Codex web
+    # search result cache TTL in internal/config/sdk_config.go (Validate,
+    # which also takes integer seconds; the type admits the duration form).
     duration = {
       type = "string";
       refine = {types, ...}: types.duration;
     };
   in {
+    "client.codex.web-search-result-cache.ttl" = duration;
     # The v8 loader refuses any other value (internal/config/config_v8.go,
     # flattenV8: "unsupported config-version (expected 8)").
     config-version = {
