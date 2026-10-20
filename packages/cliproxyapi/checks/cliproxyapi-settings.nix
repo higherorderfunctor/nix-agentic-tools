@@ -16,6 +16,8 @@
   overrides = {
     # refinements: the values they admit
     config-version = 8;
+    # config/sdk_config.go: a Go duration or integer seconds
+    "client.codex.web-search-result-cache.ttl" = "1s";
     # config/credential_in_flight.go: stale-after at least three snapshot
     # intervals, part bytes at least 1024, revision bytes at least one part
     "credentials.in-flight.max-part-bytes" = 1024;
