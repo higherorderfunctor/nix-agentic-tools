@@ -1,8 +1,10 @@
 Compile out Kimchi's self-update: Nix owns the binary, and the store copy is
 read-only. Every update gate is hardwired off: the launch path returns before
 probing, the shared workflow finds no update for `kimchi update`, `/update`
-stops before its menu (so no toggle and no "enable auto-update" tip), and the
-tip rotation drops the auto-update tip. Each gate is a one-line condition, so
+stops before its menu (so no toggle and no "enable auto-update" tip), the tip
+rotation drops the auto-update tip, and the startup check shows neither its
+one-time "auto-update is now on by default" notice nor an "Update available"
+hint. Each gate is a one-line condition, so
 the patch touches no import block or help text; `/update` keeps upstream's
 notice wording. The `opts.signal!` assertion keeps TypeScript's narrowing in
 the now-unreachable launch path.
@@ -33,6 +35,19 @@ index 1410bba..0c07be0 100644
  			if (isHomebrewInstall()) return []
  			if (loadAutoUpdateSetting()) return []
  			return [AUTO_UPDATE_TIP]
+diff --git i/src/extensions/startup-update.ts w/src/extensions/startup-update.ts
+index 428a820..d342a7a 100644
+--- i/src/extensions/startup-update.ts
++++ w/src/extensions/startup-update.ts
+@@ -42,7 +42,7 @@ export default function startupUpdateExtension(pi: ExtensionAPI) {
+ 	)
+ 
+ 	pi.on("session_start", async (_event, ctx: ExtensionContext) => {
+-		if (!ctx.hasUI) return
++		if (true) return
+ 
+ 		const current = getVersion()
+ 		// Canary users opted into the canary track; don't nag them about
 diff --git i/src/update/auto-update.ts w/src/update/auto-update.ts
 index dbf8323..69e9bbe 100644
 --- i/src/update/auto-update.ts
