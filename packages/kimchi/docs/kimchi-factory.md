@@ -1,7 +1,7 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-10-21 — the entry-overwrite analysis walks a top-level
-> call to an entry.ts function (`void main()`) in place.
+> `void main()` in place and fails on environment writes it cannot place.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -154,14 +154,17 @@ derived, not annotated: the extractor walks `src/entry.ts`'s top-level
 statements in order and marks a variable fixed when a statement assigns it on
 every path and no earlier statement reads it, counting what a callee handed
 `process.env` reads from it. A top-level call to a function entry.ts declares
-(`void main()`, since 1.17 moved startup there to avoid top-level await) is
-walked in place. `PI_CODING_AGENT_DIR` is assigned too, but read and preserved
-first, so it stays settable. The analysis fails instead of guessing when a
-module entry.ts statically imports reads the same name, or when an assignment
-follows entry.ts's first `await` or `import()`. Every variable the factory sets
-itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`, `KIMCHI_REGION`,
-`KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`, which fails
-evaluation if the pinned Kimchi no longer reads it or starts overwriting it.
+(`void main()`, where 1.17 moved startup to avoid top-level await) is walked in
+place, but only when its name appears nowhere else and its body has no `return`
+or `throw`; any other declaration's reads count from the start.
+`PI_CODING_AGENT_DIR` is assigned too, but read and preserved first, so it stays
+settable. The analysis fails instead of guessing when a module entry.ts
+statically imports reads the same name, when an assignment follows entry.ts's
+first `await` or `import()`, or when one sits in a function whose running point
+it cannot place. Every variable the factory sets itself (`KIMCHI_API_KEY`,
+`KIMCHI_ENABLE_RESOURCES`, `KIMCHI_REGION`, `KIMCHI_TELEMETRY_ENABLED`) goes
+through `environmentName`, which fails evaluation if the pinned Kimchi no longer
+reads it or starts overwriting it.
 
 The extractor emits every resolved environment name with `type = "string"`. A
 secret name needs a recorded row stating what it controls; ordinary names may

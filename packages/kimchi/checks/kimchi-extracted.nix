@@ -77,6 +77,10 @@
             'if (env.XDG_DATA_HOME) {' 'if (env.XDG_DATA_HOME && !process.env.KIMCHI_CODING_AGENT_DIR) {'
           mutant "$kimchi" entry-late-write src/entry.ts \
             'installPasteInterceptor()' $'installPasteInterceptor()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
+          mutant "$kimchi" entry-nested-write src/entry.ts \
+            'installPasteInterceptor()' $'installPasteInterceptor()\nvoid (() => { process.env.KIMCHI_NO_UPDATE_CHECK = "1" })()'
+          mutant "$kimchi" entry-early-return src/entry.ts \
+            'async function main(): Promise<void> {' $'async function main(): Promise<void> {\n\tif (process.argv.includes("--early")) return\n\tprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
           mutant "$kimchi" entry-overwrite src/entry.ts \
             'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "0"'
           mutant "$kimchi" entry-unread src/entry.ts \
@@ -214,8 +218,12 @@
             'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
           expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
             'src/entry.ts assigns KIMCHI_CODING_AGENT_DIR before reading it, but' >> "$TMPDIR/proof"
+          expect_rejection entry-early-return "$TMPDIR/entry-early-return-source" \
+            'src/entry.ts assigns KIMCHI_NO_UPDATE_CHECK inside main, which runs at no single place' >> "$TMPDIR/proof"
           expect_rejection entry-late-write "$TMPDIR/entry-late-write-source" \
             'src/entry.ts assigns KIMCHI_NO_UPDATE_CHECK after it suspends' >> "$TMPDIR/proof"
+          expect_rejection entry-nested-write "$TMPDIR/entry-nested-write-source" \
+            'src/entry.ts assigns KIMCHI_NO_UPDATE_CHECK inside a nested function' >> "$TMPDIR/proof"
           expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
             "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
           expect_rejection pi-app-name "$kimchi" \
