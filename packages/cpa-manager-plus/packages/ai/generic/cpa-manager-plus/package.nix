@@ -11,15 +11,22 @@
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
   sourcesFile = repoPath ../../../../sources.json;
   inherit (sources) version;
-  src = fetchzip {
-    name = "${pname}-${version}-source";
-    url = "https://github.com/seakee/CPA-Manager-Plus/archive/v${version}.tar.gz";
-    hash = sources.srcHash or lib.fakeHash;
-    postFetch = ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      ${lib.getExe pkgs.npm-lockfile-fix} "$out/package-lock.json"
-    '';
+  # The patched tree is `src` itself, so the web app, the server, the
+  # extractor and the settings check (which copy `package.src`) all read it.
+  src = pkgs.applyPatches {
+    src = fetchzip {
+      name = "${pname}-${version}-source";
+      url = "https://github.com/seakee/CPA-Manager-Plus/archive/v${version}.tar.gz";
+      hash = sources.srcHash or lib.fakeHash;
+      postFetch = ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${lib.getExe pkgs.npm-lockfile-fix} "$out/package-lock.json"
+      '';
+    };
+    patches = [../../../../patches/default-theme.patch];
+    # A release that moves the patched context fails here, loudly.
+    patchFlags = ["-p1" "--fuzz=0"];
   };
   modRoot = "apps/manager-server";
   goModPath = "${modRoot}/go.mod";
@@ -39,6 +46,16 @@
     npmDepsFetcherVersion = 2;
     npmDepsHash = sources.npmDepsHash or lib.fakeHash;
     env.VERSION = version;
+    # The patch's store test; upstream's full suite has a date-dependent
+    # failure (DemoPage.test.tsx) on 1.14.7.
+    doCheck = true;
+    checkPhase = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      runHook preCheck
+      npm --workspace apps/web exec -- vitest run src/stores/useThemeStore.test.ts
+      runHook postCheck
+    '';
     installPhase = ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

@@ -216,10 +216,14 @@ in {
               // manager;
           })).config;
         real = daemons {};
-        # The same daemon with a declared database outside its state.
+        # The same daemon with a declared database outside its state, and a
+        # dark panel default.
         declaredDatabase = daemons {
           settings = {
-            config.adminKeyFile = "/build/admin-key";
+            config = {
+              adminKeyFile = "/build/admin-key";
+              defaultTheme = "dark";
+            };
             environment.USAGE_DB_PATH = "/build/state/declared-db/usage.sqlite";
           };
           stateDir = "/build/state/declared";
@@ -269,6 +273,13 @@ in {
             kill -TERM "''${processes[-1]}"
             wait "''${processes[-1]}" || :
           }
+          # The panel's pre-login info carries defaultTheme, which the served
+          # web app reads (patches/default-theme.patch).
+          theme() {
+            ${pkgs.curl}/bin/curl --noproxy '*' --max-time 5 --silent --fail http://127.0.0.1:28418/usage-service/info > info.json
+            echo "defaultTheme: $(${pkgs.jq}/bin/jq -c .defaultTheme info.json)"
+            ${pkgs.jq}/bin/jq -e --arg theme "$1" '.defaultTheme == $theme' info.json > /dev/null
+          }
           # A first start refuses a key file that is blank to strings.TrimSpace,
           # here a lone no-break space, before bootstrap could generate and log a key.
           printf '\302\240\n' > /build/admin-key
@@ -280,6 +291,11 @@ in {
           printf '%s\n' admin-key-a > /build/admin-key
           manager "$main" manager.log
           ${pkgs.jq}/bin/jq -e '.ok == true and .service == "cpa-manager-plus"' health.json
+          theme auto
+          ${pkgs.curl}/bin/curl --noproxy '*' --max-time 5 --silent --fail http://127.0.0.1:28418/management.html > panel.html
+          # An assignment fails on grep's status, so a panel without it fails here.
+          count="$(${pkgs.gnugrep}/bin/grep -cF defaultTheme panel.html)"
+          echo "served panel lines reading defaultTheme: $count"
           # Each port has exactly one listener, bound to IPv4 loopback.
           for port in 6F01 6F02; do
             ${pkgs.gawk}/bin/awk -v port="$port" '
@@ -341,6 +357,7 @@ in {
           test -s /build/state/declared-db/usage.sqlite
           test ! -e /build/state/declared/usage.sqlite
           accepts admin-key-c
+          theme dark
           stop
           printf '%s\n' admin-key-d > /build/admin-key
           manager "$declared" manager-declared-restart.log
