@@ -104,14 +104,30 @@
         export CODEQL_CONFIG_FILE="$ours"
         exec "$codeql" "$@"
       fi
-      if ! ${grep} -qvxFf "$theirs" "$ours"; then
-        exec "$codeql" "$@"
-      fi
-      if ${grep} -qE -- '${lib.concatStringsSep "|" (options spec)}' "$theirs"; then
-        echo "codeql: $theirs sets ${lib.concatStringsSep " or " (options spec)}, which this customized codeql sets from customizePackage." >&2
-        echo "codeql: CodeQL keeps one value per option, so one side's packs would be lost; give those packs to customizePackage instead." >&2
+      if [ ! -f "$theirs" ] || [ ! -r "$theirs" ]; then
+        echo "codeql: $theirs is not a readable file, so this customized codeql cannot merge its packs into it." >&2
         exit 2
       fi
+      # grep exits 1 when every line of ours is in theirs, and 2 on an error,
+      # which must take neither branch.
+      covered=0
+      ${grep} -qvxFf "$theirs" "$ours" || covered=$?
+      case "$covered" in
+        0) ;;
+        1) exec "$codeql" "$@" ;;
+        *) exit 2 ;;
+      esac
+      clash=0
+      ${grep} -qE -- '${lib.concatStringsSep "|" (options spec)}' "$theirs" || clash=$?
+      case "$clash" in
+        0)
+          echo "codeql: $theirs sets ${lib.concatStringsSep " or " (options spec)}, which this customized codeql sets from customizePackage." >&2
+          echo "codeql: CodeQL keeps one value per option, so one side's packs would be lost; give those packs to customizePackage instead." >&2
+          exit 2
+          ;;
+        1) ;;
+        *) exit 2 ;;
+      esac
       merged="$(${coreutils}/mktemp)"
       trap '${coreutils}/rm -f "$merged"' EXIT
       # The echo ends a last line that has no newline, which would otherwise
