@@ -95,7 +95,27 @@
     && failures (evaluate backend (withInstances {cpa-manager-plus.instances.main.upstream = "missing";}))
     == ["ai.cpa-manager-plus.instances.main.upstream names `missing`, which is not an `ai.cliproxyapi.instances` entry."]
     && failures (evaluate backend (withInstances {cliproxyapi.instances.main.enable = false;}))
-    == ["ai.cpa-manager-plus.instances.main.upstream names `ai.cliproxyapi.instances.main`, which is disabled."];
+    == ["ai.cpa-manager-plus.instances.main.upstream names `ai.cliproxyapi.instances.main`, which is disabled."]
+    # Each other admin key form is steered to adminKeyFile, never ignored.
+    && failures (evaluate backend (withInstances {
+      cpa-manager-plus.instances.main.settings = {
+        config.adminKeyFile = "admin.key";
+        environment = {
+          CPA_MANAGER_ADMIN_KEY = redact.file "/run/secrets/cpa-admin-key";
+          CPA_MANAGER_ADMIN_KEY_FILE = "/run/secrets/cpa-admin-key";
+        };
+      };
+    }))
+    == [
+      "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY only on its first start, while the instance applies adminKeyFile on every start."
+      "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY_FILE: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY_FILE only on its first start, while the instance applies adminKeyFile on every start."
+      "ai.cpa-manager-plus.instances.main.settings.config.adminKeyFile: must be an absolute path, not `admin.key`."
+    ];
+
+  # adminKeyFile restarts the instance when its bytes change.
+  keyed = backend:
+    services.triggers (evaluate backend (withInstances {cpa-manager-plus.instances.main.settings.config.adminKeyFile = "/run/secrets/cpa-admin-key";})).config.ai.services.cpa-manager-plus-main
+    == ["/run/secrets/cpa-admin-key" "/run/secrets/cpa-management-key"];
 
   devenv = (evalDevenv (withInstances {})).config;
   hm = (evalHm (withInstances {})).config;
@@ -130,7 +150,7 @@ in {
   checks =
     {
       module-service-instances = mkTest "service-instances" (
-        lib.all (backend: entries backend && refusals backend) ["devenv" "hm"]
+        lib.all (backend: entries backend && keyed backend && refusals backend) ["devenv" "hm"]
         && devenv.processes.cliproxyapi-main.watch.paths == ["/run/secrets/cpa-client-key" "/run/secrets/cpa-management-key"]
         && devenv.processes.cpa-manager-plus-main.watch.paths == ["/run/secrets/cpa-management-key"]
         && !disabled.ai.services.cliproxyapi-main.enable
@@ -155,6 +175,7 @@ in {
             cpa-manager-plus.instances.main = {
               package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cpa-manager-plus;
               port = 28418;
+              settings.config.adminKeyFile = "/build/admin-key";
               stateDir = "/build/state/manager";
             };
           })).config;
@@ -164,6 +185,7 @@ in {
           shopt -s inherit_errexit 2>/dev/null || :
           printf '%s' client-test-secret > /build/client-key
           printf '%s' management-test-secret > /build/management-key
+          printf '%s\n' admin-key-a > /build/admin-key
           # The user manager sets XDG_RUNTIME_DIR and INVOCATION_ID for every unit.
           export HOME="$TMPDIR/home" XDG_RUNTIME_DIR="$TMPDIR/run" INVOCATION_ID=real-daemons
           mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
@@ -206,6 +228,44 @@ in {
               END { if (count != 1) exit 1 }
             ' /proc/net/tcp /proc/net/tcp6
           done
+          # The web login's admin check: GET /v0/management/config with the
+          # admin key as a bearer token (useAuthStore login → configApi), which
+          # Manager Plus answers 401 "invalid admin key" for any other key.
+          request() {
+            ${pkgs.curl}/bin/curl --noproxy '*' --max-time 5 --silent --output response.json --write-out '%{http_code}' \
+              --header "Authorization: Bearer $1" http://127.0.0.1:28418/v0/management/config
+          }
+          accepts() {
+            local code
+            code="$(request "$1")"
+            echo "admin key $1: HTTP $code"
+            [ "$code" != 401 ] && [ "$code" != 500 ]
+          }
+          refuses() {
+            local code
+            code="$(request "$1")"
+            echo "admin key $1: HTTP $code $(cat response.json)"
+            [ "$code" = 401 ] && ${pkgs.jq}/bin/jq -e '.error == "invalid admin key"' response.json > /dev/null
+          }
+          accepts admin-key-a
+          refuses admin-key-wrong
+          # Rotate the file and start again on the same state: the stored
+          # credential is reset to the new key before the server runs.
+          kill -TERM "''${processes[1]}"
+          wait "''${processes[1]}" || :
+          printf '%s\n' admin-key-b > /build/admin-key
+          ${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart} > manager-restart.log 2>&1 &
+          processes+=("$!")
+          ready "''${processes[2]}" http://127.0.0.1:28418/health manager-restart.log
+          accepts admin-key-b
+          refuses admin-key-a
+          # A first start seeds the credential itself; a later one resets it.
+          # Neither key reaches either log. `! grep` would be exempt from
+          # errexit, so each absence fails explicitly.
+          grep -Fx 'CPA Manager Plus admin key reset.' manager-restart.log
+          if grep -F -e 'admin key reset' -e admin-key-a -e admin-key-b manager.log || grep -F -e admin-key-a -e admin-key-b manager-restart.log; then
+            false
+          fi
           touch "$out"
         '';
       # Linux Home Manager emits the units, and the launcher renders the

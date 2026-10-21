@@ -1,9 +1,10 @@
 # CPA Manager Plus typed settings
 
-> **Last verified:** 2026-10-18 — 27 config.json keys and 32 environment
+> **Last verified:** 2026-10-20 — 27 config.json keys and 32 environment
 > variables give the settings type through `lib/extracted/options.nix`; the
 > render loads through Manager Plus 1.14.7's `LoadWithoutCreatingDefault`;
-> `ai.cpa-manager-plus.instances` renders it at start.
+> `ai.cpa-manager-plus.instances` renders it at start and applies
+> `config.adminKeyFile` through `reset-admin-key` on every start.
 
 `lib/default.nix` exports
 `cpa-manager-plus.{settingsType, render, report, exclusions, sample}`. One
@@ -15,9 +16,10 @@ The shared rules are in `dev/fragments/extracted/typed-settings.md`.
 
 config.json names key files, never keys, so its render lifts nothing. The keys
 are the three annotated variables `CPA_MANAGEMENT_KEY`, `CPA_MANAGER_ADMIN_KEY`
-and `CPA_MANAGER_DATA_KEY`, typed as redact references. Every other variable is
-a string, as Manager Plus reads it; `readBy` and `configKeys` are prose the type
-does not carry (`unread`).
+and `CPA_MANAGER_DATA_KEY`, typed as redact references. An instance takes its
+admin key from `config.adminKeyFile` instead (Instances, Admin key). Every other
+variable is a string, as Manager Plus reads it; `readBy` and `configKeys` are
+prose the type does not carry (`unread`).
 
 `render settings` gives `{ content; secrets; environment; }`: config.json as
 JSON text, and the set variables, nulls dropped, ready for an option of type
@@ -47,3 +49,26 @@ becomes the service's. `upstream` names an `ai.cliproxyapi.instances` entry and
 defaults `config.cpaUpstreamUrl` to its loopback origin and `CPA_MANAGEMENT_KEY`
 to its `management.secret-key` reference; a missing or disabled one fails an
 assertion.
+
+### Admin key
+
+Manager Plus reads its admin key only while its database holds no admin
+credential (`internal/service/bootstrap/service.go`, `ensureAdminCredential`);
+after the first start a changed key is ignored. An instance with
+`config.adminKeyFile`, an absolute path, applies it on every start instead: the
+run script calls
+`cpa-manager-plus reset-admin-key --db-path <db> --admin-key-file <file>` before
+it execs the server. `<db>` is the database as `config.go` `LoadWithOptions`
+resolves it, `<stateDir>/usage.sqlite` by default. The command refuses a missing
+or empty database, so a start without one is a first start: the server seeds its
+credential from the same file, and the run script fails first if that file is
+unreadable or blank, where Manager Plus would generate a key and log it. A
+failed reset fails the start. The path is a restart trigger (`restartOnChange`),
+so a changed file restarts the instance onto the new key. Only the path reaches
+argv and the store; the command prints no key.
+
+`environment.CPA_MANAGER_ADMIN_KEY` and `CPA_MANAGER_ADMIN_KEY_FILE` fail an
+assertion that names `config.adminKeyFile`. Either one takes precedence over
+`adminKeyFile` (`readSecret`) and would be read on the first start only, and the
+plain key could reach `reset-admin-key` only through argv or a copy on disk.
+Without any of the three, the run script resets nothing, as before.

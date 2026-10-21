@@ -301,12 +301,13 @@ the default state root (`xdg.stateHome` on Home Manager, `devenv.state` on
 devenv, so a repository's instance keeps its own logins). Each instance becomes
 the service `<owner>-<name>`: its port is `ports.main`, its settings render to
 `files.config`, and a strict run script creates `stateDir` (and the owner's
-state subdirectories) 0700, enters it and execs the package. The owner fixes the
-settings an instance derives (the listen port, state paths) as ordinary
-definitions, so a consumer value that disagrees fails evaluation. `select`
-resolves an instance name to `http://127.0.0.1:<port>` or to the reason it
-cannot: the name is missing or the instance is disabled. CLIProxyAPI and CPA
-Manager Plus use it.
+state subdirectories) 0700, enters it, runs the owner's `preStart` shell and
+execs the package; the owner's `restartOnChange` paths join the service's
+restart triggers. The owner fixes the settings an instance derives (the listen
+port, state paths) as ordinary definitions, so a consumer value that disagrees
+fails evaluation. `select` resolves an instance name to
+`http://127.0.0.1:<port>` or to the reason it cannot: the name is missing or the
+instance is disabled. CLIProxyAPI and CPA Manager Plus use it.
 
 | Backend             | Lowering                                                                                                                                                                                                   |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
