@@ -157,8 +157,13 @@
       # run into our first line. The merged file is named by its content and
       # outlives this wrapper, which execs codeql, so a codeql that codeql
       # starts reads the same file. Each run writes it again and renames it into
-      # place, never trusting a file already under that name.
-      dir="''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}"
+      # place, never trusting a file already under that name. It goes under
+      # XDG_RUNTIME_DIR when that is a writable directory, else TMPDIR, else
+      # /tmp.
+      dir="''${XDG_RUNTIME_DIR:-}"
+      if [ -z "$dir" ] || [ ! -d "$dir" ] || [ ! -w "$dir" ]; then
+        dir="''${TMPDIR:-/tmp}"
+      fi
       tmp="$(${coreutils}/mktemp "$dir/codeql-config.XXXXXXXX")"
       { ${coreutils}/cat "$theirs"; echo; ${coreutils}/cat "$ours"; } > "$tmp"
       sum="$(${coreutils}/sha256sum "$tmp")"

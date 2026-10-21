@@ -115,6 +115,8 @@ in {
         oursAt="$(grep -nm1 -- '^--additional-packs ' "''${persisted[0]}" | cut -d: -f1)"
         [ -n "$theirsAt" ] && [ -n "$oursAt" ] && [ "$theirsAt" -lt "$oursAt" ] || fail "the merged config does not hold the consumer's line before ours: $(cat "''${persisted[0]}")"
         [ -z "$(find "$TMPDIR/run" -name 'codeql-config.*')" ] || fail "the wrapper left a mktemp file: $(ls "$TMPDIR/run")"
+        # An XDG_RUNTIME_DIR that is not a directory falls back to TMPDIR.
+        XDG_RUNTIME_DIR="$TMPDIR/missing" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" merged runtime-missing
         printf -- '# --additional-packs comes from customizePackage\n--search-path %s\n' "$TMPDIR/second" > "$TMPDIR/comment-config"
         CODEQL_CONFIG_FILE="$TMPDIR/comment-config" merged comment
         printf -- '--additional-packs %s\n' "$TMPDIR" > "$TMPDIR/clashing-config"
