@@ -7,10 +7,10 @@ applyTo: "packages/kimchi/checks/kimchi-codeql.nix,packages/kimchi/lib/codeql.ni
 
 ## Kimchi CodeQL database
 
-> **Last verified:** 2026-10-21 (commit f8707ca8) — `passthru.codeql` carries
-> `database`, `runQueries`, `createDatabase` and `engine`, and `source` stays
-> internal; the `kimchi-codeql-database` check runs the smoke pack;
-> `codeql:kimchi-db` creates the same database locally. No fact reads it yet.
+> **Last verified:** 2026-10-21 — `passthru.codeql` carries `database`,
+> `runQueries`, `createDatabase` and `engine`, and `source` stays internal; the
+> `kimchi-codeql-database` check runs the smoke pack; `codeql:kimchi-db` creates
+> the same database locally. No fact reads it yet.
 
 ### Three layers
 
