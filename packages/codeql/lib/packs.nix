@@ -71,7 +71,7 @@
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         cp -R --no-preserve=mode ${args.src} pack # bare-commands: ok (stdenv builder PATH)
-        cp ${qlpack kind pack} pack/qlpack.yml # bare-commands: ok (stdenv builder PATH)
+        cp --no-preserve=mode ${qlpack kind pack} pack/qlpack.yml # bare-commands: ok (stdenv builder PATH)
         ${
           if kind == "query"
           then ''
