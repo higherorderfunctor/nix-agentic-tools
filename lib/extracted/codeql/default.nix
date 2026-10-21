@@ -50,8 +50,8 @@
     dontStrip = true;
     installPhase = ''
       runHook preInstall
-      mkdir -p "$out/bin" "$out/share"
-      cp -R . "$out/share/codeql"
+      mkdir -p "$out/bin" "$out/share" # bare-commands: ok (stdenv builder PATH)
+      cp -R . "$out/share/codeql" # bare-commands: ok (stdenv builder PATH)
       # The launcher follows symlinks back to its distribution directory.
       ln -s "$out/share/codeql/codeql" "$out/bin/codeql"
       runHook postInstall
@@ -90,8 +90,8 @@
       shopt -s inherit_errexit 2>/dev/null || :
       # Writable copies: the database caches results under itself, and query
       # resolution may write a lock file beside the pack.
-      cp -R --no-preserve=mode ${src} "$TMPDIR/source"
-      cp -R --no-preserve=mode ${./queries} "$TMPDIR/queries"
+      cp -R --no-preserve=mode ${src} "$TMPDIR/source" # bare-commands: ok (runCommand builder PATH)
+      cp -R --no-preserve=mode ${./queries} "$TMPDIR/queries" # bare-commands: ok (runCommand builder PATH)
       # An explicit language keeps the CLI from asking the GitHub API to
       # detect one; JavaScript supports only build mode none.
       codeql database create "$TMPDIR/db" \
@@ -100,9 +100,12 @@
         --source-root="$TMPDIR/source" \
         --threads="$NIX_BUILD_CORES"
       # HOME is /homeless-shelter, so the compilation cache needs a home.
+      # Without --ram the evaluator capped its heap at 1800 MB on a 16 GB CI
+      # runner; global taint flow wants more.
       codeql query run \
         --database="$TMPDIR/db" \
         --common-caches="$TMPDIR/codeql" \
+        --ram=8192 \
         --threads="$NIX_BUILD_CORES" \
         --output="$TMPDIR/result.bqrs" \
         "$TMPDIR/queries/${query}"
@@ -113,12 +116,14 @@
         "$TMPDIR/result.bqrs"
       jq --sort-keys ${lib.escapeShellArg jq} "$TMPDIR/result.json" > "$out"
     '';
-  # `networkTargets { name; src; }`: every constant URL a modeled client
-  # request in `src` reaches, as `{ hosts.<host> = [files]; otherTargets.<url>
-  # = [files]; }`. A URL without a scheme (a relative path, a bare host) has
-  # no host to key on and stays whole under otherTargets, so nothing the query
-  # found is dropped. An empty result set fails: it means the query or the
-  # extraction found nothing, not that the program makes no requests.
+  # `networkTargets { name; src; }`: every constant URL (a string with a
+  # scheme) that taint-flows into the URL of a modeled client request in `src`,
+  # as `{ hosts.<host> = [files]; otherTargets.<url> = [files]; }`, the files
+  # being those of the requests. Taint means the constant may be any part of
+  # a concatenation or template, not only its leading part. A URL with no host
+  # to key on (`file:///...`) stays whole under otherTargets, so nothing the
+  # query found is dropped. An empty result set fails: it means the query or
+  # the extraction found nothing, not that the program makes no requests.
   networkTargets = {
     name,
     src,
