@@ -1,7 +1,8 @@
 ## Update Pipeline Architecture
 
 > **Last verified:** 2026-10-20 — updates run only as CI's per-target matrix,
-> and package lanes never build.
+> and package lanes never build; fixture flake locks under
+> `checks/<concern>/flake.lock` are a third target kind, `update-lock.sh`.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -61,6 +62,12 @@ Targets fall into three categories:
   verification, only the `devenv` input runs `devenv --no-tui shell true` with
   the installed CLI in its updated worktree. A failed shell entry holds the bump
   back before commit and publication.
+- **Fixture locks** (`update-lock.sh <name> <flake-dir>`) — every
+  `checks/<concern>/flake.lock`, discovered rather than registered
+  (`fixture_flakes` in `update-matrix.py`) and named by its concern. The worker
+  runs `nix flake update --flake <flake-dir>` and commits only that lock. It
+  builds nothing: the fixture's own CI job, a required context, is the
+  verification.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages.
   Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
@@ -394,6 +401,7 @@ belt-and-braces, not the mechanism.
 | `dev/scripts/update-common.sh`                  | Shared functions (worktree, version, report, colors)           |
 | `dev/scripts/update-init.sh`                    | Pipeline initialization (clean stale state)                    |
 | `dev/scripts/update-input.sh`                   | Per-input update script                                        |
+| `dev/scripts/update-lock.sh`                    | Per-fixture-flake lock update script                           |
 | `dev/scripts/update-pkg.sh`                     | Per-package update script (rev bump + nix-update)              |
 | `lib/update.nix`                                | Declares `config.update.targets` (the option declaration)      |
 | `packages/<owner>/registry.nix`                 | Owner update targets, source paths, and cache metadata         |

@@ -14,12 +14,20 @@ from pathlib import Path
 from artifacts import downloaded
 
 
-def discover(lock, targets, requested=""):
+def fixture_flakes(root=Path(".")):
+    """Dev-only fixture flakes with their own lock: checks/<concern>/flake.lock."""
+    return sorted(str(path.parent.relative_to(root)) for path in root.glob("checks/*/flake.lock"))
+
+
+def discover(lock, targets, requested="", flakes=()):
     inputs = lock["nodes"][lock["root"]]["inputs"]
-    if set(inputs) & set(targets):
-        raise ValueError("input and package update branch names collide")
+    locks = {Path(flake).name: flake for flake in flakes}
+    names = [*inputs, *targets, *locks]
+    if len(locks) != len(flakes) or len(set(names)) != len(names):
+        raise ValueError("input, package and lock update branch names collide")
     rows = [{"kind": "input", "name": name} for name in sorted(inputs)]
     rows += [{"kind": "package", "name": name, **config} for name, config in sorted(targets.items())]
+    rows += [{"kind": "lock", "name": name, "flake": flake} for name, flake in sorted(locks.items())]
     if any(not re.fullmatch(r"[a-zA-Z0-9_-]+", row["name"]) for row in rows):
         raise ValueError("unexpected update target name")
     if requested:
@@ -423,7 +431,7 @@ def main():
     args = parser.parse_args()
     temp = Path(os.environ["RUNNER_TEMP"])
     if args.command == "discover":
-        matrix = discover(json.loads(Path("flake.lock").read_text()), json.loads((temp / "targets.json").read_text()), os.environ.get("REQUESTED_TARGETS", ""))
+        matrix = discover(json.loads(Path("flake.lock").read_text()), json.loads((temp / "targets.json").read_text()), os.environ.get("REQUESTED_TARGETS", ""), fixture_flakes())
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
             output.write("matrix=" + json.dumps(matrix, separators=(",", ":")) + "\n")
         print(json.dumps(matrix, indent=2))
@@ -431,11 +439,14 @@ def main():
         target = json.loads(os.environ["UPDATE_TARGET_JSON"])
         scripts = Path(__file__).resolve().parent
         subprocess.run(["bash", str(scripts / "update-init.sh")], check=True)
-        command = ["bash", str(scripts / f"update-{'pkg' if target['kind'] == 'package' else 'input'}.sh"), target["name"]]
+        script = {"input": "update-input.sh", "lock": "update-lock.sh", "package": "update-pkg.sh"}[target["kind"]]
+        command = ["bash", str(scripts / script), target["name"]]
         if target["kind"] == "package":
             command.extend(target["flags"])
             if target["git"]:
                 command.append(target["git"])
+        elif target["kind"] == "lock":
+            command.append(target["flake"])
         subprocess.run(command, check=True)
         # An early phase-0 commit is not proof that hashes/extraction completed.
         # Only a normal target return with its final report permits publication.
