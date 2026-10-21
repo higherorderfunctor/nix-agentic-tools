@@ -137,7 +137,8 @@ x86_64-linux runner, engine substituted from the check cache):
   returned 362 rows.
 - `mkQueryPack` compiled the smoke pack in 33 s, in parallel with `database`.
 - The check cache's drain pushed the job's 11 built paths, the database among
-  them, in 85.6 MiB.
+  them, in 85.6 MiB. Run 39670617753 had the same database derivation and copied
+  it from the check cache in under 2 s, without building it.
 
 ### Licence
 

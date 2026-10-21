@@ -134,7 +134,18 @@ before it evaluates.
 
 ### CI measurements
 
-<!-- filled from the first green run -->
+From the `checks (owner-kimchi)` job of run 39667792203 (2026-10-21, a 4-core
+x86_64-linux runner, engine substituted from the check cache):
+
+- `database` took 85 s: 58 s of extraction with 4 threads and 23.5 s of TRAP
+  import. It holds 133.8 MiB of relations, a 56.0 MiB string pool and a 6.0 MiB
+  source archive.
+- `runQueries` on the smoke pack took 9 s, of which evaluation was 5.7 s. It
+  returned 362 rows.
+- `mkQueryPack` compiled the smoke pack in 33 s, in parallel with `database`.
+- The check cache's drain pushed the job's 11 built paths, the database among
+  them, in 85.6 MiB. Run 39670617753 had the same database derivation and copied
+  it from the check cache in under 2 s, without building it.
 
 ### Licence
 
