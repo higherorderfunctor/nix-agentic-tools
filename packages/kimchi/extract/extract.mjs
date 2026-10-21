@@ -1915,7 +1915,10 @@ function definiteEnvironmentWrites(statement, context) {
 // and no earlier statement (or a callee handed process.env) reads it. Anything
 // that would make that order unknowable fails the extraction: a read of the
 // same name anywhere in the statically imported modules, or an assignment
-// after entry.ts first awaits or imports dynamically.
+// after entry.ts first awaits or imports dynamically. A top-level call to a
+// function entry.ts declares (`void main()`) runs that body in place: Kimchi
+// 1.17 moved its startup into `async function main()` because bun's bytecode
+// build rejects top-level await.
 function launchOverwrites(entrySource, program, context) {
   const { ts } = context;
   const imported = moduleClosure([entrySource], program, ts, {
@@ -1933,10 +1936,40 @@ function launchOverwrites(entrySource, program, context) {
   const read = new Set();
   const overwritten = new Set();
   let suspended;
-  for (const statement of entrySource.statements) {
-    if (ts.isImportDeclaration(statement)) continue;
+  const declared = new Map(
+    entrySource.statements
+      .filter((statement) => ts.isFunctionDeclaration(statement))
+      .filter((statement) => statement.name && statement.body)
+      .map((statement) => [statement.name.text, statement]),
+  );
+  function calledDeclaration(statement) {
+    if (!ts.isExpressionStatement(statement)) return undefined;
+    let expression = statement.expression;
+    if (ts.isVoidExpression(expression) || ts.isAwaitExpression(expression))
+      expression = expression.expression;
+    if (
+      ts.isCallExpression(expression) &&
+      ts.isIdentifier(expression.expression)
+    )
+      return declared.get(expression.expression.text);
+    return undefined;
+  }
+  const running = new Set();
+  function visit(statement) {
+    if (ts.isImportDeclaration(statement)) return;
+    // Reads in a declaration count where it stands, which is never later
+    // than where it runs; its writes and suspensions count where it is called.
     for (const name of statementEnvironmentReads(statement, context))
       read.add(name);
+    if (ts.isFunctionDeclaration(statement)) return;
+    const callee = calledDeclaration(statement);
+    if (callee) {
+      if (running.has(callee))
+        fail(`src/entry.ts calls ${callee.name.text} recursively`);
+      running.add(callee);
+      callee.body.statements.forEach(visit);
+      running.delete(callee);
+    }
     for (const name of definiteEnvironmentWrites(statement, context)) {
       if (read.has(name) || overwritten.has(name)) continue;
       if (suspended)
@@ -1967,6 +2000,7 @@ function launchOverwrites(entrySource, program, context) {
     }
     findSuspension(statement);
   }
+  entrySource.statements.forEach(visit);
   return overwritten;
 }
 
