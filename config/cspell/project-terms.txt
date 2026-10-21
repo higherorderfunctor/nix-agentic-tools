@@ -26,6 +26,7 @@ qll
 TERMUX
 userconfig
 WEZTERM
+WHATWG
 WINDIR
 WSLENV
 Xext
@@ -56,6 +57,7 @@ autologin
 autoresearch
 autosquash
 avifenesh
+axios
 backgrounded
 backticked
 basenames
@@ -107,6 +109,7 @@ configdir
 convco
 coreutils
 cpamp
+createrequire
 creds
 customisation
 datamodels
@@ -139,9 +142,11 @@ edolstra
 elicitations
 endgroup
 endswith
+envproxy
 envrc
 envsubst
 epid
+esbuild
 etime
 evals
 execpolicy
@@ -167,6 +172,7 @@ frepo
 fromdate
 frontloaded
 frontmatter
+genai
 getconf
 getdents
 getkimchi
@@ -179,6 +185,7 @@ gitidentity
 gitref
 gitrevise
 glab
+globalthis
 gluetun
 gnugrep
 gnumake
@@ -193,6 +200,7 @@ goproxy
 gpgsign
 gradeability
 gradeable
+groq
 headlessly
 heredocs
 herestring
@@ -203,6 +211,7 @@ hookio
 hookscripts
 hookscriptsdir
 hostable
+hostonly
 hotspots
 huggingface
 idempotently
@@ -263,6 +272,7 @@ lockdown
 lockfiles
 logind
 logname
+ltrimstr
 manpages
 materializer
 mcpconfig
@@ -446,6 +456,7 @@ subkeys
 subshell
 subshells
 substituters
+succ
 superlinear
 supersection
 swapfile
@@ -481,6 +492,7 @@ unbuildable
 uncacheable
 uncallable
 uncompiled
+undici
 undmg
 unforked
 ungated

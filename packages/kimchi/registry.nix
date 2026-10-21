@@ -28,14 +28,20 @@
       ];
     };
     # kimchi-codeql: the release's CodeQL database, its query runner, the
-    # local query loop, and the environment fact the database produces.
+    # local query loop, and the environment and network facts the database
+    # produces.
     kimchi-codeql = {
       scopes = [
         "packages/${facetOwner}/checks/fixtures/codeql-environment/**"
+        "packages/${facetOwner}/checks/fixtures/network-expected.txt"
+        "packages/${facetOwner}/checks/fixtures/network/**"
+        "packages/${facetOwner}/checks/kimchi-codeql-network.nix"
         "packages/${facetOwner}/checks/kimchi-codeql.nix"
         "packages/${facetOwner}/extract/environment.jq"
         "packages/${facetOwner}/extract/environment.nix"
         "packages/${facetOwner}/lib/codeql.nix"
+        "packages/${facetOwner}/lib/network.jq"
+        "packages/${facetOwner}/lib/network.nix"
         "packages/${facetOwner}/ql/**"
       ];
       sources = [
@@ -47,6 +53,11 @@
         {
           location = "package";
           name = "kimchi-codeql-environment";
+          dir = facetOwner;
+        }
+        {
+          location = "package";
+          name = "kimchi-codeql-network";
           dir = facetOwner;
         }
       ];

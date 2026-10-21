@@ -24,6 +24,11 @@
     "systems": ["x86_64-linux"],
     "type": "object"
   },
+  "network": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
   "virtualPackages": {
     "source": "static",
     "systems": ["x86_64-linux"],

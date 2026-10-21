@@ -77,10 +77,17 @@
     inherit pkgs;
     inherit (sources) version;
   };
-  # The `environment` surface comes from the database (../../../extract/environment.nix),
-  # the rest from extract.mjs over the same release source. The engine runs on
-  # x86_64-linux only, which is the one system every facts.json row declares,
-  # so the raw exists on that system alone.
+  # The `network` fact: ../../../lib/network.nix.
+  network = import ../../../lib/network.nix {inherit codeql pkgs;};
+  # The `environment` surface (../../../extract/environment.nix) and the
+  # `network` fact come from the database, the rest from extract.mjs over the
+  # same release source. The engine runs on x86_64-linux only, which is the
+  # one system every facts.json row declares, so the raw exists on that
+  # system alone.
+  codeqlFacts = {
+    environment = (import ../../../extract/environment.nix {inherit codeql pkgs;}).surface;
+    network = network.fact;
+  };
   extracted =
     pkgs.runCommand "kimchi-extracted.json" {
       nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
@@ -100,8 +107,7 @@
         --pi-package ${piPackage} \
         --pi-tui-package ${piTuiPackage} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js \
-        | ${pkgs.jq}/bin/jq -S --slurpfile environment ${(import ../../../extract/environment.nix {inherit codeql pkgs;}).surface} \
-          '.environment = $environment[0]' > "$out"
+        | ${pkgs.jq}/bin/jq -S ${lib.concatStrings (lib.mapAttrsToList (name: fact: "--slurpfile ${name} ${fact} ") codeqlFacts)}'. + ($ARGS.named | map_values(.[0]))' > "$out"
     '';
 
   # `mkUpdateScript` records the version alone (`platforms = {}`), so this
@@ -324,7 +330,7 @@ in
 
     passthru =
       {
-        inherit codeql externalizedExtensions externalizeExtensions fixPnpmDepsHash goFloor goModPath proxyHelper;
+        inherit codeql externalizedExtensions externalizeExtensions fixPnpmDepsHash goFloor goModPath network proxyHelper;
         inherit (goUpdate) fixGoFloor fixVendorHash;
         extractedRules = import ../../../extract/rules.nix {
           inherit extractedLib pkgs;

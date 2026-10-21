@@ -2285,6 +2285,3813 @@
       }
     }
   },
+  "network": {
+    "callSites": [
+      {
+        "bundledModule": null,
+        "file": "src/extensions/billing/status.ts",
+        "library": "fetch",
+        "line": 180,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:802",
+            "value": "KIMCHI_BASE_URL"
+          },
+          {
+            "host": "llm.eu.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:35",
+            "value": "https://llm.eu.kimchi.dev"
+          },
+          {
+            "host": "llm.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:28",
+            "value": "https://llm.kimchi.dev"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/billing/status.ts",
+        "library": "fetch",
+        "line": 216,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:802",
+            "value": "KIMCHI_BASE_URL"
+          },
+          {
+            "host": "llm.eu.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:35",
+            "value": "https://llm.eu.kimchi.dev"
+          },
+          {
+            "host": "llm.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:28",
+            "value": "https://llm.kimchi.dev"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/ide-adapter/mcp-client.ts",
+        "library": "websocket",
+        "line": 74,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "src/extensions/ide-adapter/mcp-client.ts:74",
+            "value": "urlWithToken"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/memory/backend.ts",
+        "library": "fetch",
+        "line": 105,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:802",
+            "value": "KIMCHI_BASE_URL"
+          },
+          {
+            "host": "llm.eu.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:35",
+            "value": "https://llm.eu.kimchi.dev"
+          },
+          {
+            "host": "llm.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:28",
+            "value": "https://llm.kimchi.dev"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/memory/backend.ts",
+        "library": "fetch",
+        "line": 145,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/extensions/memory/backend.ts:145",
+            "value": "input"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/memory/backend.ts",
+        "library": "fetch",
+        "line": 150,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/extensions/memory/backend.ts:150",
+            "value": "input"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/pr-cost-reporting/worker.ts",
+        "library": "fetch",
+        "line": 187,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/extensions/pr-cost-reporting/worker.ts:187",
+            "value": "input"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/pull-request-status/provider-api.ts",
+        "library": "fetch",
+        "line": 251,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": "api.github.com",
+            "kind": "url",
+            "origin": "src/extensions/pull-request-status/provider-api.ts:202",
+            "value": "https://api.github.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/session-name.ts",
+        "library": "fetch",
+        "line": 182,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/extensions/session-name.ts:182",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/telemetry/transport.ts",
+        "library": "fetch",
+        "line": 218,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/extensions/telemetry/transport.ts:218",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/teleport/pty/websocket-transport.ts",
+        "library": "websocket",
+        "line": 158,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "src/extensions/teleport/pty/websocket-transport.ts:158",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/extensions/work-attribution/cost-sync.ts",
+        "library": "fetch",
+        "line": 338,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:907",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": "app.eu.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:34",
+            "value": "https://app.eu.kimchi.dev"
+          },
+          {
+            "host": "app.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:27",
+            "value": "https://app.kimchi.dev"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/http/proxy.ts",
+        "library": "undici",
+        "line": 48,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/http/proxy.ts:40",
+            "value": "HTTP_PROXY"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/http/proxy.ts:40",
+            "value": "KIMCHI_PROXY"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/http/proxy.ts:40",
+            "value": "http_proxy"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/http/proxy.ts:41",
+            "value": "HTTPS_PROXY"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/http/proxy.ts:41",
+            "value": "KIMCHI_PROXY"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/http/proxy.ts:41",
+            "value": "https_proxy"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/models.ts",
+        "library": "fetch",
+        "line": 197,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:802",
+            "value": "KIMCHI_BASE_URL"
+          },
+          {
+            "host": "llm.eu.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:35",
+            "value": "https://llm.eu.kimchi.dev"
+          },
+          {
+            "host": "llm.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:28",
+            "value": "https://llm.kimchi.dev"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/ollama.ts",
+        "library": "fetch",
+        "line": 197,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/ollama.ts:125",
+            "value": "KIMCHI_OLLAMA_HOST"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/ollama.ts:125",
+            "value": "OLLAMA_HOST"
+          },
+          {
+            "host": "localhost",
+            "kind": "url",
+            "origin": "src/ollama.ts:19",
+            "value": "http://localhost:11434"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/ollama.ts",
+        "library": "fetch",
+        "line": 247,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/ollama.ts:125",
+            "value": "KIMCHI_OLLAMA_HOST"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/ollama.ts:125",
+            "value": "OLLAMA_HOST"
+          },
+          {
+            "host": "localhost",
+            "kind": "url",
+            "origin": "src/ollama.ts:19",
+            "value": "http://localhost:11434"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/sandbox/cloud/http.ts",
+        "library": "fetch",
+        "line": 21,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:907",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:1123",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:1164",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:529",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:566",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:615",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/agents/manager/agent-manager.ts:657",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/remote-run/post-completion.ts:340",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/remote-run/post-completion.ts:507",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/remote-run/post-completion.ts:535",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/remote-run/post-completion.ts:791",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/remote-run/post-completion.ts:980",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/extensions/remote-run/sandbox-git.ts:118",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": "app.eu.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:34",
+            "value": "https://app.eu.kimchi.dev"
+          },
+          {
+            "host": "app.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:27",
+            "value": "https://app.kimchi.dev"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/sandbox/cloud/readiness.ts",
+        "library": "fetch",
+        "line": 69,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "src/sandbox/cloud/readiness.ts:69",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/sandbox/worker/acp-client.ts",
+        "library": "websocket",
+        "line": 484,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "src/sandbox/worker/acp-client.ts:484",
+            "value": "wsUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/sandbox/worker/client.ts",
+        "library": "fetch",
+        "line": 194,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "src/sandbox/worker/client.ts:194",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "src/utils/http.ts",
+        "library": "fetch",
+        "line": 90,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:802",
+            "value": "KIMCHI_BASE_URL"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "src/config.ts:907",
+            "value": "KIMCHI_REMOTE_ENDPOINT"
+          },
+          {
+            "host": "api.cast.ai",
+            "kind": "url",
+            "origin": "src/regions.ts:29",
+            "value": "https://api.cast.ai"
+          },
+          {
+            "host": "api.eu.cast.ai",
+            "kind": "url",
+            "origin": "src/regions.ts:36",
+            "value": "https://api.eu.cast.ai"
+          },
+          {
+            "host": "api.github.com",
+            "kind": "url",
+            "origin": "src/update/github.ts:8",
+            "value": "https://api.github.com"
+          },
+          {
+            "host": "app.eu.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:34",
+            "value": "https://app.eu.kimchi.dev"
+          },
+          {
+            "host": "app.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:27",
+            "value": "https://app.kimchi.dev"
+          },
+          {
+            "host": "github.com",
+            "kind": "url",
+            "origin": "src/update/github.ts:9",
+            "value": "https://github.com"
+          },
+          {
+            "host": "llm.eu.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:35",
+            "value": "https://llm.eu.kimchi.dev"
+          },
+          {
+            "host": "llm.kimchi.dev",
+            "kind": "url",
+            "origin": "src/regions.ts:28",
+            "value": "https://llm.kimchi.dev"
+          },
+          {
+            "host": "registry.npmjs.org",
+            "kind": "url",
+            "origin": "src/integrations/constants.ts:16",
+            "value": "https://registry.npmjs.org"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-agent-core/dist/proxy.js",
+        "library": "fetch",
+        "line": 84,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-agent-core/dist/proxy.js:84",
+            "value": "`${opti ... stream`"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/anthropic-messages.js",
+        "library": "sdk:@anthropic-ai/sdk",
+        "line": 694,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/anthropic-messages.js:694",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/anthropic-messages.js",
+        "library": "sdk:@anthropic-ai/sdk",
+        "line": 709,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/anthropic-messages.js:709",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/anthropic-messages.js",
+        "library": "sdk:@anthropic-ai/sdk",
+        "line": 730,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/anthropic-messages.js:730",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/azure-openai-responses.js",
+        "library": "sdk:openai",
+        "line": 191,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/azure-openai-responses.js:191",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/bedrock-converse-stream.js",
+        "library": "sdk:@aws-sdk/client-bedrock-runtime",
+        "line": 126,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/bedrock-converse-stream.js:126",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/google-generative-ai.js",
+        "library": "sdk:@google/genai",
+        "line": 274,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/google-generative-ai.js:274",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/google-generative-ai.js",
+        "library": "sdk:@google/genai",
+        "line": 276,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/google-generative-ai.js:276",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/google-vertex.js",
+        "library": "sdk:@google/genai",
+        "line": 305,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-ai/dist/api/google-vertex.js:305",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/mistral-conversations.js",
+        "library": "fetch",
+        "line": 165,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-ai/dist/api/mistral-conversations.js:165",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/openai-codex-responses.js",
+        "library": "fetch",
+        "line": 265,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "chatgpt.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/api/openai-codex-responses.js:19",
+            "value": "https://chatgpt.com/backend-api"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/openai-codex-responses.js",
+        "library": "websocket",
+        "line": 792,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "chatgpt.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/api/openai-codex-responses.js:19",
+            "value": "https://chatgpt.com/backend-api"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/openai-completions.js",
+        "library": "sdk:openai",
+        "line": 573,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/openai-completions.js:573",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/openai-responses.js",
+        "library": "sdk:openai",
+        "line": 201,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/openai-responses.js:201",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/openrouter-images.js",
+        "library": "sdk:openai",
+        "line": 73,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-ai/dist/api/openrouter-images.js:73",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/api/pi-messages.js",
+        "library": "fetch",
+        "line": 270,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-ai/dist/api/pi-messages.js:270",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/anthropic.js",
+        "library": "fetch",
+        "line": 144,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "platform.claude.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/anthropic.js:15",
+            "value": "https://platform.claude.com/v1/oauth/token"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js",
+        "library": "fetch",
+        "line": 107,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "api.individual.githubcopilot.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js:59",
+            "value": "https://api.individual.githubcopilot.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js",
+        "library": "fetch",
+        "line": 147,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "github.com",
+            "kind": "host",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js:245",
+            "value": "github.com"
+          },
+          {
+            "host": "github.com",
+            "kind": "host",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js:348",
+            "value": "github.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js",
+        "library": "fetch",
+        "line": 51,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "auth.kimi.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js:12",
+            "value": "https://auth.kimi.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js",
+        "library": "fetch",
+        "line": 118,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "auth.kimi.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js:12",
+            "value": "https://auth.kimi.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js",
+        "library": "fetch",
+        "line": 186,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "auth.kimi.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/kimi-coding.js:12",
+            "value": "https://auth.kimi.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js",
+        "library": "fetch",
+        "line": 87,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "auth.openai.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js:23",
+            "value": "https://auth.openai.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js",
+        "library": "fetch",
+        "line": 130,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "auth.openai.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js:23",
+            "value": "https://auth.openai.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/openrouter.js",
+        "library": "fetch",
+        "line": 69,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "openrouter.ai",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/openrouter.js:18",
+            "value": "https://openrouter.ai/api/v1/auth/keys"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/radius.js",
+        "library": "fetch",
+        "line": 33,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/radius.js:33",
+            "value": "new URL ... ateway)"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/radius.js",
+        "library": "fetch",
+        "line": 79,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/radius.js:79",
+            "value": "new URL ... ateway)"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/radius.js",
+        "library": "fetch",
+        "line": 213,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/radius.js:213",
+            "value": "new URL ... ateway)"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/xai.js",
+        "library": "fetch",
+        "line": 44,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "auth.x.ai",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/xai.js:7",
+            "value": "https://auth.x.ai/oauth2/device/code"
+          },
+          {
+            "host": "auth.x.ai",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/auth/oauth/xai.js:8",
+            "value": "https://auth.x.ai/oauth2/token"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-ai/dist/providers/radius-config.js",
+        "library": "fetch",
+        "line": 54,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "radius.pi.dev",
+            "kind": "url",
+            "origin": "@earendil-works/pi-ai/dist/providers/radius-config.js:1",
+            "value": "https://radius.pi.dev"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/anthropic-messages-VWZZOSJQ.js",
+        "library": "sdk:Anthropic",
+        "line": 6,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/anthropic-messages-VWZZOSJQ.js:6",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/anthropic.js",
+        "library": "fetch",
+        "line": 75,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "platform.claude.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/anthropic.js:75",
+            "value": "https://platform.claude.com/v1/oauth/token"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/azure-openai-responses-BJLAM6CD.js",
+        "library": "sdk:AzureOpenAI",
+        "line": 2,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/azure-openai-responses-BJLAM6CD.js:2",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/@smithy/fetch-http-handler/dist-cjs/index.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "library": "fetch",
+        "line": 25,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js:25",
+            "value": "fetchRequest"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/@aws-sdk/middleware-websocket/dist-cjs/index.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "library": "websocket",
+        "line": 25,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js:25",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/@smithy/credential-provider-imds/dist-cjs/index.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "library": "node-http",
+        "line": 36,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js:36",
+            "value": "options ... /,\"$1\")"
+          },
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js:36",
+            "value": "{method ... ,\"$1\")}"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/@smithy/node-http-handler/dist-cjs/index.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "library": "node-http",
+        "line": 39,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js:39",
+            "value": "nodeHttpsOptions"
+          },
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js:39",
+            "value": "hostname"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "library": "sdk:@aws-sdk/client-bedrock-runtime",
+        "line": 74,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js:74",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-CLNPYIDP.js",
+        "library": "fetch",
+        "line": 6,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-CLNPYIDP.js:6",
+            "value": "url"
+          },
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-CLNPYIDP.js:6",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-CLNPYIDP.js",
+        "library": "fetch",
+        "line": 42,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-CLNPYIDP.js:42",
+            "value": "innerUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/undici/index.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "undici",
+        "line": 269,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:269",
+            "value": "{...res ... \"GET\")}"
+          },
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:269",
+            "value": "origin"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/undici/index.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "undici",
+        "line": 272,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:272",
+            "value": "init"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "fetch",
+        "line": 484,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "radius.pi.dev",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:484",
+            "value": "https://radius.pi.dev"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "fetch",
+        "line": 1063,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1063",
+            "value": "`${opti ... stream`"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "fetch",
+        "line": 1159,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "github.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1159",
+            "value": "https://github.com"
+          },
+          {
+            "host": "pi.dev",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1243",
+            "value": "https://pi.dev"
+          },
+          {
+            "host": "pi.dev",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1305",
+            "value": "https://pi.dev/api/latest-version"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "undici",
+        "line": 1247,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1247",
+            "value": "origin"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "fetch",
+        "line": 1279,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1279",
+            "value": "`${this ... ls/sse`"
+          },
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1287",
+            "value": "LLAMA_BASE_URL"
+          },
+          {
+            "host": "127.0.0.1",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1287",
+            "value": "http://127.0.0.1:8080"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "fetch",
+        "line": 1287,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "huggingface.co",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1287",
+            "value": "https://huggingface.co"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "fetch",
+        "line": 1342,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "radius.pi.dev",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:484",
+            "value": "https://radius.pi.dev"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "fetch",
+        "line": 1354,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1354",
+            "value": "`https: ... sion)}`"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "library": "fetch",
+        "line": 1470,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1471",
+            "value": "PI_INSTALLER_API_BASE"
+          },
+          {
+            "host": "pi.dev",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js:1470",
+            "value": "https://pi.dev/api/installer/releases"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js",
+        "library": "fetch",
+        "line": 6,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js:6",
+            "value": "tokenExchangeUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js",
+        "library": "fetch",
+        "line": 25,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js:25",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js",
+        "library": "sdk:constructor",
+        "line": 25,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js:25",
+            "value": "baseURL"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/gaxios/build/cjs/src/gaxios.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "library": "fetch",
+        "line": 3,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:3",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/ws/lib/websocket.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "library": "node-http",
+        "line": 31,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:31",
+            "value": "opts"
+          },
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:31",
+            "value": "void 0"
+          },
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:31",
+            "value": "hostname"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/ws/lib/permessage-deflate.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "library": "websocket",
+        "line": 31,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:31",
+            "value": "concurrencyLimit"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/ws/lib/websocket-server.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "library": "websocket",
+        "line": 31,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:31",
+            "value": "null"
+          },
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:31",
+            "value": "{...thi ... ayload}"
+          }
+        ]
+      },
+      {
+        "bundledModule": "node_modules/ws/lib/websocket.js",
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "library": "websocket",
+        "line": 31,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:31",
+            "value": "socket"
+          },
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:31",
+            "value": "{...opt ... ayload}"
+          },
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:31",
+            "value": "{allowS ... dation}"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "library": "fetch",
+        "line": 41,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "dummy.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:41",
+            "value": "http://dummy.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "library": "fetch",
+        "line": 49,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:49",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "library": "sdk:GeminiNextGenAPIClient",
+        "line": 49,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:49",
+            "value": "this.ap ... seUrl()"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "library": "websocket",
+        "line": 49,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js:49",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/github-copilot.js",
+        "library": "fetch",
+        "line": 2,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "api.individual.githubcopilot.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/github-copilot.js:2",
+            "value": "https://api.individual.githubcopilot.com"
+          },
+          {
+            "host": "github.com",
+            "kind": "host",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/github-copilot.js:2",
+            "value": "github.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/kimi-coding.js",
+        "library": "fetch",
+        "line": 2,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "auth.kimi.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/kimi-coding.js:2",
+            "value": "https://auth.kimi.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/mistral-conversations-4M6BZBX6.js",
+        "library": "fetch",
+        "line": 2,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/mistral-conversations-4M6BZBX6.js:2",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex-responses-R6VYZTVY.js",
+        "library": "fetch",
+        "line": 2,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "chatgpt.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex-responses-R6VYZTVY.js:2",
+            "value": "https://chatgpt.com/backend-api"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex-responses-R6VYZTVY.js",
+        "library": "websocket",
+        "line": 10,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "chatgpt.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex-responses-R6VYZTVY.js:2",
+            "value": "https://chatgpt.com/backend-api"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex.js",
+        "library": "fetch",
+        "line": 75,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "auth.openai.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex.js:75",
+            "value": "https://auth.openai.com"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-completions-EKZT2IH2.js",
+        "library": "sdk:OpenAI",
+        "line": 3,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-completions-EKZT2IH2.js:3",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-responses-TFDINO6W.js",
+        "library": "sdk:OpenAI",
+        "line": 2,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-responses-TFDINO6W.js:2",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openrouter-images-N4XVVFSD.js",
+        "library": "sdk:OpenAI",
+        "line": 2,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "property",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openrouter-images-N4XVVFSD.js:2",
+            "value": "baseUrl"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openrouter.js",
+        "library": "fetch",
+        "line": 75,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "openrouter.ai",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openrouter.js:75",
+            "value": "https://openrouter.ai/api/v1/auth/keys"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/pi-messages-PML4SPVJ.js",
+        "library": "fetch",
+        "line": 8,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/pi-messages-PML4SPVJ.js:8",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/radius.js",
+        "library": "fetch",
+        "line": 75,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/radius.js:75",
+            "value": "new URL ... ateway)"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/src-UK77SYZE.js",
+        "library": "node-http",
+        "line": 2,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/src-UK77SYZE.js:2",
+            "value": "parsedURL.toString()"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/xai.js",
+        "library": "fetch",
+        "line": 2,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "auth.x.ai",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/xai.js:2",
+            "value": "https://auth.x.ai/oauth2/device/code"
+          },
+          {
+            "host": "auth.x.ai",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/xai.js:2",
+            "value": "https://auth.x.ai/oauth2/token"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/core/http-dispatcher.js",
+        "library": "undici",
+        "line": 56,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "@earendil-works/pi-coding-agent/dist/core/http-dispatcher.js:56",
+            "value": "origin"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/core/http-dispatcher.js",
+        "library": "undici",
+        "line": 63,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "argument",
+            "origin": "@earendil-works/pi-coding-agent/dist/core/http-dispatcher.js:63",
+            "value": "origin"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/extensions/llama/client.js",
+        "library": "fetch",
+        "line": 131,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "@earendil-works/pi-coding-agent/dist/extensions/llama/provider.js:76",
+            "value": "LLAMA_BASE_URL"
+          },
+          {
+            "host": "127.0.0.1",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/extensions/llama/provider.js:4",
+            "value": "http://127.0.0.1:8080"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/extensions/llama/client.js",
+        "library": "fetch",
+        "line": 182,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/extensions/llama/client.js:182",
+            "value": "`${this ... ls/sse`"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/extensions/llama/huggingface.js",
+        "library": "fetch",
+        "line": 55,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "huggingface.co",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/extensions/llama/huggingface.js:4",
+            "value": "https://huggingface.co"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
+        "library": "fetch",
+        "line": 937,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js:937",
+            "value": "`https: ... sion)}`"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/modes/interactive/session-share.js",
+        "library": "fetch",
+        "line": 98,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-coding-agent/dist/modes/interactive/session-share.js:98",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/package-manager-cli.js",
+        "library": "fetch",
+        "line": 46,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "env",
+            "origin": "@earendil-works/pi-coding-agent/dist/package-manager-cli.js:147",
+            "value": "PI_INSTALLER_API_BASE"
+          },
+          {
+            "host": "pi.dev",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/package-manager-cli.js:20",
+            "value": "https://pi.dev/api/installer/releases"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
+        "file": "@earendil-works/pi-coding-agent/dist/utils/management-http.js",
+        "library": "fetch",
+        "line": 28,
+        "readBy": "pi",
+        "targets": [
+          {
+            "host": "github.com",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js:116",
+            "value": "https://github.com"
+          },
+          {
+            "host": "pi.dev",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/core/remote-catalog-provider.js:4",
+            "value": "https://pi.dev"
+          },
+          {
+            "host": "pi.dev",
+            "kind": "url",
+            "origin": "@earendil-works/pi-coding-agent/dist/utils/version-check.js:4",
+            "value": "https://pi.dev/api/latest-version"
+          }
+        ]
+      }
+    ],
+    "unattributed": [
+      {
+        "file": "src/extensions/login/flow.ts",
+        "host": "your-kimchi-host.example.com",
+        "line": 139,
+        "readBy": "kimchi",
+        "value": "https://your-kimchi-host.example.com"
+      },
+      {
+        "file": "src/extensions/remote-run/index.ts",
+        "host": "e2e.fake",
+        "line": 52,
+        "readBy": "kimchi",
+        "value": "ws://e2e.fake"
+      },
+      {
+        "file": "src/extensions/report-bug.ts",
+        "host": "github.com",
+        "line": 13,
+        "readBy": "kimchi",
+        "value": "https://github.com/getkimchi/kimchi/issues/new"
+      },
+      {
+        "file": "src/integrations/openclaw.ts",
+        "host": "openclaw.ai",
+        "line": 271,
+        "readBy": "kimchi",
+        "value": "https://openclaw.ai/install.sh"
+      },
+      {
+        "file": "src/integrations/opencode.ts",
+        "host": "opencode.ai",
+        "line": 187,
+        "readBy": "kimchi",
+        "value": "https://opencode.ai/config.json"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/bedrock-converse-stream.js",
+        "host": "docs.aws.amazon.com",
+        "line": 256,
+        "readBy": "pi",
+        "value": "https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/cloudflare.d.ts",
+        "host": "api.cloudflare.com",
+        "line": 2,
+        "readBy": "pi",
+        "value": "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/cloudflare.d.ts",
+        "host": "gateway.ai.cloudflare.com",
+        "line": 4,
+        "readBy": "pi",
+        "value": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/cloudflare.d.ts",
+        "host": "gateway.ai.cloudflare.com",
+        "line": 6,
+        "readBy": "pi",
+        "value": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/cloudflare.d.ts",
+        "host": "gateway.ai.cloudflare.com",
+        "line": 8,
+        "readBy": "pi",
+        "value": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/cloudflare.js",
+        "host": "api.cloudflare.com",
+        "line": 2,
+        "readBy": "pi",
+        "value": "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/cloudflare.js",
+        "host": "gateway.ai.cloudflare.com",
+        "line": 4,
+        "readBy": "pi",
+        "value": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/cloudflare.js",
+        "host": "gateway.ai.cloudflare.com",
+        "line": 6,
+        "readBy": "pi",
+        "value": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/cloudflare.js",
+        "host": "gateway.ai.cloudflare.com",
+        "line": 8,
+        "readBy": "pi",
+        "value": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/api/openai-codex-responses.js",
+        "host": "api.openai.com",
+        "line": 20,
+        "readBy": "pi",
+        "value": "https://api.openai.com/auth"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/anthropic.js",
+        "host": "claude.ai",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://claude.ai/oauth/authorize"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/anthropic.js",
+        "host": "localhost",
+        "line": 95,
+        "readBy": "pi",
+        "value": "http://localhost"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/github-copilot.js",
+        "host": "api.individual.githubcopilot.com",
+        "line": 132,
+        "readBy": "pi",
+        "value": "https://api.individual.githubcopilot.com"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js",
+        "host": "localhost",
+        "line": 26,
+        "readBy": "pi",
+        "value": "http://localhost:1455/auth/callback"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js",
+        "host": "api.openai.com",
+        "line": 35,
+        "readBy": "pi",
+        "value": "https://api.openai.com/auth"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js",
+        "host": "localhost",
+        "line": 261,
+        "readBy": "pi",
+        "value": "http://localhost"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/auth/oauth/openrouter.js",
+        "host": "openrouter.ai",
+        "line": 17,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/auth"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 10,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 25,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 40,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 55,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 70,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 85,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 100,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 115,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 130,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 145,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 160,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 175,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 190,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 205,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 220,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 235,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 250,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 265,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 280,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 295,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 310,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 325,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 340,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 355,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 370,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 385,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 400,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 415,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 430,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 445,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 460,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 475,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 490,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 505,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 520,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 535,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 550,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 565,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 580,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 595,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 610,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 625,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 640,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 655,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 670,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 685,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 700,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 715,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 730,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 745,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 760,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/image-models.generated.js",
+        "host": "openrouter.ai",
+        "line": 775,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/amazon-bedrock.js",
+        "host": "docs.aws.amazon.com",
+        "line": 35,
+        "readBy": "pi",
+        "value": "https://docs.aws.amazon.com/sdkref/latest/guide/standardized-credentials.html"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/ant-ling.js",
+        "host": "api.ant-ling.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.ant-ling.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/anthropic.js",
+        "host": "api.anthropic.com",
+        "line": 43,
+        "readBy": "pi",
+        "value": "https://api.anthropic.com"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/baseten.js",
+        "host": "inference.baseten.co",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://inference.baseten.co/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/cerebras.js",
+        "host": "api.cerebras.ai",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.cerebras.ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/deepseek.js",
+        "host": "api.deepseek.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.deepseek.com"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/faux.js",
+        "host": "localhost",
+        "line": 7,
+        "readBy": "pi",
+        "value": "http://localhost:0"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/fireworks.js",
+        "host": "api.fireworks.ai",
+        "line": 10,
+        "readBy": "pi",
+        "value": "https://api.fireworks.ai/inference"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/github-copilot.js",
+        "host": "api.individual.githubcopilot.com",
+        "line": 12,
+        "readBy": "pi",
+        "value": "https://api.individual.githubcopilot.com"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/google-vertex.js",
+        "host": "cloud.google.com",
+        "line": 41,
+        "readBy": "pi",
+        "value": "https://cloud.google.com/docs/authentication/provide-credentials-adc"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/google.js",
+        "host": "generativelanguage.googleapis.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://generativelanguage.googleapis.com/v1beta"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/groq.js",
+        "host": "api.groq.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.groq.com/openai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/huggingface.js",
+        "host": "router.huggingface.co",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://router.huggingface.co/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/kimi-coding.js",
+        "host": "api.kimi.com",
+        "line": 10,
+        "readBy": "pi",
+        "value": "https://api.kimi.com/coding"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/minimax-cn.js",
+        "host": "api.minimaxi.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.minimaxi.com/anthropic"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/minimax.js",
+        "host": "api.minimax.io",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.minimax.io/anthropic"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/mistral.js",
+        "host": "api.mistral.ai",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.mistral.ai"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/moonshotai-cn.js",
+        "host": "api.moonshot.cn",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.moonshot.cn/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/moonshotai.js",
+        "host": "api.moonshot.ai",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.moonshot.ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/nvidia.js",
+        "host": "integrate.api.nvidia.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://integrate.api.nvidia.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/openai-codex.js",
+        "host": "chatgpt.com",
+        "line": 10,
+        "readBy": "pi",
+        "value": "https://chatgpt.com/backend-api"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/openai.js",
+        "host": "api.openai.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.openai.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/openrouter.js",
+        "host": "openrouter.ai",
+        "line": 11,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/qwen-token-plan-cn.js",
+        "host": "token-plan.cn-beijing.maas.aliyuncs.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/qwen-token-plan-individual.js",
+        "host": "token-plan.ap-southeast-1.maas.aliyuncs.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/qwen-token-plan.js",
+        "host": "token-plan.ap-southeast-1.maas.aliyuncs.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/radius-config.d.ts",
+        "host": "radius.pi.dev",
+        "line": 3,
+        "readBy": "pi",
+        "value": "https://radius.pi.dev"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/together.js",
+        "host": "api.together.ai",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.together.ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/vercel-ai-gateway.js",
+        "host": "ai-gateway.vercel.sh",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://ai-gateway.vercel.sh"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/xai.js",
+        "host": "api.x.ai",
+        "line": 10,
+        "readBy": "pi",
+        "value": "https://api.x.ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/xiaomi-token-plan-ams.js",
+        "host": "token-plan-ams.xiaomimimo.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://token-plan-ams.xiaomimimo.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/xiaomi-token-plan-cn.js",
+        "host": "token-plan-cn.xiaomimimo.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://token-plan-cn.xiaomimimo.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/xiaomi-token-plan-sgp.js",
+        "host": "token-plan-sgp.xiaomimimo.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://token-plan-sgp.xiaomimimo.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/xiaomi.js",
+        "host": "api.xiaomimimo.com",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.xiaomimimo.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/zai-coding-cn.js",
+        "host": "open.bigmodel.cn",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://open.bigmodel.cn/api/coding/paas/v4"
+      },
+      {
+        "file": "@earendil-works/pi-ai/dist/providers/zai.js",
+        "host": "api.z.ai",
+        "line": 9,
+        "readBy": "pi",
+        "value": "https://api.z.ai/api/coding/paas/v4"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/anthropic.js",
+        "host": "localhost",
+        "line": 75,
+        "readBy": "pi",
+        "value": "http://localhost"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/anthropic.js",
+        "host": "claude.ai",
+        "line": 75,
+        "readBy": "pi",
+        "value": "https://claude.ai/oauth/authorize"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "[::1]",
+        "line": 25,
+        "readBy": "pi",
+        "value": "https://[::1]"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "169.254.169.254",
+        "line": 36,
+        "readBy": "pi",
+        "value": "http://169.254.169.254"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "[fd00:ec2::254]",
+        "line": 36,
+        "readBy": "pi",
+        "value": "http://[fd00:ec2::254]"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "aws.amazon.com",
+        "line": 36,
+        "readBy": "pi",
+        "value": "https://aws.amazon.com/javascript/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "docs.aws.amazon.com",
+        "line": 36,
+        "readBy": "pi",
+        "value": "https://docs.aws.amazon.com/sdkref/latest/guide/feature-static-credentials.html"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "github.com",
+        "line": 36,
+        "readBy": "pi",
+        "value": "https://github.com/aws/aws-sdk-js-v3.git"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "github.com",
+        "line": 36,
+        "readBy": "pi",
+        "value": "https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-bedrock-runtime"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "169.254.170.2",
+        "line": 42,
+        "readBy": "pi",
+        "value": "http://169.254.170.2"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "aws.amazon.com",
+        "line": 43,
+        "readBy": "pi",
+        "value": "https://aws.amazon.com/javascript/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "github.com",
+        "line": 43,
+        "readBy": "pi",
+        "value": "https://github.com/aws/aws-sdk-js-v3.git"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "github.com",
+        "line": 43,
+        "readBy": "pi",
+        "value": "https://github.com/aws/aws-sdk-js-v3/tree/main/packages/nested-clients"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "oidc-fips.{region}.{partitionresult",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://oidc-fips.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "oidc-fips.{region}.{partitionresult",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://oidc-fips.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "oidc.{region}.amazonaws.com",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://oidc.{Region}.amazonaws.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "oidc.{region}.{partitionresult",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://oidc.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "oidc.{region}.{partitionresult",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://oidc.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "portal.sso-fips.{region}.{partitionresult",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://portal.sso-fips.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "portal.sso-fips.{region}.{partitionresult",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://portal.sso-fips.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "portal.sso.{region}.amazonaws.com",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://portal.sso.{Region}.amazonaws.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "portal.sso.{region}.{partitionresult",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://portal.sso.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "portal.sso.{region}.{partitionresult",
+        "line": 50,
+        "readBy": "pi",
+        "value": "https://portal.sso.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "signin-fips.{region}.{partitionresult",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://signin-fips.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "signin-fips.{region}.{partitionresult",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://signin-fips.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "signin.{region}.{partitionresult",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://signin.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "signin.{region}.{partitionresult",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://signin.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "sts-fips.{region}.{partitionresult",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://sts-fips.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "sts-fips.{region}.{partitionresult",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://sts-fips.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "sts.amazonaws.com",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://sts.amazonaws.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "sts.amazonaws.com",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://sts.amazonaws.com/doc/2011-06-15/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "sts.{region}.amazonaws.com",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://sts.{Region}.amazonaws.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "sts.{region}.{partitionresult",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://sts.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "sts.{region}.{partitionresult",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://sts.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "{region}.signin.amazonaws-us-gov.com",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://{Region}.signin.amazonaws-us-gov.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "{region}.signin.amazonaws.cn",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://{Region}.signin.amazonaws.cn"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "{region}.signin.aws.amazon.com",
+        "line": 51,
+        "readBy": "pi",
+        "value": "https://{Region}.signin.aws.amazon.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "bedrock-runtime-fips.{region}.{partitionresult",
+        "line": 59,
+        "readBy": "pi",
+        "value": "https://bedrock-runtime-fips.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "bedrock-runtime-fips.{region}.{partitionresult",
+        "line": 59,
+        "readBy": "pi",
+        "value": "https://bedrock-runtime-fips.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "bedrock-runtime.{region}.{partitionresult",
+        "line": 59,
+        "readBy": "pi",
+        "value": "https://bedrock-runtime.{Region}.{PartitionResult#dnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "bedrock-runtime.{region}.{partitionresult",
+        "line": 59,
+        "readBy": "pi",
+        "value": "https://bedrock-runtime.{Region}.{PartitionResult#dualStackDnsSuffix}"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js",
+        "host": "docs.aws.amazon.com",
+        "line": 74,
+        "readBy": "pi",
+        "value": "https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-CLNPYIDP.js",
+        "host": "api.anthropic.com",
+        "line": 34,
+        "readBy": "pi",
+        "value": "https://api.anthropic.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-CLNPYIDP.js",
+        "host": "api.anthropic.com",
+        "line": 42,
+        "readBy": "pi",
+        "value": "https://api.anthropic.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "localhost",
+        "line": 180,
+        "readBy": "pi",
+        "value": "http://localhost:9999"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "pi.dev",
+        "line": 276,
+        "readBy": "pi",
+        "value": "https://pi.dev/session/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "localhost",
+        "line": 470,
+        "readBy": "pi",
+        "value": "http://localhost:0"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "example.com",
+        "line": 476,
+        "readBy": "pi",
+        "value": "http://example.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "unknown",
+        "line": 476,
+        "readBy": "pi",
+        "value": "http://unknown"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "unknown",
+        "line": 476,
+        "readBy": "pi",
+        "value": "http://unknown/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "ai-gateway.vercel.sh",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://ai-gateway.vercel.sh"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.ant-ling.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.ant-ling.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.anthropic.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.anthropic.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.cerebras.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.cerebras.ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.cloudflare.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.deepseek.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.deepseek.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.fireworks.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.fireworks.ai/inference"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.fireworks.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.fireworks.ai/inference/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.groq.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.groq.com/openai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.individual.githubcopilot.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.individual.githubcopilot.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.kimi.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.kimi.com/coding"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.minimax.io",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.minimax.io/anthropic"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.minimaxi.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.minimaxi.com/anthropic"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.mistral.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.mistral.ai"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.moonshot.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.moonshot.ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.moonshot.cn",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.moonshot.cn/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.openai.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.openai.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.together.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.together.ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.x.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.x.ai/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.xiaomimimo.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.xiaomimimo.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "api.z.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://api.z.ai/api/coding/paas/v4"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "bedrock-runtime.eu-central-1.amazonaws.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://bedrock-runtime.eu-central-1.amazonaws.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "bedrock-runtime.us-east-1.amazonaws.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://bedrock-runtime.us-east-1.amazonaws.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "chatgpt.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://chatgpt.com/backend-api"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "cloud.google.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://cloud.google.com/docs/authentication/provide-credentials-adc"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "docs.aws.amazon.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://docs.aws.amazon.com/sdkref/latest/guide/standardized-credentials.html"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "gateway.ai.cloudflare.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "gateway.ai.cloudflare.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/compat"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "gateway.ai.cloudflare.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "generativelanguage.googleapis.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://generativelanguage.googleapis.com/v1beta"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "inference.baseten.co",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://inference.baseten.co/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "integrate.api.nvidia.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://integrate.api.nvidia.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "open.bigmodel.cn",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://open.bigmodel.cn/api/coding/paas/v4"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "opencode.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://opencode.ai/zen"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "opencode.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://opencode.ai/zen/go"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "opencode.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://opencode.ai/zen/go/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "opencode.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://opencode.ai/zen/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "openrouter.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "openrouter.ai",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/api/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "router.huggingface.co",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://router.huggingface.co/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "token-plan-ams.xiaomimimo.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://token-plan-ams.xiaomimimo.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "token-plan-cn.xiaomimimo.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://token-plan-cn.xiaomimimo.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "token-plan-sgp.xiaomimimo.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://token-plan-sgp.xiaomimimo.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "token-plan.ap-southeast-1.maas.aliyuncs.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "token-plan.cn-beijing.maas.aliyuncs.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "{location}-aiplatform.googleapis.com",
+        "line": 484,
+        "readBy": "pi",
+        "value": "https://{location}-aiplatform.googleapis.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "pi.dev",
+        "line": 1247,
+        "readBy": "pi",
+        "value": "https://pi.dev"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "github.com",
+        "line": 1298,
+        "readBy": "pi",
+        "value": "https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/CHANGELOG.md#extensions-migration"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "github.com",
+        "line": 1298,
+        "readBy": "pi",
+        "value": "https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/extensions.md"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "mariozechner.at",
+        "line": 1324,
+        "readBy": "pi",
+        "value": "https://mariozechner.at/posts/2026-04-08-ive-sold-out/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "mistral.ai",
+        "line": 1324,
+        "readBy": "pi",
+        "value": "https://mistral.ai/news/mistral-vibe-2-0"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-JVUZSMYM.js",
+        "host": "pi.dev",
+        "line": 1367,
+        "readBy": "pi",
+        "value": "https://pi.dev/changelog"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js",
+        "host": "auth.openai.com",
+        "line": 6,
+        "readBy": "pi",
+        "value": "https://auth.openai.com/oauth/token"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js",
+        "host": "api.openai.com",
+        "line": 15,
+        "readBy": "pi",
+        "value": "https://api.openai.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js",
+        "host": "api.openai.com",
+        "line": 25,
+        "readBy": "pi",
+        "value": "https://api.openai.com/v1"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "github.com",
+        "line": 2,
+        "readBy": "pi",
+        "value": "https://github.com/googleapis/google-cloud-node-core.git"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "github.com",
+        "line": 2,
+        "readBy": "pi",
+        "value": "https://github.com/googleapis/google-cloud-node-core/tree/main/packages/gaxios"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "169.254.169.254",
+        "line": 14,
+        "readBy": "pi",
+        "value": "http://169.254.169.254"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "metadata.google.internal.",
+        "line": 14,
+        "readBy": "pi",
+        "value": "http://metadata.google.internal."
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "accounts.google.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://accounts.google.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "accounts.google.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://accounts.google.com/o/oauth2/v2/auth"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "github.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://github.com/googleapis/google-cloud-node-core.git"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "github.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://github.com/googleapis/google-cloud-node-core/tree/main/packages/google-auth-library-nodejs"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "oauth2.googleapis.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://oauth2.googleapis.com/revoke"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "oauth2.googleapis.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://oauth2.googleapis.com/token"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "oauth2.googleapis.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://oauth2.googleapis.com/tokeninfo"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "www.googleapis.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://www.googleapis.com/oauth2/v1/certs"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "www.googleapis.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://www.googleapis.com/oauth2/v3/certs"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "www.gstatic.com",
+        "line": 14,
+        "readBy": "pi",
+        "value": "https://www.gstatic.com/iap/verify/public_key"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "cloudresourcemanager.googleapis.com",
+        "line": 16,
+        "readBy": "pi",
+        "value": "https://cloudresourcemanager.googleapis.com/v1/projects/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "oauth2.googleapis.com",
+        "line": 16,
+        "readBy": "pi",
+        "value": "https://oauth2.googleapis.com/revoke?token="
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "oauth2.googleapis.com",
+        "line": 16,
+        "readBy": "pi",
+        "value": "https://oauth2.googleapis.com/token"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "sts.{universedomain}",
+        "line": 16,
+        "readBy": "pi",
+        "value": "https://sts.{universeDomain}/v1/token"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "www.googleapis.com",
+        "line": 16,
+        "readBy": "pi",
+        "value": "https://www.googleapis.com/auth/cloud-platform"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "sts.{region}.amazonaws.com",
+        "line": 25,
+        "readBy": "pi",
+        "value": "https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "sts.{universedomain}",
+        "line": 25,
+        "readBy": "pi",
+        "value": "https://sts.{universeDomain}/v1/oauthtoken"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "aiplatform.googleapis.com",
+        "line": 37,
+        "readBy": "pi",
+        "value": "https://aiplatform.googleapis.com/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "generativelanguage.googleapis.com",
+        "line": 37,
+        "readBy": "pi",
+        "value": "https://generativelanguage.googleapis.com/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "generativelanguage.googleapis.com",
+        "line": 49,
+        "readBy": "pi",
+        "value": "https://generativelanguage.googleapis.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-U6ZMQKGD.js",
+        "host": "www.googleapis.com",
+        "line": 49,
+        "readBy": "pi",
+        "value": "https://www.googleapis.com/auth/cloud-platform"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/github-copilot.js",
+        "host": "api.individual.githubcopilot.com",
+        "line": 2,
+        "readBy": "pi",
+        "value": "https://api.individual.githubcopilot.com"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex-responses-R6VYZTVY.js",
+        "host": "api.openai.com",
+        "line": 2,
+        "readBy": "pi",
+        "value": "https://api.openai.com/auth"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex.js",
+        "host": "localhost",
+        "line": 75,
+        "readBy": "pi",
+        "value": "http://localhost"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex.js",
+        "host": "localhost",
+        "line": 75,
+        "readBy": "pi",
+        "value": "http://localhost:1455/auth/callback"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openai-codex.js",
+        "host": "api.openai.com",
+        "line": 75,
+        "readBy": "pi",
+        "value": "https://api.openai.com/auth"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/openrouter.js",
+        "host": "openrouter.ai",
+        "line": 75,
+        "readBy": "pi",
+        "value": "https://openrouter.ai/auth"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/src-UK77SYZE.js",
+        "host": "github.com",
+        "line": 2,
+        "readBy": "pi",
+        "value": "https://github.com/node-fetch/node-fetch/issues/1000 (request)"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/src-UK77SYZE.js",
+        "host": "github.com",
+        "line": 2,
+        "readBy": "pi",
+        "value": "https://github.com/node-fetch/node-fetch/issues/1000 (response)"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/src-UK77SYZE.js",
+        "host": "github.com",
+        "line": 2,
+        "readBy": "pi",
+        "value": "https://github.com/node-fetch/node-fetch/issues/1167"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/config.js",
+        "host": "pi.dev",
+        "line": 411,
+        "readBy": "pi",
+        "value": "https://pi.dev/session/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/core/export-html/vendor/highlight.min.js",
+        "host": "github.com",
+        "line": 267,
+        "readBy": "pi",
+        "value": "https://github.com/highlightjs/highlight.js/wiki/security"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/core/provider-attribution.js",
+        "host": "pi.dev",
+        "line": 33,
+        "readBy": "pi",
+        "value": "https://pi.dev"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/extensions/llama/provider.d.ts",
+        "host": "127.0.0.1",
+        "line": 4,
+        "readBy": "pi",
+        "value": "http://127.0.0.1:8080"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/migrations.js",
+        "host": "github.com",
+        "line": 10,
+        "readBy": "pi",
+        "value": "https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/CHANGELOG.md#extensions-migration"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/migrations.js",
+        "host": "github.com",
+        "line": 11,
+        "readBy": "pi",
+        "value": "https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/extensions.md"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/modes/interactive/components/daxnuts.js",
+        "host": "mistral.ai",
+        "line": 124,
+        "readBy": "pi",
+        "value": "https://mistral.ai/news/mistral-vibe-2-0"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/modes/interactive/components/earendil-announcement.js",
+        "host": "mariozechner.at",
+        "line": 6,
+        "readBy": "pi",
+        "value": "https://mariozechner.at/posts/2026-04-08-ive-sold-out/"
+      },
+      {
+        "file": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
+        "host": "pi.dev",
+        "line": 3613,
+        "readBy": "pi",
+        "value": "https://pi.dev/changelog"
+      }
+    ]
+  },
   "virtualPackages": [
     "@earendil-works/pi-agent-core",
     "@earendil-works/pi-ai",

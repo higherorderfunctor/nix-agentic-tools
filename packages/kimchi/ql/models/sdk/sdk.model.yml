@@ -1,0 +1,49 @@
+# SDK clients kimchi and pi construct with a base URL. The construction site
+# stands for every request the client makes.
+extensions:
+  - addsTo:
+      pack: codeql/javascript-all
+      extensible: sinkModel
+    data:
+      - ["@anthropic-ai/sdk", "Argument[0].Member[baseURL]", "request-forgery"]
+      - [
+          "@anthropic-ai/sdk",
+          "Member[Anthropic].Argument[0].Member[baseURL]",
+          "request-forgery",
+        ]
+      - [
+          "@aws-sdk/client-bedrock-runtime",
+          "Member[BedrockRuntimeClient].Argument[0].Member[endpoint]",
+          "request-forgery",
+        ]
+      - [
+          "@google/genai",
+          "Member[GoogleGenAI].Argument[0].Member[httpOptions].Member[baseUrl]",
+          "request-forgery",
+        ]
+      - [
+          "@modelcontextprotocol/client",
+          "Member[SSEClientTransport,StreamableHTTPClientTransport,WebSocketClientTransport].Argument[0]",
+          "request-forgery",
+        ]
+      - [
+          "'@modelcontextprotocol/sdk/client/sse.js'",
+          "Member[SSEClientTransport].Argument[0]",
+          "request-forgery",
+        ]
+      - [
+          "'@modelcontextprotocol/sdk/client/streamableHttp.js'",
+          "Member[StreamableHTTPClientTransport].Argument[0]",
+          "request-forgery",
+        ]
+      - [
+          "'@modelcontextprotocol/sdk/client/websocket.js'",
+          "Member[WebSocketClientTransport].Argument[0]",
+          "request-forgery",
+        ]
+      - ["openai", "Argument[0].Member[baseURL]", "request-forgery"]
+      - [
+          "openai",
+          "Member[AzureOpenAI,OpenAI].Argument[0].Member[baseURL,endpoint]",
+          "request-forgery",
+        ]

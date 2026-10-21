@@ -1,9 +1,8 @@
 ## Kimchi CodeQL database
 
 > **Last verified:** 2026-10-22 — Kimchi 1.17.2; `passthru.codeql` carries
-> `database`, `runQueries`, `mkQueryRunner`, `createDatabase` and `engine`;
-> `source` is internal; the check runs the smoke pack; `codeql:kimchi-db` builds
-> it locally; the environment fact reads it (kimchi-codeql-environment.md).
+> `database`, `databaseOf`, `runQueries`, `mkQueryRunner`, `createDatabase` and
+> `engine`; the environment and network facts read it.
 
 ### Three layers
 
@@ -16,13 +15,14 @@
 - **`database`**: one CodeQL database of `source`, under `$out/db`. It moves
   with `source`, the engine and nixpkgs, so a nixpkgs bump costs one database
   rebuild of about 85 s.
-- **`runQueries { name; queries; models ? []; }`**: every query of an
-  `ai.devTools.codeql.mkQueryPack` spec, run against a copy of `database` with
-  optional `mkModelPack` specs. `engine.customizePackage` realizes the specs, so
-  the pack compiles against the engine that built the database.
-  `$out/<query>.json` is `codeql bqrs decode --format=json` of every result set
-  of `<query>.ql`, its tuples sorted. `mkQueryRunner { queries; models; }` is
-  the same run as a script, `kimchi-codeql-run-queries <db> <out>`.
+- **`runQueries { name; queries; models ? []; on ? database; }`**: every query
+  of an `ai.devTools.codeql.mkQueryPack` spec, run against a copy of `on` with
+  optional `mkModelPack` specs. `engine.customizePackage` realizes the specs,
+  compiling against the engine that built the database. `databaseOf name tree`
+  builds a database of another tree laid out as `source`. `$out/<query>.json` is
+  `codeql bqrs decode --format=json` of every result set of `<query>.ql`, its
+  tuples sorted. `mkQueryRunner { queries; models; }` is the same run as a
+  script, `kimchi-codeql-run-queries <db> <out>`.
 
 Editing a query rebuilds its pack and its results. The database stays cached.
 Select strings, relative paths and numbers only: an entity or an absolute
