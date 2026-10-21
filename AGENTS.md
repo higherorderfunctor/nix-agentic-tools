@@ -127,6 +127,7 @@ for it. When several entries match, their guidance composes.
     - `packages/codeql/**`
   - Read:
     - [`packages/codeql/docs/codeql.md`](packages/codeql/docs/codeql.md)
+    - [`packages/codeql/docs/customize.md`](packages/codeql/docs/customize.md)
 - **`codex-daemon`**
   - Match:
     - `packages/chatgpt-codex/**`

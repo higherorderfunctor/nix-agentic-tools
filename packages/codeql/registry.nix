@@ -12,6 +12,11 @@
         name = "codeql";
         dir = facetOwner;
       }
+      {
+        location = "package";
+        name = "customize";
+        dir = facetOwner;
+      }
     ];
   };
   # One target: every engine's script bumps every asset from the same tag.

@@ -7,9 +7,10 @@ applyTo: "packages/codeql/**"
 
 ## CodeQL engines
 
-> **Last verified:** 2026-10-21 (commit d2ecea76) — eleven engines at 2.27.3
-> from one `mkEngine` factory; CI builds javascript and evaluates the rest; the
-> update input lanes build none.
+> **Last verified:** 2026-10-21 (commit 044e6939) — eleven engines at 2.27.3
+> from one `mkEngine` factory; the javascript engine wraps its launcher with a
+> Node; CI builds javascript and evaluates the rest; the update input lanes
+> build none. Packs and `customizePackage`: customize.md.
 
 ### What a bundle is
 
@@ -40,13 +41,20 @@ The languages are actions, cpp, csharp, go, java, javascript, python, ruby and
 rust. All are x86_64-linux only (each recipe directory has a `platforms.nix`, so
 the attribute is absent on Darwin). Each installs to `$out/share/codeql` with
 `bin/codeql` symlinked to the launcher, which resolves its distribution by
-following the symlink.
+following the symlink. The javascript engine's `bin/codeql` is instead a
+`makeWrapper` of the launcher that sets `SEMMLE_TYPESCRIPT_NODE_RUNTIME` to its
+`nodejs` argument (`passthru.nodejs`, swapped with
+`.override { nodejs = ...; }`): the TypeScript extractor runs Node, and the
+bundle ships none.
 
 The leaf name repeats `codeql` because a flat package name is the last key of
 its path (`lib/facets.nix` `flattenPackages`): `ai.devTools.codeql.javascript`
 would publish a flat package called `javascript`. The `codeql` namespace keeps
 the engines together under `ai.devTools`, and the prefix keeps every flat name
 unique and matched by the `codeql` push filter.
+
+`lib/mkEngine.nix` is the one body. Each call site passes only `engine`;
+`sources.json` holds the url and hash per engine under one `version`.
 
 `autoPatchelfIgnoreMissingDeps` lists the JREs' X11, font and sound libraries
 and the .NET runtime's LTTng provider. The list was measured over every x86-64
@@ -103,3 +111,127 @@ The update pipeline's input lanes skip the engines for the same reason:
 `ci-packages.py update-plan`, which drops the `codeql-` prefix from both the
 expected set and the `--select`. An update PR still runs the smoke check in
 `ci.yml`.
+
+<!-- Fragment: packages/codeql/docs/customize.md -->
+
+## CodeQL packs and customizePackage
+
+> **Last verified:** 2026-10-21 (commit 044e6939) — every engine carries
+> `customizePackage`, `mkQueryPack` and `mkModelPack`; packs reach CodeQL
+> through a generated `CODEQL_CONFIG_FILE`; query packs are precompiled.
+>
+> **Settled — do not relitigate.** Each was measured on the 2.27.3 javascript
+> bundle and rejected:
+>
+> - **A symlink farm of the distribution with the packs inside it.** The
+>   launcher accepts a farm, but the manifest globs do not descend a symlinked
+>   directory (`codeql/javascript-queries` stopped resolving), a symlinked pack
+>   root resolves zero queries, and a pack without a lock file in the
+>   distribution root fails dependency resolution. A sibling of the distribution
+>   is searched only one level deep and only in real directories.
+> - **`--search-path` for the packs.** It survives a command-line
+>   `--additional-packs`, but `--model-packs` finds extension packs only through
+>   `--additional-packs`.
+> - **`ai.devTools.codeql.mkQueryPack` through an owner `overlay.nix`.** The
+>   overlay check (`lib/facets.nix` `changedLeafPaths`) compares every sibling
+>   leaf of `ai` with `==`, which forces each derivation's outPath, so reading
+>   any `pkgs.ai` attribute would instantiate every `ai` package.
+
+### Surface
+
+```nix
+engine = ai.devTools.codeql.codeql-javascript;
+engine.customizePackage { queries = [ ./ql ]; models = [ ./models ]; extraPackages = [ pkgs.gnumake ]; }
+engine.mkQueryPack { name = "me/my-queries"; src = ./ql; }     # language defaults to the engine's
+engine.mkModelPack { name = "me/my-models"; src = ./models; }
+engine.override { nodejs = pkgs.nodejs-slim; }
+```
+
+The builders are passthru on each engine, because a query pack is compiled
+against one engine. `language` defaults to a language bundle's own and must be
+named on `codeql-full`; `codeql-bare` has no libraries and throws. Every field
+is optional, and a bad spec or argument throws (`lib/customization.nix`,
+`lib/packs.nix`). `queries` and `models` take a directory holding a qlpack.yml
+or a builder result. `customizePackage` on a customized package appends.
+
+The result has `bin/codeql`, a wrapper of the engine's, and `share/codeql`, a
+link to the engine's. Nothing of the distribution is copied.
+
+### How packs become visible
+
+The wrapper sets `CODEQL_CONFIG_FILE` to a store file:
+
+```text
+--additional-packs <every pack>:<the aggregate model pack>
+--model-packs nix-agentic-tools/customized-models
+```
+
+CodeQL reads that file in every subcommand, including the ones it starts itself.
+Measured:
+
+- The form is `--option value`. `--option=value` is ignored without an error.
+- Each option keeps one value: a second line replaces the first, and the same
+  option on the command line replaces the file's. A consumer who passes
+  `--additional-packs` or `--model-packs` on the command line replaces these
+  packs for that call.
+- A model pack applies only when `--model-packs` names it, and a config line
+  names one. So the wrapper builds one aggregate pack holding every model's data
+  extensions, each under its index with its own `dataExtensions` globs, and
+  `extensionTargets` merged. The copies drop their qlpack.yml, so each model
+  pack resolves by its own name once.
+- `CODEQL_CONFIG_FILE` replaces CodeQL's per-user `~/.config/codeql/config`. It
+  does not add to it.
+
+### A consumer's own config file is merged
+
+The consumer's file is `CODEQL_CONFIG_FILE` when set, else
+`~/.config/codeql/config`. If it exists, the wrapper writes the consumer's lines
+and then its own to a `mktemp` file. It runs `codeql` as a child so it can
+delete that file on exit.
+
+A file that already holds every line of the wrapper's config is used as it is,
+because it comes from a `codeql` this wrapper started, such as a build command
+calling `codeql`.
+
+A consumer file that sets `--additional-packs` or `--model-packs` exits 2 with a
+message. CodeQL keeps one value per option, so merging would silently lose one
+side's packs.
+
+### Precompilation
+
+`mkQueryPack` writes its qlpack.yml, with `codeql/<language>-all: "*"`, over
+`src`, then runs `codeql pack create`. That needs no network: dependencies
+resolve from the engine's bundled packs. The output is the pack with `.qlx`
+plans, a lock file and the libraries it uses under `.codeql/libraries`, about 11
+MB for javascript. The javascript fixture compiled cold in about 40 s.
+
+`mkModelPack` only writes its qlpack.yml (`extensionTargets`,
+`dataExtensions: ["*.model.yml"]`). A directory given as it is stays uncompiled
+and resolves the same way.
+
+### The model check's kind
+
+`codeql-model-pack-mutation` adds a `sinkModel` row
+`["fakehttp", "Member[request].Argument[0]", "request-forgery"]`.
+`RequestForgeryCustomizations.qll` makes every
+`ModelOutput::sinkNode(_, "request-forgery")` a `RequestForgery::Sink`, as the
+bundled `ext/axios.model.yml` does for axios. The query selects
+`RequestForgery::Sink`. It finds nothing in the fixture without the pack and
+exactly `request(...)` with it.
+
+### Checks
+
+`codeql-custom-query-pack` checks:
+
+- the `.qlx` plans;
+- resolution with no flag, while the plain engine does not resolve the pack;
+- the merge with a consumer config file, and the refusal of a clashing one;
+- the engine's Node in the extractor log;
+- the four rows of a two-query pack (one query imports a `.qll`) over a `.js`
+  and a `.ts` file.
+
+`codeql-extra-packages` runs a program from `extraPackages` as
+`database create --command`, which the plain engine cannot find.
+`codeql-model-pack-mutation` checks the rows above, adding the models by
+customizing the customized package. All three are x86_64-linux only. Their
+`$out` holds text.
