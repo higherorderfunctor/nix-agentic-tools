@@ -116,7 +116,7 @@ expected set and the `--select`. An update PR still runs the smoke check in
 
 ## CodeQL packs and customizePackage
 
-> **Last verified:** 2026-10-21 (commit a9fa1841) — every engine carries
+> **Last verified:** 2026-10-21 (commit 7d85f150) — every engine carries
 > `customizePackage`, `mkQueryPack` and `mkModelPack`; packs reach CodeQL
 > through a generated `CODEQL_CONFIG_FILE`; query packs are precompiled; the
 > wrapper execs codeql over a merged config named by its content.
@@ -137,6 +137,11 @@ expected set and the `--select`. An update PR still runs the smoke check in
 >   overlay check (`lib/facets.nix` `changedLeafPaths`) compares every sibling
 >   leaf of `ai` with `==`, which forces each derivation's outPath, so reading
 >   any `pkgs.ai` attribute would instantiate every `ai` package.
+> - **A child codeql with a trap that deletes the merged config.** The 2.27.3
+>   launcher runs java in the foreground and traps only EXIT, INT and TERM, so a
+>   HUP left the JVM running on a deleted config, and the wrapper cannot reach
+>   the JVM to forward signals; the wrapper execs over a file named by its
+>   content instead (`git show 80d4c57a`).
 
 ### Surface
 
@@ -192,12 +197,13 @@ Measured:
 ### A consumer's own config file is merged
 
 The consumer's file is `CODEQL_CONFIG_FILE` when set, else
-`~/.config/codeql/config`; `/dev/null` means none. If it exists, the wrapper
-writes the consumer's lines and then its own to `codeql-config-<uid>-<sha256>`
-under `XDG_RUNTIME_DIR`, else `TMPDIR`, else `/tmp`, and execs `codeql`. The
-name comes from the content, so the file outlives the wrapper and a `codeql`
-that codeql starts reads it too. Each run writes it again and renames it into
-place over any file of that name.
+`~/.config/codeql/config`; `/dev/null`, or a link to it, means none. If it
+exists, the wrapper writes the consumer's lines and then its own to
+`codeql-config-<uid>-<sha256>` under `XDG_RUNTIME_DIR` when it is a writable
+directory, else `TMPDIR`, else `/tmp`, and execs `codeql`. The name comes from
+the content, so the file outlives the wrapper and a `codeql` that codeql starts
+reads it too. Each run writes it again and renames it into place over any file
+of that name.
 
 A file that already holds every line of the wrapper's config is used as it is,
 because it comes from a `codeql` this wrapper started, such as a build command

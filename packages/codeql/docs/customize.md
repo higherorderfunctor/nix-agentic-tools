@@ -1,6 +1,6 @@
 ## CodeQL packs and customizePackage
 
-> **Last verified:** 2026-10-21 (commit a9fa1841) — every engine carries
+> **Last verified:** 2026-10-21 (commit 7d85f150) — every engine carries
 > `customizePackage`, `mkQueryPack` and `mkModelPack`; packs reach CodeQL
 > through a generated `CODEQL_CONFIG_FILE`; query packs are precompiled; the
 > wrapper execs codeql over a merged config named by its content.
@@ -21,6 +21,11 @@
 >   overlay check (`lib/facets.nix` `changedLeafPaths`) compares every sibling
 >   leaf of `ai` with `==`, which forces each derivation's outPath, so reading
 >   any `pkgs.ai` attribute would instantiate every `ai` package.
+> - **A child codeql with a trap that deletes the merged config.** The 2.27.3
+>   launcher runs java in the foreground and traps only EXIT, INT and TERM, so a
+>   HUP left the JVM running on a deleted config, and the wrapper cannot reach
+>   the JVM to forward signals; the wrapper execs over a file named by its
+>   content instead (`git show 80d4c57a`).
 
 ### Surface
 
