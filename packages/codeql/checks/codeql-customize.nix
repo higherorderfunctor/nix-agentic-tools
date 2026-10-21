@@ -66,7 +66,8 @@
 in {
   checks = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
     # A precompiled two-query pack resolves by name with no flag, and its
-    # queries return the fixture rows, also with CODEQL_CONFIG_FILE=/dev/null.
+    # queries return the fixture rows, also with CODEQL_CONFIG_FILE=/dev/null
+    # or a link to it.
     # A consumer's own config file, from CODEQL_CONFIG_FILE or HOME, still
     # applies beside it, also with no final newline, and the merged file
     # outlives the wrapper; one that sets --additional-packs is refused,
@@ -86,6 +87,9 @@ in {
         grep -q " $pack@" "$TMPDIR/packs" || fail "the customized engine does not resolve $pack"
         CODEQL_CONFIG_FILE=/dev/null "$codeql" resolve packs > "$TMPDIR/devnull-packs" 2>&1 || fail "CODEQL_CONFIG_FILE=/dev/null: codeql failed: $(cat "$TMPDIR/devnull-packs")"
         grep -q " $pack@" "$TMPDIR/devnull-packs" || fail "CODEQL_CONFIG_FILE=/dev/null hides $pack"
+        ln -s /dev/null "$TMPDIR/null-link"
+        CODEQL_CONFIG_FILE="$TMPDIR/null-link" "$codeql" resolve packs > "$TMPDIR/null-link-packs" 2>&1 || fail "a CODEQL_CONFIG_FILE link to /dev/null: codeql failed: $(cat "$TMPDIR/null-link-packs")"
+        grep -q " $pack@" "$TMPDIR/null-link-packs" || fail "a CODEQL_CONFIG_FILE link to /dev/null hides $pack"
         second=nix-agentic-tools/fixture-second
         mkdir -p "$TMPDIR/second" "$TMPDIR/home/.config/codeql"
         printf 'name: %s\nversion: 0.0.0\n' "$second" > "$TMPDIR/second/qlpack.yml"

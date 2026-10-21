@@ -76,12 +76,13 @@ Measured:
 ### A consumer's own config file is merged
 
 The consumer's file is `CODEQL_CONFIG_FILE` when set, else
-`~/.config/codeql/config`; `/dev/null` means none. If it exists, the wrapper
-writes the consumer's lines and then its own to `codeql-config-<uid>-<sha256>`
-under `XDG_RUNTIME_DIR` when it is a writable directory, else `TMPDIR`, else
-`/tmp`, and execs `codeql`. The name comes from the content, so the file
-outlives the wrapper and a `codeql` that codeql starts reads it too. Each run
-writes it again and renames it into place over any file of that name.
+`~/.config/codeql/config`; `/dev/null`, or a link to it, means none. If it
+exists, the wrapper writes the consumer's lines and then its own to
+`codeql-config-<uid>-<sha256>` under `XDG_RUNTIME_DIR` when it is a writable
+directory, else `TMPDIR`, else `/tmp`, and execs `codeql`. The name comes from
+the content, so the file outlives the wrapper and a `codeql` that codeql starts
+reads it too. Each run writes it again and renames it into place over any file
+of that name.
 
 A file that already holds every line of the wrapper's config is used as it is,
 because it comes from a `codeql` this wrapper started, such as a build command

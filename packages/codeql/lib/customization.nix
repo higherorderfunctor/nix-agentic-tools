@@ -122,8 +122,8 @@
     configure = ''
       ours=${config}
       theirs="''${CODEQL_CONFIG_FILE:-''${HOME:+$HOME/.config/codeql/config}}"
-      # /dev/null is how a caller says it has no config file.
-      if [ -z "$theirs" ] || [ "$theirs" = /dev/null ] || [ ! -e "$theirs" ]; then
+      # /dev/null, or a link to it, is how a caller says it has no config file.
+      if [ -z "$theirs" ] || [ "$theirs" -ef /dev/null ] || [ ! -e "$theirs" ]; then
         export CODEQL_CONFIG_FILE="$ours"
         exec "$codeql" "$@"
       fi
