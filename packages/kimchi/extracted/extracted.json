@@ -492,6 +492,11 @@
         "type": "string"
       },
       "CI": { "consumerOverridable": true, "readBy": ["pi"], "type": "string" },
+      "CI_NAME": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "CLOUDSDK_CONFIG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -548,6 +553,11 @@
         "type": "string"
       },
       "EDITOR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "FORCE_COLOR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -705,6 +715,11 @@
       "HOMEBREW_PREFIX": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "HOSTNAME": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
         "type": "string"
       },
       "HTTPS_PROXY": {
@@ -1296,6 +1311,11 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "TEAMCITY_VERSION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "TERM": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
@@ -1314,6 +1334,11 @@
       "TERM_PROGRAM": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "TERM_PROGRAM_VERSION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
         "type": "string"
       },
       "TEST_GRACEFUL_FS_GLOBAL_PATCH": {
