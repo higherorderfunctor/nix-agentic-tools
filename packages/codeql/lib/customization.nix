@@ -114,7 +114,9 @@
       fi
       merged="$(${coreutils}/mktemp)"
       trap '${coreutils}/rm -f "$merged"' EXIT
-      ${coreutils}/cat "$theirs" "$ours" > "$merged"
+      # The echo ends a last line that has no newline, which would otherwise
+      # run into our first line.
+      { ${coreutils}/cat "$theirs"; echo; ${coreutils}/cat "$ours"; } > "$merged"
       export CODEQL_CONFIG_FILE="$merged"
       status=0
       "$codeql" "$@" || status=$?
