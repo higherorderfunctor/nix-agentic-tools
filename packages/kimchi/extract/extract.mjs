@@ -1922,7 +1922,7 @@ function definiteEnvironmentWrites(statement, context) {
 // after entry.ts first awaits, imports dynamically or calls a declared
 // function that can.
 function launchOverwrites(entrySource, program, context) {
-  const { ts } = context;
+  const { checker, ts } = context;
   const imported = moduleClosure([entrySource], program, ts, {
     dynamic: false,
     types: false,
@@ -1993,8 +1993,9 @@ function launchOverwrites(entrySource, program, context) {
     if (!ts.isFunctionDeclaration(statement)) continue;
     for (const name of statementEnvironmentReads(statement, context))
       read.add(name);
-    if (statement.name && some(statement, isSuspension))
-      suspending.add(statement.name.text);
+    const symbol =
+      statement.name && checker.getSymbolAtLocation(statement.name);
+    if (symbol && some(statement, isSuspension)) suspending.add(symbol);
   }
   // Children first: an assignment stores, and an await suspends, only after
   // its operands are evaluated.
@@ -2008,7 +2009,8 @@ function launchOverwrites(entrySource, program, context) {
     if (
       !suspended &&
       (isSuspension(node) ||
-        (ts.isIdentifier(node) && suspending.has(node.text)))
+        (ts.isIdentifier(node) &&
+          suspending.has(checker.getSymbolAtLocation(node))))
     )
       suspended = position(node);
   }

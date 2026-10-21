@@ -160,13 +160,14 @@ statements in order and marks a variable fixed when a statement assigns it on
 every path and no earlier statement reads it, counting what a callee handed
 `process.env` reads from it. Function bodies are not walked: 1.17 moved the
 async startup into `async function main()`, called as `void main()`, so a
-declared function's reads count from the start, and an environment write inside
-any function fails the extraction. `PI_CODING_AGENT_DIR` is assigned too, but
-read and preserved first, so it stays settable. The analysis also fails instead
-of guessing when a module entry.ts statically imports reads the same name, or
-when an assignment follows entry.ts's first `await`, `import()` or call to a
-declared function that can suspend. Every variable the factory sets itself
-(`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`, `KIMCHI_REGION`,
+declared function's reads count from the start, and a direct `process.env`
+assignment or `delete` inside any function fails the extraction.
+`PI_CODING_AGENT_DIR` is assigned too, but read and preserved first, so it stays
+settable. The analysis also fails instead of guessing when a module entry.ts
+statically imports reads the same name, or when an assignment follows entry.ts's
+first `await`, `import()` or reference (resolved by the type checker, not by
+name) to a declared function that can suspend. Every variable the factory sets
+itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`, `KIMCHI_REGION`,
 `KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`, which fails
 evaluation if the pinned Kimchi no longer reads it or starts overwriting it.
 

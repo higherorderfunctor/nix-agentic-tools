@@ -73,6 +73,10 @@
             'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
           mutant "$kimchi" duplicate-live-schema src/agent-discovery/agents/claude-code.ts \
             'import { homedir } from "node:os"' $'import "../../extensions/model-catalog/model-metadata.js"\nimport { homedir } from "node:os"'
+          # Accepted, not rejected: a property key spelled like the suspending
+          # main() is not a reference to it.
+          mutant "$kimchi" entry-property-name src/entry.ts \
+            'const rawArgv = process.argv.slice(2)' $'const packageMetadata = { main: "./cli.js" }\nvoid packageMetadata\nconst rawArgv = process.argv.slice(2)'
           mutant "$kimchi" entry-function-write src/entry.ts \
             'installPasteInterceptor()' $'installPasteInterceptor()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
           mutant "$kimchi" entry-imported-read src/auxiliary-files/resolver.ts \
@@ -226,6 +230,8 @@
             'pi APP_NAME in' "$TMPDIR/pi-app-name-source" >> "$TMPDIR/proof"
 
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/real.json"'' ''"$pi"''}
+          ${runExtractor ''"$TMPDIR/entry-property-name-source"'' ''"$TMPDIR/entry-property-name.json"'' ''"$pi"''}
+          echo "entry-property-name (exit 0): a main property key does not suspend" >> "$TMPDIR/proof"
           ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"'' ''"$pi"''}
           if ${pkgs.jq}/bin/jq -e \
             '(.config.projectTier.honoredKeys | index("apiKey") == null and index("api_key") == null) and
