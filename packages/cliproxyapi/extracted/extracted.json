@@ -1572,6 +1572,10 @@
       "description": "Name is the actual model name used by the external provider.",
       "type": "string"
     },
+    "api-keys.vertex[].keys[].models[].openapi": {
+      "description": "OpenAPI overrides endpoint selection for this model.",
+      "type": "bool"
+    },
     "api-keys.vertex[].keys[].models[].thinking": {
       "description": "Thinking configures the thinking/reasoning capability for this model.",
       "type": "object"
@@ -1600,6 +1604,14 @@
     "api-keys.vertex[].keys[].models[].thinking.zero-allowed": {
       "description": "ZeroAllowed indicates whether 0 is a valid value (to disable thinking).",
       "type": "bool"
+    },
+    "api-keys.vertex[].keys[].openapi": {
+      "description": "OpenAPI overrides automatic OpenAI-compatible endpoint selection.",
+      "type": "bool"
+    },
+    "api-keys.vertex[].keys[].openapi-location": {
+      "description": "OpenAPILocation overrides the location used for OpenAPI requests.",
+      "type": "string"
     },
     "api-keys.vertex[].keys[].prefix": {
       "description": "Prefix optionally namespaces model aliases for this credential (e.g., \"teamA/vertex-pro\").",
@@ -1641,6 +1653,10 @@
     "api-keys.vertex[].models[].name": {
       "description": "Name is the actual model name used by the external provider.",
       "type": "string"
+    },
+    "api-keys.vertex[].models[].openapi": {
+      "description": "OpenAPI overrides endpoint selection for this model.",
+      "type": "bool"
     },
     "api-keys.vertex[].models[].thinking": {
       "description": "Thinking configures the thinking/reasoning capability for this model.",
@@ -2111,6 +2127,10 @@
     "oauth.model-alias.<name>[].force-mapping": { "type": "bool" },
     "oauth.model-alias.<name>[].fork": { "type": "bool" },
     "oauth.model-alias.<name>[].name": { "type": "string" },
+    "oauth.model-alias.<name>[].openapi": {
+      "description": "OpenAPI overrides Vertex endpoint selection for this model.",
+      "type": "bool"
+    },
     "oauth.providers": {
       "template": "Provider options below apply to OAuth/file-backed credentials.\nAPI-key credentials use their own group/key options.",
       "type": "object"
@@ -2257,6 +2277,10 @@
       "type": "int"
     },
     "oauth.settings.<name>[].name": { "type": "string" },
+    "oauth.settings.<name>[].openapi": {
+      "description": "OpenAPI overrides Vertex endpoint selection for this model.",
+      "type": "bool"
+    },
     "observability": {
       "template": "Application logs, request logs, usage aggregation, and profiling.",
       "type": "object"
