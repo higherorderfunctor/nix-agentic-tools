@@ -177,7 +177,7 @@ new file mode 100644
 index 0000000..3bd1279
 --- /dev/null
 +++ b/apps/web/src/stores/useThemeStore.test.ts
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,84 @@
 +import { beforeEach, describe, expect, it, vi } from 'vitest';
 +import { STORAGE_KEY_THEME } from '@/utils/constants';
 +
@@ -245,14 +245,21 @@ index 0000000..3bd1279
 +    expect(store.getState().theme).toBe('auto');
 +  });
 +
-+  it("migrates version 0: a stored 'white' or 'dark' was chosen, 'auto' was not", async () => {
-+    const dark = await load({ state: { theme: 'dark', resolvedTheme: 'dark' }, version: 0 });
-+    dark.getState().applyDefaultTheme('white');
-+    expect(dark.getState()).toMatchObject({ theme: 'dark', chosen: true });
++  it.each(['auto', 'dark', 'white'])(
++    'migrates a version 0 %s as chosen, so a server default does not replace it',
++    async (stored) => {
++      const store = await load({ state: { theme: stored, resolvedTheme: 'light' }, version: 0 });
++      expect(store.getState()).toMatchObject({ theme: stored, chosen: true });
++      for (const serverDefault of ['dark', 'white']) {
++        store.getState().applyDefaultTheme(serverDefault);
++        expect(store.getState().theme).toBe(stored);
++      }
++    }
++  );
 +
-+    const auto = await load({ state: { theme: 'auto', resolvedTheme: 'light' }, version: 0 });
-+    auto.getState().applyDefaultTheme('dark');
-+    expect(auto.getState()).toMatchObject({ theme: 'dark', chosen: false });
++  it('does not treat a version 0 value that is not a theme as chosen', async () => {
++    const store = await load({ state: { theme: 'light' }, version: 0 });
++    expect(store.getState().chosen).toBe(false);
 +  });
 +});
 diff --git a/apps/web/src/stores/useThemeStore.ts b/apps/web/src/stores/useThemeStore.ts
@@ -317,18 +324,17 @@ index 869e89a..8c29dc9 100644
  
          // 监听系统主题变化（仅在 auto 模式下生效）
          if (!window.matchMedia) {
-@@ -113,6 +124,15 @@ export const useThemeStore = create<ThemeState>()(
+@@ -113,6 +124,14 @@ export const useThemeStore = create<ThemeState>()(
      }),
      {
        name: STORAGE_KEY_THEME,
 +      version: 1,
-+      // Version 0 stored no `chosen`, and initializeTheme wrote 'auto' back
-+      // unasked, so only a stored 'white' or 'dark' was the user's.
++      // Version 0 stored no `chosen`, and initializeTheme wrote 'auto' back on
++      // every load, so a stored 'auto' is the same bytes whether it was picked
++      // or not. Anything stored counts as chosen; only a fresh store is not.
 +      migrate: (persisted, version) => {
 +        const state = (persisted ?? {}) as Partial<ThemeState>;
-+        return version === 0
-+          ? { ...state, chosen: state.theme === 'white' || state.theme === 'dark' }
-+          : state;
++        return version === 0 ? { ...state, chosen: isTheme(state.theme) } : state;
 +      },
      }
    )

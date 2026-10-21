@@ -115,9 +115,12 @@ read the patched tree; it changes neither `package-lock.json` nor `go.mod`, so
   and `applyDefaultTheme` applies a valid answer. The store records `chosen`:
   `setTheme` (theme menu, login toggle) sets it and the default never does, so a
   changed `defaultTheme` still reaches a browser that never chose. Stored state
-  moves to version 1. A version 0 `white` or `dark` counts as chosen and a
-  version 0 `auto` does not, because 1.14.7's `initializeTheme` wrote `auto`
-  back on every load.
+  moves to version 1. Any valid version 0 theme, `auto` included, counts as
+  chosen: 1.14.7's `initializeTheme` wrote `auto` back on every load, so a
+  picked `auto` and an untouched one are the same bytes and nothing can tell
+  them apart. Treating all of them as chosen keeps a configured default from
+  overwriting a pick; a browser with nothing stored, the case this key exists
+  for, still takes the server default.
 
 Unset, the server reports `auto` and the panel behaves as upstream, apart from
 the one request. A panel served by plain CPA has no such endpoint and keeps its
