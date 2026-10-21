@@ -46,7 +46,10 @@ kimchi/node_modules/@earendil-works/<pi package>/{package.json,dist/}
   `package-identity.patch`, ...) are not in it.
 - **pi's four packages sit under `kimchi/node_modules`**, where Kimchi's imports
   resolve them. Measured: 506 of Kimchi's 508 `@earendil-works/*` import
-  declarations resolve to a pi module in the database.
+  declarations resolve to a pi module in the database. `extract.mjs` scans only
+  pi-coding-agent's dist, sees the other three as `index.d.ts` types and reads
+  patch `+` lines; the database holds all four `dist/` trees, patched. A fact
+  difference there is a source-root difference, not an extractor bug.
 - **Kimchi's own `node_modules` (its pnpm store) is not in it.** That is every
   third-party dependency. The pi bundle chunks already hold what pi bundles from
   its own dependencies.
