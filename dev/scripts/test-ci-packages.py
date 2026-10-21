@@ -49,6 +49,8 @@ class CacheAssertionTest(unittest.TestCase):
             lines.append(line)
         script = textwrap.dedent("\n".join(lines))
         # Execute the workflow's shell, replacing only the external services.
+        # Exported, so dev/scripts/assert-not-published.sh, which the step
+        # calls, sees the same mocks.
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 nix() {
@@ -61,6 +63,7 @@ nix() {
     partial) printf '%s\n' "$OUT"; return 1 ;;
     empty) return ;;
     missing) printf '%s\n' /nix/store/unrelated; return ;;
+    root-only) printf '%s\n' "$OUT"; return ;;
     *) printf '%s\n' "$OUT" /nix/store/base-kiro ;;
   esac
 }
@@ -69,6 +72,7 @@ curl() {
   printf 'narinfo\n' >> "$RUNNER_TEMP/queries"
   printf '%s' "$HTTP_CODE"
 }
+export -f curl nix
 '''
         with tempfile.TemporaryDirectory() as directory:
             queries = Path(directory) / "queries"
@@ -77,6 +81,8 @@ curl() {
                 ("partial", "404", False, False),
                 ("empty", "404", False, False),
                 ("missing", "404", False, False),
+                # A listing with its root but no kiro path asks nothing.
+                ("root-only", "404", False, False),
                 ("complete", "404", True, True),
                 ("complete", "200", False, True),
                 ("complete", "503", False, True),
@@ -84,10 +90,12 @@ curl() {
                 with self.subTest(mode=mode, http_code=http_code):
                     queries.unlink(missing_ok=True)
                     env = dict(os.environ, CACHE="https://cache.invalid", HTTP_CODE=http_code,
-                               MODE=mode, OUT="/nix/store/patched-kiro", RUNNER_TEMP=directory,
+                               MODE=mode, RUNNER_TEMP=directory,
+                               OUT="/nix/store/patched-other" if mode == "root-only" else "/nix/store/patched-kiro",
                                SYSTEM="x86_64-linux")
                     result = subprocess.run(["bash", "-c", services + script], env=env,
-                                            capture_output=True, text=True)
+                                            capture_output=True, text=True,
+                                            cwd=Path(__file__).parents[2])
                     self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
 

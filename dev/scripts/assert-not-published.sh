@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Asserts that no store path given as an argument is fetchable from the
 # binary cache at $CACHE: the outcome check behind a pushFilter, which is only
-# configuration. Used for the CodeQL bundle, whose terms forbid distributing
-# it. The patched-Kiro tripwire in ci.yml keeps its own inline copy, because
-# test-ci-packages.py executes that step's shell with mocked services.
+# configuration. ci.yml's patched-Kiro and CodeQL-bundle tripwires each
+# enumerate their own paths and call this; test-ci-packages.py runs it through
+# the Kiro step with mocked services.
 #
 # Every assertion is "the answer was not 200", which a wrong host or an
 # empty argument list would satisfy unconditionally, so both fail closed: the
