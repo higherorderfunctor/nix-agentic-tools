@@ -115,9 +115,9 @@
     grep = "${pkgs.gnugrep}/bin/grep";
     # With packs, the wrapper points CODEQL_CONFIG_FILE at its config. A
     # consumer's own file (CODEQL_CONFIG_FILE, else CodeQL's per-user default)
-    # is merged: theirs first, then ours, in a temporary file that lives as
-    # long as this process. A file that already holds every line of ours is a
-    # codeql this wrapper started, and is used as it is.
+    # is merged: theirs first, then ours, in a file named by its content. A
+    # file that already holds every line of ours is a codeql this wrapper
+    # started, and is used as it is.
     configure = ''
       ours=${config}
       theirs="''${CODEQL_CONFIG_FILE:-''${HOME:+$HOME/.config/codeql/config}}"
@@ -151,32 +151,19 @@
         1) ;;
         *) exit 2 ;;
       esac
-      merged="$(${coreutils}/mktemp)"
-      trap '${coreutils}/rm -f "$merged"' EXIT
       # The echo ends a last line that has no newline, which would otherwise
-      # run into our first line.
-      { ${coreutils}/cat "$theirs"; echo; ${coreutils}/cat "$ours"; } > "$merged"
+      # run into our first line. The merged file is named by its content and
+      # outlives this wrapper, which execs codeql, so a codeql that codeql
+      # starts reads the same file. Each run writes it again and renames it into
+      # place, never trusting a file already under that name.
+      dir="''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}"
+      tmp="$(${coreutils}/mktemp "$dir/codeql-config.XXXXXXXX")"
+      { ${coreutils}/cat "$theirs"; echo; ${coreutils}/cat "$ours"; } > "$tmp"
+      sum="$(${coreutils}/sha256sum "$tmp")"
+      merged="$dir/codeql-config-$(${coreutils}/id -u)-''${sum%% *}"
+      ${coreutils}/mv -fT "$tmp" "$merged"
       export CODEQL_CONFIG_FILE="$merged"
-      # codeql runs as a child so the EXIT trap can remove $merged. A signal
-      # sent to this PID alone is passed on, and the wrapper waits until the
-      # child has exited: `wait` returns early when a trapped signal arrives.
-      # Bash starts a background job with SIGINT and SIGQUIT ignored and stdin
-      # from /dev/null; the subshell restores both, unless the caller itself
-      # ignored them.
-      (
-        trap - INT QUIT
-        exec "$codeql" "$@"
-      ) <&0 &
-      child=$!
-      trap 'kill -s HUP "$child" 2>/dev/null || :' HUP
-      trap 'kill -s INT "$child" 2>/dev/null || :' INT
-      trap 'kill -s TERM "$child" 2>/dev/null || :' TERM
-      while :; do
-        status=0
-        wait "$child" || status=$?
-        kill -0 "$child" 2>/dev/null || break
-      done
-      exit "$status"
+      exec "$codeql" "$@"
     '';
     wrapper = pkgs.writeShellApplication {
       name = "codeql";

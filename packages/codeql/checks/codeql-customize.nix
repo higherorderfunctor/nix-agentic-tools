@@ -68,7 +68,7 @@ in {
     # A precompiled two-query pack resolves by name with no flag, and its
     # queries return the fixture rows. A consumer's own config file, from
     # CODEQL_CONFIG_FILE or HOME, still applies beside it, also with no final
-    # newline; one that sets --additional-packs is refused, one whose comment
+    # newline, and the merged file outlives the wrapper; one that sets --additional-packs is refused, one whose comment
     # names it is not. The TypeScript file is extracted only with the engine's
     # Node.
     codeql-custom-query-pack = let
@@ -99,6 +99,19 @@ in {
         CODEQL_CONFIG_FILE="$TMPDIR/no-newline-config" merged no-newline
         cp "$TMPDIR/consumer-config" "$TMPDIR/home/.config/codeql/config"
         HOME="$TMPDIR/home" merged home
+        # The merged config outlives the wrapper under a name from its content:
+        # two runs leave one file, the consumer's line before ours, and no
+        # mktemp file behind.
+        mkdir "$TMPDIR/run"
+        for run in first second; do
+          XDG_RUNTIME_DIR="$TMPDIR/run" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" merged "runtime-$run"
+        done
+        persisted=("$TMPDIR"/run/codeql-config-*)
+        [ "''${#persisted[@]}" = 1 ] && [ -f "''${persisted[0]}" ] || fail "two runs left $(ls "$TMPDIR/run"), not one codeql-config-* file"
+        theirsAt="$(grep -nm1 -- '^--search-path ' "''${persisted[0]}" | cut -d: -f1)"
+        oursAt="$(grep -nm1 -- '^--additional-packs ' "''${persisted[0]}" | cut -d: -f1)"
+        [ -n "$theirsAt" ] && [ -n "$oursAt" ] && [ "$theirsAt" -lt "$oursAt" ] || fail "the merged config does not hold the consumer's line before ours: $(cat "''${persisted[0]}")"
+        [ -z "$(find "$TMPDIR/run" -name 'codeql-config.*')" ] || fail "the wrapper left a mktemp file: $(ls "$TMPDIR/run")"
         printf -- '# --additional-packs comes from customizePackage\n--search-path %s\n' "$TMPDIR/second" > "$TMPDIR/comment-config"
         CODEQL_CONFIG_FILE="$TMPDIR/comment-config" merged comment
         printf -- '--additional-packs %s\n' "$TMPDIR" > "$TMPDIR/clashing-config"

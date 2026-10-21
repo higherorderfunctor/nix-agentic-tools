@@ -1,9 +1,9 @@
 ## CodeQL packs and customizePackage
 
-> **Last verified:** 2026-10-21 (commit d088283e) — every engine carries
+> **Last verified:** 2026-10-21 (commit a9fa1841) — every engine carries
 > `customizePackage`, `mkQueryPack` and `mkModelPack`; packs reach CodeQL
 > through a generated `CODEQL_CONFIG_FILE`; query packs are precompiled; the
-> wrapper passes signals on to a merged-config codeql.
+> wrapper execs codeql over a merged config named by its content.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 javascript
 > bundle and rejected:
@@ -76,9 +76,10 @@ Measured:
 
 The consumer's file is `CODEQL_CONFIG_FILE` when set, else
 `~/.config/codeql/config`. If it exists, the wrapper writes the consumer's lines
-and then its own to a `mktemp` file. It runs `codeql` as a child so it can
-delete that file on exit, and passes HUP, INT and TERM sent to its own PID on to
-that child.
+and then its own to `codeql-config-<uid>-<sha256>` under `XDG_RUNTIME_DIR`, else
+`TMPDIR`, else `/tmp`, and execs `codeql`. The name comes from the content, so
+the file outlives the wrapper and a `codeql` that codeql starts reads it too.
+Each run writes it again and renames it into place over any file of that name.
 
 A file that already holds every line of the wrapper's config is used as it is,
 because it comes from a `codeql` this wrapper started, such as a build command
@@ -120,8 +121,8 @@ the packs and exactly `request(...)` and `fetchUrl(...)` with them.
 - resolution with no flag, while the plain engine does not resolve the pack;
 - the merge with a consumer config file from `CODEQL_CONFIG_FILE` or `HOME`,
   with and without a final newline, where its `--search-path` pack still
-  resolves; the refusal of a clashing one, and no refusal for a comment naming
-  the option;
+  resolves; one merged file left by two runs, consumer line first; the refusal
+  of a clashing one, and no refusal for a comment naming the option;
 - the engine's Node in the extractor log;
 - the four rows of a two-query pack (one query imports a `.qll`) over a `.js`
   and a `.ts` file.
