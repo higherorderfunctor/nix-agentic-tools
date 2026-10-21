@@ -609,13 +609,5 @@ in rec {
     inherit (evaluated.config) testing;
     claims = deepSeq (attrNames exclusive) byName;
     checks = deepSeq (attrNames exclusive) evaluated.config.checks;
-    # Names only, so no check value is read. A name that is not a check fails:
-    # a typo would otherwise leave the real check in the cache-writing matrix.
-    unpublishedChecks = let
-      names = evaluated.config.unpublishedChecks;
-      unknown = filter (name: !(elem name (attrNames evaluated.config.checks))) names;
-    in
-      assert ensure (unknown == []) "unpublishedChecks names no check: ${concatStringsSep ", " unknown}";
-        unique names;
   };
 }

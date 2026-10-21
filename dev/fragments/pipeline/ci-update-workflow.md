@@ -6,8 +6,7 @@
 > the required KVM job `service-secret-ordering`, which builds a dev-only
 > fixture flake; `jail-smoke` and `checks-eval-darwin` are required contexts;
 > both systems' name evaluations are budgeted by function count; the pushFilter
-> also excludes the CodeQL bundle; `checks-unpublished` builds the
-> `unpublishedChecks` outside the matrix.
+> also excludes the CodeQL bundle.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -325,14 +324,8 @@ builds each uncached row as `<drvPath>^*` without flake evaluation, and
 all-cached plan passes. Hestia keeps nix-eval-jobs' stdout to itself and lists
 only uncached rows by their first member, so a wrapper captures the raw rows of
 that same evaluation. The plan check requires the evaluated attrs to equal
-`checks.x86_64-linux` attr names less `ciUnpublishedChecks.x86_64-linux`, and
-the planned drvs to equal the uncached ones.
-
-`ciChecks` omits the checks named in `unpublishedChecks`, whose build closures
-may reach no cache (today the CodeQL check). A matrix worker's Hestia would
-upload them; `checks-unpublished` builds them with no Hestia and no Cachix
-token, fails on an empty list, and `checks-matrix` fails unless it succeeded.
-`dev/fragments/flake/binary-cache.md` records why a `pushFilter` is not enough.
+`checks.x86_64-linux` attr names and the planned drvs to equal the uncached
+ones.
 
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
 `dev/ci-check-evaluator.nix` records why.

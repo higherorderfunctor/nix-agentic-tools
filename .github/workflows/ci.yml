@@ -790,8 +790,7 @@ jobs:
           nix-eval-jobs: ${{ steps.evaluator.outputs.command }}
           runner-map: x86_64-linux=ubuntu-latest
 
-      # The evaluated attrs must be exactly the public checks less the
-      # `ciUnpublishedChecks`, which `checks-unpublished` builds, and every
+      # The evaluated attrs must be exactly the public checks, and every
       # uncached derivation must be in exactly one row. The second evaluation
       # runs after the matrix evaluator exited. The matrix goes through a
       # quoted heredoc, not `env:`: a cold plan nears Linux's 128 KiB limit on
@@ -805,13 +804,11 @@ jobs:
           JSON
           NIX_SHOW_STATS=1 NIX_SHOW_STATS_PATH="$RUNNER_TEMP/checks-eval-stats.json" \
             nix eval --no-eval-cache --json .#.checks.x86_64-linux --apply builtins.attrNames > "$RUNNER_TEMP/checks.json"
-          nix eval --json .#.ciUnpublishedChecks.x86_64-linux > "$RUNNER_TEMP/unpublished.json"
           jq -n \
             --slurpfile rows "$CHECK_ROWS" \
             --slurpfile names "$RUNNER_TEMP/checks.json" \
-            --slurpfile unpublished "$RUNNER_TEMP/unpublished.json" \
             --slurpfile matrix "$RUNNER_TEMP/matrix.json" '
-            (($names[0] - $unpublished[0]) | sort) as $public
+            ($names[0] | sort) as $public
             | $matrix[0].include as $include
             | [$include[].installables | split(" ")[] | select(. != "")] as $installables
             | ($installables | map(rtrimstr("^*"))) as $planned
@@ -827,7 +824,7 @@ jobs:
                     | select((.attrPath | length) != 1 or .system != "x86_64-linux")
                     | "malformed row \(.attr)"),
                   (if ([$rows[].attrPath[0]] | sort) != $public
-                    then "evaluated attrs differ from the public checks less the unpublished ones" else empty end),
+                    then "evaluated attrs differ from the public checks" else empty end),
                   (if ($planned | sort) != $pending
                     then "planned derivations differ from the uncached derivations" else empty end)
                 ]
@@ -859,7 +856,6 @@ jobs:
             ${{ runner.temp }}/matrix.json
             ${{ runner.temp }}/plan-report.json
             ${{ runner.temp }}/rows.jsonl
-            ${{ runner.temp }}/unpublished.json
           if-no-files-found: warn
 
   checks-build:
@@ -890,58 +886,13 @@ jobs:
           "$HESTIA_BIN" prefetch "${installables[@]}"
           nix build --no-link -L "${installables[@]}"
 
-  # The checks named in `unpublishedChecks` (lib/testing/check-options.nix),
-  # whose build closures may reach no cache. Today that is the CodeQL check:
-  # the GitHub CodeQL Terms forbid sharing, publishing or distributing the CLI.
-  # A Hestia worker would upload the bundle with the rest of what it builds
-  # (PR #2771's first run did, through `codeql-bundle-javascript (post)`), and
-  # Hestia v3.1.0 has no path exclusion, only read-only mode. So this job
-  # installs no Hestia and holds no Cachix token, like `kiro-patched`:
-  # substitutes come from the flake's own read-only caches and nothing is
-  # written anywhere. The `test` job's tripwire still asserts the public cache
-  # does not serve the bundle. It always runs, forks included, since it needs
-  # no secret; `checks-matrix` requires it, so the checks stay gated.
-  checks-unpublished:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
-            sandbox = true
-      - uses: ./.github/actions/assert-nix-config
-        with:
-          require: |
-            ^accept-flake-config = true
-            ^sandbox = true
-      - name: Warm IFD sources (retry, best-effort)
-        uses: ./.github/actions/warm-ifd
-        with:
-          systems: x86_64-linux
-      # Fails closed on an empty list: a job that builds nothing would pass
-      # and hide that the checks it exists for went elsewhere.
-      - name: Build the unpublished checks
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          nix eval --json .#.ciUnpublishedChecks.x86_64-linux > "$RUNNER_TEMP/unpublished.json"
-          jq -r '.[] | ".#.checks.x86_64-linux.\(.)"' "$RUNNER_TEMP/unpublished.json" > "$RUNNER_TEMP/unpublished"
-          mapfile -t installables < "$RUNNER_TEMP/unpublished"
-          if [ "${#installables[@]}" -eq 0 ]; then
-            echo "::error::ciUnpublishedChecks is empty, so this job would build nothing; delete it instead" >&2
-            exit 1
-          fi
-          nix build --no-link -L "${installables[@]}"
-
   # Fails unless evaluation succeeded and every planned leg succeeded: the
   # matrix is fixed by checks-eval and does not fail fast. An all-cached plan
-  # has no workers and passes. The unpublished checks must pass as well.
+  # has no workers and passes.
   # Required context. A fork PR has no evaluator run, so its `test` job built
   # every check itself and this gate passes on that job's success instead.
   checks-matrix:
-    needs: [checks-eval, checks-build, checks-unpublished, test]
+    needs: [checks-eval, checks-build, test]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -952,11 +903,9 @@ jobs:
           BUILD_RESULT: ${{ needs.checks-build.result }}
           EVAL_RESULT: ${{ needs.checks-eval.result }}
           TEST_RESULT: ${{ needs.test.result }}
-          UNPUBLISHED_RESULT: ${{ needs.checks-unpublished.result }}
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          test "$UNPUBLISHED_RESULT" = success
           if [ "$EVAL_RESULT" = skipped ]; then
             test "$TEST_RESULT" = success
             exit 0

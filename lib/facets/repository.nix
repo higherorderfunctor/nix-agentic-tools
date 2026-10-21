@@ -210,7 +210,7 @@
     ownership = lib.mapAttrs (_: claim: {inherit (claim) owner source;}) world.claims;
   in
     builtins.deepSeq ownership {
-      inherit (world) checks unpublishedChecks;
+      inherit (world) checks;
       claims = ownership;
     };
 in {

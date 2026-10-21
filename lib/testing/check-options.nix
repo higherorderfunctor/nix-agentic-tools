@@ -17,15 +17,5 @@
         description = "Owner configurations that activate package pool contributions.";
       };
     };
-    unpublishedChecks = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [];
-      description = ''
-        Names of checks whose build closure must never be uploaded to any
-        cache, for example one built from software whose licence forbids
-        redistribution. CI builds them in a job with no cache that writes, and
-        leaves them out of the cache-writing check matrix (`ciChecks`).
-      '';
-    };
   };
 }

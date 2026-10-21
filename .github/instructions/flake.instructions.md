@@ -9,8 +9,8 @@ applyTo: ".github/actions/check-cache/**,.github/workflows/hestia-gc.yml,flake.n
 
 > **Last verified:** 2026-10-21 — overlay parity uses the ordinary
 > `nixpkgs-stable` input; no patched evaluation source needs retention; every
-> credentialed push also filters the CodeQL bundle; `unpublishedChecks` build
-> outside Hestia.
+> credentialed push also filters the CodeQL bundle, which the private check
+> cache deliberately holds.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -58,7 +58,11 @@ action's release attestation; the source hash and in-repo build pin its bytes.
 Its post-build hook retains check outputs and runtime closures in GitHub Actions
 cache, independently of public Cachix publication. The signature filter excludes
 only `cache.nixos.org-1` and `nix-agentic-tools.cachix.org-1`; retaining
-devenv-signed paths is intentional.
+devenv-signed paths is intentional. This private Actions cache deliberately
+holds the CodeQL bundle, which a check builds as an input: that is CI-internal
+storage, not distribution under the GitHub CodeQL Terms. The bundle's guards
+(the Cachix `pushFilter`, ci-packages.py's exclusion and the `test` job's
+narinfo tripwire) target public publication only.
 
 `publish-hestia` builds `ciHestia` before the test and check evaluator jobs. Its
 credentialed Cachix action publishes the Rust binary and keeps the
@@ -133,17 +137,6 @@ within GitHub's shared cache quota. It has no explicit job timeout, matching
 upstream's GC workflow: repacking and the one-second REST mutation spacing can
 exceed 15 minutes. Garbage collection does not prevent GitHub's own expiry or
 LRU eviction. This cache carries no Cachix publishing token.
-
-Hestia's post-build hook uploads EVERY path a writing job builds, build-time
-inputs included, and v3.1.0 has no path exclusion: only `read-only` disables the
-hook. So a check whose closure may reach no cache, such as one built from the
-CodeQL bundle, whose terms forbid distributing it, names itself in
-`unpublishedChecks` (`lib/testing/check-options.nix`). `ciChecks` leaves it out
-of the matrix, and ci.yml's `checks-unpublished` job builds
-`ciUnpublishedChecks` with no Hestia and no Cachix token, as `kiro-patched`
-does; `checks-matrix` requires that job. A Cachix `pushFilter` does not cover
-this: PR #2771's first run uploaded the bundle through a matrix worker's Hestia
-drain while every credentialed Cachix step filtered it.
 
 The `checks-eval` job registers every evaluated `.drv` closure in the same
 cache. Its workers pass the eval job's `manifest-version` through the helper's

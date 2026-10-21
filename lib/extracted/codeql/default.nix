@@ -5,10 +5,11 @@
 # unfree under the GitHub CodeQL Terms, which forbid sharing, publishing or
 # distributing the CLI. Every credentialed cachix-action step filters its
 # pname, ci-packages.py excludes it, and ci.yml asserts the cache does not
-# serve it. A check that runs a query names itself in `unpublishedChecks`, so
-# CI builds it outside the Hestia matrix, whose cache would store the bundle
-# as a build input. A runner's `$out` holds only the decoded JSON, so no check
-# output carries the CLI or a database in its closure.
+# serve it. A runner's `$out` holds only the decoded JSON, so no check output
+# carries the CLI or a database in its closure. The Hestia check cache in this
+# repository's private GitHub Actions cache deliberately holds the bundle as a
+# build input: that is CI-internal storage, not distribution. The guards above
+# target public publication only.
 #
 # The Terms allow automated database creation only for an OSI-licensed
 # codebase hosted and maintained on GitHub.com. Point a runner at a

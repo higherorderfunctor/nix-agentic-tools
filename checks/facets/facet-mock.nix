@@ -192,18 +192,7 @@
       check-laziness =
         lib.isDerivation lazyCheckWorld.checks.available
         && builtins.attrNames lazyCheckWorld.checks == ["available" "unavailable"]
-        && builtins.attrNames lazyCheckWorld.claims == ["available" "unavailable"]
-        && lazyCheckWorld.unpublishedChecks == ["unavailable"];
-      # An unpublished name that is no check fails, so a typo cannot leave the
-      # real check in the cache-writing matrix.
-      unpublished-check-must-exist =
-        !(builtins.tryEval (builtins.deepSeq
-          (loader.realizeChecks {
-            context = {inherit inputs lib pkgs self system;};
-            index = lazyIndex;
-            rootModules = [{unpublishedChecks = ["missing"];}];
-          }).unpublishedChecks
-          true)).success;
+        && builtins.attrNames lazyCheckWorld.claims == ["available" "unavailable"];
       overlay-order-and-namespace =
         overlayResult.ai.seed
         == inputs.fixture.sentinel

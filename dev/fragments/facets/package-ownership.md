@@ -1,8 +1,8 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-21 — a `checks/` concern without `default.nix` (a
-> fixture flake) is not discovered; check-name laziness, `unpublishedChecks`
-> included, is gated by the `check-laziness` assertion in facet-mock.
+> **Last verified:** 2026-10-20 — a `checks/` concern without `default.nix` (a
+> fixture flake) is not discovered; check-name laziness is gated by the
+> `check-laziness` assertion in facet-mock.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -66,17 +66,13 @@ reading package metadata at name time: keep package reads, `assert` and `throw`
 out of check-module top level and name derivation. Root groups cover workspace
 policy and genuine cross-owner contracts.
 
-`repository.checkWorldFor` realizes the checks once and returns `checks`,
+`repository.checkWorldFor` realizes the checks once and returns `checks` plus
 `claims`, each check's `{owner, source}` (`owner = "<root>"` for a root
-concern), and `unpublishedChecks`, the check names whose build closures may
-reach no cache. The claims are `deepSeq`'d so they never retain the evaluated
-world. `unpublishedChecks` is computed from names only and fails on a name that
-is no check. `checksFor` is its `.checks`. The flake builds one
-`checkWorlds.<system>` and derives `checks`, the CI-only `ciChecks` and
-`ciUnpublishedChecks` from it; `ciChecks` drops the unpublished checks and
-merges `meta.hestia.group` (`owner-<owner>` or `workspace-<concern dir>`) into
-each remaining check's own `meta` so Hestia's matrix schedules one row per
-ownership group.
+concern). The claims are `deepSeq`'d so they never retain the evaluated world.
+`checksFor` is its `.checks`. The flake builds one `checkWorlds.<system>` and
+derives both `checks` and the CI-only `ciChecks` from it; `ciChecks` merges
+`meta.hestia.group` (`owner-<owner>` or `workspace-<concern dir>`) into each
+check's own `meta` so Hestia's matrix schedules one row per ownership group.
 
 The shared harness in `lib/testing/module-harness.nix` discovers backend imports
 from the same owner index as production. Package check modules may contribute
