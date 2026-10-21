@@ -1011,14 +1011,13 @@ exclusive ownership, and consumer policy. Package recipes do not use the former
 three-argument overlay curry.
 
 Return only the leaves you claim, for example
-`{ai.devTools.codeql.mkQueryPack = ...;}`. The composer deep-merges the result
-into `prev` with `mergeContribution` in `lib/facets.nix`, stopping at
-derivations, which it replaces whole, and the claims check walks only the names
-the result sets. Do not re-emit `prev` (`ai = prev.ai // {...}`): it still
-merges, but the check then compares every carried sibling with `==`, which
-forces both `outPath`s of every sibling derivation. The
-`overlay-re-emit-forcing` probe in `checks/facets/facet-mock.nix` pins that
-hazard.
+`{ai.devTools.example.mkThing = ...;}`. The composer deep-merges the result into
+`prev` with `mergeContribution` in `lib/facets.nix`, stopping at derivations,
+which it replaces whole, and the claims check walks only the names the result
+sets. Do not re-emit `prev` (`ai = prev.ai // {...}`): it still merges, but the
+check then compares every carried sibling with `==`, which forces both
+`outPath`s of every sibling derivation. The `overlay-re-emit-forcing` probe in
+`checks/facets/facet-mock.nix` pins that hazard.
 
 <!-- Fragment: dev/fragments/overlays/source-patches.md -->
 
