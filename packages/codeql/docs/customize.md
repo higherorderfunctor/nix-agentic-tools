@@ -71,7 +71,8 @@ Measured:
 The consumer's file is `CODEQL_CONFIG_FILE` when set, else
 `~/.config/codeql/config`. If it exists, the wrapper writes the consumer's lines
 and then its own to a `mktemp` file. It runs `codeql` as a child so it can
-delete that file on exit.
+delete that file on exit, and passes HUP, INT and TERM sent to its own PID on to
+that child.
 
 A file that already holds every line of the wrapper's config is used as it is,
 because it comes from a `codeql` this wrapper started, such as a build command

@@ -138,8 +138,25 @@
       # run into our first line.
       { ${coreutils}/cat "$theirs"; echo; ${coreutils}/cat "$ours"; } > "$merged"
       export CODEQL_CONFIG_FILE="$merged"
-      status=0
-      "$codeql" "$@" || status=$?
+      # codeql runs as a child so the EXIT trap can remove $merged. A signal
+      # sent to this PID alone is passed on, and the wrapper waits until the
+      # child has exited: `wait` returns early when a trapped signal arrives.
+      # Bash starts a background job with SIGINT and SIGQUIT ignored and stdin
+      # from /dev/null; the subshell restores both, unless the caller itself
+      # ignored them.
+      (
+        trap - INT QUIT
+        exec "$codeql" "$@"
+      ) <&0 &
+      child=$!
+      trap 'kill -s HUP "$child" 2>/dev/null || :' HUP
+      trap 'kill -s INT "$child" 2>/dev/null || :' INT
+      trap 'kill -s TERM "$child" 2>/dev/null || :' TERM
+      while :; do
+        status=0
+        wait "$child" || status=$?
+        kill -0 "$child" 2>/dev/null || break
+      done
       exit "$status"
     '';
     wrapper = pkgs.writeShellApplication {
