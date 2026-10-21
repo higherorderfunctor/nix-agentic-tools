@@ -20,8 +20,10 @@
   modelsName = "nix-agentic-tools/customized-models";
   # Interpolation copies a directory into the store; toString would not.
   storePath = entry: "${entry}";
-  # The options the generated config file sets; a consumer config file that
-  # sets one too cannot be merged without losing one side's packs.
+  # The options the generated config file sets. The wrapper concatenates a
+  # consumer's config lines with these and does not join option values, and
+  # CodeQL keeps one value per option, so a consumer file that sets one too
+  # would drop one side's packs.
   options = spec: ["--additional-packs"] ++ lib.optional (spec.models != []) "--model-packs";
 
   packErrors = field: kind:
@@ -124,7 +126,7 @@
       case "$clash" in
         0)
           echo "codeql: $theirs sets ${lib.concatStringsSep " or " (options spec)}, which this customized codeql sets from customizePackage." >&2
-          echo "codeql: CodeQL keeps one value per option, so one side's packs would be lost; give those packs to customizePackage instead." >&2
+          echo "codeql: the wrapper adds its lines to yours and does not join option values, and CodeQL keeps one value per option, so one side's packs would be lost; give those packs to customizePackage instead." >&2
           exit 2
           ;;
         1) ;;

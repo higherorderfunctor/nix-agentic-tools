@@ -78,8 +78,9 @@ because it comes from a `codeql` this wrapper started, such as a build command
 calling `codeql`.
 
 A consumer file that sets `--additional-packs` or `--model-packs` exits 2 with a
-message. CodeQL keeps one value per option, so merging would silently lose one
-side's packs.
+message. The wrapper adds lines and does not join option values, and CodeQL
+keeps one value per option, so the added lines would silently drop one side's
+packs.
 
 ### Precompilation
 
