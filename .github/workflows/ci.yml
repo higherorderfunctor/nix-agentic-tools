@@ -539,18 +539,19 @@ jobs:
           # before the pushFilter existed; the operator purged them, so nothing
           # kiro may answer 200 any more. Select on BASENAMES (`${path##*/}`):
           # `nix path-info` output shape has varied between nix versions, and
-          # the store hash plus name identifies a path either way.
-          kiro_file="$RUNNER_TEMP/patched-kiro-paths"
+          # the store hash plus name identifies a path either way. No
+          # bash 4 builtins: macOS runs this step with bash 3.2.
+          paths=()
           while read -r path; do
-            case "${path##*/}" in *kiro*) printf '%s\n' "$path" ;; esac
-          done < "$closure_file" > "$kiro_file"
-          mapfile -t paths < "$kiro_file"
+            case "${path##*/}" in *kiro*) paths+=("$path") ;; esac
+          done < "$closure_file"
 
           # The shared HTTP assertion: a positive control against the cache
           # first, then only a 404 counts as absent. It refuses an empty path
           # list, so a well-formed listing with no kiro path in it fails rather
-          # than asking nothing and passing.
-          dev/scripts/assert-not-published.sh "${paths[@]}"
+          # than asking nothing and passing. The `+` form expands an empty
+          # array under bash 3.2's nounset.
+          dev/scripts/assert-not-published.sh ${paths[@]+"${paths[@]}"}
 
   # Validation entrypoint: `nix flake check` is the single source of truth for
   # repo health. In addition to structural evaluation and formatting, it runs

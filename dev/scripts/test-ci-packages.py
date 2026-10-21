@@ -48,6 +48,8 @@ class CacheAssertionTest(unittest.TestCase):
                 break
             lines.append(line)
         script = textwrap.dedent("\n".join(lines))
+        # The macOS leg runs this step with /bin/bash 3.2, which has neither.
+        self.assertNotRegex(script, r"\b(mapfile|readarray)\b")
         # Execute the workflow's shell, replacing only the external services.
         # Exported, so dev/scripts/assert-not-published.sh, which the step
         # calls, sees the same mocks.
