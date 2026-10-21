@@ -1,17 +1,18 @@
 ## Kimchi CodeQL database
 
 > **Last verified:** 2026-10-21 (commit f8707ca8) — `passthru.codeql` carries
-> `source`, `database`, `runQueries`, `createDatabase` and `engine`; the
-> `kimchi-codeql-database` check runs the smoke pack; `codeql:kimchi-db` creates
-> the same database locally. No fact reads it yet.
+> `database`, `runQueries`, `createDatabase` and `engine`, and `source` stays
+> internal; the `kimchi-codeql-database` check runs the smoke pack;
+> `codeql:kimchi-db` creates the same database locally. No fact reads it yet.
 
 ### Three layers
 
 `packages/kimchi/lib/codeql.nix`, reached through
 `self.ciPackages.<system>.kimchi.passthru.codeql`:
 
-- **`source`**: the tree the database is created from. It moves with the Kimchi
-  or pi pins and with the flake's nixpkgs (stdenv, bash, jq, coreutils, patch).
+- **`source`**, internal to the file: the tree `database` is created from, not a
+  passthru attribute. It moves with the Kimchi or pi pins and with the flake's
+  nixpkgs (stdenv, bash, jq, coreutils, patch).
 - **`database`**: one CodeQL database of `source`, under `$out/db`. It moves
   with `source`, the engine and nixpkgs, so a nixpkgs bump costs one database
   rebuild of about 85 s.

@@ -144,5 +144,5 @@
         done
       '';
 in {
-  inherit createDatabase database engine runQueries source;
+  inherit createDatabase database engine runQueries;
 }
