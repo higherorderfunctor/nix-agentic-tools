@@ -4,9 +4,9 @@
 > variables give the settings type through `lib/extracted/options.nix`; the
 > render loads through Manager Plus 1.14.7's `LoadWithoutCreatingDefault`;
 > `ai.cpa-manager-plus.instances` renders it at start and applies
-> `config.adminKeyFile` through `reset-admin-key` on every start, against the
-> database the server resolves at run time, with inherited admin-key variables
-> unset.
+> `config.adminKeyFile` through `reset-admin-key` on every start; evaluation
+> resolves the database from declared, clean paths, and the run script unsets
+> inherited admin-key and database variables.
 
 `lib/default.nix` exports
 `cpa-manager-plus.{settingsType, render, report, exclusions, sample}`. One
@@ -63,21 +63,27 @@ before it execs the server. Without `--db-path` the command loads the same
 config and environment the server does (its `resolveDBPath`), so it resets the
 database the server opens. The command refuses a missing or empty database, so a
 start without one is a first start. The run script tells the two apart by
-resolving the database as `config.go` `LoadWithOptions` does, at run time:
-`USAGE_DB_PATH`, then `$USAGE_DATA_DIR/usage.sqlite`, set in the environment or
-inherited from it, then config.json's `dbPath`, then `<dataDir>/usage.sqlite`,
-`<stateDir>/usage.sqlite` by default. A first start seeds the credential from
-the same file, and the run script fails first if that file is unreadable or
-blank, where Manager Plus would generate a key and log it. A failed reset fails
-the start. The path is a restart trigger (`restartOnChange`), so a changed file
-restarts the instance onto the new key, and on Linux Home Manager the unit
-orders after the secret providers, as one reading a redact reference does. Only
-the path reaches argv and the store; the command prints no key.
+testing the database evaluation resolves as `config.go` `LoadWithOptions` does:
+`environment.USAGE_DB_PATH`, then `<environment.USAGE_DATA_DIR>/usage.sqlite`,
+then `config.dbPath`, then `<config.dataDir>/usage.sqlite`,
+`<stateDir>/usage.sqlite` by default. Each of these, when set, must be an
+absolute path with no empty, `.` or `..` segment and no trailing whitespace, or
+evaluation fails: Manager Plus cleans paths lexically (`filepath.Join`) and
+trims Unicode whitespace (`strings.TrimSpace`), so only such a path is the one
+it opens. The run script unsets `USAGE_DB_PATH` and `USAGE_DATA_DIR` unless the
+instance declares them, so a value inherited from the user manager's environment
+cannot move the database. A first start seeds the credential from the same file,
+and the run script fails first if that file is unreadable or blank, where
+Manager Plus would generate a key and log it. A failed reset fails the start.
+The path is a restart trigger (`restartOnChange`), so a changed file restarts
+the instance onto the new key, and on Linux Home Manager the unit orders after
+the secret providers, as one reading a redact reference does. Only the path
+reaches argv and the store; the command prints no key.
 
 `environment.CPA_MANAGER_ADMIN_KEY` and `CPA_MANAGER_ADMIN_KEY_FILE` fail an
 assertion that names `config.adminKeyFile`. Either one takes precedence over
 `adminKeyFile` (`readSecret`) and would be read on the first start only, and the
 plain key could reach `reset-admin-key` only through argv or a copy on disk. The
-run script unsets both before the reset and the server, so a value inherited
-from the user manager's environment cannot seed a first start either. Without
-any of the three, the run script resets nothing, as before.
+run script unsets both before the reset and the server, so an inherited value
+cannot seed a first start either. Without any of the three, the run script
+resets nothing, as before.

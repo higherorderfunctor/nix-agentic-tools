@@ -110,7 +110,29 @@
       "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY only on its first start, while the instance applies adminKeyFile on every start."
       "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY_FILE: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY_FILE only on its first start, while the instance applies adminKeyFile on every start."
       "ai.cpa-manager-plus.instances.main.settings.config.adminKeyFile: must be an absolute path, not `admin.key`."
-    ];
+    ]
+    # With adminKeyFile, every input that places the database must be a path
+    # Manager Plus opens as written; without it, none is refused.
+    && failures (evaluate backend (withInstances {
+      cpa-manager-plus.instances.main = {
+        settings = unclean // {config = unclean.config // {adminKeyFile = "/run/secrets/cpa-admin-key";};};
+        stateDir = "/srv/state/../manager";
+      };
+    }))
+    == map (option: "ai.cpa-manager-plus.instances.main.${option}: with settings.config.adminKeyFile set, must be an absolute path with no empty, `.` or `..` segment and no trailing whitespace, which Manager Plus opens as written; not `${lib.attrByPath (lib.tail (lib.splitString "." option)) "/srv/state/../manager" unclean}`.") [
+      "settings.config.dataDir"
+      "settings.config.dbPath"
+      "settings.environment.USAGE_DATA_DIR"
+      "settings.environment.USAGE_DB_PATH"
+    ]
+    && failures (evaluate backend (withInstances {cpa-manager-plus.instances.main.settings = unclean;})) == [];
+  unclean = {
+    config.dbPath = "missing/../usage.sqlite";
+    environment = {
+      USAGE_DATA_DIR = "/srv/manager/";
+      USAGE_DB_PATH = "/srv/manager/usage.sqlite${builtins.fromJSON ''"\u00a0"''}";
+    };
+  };
 
   # adminKeyFile restarts the instance when its bytes change.
   keyed = backend:
@@ -170,7 +192,7 @@ in {
       # Start the packaged daemons through the actual instance-derived units,
       # with file references whose dummy values exist only at build time.
       module-service-instances-real-daemons = let
-        real =
+        daemons = manager:
           (evalHm (withInstances {
             cliproxyapi.instances.main = {
               package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi;
@@ -181,13 +203,24 @@ in {
               };
               stateDir = "/build/state/cpa";
             };
-            cpa-manager-plus.instances.main = {
-              package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cpa-manager-plus;
-              port = 28418;
-              settings.config.adminKeyFile = "/build/admin-key";
-              stateDir = "/build/state/manager";
-            };
+            cpa-manager-plus.instances.main =
+              {
+                package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cpa-manager-plus;
+                port = 28418;
+                settings.config.adminKeyFile = "/build/admin-key";
+                stateDir = "/build/state/manager";
+              }
+              // manager;
           })).config;
+        real = daemons {};
+        # The same daemon with a declared database outside its state.
+        declaredDatabase = daemons {
+          settings = {
+            config.adminKeyFile = "/build/admin-key";
+            environment.USAGE_DB_PATH = "/build/state/declared-db/usage.sqlite";
+          };
+          stateDir = "/build/state/declared";
+        };
       in
         pkgs.runCommandLocal "module-test-service-instances-real-daemons" {} ''
           set -euETo pipefail
@@ -222,16 +255,18 @@ in {
           processes+=("$!")
           ready "''${processes[0]}" http://127.0.0.1:28417/healthz cpa.log
           ${pkgs.jq}/bin/jq -e '.status == "ok"' health.json
+          main=${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart}
+          declared=${declaredDatabase.systemd.user.services.cpa-manager-plus-main.Service.ExecStart}
           manager() {
-            ${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart} > "$1" 2>&1 &
+            "$1" > "$2" 2>&1 &
             processes+=("$!")
-            ready "$!" http://127.0.0.1:28418/health "$1"
+            ready "$!" http://127.0.0.1:28418/health "$2"
           }
           stop() {
             kill -TERM "''${processes[-1]}"
             wait "''${processes[-1]}" || :
           }
-          manager manager.log
+          manager "$main" manager.log
           ${pkgs.jq}/bin/jq -e '.ok == true and .service == "cpa-manager-plus"' health.json
           # Each port has exactly one listener, bound to IPv4 loopback.
           for port in 6F01 6F02; do
@@ -269,35 +304,44 @@ in {
           # credential is reset to the new key before the server runs.
           stop
           printf '%s\n' admin-key-b > /build/admin-key
-          manager manager-restart.log
+          manager "$main" manager-restart.log
           accepts admin-key-b
           refuses admin-key-a
-          # A database path and both admin-key variables inherited from the
-          # user manager's environment. The first start on that database
-          # seeds the file's key, not either variable's; a later start resets
-          # the database the server opens, not the default one.
+          # Database and admin-key variables inherited from the user manager's
+          # environment are dropped: the next start resets the database the
+          # instance declares to the rotated file, and the server opens it.
           stop
           printf '%s\n' admin-key-env-file > /build/env-admin-key
           mkdir -p /build/state/inherited
-          export USAGE_DB_PATH=/build/state/inherited/usage.sqlite CPA_MANAGER_ADMIN_KEY=admin-key-env CPA_MANAGER_ADMIN_KEY_FILE=/build/env-admin-key
-          manager manager-inherited.log
-          test -s "$USAGE_DB_PATH"
-          accepts admin-key-b
-          refuses admin-key-env
-          refuses admin-key-env-file
-          stop
+          export USAGE_DB_PATH=/build/state/inherited/usage.sqlite USAGE_DATA_DIR=/build/state/inherited CPA_MANAGER_ADMIN_KEY=admin-key-env CPA_MANAGER_ADMIN_KEY_FILE=/build/env-admin-key
           printf '%s\n' admin-key-c > /build/admin-key
-          manager manager-inherited-restart.log
+          manager "$main" manager-inherited.log
+          test ! -e /build/state/inherited/usage.sqlite
           accepts admin-key-c
           refuses admin-key-b
+          refuses admin-key-env
+          refuses admin-key-env-file
+          # A declared USAGE_DB_PATH places the database, outside `stateDir`:
+          # the first start seeds it, and the next resets it.
+          stop
+          mkdir -p /build/state/declared-db
+          manager "$declared" manager-declared.log
+          test -s /build/state/declared-db/usage.sqlite
+          test ! -e /build/state/declared/usage.sqlite
+          accepts admin-key-c
+          stop
+          printf '%s\n' admin-key-d > /build/admin-key
+          manager "$declared" manager-declared-restart.log
+          accepts admin-key-d
+          refuses admin-key-c
           # A first start seeds the credential itself; a later one resets it.
           # No key reaches any log. `! grep` would be exempt from errexit, so
           # each absence fails explicitly.
-          for log in manager-restart.log manager-inherited-restart.log; do
+          for log in manager-restart.log manager-inherited.log manager-declared-restart.log; do
             grep -Fx 'CPA Manager Plus admin key reset.' "$log"
           done
-          if grep -F 'admin key reset' manager.log manager-inherited.log \
-            || grep -F -e admin-key-a -e admin-key-b -e admin-key-c -e admin-key-env manager*.log; then
+          if grep -F 'admin key reset' manager.log manager-declared.log \
+            || grep -F -e admin-key-a -e admin-key-b -e admin-key-c -e admin-key-d -e admin-key-env manager*.log; then
             false
           fi
           touch "$out"
