@@ -109,8 +109,11 @@
     == [
       "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY only on its first start, while the instance applies adminKeyFile on every start."
       "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY_FILE: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY_FILE only on its first start, while the instance applies adminKeyFile on every start."
-      "ai.cpa-manager-plus.instances.main.settings.config.adminKeyFile: must be an absolute path, not `admin.key`."
+      "ai.cpa-manager-plus.instances.main.settings.config.adminKeyFile: must be an absolute path with no empty, `.` or `..` segment and no trailing whitespace, not `admin.key`."
     ]
+    # Bootstrap trims the path it reads; a trailing space would name another file.
+    && failures (evaluate backend (withInstances {cpa-manager-plus.instances.main.settings.config.adminKeyFile = "/run/secrets/cpa-admin-key ";}))
+    == ["ai.cpa-manager-plus.instances.main.settings.config.adminKeyFile: must be an absolute path with no empty, `.` or `..` segment and no trailing whitespace, not `/run/secrets/cpa-admin-key `."]
     # With adminKeyFile, every input that places the database must be a path
     # Manager Plus opens as written; without it, none is refused.
     && failures (evaluate backend (withInstances {
@@ -266,6 +269,15 @@ in {
             kill -TERM "''${processes[-1]}"
             wait "''${processes[-1]}" || :
           }
+          # A first start refuses a key file that is blank to strings.TrimSpace,
+          # here a lone no-break space, before bootstrap could generate and log a key.
+          printf '\302\240\n' > /build/admin-key
+          if "$main" > blank.log 2>&1; then
+            echo "a blank admin key file started Manager Plus" >&2
+            exit 1
+          fi
+          ${pkgs.gnugrep}/bin/grep -F 'is unreadable or blank' blank.log
+          printf '%s\n' admin-key-a > /build/admin-key
           manager "$main" manager.log
           ${pkgs.jq}/bin/jq -e '.ok == true and .service == "cpa-manager-plus"' health.json
           # Each port has exactly one listener, bound to IPv4 loopback.

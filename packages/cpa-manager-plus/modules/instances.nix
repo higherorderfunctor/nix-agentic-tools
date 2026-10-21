@@ -109,12 +109,15 @@ in {
       # declare; declared admin-key ones are refused below.
       preStart = instance: let
         key = lib.escapeShellArg instance.settings.config.adminKeyFile;
+        # Bootstrap trims with strings.TrimSpace: drop the non-ASCII spaces
+        # byte-wise, so C's [:space:] covers the rest.
+        blankSpaces = toString (map (space: "-e ${lib.escapeShellArg "s/${space}//g"}") (lib.filter (space: builtins.stringLength space > 1) spaces));
       in
         lib.optionalString (instance.settings.config.adminKeyFile != null) ''
           unset ${toString (adminKeyVariables ++ lib.filter (variable: !given instance.settings.environment.${variable}) databaseVariables)}
           if [ -s ${lib.escapeShellArg (database instance)} ]; then
             ${lib.getExe instance.package} reset-admin-key --admin-key-file ${key}
-          elif ! ${pkgs.gnugrep}/bin/grep -q '[^[:space:]]' ${key}; then
+          elif ! stripped="$(LC_ALL=C ${pkgs.gnused}/bin/sed ${blankSpaces} -- ${key} 2>/dev/null)" || ! LC_ALL=C ${pkgs.gnugrep}/bin/grep -q '[^[:space:]]' <<<"$stripped"; then
             printf '%s\n' ${lib.escapeShellArg "settings.config.adminKeyFile: ${instance.settings.config.adminKeyFile} is unreadable or blank"} >&2
             exit 1
           fi
@@ -146,8 +149,9 @@ in {
     # cannot be a restart trigger.
     ++ lib.optionals (instance.settings.config.adminKeyFile != null) ([
         {
-          assertion = lib.hasPrefix "/" instance.settings.config.adminKeyFile;
-          message = "ai.cpa-manager-plus.instances.${name}.settings.config.adminKeyFile: must be an absolute path, not `${instance.settings.config.adminKeyFile}`.";
+          # Bootstrap trims the path; the trigger, the probe and the reset do not.
+          assertion = clean instance.settings.config.adminKeyFile;
+          message = "ai.cpa-manager-plus.instances.${name}.settings.config.adminKeyFile: must be an absolute path with no empty, `.` or `..` segment and no trailing whitespace, not `${instance.settings.config.adminKeyFile}`.";
         }
       ]
       # The first-start probe tests `database`, which is the database
