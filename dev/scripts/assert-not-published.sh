@@ -42,7 +42,7 @@ done
 
 if [ "$failed" -ne 0 ]; then
   echo "::error::${failed} path(s) failed the not-published assertion against $CACHE." \
-    "Check the cachix-action pushFilter in ci.yml and update.yml and ci-packages.py's EXCLUDED set." >&2
+    "Check the cachix-action pushFilter in ci.yml and update.yml and ci-packages.py's EXCLUDED and EXCLUDED_PREFIXES." >&2
   exit 1
 fi
 echo "No asserted path is fetchable from $CACHE."

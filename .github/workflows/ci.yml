@@ -501,10 +501,10 @@ jobs:
             --option substituters "https://cache.nixos.org https://devenv.cachix.org")"
           printf 'out=%s\n' "$out" >> "$GITHUB_OUTPUT"
 
-      # TRIPWIRE. The exclusion above and the `pushFilter: kiro-cli` on every
-      # credentialed cachix-action step are both configuration, and this repo
-      # already learned that a mitigation with an unwatched hole reads exactly
-      # like a working one: #665 excluded this attribute from the
+      # TRIPWIRE. The exclusion above and the `pushFilter: kiro-cli|codeql` on
+      # every credentialed cachix-action step are both configuration, and this
+      # repo already learned that a mitigation with an unwatched hole reads
+      # exactly like a working one: #665 excluded this attribute from the
       # cache-writing build and the patched binary was published anyway for
       # eleven days, through update.yml's whole-package-set verification build.
       # So assert the OUTCOME rather than trusting either knob — ask the cache
@@ -634,8 +634,8 @@ jobs:
       # TRIPWIRE for the CodeQL engines (packages/codeql), the outcome
       # assertion the kiro-patched job makes for the patched Kiro: the GitHub
       # CodeQL Terms forbid distributing the CLI, and the pushFilter and
-      # ci-packages.py's EXCLUDED are only configuration. Every engine and
-      # every engine's source asset must answer 404. It evaluates and builds
+      # ci-packages.py's EXCLUDED_PREFIXES are only configuration. Every engine
+      # and every engine's source asset must answer 404. It evaluates and builds
       # nothing, so it runs on every event, forks too.
       - name: Assert no CodeQL engine is published
         env:
