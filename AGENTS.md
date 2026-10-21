@@ -408,7 +408,6 @@ for it. When several entries match, their guidance composes.
     - `.github/workflows/hestia-gc.yml`
     - `.github/workflows/update.yml`
     - `config/fragment-categories.nix`
-    - `config/generate-update-ninja.nix`
     - `config/update-targets.nix`
     - `dev/ai.nix`
     - `dev/ci-check-evaluator.nix`

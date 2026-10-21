@@ -103,7 +103,6 @@ in {
       check-jsonschema
       cspell
       deadnix
-      ninja
       prefetch-npm-deps
       statix
     ]
@@ -201,11 +200,6 @@ in {
       };
       "devenv:treefmt:run".before = lib.mkForce [];
 
-      # ── Update pipeline (ninja DAG) ──────────────────────────────────
-      # ninja handles the full dependency graph with -j4 concurrency.
-      # Each target runs in a git worktree, cherry-picks to branch on
-      # success, rolls back on failure. See scripts/update-*.sh.
-      # Targeted updates: ninja -j4 -f .update.ninja update-agnix
       # Reporting-only. Deliberately NOT a git-hooks validator: that table in
       # config/repo-validation.nix requires every validator to carry a CI
       # backend and participate in Stop, which would make this merge-blocking
@@ -221,28 +215,6 @@ in {
         '';
       };
 
-      "update:all" = {
-        description = "Run full update pipeline (ninja DAG)";
-        exec = ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "ERROR: working tree is dirty. Commit or stash changes first." >&2
-            git status --short >&2
-            exit 1
-          fi
-
-          # Regenerate ninja build file from flake.lock + config.update.targets
-          nix run .#generate-update-ninja
-
-          # Clear previous report
-          rm -f .update-report.txt
-
-          # Run the DAG
-          ninja -j4 -f .update.ninja update-report
-        '';
-      };
       "build:all" = {
         description = "Build all packages for the current system";
         exec = ''

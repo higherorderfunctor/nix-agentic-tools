@@ -116,9 +116,9 @@ If a JS MCP server fails with `Cannot find module 'X'`:
 
 ## MCP Server Packages
 
-> **Last verified:** 2026-10-15 — source patching defers to the overlays
-> `source-patches` rule: a no-fuzz `.patch`, or `--replace-fail` for churning
-> text.
+> **Last verified:** 2026-10-20 — updates are dispatched as the CI `Update`
+> workflow; source patching defers to the overlays `source-patches` rule: a
+> no-fuzz `.patch`, or `--replace-fail` for churning text.
 >
 > Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.
 
@@ -311,7 +311,7 @@ around; plan for the patch to be DELETED, not maintained forever.
 
 ```bash
 nix build .#<server-name>       # Build a single server
-nix run .#update                # Run all updates via config.update.targets
+gh workflow run update.yml      # Dispatch the CI update sweep over config.update.targets
 nix flake check                 # Verify evaluation
 ```
 

@@ -20,22 +20,6 @@ git rebase --abort 2>/dev/null || true
 # setup_worktree's add path self-heal.
 git worktree prune
 
-# Remove orphaned worktrees whose target no longer exists in the current
-# ninja file. Targets can disappear when packages or combo scripts are
-# removed. Leaving orphans eats disk and confuses new contributors.
-if [ -d "$WORKTREES_DIR" ] && [ -f ".update.ninja" ]; then
-  for wt in "$WORKTREES_DIR"/update-*; do
-    [ -d "$wt" ] || continue
-    name="$(basename "$wt")"
-    name="${name#update-}"
-    if ! grep -q "update-${name}\b" .update.ninja 2>/dev/null; then
-      echo "  Pruning orphaned worktree: $name"
-      git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
-      git branch -D "update/$name" 2>/dev/null || true
-    fi
-  done
-fi
-
 # Detach worktrees so their branches can be deleted.
 # setup_worktree will re-checkout the named branch.
 if [ -d "$WORKTREES_DIR" ]; then

@@ -42,9 +42,9 @@ in {
           type = types.listOf types.str;
           default = [];
           description = ''
-            Extra nix-update CLI flags, e.g. ["--version" "skip"]. Emitted
-            space-joined into the ninja DAG (config/generate-update-ninja.nix)
-            and consumed positionally by update-pkg.sh.
+            Extra nix-update CLI flags, e.g. ["--version" "skip"]. The CI
+            matrix (dev/scripts/update-matrix.py) passes them positionally to
+            update-pkg.sh.
           '';
         };
         git = mkOption {
@@ -53,16 +53,6 @@ in {
           description = ''
             Upstream repo URL for main-tracking rev-bump; null for binary
             (--use-update-script) packages.
-          '';
-        };
-        dependsOn = mkOption {
-          type = types.listOf types.str;
-          default = [];
-          description = ''
-            DAG predecessors, e.g. ["rust-overlay"]. The ninja generator turns
-            each entry <d> into an `update-<d>` edge after the universal
-            `update-init` predecessor. Package targets do not universally wait
-            for the isolated nixpkgs or nix-update input targets.
           '';
         };
       };

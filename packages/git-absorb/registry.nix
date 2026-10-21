@@ -4,6 +4,5 @@
     file = repoPath ./packages/ai/gitTools/git-absorb/package.nix;
     flags = ["--version" "skip"];
     git = "https://github.com/tummychow/git-absorb.git";
-    dependsOn = ["rust-overlay"];
   };
 }

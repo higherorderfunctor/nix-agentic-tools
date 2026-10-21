@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # dev/scripts/update-pkg.sh <package-name> <nix-update-flags> [git-url]
-# Update a single package in a worktree, verify build, merge back.
+# Update a single package in a worktree and commit it to its update branch.
 # If git-url is provided, bumps rev to latest default branch commit first.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
@@ -140,7 +140,7 @@ if [ -n "$git_url" ]; then
     # contributions plus workspace policy). Every
     # main-tracking package declares one, so resolve_recipe_file below is a
     # retained safety-net fallback. Only `file` is consumed here; `flags`/`git`
-    # flow positionally from the same registry via the ninja DAG.
+    # arrive positionally from the same registry via update-matrix.py.
     # checks.update-targets-parity asserts the declared `file` is byte-identical
     # to resolve_recipe_file's output, so the two paths agree.
     # cwd is still the main tree here (before Phase 1 changes directories), so
@@ -445,7 +445,7 @@ set +e
   if ! git_diff_quiet -C "$wt" diff || ! git_diff_quiet -C "$wt" diff --staged; then
     # Explicit `exit`, because this body is the CONDITION of the `if ! (`
     # above and bash disables errexit for a condition — a bare failing
-    # call falls through to the build below instead of aborting.
+    # call falls through to the commit below instead of aborting.
     if ! run_build nix fmt; then
       log_failure "formatter errored"
       exit 1
@@ -462,40 +462,6 @@ set +e
     # the function body. A failure means the PR cannot be written.
     exit 1
   fi
-
-  # Nothing changed from base
-  if [ "$(git -C "$wt" rev-parse HEAD)" = "$base_head" ]; then
-    exit 0
-  fi
-
-  # Phase 2: Build verification — never withholds the PR.
-  #
-  # nix-update already derived every dependency hash the PR needs, and its
-  # own failure exits above. So reaching here means the tree is complete
-  # and committable: rev, src and hashes are all written. A build that
-  # still fails means the update is well-formed but does not build —
-  # a dependency floor the pinned nixpkgs cannot satisfy, say — and that
-  # is a red PR for branch CI to report, not a reason to withhold it. The
-  # failure is recorded so a CI worker that ran this build fails after
-  # publishing; CI sets NAT_UPDATE_VERIFY_PACKAGES=0 today, so in practice
-  # only local Ninja runs reach the build.
-  #
-  # This USED to be the last command in the subshell, which is the only
-  # reason a failing build held the package back: errexit is disabled for
-  # an `if` condition, so position was doing the work, not intent.
-  # CI publishes after preparation; native PR shards perform this validation.
-  # Local Ninja retains its informational build and all resource safeguards.
-  if [ "${NAT_UPDATE_VERIFY_PACKAGES:-1}" = "0" ]; then
-    log_info "Prepared update — native PR CI will verify the build"
-  elif ! run_build nix build ".#$(nat_attr "$name")" --no-link --log-format bar-with-logs; then
-    if ! record_verify_failure "$name" "$(nat_attr "$name")"; then
-      log_failure "could not record the failed build verification"
-      exit 1
-    fi
-  fi
-  # Belt and braces: keep the subshell's exit status independent of the
-  # build above even if a later edit adds a statement here.
-  true
 )
 target_rc=$?
 set -e

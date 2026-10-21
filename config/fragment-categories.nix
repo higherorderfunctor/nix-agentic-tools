@@ -501,8 +501,8 @@ _: {
     };
     # pipeline: fragment composition, ecosystem transforms, update
     # pipeline, and CI workflow. Scoped to every file in the dev
-    # fragment chain, update scripts, CI workflow, ninja DAG
-    # generation, and both registries — config.fragments.categories
+    # fragment chain, update scripts, CI workflow, and both
+    # registries — config.fragments.categories
     # (this file + lib/fragments-registry.nix) and
     # config.update.targets, plus the Renovate config and the
     # Actions allowlist manifest it depends on.
@@ -515,7 +515,6 @@ _: {
         ".github/workflows/hestia-gc.yml"
         ".github/workflows/update.yml"
         "config/fragment-categories.nix"
-        "config/generate-update-ninja.nix"
         "config/update-targets.nix"
         "dev/ai.nix"
         "dev/ci-check-evaluator.nix"

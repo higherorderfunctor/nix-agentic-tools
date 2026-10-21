@@ -83,8 +83,6 @@ jobs:
     env:
       NAT_UPDATE_EVAL_MAX_MEMORY: 4096
       NAT_UPDATE_EVAL_WORKERS: 1
-      NAT_UPDATE_JOBS: 1
-      NAT_UPDATE_VERIFY_PACKAGES: 0
       NIX_CONFIG: |
         max-jobs = 1
         cores = 0
@@ -158,7 +156,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NAT_UPDATE_WORKTREES_DIR: ${{ runner.temp }}/nat-update-worktrees
-          WORKTREE_LOCK: ${{ runner.temp }}/nix-update-worktree
           UPDATE_TARGET_JSON: ${{ toJSON(matrix) }}
         run: |
           set -euETo pipefail
