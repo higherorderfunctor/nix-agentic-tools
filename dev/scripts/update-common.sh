@@ -469,18 +469,27 @@ run_nfb_build() {
 # The pipeline's whole-package-set build verification. Defined once because
 # update-input.sh's initial attempt and repair retry must invoke it identically;
 # when copies drifted they silently verified different things.
+#
+# ci-packages.py update-plan drops the CodeQL engines (EXCLUDED_PREFIXES) from
+# both the expected set and the build: their runtime proof is the CodeQL smoke
+# check, and an engine absent from every substituter would be fetched from
+# upstream on every input bump.
 verify_all_packages() {
-  local expected_packages system verify_rc=0
+  local all_packages expected_packages select system verify_rc=0
   system=$(nat_system) || return 2
   mkdir -p "$UPDATE_LOGS_DIR" || return 2
+  all_packages=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-all-packages-XXXXXX) || return 2
   expected_packages=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-packages-XXXXXX) || return 2
-  if ! nix eval --json ".#ciPackages.$system" --apply builtins.attrNames >"$expected_packages"; then
+  if ! nix eval --json ".#ciPackages.$system" --apply builtins.attrNames >"$all_packages" ||
+    ! select=$(python3 "$(dirname "${BASH_SOURCE[0]}")/ci-packages.py" \
+      update-plan "$all_packages" "$expected_packages"); then
     log_failure "Could not enumerate packages before verification"
     return 2
   fi
+  rm -f "$all_packages"
   run_nfb_build "$expected_packages" nix run --inputs-from . nix-fast-build -- \
     --skip-cached --no-nom --no-link \
-    --flake ".#ciPackages.$system" || verify_rc=$?
+    --flake ".#ciPackages.$system" --select "$select" || verify_rc=$?
   [ "$verify_rc" -ne 0 ] || rm -f "$expected_packages"
   return "$verify_rc"
 }

@@ -1,7 +1,8 @@
 ## CodeQL engines
 
 > **Last verified:** 2026-10-21 (commit b37f61b0) — eleven engines at 2.27.3
-> from one `mkEngine` factory; CI builds javascript and evaluates the rest.
+> from one `mkEngine` factory; CI builds javascript and evaluates the rest; the
+> update input lanes build none.
 
 ### What a bundle is
 
@@ -93,6 +94,8 @@ is ever cached publicly, so every run would pay it again. Since the eleven
 differ only in the asset, building one proves the shared body and evaluating all
 proves every call site and pin.
 
-The update pipeline's input lanes are the exception: `verify_all_packages`
-builds every `ciPackages` entry with no selection, so each input bump builds all
-eleven. Their pushes are filtered like everything else.
+The update pipeline's input lanes skip the engines for the same reason:
+`verify_all_packages` builds every other `ciPackages` entry through
+`ci-packages.py update-plan`, which drops the `codeql-` prefix from both the
+expected set and the `--select`. An update PR still runs the smoke check in
+`ci.yml`.

@@ -168,6 +168,13 @@ class CoverageTest(unittest.TestCase):
         # Every engine, including one added later, by prefix.
         self.assertFalse([n for n in names if n.startswith("codeql-")])
 
+    def test_update_lanes_build_every_package_but_the_engines(self):
+        packages = ci.update_packages(self.names)
+        self.assertIn("kiro-cli-rollout-canary", packages)
+        self.assertFalse([n for n in packages if n.startswith("codeql-")])
+        with self.assertRaises(ValueError):
+            ci.update_packages(["codeql-javascript"])
+
     def test_missing_duplicate_or_different_source_shards_fail(self):
         changed = copy.deepcopy(self.plans)
         changed[0]["universe"].append("unexpected")

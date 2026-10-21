@@ -105,7 +105,8 @@ repository files (`AGENTS.md`, `.github/instructions/`, `.github/agents/`,
 > store-linked runtime; Kiro parses embedded rollout JSON, preserving state
 > fields; copies must agree. The byte-preserving patcher remains strict. The
 > devenv update lane realizes the patched Kiro through the repo shell, so it
-> does not push. The same pushFilter also excludes the CodeQL engines.
+> does not push. The same pushFilter also excludes the CodeQL engines, which the
+> input lanes do not build.
 
 ### Overview
 
@@ -259,14 +260,16 @@ without cache credentials. The unpatched `kiro-cli` stays in the shards: they
 build it as a check, and the `pushFilter` is what keeps it out of the cache.
 
 `verify_all_packages` (`dev/scripts/update-common.sh`) builds
-`.#ciPackages.<sys>` with **no `--select`**, on every input bump. That is
-deliberate and stays: `postInstallCheck` runs `kiro-cli-chat --version`, so the
-build is a genuine runtime smoke test of the patch, and `doInstallCheck` is
-already true upstream so the phase really executes. The fix is therefore at the
-PUSH, not the build — `pushFilter: kiro-cli|codeql` on every `cachix-action`
-step that holds the token (`ci.yml` build-packages and `update.yml` inputs). One
-spelling, copied identically: Actions cannot share an action input across
-workflows, and `test-ci-packages.py` fails if any credentialed step lacks it.
+`.#ciPackages.<sys>`, Kiro's patched canary included, on every input bump; only
+the CodeQL engines are left out of its `--select` (see the codeql fragment).
+Building Kiro there is deliberate and stays: `postInstallCheck` runs
+`kiro-cli-chat --version`, so the build is a genuine runtime smoke test of the
+patch, and `doInstallCheck` is already true upstream so the phase really
+executes. The fix is therefore at the PUSH, not the build —
+`pushFilter: kiro-cli|codeql` on every `cachix-action` step that holds the token
+(`ci.yml` build-packages and `update.yml` inputs). One spelling, copied
+identically: Actions cannot share an action input across workflows, and
+`test-ci-packages.py` fails if any credentialed step lacks it.
 
 **The generalizable lesson: `cachix-action` with a token runs a watch-store
 daemon that pushes every path realized in the job.** Reasoning about which
