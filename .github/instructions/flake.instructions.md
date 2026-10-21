@@ -7,9 +7,10 @@ applyTo: ".github/actions/check-cache/**,.github/workflows/hestia-gc.yml,flake.n
 
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-20 — overlay parity uses the ordinary
+> **Last verified:** 2026-10-21 — overlay parity uses the ordinary
 > `nixpkgs-stable` input; no patched evaluation source needs retention; every
-> credentialed push also filters the CodeQL bundle.
+> credentialed push also filters the CodeQL bundle; `unpublishedChecks` build
+> outside Hestia.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -132,6 +133,17 @@ within GitHub's shared cache quota. It has no explicit job timeout, matching
 upstream's GC workflow: repacking and the one-second REST mutation spacing can
 exceed 15 minutes. Garbage collection does not prevent GitHub's own expiry or
 LRU eviction. This cache carries no Cachix publishing token.
+
+Hestia's post-build hook uploads EVERY path a writing job builds, build-time
+inputs included, and v3.1.0 has no path exclusion: only `read-only` disables the
+hook. So a check whose closure may reach no cache, such as one built from the
+CodeQL bundle, whose terms forbid distributing it, names itself in
+`unpublishedChecks` (`lib/testing/check-options.nix`). `ciChecks` leaves it out
+of the matrix, and ci.yml's `checks-unpublished` job builds
+`ciUnpublishedChecks` with no Hestia and no Cachix token, as `kiro-patched`
+does; `checks-matrix` requires that job. A Cachix `pushFilter` does not cover
+this: PR #2771's first run uploaded the bundle through a matrix worker's Hestia
+drain while every credentialed Cachix step filtered it.
 
 The `checks-eval` job registers every evaluated `.drv` closure in the same
 cache. Its workers pass the eval job's `manifest-version` through the helper's

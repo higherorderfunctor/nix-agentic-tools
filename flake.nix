@@ -198,6 +198,10 @@
 
     checks = forAllSystems (system: checkWorlds.${system}.checks);
 
+    # The checks Hestia's matrix builds, every check less the
+    # `unpublishedChecks`: the matrix workers' Hestia uploads every path they
+    # build, and those must reach no cache. ci.yml's `checks-unpublished` job
+    # builds them instead, with no cache that writes.
     ciChecks = forAllSystems (system:
       lib.mapAttrs (name: check:
         check
@@ -215,7 +219,9 @@
                 else "owner-${claim.owner}";
             };
         })
-      checkWorlds.${system}.checks);
+      (builtins.removeAttrs checkWorlds.${system}.checks checkWorlds.${system}.unpublishedChecks));
+
+    ciUnpublishedChecks = forAllSystems (system: checkWorlds.${system}.unpublishedChecks);
 
     # Each revision supplies its own owner map, declarations, and packages to
     # the native extraction planner. Attribute names stay lazy if a drv fails.
