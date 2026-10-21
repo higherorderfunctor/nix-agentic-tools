@@ -1948,7 +1948,10 @@ function statementEnvironmentReads(statement, context) {
   return found;
 }
 
-// Names a top-level statement assigns on every path through it.
+// Names a top-level statement assigns on every path through it. Only
+// `process.env` spelled out establishes an overwrite: the other spellings of
+// the process object are recognized for reads, and counting their writes would
+// let a read through a spelling not yet recognized pair with a counted write.
 function definiteEnvironmentWrites(statement, context) {
   const { ts } = context;
   if (
@@ -1957,6 +1960,20 @@ function definiteEnvironmentWrites(statement, context) {
     statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
   ) {
     const target = statement.expression.left;
+    const object = target.expression;
+    if (
+      (ts.isPropertyAccessExpression(target) ||
+        ts.isElementAccessExpression(target)) &&
+      isProcessEnvironment(object, context) &&
+      !(
+        ts.isPropertyAccessExpression(object) &&
+        ts.isIdentifier(object.expression) &&
+        object.expression.text === "process"
+      )
+    )
+      fail(
+        `src/entry.ts assigns through ${object.getText()}, which the overwrite analysis counts only as process.env spelled out: ${statement.getText()}`,
+      );
     if (
       ts.isPropertyAccessExpression(target) &&
       isProcessEnvironment(target.expression, context)

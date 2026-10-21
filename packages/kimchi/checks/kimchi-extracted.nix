@@ -75,6 +75,8 @@
             'import { homedir } from "node:os"' $'import "../../extensions/model-catalog/model-metadata.js"\nimport { homedir } from "node:os"'
           mutant "$kimchi" entry-aliased-import src/entry.ts \
             'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' $'import * as proc from "node:process"\nconst inheritedPiAgentDir = proc.env.PI_CODING_AGENT_DIR'
+          mutant "$kimchi" entry-aliased-write src/entry.ts \
+            'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'import * as proc from "node:process"\nproc.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"'
           mutant "$kimchi" entry-destructured-env src/entry.ts \
             'const rawArgv = process.argv.slice(2)' $'const { env } = process\nvoid env.KIMCHI_NO_UPDATE_CHECK\nconst rawArgv = process.argv.slice(2)'
           mutant "$kimchi" entry-element-read src/entry.ts \
@@ -234,6 +236,8 @@
             "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"$drifted_version\"" >> "$TMPDIR/proof"
           expect_rejection pi-scope-unread "$kimchi" \
             'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
+          expect_rejection entry-aliased-write "$TMPDIR/entry-aliased-write-source" \
+            'src/entry.ts assigns through proc.env, which the overwrite analysis counts only as process.env spelled out' >> "$TMPDIR/proof"
           expect_rejection entry-destructured-env "$TMPDIR/entry-destructured-env-source" \
             'src/entry.ts hands process.env to { env }' >> "$TMPDIR/proof"
           expect_rejection entry-function-write "$TMPDIR/entry-function-write-source" \

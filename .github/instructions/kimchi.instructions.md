@@ -172,11 +172,14 @@ the extraction. The process object is `process` when the checker resolves it to
 the global (no extraction program has Node's types, so that global is whatever
 the program declares, or nothing), `process` on `globalThis`, or a default or
 namespace import of `node:process` under any local name; the `env` of any other
-local binding named `process` fails. Dotted and string-keyed access count alike,
-while destructuring `env` from `process` in entry.ts fails. Function bodies are
-not walked: 1.17 moved the async startup into `async function main()`, called as
-`void main()`, so a declared function's reads count from the start, and a direct
-`process.env` assignment or `delete` inside any function fails the extraction.
+local binding named `process` fails. Dotted and string-keyed access count alike
+for reads, while destructuring `env` from `process` in entry.ts fails. Only a
+write spelled `process.env` in entry.ts makes a variable fixed; a write through
+any other spelling fails, so a read through a spelling not yet recognized can
+never pair with a counted write. Function bodies are not walked: 1.17 moved the
+async startup into `async function main()`, called as `void main()`, so a
+declared function's reads count from the start, and a direct `process.env`
+assignment or `delete` inside any function fails the extraction.
 `PI_CODING_AGENT_DIR` is assigned too, but read and preserved first, so it stays
 settable. The analysis also fails instead of guessing when a module entry.ts
 statically imports reads the same name, or when an assignment follows entry.ts's
