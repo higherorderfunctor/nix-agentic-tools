@@ -8,7 +8,8 @@ applyTo: "packages/kimchi/**"
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-10-21 — the entry-overwrite analysis counts only
-> top-level writes and fails on any environment write inside a function.
+> top-level writes, fails on any environment write inside a function or through
+> a callee's parameter, and identifies `process` by checker symbol.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -165,8 +166,10 @@ Kimchi's entry point overwrites it before anything reads it. That flag is
 derived, not annotated: the extractor walks `src/entry.ts`'s top-level
 statements in order and marks a variable fixed when a statement assigns it on
 every path and no earlier statement reads it, counting what a callee handed
-`process.env` reads from it. Function bodies are not walked: 1.17 moved the
-async startup into `async function main()`, called as `void main()`, so a
+`process.env` reads from it; a callee that writes through it fails the
+extraction. `process` is the global one by checker symbol, and the `env` of a
+local binding of that name fails too. Function bodies are not walked: 1.17 moved
+the async startup into `async function main()`, called as `void main()`, so a
 declared function's reads count from the start, and a direct `process.env`
 assignment or `delete` inside any function fails the extraction.
 `PI_CODING_AGENT_DIR` is assigned too, but read and preserved first, so it stays

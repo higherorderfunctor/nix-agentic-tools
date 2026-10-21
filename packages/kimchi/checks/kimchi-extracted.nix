@@ -85,6 +85,10 @@
             'void main()' $'void main()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
           mutant "$kimchi" entry-overwrite src/entry.ts \
             'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "0"'
+          mutant "$kimchi" entry-parameter-write src/entry.ts \
+            'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nfunction setenv(env) { env.KIMCHI_NO_UPDATE_CHECK = "1" }\nsetenv(process.env)'
+          mutant "$kimchi" entry-shadowed-process src/entry.ts \
+            'const rawArgv = process.argv.slice(2)' $'{ const process = { env: { KIMCHI_NO_UPDATE_CHECK: "" } }; process.env.KIMCHI_NO_UPDATE_CHECK = "1" }\nconst rawArgv = process.argv.slice(2)'
           mutant "$kimchi" entry-unread src/entry.ts \
             'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' 'const inheritedPiAgentDir = undefined'
           mutant "$kimchi" environment-app-name package.json \
@@ -224,6 +228,10 @@
             'src/entry.ts assigns KIMCHI_CODING_AGENT_DIR before reading it, but' >> "$TMPDIR/proof"
           expect_rejection entry-late-write "$TMPDIR/entry-late-write-source" \
             'src/entry.ts assigns KIMCHI_NO_UPDATE_CHECK after it suspends' >> "$TMPDIR/proof"
+          expect_rejection entry-parameter-write "$TMPDIR/entry-parameter-write-source" \
+            'assigns KIMCHI_NO_UPDATE_CHECK through the environment parameter env' >> "$TMPDIR/proof"
+          expect_rejection entry-shadowed-process "$TMPDIR/entry-shadowed-process-source" \
+            'takes env from a local binding named process' >> "$TMPDIR/proof"
           expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
             "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
           expect_rejection pi-app-name "$kimchi" \
