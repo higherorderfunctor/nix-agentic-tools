@@ -3,7 +3,7 @@
   repoPath,
   ...
 }: {
-  documentation.devToolDescriptions."codeql-<engine>" = "GitHub CodeQL CLI: `bare`, `full`, or one language's bundle (unfree, x86_64-linux, never published)";
+  documentation.devToolDescriptions."codeql.codeql-<engine>" = "GitHub CodeQL CLI: `bare`, `full`, or one language's bundle (unfree, x86_64-linux, never published)";
   fragments.categories.codeql = {
     scopes = ["packages/${facetOwner}/**"];
     sources = [
