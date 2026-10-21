@@ -238,7 +238,8 @@ the packs and exactly `request(...)` and `fetchUrl(...)` with them.
 - the merge with a consumer config file from `CODEQL_CONFIG_FILE` or `HOME`,
   with and without a final newline, where its `--search-path` pack still
   resolves; one merged file left by two runs, consumer line first; the refusal
-  of a clashing one, and no refusal for a comment naming the option;
+  of a clashing one, indented too, and no refusal for a comment naming the
+  option;
 - the engine's Node in the extractor log;
 - the four rows of a two-query pack (one query imports a `.qll`) over a `.js`
   and a `.ts` file.

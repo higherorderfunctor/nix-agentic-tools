@@ -68,9 +68,9 @@ in {
     # A precompiled two-query pack resolves by name with no flag, and its
     # queries return the fixture rows. A consumer's own config file, from
     # CODEQL_CONFIG_FILE or HOME, still applies beside it, also with no final
-    # newline, and the merged file outlives the wrapper; one that sets --additional-packs is refused, one whose comment
-    # names it is not. The TypeScript file is extracted only with the engine's
-    # Node.
+    # newline, and the merged file outlives the wrapper; one that sets
+    # --additional-packs is refused, indented too, one whose comment names it
+    # is not. The TypeScript file is extracted only with the engine's Node.
     codeql-custom-query-pack = let
       custom = engine.customizePackage {queries = [queries];};
     in
@@ -119,6 +119,10 @@ in {
           fail "a consumer --additional-packs line was accepted"
         fi
         grep -q customizePackage "$TMPDIR/clash.err" || fail "the clash message does not name customizePackage"
+        printf -- '  --additional-packs %s\n' "$TMPDIR" > "$TMPDIR/indented-config"
+        status=0
+        CODEQL_CONFIG_FILE="$TMPDIR/indented-config" "$codeql" resolve packs 2> /dev/null || status=$?
+        [ "$status" = 2 ] || fail "an indented consumer --additional-packs line exited $status, not 2"
         database "$codeql" db ${./fixtures/project} --build-mode=none
         grep -qF "Found Node.js at: ${lib.getExe engine.nodejs}" "$TMPDIR/db.log" || fail "the extractor did not run the engine's Node"
         results "$codeql" "$TMPDIR/db" "$pack" > "$out"
