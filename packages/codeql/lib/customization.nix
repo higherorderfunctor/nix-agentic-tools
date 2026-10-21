@@ -77,7 +77,8 @@
 
   # One model pack whose data extensions are every model pack's own, each
   # copied under its index without its qlpack.yml so the copy is no second
-  # pack of the same name.
+  # pack of the same name, and without its codeql-pack.lock.yml, because a lock
+  # file without its manifest is not kept.
   aggregate = models:
     pkgs.runCommand "codeql-model-pack-customized" {
       nativeBuildInputs = [pkgs.jq pkgs.yq-go];
@@ -195,7 +196,6 @@
     pkgs.runCommand "${engine.pname}-customized-${engine.version}" {
       passthru = {
         inherit (engine) mkModelPack mkQueryPack;
-        codeqlSpec = spec;
         customizePackage = more: build (merged [spec (checked more)]);
         unwrapped = engine;
       };

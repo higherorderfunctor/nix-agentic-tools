@@ -159,7 +159,8 @@ one call or across calls, is used once; two paths holding one pack name throw,
 because CodeQL calls a pack found in two locations an error.
 
 The result has `bin/codeql`, a wrapper of the engine's, and `share/codeql`, a
-link to the engine's. Nothing of the distribution is copied.
+link to the engine's. Nothing of the distribution is copied. Its `unwrapped` is
+the engine, and it carries the engine's `mkQueryPack` and `mkModelPack`.
 
 ### How packs become visible
 
