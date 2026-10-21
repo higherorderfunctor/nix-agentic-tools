@@ -44,7 +44,7 @@ inputs.nix-agentic-tools = {
 # builds without it.
 nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 
-# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
+# Unfree: claude-code, codeql-actions, codeql-bare, codeql-cpp, codeql-csharp, codeql-full, codeql-go, codeql-java, codeql-javascript, codeql-python, codeql-ruby, codeql-rust, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
 # Allow them in the nixpkgs.config your pkgs comes from (NixOS's when
 # useGlobalPkgs is set).
 
@@ -87,7 +87,7 @@ services.mcp-servers.servers.github-mcp = {
 
 ```yaml
 # devenv.yaml
-# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
+# Unfree: claude-code, codeql-actions, codeql-bare, codeql-cpp, codeql-csharp, codeql-full, codeql-go, codeql-java, codeql-javascript, codeql-python, codeql-ruby, codeql-rust, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
 # Opt in as for nixpkgs.
 allowUnfree: true
 inputs:
@@ -277,6 +277,7 @@ Agent-adjacent development utilities exposed as `pkgs.ai.devTools.*`.
 | Package | Description |
 |---------|-------------|
 | `beads` | Graph-based issue tracker for AI coding agents |
+| `codeql-<engine>` | GitHub CodeQL CLI: `bare`, `full`, or one language's bundle (unfree, x86_64-linux, never published) |
 | `gh` | GitHub CLI |
 | `glab` | GitLab CLI |
 | `markdownlint-cli2` | Configuration-based markdown linter (markdownlint) |

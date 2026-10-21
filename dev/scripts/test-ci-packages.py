@@ -17,16 +17,17 @@ SPEC.loader.exec_module(ci)
 
 
 class CachixPushFilterTest(unittest.TestCase):
-    def test_every_credentialed_cachix_step_filters_kiro(self):
+    def test_every_credentialed_cachix_step_filters_kiro_and_codeql(self):
         # cachix-action with a token pushes every path the job realizes, so the
-        # audit is by credential: any step holding the token must exclude kiro.
+        # audit is by credential: any step holding the token must exclude kiro
+        # and the CodeQL engines, whose terms forbid distributing them.
         steps = 0
         for workflow in sorted((Path(__file__).parents[2] / ".github/workflows").glob("*.yml")):
             for chunk in workflow.read_text().split("uses: cachix/cachix-action@")[1:]:
                 step = chunk.split("\n      - ", 1)[0]
                 if "CACHIX_AUTH_TOKEN" in step:
                     steps += 1
-                    self.assertIn("pushFilter: kiro-cli\n", step + "\n", workflow.name)
+                    self.assertIn("pushFilter: kiro-cli|codeql\n", step + "\n", workflow.name)
         self.assertGreater(steps, 0)
 
     def test_devenv_update_lane_does_not_push(self):
@@ -47,7 +48,11 @@ class CacheAssertionTest(unittest.TestCase):
                 break
             lines.append(line)
         script = textwrap.dedent("\n".join(lines))
+        # The macOS leg runs this step with /bin/bash 3.2, which has neither.
+        self.assertNotRegex(script, r"\b(mapfile|readarray)\b")
         # Execute the workflow's shell, replacing only the external services.
+        # Exported, so dev/scripts/assert-not-published.sh, which the step
+        # calls, sees the same mocks.
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 nix() {
@@ -60,6 +65,7 @@ nix() {
     partial) printf '%s\n' "$OUT"; return 1 ;;
     empty) return ;;
     missing) printf '%s\n' /nix/store/unrelated; return ;;
+    root-only) printf '%s\n' "$OUT"; return ;;
     *) printf '%s\n' "$OUT" /nix/store/base-kiro ;;
   esac
 }
@@ -68,6 +74,7 @@ curl() {
   printf 'narinfo\n' >> "$RUNNER_TEMP/queries"
   printf '%s' "$HTTP_CODE"
 }
+export -f curl nix
 '''
         with tempfile.TemporaryDirectory() as directory:
             queries = Path(directory) / "queries"
@@ -76,6 +83,8 @@ curl() {
                 ("partial", "404", False, False),
                 ("empty", "404", False, False),
                 ("missing", "404", False, False),
+                # A listing with its root but no kiro path asks nothing.
+                ("root-only", "404", False, False),
                 ("complete", "404", True, True),
                 ("complete", "200", False, True),
                 ("complete", "503", False, True),
@@ -83,24 +92,28 @@ curl() {
                 with self.subTest(mode=mode, http_code=http_code):
                     queries.unlink(missing_ok=True)
                     env = dict(os.environ, CACHE="https://cache.invalid", HTTP_CODE=http_code,
-                               MODE=mode, OUT="/nix/store/patched-kiro", RUNNER_TEMP=directory,
+                               MODE=mode, RUNNER_TEMP=directory,
+                               OUT="/nix/store/patched-other" if mode == "root-only" else "/nix/store/patched-kiro",
                                SYSTEM="x86_64-linux")
                     result = subprocess.run(["bash", "-c", services + script], env=env,
-                                            capture_output=True, text=True)
+                                            capture_output=True, text=True,
+                                            cwd=Path(__file__).parents[2])
                     self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
 
 
 class CoverageTest(unittest.TestCase):
     def setUp(self):
-        self.names = ["alpha", "beta", "delta", "epsilon", "gamma", "new-package", "kiro-cli-rollout-canary"]
+        self.names = ["alpha", "beta", "codeql-javascript", "codeql-new-engine", "delta", "epsilon", "gamma", "new-package", "kiro-cli-rollout-canary"]
         self.plans = [ci.partition(self.names, i, 5) for i in range(5)]
 
-    def test_added_package_is_covered_and_patched_kiro_excluded(self):
+    def test_added_package_is_covered_and_unpublishable_excluded(self):
         ci.validate_coverage(self.plans, 5)
         names = [n for p in self.plans for n in p["packages"]]
         self.assertEqual(names.count("new-package"), 1)
         self.assertNotIn("kiro-cli-rollout-canary", names)
+        # Every engine, including one added later, by prefix.
+        self.assertFalse([n for n in names if n.startswith("codeql-")])
 
     def test_missing_duplicate_or_different_source_shards_fail(self):
         changed = copy.deepcopy(self.plans)

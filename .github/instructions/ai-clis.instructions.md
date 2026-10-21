@@ -100,12 +100,12 @@ repository files (`AGENTS.md`, `.github/instructions/`, `.github/agents/`,
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-20 — updates are dispatched as the CI `Update`
+> **Last verified:** 2026-10-21 — updates are dispatched as the CI `Update`
 > workflow. Codex adopts nixpkgs' output-root layout, source-built voice and
 > store-linked runtime; Kiro parses embedded rollout JSON, preserving state
 > fields; copies must agree. The byte-preserving patcher remains strict. The
 > devenv update lane realizes the patched Kiro through the repo shell, so it
-> does not push.
+> does not push. The same pushFilter also excludes the CodeQL engines.
 
 ### Overview
 
@@ -263,10 +263,10 @@ build it as a check, and the `pushFilter` is what keeps it out of the cache.
 deliberate and stays: `postInstallCheck` runs `kiro-cli-chat --version`, so the
 build is a genuine runtime smoke test of the patch, and `doInstallCheck` is
 already true upstream so the phase really executes. The fix is therefore at the
-PUSH, not the build — `pushFilter: kiro-cli` on every `cachix-action` step that
-holds the token (`ci.yml` build-packages and `update.yml` inputs). One spelling,
-copied identically: Actions cannot share an action input across workflows, and
-`test-ci-packages.py` fails if any credentialed step lacks it.
+PUSH, not the build — `pushFilter: kiro-cli|codeql` on every `cachix-action`
+step that holds the token (`ci.yml` build-packages and `update.yml` inputs). One
+spelling, copied identically: Actions cannot share an action input across
+workflows, and `test-ci-packages.py` fails if any credentialed step lacks it.
 
 **The generalizable lesson: `cachix-action` with a token runs a watch-store
 daemon that pushes every path realized in the job.** Reasoning about which

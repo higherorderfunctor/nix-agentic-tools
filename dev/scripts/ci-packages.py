@@ -9,13 +9,17 @@ from pathlib import Path
 from artifacts import downloaded
 
 # Generated documents are checked by `test`. Patched Hestia has a dedicated
-# early cache-writing job; patched Kiro has jobs without cache uploads.
+# early cache-writing job; patched Kiro has jobs without cache uploads. The
+# CodeQL engines' terms forbid distributing them, and CI builds one of them
+# through a check: excluded by prefix, so a new engine can never reach a
+# cache-writing shard.
 EXCLUDED = {
     "ci-hestia",
     "kiro-cli-rollout-canary",
     "repo-contributing",
     "repo-readme",
 }
+EXCLUDED_PREFIXES = ("codeql-",)
 
 
 def partition(names, index, count):
@@ -25,7 +29,7 @@ def partition(names, index, count):
         raise ValueError("unexpected package attribute name")
     if not 0 <= index < count:
         raise ValueError("invalid shard index/count")
-    universe = sorted(set(names) - EXCLUDED)
+    universe = sorted(name for name in set(names) - EXCLUDED if not name.startswith(EXCLUDED_PREFIXES))
     selected = universe[index::count]
     if not selected:
         raise ValueError("empty package shard")
