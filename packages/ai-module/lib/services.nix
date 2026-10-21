@@ -189,8 +189,12 @@
       };
   enabled = lib.filterAttrs (_: entry: entry.enable);
   launch = stamp: pkgs: name: entry: "${mkLauncher {inherit pkgs name entry stamp;}}/bin/ai-service-${name}";
+  # A reference, or a trigger file: a restartOnChange path is read at start
+  # like a file reference, so it waits for the providers as one does.
   readsSecrets = entry:
-    lib.any (value: value != null && !builtins.isString value) (builtins.attrValues entry.environment)
+    triggers entry
+    != []
+    || lib.any (value: value != null && !builtins.isString value) (builtins.attrValues entry.environment)
     || lib.any (file: file.secrets != {}) (builtins.attrValues entry.files);
   hmUnits = pkgs: services: {
     providerUnits,

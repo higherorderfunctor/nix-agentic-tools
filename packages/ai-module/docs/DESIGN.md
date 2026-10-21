@@ -255,9 +255,10 @@ their key and ports; disabled owners forward nothing. Names match
 A daemon reads store paths and secrets at start, never files written by the
 files engine, so no unit depends on file activation. Each Linux Home Manager
 unit orders after `network.target`. A service whose environment contains a
-redact reference or whose rendered file has secrets also has `Wants=` and
-`After=` on every registered provider unit. sd-switch submits each start as its
-own job, in unit-name order and without waiting, and `After=` orders only
+redact reference, whose rendered file has secrets, or that has a restart trigger
+(a file it reads at start, such as a `restartOnChange` path) also has `Wants=`
+and `After=` on every registered provider unit. sd-switch submits each start as
+its own job, in unit-name order and without waiting, and `After=` orders only
 against a job already queued, so with `After=` alone a reader that sorts before
 its provider started first and read the previous secrets. `Wants=` puts the
 provider's start into the reader's own transaction. So every start of a reader,
@@ -301,12 +302,13 @@ the default state root (`xdg.stateHome` on Home Manager, `devenv.state` on
 devenv, so a repository's instance keeps its own logins). Each instance becomes
 the service `<owner>-<name>`: its port is `ports.main`, its settings render to
 `files.config`, and a strict run script creates `stateDir` (and the owner's
-state subdirectories) 0700, enters it and execs the package. The owner fixes the
-settings an instance derives (the listen port, state paths) as ordinary
-definitions, so a consumer value that disagrees fails evaluation. `select`
-resolves an instance name to `http://127.0.0.1:<port>` or to the reason it
-cannot: the name is missing or the instance is disabled. CLIProxyAPI and CPA
-Manager Plus use it.
+state subdirectories) 0700, enters it, runs the owner's `preStart` shell and
+execs the package; the owner's `restartOnChange` paths join the service's
+restart triggers. The owner fixes the settings an instance derives (the listen
+port, state paths) as ordinary definitions, so a consumer value that disagrees
+fails evaluation. `select` resolves an instance name to
+`http://127.0.0.1:<port>` or to the reason it cannot: the name is missing or the
+instance is disabled. CLIProxyAPI and CPA Manager Plus use it.
 
 | Backend             | Lowering                                                                                                                                                                                                   |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

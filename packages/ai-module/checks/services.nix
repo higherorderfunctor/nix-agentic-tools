@@ -90,6 +90,10 @@
   environmentOnly = backends.evaluate "hm" {
     services.secret = daemon // {environment.TOKEN = redact.file "/run/secrets/env-only";};
   };
+  # A trigger path is read at start, as a reference is.
+  triggerOnly = backends.evaluate "hm" {
+    services.secret = daemon // {restartOnChange = ["/run/secrets/trigger-only"];};
+  };
   fileOnly = backends.evaluate "hm" {
     services.secret =
       daemon
@@ -345,6 +349,8 @@ in {
         && fileOnly.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
         && fileOnly.systemd.user.services.secret.Install.WantedBy == ["default.target"]
         && environmentOnly.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
+        && triggerOnly.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
+        && triggerOnly.systemd.user.services.secret.Unit.Wants == ["sops-nix.service"]
         && withSopsUnit.systemd.user.services.secret.Install.WantedBy == ["graphical-session-pre.target"]
         && withSopsUnit.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
         && withSopsUnit.systemd.user.services.plain.Install.WantedBy == ["default.target"]

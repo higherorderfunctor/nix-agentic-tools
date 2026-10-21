@@ -41,6 +41,9 @@ in {
   # into `{ content; secrets; environment? }`; `variable` carries the rendered
   # file's path; `arguments` are the shell words after the executable and
   # `directories` the state subdirectories created with `stateDir`.
+  # `preStart` is shell the run script runs in `stateDir`, with `variable`
+  # exported, before it execs the executable; `restartOnChange` adds the
+  # service's restart triggers.
   # `packagePath` is the default package's path under `ai.internal.packages`
   # and `packageText` its documentation.
   module = {
@@ -53,7 +56,9 @@ in {
     owner,
     packagePath,
     packageText,
+    preStart ? _: "",
     render,
+    restartOnChange ? _: [],
     settingsType,
     tool,
     variable,
@@ -140,6 +145,7 @@ in {
           ${pkgs.coreutils}/bin/mkdir -p ${toString state}
           ${pkgs.coreutils}/bin/chmod 0700 ${toString state}
           cd ${lib.escapeShellArg instance.stateDir}
+          ${preStart instance}
           exec ${lib.getExe instance.package} ${arguments}
         '';
       };
@@ -154,6 +160,7 @@ in {
           inherit variable;
         };
         ports.main = instance.port;
+        restartOnChange = restartOnChange instance;
       })
     instances;
   };
