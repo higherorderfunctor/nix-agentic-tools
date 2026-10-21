@@ -95,11 +95,9 @@ database: a read-only one fails with `Error acquiring the IMB cache lock`. So
 every consumer copies the database first. Measured locally on the 214 MB
 database: copying the directory took 0.1 s, unzipping its 100 MB
 `codeql database bundle` 1.3 s, and building that bundle 10 s. `$out/db` drops
-the creation `log/`.
-
-`createDatabase` (`kimchi-codeql-create-database <dir>`) is the single place
-that creates it. It copies `source` to `<dir>/source` and creates `<dir>/db`.
-The derivation and the devenv task both run it.
+the creation `log/`. `createDatabase` (`kimchi-codeql-create-database <dir>`) is
+the single place that creates it. It copies `source` to `<dir>/source` and
+creates `<dir>/db`. The derivation and the devenv task both run it.
 
 ### Running a query without Nix
 
@@ -128,16 +126,11 @@ lock file, and running a query writes none. Each subdirectory is also one
 qlpack.yml. A query that imports a `.qll` from a sibling directory resolves
 locally but not through `mkQueryPack`.
 
-Measured on this host under load (load average 8 to 15 on 16 cores), with the
-smoke query:
-
-- the first run with a cold compile cache took 35 s;
-- running the same query again took 5 to 10 s;
-- an edited query took 17 to 25 s, about 15 s to compile and 2 to 3 s to
-  evaluate.
-
-For comparison, the Nix path compiles the pack (66 s for PR 2's fixture in CI)
-before it evaluates.
+Measured with the smoke query on a 16-core x86_64-linux workstation at load
+average 8 to 15: a cold first run took 35 s, the same query again 5 to 10 s, and
+an edited query 17 to 25 s (about 15 s to compile, 2 to 3 s to evaluate). The
+Nix path compiles the pack first: 66 s in CI run 39642944093 for the
+codeql-customize checks' two-query `nix-agentic-tools/fixture-queries` pack.
 
 ### CI measurements
 
@@ -147,8 +140,7 @@ x86_64-linux runner, engine substituted from the check cache):
 - `database` took 85 s: 58 s of extraction with 4 threads and 23.5 s of TRAP
   import. It holds 133.8 MiB of relations, a 56.0 MiB string pool and a 6.0 MiB
   source archive.
-- `runQueries` on the smoke pack took 9 s, of which evaluation was 5.7 s. It
-  returned 362 rows.
+- `runQueries` on the smoke pack took 9 s (5.7 s evaluation) for 362 rows.
 - `mkQueryPack` compiled the smoke pack in 33 s, in parallel with `database`.
 - The check cache's drain pushed the job's 11 built paths, the database among
   them, in 85.6 MiB. Run 39670617753 had the same database derivation and copied
