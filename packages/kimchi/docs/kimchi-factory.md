@@ -1,8 +1,9 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-10-21 — the entry-overwrite analysis counts only
-> top-level writes, fails on any environment write inside a function or through
-> a callee's parameter, and identifies `process` by checker symbol.
+> top-level writes, fails on an environment assignment or `delete` inside a
+> function or through a callee's parameter, and fails on the `env` of a local
+> `process` other than a `node:process` import.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -159,20 +160,25 @@ Kimchi's entry point overwrites it before anything reads it. That flag is
 derived, not annotated: the extractor walks `src/entry.ts`'s top-level
 statements in order and marks a variable fixed when a statement assigns it on
 every path and no earlier statement reads it, counting what a callee handed
-`process.env` reads from it; a callee that writes through it fails the
-extraction. `process` is the global one by checker symbol, and the `env` of a
-local binding of that name fails too. Function bodies are not walked: 1.17 moved
-the async startup into `async function main()`, called as `void main()`, so a
-declared function's reads count from the start, and a direct `process.env`
-assignment or `delete` inside any function fails the extraction.
-`PI_CODING_AGENT_DIR` is assigned too, but read and preserved first, so it stays
-settable. The analysis also fails instead of guessing when a module entry.ts
-statically imports reads the same name, or when an assignment follows entry.ts's
-first `await`, `import()` or reference (resolved by the type checker, not by
-name) to a declared function that can suspend. Every variable the factory sets
-itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`, `KIMCHI_REGION`,
-`KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`, which fails
-evaluation if the pinned Kimchi no longer reads it or starts overwriting it.
+`process.env` reads from it; a callee that assigns or deletes through it fails
+the extraction. `process` counts when the checker leaves it unresolved, as it
+leaves the global in every extraction program (none has Node's types, and the
+patch programs no lib), or when it is a default or namespace import of
+`node:process`; the `env` of any other local binding of that name fails.
+`process["env"]` counts as `process.env`, while destructuring `env` from
+`process` in entry.ts, or reaching `globalThis.process` in entry.ts or a module
+it imports, fails. Function bodies are not walked: 1.17 moved the async startup
+into `async function main()`, called as `void main()`, so a declared function's
+reads count from the start, and a direct `process.env` assignment or `delete`
+inside any function fails the extraction. `PI_CODING_AGENT_DIR` is assigned too,
+but read and preserved first, so it stays settable. The analysis also fails
+instead of guessing when a module entry.ts statically imports reads the same
+name, or when an assignment follows entry.ts's first `await`, `import()` or
+reference (resolved by the type checker, not by name) to a declared function
+that can suspend. Every variable the factory sets itself (`KIMCHI_API_KEY`,
+`KIMCHI_ENABLE_RESOURCES`, `KIMCHI_REGION`, `KIMCHI_TELEMETRY_ENABLED`) goes
+through `environmentName`, which fails evaluation if the pinned Kimchi no longer
+reads it or starts overwriting it.
 
 The extractor emits every resolved environment name with `type = "string"`. A
 secret name needs a recorded row stating what it controls; ordinary names may

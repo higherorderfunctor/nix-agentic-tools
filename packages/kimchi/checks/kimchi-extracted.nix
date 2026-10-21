@@ -73,12 +73,14 @@
             'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
           mutant "$kimchi" duplicate-live-schema src/agent-discovery/agents/claude-code.ts \
             'import { homedir } from "node:os"' $'import "../../extensions/model-catalog/model-metadata.js"\nimport { homedir } from "node:os"'
-          # Accepted, not rejected: a property key spelled like the suspending
-          # main() is not a reference to it.
-          mutant "$kimchi" entry-property-name src/entry.ts \
-            'const rawArgv = process.argv.slice(2)' $'const packageMetadata = { main: "./cli.js" }\nvoid packageMetadata\nconst rawArgv = process.argv.slice(2)'
+          mutant "$kimchi" entry-destructured-env src/entry.ts \
+            'const rawArgv = process.argv.slice(2)' $'const { env } = process\nvoid env.KIMCHI_NO_UPDATE_CHECK\nconst rawArgv = process.argv.slice(2)'
+          mutant "$kimchi" entry-element-read src/entry.ts \
+            'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' 'const inheritedPiAgentDir = process["env"].PI_CODING_AGENT_DIR'
           mutant "$kimchi" entry-function-write src/entry.ts \
             'installPasteInterceptor()' $'installPasteInterceptor()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
+          mutant "$kimchi" entry-global-this src/entry.ts \
+            'const rawArgv = process.argv.slice(2)' $'void globalThis.process.env.KIMCHI_NO_UPDATE_CHECK\nconst rawArgv = process.argv.slice(2)'
           mutant "$kimchi" entry-imported-read src/auxiliary-files/resolver.ts \
             'if (env.XDG_DATA_HOME) {' 'if (env.XDG_DATA_HOME && !process.env.KIMCHI_CODING_AGENT_DIR) {'
           mutant "$kimchi" entry-late-write src/entry.ts \
@@ -87,6 +89,14 @@
             'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "0"'
           mutant "$kimchi" entry-parameter-write src/entry.ts \
             'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nfunction setenv(env) { env.KIMCHI_NO_UPDATE_CHECK = "1" }\nsetenv(process.env)'
+          # Accepted, not rejected: the builtin module's default export is the
+          # process object.
+          mutant "$kimchi" entry-process-import src/entry.ts \
+            'import { existsSync } from "node:fs"' $'import process from "node:process"\nimport { existsSync } from "node:fs"'
+          # Accepted, not rejected: a property key spelled like the suspending
+          # main() is not a reference to it.
+          mutant "$kimchi" entry-property-name src/entry.ts \
+            'const rawArgv = process.argv.slice(2)' $'const packageMetadata = { main: "./cli.js" }\nvoid packageMetadata\nconst rawArgv = process.argv.slice(2)'
           mutant "$kimchi" entry-shadowed-process src/entry.ts \
             'const rawArgv = process.argv.slice(2)' $'{ const process = { env: { KIMCHI_NO_UPDATE_CHECK: "" } }; process.env.KIMCHI_NO_UPDATE_CHECK = "1" }\nconst rawArgv = process.argv.slice(2)'
           mutant "$kimchi" entry-unread src/entry.ts \
@@ -222,8 +232,12 @@
             "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"$drifted_version\"" >> "$TMPDIR/proof"
           expect_rejection pi-scope-unread "$kimchi" \
             'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
+          expect_rejection entry-destructured-env "$TMPDIR/entry-destructured-env-source" \
+            'src/entry.ts hands process.env to { env }' >> "$TMPDIR/proof"
           expect_rejection entry-function-write "$TMPDIR/entry-function-write-source" \
             'src/entry.ts assigns KIMCHI_NO_UPDATE_CHECK inside a function' >> "$TMPDIR/proof"
+          expect_rejection entry-global-this "$TMPDIR/entry-global-this-source" \
+            'src/entry.ts reaches process through globalThis' >> "$TMPDIR/proof"
           expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
             'src/entry.ts assigns KIMCHI_CODING_AGENT_DIR before reading it, but' >> "$TMPDIR/proof"
           expect_rejection entry-late-write "$TMPDIR/entry-late-write-source" \
@@ -238,6 +252,8 @@
             'pi APP_NAME in' "$TMPDIR/pi-app-name-source" >> "$TMPDIR/proof"
 
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/real.json"'' ''"$pi"''}
+          ${runExtractor ''"$TMPDIR/entry-process-import-source"'' ''"$TMPDIR/entry-process-import.json"'' ''"$pi"''}
+          echo "entry-process-import (exit 0): the node:process default import is the process object" >> "$TMPDIR/proof"
           ${runExtractor ''"$TMPDIR/entry-property-name-source"'' ''"$TMPDIR/entry-property-name.json"'' ''"$pi"''}
           echo "entry-property-name (exit 0): a main property key does not suspend" >> "$TMPDIR/proof"
           ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"'' ''"$pi"''}
@@ -297,9 +313,10 @@
           echo 'helper-known-unresolved (exit 0): warned and retained parser shape' >> "$TMPDIR/proof"
           # The overwrite flag is derived from entry.ts, so an assignment before
           # any read flips a variable to fixed and a read before it flips back.
+          ${runExtractor ''"$TMPDIR/entry-element-read-source"'' ''"$TMPDIR/entry-element-read.json"'' ''"$pi"''}
           ${runExtractor ''"$TMPDIR/entry-overwrite-source"'' ''"$TMPDIR/entry-overwrite.json"'' ''"$pi"''}
           ${runExtractor ''"$TMPDIR/entry-unread-source"'' ''"$TMPDIR/entry-unread.json"'' ''"$pi"''}
-          for fixture in real:true:true entry-overwrite:false:true entry-unread:true:false; do
+          for fixture in real:true:true entry-element-read:true:true entry-overwrite:false:true entry-unread:true:false; do
             IFS=: read -r label update_check agent_dir <<< "$fixture"
             if ${pkgs.jq}/bin/jq -e --argjson a "$update_check" --argjson b "$agent_dir" \
               '.environment.variables | (.KIMCHI_NO_UPDATE_CHECK.consumerOverridable == $a) and (.PI_CODING_AGENT_DIR.consumerOverridable == $b)' \

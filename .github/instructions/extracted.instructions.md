@@ -8,7 +8,7 @@ applyTo: "checks/extracted/**,lib/extracted/**,lib/git-tool-settings/**,packages
 # Extraction method: eval, then AST, then regex
 
 > **Last verified:** 2026-10-21 — added the rule to identify a binding by its
-> checker symbol.
+> checker symbol, and its spelling fallback where the global is undeclared.
 
 Every extractor picks the least brittle method its source allows. The method
 follows the SOURCE, not the author's habit.
@@ -46,7 +46,9 @@ the parser reads the value, and a missing bound fails with its own message.
 - **Fail when it cannot extract.** Never default, skip or count around a miss.
 - **Identify a binding by its checker symbol, never by its spelling.** A local
   binding can shadow a global of the same name; when the checker cannot say what
-  a binding holds, fail.
+  a binding holds, fail. A program without the global's declaration (no lib, no
+  `@types/node`) resolves it to no symbol, so there a name the checker leaves
+  unresolved matches the global by its spelling alone.
 - **No layer between the extraction and its readers.** Readers are hand-written
   and read the copied value directly. Do not build a normalized meta format or
   automation that carries upstream changes up to them; when a reader breaks, an

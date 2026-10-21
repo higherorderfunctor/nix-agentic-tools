@@ -1654,26 +1654,58 @@ function assignmentTarget(node, ts) {
   return undefined;
 }
 
-// `process.env` on the global `process`, identified by its checker symbol. A
-// local binding named `process` may or may not hold the real one, so its `env`
-// fails the extraction.
-function isProcessEnvironment(node, context) {
+// Whether `node` is an identifier named `process` that its checker symbol
+// identifies as the process object: the global (unresolved in these programs,
+// which lack Node's types), or a default or namespace import of the builtin
+// module. Any other local binding of that name may or may not hold the real
+// one, so it fails the extraction.
+function isProcessObject(node, context) {
   const { checker, ts } = context;
+  if (!ts.isIdentifier(node) || node.text !== "process") return false;
+  const symbol = checker.getSymbolAtLocation(node);
+  const declaration = symbol?.declarations?.[0];
+  const imported =
+    declaration &&
+    (ts.isImportClause(declaration) || ts.isNamespaceImport(declaration))
+      ? ts.findAncestor(declaration, ts.isImportDeclaration)
+      : undefined;
   if (
-    !ts.isPropertyAccessExpression(node) ||
-    !ts.isIdentifier(node.expression) ||
-    node.expression.text !== "process" ||
-    node.name.text !== "env"
-  )
-    return false;
-  if (
-    checker.getSymbolAtLocation(node.expression) ===
-    checker.resolveName("process", undefined, ts.SymbolFlags.Value, false)
+    symbol ===
+      checker.resolveName("process", undefined, ts.SymbolFlags.Value, false) ||
+    ["node:process", "process"].includes(imported?.moduleSpecifier.text)
   )
     return true;
   const sourceFile = node.getSourceFile();
   fail(
     `${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1} takes env from a local binding named process, which the checker cannot identify as the environment`,
+  );
+}
+
+// `process.env` or `process["env"]` on the process object.
+function isProcessEnvironment(node, context) {
+  const { ts } = context;
+  const name = ts.isPropertyAccessExpression(node)
+    ? node.name.text
+    : ts.isElementAccessExpression(node) &&
+        ts.isStringLiteralLike(node.argumentExpression)
+      ? node.argumentExpression.text
+      : undefined;
+  return name === "env" && isProcessObject(node.expression, context);
+}
+
+// `const { env } = process`: a binding element that holds the environment
+// object.
+function bindsProcessEnvironment(node, context) {
+  const { ts } = context;
+  return (
+    ts.isBindingElement(node) &&
+    ts.isObjectBindingPattern(node.parent) &&
+    (node.propertyName ?? node.name).text === "env" &&
+    Boolean(node.parent.parent.initializer) &&
+    isProcessObject(
+      unwrapExpression(node.parent.parent.initializer, ts),
+      context,
+    )
   );
 }
 
@@ -1713,6 +1745,13 @@ function environmentReads(sourceFile, context) {
     ) {
       const symbol = checker.getSymbolAtLocation(node.name);
       if (symbol) environmentSymbols.add(symbol);
+    }
+    if (bindsProcessEnvironment(node, context)) {
+      if (!ts.isIdentifier(node.name))
+        fail(
+          `${sourceFile.getSourceFile().fileName} takes process.env apart by destructuring (${node.getText()}), so the names it reads cannot be listed`,
+        );
+      environmentSymbols.add(checker.getSymbolAtLocation(node.name));
     }
     ts.forEachChild(node, identifyAliases);
   }
@@ -1853,12 +1892,13 @@ function statementEnvironmentReads(statement, context) {
   function visit(node) {
     const parent = node.parent;
     if (
-      isProcessEnvironment(node, context) &&
-      !(
-        (ts.isPropertyAccessExpression(parent) ||
-          ts.isElementAccessExpression(parent)) &&
-        parent.expression === node
-      )
+      (isProcessEnvironment(node, context) &&
+        !(
+          (ts.isPropertyAccessExpression(parent) ||
+            ts.isElementAccessExpression(parent)) &&
+          parent.expression === node
+        )) ||
+      bindsProcessEnvironment(node, context)
     ) {
       let callee;
       if (ts.isCallExpression(parent) && parent.arguments.includes(node)) {
@@ -1987,6 +2027,20 @@ function launchOverwrites(entrySource, program, context) {
     return (
       test(node) || Boolean(ts.forEachChild(node, (child) => some(child, test)))
     );
+  }
+  // The walk follows the environment through `process` only, so a read through
+  // `globalThis.process` would go uncounted.
+  const isGlobalThisProcess = (node) =>
+    ts.isPropertyAccessExpression(node) &&
+    node.name.text === "process" &&
+    ts.isIdentifier(node.expression) &&
+    checker.getSymbolAtLocation(node.expression) ===
+      checker.resolveName("globalThis", undefined, ts.SymbolFlags.Value, false);
+  for (const sourceFile of [entrySource, ...imported]) {
+    if (some(sourceFile, isGlobalThisProcess))
+      fail(
+        `${sourceFile.fileName} reaches process through globalThis, which the overwrite analysis does not follow`,
+      );
   }
   function rejectFunctionWrites(node, inFunction) {
     const name = inFunction ? assignedName(node) : undefined;
