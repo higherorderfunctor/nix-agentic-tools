@@ -57,7 +57,6 @@ backend: {
 in {
   imports = [
     (instances.module {
-      arguments = "";
       inherit backend;
       defaultPort = 18317;
       # Native defaults would bind every interface and keep the data next to

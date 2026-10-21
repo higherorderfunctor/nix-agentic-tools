@@ -39,8 +39,7 @@ in {
   # settings an instance fixes (its port, its state paths), which merge with
   # the consumer's and conflict on a different value; `render` turns settings
   # into `{ content; secrets; environment? }`; `variable` carries the rendered
-  # file's path; `arguments` are the shell words after the executable (a
-  # string, or a function of the instance when a word depends on its options)
+  # file's path; `arguments` are the shell words after the executable, per instance,
   # and `directories` the state subdirectories created with `stateDir`.
   # `preStart` is shell the run script runs in `stateDir`, with `variable`
   # exported, before it execs the executable; `restartOnChange` adds the
@@ -48,7 +47,7 @@ in {
   # `packagePath` is the default package's path under `ai.internal.packages`
   # and `packageText` its documentation.
   module = {
-    arguments,
+    arguments ? _: "",
     backend,
     defaultPort,
     derived,
@@ -70,10 +69,6 @@ in {
   }: let
     top = config;
     instances = config.ai.${owner}.instances;
-    argumentsOf = instance:
-      if lib.isFunction arguments
-      then arguments instance
-      else arguments;
   in {
     imports = [
       (import ./runtime.nix {
@@ -151,7 +146,7 @@ in {
           ${pkgs.coreutils}/bin/chmod 0700 ${toString state}
           cd ${lib.escapeShellArg instance.stateDir}
           ${preStart instance}
-          exec ${lib.getExe instance.package} ${argumentsOf instance}
+          exec ${lib.getExe instance.package} ${arguments instance}
         '';
       };
     in
