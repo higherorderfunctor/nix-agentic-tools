@@ -1,12 +1,13 @@
 # CPA Manager Plus typed settings
 
-> **Last verified:** 2026-10-20 — 27 config.json keys and 32 environment
+> **Last verified:** 2026-10-20 — 28 config.json keys and 32 environment
 > variables give the settings type through `lib/extracted/options.nix`; the
-> render loads through Manager Plus 1.14.7's `LoadWithoutCreatingDefault`;
-> `ai.cpa-manager-plus.instances` renders it at start and applies
-> `config.adminKeyFile` through `reset-admin-key` on every start; evaluation
-> resolves the database from declared, clean paths, and the run script unsets
-> inherited admin-key and database variables.
+> render loads through patched Manager Plus 1.14.7's
+> `LoadWithoutCreatingDefault`; `config.defaultTheme` reaches the panel through
+> `/usage-service/info`; `ai.cpa-manager-plus.instances` renders it at start and
+> applies `config.adminKeyFile` through `reset-admin-key` on every start;
+> evaluation resolves the database from declared, clean paths, and the run
+> script unsets inherited admin-key and database variables.
 
 `lib/default.nix` exports
 `cpa-manager-plus.{settingsType, render, report, exclusions, sample}`. One
@@ -87,3 +88,43 @@ plain key could reach `reset-admin-key` only through argv or a copy on disk. The
 run script unsets both before the reset and the server, so an inherited value
 cannot seed a first start either. Without any of the three, the run script
 resets nothing, as before.
+
+## Default theme
+
+Manager Plus 1.14.7 has no server theme setting. The web store
+(`apps/web/src/stores/useThemeStore.ts`) defaults `theme` to `auto`, which
+follows `prefers-color-scheme`, and persists the user's pick in localStorage. A
+browser that reports light to every page and clears site data on close, as
+Firefox does with anti-fingerprinting on, always gets light.
+`patches/default-theme.patch` adds `config.defaultTheme`. The package applies it
+to `src` itself with `--fuzz=0`, so the build, the extractor and the checks all
+read the patched tree; it changes neither `package-lock.json` nor `go.mod`, so
+`npmDepsHash` and `vendorHash` are unchanged.
+
+- `internal/config/config.go`: `auto` when unset, else `dark` or `white`, the
+  web app's `Theme` values (`apps/web/src/types/common.ts`). Any other value
+  fails `LoadWithOptions`. No environment variable sets it.
+- `internal/service/setup/service.go`: `Info`, served unauthenticated at
+  `/usage-service/info`, returns it. The panel already calls that endpoint
+  before login (`LoginPage.tsx`, `ProtectedRoute.tsx`). Writing the value into
+  `management.html` was rejected: `internal/service/panel/service.go` serves the
+  embedded or `panelPath` bytes through `http.ServeContent`, so a rewrite would
+  be a second channel with its own caching. The cost is one request at load, and
+  a light first frame until the answer arrives.
+- `apps/web`: `AppLifecycle.tsx` asks once at start unless the user has chosen,
+  and `applyDefaultTheme` applies a valid answer. The store records `chosen`:
+  `setTheme` (theme menu, login toggle) sets it and the default never does, so a
+  changed `defaultTheme` still reaches a browser that never chose. Stored state
+  moves to version 1. Any valid version 0 theme, `auto` included, counts as
+  chosen: 1.14.7's `initializeTheme` wrote `auto` back on every load, so a
+  picked `auto` and an untouched one are the same bytes and nothing can tell
+  them apart. Treating all of them as chosen keeps a configured default from
+  overwriting a pick; a browser with nothing stored, the case this key exists
+  for, still takes the server default.
+
+Unset, the server reports `auto` and the panel behaves as upstream, apart from
+the one request. A panel served by plain CPA has no such endpoint and keeps its
+theme. `module-service-instances-real-daemons` starts the patched server unset
+and with `dark`, reads `defaultTheme` back from `/usage-service/info`, and finds
+the reader in the served panel. `cpa-manager-plus-settings` runs the patch's
+`TestLoadDefaultTheme`, and the web build runs its `useThemeStore.test.ts`.

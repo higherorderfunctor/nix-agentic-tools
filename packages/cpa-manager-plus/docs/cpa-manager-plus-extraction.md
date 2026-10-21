@@ -1,7 +1,8 @@
 # CPA Manager Plus extraction: config.json and environment
 
-> **Last verified:** 2026-10-18 — Manager Plus 1.14.7 measures 27 config.json
-> keys and 33 environment variables through the shared Go test extractor.
+> **Last verified:** 2026-10-20 — patched Manager Plus 1.14.7 measures 28
+> config.json keys, `defaultTheme` with its values, and 33 environment variables
+> through the shared Go test extractor.
 
 ## Two surfaces
 
@@ -14,6 +15,10 @@ one fact per surface, each declared in `extracted/facts.json` as an opaque
 decodes into, over its `json` tags. Node types and the path grammar are the
 shared ones from `lib/extracted/go/nat_shared_test.go`. A field whose type has
 its own JSON decoder fails extraction: nothing probes such decoders yet.
+`defaultTheme`, which `patches/default-theme.patch` adds, also carries `enum`:
+the loader's `defaultThemes`, so the option takes only values the server loads.
+The extractor names that variable, so a release without the patch fails to
+compile it.
 
 `environment` comes from `go/ast` over the non-test files of the
 `apps/manager-server` module that the Linux build compiles, functions and

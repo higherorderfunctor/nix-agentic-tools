@@ -1,0 +1,341 @@
+diff --git a/apps/manager-server/internal/config/config.go b/apps/manager-server/internal/config/config.go
+index 85ce520..4dba354 100644
+--- a/apps/manager-server/internal/config/config.go
++++ b/apps/manager-server/internal/config/config.go
+@@ -6,6 +6,7 @@ import (
+ 	"math"
+ 	"os"
+ 	"path/filepath"
++	"slices"
+ 	"strconv"
+ 	"strings"
+ 	"time"
+@@ -46,6 +47,7 @@ type Config struct {
+ 	QueryLimit                   int
+ 	PprofAddr                    string
+ 	PanelPath                    string
++	DefaultTheme                 string
+ 	CORSOrigins                  []string
+ 	TLSSkipVerify                bool
+ 	QuotaCooldownEnabled         bool
+@@ -85,6 +87,7 @@ type fileConfig struct {
+ 	QueryLimit                   int      `json:"queryLimit,omitempty"`
+ 	PprofAddr                    string   `json:"pprofAddr,omitempty"`
+ 	PanelPath                    string   `json:"panelPath,omitempty"`
++	DefaultTheme                 string   `json:"defaultTheme,omitempty"`
+ 	CORSOrigins                  []string `json:"corsOrigins,omitempty"`
+ 	TLSSkipVerify                bool     `json:"tlsSkipVerify,omitempty"`
+ 	QuotaCooldownEnabled         bool     `json:"quotaCooldownEnabled,omitempty"`
+@@ -134,6 +137,10 @@ func LoadWithOptions(options LoadOptions) (Config, error) {
+ 	if err != nil {
+ 		return Config{}, err
+ 	}
++	defaultTheme, err := resolveDefaultTheme(cfgFile.DefaultTheme)
++	if err != nil {
++		return Config{}, err
++	}
+ 
+ 	managementKeyFile := defaultSecretFile
+ 	if cfgFile.ManagementKeyFile != "" {
+@@ -171,6 +178,7 @@ func LoadWithOptions(options LoadOptions) (Config, error) {
+ 		QueryLimit:                   envInt("USAGE_QUERY_LIMIT", intFallback(cfgFile.QueryLimit, 50000)),
+ 		PprofAddr:                    env("CPA_MANAGER_PPROF_ADDR", cfgFile.PprofAddr),
+ 		PanelPath:                    env("PANEL_PATH", resolveConfigPath(cfgFile.PanelPath, cfgDir)),
++		DefaultTheme:                 defaultTheme,
+ 		CORSOrigins:                  splitCSV(env("USAGE_CORS_ORIGINS", strings.Join(sliceFallback(cfgFile.CORSOrigins, []string{"*"}), ","))),
+ 		TLSSkipVerify:                envBool("USAGE_RESP_TLS_SKIP_VERIFY", cfgFile.TLSSkipVerify),
+ 		QuotaCooldownEnabled:         envBool("USAGE_QUOTA_COOLDOWN_ENABLED", cfgFile.QuotaCooldownEnabled),
+@@ -351,6 +359,19 @@ func validateUsageArchiveRetentionDays(source string, value int64) (int, error)
+ 	return int(value), nil
+ }
+ 
++// defaultThemes are the web panel's Theme values (apps/web/src/types/common.ts).
++var defaultThemes = []string{"auto", "dark", "white"}
++
++func resolveDefaultTheme(value string) (string, error) {
++	if value == "" {
++		return defaultThemes[0], nil
++	}
++	if !slices.Contains(defaultThemes, value) {
++		return "", fmt.Errorf("defaultTheme must be one of %s, not %q", strings.Join(defaultThemes, ", "), value)
++	}
++	return value, nil
++}
++
+ func envBool(key string, fallback bool) bool {
+ 	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+ 	if value == "" {
+diff --git a/apps/manager-server/internal/config/config_test.go b/apps/manager-server/internal/config/config_test.go
+index 641cf21..a91fab6 100644
+--- a/apps/manager-server/internal/config/config_test.go
++++ b/apps/manager-server/internal/config/config_test.go
+@@ -265,6 +265,38 @@ func TestLoadRejectsInvalidUsageArchiveRetentionDays(t *testing.T) {
+ 	}
+ }
+ 
++func TestLoadDefaultTheme(t *testing.T) {
++	for _, test := range []struct {
++		contents string
++		want     string
++	}{
++		{contents: `{}`, want: "auto"},
++		{contents: `{"defaultTheme":"dark"}`, want: "dark"},
++		{contents: `{"defaultTheme":"white"}`, want: "white"},
++		{contents: `{"defaultTheme":"light"}`},
++		{contents: `{"defaultTheme":" dark"}`},
++	} {
++		t.Run(test.contents, func(t *testing.T) {
++			clearConfigEnv(t)
++			configPath := filepath.Join(t.TempDir(), "config.json")
++			if err := os.WriteFile(configPath, []byte(test.contents), 0o600); err != nil {
++				t.Fatalf("write config: %v", err)
++			}
++			t.Setenv(configEnvKey, configPath)
++			cfg, err := LoadWithoutCreatingDefault()
++			if test.want == "" {
++				if err == nil {
++					t.Fatalf("defaultTheme loaded as %q", cfg.DefaultTheme)
++				}
++				return
++			}
++			if err != nil || cfg.DefaultTheme != test.want {
++				t.Fatalf("defaultTheme = %q, %v; want %q", cfg.DefaultTheme, err, test.want)
++			}
++		})
++	}
++}
++
+ func TestLoadRetentionDaysEnvironmentOverridesInvalidFileValue(t *testing.T) {
+ 	clearConfigEnv(t)
+ 	dir := t.TempDir()
+diff --git a/apps/manager-server/internal/service/setup/service.go b/apps/manager-server/internal/service/setup/service.go
+index d6e1999..e77b4f5 100644
+--- a/apps/manager-server/internal/service/setup/service.go
++++ b/apps/manager-server/internal/service/setup/service.go
+@@ -44,6 +44,7 @@ type InfoResult struct {
+ 	MigrationStatus    string `json:"migrationStatus,omitempty"`
+ 	DataKeyReady       bool   `json:"dataKeyReady"`
+ 	HasHistoricalData  bool   `json:"hasHistoricalData"`
++	DefaultTheme       string `json:"defaultTheme"`
+ }
+ 
+ type Service struct {
+@@ -94,6 +95,7 @@ func (s *Service) Info(ctx context.Context) (InfoResult, error) {
+ 		MigrationStatus:    bootstrapState.Status,
+ 		DataKeyReady:       bootstrapState.DataKeyReady,
+ 		HasHistoricalData:  bootstrapState.HasHistoricalData,
++		DefaultTheme:       s.cfg.DefaultTheme,
+ 	}, nil
+ }
+ 
+diff --git a/apps/web/src/app/AppLifecycle.tsx b/apps/web/src/app/AppLifecycle.tsx
+index 12e3042..b8e848e 100644
+--- a/apps/web/src/app/AppLifecycle.tsx
++++ b/apps/web/src/app/AppLifecycle.tsx
+@@ -1,16 +1,26 @@
+ import { useEffect } from 'react';
++import { usageServiceApi } from '@/services/api/usageService';
+ import { useLanguageStore, useThemeStore, useVisualEffectsStore } from '@/stores';
++import { detectApiBaseFromLocation } from '@/utils/connection';
+ 
+ export function AppLifecycle() {
+   const initializeTheme = useThemeStore((state) => state.initializeTheme);
++  const applyDefaultTheme = useThemeStore((state) => state.applyDefaultTheme);
+   const initializeVisualEffects = useVisualEffectsStore((state) => state.initializeVisualEffects);
+   const language = useLanguageStore((state) => state.language);
+   const setLanguage = useLanguageStore((state) => state.setLanguage);
+ 
+   useEffect(() => {
+     const cleanupTheme = initializeTheme();
++    if (!useThemeStore.getState().chosen) {
++      // A plain CPA panel has no Manager Plus server to ask; keep the theme.
++      usageServiceApi
++        .getInfo(detectApiBaseFromLocation())
++        .then((info) => applyDefaultTheme(info.defaultTheme))
++        .catch(() => {});
++    }
+     return cleanupTheme;
+-  }, [initializeTheme]);
++  }, [initializeTheme, applyDefaultTheme]);
+ 
+   useEffect(() => {
+     initializeVisualEffects();
+diff --git a/apps/web/src/services/api/usageService.ts b/apps/web/src/services/api/usageService.ts
+index 17f5fd5..93fa51d 100644
+--- a/apps/web/src/services/api/usageService.ts
++++ b/apps/web/src/services/api/usageService.ts
+@@ -104,6 +104,7 @@ export interface UsageServiceInfo {
+   migrationStatus?: string;
+   dataKeyReady?: boolean;
+   hasHistoricalData?: boolean;
++  defaultTheme?: string;
+ }
+ 
+ export interface UsageServiceCollectorStatus {
+diff --git a/apps/web/src/stores/useThemeStore.test.ts b/apps/web/src/stores/useThemeStore.test.ts
+new file mode 100644
+index 0000000..3bd1279
+--- /dev/null
++++ b/apps/web/src/stores/useThemeStore.test.ts
+@@ -0,0 +1,84 @@
++import { beforeEach, describe, expect, it, vi } from 'vitest';
++import { STORAGE_KEY_THEME } from '@/utils/constants';
++
++const storage = new Map<string, string>();
++
++const load = async (stored?: { state: object; version: number }) => {
++  storage.clear();
++  if (stored) {
++    storage.set(STORAGE_KEY_THEME, JSON.stringify(stored));
++  }
++  vi.resetModules();
++  const { useThemeStore } = await import('./useThemeStore');
++  useThemeStore.getState().initializeTheme();
++  return useThemeStore;
++};
++
++describe('useThemeStore defaultTheme', () => {
++  beforeEach(() => {
++    vi.stubGlobal('localStorage', {
++      getItem: (key: string) => storage.get(key) ?? null,
++      setItem: (key: string, value: string) => storage.set(key, value),
++      removeItem: (key: string) => storage.delete(key),
++    });
++    vi.stubGlobal('window', {
++      matchMedia: () => ({
++        matches: false,
++        addEventListener: () => {},
++        removeEventListener: () => {},
++      }),
++    });
++    vi.stubGlobal('document', {
++      documentElement: { setAttribute: vi.fn(), removeAttribute: vi.fn() },
++    });
++  });
++
++  it('applies the server default when nothing is stored, and keeps it unchosen', async () => {
++    const store = await load();
++    store.getState().applyDefaultTheme('dark');
++    expect(store.getState()).toMatchObject({ theme: 'dark', chosen: false });
++    expect(document.documentElement.setAttribute).toHaveBeenLastCalledWith('data-theme', 'dark');
++    expect(JSON.parse(storage.get(STORAGE_KEY_THEME) ?? '{}').state.chosen).toBe(false);
++  });
++
++  it('ignores a value that is not a theme', async () => {
++    const store = await load();
++    store.getState().applyDefaultTheme('light');
++    store.getState().applyDefaultTheme(undefined);
++    expect(store.getState().theme).toBe('auto');
++  });
++
++  it("keeps the user's choice, auto included", async () => {
++    const store = await load();
++    store.getState().setTheme('auto');
++    store.getState().applyDefaultTheme('dark');
++    expect(store.getState()).toMatchObject({ theme: 'auto', chosen: true });
++
++    const reloaded = await load({ state: { theme: 'white', chosen: true }, version: 1 });
++    reloaded.getState().applyDefaultTheme('dark');
++    expect(reloaded.getState().theme).toBe('white');
++  });
++
++  it('follows a changed server default for a theme the user never chose', async () => {
++    const store = await load({ state: { theme: 'dark', chosen: false }, version: 1 });
++    store.getState().applyDefaultTheme('auto');
++    expect(store.getState().theme).toBe('auto');
++  });
++
++  it.each(['auto', 'dark', 'white'])(
++    'migrates a version 0 %s as chosen, so a server default does not replace it',
++    async (stored) => {
++      const store = await load({ state: { theme: stored, resolvedTheme: 'light' }, version: 0 });
++      expect(store.getState()).toMatchObject({ theme: stored, chosen: true });
++      for (const serverDefault of ['dark', 'white']) {
++        store.getState().applyDefaultTheme(serverDefault);
++        expect(store.getState().theme).toBe(stored);
++      }
++    }
++  );
++
++  it('does not treat a version 0 value that is not a theme as chosen', async () => {
++    const store = await load({ state: { theme: 'light' }, version: 0 });
++    expect(store.getState().chosen).toBe(false);
++  });
++});
+diff --git a/apps/web/src/stores/useThemeStore.ts b/apps/web/src/stores/useThemeStore.ts
+index 869e89a..8c29dc9 100644
+--- a/apps/web/src/stores/useThemeStore.ts
++++ b/apps/web/src/stores/useThemeStore.ts
+@@ -14,7 +14,10 @@ type AppliedTheme = ResolvedTheme | 'white';
+ interface ThemeState {
+   theme: Theme;
+   resolvedTheme: ResolvedTheme;
++  // The user picked `theme`; otherwise it is the server's defaultTheme.
++  chosen: boolean;
+   setTheme: (theme: Theme) => void;
++  applyDefaultTheme: (theme: unknown) => void;
+   cycleTheme: () => void;
+   initializeTheme: () => () => void;
+ }
+@@ -62,19 +65,27 @@ const applyTheme = (resolved: AppliedTheme) => {
+   document.documentElement.removeAttribute('data-theme');
+ };
+ 
++const showTheme = (theme: Theme) => {
++  const resolved = resolveTheme(theme);
++  applyTheme(resolved);
++  return { theme, resolvedTheme: normalizeResolvedTheme(resolved) };
++};
++
+ export const useThemeStore = create<ThemeState>()(
+   persist(
+     (set, get) => ({
+       theme: 'auto',
+       resolvedTheme: 'light',
++      chosen: false,
+ 
+       setTheme: (theme) => {
+-        const resolved = resolveTheme(theme);
+-        applyTheme(resolved);
+-        set({
+-          theme,
+-          resolvedTheme: normalizeResolvedTheme(resolved),
+-        });
++        set({ ...showTheme(theme), chosen: true });
++      },
++
++      applyDefaultTheme: (theme) => {
++        if (!get().chosen && isTheme(theme)) {
++          set(showTheme(theme));
++        }
+       },
+ 
+       cycleTheme: () => {
+@@ -86,10 +97,10 @@ export const useThemeStore = create<ThemeState>()(
+       },
+ 
+       initializeTheme: () => {
+-        const { theme, setTheme } = get();
++        const { theme } = get();
+ 
+         // 应用已保存的主题
+-        setTheme(isTheme(theme) ? theme : 'auto');
++        set(showTheme(isTheme(theme) ? theme : 'auto'));
+ 
+         // 监听系统主题变化（仅在 auto 模式下生效）
+         if (!window.matchMedia) {
+@@ -113,6 +124,14 @@ export const useThemeStore = create<ThemeState>()(
+     }),
+     {
+       name: STORAGE_KEY_THEME,
++      version: 1,
++      // Version 0 stored no `chosen`, and initializeTheme wrote 'auto' back on
++      // every load, so a stored 'auto' is the same bytes whether it was picked
++      // or not. Anything stored counts as chosen; only a fresh store is not.
++      migrate: (persisted, version) => {
++        const state = (persisted ?? {}) as Partial<ThemeState>;
++        return version === 0 ? { ...state, chosen: isTheme(state.theme) } : state;
++      },
+     }
+   )
+ );

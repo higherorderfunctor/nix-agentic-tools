@@ -3,6 +3,8 @@
 # LoadWithoutCreatingDefault, with the rendered environment set and each
 # redact reference in it replaced by a dummy value. The environment is also
 # accepted by redact.types.environment, the type a service's environment has.
+# It also runs patches/default-theme.patch's loader test, which the package
+# build, testing cmd/cpa-manager-plus only, does not.
 {
   extractedLib,
   lib,
@@ -46,6 +48,6 @@ in {
     package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cpa-manager-plus;
     packagePath = "internal/config";
     postTest = ''echo "ok — CPA Manager Plus loads the rendered settings sample" >"$out"'';
-    run = "TestNatLoad";
+    run = "(TestNatLoad|TestLoadDefaultTheme)";
   };
 }

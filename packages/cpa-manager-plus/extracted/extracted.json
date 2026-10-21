@@ -12,6 +12,7 @@
     "dataKeyFile": { "type": "string" },
     "dataKeyPath": { "type": "string" },
     "dbPath": { "type": "string" },
+    "defaultTheme": { "enum": ["auto", "dark", "white"], "type": "string" },
     "httpAddr": { "type": "string" },
     "managementKeyFile": { "type": "string" },
     "panelPath": { "type": "string" },

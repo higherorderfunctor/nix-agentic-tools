@@ -9,7 +9,8 @@
 //
 //   - config: one node per config.json path, typed by reflect over
 //     fileConfig. Path grammar: `.` between keys, `[]` for a list element,
-//     `.<name>` for a map value.
+//     `.<name>` for a map value. defaultTheme, from patches/default-theme.patch,
+//     carries the values its loader accepts.
 //   - environment: one node per environment variable the module's code reads,
 //     found with go/ast, described by the operations guide's table.
 package config
@@ -32,7 +33,8 @@ import (
 )
 
 type natNode struct {
-	Type string `json:"type"`
+	Enum []string `json:"enum,omitempty"`
+	Type string   `json:"type"`
 }
 
 type natVariable struct {
@@ -430,6 +432,7 @@ func natSorted(values []string) []string {
 func TestNatExtract(t *testing.T) {
 	config := map[string]natNode{}
 	natConfig(t, config, reflect.TypeOf(fileConfig{}), "")
+	config["defaultTheme"] = natNode{Enum: defaultThemes, Type: config["defaultTheme"].Type}
 	fields := map[string]string{}
 	natFields(reflect.TypeOf(fileConfig{}), natJSON, func(key string, field reflect.StructField, _ reflect.Type) {
 		fields[field.Name] = key
