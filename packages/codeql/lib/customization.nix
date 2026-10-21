@@ -67,8 +67,9 @@
     else kept ++ [entry]) [];
 
   # Checked specs joined, each store path kept once, and then one pack name per
-  # path: CodeQL calls one name found in two locations an error, so the check
-  # runs over the joined spec, across appending calls too.
+  # builder result, over the joined spec, across appending calls too. A plain
+  # directory's pack name is not read here; CodeQL reports a pack found in two
+  # locations when the packs are used.
   merged = specs: let
     spec = lib.mapAttrs (_: uniqueEntries) (lib.zipAttrsWith (_: lib.concatLists) specs);
     names = lib.concatMap (entry: lib.optional (entry ? codeqlPack.name) entry.codeqlPack.name) (spec.queries ++ spec.models);

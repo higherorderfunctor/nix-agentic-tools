@@ -40,8 +40,9 @@ language the engine does not carry. Every field is optional, and a bad spec or
 argument throws (`lib/customization.nix`, `lib/packs.nix`). `queries` and
 `models` take a directory holding a qlpack.yml or a builder result.
 `customizePackage` on a customized package appends. A store path given twice, in
-one call or across calls, is used once; two paths holding one pack name throw,
-because CodeQL calls a pack found in two locations an error.
+one call or across calls, is used once. Two builder results with one pack name
+throw. A plain directory's pack name is not checked at eval time; CodeQL reports
+a pack found in two locations when the packs are used.
 
 The result has `bin/codeql`, a wrapper of the engine's, and `share/codeql`, a
 link to the engine's. Nothing of the distribution is copied. Its `unwrapped` is
