@@ -36,6 +36,11 @@
     else "https://github.com/${bundleRepo}/releases/download/${bundleTagPrefix}${version}/codeql-bundle${lib.optionalString (name != "full") "-${name}"}-linux64.tar.zst";
   engines = builtins.attrNames (builtins.removeAttrs sources ["version"]);
   languages = builtins.filter (name: !(lib.elem name ["bare" "full"])) engines;
+  # The languages this engine carries CodeQL libraries for.
+  carried =
+    if engine == "full"
+    then languages
+    else lib.intersectLists [engine] languages;
   zip = lib.hasSuffix ".zip" source.url;
 in
   pkgs.stdenv.mkDerivation (finalAttrs: {
@@ -95,12 +100,14 @@ in
       import ./packs.nix {
         engine = finalAttrs.finalPackage;
         engineName = engine;
-        inherit languages pkgs;
+        languages = carried;
+        inherit pkgs;
       }
       // lib.optionalAttrs (nodejs != null) {inherit nodejs;}
       // {
         customizePackage = import ./customization.nix {
           engine = finalAttrs.finalPackage;
+          languages = carried;
           inherit pkgs;
         };
         updateScript = packageLib.mkUpdateScript {

@@ -1,8 +1,10 @@
 # `mkQueryPack` and `mkModelPack` on one engine: a CodeQL pack from a source
 # directory, with a qlpack.yml both builders render from the same function. A
 # query pack is precompiled with `codeql pack create`, offline, against the
-# engine's bundled `codeql/<language>-all`. Direct callers get a throw for a
-# bad argument. See ../docs/codeql.md.
+# engine's bundled `codeql/<language>-all`. Both take only a language the engine
+# carries (`languages`): a query pack compiles against it, and customizePackage
+# applies a model pack only on an engine that carries its language. Direct
+# callers get a throw for a bad argument. See ../docs/codeql.md.
 {
   engine,
   engineName,
@@ -29,7 +31,7 @@
     "`src` already holds a qlpack.yml; hand that directory to customizePackage as it is"
     ++ lib.optional (engineName == "bare") "codeql-bare carries no CodeQL libraries; build packs with a language engine or codeql-full"
     ++ lib.optional (engineName != "bare" && !(lib.elem language languages))
-    "`language` must be one of ${lib.concatStringsSep ", " languages}${lib.optionalString (defaultLanguage == null) " (codeql-${engineName} has no default)"}";
+    "`language` must be one of ${lib.concatStringsSep ", " languages} on codeql-${engineName}${lib.optionalString (defaultLanguage == null) ", which has no default"}";
 
   # The one qlpack.yml renderer. JSON is YAML, so toJSON writes it.
   qlpack = kind: {

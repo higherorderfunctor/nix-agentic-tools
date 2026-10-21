@@ -13,6 +13,8 @@
 # config file.
 {
   engine,
+  # The languages the engine carries CodeQL libraries for.
+  languages,
   pkgs,
 }: let
   inherit (pkgs) lib;
@@ -30,9 +32,12 @@
     lib.imap1 (index: entry: let
       at = "`${field}.${toString index}`";
       tagged = entry.codeqlPack.kind or null;
+      language = entry.codeqlPack.language or null;
     in
       if lib.isDerivation entry
-      then lib.optional (tagged != null && tagged != kind) "${at} is a ${tagged} pack; put it in `${tagged}s`"
+      then
+        lib.optional (tagged != null && tagged != kind) "${at} is a ${tagged} pack; put it in `${tagged}s`"
+        ++ lib.optional (language != null && !(lib.elem language languages)) "${at} is a ${language} pack, which ${engine.pname} does not carry"
       else if builtins.isPath entry
       then lib.optional (!builtins.pathExists (entry + "/qlpack.yml")) "${at} (${toString entry}) holds no qlpack.yml"
       else ["${at} must be a directory or a pack derivation"]);
