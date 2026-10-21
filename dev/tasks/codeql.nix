@@ -28,7 +28,7 @@ in {
         echo "==> creating $state/db ($pins)" >&2
         nix build --out-link "$state/engine" "$codeql.engine"
         create="$(nix build --no-link --print-out-paths "$codeql.createDatabase")"
-        "$create/bin/kimchi-codeql-database" "$state"
+        "$create/bin/kimchi-codeql-create-database" "$state"
         printf '%s\n' "$pins" > "$state/stamp"
       '';
     };

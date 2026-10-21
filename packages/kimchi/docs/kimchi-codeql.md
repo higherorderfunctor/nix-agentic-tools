@@ -86,9 +86,9 @@ database: copying the directory took 0.1 s, unzipping its 100 MB
 `codeql database bundle` 1.3 s, and building that bundle 10 s. `$out/db` drops
 the creation `log/`.
 
-`createDatabase` (`kimchi-codeql-database <dir>`) is the single place that
-creates it. It copies `source` to `<dir>/source` and creates `<dir>/db`. The
-derivation and the devenv task both run it.
+`createDatabase` (`kimchi-codeql-create-database <dir>`) is the single place
+that creates it. It copies `source` to `<dir>/source` and creates `<dir>/db`.
+The derivation and the devenv task both run it.
 
 ### Running a query without Nix
 

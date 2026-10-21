@@ -58,21 +58,21 @@
       find "$out" -name '*.map' -type f -delete
     '';
 
-  # `kimchi-codeql-database <dir>` copies `source` to <dir>/source and creates
-  # <dir>/db from it. The database derivation and the codeql:kimchi-db devenv
-  # task both run it, so the two hold the same database.
+  # `kimchi-codeql-create-database <dir>` copies `source` to <dir>/source and
+  # creates <dir>/db from it. The database derivation and the codeql:kimchi-db
+  # devenv task both run it, so the two hold the same database.
   #
   # The extractor skips node_modules unless an include names it, and skips a
   # file it judges minified unless told otherwise; pi's dist/bundle chunks
   # are, and they carry the reads of pi's bundled dependencies.
   createDatabase = pkgs.writeShellApplication {
-    name = "kimchi-codeql-database";
+    name = "kimchi-codeql-create-database";
     bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
     runtimeInputs = [pkgs.coreutils];
     text = ''
       shopt -s inherit_errexit 2>/dev/null || :
       if [ "$#" -ne 1 ]; then
-        echo "usage: kimchi-codeql-database <dir>" >&2
+        echo "usage: kimchi-codeql-create-database <dir>" >&2
         exit 2
       fi
       mkdir -p "$1" # bare-commands: ok (runtimeInputs PATH)
