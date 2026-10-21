@@ -1654,21 +1654,38 @@ function assignmentTarget(node, ts) {
   return undefined;
 }
 
-// Whether `node` is the process object: `globalThis.process`, or an identifier
-// named `process` that its checker symbol identifies as the global, or as a
-// default or namespace import of the builtin module. Any other local binding
-// of that name may or may not hold the real one, so it fails the extraction.
+// The member a dotted or string-keyed access names, else undefined.
+function memberName(node, ts) {
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  if (
+    ts.isElementAccessExpression(node) &&
+    ts.isStringLiteralLike(node.argumentExpression)
+  )
+    return node.argumentExpression.text;
+  return undefined;
+}
+
+// Whether `node` is the process object: `process` on `globalThis`, a default
+// or namespace import of the builtin module under any local name, or an
+// identifier named `process` that its checker symbol identifies as the global.
+// Any other local binding of that name may or may not hold the real one, so it
+// fails the extraction.
 function isProcessObject(node, context) {
   const { checker, ts } = context;
-  if (
-    ts.isPropertyAccessExpression(node) &&
-    node.name.text === "process" &&
-    ts.isIdentifier(node.expression) &&
-    checker.getSymbolAtLocation(node.expression) ===
-      checker.resolveName("globalThis", undefined, ts.SymbolFlags.Value, false)
-  )
-    return true;
-  if (!ts.isIdentifier(node) || node.text !== "process") return false;
+  const member = memberName(node, ts);
+  if (member !== undefined)
+    return (
+      member === "process" &&
+      ts.isIdentifier(node.expression) &&
+      checker.getSymbolAtLocation(node.expression) ===
+        checker.resolveName(
+          "globalThis",
+          undefined,
+          ts.SymbolFlags.Value,
+          false,
+        )
+    );
+  if (!ts.isIdentifier(node)) return false;
   const symbol = checker.getSymbolAtLocation(node);
   const declaration = symbol?.declarations?.[0];
   const imported =
@@ -1676,10 +1693,12 @@ function isProcessObject(node, context) {
     (ts.isImportClause(declaration) || ts.isNamespaceImport(declaration))
       ? ts.findAncestor(declaration, ts.isImportDeclaration)
       : undefined;
+  if (["node:process", "process"].includes(imported?.moduleSpecifier.text))
+    return true;
+  if (node.text !== "process") return false;
   if (
     symbol ===
-      checker.resolveName("process", undefined, ts.SymbolFlags.Value, false) ||
-    ["node:process", "process"].includes(imported?.moduleSpecifier.text)
+    checker.resolveName("process", undefined, ts.SymbolFlags.Value, false)
   )
     return true;
   const sourceFile = node.getSourceFile();
@@ -1690,22 +1709,19 @@ function isProcessObject(node, context) {
 
 // `process.env` or `process["env"]` on the process object.
 function isProcessEnvironment(node, context) {
-  const { ts } = context;
-  const name = ts.isPropertyAccessExpression(node)
-    ? node.name.text
-    : ts.isElementAccessExpression(node) &&
-        ts.isStringLiteralLike(node.argumentExpression)
-      ? node.argumentExpression.text
-      : undefined;
-  return name === "env" && isProcessObject(node.expression, context);
+  return (
+    memberName(node, context.ts) === "env" &&
+    isProcessObject(node.expression, context)
+  );
 }
 
 // `const { env } = process`: a binding element that holds the environment
-// object.
+// object. A rest element (`{ ...env }`) copies `process` itself.
 function bindsProcessEnvironment(node, context) {
   const { ts } = context;
   return (
     ts.isBindingElement(node) &&
+    !node.dotDotDotToken &&
     ts.isObjectBindingPattern(node.parent) &&
     (node.propertyName ?? node.name).text === "env" &&
     Boolean(node.parent.parent.initializer) &&

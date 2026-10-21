@@ -161,13 +161,13 @@ derived, not annotated: the extractor walks `src/entry.ts`'s top-level
 statements in order and marks a variable fixed when a statement assigns it on
 every path and no earlier statement reads it, counting what a callee handed
 `process.env` reads from it; a callee that assigns or deletes through it fails
-the extraction. `process` counts when the checker leaves it unresolved, as it
-leaves the global in every extraction program (none has Node's types, and the
-patch programs no lib), or when it is a default or namespace import of
-`node:process`; the `env` of any other local binding of that name fails.
-`process["env"]` and `globalThis.process.env` count as `process.env`, while
-destructuring `env` from `process` in entry.ts fails. Function bodies are not
-walked: 1.17 moved the async startup into `async function main()`, called as
+the extraction. The process object is `process` when the checker resolves it to
+the global (no extraction program has Node's types, so that global is whatever
+the program declares, or nothing), `process` on `globalThis`, or a default or
+namespace import of `node:process` under any local name; the `env` of any other
+local binding named `process` fails. Dotted and string-keyed access count alike,
+while destructuring `env` from `process` in entry.ts fails. Function bodies are
+not walked: 1.17 moved the async startup into `async function main()`, called as
 `void main()`, so a declared function's reads count from the start, and a direct
 `process.env` assignment or `delete` inside any function fails the extraction.
 `PI_CODING_AGENT_DIR` is assigned too, but read and preserved first, so it stays

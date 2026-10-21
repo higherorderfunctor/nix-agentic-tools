@@ -73,6 +73,8 @@
             'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
           mutant "$kimchi" duplicate-live-schema src/agent-discovery/agents/claude-code.ts \
             'import { homedir } from "node:os"' $'import "../../extensions/model-catalog/model-metadata.js"\nimport { homedir } from "node:os"'
+          mutant "$kimchi" entry-aliased-import src/entry.ts \
+            'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' $'import * as proc from "node:process"\nconst inheritedPiAgentDir = proc.env.PI_CODING_AGENT_DIR'
           mutant "$kimchi" entry-destructured-env src/entry.ts \
             'const rawArgv = process.argv.slice(2)' $'const { env } = process\nvoid env.KIMCHI_NO_UPDATE_CHECK\nconst rawArgv = process.argv.slice(2)'
           mutant "$kimchi" entry-element-read src/entry.ts \
@@ -80,7 +82,7 @@
           mutant "$kimchi" entry-function-write src/entry.ts \
             'installPasteInterceptor()' $'installPasteInterceptor()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
           mutant "$kimchi" entry-global-this src/entry.ts \
-            'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' 'const inheritedPiAgentDir = globalThis.process.env.PI_CODING_AGENT_DIR'
+            'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' 'const inheritedPiAgentDir = globalThis["process"].env.PI_CODING_AGENT_DIR'
           mutant "$kimchi" entry-imported-read src/auxiliary-files/resolver.ts \
             'if (env.XDG_DATA_HOME) {' 'if (env.XDG_DATA_HOME && !process.env.KIMCHI_CODING_AGENT_DIR) {'
           mutant "$kimchi" entry-late-write src/entry.ts \
@@ -311,11 +313,12 @@
           echo 'helper-known-unresolved (exit 0): warned and retained parser shape' >> "$TMPDIR/proof"
           # The overwrite flag is derived from entry.ts, so an assignment before
           # any read flips a variable to fixed and a read before it flips back.
+          ${runExtractor ''"$TMPDIR/entry-aliased-import-source"'' ''"$TMPDIR/entry-aliased-import.json"'' ''"$pi"''}
           ${runExtractor ''"$TMPDIR/entry-element-read-source"'' ''"$TMPDIR/entry-element-read.json"'' ''"$pi"''}
           ${runExtractor ''"$TMPDIR/entry-global-this-source"'' ''"$TMPDIR/entry-global-this.json"'' ''"$pi"''}
           ${runExtractor ''"$TMPDIR/entry-overwrite-source"'' ''"$TMPDIR/entry-overwrite.json"'' ''"$pi"''}
           ${runExtractor ''"$TMPDIR/entry-unread-source"'' ''"$TMPDIR/entry-unread.json"'' ''"$pi"''}
-          for fixture in real:true:true entry-element-read:true:true entry-global-this:true:true entry-overwrite:false:true entry-unread:true:false; do
+          for fixture in real:true:true entry-aliased-import:true:true entry-element-read:true:true entry-global-this:true:true entry-overwrite:false:true entry-unread:true:false; do
             IFS=: read -r label update_check agent_dir <<< "$fixture"
             if ${pkgs.jq}/bin/jq -e --argjson a "$update_check" --argjson b "$agent_dir" \
               '.environment.variables | (.KIMCHI_NO_UPDATE_CHECK.consumerOverridable == $a) and (.PI_CODING_AGENT_DIR.consumerOverridable == $b)' \
