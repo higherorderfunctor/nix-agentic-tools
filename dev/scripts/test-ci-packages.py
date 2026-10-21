@@ -107,13 +107,20 @@ export -f curl nix
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
 
 
-    def test_codeql_assertion_requires_every_engine_and_source(self):
+    def test_codeql_assertion_requires_every_engine_source_and_database(self):
         script = ci_step_script("Assert no CodeQL engine is published")
-        # Two engines, each with its source; MODE drops one source or all.
+        # Two engines, each with its source, and the Kimchi database; MODE
+        # drops one source, every engine, or the database's output.
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 nix() {
   case "$MODE" in empty) return ;; esac
+  case "$*" in
+    *codeql.database.drvPath*)
+      [ "$MODE" = nodb ] || printf '%s' /nix/store/f-kimchi-codeql-database-1.drv
+      return
+      ;;
+  esac
   printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/b-codeql-full-1.drv
 }
 nix-store() {
@@ -123,7 +130,7 @@ nix-store() {
         /nix/store/c-codeql-linux64.zip.drv /nix/store/e-glibc-1.drv
       [ "$MODE" = missing ] || printf '%s\n' /nix/store/d-codeql-bundle-linux64.tar.zst.drv
       ;;
-    --outputs) shift 2; for drv in "$@"; do printf '%s\n' "${drv%.drv}"; done ;;
+    --outputs) shift 2; for drv in "$@"; do [ -z "$drv" ] || printf '%s\n' "${drv%.drv}"; done ;;
   esac
 }
 curl() {
@@ -138,6 +145,7 @@ export -f curl nix nix-store
             for mode, http_code, success, queried in (
                 ("empty", "404", False, False),
                 ("missing", "404", False, False),
+                ("nodb", "404", False, False),
                 ("complete", "404", True, True),
                 ("complete", "200", False, True),
             ):
@@ -151,7 +159,7 @@ export -f curl nix nix-store
                     self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
                     if success:
-                        self.assertEqual(len(queries.read_text().splitlines()), 4)
+                        self.assertEqual(len(queries.read_text().splitlines()), 5)
 
 class CoverageTest(unittest.TestCase):
     def setUp(self):
