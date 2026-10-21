@@ -11,7 +11,7 @@ in {
   imports = [
     ((import ../../ai-module/lib/instances.nix {inherit lib;}).module {
       # `--local-model` is the only switch for the model catalog fetches: it
-      # selects the embedded catalogs, and no setting does the same.
+      # selects the embedded catalogs, and no setting selects the embedded catalogs.
       arguments = instance:
         ''--config "$CPA_CONFIG"''
         + lib.optionalString (!instance.fetchModelCatalogs) " --local-model";

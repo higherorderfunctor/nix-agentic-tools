@@ -297,6 +297,7 @@ in {
           processes+=("$!")
           ready "''${processes[0]}" http://127.0.0.1:28417/healthz cpa.log
           ${pkgs.jq}/bin/jq -e '.status == "ok"' health.json
+          grep -F 'Local model mode' cpa.log
           main=${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart}
           declared=${declaredDatabase.systemd.user.services.cpa-manager-plus-main.Service.ExecStart}
           manager() {

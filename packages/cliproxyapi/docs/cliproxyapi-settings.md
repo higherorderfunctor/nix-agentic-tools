@@ -4,8 +4,8 @@
 > through `lib/extracted/options.nix`, with five refinements; the clean render
 > passes native v8 validation and loads through CPA's `LoadConfig` in
 > `cliproxyapi-settings`; `ai.cliproxyapi.instances` renders it at start,
-> defaults its listener to loopback, and turns off the unprompted fetches CPA
-> 8.0.36 has a switch for.
+> defaults its listener to loopback, and turns off the unprompted fetches the
+> pinned CPA has a switch for.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -30,16 +30,16 @@ harnesses at an instance by name.
 
 ## Unprompted network calls
 
-CPA 8.0.36 starts four background fetchers that need no request and no
+The pinned CPA starts four background fetchers that need no request and no
 credential, each at start and every 3 hours after. The instance module turns off
 the ones CPA has a switch for:
 
-| Call                                                                                    | Switch                                                                             | Instance default                           |
-| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------ |
-| Model catalogs (general, Codex, Devin): raw.githubusercontent.com, models.router-for.me | `--local-model` flag; no setting, and `models.*` only takes URLs or absolute paths | off: the run script passes `--local-model` |
-| Management panel: api.github.com and a router-for.me fallback                           | `management.disable-auto-update-panel`                                             | off: `mkDefault true`                      |
-| Antigravity client version: antigravity-hub-auto-updater Cloud Run manifest             | none                                                                               | still on                                   |
-| Grok CLI version: registry.npmjs.org                                                    | none                                                                               | still on                                   |
+| Call                                                                                    | Switch                                                         | Instance default                           |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------ |
+| Model catalogs (general, Codex, Devin): raw.githubusercontent.com, models.router-for.me | `--local-model` flag; no setting selects the embedded catalogs | off: the run script passes `--local-model` |
+| Management panel: api.github.com and a router-for.me fallback                           | `management.disable-auto-update-panel`                         | off: `mkDefault true`                      |
+| Antigravity client version: antigravity-hub-auto-updater Cloud Run manifest             | none                                                           | still on                                   |
+| Grok CLI version: registry.npmjs.org                                                    | none                                                           | still on                                   |
 
 To turn one back on, set
 `ai.cliproxyapi.instances.<name>.fetchModelCatalogs = true` (the run script
@@ -49,11 +49,12 @@ drops `--local-model`) or
 `--local-model` and is read from its URL or file at the same cadence.
 
 Three more calls happen only on demand and stay: the management panel download
-when `/management.html` is requested and the file is missing (it needs a
-`management.secret-key` and no `disable-control-panel`), the management API's
-`latest-version` and plugin-store routes, and the public-IP lookup during an
-interactive OAuth login. Provider traffic for logins a consumer added (token
-refresh, entitlements) is not an unprompted call.
+when `/management.html` is requested and the file is missing (any request
+triggers it; the download may send a GitHub token from `server.github-token` or
+the service environment; `management.disable-control-panel = true` closes it),
+the management API's `latest-version` and plugin-store routes, and the public-IP
+lookup during an interactive OAuth login. Provider traffic for logins a consumer
+added (token refresh, entitlements) is not an unprompted call.
 
 The two calls without a switch send no credential and no request content, only a
 GET for a version string, and fail soft to a pinned fallback. Silencing them
