@@ -113,7 +113,9 @@ The task is explicit: nothing runs it before or after another task. It links the
 plain engine at `$state/engine` and builds `createDatabase` through the flake.
 It rebuilds only when `packages/kimchi/sources.json` or
 `packages/codeql/sources.json` changes version. Delete `$state/stamp` after
-changing `source` itself. Result paths are relative to `$state/source`.
+changing `packages/kimchi/lib/codeql.nix` (the source tree, the patch step or
+the extractor environment) without a pin bump. Result paths are relative to
+`$state/source`.
 
 `packages/kimchi/ql/qlpack.yml` makes the whole directory one local pack, so a
 `.ql` file anywhere under it resolves `import javascript`. A query file outside

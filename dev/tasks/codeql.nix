@@ -7,8 +7,9 @@ in {
     # The database the kimchi-codeql-database check builds, under
     # .devenv/state/codeql/kimchi, with the plain engine linked beside it, so
     # a query runs against it without Nix: packages/kimchi/docs/kimchi-codeql.md.
-    # It rebuilds only when the Kimchi or CodeQL pin moves; delete `stamp` to
-    # force one.
+    # It rebuilds only when the Kimchi or CodeQL pin moves; delete `stamp` after
+    # changing packages/kimchi/lib/codeql.nix (the source tree, the patch step
+    # or the extractor environment) without a pin bump.
     "codeql:kimchi-db" = {
       description = "Create the pinned Kimchi release's CodeQL database in .devenv/state/codeql/kimchi";
       exec = ''
