@@ -43,6 +43,23 @@ class MatrixTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.discover(lock, {"nixpkgs": {}})
 
+    def test_fixture_flake_locks_are_lock_rows(self):
+        lock = {"root": "root", "nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs"}}}}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for flake in ("checks/fixture", "checks/unlocked", "dev/elsewhere"):
+                (root / flake).mkdir(parents=True)
+                if flake != "checks/unlocked":
+                    (root / flake / "flake.lock").write_text("{}\n")
+            (root / "flake.lock").write_text("{}\n")
+            flakes = matrix.fixture_flakes(root)
+        self.assertEqual(flakes, ["checks/fixture"])
+        plan = matrix.discover(lock, {}, "", flakes)
+        self.assertEqual(plan["include"][-1], {"kind": "lock", "name": "fixture", "flake": "checks/fixture"})
+        for collision in (["checks/nixpkgs"], ["checks/fixture", "dev/fixture"]):
+            with self.assertRaises(ValueError):
+                matrix.discover(lock, {}, "", collision)
+
     def test_reports_require_normal_target_completion(self):
         for report, status in (
             ("UPDATED: demo | 1 -> 2", "UPDATED"),

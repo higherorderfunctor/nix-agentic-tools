@@ -128,6 +128,7 @@ drvs
 dsolve
 dunder
 earendil
+edolstra
 elicitations
 endgroup
 endswith
@@ -247,6 +248,8 @@ livelock
 llms
 lockdown
 lockfiles
+logind
+logname
 manpages
 materializer
 mcpconfig
@@ -326,6 +329,7 @@ pasteable
 patchability
 pdsolve
 peaceiris
+pids
 pipelock
 pipewrench
 pkgs
@@ -380,6 +384,7 @@ rspack
 rsyncs
 rtrimstr
 rumdl
+runuser
 rvben
 sandboxed
 sandboxing
@@ -449,6 +454,7 @@ tsgolint
 tummychow
 turbofish
 typebox
+udevadm
 ufcs
 ugrep
 uinput
@@ -482,6 +488,7 @@ unwire
 uppercased
 usebruno
 userns
+virtualisation
 vllm
 wfagents
 wfcap

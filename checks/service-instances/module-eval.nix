@@ -164,7 +164,8 @@ in {
           shopt -s inherit_errexit 2>/dev/null || :
           printf '%s' client-test-secret > /build/client-key
           printf '%s' management-test-secret > /build/management-key
-          export HOME="$TMPDIR/home" XDG_RUNTIME_DIR="$TMPDIR/run"
+          # The user manager sets XDG_RUNTIME_DIR and INVOCATION_ID for every unit.
+          export HOME="$TMPDIR/home" XDG_RUNTIME_DIR="$TMPDIR/run" INVOCATION_ID=real-daemons
           mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
           processes=()
           cleanup() {

@@ -7,18 +7,18 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-17 — glab resolves redact references at service
-> runtime; non-AI owners use the layer-1 helper; Claude uses engine-backed `rw`
-> ownership, Kiro stages settings and hooks and drains all three legacy ledgers
-> through the engine; Kimchi stages every surface and drains all legacy ledgers,
-> and Claude has an ordered activation mode command; Codex stages daemon JSON as
-> `ro` and drains legacy ledgers even while disabled; `mkSkillFiles`
-> interpolates every skill source before the files engine walks it; Kiro is
-> gated by `ai.kiro.cli.enable`; factories read the derived, read-only
-> `ai.kiro.enable`; `ai.copilot` is github.com Copilot, with pools under
-> `ai.copilot.github` and no launcher. ai-module supplies the sole file writer
-> and its ordered prune and apply entries; legacy ledgers remain available for
-> upgrades.
+> **Last verified:** 2026-10-20 — the services reconcile entry follows
+> `reloadSystemd`; glab resolves redact references at service runtime; non-AI
+> owners use the layer-1 helper; Claude uses engine-backed `rw` ownership, Kiro
+> stages settings and hooks and drains all three legacy ledgers through the
+> engine; Kimchi stages every surface and drains all legacy ledgers, and Claude
+> has an ordered activation mode command; Codex stages daemon JSON as `ro` and
+> drains legacy ledgers even while disabled; `mkSkillFiles` interpolates every
+> skill source before the files engine walks it; Kiro is gated by
+> `ai.kiro.cli.enable`; factories read the derived, read-only `ai.kiro.enable`;
+> `ai.copilot` is github.com Copilot, with pools under `ai.copilot.github` and
+> no launcher. ai-module supplies the sole file writer and its ordered prune and
+> apply entries; legacy ledgers remain available for upgrades.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -309,11 +309,12 @@ format and method in `ai.<owner>.files` or finite commands in
 `ai.<owner>.activation`. Only ai-module writes native file and activation sinks;
 `ai-module-no-direct-sink-writes` fails a library or owner module line that
 starts with one. The layer contract is `packages/ai-module/docs/contract.md`.
-Semble's cache guard follows `materialized`; glab's keyring marker and the
-services restart-on-change entry follow `files` and `secrets`. HM lowering wraps
-the whole command in `run`; child command bodies use ordinary external commands,
-not activation-shell functions. Package installs keep their native configuration
-surfaces; daemons go through `ai.services`. `outOfStoreSymlink` is not used.
+Semble's cache guard follows `materialized`; glab's keyring marker follows
+`files` and `secrets`; the services reconcile entry also follows
+`reloadSystemd`, through `afterNodes`. HM lowering wraps the whole command in
+`run`; child command bodies use ordinary external commands, not activation-shell
+functions. Package installs keep their native configuration surfaces; daemons go
+through `ai.services`. `outOfStoreSymlink` is not used.
 
 ### Config parity rule (HM ↔ devenv)
 
@@ -627,16 +628,20 @@ file-watch units remain outside this surface. A tool with typed settings
 declares named instances through `lib/instances.nix`, which lowers each
 `ai.<owner>.instances.<name>` to the service `<owner>-<name>`.
 
-Linux Home Manager orders a secret-reading unit after registered provider units
-and starts it under the targets of provider units defined in the evaluated
-configuration, falling back to `default.target`; a plain service uses
-`network.target` ordering and `default.target`. Devenv lowers to processes and
-ignores provider units. Darwin Home Manager emits one warning per enabled
-service, since it has no systemd user units. File references in the environment
-and in file secrets join explicit restart triggers, which behave differently per
-backend: Linux Home Manager fingerprints them in one generated
-`services-restart-on-change` activation entry after `files` and `secrets`;
-devenv uses `watch.paths`. Only ai-module writes these daemon sinks.
+Linux Home Manager gives a secret-reading unit `Wants=` and `After=` on the
+registered provider units and starts it under the targets of provider units
+defined in the evaluated configuration, falling back to `default.target`; a
+plain service uses `network.target` ordering and `default.target`. Devenv lowers
+to processes and ignores provider units. Darwin Home Manager emits one warning
+per enabled service, since it has no systemd user units. File references in the
+environment and in file secrets join explicit restart triggers, which behave
+differently per backend. On Linux Home Manager the launcher stamps a digest of
+the triggers and its invocation ID under the runtime directory before exec, and
+one generated `services-reconcile` activation entry after `reloadSystemd`
+restarts each active reader whose stamp differs from the files, through
+`systemd.user.systemctlPath`; a failed provider or reader, a restart that does
+not stamp current bytes, or an unreachable running user manager fails
+activation. Devenv uses `watch.paths`. Only ai-module writes these daemon sinks.
 
 ### State and ownership
 

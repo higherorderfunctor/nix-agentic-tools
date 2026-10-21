@@ -39,6 +39,14 @@
     values = builtins.attrValues entry.environment ++ lib.concatMap (file: builtins.attrValues file.secrets) (builtins.attrValues entry.files);
   in
     lib.sort lib.lessThan (lib.unique (entry.restartOnChange ++ lib.concatMap redact.filePaths values));
+  # One sha256 over each trigger path and its bytes; `files` is shell words.
+  # sha256sum names a file it cannot read and fails, so a missing trigger
+  # never hashes as empty.
+  digest = pkgs: files: "${pkgs.coreutils}/bin/sha256sum -- ${files} | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d ' ' -f1";
+  # Where a Home Manager launcher records what its start read. The user
+  # manager sets XDG_RUNTIME_DIR for every unit; the reconcile entry exports
+  # it before reading.
+  stampFile = name: ''"$XDG_RUNTIME_DIR"/${lib.escapeShellArg "ai-service-${name}.stamp"}'';
   # Every NAME of a `{$NAME}` string in a JSON value. Bracket expressions,
   # since libstdc++'s ERE rejects an escaped brace.
   placeholderPattern = "[{][$](" + identifier + ")[}]";
@@ -129,8 +137,25 @@
     pkgs,
     name,
     entry,
+    stamp ? false,
   }: let
     inherit (entry) files;
+    coreutils = "${pkgs.coreutils}/bin";
+    stamped = stamp && triggers entry != [];
+    # Each stamp block ends in a newline and is spliced at the start of the
+    # line it precedes, so an unstamped launcher's text is unchanged.
+    hashBlock = lib.optionalString stamped ''
+      # Hashed before any secret is read: a file replaced after this
+      # leaves the stamp older than the daemon, never newer.
+      _ai_digest="$(${digest pkgs (lib.escapeShellArgs (triggers entry))})"
+    '';
+    stampBlock = lib.optionalString stamped ''
+      # What this invocation read, for Home Manager's post-reload check.
+      _ai_stamp=${stampFile name}
+      _ai_temporary="$(${coreutils}/mktemp "$_ai_stamp.XXXXXX")"
+      printf '%s %s\n' "$_ai_digest" "$INVOCATION_ID" > "$_ai_temporary"
+      ${coreutils}/mv -f -- "$_ai_temporary" "$_ai_stamp"
+    '';
     variables = builtins.attrNames entry.environment ++ lib.mapAttrsToList (_: file: file.variable) files;
     clashes = lib.unique (lib.filter (variable: lib.count (other: other == variable) variables > 1) variables);
     reserved =
@@ -145,7 +170,7 @@
       strictShellApplication pkgs {
         name = "ai-service-${name}";
         text = ''
-          # Generated literal assignments: dollar signs and quotes are data.
+          ${hashBlock}# Generated literal assignments: dollar signs and quotes are data.
           # shellcheck disable=SC2016,SC2089,SC2090
           {
           ${lib.concatStringsSep "\n" (lib.mapAttrsToList (variable: value:
@@ -158,12 +183,12 @@
           :
           }
           ${renderFiles pkgs name files}
-          # shellcheck disable=SC2016
+          ${stampBlock}# shellcheck disable=SC2016
           exec ${lib.escapeShellArgs entry.command}
         '';
       };
   enabled = lib.filterAttrs (_: entry: entry.enable);
-  launch = pkgs: name: entry: "${mkLauncher {inherit pkgs name entry;}}/bin/ai-service-${name}";
+  launch = stamp: pkgs: name: entry: "${mkLauncher {inherit pkgs name entry stamp;}}/bin/ai-service-${name}";
   readsSecrets = entry:
     lib.any (value: value != null && !builtins.isString value) (builtins.attrValues entry.environment)
     || lib.any (file: file.secrets != {}) (builtins.attrValues entry.files);
@@ -181,9 +206,9 @@
         targets = lib.sort lib.lessThan (lib.unique (userServices.${name}.Install.WantedBy or []));
       })
     providerUnits;
-    # A target wants each provider independently, so a reader wanted by the
-    # union of two providers' targets could start with one of them and never
-    # wait for the other. Readers follow one target set or evaluation stops.
+    # A reader pulls every provider in through Wants=, so under the union of
+    # two providers' targets it would start one provider early, under the
+    # other's target. Readers follow one target set or evaluation stops.
     targetSets = lib.unique (map (provider: provider.targets) defined);
     wantedBy =
       if builtins.length targetSets > 1
@@ -203,25 +228,27 @@
           then wantedBy
           else ["default.target"];
         Service = {
-          ExecStart = launch pkgs name entry;
+          ExecStart = launch true pkgs name entry;
           Restart =
             if entry.restart == "never"
             then "no"
             else entry.restart;
           RestartSec = 5;
         };
-        # Secret readers start after provider units under the providers' targets.
-        Unit = {
-          After = ["network.target"] ++ lib.optionals secretReader providerUnits;
-          Description = "${name} (ai.services)";
-        };
+        # Wants=, not Requires= or After= alone: DESIGN.md, Services.
+        Unit =
+          {
+            After = ["network.target"] ++ lib.optionals secretReader providerUnits;
+            Description = "${name} (ai.services)";
+          }
+          // lib.optionalAttrs secretReader {Wants = providerUnits;};
       }) (enabled services));
   hmWarnings = pkgs: services: lib.optionals (!pkgs.stdenv.hostPlatform.isLinux) (map (name: "ai.services.${name}: Home Manager writes services as systemd user units, which this platform lacks; the service is not written") (builtins.attrNames (enabled services)));
   devenvProcesses = pkgs: services:
     lib.mapAttrs (
       name: entry:
         {
-          exec = launch pkgs name entry;
+          exec = launch false pkgs name entry;
           restart.on =
             if entry.restart == "on-failure"
             then "on_failure"
@@ -229,48 +256,119 @@
         }
         // lib.optionalAttrs (triggers entry != []) {watch.paths = triggers entry;}
     ) (enabled services);
-  # Home Manager has no live file watch: each activation hashes the readable
-  # trigger files and restarts a running unit whose hash changed since the
-  # recorded one. The first record restarts nothing, `try-restart` leaves a
-  # stopped unit stopped, and a missing or unreadable file is skipped so an
-  # secret that is not decrypted yet cannot abort activation.
-  rotationCheck = pkgs: name: paths: ''
-    hash_file="$state_dir/${name}.sha256"
-    new_hash="$(
-      for path in ${lib.escapeShellArgs paths}; do
-        if [ -f "$path" ] && [ -r "$path" ]; then
-          ${pkgs.coreutils}/bin/sha256sum -- "$path"
-        fi
-      done | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d ' ' -f1
-    )"
-    old_hash=""
-    if [ -r "$hash_file" ]; then
-      old_hash="$(${pkgs.coreutils}/bin/cat -- "$hash_file")"
-    fi
-    if [ -n "$old_hash" ] && [ "$old_hash" != "$new_hash" ]; then
-      ${pkgs.systemd}/bin/systemctl --user try-restart ${lib.escapeShellArg name}
-    fi
-    printf '%s' "$new_hash" > "$hash_file"
-  '';
-  hmRestart = pkgs: services: let
+  # Restarts readers whose stamp is stale after sd-switch; DESIGN.md, Services.
+  hmReconcile = pkgs: services: {
+    providerUnits,
+    systemctlPath,
+    # Seconds each pass waits for running starts to stamp; DESIGN.md, Services.
+    stampTimeout ? 90,
+  }: let
+    coreutils = "${pkgs.coreutils}/bin";
     watched = lib.filterAttrs (_: paths: paths != []) (lib.mapAttrs (_: triggers) (enabled services));
+    names = builtins.attrNames watched;
+    observer = index: name: ''
+      observe_${toString index}() { observe ${lib.escapeShellArg "${name}.service"} ${stampFile name} ${lib.escapeShellArgs watched.${name}}; }
+    '';
   in
     lib.optionalAttrs (pkgs.stdenv.hostPlatform.isLinux && watched != {}) {
-      services-restart-on-change = {
+      services-reconcile = {
         after = ["files" "secrets"];
+        afterNodes = {
+          devenv = [];
+          hm = ["reloadSystemd"];
+        };
         before = ["shell"];
         command = ''
-          case "$(${pkgs.systemd}/bin/systemctl --user is-system-running 2>/dev/null || :)" in
-            running | degraded) ;;
-            *) exit 0 ;;
+          ctl=${lib.escapeShellArg systemctlPath}
+          uid="$(${coreutils}/id -u)"
+          export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$uid}"
+          prop() { "$ctl" --user show --property="$2" --value "$1"; }
+          # Sets `fresh` once the unit's running invocation has stamped: yes or
+          # no for its stamp against the trigger files now, inactive, or
+          # unstamped when it stays active past the pass's `deadline` without
+          # a stamp from its running invocation. Each unit is read at least once.
+          observe() {
+            local unit=$1 stamp=$2 state sub invocation current recorded started
+            shift 2
+            while :; do
+              state="$(prop "$unit" ActiveState)"
+              sub="$(prop "$unit" SubState)"
+              if [ "$state" = failed ] || [ "$sub" = auto-restart ]; then
+                printf 'ai.services: %s is %s (%s)\n' "$unit" "$state" "$sub" >&2
+                false
+              fi
+              if [ "$state" != active ]; then
+                fresh=inactive
+                return
+              fi
+              invocation="$(prop "$unit" InvocationID)"
+              recorded="" started=""
+              [ ! -f "$stamp" ] || read -r recorded started < "$stamp"
+              if [ "$started" = "$invocation" ]; then
+                current="$(${digest pkgs ''"$@"''})"
+                fresh=no
+                [ "$recorded" != "$current" ] || fresh=yes
+                return
+              fi
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                fresh=unstamped
+                return
+              fi
+              ${coreutils}/sleep 0.2
+            done
+          }
+          ${lib.concatStrings (lib.imap0 observer names)}
+          reconcile() {
+            local provider load result index
+            for provider in ${lib.escapeShellArgs providerUnits}; do
+              load="$(prop "$provider" LoadState)"
+              if [ "$load" != not-found ]; then
+                result="$(prop "$provider" Result)"
+                if [ "$result" != success ]; then
+                  printf 'ai.services: secret provider %s last ran with Result=%s\n' "$provider" "$result" >&2
+                  false
+                fi
+              fi
+            done
+            units=(${lib.escapeShellArgs (map (name: "${name}.service") names)})
+            stale=() restart=()
+            deadline=$((SECONDS + ${toString stampTimeout}))
+            for index in "''${!units[@]}"; do
+              "observe_$index"
+              if [ "$fresh" = no ] || [ "$fresh" = unstamped ]; then
+                stale+=("$index")
+                restart+=("''${units[index]}")
+              fi
+            done
+            if [ "''${#stale[@]}" -gt 0 ]; then
+              "$ctl" --user try-restart "''${restart[@]}"
+              deadline=$((SECONDS + ${toString stampTimeout}))
+              for index in "''${stale[@]}"; do
+                "observe_$index"
+                if [ "$fresh" != yes ]; then
+                  printf 'ai.services: %s did not restart onto its current trigger files (%s)\n' "''${units[index]}" "$fresh" >&2
+                  false
+                fi
+              done
+            fi
+          }
+          skip() { printf 'ai.services: the user manager is not running (%s); skipping service reconciliation\n' "$1"; }
+          status="$("$ctl" --user is-system-running 2>&1 || :)"
+          case "$status" in
+            running | degraded) reconcile ;;
+            starting | stopping) skip "$status" ;;
+            *)
+              manager="$("$ctl" --system show --property=ActiveState --value "user@$uid.service" 2>&1)" || manager="unknown: $manager"
+              if [ "$manager" = active ]; then
+                printf 'ai.services: user@%s.service is active, but its manager reports: %s\n' "$uid" "$status" >&2
+                false
+              fi
+              skip "user@$uid.service: $manager"
+              ;;
           esac
-          state_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/services"
-          ${pkgs.coreutils}/bin/mkdir -p "$state_dir"
-          ${pkgs.coreutils}/bin/chmod 700 "$state_dir"
-          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (rotationCheck pkgs) watched)}
         '';
       };
     };
 in {
-  inherit claimAssertions devenvProcesses hmRestart hmUnits hmWarnings mkLauncher serviceEntry triggers;
+  inherit claimAssertions devenvProcesses hmReconcile hmUnits hmWarnings mkLauncher serviceEntry triggers;
 }

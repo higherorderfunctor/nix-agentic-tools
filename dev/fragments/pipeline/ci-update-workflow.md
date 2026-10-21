@@ -1,9 +1,11 @@
 ## CI Update Workflow
 
 > **Last verified:** 2026-10-20 — the sweep is the only update entrypoint;
-> package workers never build; the `mirror-health` job reports the jail-nix
-> mirror; `jail-smoke` and `checks-eval-darwin` are required contexts; both
-> systems' name evaluations are budgeted by function count.
+> package workers never build; `checks/<concern>/flake.lock` files are lock-kind
+> matrix rows; the `mirror-health` job reports the jail-nix mirror; ci.yml runs
+> the required KVM job `service-secret-ordering`, which builds a dev-only
+> fixture flake; `jail-smoke` and `checks-eval-darwin` are required contexts;
+> both systems' name evaluations are budgeted by function count.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -34,7 +36,7 @@ resulting matrix. Every input and package becomes one Linux matrix worker, with
 eight concurrent workers and `fail-fast: false`. Workers share no state, so the
 registry declares no cross-target ordering.
 
-Each worker runs the existing `update-input.sh` or `update-pkg.sh` in an
+Each worker runs `update-input.sh`, `update-pkg.sh` or `update-lock.sh` in an
 ephemeral worktree and publishes its own `update/<name>` branch. A slow or
 failed worker cannot discard other workers' completed PRs. Branch names remain
 stable, existing PRs are reused, and every sweep rebuilds bot changes on the
@@ -324,6 +326,16 @@ ones.
 
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
 `dev/ci-check-evaluator.nix` records why.
+
+### Fixture flake VM test
+
+`service-secret-ordering` builds `checks/service-secret-ordering/flake.nix`, a
+dev-only flake with its own lock so home-manager and sops-nix never enter the
+root lock that consumers follow. It is not a `checks.*` attribute. It is a
+required context and the only verification of the sweep's lock-kind PRs for its
+`flake.lock`. A udev rule opens `/dev/kvm` to the Nix build users before the
+installer starts the daemon, and `system-features` adds `kvm` and `nixos-test`;
+the job asserts both. Its Cachix step holds no token, so it pushes nothing.
 
 ### Darwin check evaluation
 

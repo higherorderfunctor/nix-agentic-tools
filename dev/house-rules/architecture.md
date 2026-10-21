@@ -18,10 +18,12 @@ hoc machinery beside an existing abstraction.
 - **Secret readiness is one provider registry.** Declare a secret provider once
   in `ai.activationOrder.secretProviders` with its activation nodes and its user
   unit; activation's `secrets` point and `ai.services` units both read it. A
-  unit that reads a reference orders after the provider units and starts with
-  the target the provider's own unit uses, read from the evaluated unit; Home
-  Manager adds sops-nix by default. A hardcoded provider name or a second
-  ordering mechanism would drift. See `packages/ai-module/lib/secrets.nix` and
+  unit that reads a reference wants and orders after the provider units and
+  starts with the target the provider's own unit uses, read from the evaluated
+  unit; Home Manager adds sops-nix by default. Home Manager's post-reload
+  service check reads the same units' last results. A hardcoded provider name or
+  a second ordering mechanism would drift. See
+  `packages/ai-module/lib/secrets.nix` and
   `packages/ai-module/lib/services.nix`.
 - **Long-running services use `ai.services`.** Declare a daemon under
   `ai.<owner>.services`; `packages/ai-module/lib/services.nix` lowers it to

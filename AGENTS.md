@@ -480,10 +480,12 @@ hoc machinery beside an existing abstraction.
 - **Secret readiness is one provider registry.** Declare a secret provider once
   in `ai.activationOrder.secretProviders` with its activation nodes and its user
   unit; activation's `secrets` point and `ai.services` units both read it. A
-  unit that reads a reference orders after the provider units and starts with
-  the target the provider's own unit uses, read from the evaluated unit; Home
-  Manager adds sops-nix by default. A hardcoded provider name or a second
-  ordering mechanism would drift. See `packages/ai-module/lib/secrets.nix` and
+  unit that reads a reference wants and orders after the provider units and
+  starts with the target the provider's own unit uses, read from the evaluated
+  unit; Home Manager adds sops-nix by default. Home Manager's post-reload
+  service check reads the same units' last results. A hardcoded provider name or
+  a second ordering mechanism would drift. See
+  `packages/ai-module/lib/secrets.nix` and
   `packages/ai-module/lib/services.nix`.
 - **Long-running services use `ai.services`.** Declare a daemon under
   `ai.<owner>.services`; `packages/ai-module/lib/services.nix` lowers it to
@@ -1075,11 +1077,12 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-20 — `jail-smoke` is the ninth required context; CI
-> watching exits on the first failure through the `pr-review-loop` watcher;
-> `test` evaluates only. The worker and three review roles run inside a loop of
-> at most 3 rounds; unsettled findings go back to the orchestrator to validate.
-> Merge teardown deletes the PR's `archive/*` backups.
+> **Last verified:** 2026-10-20 — `service-secret-ordering` is the tenth
+> required context, from #2765's merge; CI watching exits on the first failure
+> through the `pr-review-loop` watcher; `test` evaluates only. The worker and
+> three review roles run inside a loop of at most 3 rounds; unsettled findings
+> go back to the orchestrator to validate. Merge teardown deletes the PR's
+> `archive/*` backups.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -1121,21 +1124,24 @@ the repo before committing.
 >   costs a paid review re-establishing a trigger that fires on readiness only.
 
 `main` is the trunk. Its branch-protection ruleset requires a pull request, no
-force-push, no deletion, and nine required status checks —
+force-push, no deletion, and ten required status checks —
 `build (x86_64-linux, ubuntu-latest)`, `build (aarch64-darwin, macos-latest)`,
 `checks-eval-darwin`, `checks-matrix`, `gitleaks`, `jail-smoke`,
 `kiro-patched (x86_64-linux, ubuntu-latest)`,
-`kiro-patched (aarch64-darwin, macos-latest)`, and `test`. `checks-matrix` was
-promoted 2026-10-14: it builds every flake check through Hestia's evaluate-once
-matrix, and `test` only evaluates. `checks-eval-darwin` was promoted 2026-10-18
-after six green runs: since the `checks` option became lazy (#2675) no other
-Darwin context forces every check value, so without it a Linux-only check
-leaking onto Darwin merges green. Both `kiro-patched` contexts were promoted
-2026-08-13 with PR #895. `jail-smoke` was added and promoted 2026-10-20 with PR
-#2742: it runs `ai.jail` live on a runner, so a jail-nix bump that stops jailing
-cannot auto-merge. The ruleset requires **zero approving reviews** but it DOES
-require **every review thread to be resolved**
-(`required_review_thread_resolution`, enabled 2026-07-29).
+`kiro-patched (aarch64-darwin, macos-latest)`, `service-secret-ordering`, and
+`test`. `checks-matrix` was promoted 2026-10-14: it builds every flake check
+through Hestia's evaluate-once matrix, and `test` only evaluates.
+`checks-eval-darwin` was promoted 2026-10-18 after six green runs: since the
+`checks` option became lazy (#2675) no other Darwin context forces every check
+value, so without it a Linux-only check leaking onto Darwin merges green. Both
+`kiro-patched` contexts were promoted 2026-08-13 with PR #895. `jail-smoke` was
+added and promoted 2026-10-20 with PR #2742: it runs `ai.jail` live on a runner,
+so a jail-nix bump that stops jailing cannot auto-merge.
+`service-secret-ordering` is required from #2765's merge: its VM test is the
+only verification of a fixture-flake lock PR, which would otherwise auto-merge
+unverified. The ruleset requires **zero approving reviews** but it DOES require
+**every review thread to be resolved** (`required_review_thread_resolution`,
+enabled 2026-07-29).
 
 The full Devenv Diagnostic is now `workflow_dispatch` only. It was promoted to a
 required check on 2026-08-03, demoted on 2026-08-05 after becoming a
@@ -1448,8 +1454,8 @@ Open a separate PR when the change is genuinely unrelated to any open one.
 `.github/workflows/update.yml` sweeps dependencies 4x/day (00:00, 06:00, 12:00,
 18:00 UTC) and opens one PR per dependency that actually moved. Each is armed
 with GitHub-native **auto-merge (squash)** as it is created, and re-armed on
-every later sweep, so it merges itself once the nine required checks go green.
-Safe precisely because the ruleset requires no approving review, all nine status
+every later sweep, so it merges itself once the ten required checks go green.
+Safe precisely because the ruleset requires no approving review, all ten status
 checks must pass, and an unresolved Copilot thread still holds the merge through
 the separate review-thread rule.
 

@@ -8,9 +8,11 @@ applyTo: ".github/actions/check-cache/**,.github/actions/warm-ifd/**,.github/rep
 ## CI Update Workflow
 
 > **Last verified:** 2026-10-20 — the sweep is the only update entrypoint;
-> package workers never build; the `mirror-health` job reports the jail-nix
-> mirror; `jail-smoke` and `checks-eval-darwin` are required contexts; both
-> systems' name evaluations are budgeted by function count.
+> package workers never build; `checks/<concern>/flake.lock` files are lock-kind
+> matrix rows; the `mirror-health` job reports the jail-nix mirror; ci.yml runs
+> the required KVM job `service-secret-ordering`, which builds a dev-only
+> fixture flake; `jail-smoke` and `checks-eval-darwin` are required contexts;
+> both systems' name evaluations are budgeted by function count.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -41,7 +43,7 @@ resulting matrix. Every input and package becomes one Linux matrix worker, with
 eight concurrent workers and `fail-fast: false`. Workers share no state, so the
 registry declares no cross-target ordering.
 
-Each worker runs the existing `update-input.sh` or `update-pkg.sh` in an
+Each worker runs `update-input.sh`, `update-pkg.sh` or `update-lock.sh` in an
 ephemeral worktree and publishes its own `update/<name>` branch. A slow or
 failed worker cannot discard other workers' completed PRs. Branch names remain
 stable, existing PRs are reused, and every sweep rebuilds bot changes on the
@@ -331,6 +333,16 @@ ones.
 
 `ciCheckEvaluator` is nix-eval-jobs with worker GC re-enabled;
 `dev/ci-check-evaluator.nix` records why.
+
+### Fixture flake VM test
+
+`service-secret-ordering` builds `checks/service-secret-ordering/flake.nix`, a
+dev-only flake with its own lock so home-manager and sops-nix never enter the
+root lock that consumers follow. It is not a `checks.*` attribute. It is a
+required context and the only verification of the sweep's lock-kind PRs for its
+`flake.lock`. A udev rule opens `/dev/kvm` to the Nix build users before the
+installer starts the daemon, and `system-features` adds `kvm` and `nixos-test`;
+the job asserts both. Its Cachix step holds no token, so it pushes nothing.
 
 ### Darwin check evaluation
 
@@ -734,7 +746,8 @@ are ignored.
 ## Update Pipeline Architecture
 
 > **Last verified:** 2026-10-20 — updates run only as CI's per-target matrix,
-> and package lanes never build.
+> and package lanes never build; fixture flake locks under
+> `checks/<concern>/flake.lock` are a third target kind, `update-lock.sh`.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -794,6 +807,12 @@ Targets fall into three categories:
   verification, only the `devenv` input runs `devenv --no-tui shell true` with
   the installed CLI in its updated worktree. A failed shell entry holds the bump
   back before commit and publication.
+- **Fixture locks** (`update-lock.sh <name> <flake-dir>`) — every
+  `checks/<concern>/flake.lock`, discovered rather than registered
+  (`fixture_flakes` in `update-matrix.py`) and named by its concern. The worker
+  runs `nix flake update --flake <flake-dir>` and commits only that lock. It
+  builds nothing: the fixture's own CI job, a required context, is the
+  verification.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages.
   Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
@@ -1127,6 +1146,7 @@ belt-and-braces, not the mechanism.
 | `dev/scripts/update-common.sh`                  | Shared functions (worktree, version, report, colors)           |
 | `dev/scripts/update-init.sh`                    | Pipeline initialization (clean stale state)                    |
 | `dev/scripts/update-input.sh`                   | Per-input update script                                        |
+| `dev/scripts/update-lock.sh`                    | Per-fixture-flake lock update script                           |
 | `dev/scripts/update-pkg.sh`                     | Per-package update script (rev bump + nix-update)              |
 | `lib/update.nix`                                | Declares `config.update.targets` (the option declaration)      |
 | `packages/<owner>/registry.nix`                 | Owner update targets, source paths, and cache metadata         |

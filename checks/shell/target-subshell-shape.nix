@@ -41,7 +41,7 @@
 
             cd "$src"
 
-            TARGETS="dev/scripts/update-input.sh dev/scripts/update-pkg.sh"
+            TARGETS="dev/scripts/update-input.sh dev/scripts/update-lock.sh dev/scripts/update-pkg.sh"
             failures=""
 
             # The pattern must match a subshell `(` opening in a tested context while

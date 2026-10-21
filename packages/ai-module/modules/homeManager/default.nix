@@ -16,11 +16,14 @@
     providers = config.ai.activationOrder.secretProviders;
     secretNodes = config.ai.activationOrder.secretNodes;
   };
-  restart = services.hmRestart pkgs config.ai.services;
-  duplicate = files.duplicate ["files-apply" "files-prune" "services-restart-on-change"];
+  reconcile = services.hmReconcile pkgs config.ai.services {
+    providerUnits = secrets.units;
+    inherit (config.systemd.user) systemctlPath;
+  };
+  duplicate = files.duplicate ["files-apply" "files-prune" "services-reconcile"];
   generated =
     {files-prune = files.prune;}
-    // lib.mapAttrs (_: files.generatedEntry) restart
+    // lib.mapAttrs (_: files.generatedEntry) reconcile
     // lib.optionalAttrs (files.plan != []) {
       files-apply = files.generatedEntry {
         after = ["files"] ++ lib.optionals files.usesRun ["secrets"];

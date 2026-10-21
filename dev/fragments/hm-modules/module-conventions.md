@@ -1,17 +1,17 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-17 — glab resolves redact references at service
-> runtime; non-AI owners use the layer-1 helper; Claude uses engine-backed `rw`
-> ownership, Kiro stages settings and hooks and drains all three legacy ledgers
-> through the engine; Kimchi stages every surface and drains all legacy ledgers,
-> and Claude has an ordered activation mode command; Codex stages daemon JSON as
-> `ro` and drains legacy ledgers even while disabled; `mkSkillFiles`
-> interpolates every skill source before the files engine walks it; Kiro is
-> gated by `ai.kiro.cli.enable`; factories read the derived, read-only
-> `ai.kiro.enable`; `ai.copilot` is github.com Copilot, with pools under
-> `ai.copilot.github` and no launcher. ai-module supplies the sole file writer
-> and its ordered prune and apply entries; legacy ledgers remain available for
-> upgrades.
+> **Last verified:** 2026-10-20 — the services reconcile entry follows
+> `reloadSystemd`; glab resolves redact references at service runtime; non-AI
+> owners use the layer-1 helper; Claude uses engine-backed `rw` ownership, Kiro
+> stages settings and hooks and drains all three legacy ledgers through the
+> engine; Kimchi stages every surface and drains all legacy ledgers, and Claude
+> has an ordered activation mode command; Codex stages daemon JSON as `ro` and
+> drains legacy ledgers even while disabled; `mkSkillFiles` interpolates every
+> skill source before the files engine walks it; Kiro is gated by
+> `ai.kiro.cli.enable`; factories read the derived, read-only `ai.kiro.enable`;
+> `ai.copilot` is github.com Copilot, with pools under `ai.copilot.github` and
+> no launcher. ai-module supplies the sole file writer and its ordered prune and
+> apply entries; legacy ledgers remain available for upgrades.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -302,11 +302,12 @@ format and method in `ai.<owner>.files` or finite commands in
 `ai.<owner>.activation`. Only ai-module writes native file and activation sinks;
 `ai-module-no-direct-sink-writes` fails a library or owner module line that
 starts with one. The layer contract is `packages/ai-module/docs/contract.md`.
-Semble's cache guard follows `materialized`; glab's keyring marker and the
-services restart-on-change entry follow `files` and `secrets`. HM lowering wraps
-the whole command in `run`; child command bodies use ordinary external commands,
-not activation-shell functions. Package installs keep their native configuration
-surfaces; daemons go through `ai.services`. `outOfStoreSymlink` is not used.
+Semble's cache guard follows `materialized`; glab's keyring marker follows
+`files` and `secrets`; the services reconcile entry also follows
+`reloadSystemd`, through `afterNodes`. HM lowering wraps the whole command in
+`run`; child command bodies use ordinary external commands, not activation-shell
+functions. Package installs keep their native configuration surfaces; daemons go
+through `ai.services`. `outOfStoreSymlink` is not used.
 
 ### Config parity rule (HM ↔ devenv)
 

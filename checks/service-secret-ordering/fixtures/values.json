@@ -1,0 +1,11 @@
+{
+  "secrets": {
+    "base": { "aa": "aa-base", "zz": "zz-base" },
+    "broken": { "aa": "aa-broken", "zz": "zz-broken" },
+    "changed": { "aa": "aa-changed", "zz": "zz-changed" },
+    "fresh": { "aa": "aa-base", "fresh": "fresh-new", "zz": "zz-base" },
+    "rotate-aa": { "aa": "aa-rotated", "zz": "zz-base" },
+    "rotate-zz": { "aa": "aa-base", "zz": "zz-rotated" }
+  },
+  "foreign": ["broken"]
+}
