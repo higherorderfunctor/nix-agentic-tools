@@ -19,24 +19,42 @@ backend: {
       option = "ai.cpa-manager-plus.instances.${name}.upstream";
       owner = "cliproxyapi";
     };
-  set = value: value != null && lib.trim value != "";
-  # The database as Manager Plus 1.14.7 resolves it (config.go
-  # LoadWithOptions): a variable's relative path against the working
-  # directory, `stateDir`, and a config.json one against the rendered file's.
+  # The database Manager Plus 1.14.7 opens (config.go LoadWithOptions:
+  # 115-128, `hasEnv`/`env` 296-306), as shell. USAGE_DB_PATH, then
+  # USAGE_DATA_DIR/usage.sqlite, are read when the run script runs, so an
+  # inherited value counts as the server's own does; a relative one resolves
+  # against the working directory, `stateDir`, as the server's does.
+  # config.json's `dbPath`, then `dataDir` (default `./data`), are the
+  # rendered file's values, relative to its directory.
   database = instance: let
-    inherit (instance.settings) config environment;
+    inherit (instance.settings.config) dataDir dbPath;
+    given = value: value != null && value != "";
     fromConfig = path:
       if lib.hasPrefix "/" path
       then lib.escapeShellArg path
       else ''"''${CPA_MANAGER_CONFIG%/*}"/${lib.escapeShellArg path}'';
-  in
-    if set environment.USAGE_DB_PATH
-    then lib.escapeShellArg (lib.trim environment.USAGE_DB_PATH)
-    else if set environment.USAGE_DATA_DIR
-    then lib.escapeShellArg "${lib.trim environment.USAGE_DATA_DIR}/usage.sqlite"
-    else if set config.dbPath
-    then fromConfig (lib.trim config.dbPath)
-    else lib.escapeShellArg "${config.dataDir}/usage.sqlite";
+    fallback =
+      if given dbPath
+      then fromConfig (lib.trim dbPath)
+      else "${fromConfig (lib.trim (
+        if given dataDir
+        then dataDir
+        else "data"
+      ))}/usage.sqlite";
+  in ''
+    trim() {
+      local value="''${1#"''${1%%[![:space:]]*}"}"
+      printf '%s' "''${value%"''${value##*[![:space:]]}"}"
+    }
+    db="$(trim "''${USAGE_DB_PATH:-}")"
+    data_dir="$(trim "''${USAGE_DATA_DIR:-}")"
+    if [ -z "$db" ] && [ -n "$data_dir" ]; then
+      db="$data_dir/usage.sqlite"
+    fi
+    if [ -z "$db" ]; then
+      db=${fallback}
+    fi
+  '';
   adminKeyVariables = ["CPA_MANAGER_ADMIN_KEY" "CPA_MANAGER_ADMIN_KEY_FILE"];
 in {
   imports = [
@@ -84,14 +102,19 @@ in {
       # file's on every start. reset-admin-key refuses a missing or empty
       # database; that is a first start, whose bootstrap seeds the credential
       # from the same file and would generate one from an unreadable or blank
-      # file instead.
+      # file instead. Without --db-path the reset loads the same config and
+      # environment the server does (its resolveDBPath), so `db` only tells a
+      # first start apart. Either admin-key variable, declared ones being
+      # refused below, would seed a first start in place of the file
+      # (config.go readSecret), so inherited ones are dropped.
       preStart = instance: let
-        db = database instance;
         key = lib.escapeShellArg instance.settings.config.adminKeyFile;
       in
         lib.optionalString (instance.settings.config.adminKeyFile != null) ''
-          if [ -s ${db} ]; then
-            ${lib.getExe instance.package} reset-admin-key --db-path ${db} --admin-key-file ${key}
+          unset ${toString adminKeyVariables}
+          ${database instance}
+          if [ -s "$db" ]; then
+            ${lib.getExe instance.package} reset-admin-key --admin-key-file ${key}
           elif ! ${pkgs.gnugrep}/bin/grep -q '[^[:space:]]' ${key}; then
             printf '%s\n' ${lib.escapeShellArg "settings.config.adminKeyFile: ${instance.settings.config.adminKeyFile} is unreadable or blank"} >&2
             exit 1

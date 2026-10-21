@@ -6,8 +6,8 @@
 > from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
 > service's `files` render at start in checked private runtime directories with
 > user-qualified fallbacks; private secret slots are cleared before reads and
-> exec, public variables reserve `_ai_`, and tool instances use
-> `lib/instances.nix`.
+> exec, public variables reserve `_ai_`, tool instances use `lib/instances.nix`,
+> and a restart trigger alone makes a unit a secret reader.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -106,20 +106,21 @@ file-watch units remain outside this surface. A tool with typed settings
 declares named instances through `lib/instances.nix`, which lowers each
 `ai.<owner>.instances.<name>` to the service `<owner>-<name>`.
 
-Linux Home Manager gives a secret-reading unit `Wants=` and `After=` on the
-registered provider units and starts it under the targets of provider units
-defined in the evaluated configuration, falling back to `default.target`; a
-plain service uses `network.target` ordering and `default.target`. Devenv lowers
-to processes and ignores provider units. Darwin Home Manager emits one warning
-per enabled service, since it has no systemd user units. File references in the
-environment and in file secrets join explicit restart triggers, which behave
-differently per backend. On Linux Home Manager the launcher stamps a digest of
-the triggers and its invocation ID under the runtime directory before exec, and
-one generated `services-reconcile` activation entry after `reloadSystemd`
-restarts each active reader whose stamp differs from the files, through
-`systemd.user.systemctlPath`; a failed provider or reader, a restart that does
-not stamp current bytes, or an unreachable running user manager fails
-activation. Devenv uses `watch.paths`. Only ai-module writes these daemon sinks.
+Linux Home Manager gives a secret-reading unit, one with a redact reference or a
+restart trigger, `Wants=` and `After=` on the registered provider units and
+starts it under the targets of provider units defined in the evaluated
+configuration, falling back to `default.target`; a plain service uses
+`network.target` ordering and `default.target`. Devenv lowers to processes and
+ignores provider units. Darwin Home Manager emits one warning per enabled
+service, since it has no systemd user units. File references in the environment
+and in file secrets join explicit restart triggers, which behave differently per
+backend. On Linux Home Manager the launcher stamps a digest of the triggers and
+its invocation ID under the runtime directory before exec, and one generated
+`services-reconcile` activation entry after `reloadSystemd` restarts each active
+reader whose stamp differs from the files, through `systemd.user.systemctlPath`;
+a failed provider or reader, a restart that does not stamp current bytes, or an
+unreachable running user manager fails activation. Devenv uses `watch.paths`.
+Only ai-module writes these daemon sinks.
 
 ### State and ownership
 

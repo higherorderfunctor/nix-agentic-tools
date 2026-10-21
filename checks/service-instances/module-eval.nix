@@ -117,6 +117,15 @@
     services.triggers (evaluate backend (withInstances {cpa-manager-plus.instances.main.settings.config.adminKeyFile = "/run/secrets/cpa-admin-key";})).config.ai.services.cpa-manager-plus-main
     == ["/run/secrets/cpa-admin-key" "/run/secrets/cpa-management-key"];
 
+  # adminKeyFile alone, with no upstream management key, still waits for the
+  # secret providers; `disabled` has neither and stays a plain unit.
+  standalone =
+    (evalHm (withInstances {
+      cpa-manager-plus.instances.main = {
+        settings.config.adminKeyFile = "/run/secrets/cpa-admin-key";
+        upstream = null;
+      };
+    })).config;
   devenv = (evalDevenv (withInstances {})).config;
   hm = (evalHm (withInstances {})).config;
   disabled =
@@ -213,9 +222,16 @@ in {
           processes+=("$!")
           ready "''${processes[0]}" http://127.0.0.1:28417/healthz cpa.log
           ${pkgs.jq}/bin/jq -e '.status == "ok"' health.json
-          ${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart} > manager.log 2>&1 &
-          processes+=("$!")
-          ready "''${processes[1]}" http://127.0.0.1:28418/health manager.log
+          manager() {
+            ${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart} > "$1" 2>&1 &
+            processes+=("$!")
+            ready "$!" http://127.0.0.1:28418/health "$1"
+          }
+          stop() {
+            kill -TERM "''${processes[-1]}"
+            wait "''${processes[-1]}" || :
+          }
+          manager manager.log
           ${pkgs.jq}/bin/jq -e '.ok == true and .service == "cpa-manager-plus"' health.json
           # Each port has exactly one listener, bound to IPv4 loopback.
           for port in 6F01 6F02; do
@@ -251,19 +267,37 @@ in {
           refuses admin-key-wrong
           # Rotate the file and start again on the same state: the stored
           # credential is reset to the new key before the server runs.
-          kill -TERM "''${processes[1]}"
-          wait "''${processes[1]}" || :
+          stop
           printf '%s\n' admin-key-b > /build/admin-key
-          ${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart} > manager-restart.log 2>&1 &
-          processes+=("$!")
-          ready "''${processes[2]}" http://127.0.0.1:28418/health manager-restart.log
+          manager manager-restart.log
           accepts admin-key-b
           refuses admin-key-a
+          # A database path and both admin-key variables inherited from the
+          # user manager's environment. The first start on that database
+          # seeds the file's key, not either variable's; a later start resets
+          # the database the server opens, not the default one.
+          stop
+          printf '%s\n' admin-key-env-file > /build/env-admin-key
+          mkdir -p /build/state/inherited
+          export USAGE_DB_PATH=/build/state/inherited/usage.sqlite CPA_MANAGER_ADMIN_KEY=admin-key-env CPA_MANAGER_ADMIN_KEY_FILE=/build/env-admin-key
+          manager manager-inherited.log
+          test -s "$USAGE_DB_PATH"
+          accepts admin-key-b
+          refuses admin-key-env
+          refuses admin-key-env-file
+          stop
+          printf '%s\n' admin-key-c > /build/admin-key
+          manager manager-inherited-restart.log
+          accepts admin-key-c
+          refuses admin-key-b
           # A first start seeds the credential itself; a later one resets it.
-          # Neither key reaches either log. `! grep` would be exempt from
-          # errexit, so each absence fails explicitly.
-          grep -Fx 'CPA Manager Plus admin key reset.' manager-restart.log
-          if grep -F -e 'admin key reset' -e admin-key-a -e admin-key-b manager.log || grep -F -e admin-key-a -e admin-key-b manager-restart.log; then
+          # No key reaches any log. `! grep` would be exempt from errexit, so
+          # each absence fails explicitly.
+          for log in manager-restart.log manager-inherited-restart.log; do
+            grep -Fx 'CPA Manager Plus admin key reset.' "$log"
+          done
+          if grep -F 'admin key reset' manager.log manager-inherited.log \
+            || grep -F -e admin-key-a -e admin-key-b -e admin-key-c -e admin-key-env manager*.log; then
             false
           fi
           touch "$out"
@@ -280,6 +314,10 @@ in {
         assert lib.assertMsg (
           lib.all (name: lib.hasSuffix "/bin/ai-service-${name}" hm.systemd.user.services.${name}.Service.ExecStart) ["cliproxyapi-main" "cpa-manager-plus-main"]
           && !(disabled.systemd.user.services ? cliproxyapi-main)
+          && standalone.systemd.user.services.cpa-manager-plus-main.Unit.Wants == ["sops-nix.service"]
+          && standalone.systemd.user.services.cpa-manager-plus-main.Unit.After == ["network.target" "sops-nix.service"]
+          && !(disabled.systemd.user.services.cpa-manager-plus-main.Unit ? Wants)
+          && disabled.systemd.user.services.cpa-manager-plus-main.Unit.After == ["network.target"]
         ) "module-service-instances-run: Home Manager units";
           pkgs.runCommandLocal "module-test-service-instances-run" {} ''
             set -euETo pipefail

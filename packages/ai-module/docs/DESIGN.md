@@ -255,9 +255,10 @@ their key and ports; disabled owners forward nothing. Names match
 A daemon reads store paths and secrets at start, never files written by the
 files engine, so no unit depends on file activation. Each Linux Home Manager
 unit orders after `network.target`. A service whose environment contains a
-redact reference or whose rendered file has secrets also has `Wants=` and
-`After=` on every registered provider unit. sd-switch submits each start as its
-own job, in unit-name order and without waiting, and `After=` orders only
+redact reference, whose rendered file has secrets, or that has a restart trigger
+(a file it reads at start, such as a `restartOnChange` path) also has `Wants=`
+and `After=` on every registered provider unit. sd-switch submits each start as
+its own job, in unit-name order and without waiting, and `After=` orders only
 against a job already queued, so with `After=` alone a reader that sorts before
 its provider started first and read the previous secrets. `Wants=` puts the
 provider's start into the reader's own transaction. So every start of a reader,

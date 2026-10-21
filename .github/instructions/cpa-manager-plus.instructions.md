@@ -79,7 +79,9 @@ publication.
 > variables give the settings type through `lib/extracted/options.nix`; the
 > render loads through Manager Plus 1.14.7's `LoadWithoutCreatingDefault`;
 > `ai.cpa-manager-plus.instances` renders it at start and applies
-> `config.adminKeyFile` through `reset-admin-key` on every start.
+> `config.adminKeyFile` through `reset-admin-key` on every start, against the
+> database the server resolves at run time, with inherited admin-key variables
+> unset.
 
 `lib/default.nix` exports
 `cpa-manager-plus.{settingsType, render, report, exclusions, sample}`. One
@@ -131,19 +133,26 @@ Manager Plus reads its admin key only while its database holds no admin
 credential (`internal/service/bootstrap/service.go`, `ensureAdminCredential`);
 after the first start a changed key is ignored. An instance with
 `config.adminKeyFile`, an absolute path, applies it on every start instead: the
-run script calls
-`cpa-manager-plus reset-admin-key --db-path <db> --admin-key-file <file>` before
-it execs the server. `<db>` is the database as `config.go` `LoadWithOptions`
-resolves it, `<stateDir>/usage.sqlite` by default. The command refuses a missing
-or empty database, so a start without one is a first start: the server seeds its
-credential from the same file, and the run script fails first if that file is
-unreadable or blank, where Manager Plus would generate a key and log it. A
-failed reset fails the start. The path is a restart trigger (`restartOnChange`),
-so a changed file restarts the instance onto the new key. Only the path reaches
-argv and the store; the command prints no key.
+run script calls `cpa-manager-plus reset-admin-key --admin-key-file <file>`
+before it execs the server. Without `--db-path` the command loads the same
+config and environment the server does (its `resolveDBPath`), so it resets the
+database the server opens. The command refuses a missing or empty database, so a
+start without one is a first start. The run script tells the two apart by
+resolving the database as `config.go` `LoadWithOptions` does, at run time:
+`USAGE_DB_PATH`, then `$USAGE_DATA_DIR/usage.sqlite`, set in the environment or
+inherited from it, then config.json's `dbPath`, then `<dataDir>/usage.sqlite`,
+`<stateDir>/usage.sqlite` by default. A first start seeds the credential from
+the same file, and the run script fails first if that file is unreadable or
+blank, where Manager Plus would generate a key and log it. A failed reset fails
+the start. The path is a restart trigger (`restartOnChange`), so a changed file
+restarts the instance onto the new key, and on Linux Home Manager the unit
+orders after the secret providers, as one reading a redact reference does. Only
+the path reaches argv and the store; the command prints no key.
 
 `environment.CPA_MANAGER_ADMIN_KEY` and `CPA_MANAGER_ADMIN_KEY_FILE` fail an
 assertion that names `config.adminKeyFile`. Either one takes precedence over
 `adminKeyFile` (`readSecret`) and would be read on the first start only, and the
-plain key could reach `reset-admin-key` only through argv or a copy on disk.
-Without any of the three, the run script resets nothing, as before.
+plain key could reach `reset-admin-key` only through argv or a copy on disk. The
+run script unsets both before the reset and the server, so a value inherited
+from the user manager's environment cannot seed a first start either. Without
+any of the three, the run script resets nothing, as before.
