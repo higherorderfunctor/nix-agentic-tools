@@ -1,9 +1,12 @@
 /**
  * @name Network request targets
- * @description Each constant URL that reaches the URL of a modeled client
- *              request, with the file of the request. The URL may arrive
- *              whole or as the leading part of a concatenation or template,
- *              through variables, properties, calls and returns.
+ * @description Each constant URL (a string with a scheme) whose value
+ *              influences the URL of a modeled client request, with the file
+ *              of the request. Influence is taint flow: the constant may be
+ *              the whole URL or any part of a concatenation or template,
+ *              leading or not, through variables, properties, calls and
+ *              returns. It is not proof that the constant's host is the
+ *              request's destination.
  * @kind table
  * @id nat/network-targets
  */

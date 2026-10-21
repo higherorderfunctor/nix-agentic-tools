@@ -40,6 +40,8 @@
       "libasound.so.2"
     ];
     unpackPhase = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       runHook preUnpack
       zstd -dc "$src" | tar -x
       runHook postUnpack
@@ -68,7 +70,7 @@
     };
   };
 
-  # `runQuery { name; src; query; columns; jq; }`: a derivation whose `$out`
+  # `runQuery { columns; jq; name; query; src; }`: a derivation whose `$out`
   # is `jq`'s output over the decoded result set of `query` (a file in the
   # query pack below), evaluated against a database of `src`. `columns` is
   # the number of selected columns: the decode sorts on all of them, because
@@ -76,11 +78,11 @@
   # Select only strings, relative paths and line numbers; an entity or an
   # absolute location would carry the store path into the result.
   runQuery = {
-    name,
-    src,
-    query,
     columns,
     jq,
+    name,
+    query,
+    src,
   }:
     pkgs.runCommand name {
       nativeBuildInputs = [bundle pkgs.jq];
@@ -126,31 +128,20 @@
   # `networkTargets { name; src; }`: every constant URL (a string with a
   # scheme) that taint-flows into the URL of a modeled client request in `src`,
   # as `{ hosts.<host> = [files]; otherTargets.<url> = [files]; }`, the files
-  # being those of the requests. Taint means the constant may be any part of
-  # a concatenation or template, not only its leading part. A URL with no host
-  # to key on (`file:///...`) stays whole under otherTargets, so nothing the
-  # query found is dropped. An empty result set fails: it means the query or
-  # the extraction found nothing, not that the program makes no requests.
+  # being those of the requests. Taint means the constant influences the URL:
+  # it may be any part of a concatenation or template, so its host is not
+  # proven to be the request's. network-targets.jq does the projection, and
+  # checks/extracted/codeql-projection.nix holds it to its cases.
   networkTargets = {
     name,
     src,
   }:
     runQuery {
       inherit name src;
-      query = "NetworkTargets.ql";
       columns = 2;
-      jq = ''
-        .tuples
-        | if length == 0 then error("NetworkTargets found no client request with a constant URL") else . end
-        | map({url: .[0], file: .[1]}
-          | .host = ((.url | capture("^[A-Za-z][A-Za-z0-9+.-]*://([^/?#@]*@)?(?<host>[^/?#:]+)") | .host | ascii_downcase) // null))
-        | def files(key): group_by(key) | map({key: (.[0] | key), value: (map(.file) | unique)}) | from_entries;
-          {
-            hosts: (map(select(.host != null)) | files(.host)),
-            otherTargets: (map(select(.host == null)) | files(.url))
-          }
-      '';
+      jq = builtins.readFile ./network-targets.jq;
+      query = "NetworkTargets.ql";
     };
 in {
-  inherit bundle networkTargets runQuery;
+  inherit bundle networkTargets;
 }

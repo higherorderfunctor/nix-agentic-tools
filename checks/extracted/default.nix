@@ -1,5 +1,6 @@
 {
   imports = [
+    ./codeql-projection.nix
     ./drift.nix
     ./facts.nix
     ./guard.nix
