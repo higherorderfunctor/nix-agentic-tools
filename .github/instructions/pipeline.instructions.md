@@ -747,9 +747,10 @@ are ignored.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-20 — updates run only as CI's per-target matrix,
+> **Last verified:** 2026-10-21 — updates run only as CI's per-target matrix,
 > and package lanes never build; fixture flake locks under
-> `checks/<concern>/flake.lock` are a third target kind, `update-lock.sh`.
+> `checks/<concern>/flake.lock` are a third target kind, `update-lock.sh`; input
+> verification skips the CodeQL engines.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -779,16 +780,21 @@ and formatting are preparation work, and native PR CI validates the completed
 branch. Input verification reduces evaluator workers when the core-derived count
 would violate the 60% memory budget. If no viable evaluator can start, that
 setup failure holds the input back instead of being classified as an executed,
-ordinary red build. Before each verifier attempt, the updater enumerates the
-package universe. The pinned producer must then report exactly one evaluation
-per attribute, and every successful evaluation needs cached/local or build
-evidence; aliases may share one build through a common derivation path. Empty,
-partial, or malformed coverage is incomplete verification and holds the input
-back after the retry. The retry also distinguishes Nix's fixed-output hash
-mismatch from a compiler or test failure. Missing cargoDeps/pnpmDeps fixers can
-still require human repair (issue #1570), but a known unresolved hash now holds
-the input branch back; a fully covered update with an ordinary build failure
-remains eligible for a red PR.
+ordinary red build. Before each verifier attempt, the updater enumerates
+`ciPackages` minus the CodeQL engines (`EXCLUDED_PREFIXES`, through
+`ci-packages.py update-plan`) and builds only that set via `--select`. The
+deliberately built `EXCLUDED` members, such as the Kiro canary, stay in. The
+engines stay out because the CodeQL smoke check proves them, and an engine
+missing from every substituter would be fetched again from upstream on every
+input bump. The pinned producer must then report exactly one evaluation per
+attribute, and every successful evaluation needs cached/local or build evidence;
+aliases may share one build through a common derivation path. Empty, partial, or
+malformed coverage is incomplete verification and holds the input back after the
+retry. The retry also distinguishes Nix's fixed-output hash mismatch from a
+compiler or test failure. Missing cargoDeps/pnpmDeps fixers can still require
+human repair (issue #1570), but a known unresolved hash now holds the input
+branch back; a fully covered update with an ordinary build failure remains
+eligible for a red PR.
 
 Verifier failures can overlap. `run_nfb_build` returns incomplete coverage (4)
 before an observed fixed-output mismatch (3), so code 4 does not mean there is
