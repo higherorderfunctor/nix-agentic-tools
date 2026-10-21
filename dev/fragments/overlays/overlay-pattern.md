@@ -1,7 +1,8 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-18 — Go check names come from one declared table; a
-> completeness check compares both original passthru discoveries.
+> **Last verified:** 2026-10-20 — Go check names come from one declared table; a
+> completeness check compares both original passthru discoveries; the flake has
+> no `apps` output.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -111,13 +112,13 @@ their results are checked again: without that, a consumer's
 derivation here carries; other passthru functions (`mkSkill`, ...) hand out
 unchecked derivations.
 
-| Output           | Checked by                                         |
-| ---------------- | -------------------------------------------------- |
-| overlay          | the consumer's `final`                             |
-| module defaults  | the module's `pkgs` (`rootsFor`)                   |
-| `packages`       | plain `import inputs.nixpkgs { inherit system; }`  |
-| `legacyPackages` | plain `import inputs.nixpkgs { inherit system; }`  |
-| `ciPackages`     | nothing: CI, checks, repo docs, devShells.ci, apps |
+| Output           | Checked by                                        |
+| ---------------- | ------------------------------------------------- |
+| overlay          | the consumer's `final`                            |
+| module defaults  | the module's `pkgs` (`rootsFor`)                  |
+| `packages`       | plain `import inputs.nixpkgs { inherit system; }` |
+| `legacyPackages` | plain `import inputs.nixpkgs { inherit system; }` |
+| `ciPackages`     | nothing: CI, checks, repo docs, devShells.ci      |
 
 - `packages` filters out every `meta.unfree` leaf, because `nix flake check`
   forces every drvPath there and an unfree one throws.
