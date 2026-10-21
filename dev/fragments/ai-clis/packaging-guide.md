@@ -148,6 +148,7 @@ days later, so `ci.yml` provably was not the source. Two workflow paths hold
 | job                     | builds patched?                  | pushes?                  |
 | ----------------------- | -------------------------------- | ------------------------ |
 | `ci.yml` build-packages | no — `ci-packages.py` exclusions | token → **`pushFilter`** |
+| `ci.yml` publish-hestia | no — builds `ciHestia` only      | token → **`pushFilter`** |
 | `ci.yml` test           | no                               | no token                 |
 | `kiro-patched`          | yes                              | no token                 |
 | `update.yml` inputs     | **yes — `verify_all_packages`**  | token → **`pushFilter`** |
@@ -167,9 +168,10 @@ Building Kiro there is deliberate and stays: `postInstallCheck` runs
 patch, and `doInstallCheck` is already true upstream so the phase really
 executes. The fix is therefore at the PUSH, not the build —
 `pushFilter: kiro-cli|codeql` on every `cachix-action` step that holds the token
-(`ci.yml` build-packages and `update.yml` inputs). One spelling, copied
-identically: Actions cannot share an action input across workflows, and
-`test-ci-packages.py` fails if any credentialed step lacks it.
+(`ci.yml` publish-hestia and build-packages, and the `update.yml` update step
+every lane shares). One spelling, copied identically: Actions cannot share an
+action input across workflows, and `test-ci-packages.py` fails if any
+credentialed step lacks it.
 
 **The generalizable lesson: `cachix-action` with a token runs a watch-store
 daemon that pushes every path realized in the job.** Reasoning about which
@@ -212,10 +214,13 @@ Supporting properties:
   surgical.
 
 Both knobs are configuration, so the `kiro-patched` job's "Assert the patched
-output is not published" step asserts the OUTCOME: it fails if any kiro path
-answers 200 from the cache. It opens with a positive control against
-`nix-cache-info`, because every assertion in it is "not 200" and a typo'd host
-would satisfy all of them — a tripwire that can only pass is worse than none.
+output is not published" step asserts the OUTCOME. It enumerates the patched
+closure, selects the paths whose basename names kiro, and hands them to
+`dev/scripts/assert-not-published.sh`, which the CodeQL tripwire in the `test`
+job shares. That script refuses an empty path list, checks `nix-cache-info`
+first as a positive control, and counts only a 404 as absent: every assertion is
+"not fetchable", so a typo'd host or an empty list would satisfy all of them,
+and a tripwire that can only pass is worse than none.
 
 Getting that step right took wrong versions, and each failure mode is worth
 keeping because none is specific to Kiro:
