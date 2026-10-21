@@ -109,12 +109,17 @@
         --threads="$NIX_BUILD_CORES" \
         --output="$TMPDIR/result.bqrs" \
         "$TMPDIR/queries/${query}"
+      # One result set decodes to {columns, tuples}, with no set-name key.
       codeql bqrs decode \
         --format=json \
+        --result-set='#select' \
         --sort-key=${lib.concatMapStringsSep "," toString (lib.range 0 (columns - 1))} \
         --output="$TMPDIR/result.json" \
         "$TMPDIR/result.bqrs"
       jq --sort-keys ${lib.escapeShellArg jq} "$TMPDIR/result.json" > "$out"
+      # Into the build log too, so a CI run shows the result without
+      # anyone having to fetch the output.
+      jq --compact-output . "$out"
     '';
   # `networkTargets { name; src; }`: every constant URL (a string with a
   # scheme) that taint-flows into the URL of a modeled client request in `src`,
@@ -133,7 +138,7 @@
       query = "NetworkTargets.ql";
       columns = 2;
       jq = ''
-        .["#select"].tuples
+        .tuples
         | if length == 0 then error("NetworkTargets found no client request with a constant URL") else . end
         | map({url: .[0], file: .[1]}
           | .host = ((.url | capture("^[A-Za-z][A-Za-z0-9+.-]*://([^/?#@]*@)?(?<host>[^/?#:]+)") | .host | ascii_downcase) // null))
