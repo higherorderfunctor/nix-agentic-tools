@@ -42,25 +42,38 @@
       then lib.optional (!builtins.pathExists (entry + "/qlpack.yml")) "${at} (${toString entry}) holds no qlpack.yml"
       else ["${at} must be a directory or a pack derivation"]);
 
-  errors = spec: let
+  fail = problems: value:
+    assert lib.assertMsg (problems == []) "codeql.customizePackage:\n${lib.concatStringsSep "\n" problems}"; value;
+
+  # One spec's shape and entries, named by the caller's own indices.
+  checked = spec: let
     unknown = builtins.attrNames (builtins.removeAttrs spec fields);
     lists = builtins.filter (field: !builtins.isList (spec.${field} or [])) fields;
-    names = lib.concatMap (entry: lib.optional (entry ? codeqlPack.name) entry.codeqlPack.name) (spec.queries or [] ++ spec.models or []);
   in
-    lib.optional (unknown != []) "unknown field(s) ${lib.concatStringsSep ", " unknown}; expected ${lib.concatStringsSep ", " fields}"
-    ++ map (field: "`${field}` must be a list") lists
-    ++ lib.optionals (lists == []) (
-      lib.concatLists (packErrors "queries" "query" (spec.queries or []))
-      ++ lib.concatLists (packErrors "models" "model" (spec.models or []))
-      ++ lib.concatLists (lib.imap1 (index: entry: lib.optional (!lib.isDerivation entry) "`extraPackages.${toString index}` must be a package") (spec.extraPackages or []))
-      ++ map (name: "pack ${name} is given more than once") (lib.unique (builtins.filter (name: lib.count (other: other == name) names > 1) names))
-    );
+    fail (
+      lib.optional (unknown != []) "unknown field(s) ${lib.concatStringsSep ", " unknown}; expected ${lib.concatStringsSep ", " fields}"
+      ++ map (field: "`${field}` must be a list") lists
+      ++ lib.optionals (lists == []) (
+        lib.concatLists (packErrors "queries" "query" (spec.queries or []))
+        ++ lib.concatLists (packErrors "models" "model" (spec.models or []))
+        ++ lib.concatLists (lib.imap1 (index: entry: lib.optional (!lib.isDerivation entry) "`extraPackages.${toString index}` must be a package") (spec.extraPackages or []))
+      )
+    ) (lib.genAttrs fields (field: spec.${field} or []));
 
-  checked = spec: let
-    problems = errors spec;
+  # Each store path once, in first-given order.
+  uniqueEntries = lib.foldl' (kept: entry:
+    if lib.elem (storePath entry) (map storePath kept)
+    then kept
+    else kept ++ [entry]) [];
+
+  # Checked specs joined, each store path kept once, and then one pack name per
+  # path: CodeQL calls one name found in two locations an error, so the check
+  # runs over the joined spec, across appending calls too.
+  merged = specs: let
+    spec = lib.mapAttrs (_: uniqueEntries) (lib.zipAttrsWith (_: lib.concatLists) specs);
+    names = lib.concatMap (entry: lib.optional (entry ? codeqlPack.name) entry.codeqlPack.name) (spec.queries ++ spec.models);
   in
-    assert lib.assertMsg (problems == []) "codeql.customizePackage:\n${lib.concatStringsSep "\n" problems}";
-      lib.genAttrs fields (field: spec.${field} or []);
+    fail (map (name: "pack ${name} is given from more than one path") (lib.unique (builtins.filter (name: lib.count (other: other == name) names > 1) names))) spec;
 
   # One model pack whose data extensions are every model pack's own, each
   # copied under its index without its qlpack.yml so the copy is no second
@@ -183,7 +196,7 @@
       passthru = {
         inherit (engine) mkModelPack mkQueryPack;
         codeqlSpec = spec;
-        customizePackage = more: build (lib.zipAttrsWith (_: lib.concatLists) [spec (checked more)]);
+        customizePackage = more: build (merged [spec (checked more)]);
         unwrapped = engine;
       };
       meta = {inherit (engine.meta) description license mainProgram platforms;};
@@ -195,4 +208,4 @@
       ln -s ${engine}/share/codeql "$out/share/codeql"
     '';
 in
-  spec: build (checked spec)
+  spec: build (merged [(checked spec)])

@@ -38,7 +38,9 @@ has no libraries and throws. `customizePackage` refuses a builder result whose
 language the engine does not carry. Every field is optional, and a bad spec or
 argument throws (`lib/customization.nix`, `lib/packs.nix`). `queries` and
 `models` take a directory holding a qlpack.yml or a builder result.
-`customizePackage` on a customized package appends.
+`customizePackage` on a customized package appends. A store path given twice, in
+one call or across calls, is used once; two paths holding one pack name throw,
+because CodeQL calls a pack found in two locations an error.
 
 The result has `bin/codeql`, a wrapper of the engine's, and `share/codeql`, a
 link to the engine's. Nothing of the distribution is copied.
