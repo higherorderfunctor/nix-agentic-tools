@@ -20,7 +20,8 @@
 #   refinements  path → { type; refine; }: `refine {node; types;}` returns the
 #                value type for a node of the node `type` the row was written
 #                for; `types` is lib.types plus `duration` and `json`. A row on
-#                a node with a secret descendant fails evaluation.
+#                a node with a secret descendant fails evaluation
+#                when it would apply (same node type, node not itself secret).
 #   unread       node fields the owner's extractor writes and no option reads
 #
 # Returns:
@@ -62,11 +63,15 @@ in
     # A refinement returns the WHOLE value type of its node, so on a container
     # it replaces the generated type of every descendant, a redacted one
     # included, and lets a plaintext secret through. A row that would apply
-    # (see refinementFits) on a node with a secret descendant is refused.
+    # (see fits) on a node with a secret descendant is refused.
     secretsUnder = path:
       lib.filter (other: (lib.hasPrefix "${path}." other || lib.hasPrefix "${path}[]" other) && nodes.${other} ? secret) (builtins.attrNames nodes);
+    # Whether a row applies to `tree`; `widening` asks of the raw nodes,
+    # `refinementFits` of the checked ones, so reading the latter forces the
+    # throws in `checked`.
+    fits = tree: path: row: tree ? ${path} && row.type == tree.${path}.type && !(tree.${path} ? secret);
     widening = lib.concatLists (lib.mapAttrsToList (path: row:
-      lib.optionals (nodes ? ${path} && row.type == nodes.${path}.type && !(nodes.${path} ? secret))
+      lib.optionals (fits nodes path row)
       (map (secret: "${path} -> ${secret}") (secretsUnder path)))
     refinements);
     checked =
@@ -111,7 +116,7 @@ in
       parent == "" || (checked ? ${parent} && placed.${parent} && holds parent path))
     checked;
 
-    refinementFits = path: row: checked ? ${path} && row.type == checked.${path}.type && !(checked.${path} ? secret);
+    refinementFits = fits checked;
     untypedReason = path: let
       node = checked.${path};
       inherit (node) type;

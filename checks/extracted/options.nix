@@ -143,6 +143,35 @@
         ids.type = "object";
         "ids.token" = secretLeaf;
       }).options;
+    # Rows that would not apply are reported stale, not thrown: a node type
+    # that differs from the row's, and a node that is itself secret.
+    refinement-guard-ignores-rows-that-would-not-apply = let
+      secretLeaf = {
+        secret = "a credential";
+        type = "string";
+      };
+      row = type: {
+        inherit type;
+        refine = {types, ...}: types.listOf types.str;
+      };
+      typeMismatch = generate {
+        nodes = {
+          ids.type = "list";
+          "ids[]" = secretLeaf;
+        };
+        refinements.ids = row "map";
+      };
+      secretNode = generate {
+        nodes = {
+          ids = secretLeaf // {type = "list";};
+          "ids[]" = secretLeaf;
+        };
+        refinements.ids = row "list";
+      };
+    in
+      typeMismatch.report.staleRefinements
+      == ["ids"]
+      && secretNode.report.staleRefinements == ["ids"];
     refinement-on-a-list-without-secrets-works = let
       refined = generate {
         nodes = {

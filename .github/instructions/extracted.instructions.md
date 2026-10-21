@@ -629,9 +629,9 @@ raw this host carries and omit the foreign one.
 
 > **Last verified:** 2026-10-21 — `lib/extracted/options.nix` types the
 > CLIProxyAPI and CPA Manager Plus node trees with nullable container children
-> and refuses a refinement row on a node with a secret descendant; `render.nix`
-> lifts secrets into `{$NAME}` placeholders; `goTest` runs each owner's loader
-> check.
+> and refuses a refinement row that would apply on a node with a secret
+> descendant; `render.nix` lifts secrets into `{$NAME}` placeholders; `goTest`
+> runs each owner's loader check.
 
 Two owners, CLIProxyAPI and CPA Manager Plus, get typed settings from their
 reconciled facts through one generator. The four older generators
@@ -660,9 +660,9 @@ element, `.<name>` for a map value). It needs only `lib`.
   reconcile requires for every classifier hit) is
   `nullOr redact.types.redacted`, including list elements and map values. Its
   non-null type accepts references only. No refinement row widens a secret: a
-  row on one is reported stale, and a row on a container (list, map, object)
-  with a secret descendant fails evaluation, naming both paths, because the row
-  returns the whole value type and would replace the redacted element.
+  row on one is reported stale, and a row that would apply on any node with a
+  secret descendant fails evaluation, naming both paths, because the row returns
+  the whole value type and would replace the redacted descendant.
 - Node fields it does not read fail evaluation unless the owner lists them in
   `unread`, so an extractor that learns a fact must teach the generator.
 
