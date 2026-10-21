@@ -117,8 +117,10 @@
         1) exec "$codeql" "$@" ;;
         *) exit 2 ;;
       esac
+      # Only a line that starts with the option sets it: CodeQL ignores a
+      # comment and the `--option=value` form.
       clash=0
-      ${grep} -qE -- '${lib.concatStringsSep "|" (options spec)}' "$theirs" || clash=$?
+      ${grep} -qE -- '^(${lib.concatStringsSep "|" (options spec)})( |$)' "$theirs" || clash=$?
       case "$clash" in
         0)
           echo "codeql: $theirs sets ${lib.concatStringsSep " or " (options spec)}, which this customized codeql sets from customizePackage." >&2
