@@ -1654,13 +1654,20 @@ function assignmentTarget(node, ts) {
   return undefined;
 }
 
-// Whether `node` is an identifier named `process` that its checker symbol
-// identifies as the process object: the global (unresolved in these programs,
-// which lack Node's types), or a default or namespace import of the builtin
-// module. Any other local binding of that name may or may not hold the real
-// one, so it fails the extraction.
+// Whether `node` is the process object: `globalThis.process`, or an identifier
+// named `process` that its checker symbol identifies as the global, or as a
+// default or namespace import of the builtin module. Any other local binding
+// of that name may or may not hold the real one, so it fails the extraction.
 function isProcessObject(node, context) {
   const { checker, ts } = context;
+  if (
+    ts.isPropertyAccessExpression(node) &&
+    node.name.text === "process" &&
+    ts.isIdentifier(node.expression) &&
+    checker.getSymbolAtLocation(node.expression) ===
+      checker.resolveName("globalThis", undefined, ts.SymbolFlags.Value, false)
+  )
+    return true;
   if (!ts.isIdentifier(node) || node.text !== "process") return false;
   const symbol = checker.getSymbolAtLocation(node);
   const declaration = symbol?.declarations?.[0];
@@ -2027,20 +2034,6 @@ function launchOverwrites(entrySource, program, context) {
     return (
       test(node) || Boolean(ts.forEachChild(node, (child) => some(child, test)))
     );
-  }
-  // The walk follows the environment through `process` only, so a read through
-  // `globalThis.process` would go uncounted.
-  const isGlobalThisProcess = (node) =>
-    ts.isPropertyAccessExpression(node) &&
-    node.name.text === "process" &&
-    ts.isIdentifier(node.expression) &&
-    checker.getSymbolAtLocation(node.expression) ===
-      checker.resolveName("globalThis", undefined, ts.SymbolFlags.Value, false);
-  for (const sourceFile of [entrySource, ...imported]) {
-    if (some(sourceFile, isGlobalThisProcess))
-      fail(
-        `${sourceFile.fileName} reaches process through globalThis, which the overwrite analysis does not follow`,
-      );
   }
   function rejectFunctionWrites(node, inFunction) {
     const name = inFunction ? assignedName(node) : undefined;

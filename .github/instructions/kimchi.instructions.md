@@ -172,20 +172,19 @@ the extraction. `process` counts when the checker leaves it unresolved, as it
 leaves the global in every extraction program (none has Node's types, and the
 patch programs no lib), or when it is a default or namespace import of
 `node:process`; the `env` of any other local binding of that name fails.
-`process["env"]` counts as `process.env`, while destructuring `env` from
-`process` in entry.ts, or reaching `globalThis.process` in entry.ts or a module
-it imports, fails. Function bodies are not walked: 1.17 moved the async startup
-into `async function main()`, called as `void main()`, so a declared function's
-reads count from the start, and a direct `process.env` assignment or `delete`
-inside any function fails the extraction. `PI_CODING_AGENT_DIR` is assigned too,
-but read and preserved first, so it stays settable. The analysis also fails
-instead of guessing when a module entry.ts statically imports reads the same
-name, or when an assignment follows entry.ts's first `await`, `import()` or
-reference (resolved by the type checker, not by name) to a declared function
-that can suspend. Every variable the factory sets itself (`KIMCHI_API_KEY`,
-`KIMCHI_ENABLE_RESOURCES`, `KIMCHI_REGION`, `KIMCHI_TELEMETRY_ENABLED`) goes
-through `environmentName`, which fails evaluation if the pinned Kimchi no longer
-reads it or starts overwriting it.
+`process["env"]` and `globalThis.process.env` count as `process.env`, while
+destructuring `env` from `process` in entry.ts fails. Function bodies are not
+walked: 1.17 moved the async startup into `async function main()`, called as
+`void main()`, so a declared function's reads count from the start, and a direct
+`process.env` assignment or `delete` inside any function fails the extraction.
+`PI_CODING_AGENT_DIR` is assigned too, but read and preserved first, so it stays
+settable. The analysis also fails instead of guessing when a module entry.ts
+statically imports reads the same name, or when an assignment follows entry.ts's
+first `await`, `import()` or reference (resolved by the type checker, not by
+name) to a declared function that can suspend. Every variable the factory sets
+itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`, `KIMCHI_REGION`,
+`KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`, which fails
+evaluation if the pinned Kimchi no longer reads it or starts overwriting it.
 
 The extractor emits every resolved environment name with `type = "string"`. A
 secret name needs a recorded row stating what it controls; ordinary names may

@@ -80,7 +80,7 @@
           mutant "$kimchi" entry-function-write src/entry.ts \
             'installPasteInterceptor()' $'installPasteInterceptor()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
           mutant "$kimchi" entry-global-this src/entry.ts \
-            'const rawArgv = process.argv.slice(2)' $'void globalThis.process.env.KIMCHI_NO_UPDATE_CHECK\nconst rawArgv = process.argv.slice(2)'
+            'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' 'const inheritedPiAgentDir = globalThis.process.env.PI_CODING_AGENT_DIR'
           mutant "$kimchi" entry-imported-read src/auxiliary-files/resolver.ts \
             'if (env.XDG_DATA_HOME) {' 'if (env.XDG_DATA_HOME && !process.env.KIMCHI_CODING_AGENT_DIR) {'
           mutant "$kimchi" entry-late-write src/entry.ts \
@@ -236,8 +236,6 @@
             'src/entry.ts hands process.env to { env }' >> "$TMPDIR/proof"
           expect_rejection entry-function-write "$TMPDIR/entry-function-write-source" \
             'src/entry.ts assigns KIMCHI_NO_UPDATE_CHECK inside a function' >> "$TMPDIR/proof"
-          expect_rejection entry-global-this "$TMPDIR/entry-global-this-source" \
-            'src/entry.ts reaches process through globalThis' >> "$TMPDIR/proof"
           expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
             'src/entry.ts assigns KIMCHI_CODING_AGENT_DIR before reading it, but' >> "$TMPDIR/proof"
           expect_rejection entry-late-write "$TMPDIR/entry-late-write-source" \
@@ -314,9 +312,10 @@
           # The overwrite flag is derived from entry.ts, so an assignment before
           # any read flips a variable to fixed and a read before it flips back.
           ${runExtractor ''"$TMPDIR/entry-element-read-source"'' ''"$TMPDIR/entry-element-read.json"'' ''"$pi"''}
+          ${runExtractor ''"$TMPDIR/entry-global-this-source"'' ''"$TMPDIR/entry-global-this.json"'' ''"$pi"''}
           ${runExtractor ''"$TMPDIR/entry-overwrite-source"'' ''"$TMPDIR/entry-overwrite.json"'' ''"$pi"''}
           ${runExtractor ''"$TMPDIR/entry-unread-source"'' ''"$TMPDIR/entry-unread.json"'' ''"$pi"''}
-          for fixture in real:true:true entry-element-read:true:true entry-overwrite:false:true entry-unread:true:false; do
+          for fixture in real:true:true entry-element-read:true:true entry-global-this:true:true entry-overwrite:false:true entry-unread:true:false; do
             IFS=: read -r label update_check agent_dir <<< "$fixture"
             if ${pkgs.jq}/bin/jq -e --argjson a "$update_check" --argjson b "$agent_dir" \
               '.environment.variables | (.KIMCHI_NO_UPDATE_CHECK.consumerOverridable == $a) and (.PI_CODING_AGENT_DIR.consumerOverridable == $b)' \

@@ -707,6 +707,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "HOSTNAME": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "HTTPS_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
