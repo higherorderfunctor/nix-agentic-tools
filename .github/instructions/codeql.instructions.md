@@ -116,9 +116,10 @@ expected set and the `--select`. An update PR still runs the smoke check in
 
 ## CodeQL packs and customizePackage
 
-> **Last verified:** 2026-10-21 (commit 044e6939) — every engine carries
+> **Last verified:** 2026-10-21 (commit d088283e) — every engine carries
 > `customizePackage`, `mkQueryPack` and `mkModelPack`; packs reach CodeQL
-> through a generated `CODEQL_CONFIG_FILE`; query packs are precompiled.
+> through a generated `CODEQL_CONFIG_FILE`; query packs are precompiled; the
+> wrapper passes signals on to a merged-config codeql.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 javascript
 > bundle and rejected:
@@ -220,12 +221,12 @@ and resolves the same way.
 ### The model check's kind
 
 `codeql-model-pack-mutation` adds a `sinkModel` row
-`["fakehttp", "Member[request].Argument[0]", "request-forgery"]`.
-`RequestForgeryCustomizations.qll` makes every
-`ModelOutput::sinkNode(_, "request-forgery")` a `RequestForgery::Sink`, as the
-bundled `ext/axios.model.yml` does for axios. The query selects
-`RequestForgery::Sink`. It finds nothing in the fixture without the pack and
-exactly `request(...)` with it.
+`["fakehttp", "Member[request].Argument[0]", "request-forgery"]`, and a second
+pack the same row for `Member[fetchUrl]`. `RequestForgeryCustomizations.qll`
+makes every `ModelOutput::sinkNode(_, "request-forgery")` a
+`RequestForgery::Sink`, as the bundled `ext/axios.model.yml` does for axios. The
+query selects `RequestForgery::Sink`. It finds nothing in the fixture without
+the packs and exactly `request(...)` and `fetchUrl(...)` with them.
 
 ### Checks
 
@@ -233,13 +234,18 @@ exactly `request(...)` with it.
 
 - the `.qlx` plans;
 - resolution with no flag, while the plain engine does not resolve the pack;
-- the merge with a consumer config file, and the refusal of a clashing one;
+- the merge with a consumer config file from `CODEQL_CONFIG_FILE` or `HOME`,
+  with and without a final newline, where its `--search-path` pack still
+  resolves; the refusal of a clashing one, and no refusal for a comment naming
+  the option;
 - the engine's Node in the extractor log;
 - the four rows of a two-query pack (one query imports a `.qll`) over a `.js`
   and a `.ts` file.
 
 `codeql-extra-packages` runs a program from `extraPackages` as
-`database create --command`, which the plain engine cannot find.
-`codeql-model-pack-mutation` checks the rows above, adding the models by
-customizing the customized package. All three are x86_64-linux only. Their
-`$out` holds text.
+`database create --command`, which the plain engine cannot find. The program
+runs the customized `codeql resolve packs`, with and without a consumer config,
+and must list the pack. `codeql-model-pack-mutation` checks the rows above and a
+`fetchUrl` row from a second model pack, adding each pack by customizing the
+customized package, and the refusal of a consumer `--model-packs` line. All
+three are x86_64-linux only. Their `$out` holds text.
