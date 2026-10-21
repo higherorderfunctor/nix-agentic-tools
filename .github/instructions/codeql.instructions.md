@@ -203,7 +203,8 @@ side's packs.
 `src`, then runs `codeql pack create`. That needs no network: dependencies
 resolve from the engine's bundled packs. The output is the pack with `.qlx`
 plans, a lock file and the libraries it uses under `.codeql/libraries`, about 11
-MB for javascript. The javascript fixture compiled cold in about 40 s.
+MB for javascript. In CI the two-query fixture compiled in 66 s and the
+RequestForgery query in 98 s.
 
 `mkModelPack` only writes its qlpack.yml (`extensionTargets`,
 `dataExtensions: ["*.model.yml"]`). A directory given as it is stays uncompiled
