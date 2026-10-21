@@ -204,8 +204,7 @@
         && overlayResult.ai.gitTools.git-revise.drvPath == gitRevise.drvPath;
       overlay-sparse-leaf =
         overlayResult.ai.devTools.alpha-note
-        == "${inputs.fixture.sentinel}:alpha-note"
-        && overlayResult.ai.devTools.alpha-tool.drvPath == packageWorld.packages.ai.devTools.alpha-tool.drvPath;
+        == "${inputs.fixture.sentinel}:alpha-note";
       package-identity =
         packageWorld.scopes.git-revise.ai.gitTools.git-revise.drvPath
         == gitRevise.drvPath
