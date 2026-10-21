@@ -131,7 +131,8 @@ unreachable running user manager fails activation. Devenv uses `watch.paths`.
 Every service has one start limit, defined once as `restartPolicy` in
 `lib/services.nix`: five starts in 300 s with `RestartSec=5`. Linux Home Manager
 writes `StartLimitBurst` and `StartLimitIntervalSec` in `[Unit]`; devenv writes
-`restart.max = 4`. Only ai-module writes these daemon sinks.
+`restart.max = 4` and `restart.window = 300`. Only ai-module writes these daemon
+sinks.
 
 ### State and ownership
 

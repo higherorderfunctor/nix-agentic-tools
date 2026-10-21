@@ -269,10 +269,11 @@
         {
           exec = launch false pkgs name entry;
           restart = {
-            # systemd counts starts and process-compose counts restarts after
-            # the first start, so the same limit is one less. The count is
-            # for the process's lifetime, with no interval; DESIGN.md, Services.
+            # systemd counts starts and devenv's native supervisor counts
+            # restarts after the first start, so the same limit is one less
+            # burst, over the same sliding window; DESIGN.md, Start limit.
             max = restartPolicy.startLimit.burst - 1;
+            window = restartPolicy.startLimit.intervalSec;
             on =
               if entry.restart == "on-failure"
               then "on_failure"

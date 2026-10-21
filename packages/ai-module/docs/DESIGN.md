@@ -314,29 +314,30 @@ instance is disabled. CLIProxyAPI and CPA Manager Plus use it.
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Home Manager Linux  | User unit: `After = network.target`; secret readers get `Wants` and `After` on provider units, and `WantedBy` the providers' defined targets, or `default.target`; `RestartSec = 5`, `StartLimitBurst = 5`, `StartLimitIntervalSec = 300`; `never` becomes `no`. |
 | Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                                                                                                                                            |
-| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `restart.max = 4`; `watch.paths` is present only for nonempty triggers.                                                                                                     |
+| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `restart.max = 4`, `restart.window = 300`; `watch.paths` is present only for nonempty triggers.                                                                             |
 
 ### Start limit
 
-A daemon that always exits non-zero must end failed, so alerts on a failed unit
-fire. Restarts are `RestartSec = 5` apart, and systemd's default
-`StartLimitIntervalSec=10s` and `StartLimitBurst=5` can never trip: the sixth
-start of an instant crash loop lands 5 x 5 = 25 s after the first, and a 10 s
-window holds at most three starts. The unit then stays in
-`activating (auto-restart)` for good. `restartPolicy` in `lib/services.nix` is
-the one definition: five starts in 300 s. An instant crash loop trips at 25 s; a
-daemon that stays up about a minute between crashes (5 x 60 s) never does. The
-limit applies to every `restart` value, including `always`, and to every
-service; no consumer needs to tune it, so there is no option. Add one when a
-named consumer does.
+A daemon that fails within about 55 s of each start ends failed, so alerts on a
+failed unit fire; an instant crash loop ends failed after 25 s. Restarts are
+`RestartSec = 5` apart, and systemd's default `StartLimitIntervalSec=10s` and
+`StartLimitBurst=5` can never trip: the sixth start of an instant crash loop
+lands 5 x 5 = 25 s after the first, and a 10 s window holds at most three
+starts. The unit then stays in `activating (auto-restart)` for good.
+`restartPolicy` in `lib/services.nix` is the one definition: five starts in 300
+s. A daemon that lives longer than about 55 s per start (5 x (55 + 5) = 300 s)
+never trips it. The trade-off: a start-time dependency absent for longer than
+about 25 s, such as a keyring or the network at login, is now terminal where the
+unit used to retry for good. Recover with `systemctl --user reset-failed <unit>`
+and a start; the same command clears a trip that would refuse a fix-and-switch
+inside the 300 s interval, because the start limit also applies to manual starts
+and survives `daemon-reload`. The limit applies to every `restart` value,
+including `always`, and to every service; no consumer needs to tune it, so there
+is no option. Add one when a named consumer does.
 
-Devenv's process-compose maps the burst to `restart.max`. systemd counts starts
-and process-compose counts restarts after the first start, so the same limit is
-`burst - 1 = 4`. This is an explicit difference, not parity: the devenv count is
-for the process's lifetime with no interval, since `restart.window` would move
-supervision from process-compose to devenv's native supervisor for every service
-and nothing needs that. A dev-shell process that crashes five times stays down
-until the shell restarts it.
+Devenv's native supervisor applies the same limit as `restart.max = 4` and
+`restart.window = 300`: it counts restarts after the first start in a sliding
+window, so five starts in 300 s.
 
 Home Manager Linux reserves `services-reconcile`. The Home Manager launcher of a
 service with triggers hashes every trigger path and its bytes before it reads
