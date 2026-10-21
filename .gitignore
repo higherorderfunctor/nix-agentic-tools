@@ -57,11 +57,8 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 # Generated doc site (mdbook source, built from dev/docs/ + nix eval)
 docs/src/
 
-.ninja_lock
-.ninja_log
 .update-logs/
 .update-version
-.update.ninja
 .update-report.txt
 
 # Local private working area (untracked journals, assessments, scratch)

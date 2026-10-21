@@ -19,9 +19,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/resolve-recipe-file.sh"
 # and torn down (`teardown_worktree` on EXIT + `git worktree prune` in
 # update-init.sh), so nothing persists between runs.
 WORKTREES_DIR="${NAT_UPDATE_WORKTREES_DIR:-${TMPDIR:-/tmp}/nat-update-worktrees}"
-# `git worktree add` is not concurrency-safe: parallel invocations
-# race on `.git/worktrees/<name>/commondir` creation. Serialize.
-WORKTREE_LOCK="${WORKTREE_LOCK:-/run/user/$(id -u)/nix-update-worktree}"
 REPORT_FILE="$PWD/.update-report.txt"
 # Absolute (captured at source time, before any `cd "$wt"`) so forensic
 # artifacts survive an ephemeral worktree teardown and land in the
@@ -29,10 +26,11 @@ REPORT_FILE="$PWD/.update-report.txt"
 UPDATE_LOGS_DIR="$PWD/.update-logs"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-# Force color output from subcommands (ninja buffers output, tools lose TTY detection)
+# Force color output from subcommands: CI pipes every target through `tee`,
+# so tools lose TTY detection.
 export CLICOLOR_FORCE=1
 
-# ── ANSI colors (forced on — ninja passes through when stdout is a terminal) ──
+# ── ANSI colors (forced on — the CI log renders them) ──
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
 YELLOW=$'\033[0;33m'
@@ -198,7 +196,7 @@ setup_worktree() {
     git -C "$wt" clean -fd >&2
   else
     mkdir -p "$WORKTREES_DIR"
-    flock "$WORKTREE_LOCK" git worktree add -B "$wt_branch" "$wt" "$BRANCH" >&2
+    git worktree add -B "$wt_branch" "$wt" "$BRANCH" >&2
   fi
 
   # Symlink pre-commit config (devenv-generated, gitignored — worktrees don't have it).
@@ -215,107 +213,43 @@ setup_worktree() {
 # branch commit persists in refs independent of the checkout, so removing
 # the worktree never loses the update. Any registration stranded by a
 # crash or wiped temp is reaped by `git worktree prune` at the next init.
-# The `remove` is serialized on WORKTREE_LOCK just like setup_worktree's
-# `add`: under `ninja -j4` a finishing target's teardown would otherwise
-# mutate the shared `.git/worktrees/` admin dir concurrently with another
-# target's add (git worktree metadata ops are not concurrency-safe).
 teardown_worktree() {
   [ "$BASHPID" = "$$" ] || return 0
   local wt="${1:-}"
   [ -n "$wt" ] || return 0
-  flock "$WORKTREE_LOCK" git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt" 2>/dev/null || true
+  git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt" 2>/dev/null || true
   return 0
 }
 
-# Build verification. Runs the actual build to catch Mode C/D failures
-# before PRs open — see docs/update-pipeline-transitive-hash-gap.md § Gap 5.
-run_build() {
-  "$@"
-}
-
-# Core count, resolved once. Both bounds below are expressed against it.
+# Core count, resolved once; the evaluator bound below is expressed against it.
 NAT_UPDATE_CORES=$(nproc 2>/dev/null) || NAT_UPDATE_CORES=0
-
-# Target fan-out for the whole pipeline. ONE knob, because it bounds two
-# things that MULTIPLY (see nfb_eval_flags): ninja's `-j` and, through
-# it, the per-target evaluator budget. CI sets it explicitly; this
-# default is for running the pipeline by hand.
-#
-# CLAMPED TO THE CORE COUNT, and that clamp is load-bearing rather than
-# tidiness. `nfb_eval_flags` cannot give an invocation fewer than ONE
-# evaluator, so once there are more concurrent targets than cores the
-# evaluator total is pinned at the target count and no per-invocation
-# budget can bring it back under the cores. Fewer targets is the only
-# lever. Measured, cores=2 with jobs=4: workers/invocation clamps to 1
-# and the total lands at 4 evaluators on 2 cores.
-#
-# EXPORTED because ninja's `-j` has to come from the SAME number — the
-# workflow sources this file rather than reading its own env var, so the
-# two can never disagree. Clamping here while ninja still ran `-j4`
-# would fix nothing.
-NAT_UPDATE_JOBS="${NAT_UPDATE_JOBS:-4}"
-[ "$NAT_UPDATE_JOBS" -ge 1 ] 2>/dev/null || NAT_UPDATE_JOBS=1
-if [ "$NAT_UPDATE_CORES" -gt 0 ] && [ "$NAT_UPDATE_JOBS" -gt "$NAT_UPDATE_CORES" ]; then
-  NAT_UPDATE_JOBS="$NAT_UPDATE_CORES"
-fi
-export NAT_UPDATE_JOBS
 
 # Resource budget for a single nix-fast-build invocation.
 #
-# WHY THIS EXISTS. ninja runs $NAT_UPDATE_JOBS targets concurrently and
-# every target that actually changed runs its OWN nix-fast-build, whose
-# defaults are sized for it running ALONE on the box (verified in
+# WHY THIS EXISTS. nix-fast-build's defaults are (verified in
 # nix_fast_build/options.py @ 1.6.0):
 #
 #     --eval-workers          multiprocessing.cpu_count()
 #     --eval-max-memory-size  4096      # MiB, PER WORKER
 #
-# Under ninja they multiply. On the 4-vCPU / 16 GiB `ubuntu-latest`
-# runner that is 4 targets x 4 workers x 4 GiB = 64 GiB of evaluator heap
-# budget against 16 GiB of RAM — a 4x overcommit, and 16 evaluator
-# processes fighting over 4 cores and one eval-cache SQLite file.
+# On the 4-vCPU / 16 GiB `ubuntu-latest` runner that is 4 workers x 4 GiB
+# = 16 GiB of evaluator heap budget against 16 GiB of RAM, leaving nothing
+# for the nix daemon, git, or the runner agent itself — the agent being the
+# process whose death produces "The runner has received a shutdown signal"
+# (exit 143/SIGTERM). It bites against a COLD eval cache, which a `nixpkgs`
+# bump guarantees since that invalidates the eval cache for the whole
+# package set.
 #
-# It stays INVISIBLE while targets are unchanged: an unchanged target
-# exits before build verification and never spawns an evaluator at all.
-# It bites when several inputs move at once against a COLD eval cache —
-# exactly what a `nixpkgs` bump guarantees, since that invalidates the
-# eval cache for the whole package set. Run 30181958460 died that way
-# twice in a row: nixpkgs and devenv both updated, the
-# pipeline went silent with four nix-eval-jobs processes live, and the
-# runner was torn down ("The runner has received a shutdown signal",
-# exit 143/SIGTERM) 6m59s into attempt 1 and 19m27s into attempt 2.
-# Neither the 60-minute workflow timeout nor the concurrency cancel
-# fired — a cancel reports `cancelled`, and both attempts reported
-# `failure`.
+# So bound it, derived from the machine, never hardcoded, so a larger runner
+# automatically uses its headroom:
 #
-# So bound the PRODUCT. Both knobs are derived from the machine, never
-# hardcoded, so a larger runner automatically uses its headroom. When the
-# core-derived worker count would leave less than 1 GiB per evaluator, reduce
-# workers before refusing the target; the target fan-out and memory ceiling
-# remain fixed:
-#
-#   * never more than ONE evaluator per core, across all concurrent
-#     invocations — `jobs * floor(cores/jobs) <= cores`, which holds only
-#     because NAT_UPDATE_JOBS is itself clamped to the core count above
-#   * total evaluator heap ceiling <= 60% RAM, and this one holds for ANY
-#     jobs value: per-worker is `(RAM*0.6)/(jobs*workers)`, so the
-#     product telescopes back to `RAM*0.6` exactly
-#
-# The remaining 40% is the nix daemon, git, and the runner agent itself —
-# the agent being the process whose death produces the shutdown signal.
-#
-# Do NOT "make this consistent" by substituting `min(jobs, cores)` into
-# the memory divisor as well. The divisor has to be the number of
-# invocations that will ACTUALLY run concurrently; shrinking it while
-# ninja still spawns `jobs` of them inflates the per-worker ceiling and
-# breaks the heap bound. Measured, cores=2 / jobs=4 / 16 GiB: that
-# variant yields 119% of RAM — the exact failure class this exists to
-# prevent.
+#   * never more than ONE evaluator per core
+#   * total evaluator heap ceiling <= 60% RAM: per-worker is
+#     `(RAM*0.6)/workers`, and workers are reduced until each gets at least
+#     1 GiB before the target is refused
 nfb_eval_flags() {
-  local workers max_memory_workers mem_mib mem_per_worker cores="$NAT_UPDATE_CORES"
+  local workers="$NAT_UPDATE_CORES" max_memory_workers mem_mib mem_per_worker
 
-  [ "$cores" -gt 0 ] || cores="$NAT_UPDATE_JOBS"
-  workers=$((cores / NAT_UPDATE_JOBS))
   [ "$workers" -ge 1 ] || workers=1
   # Isolated CI targets can lower evaluator concurrency without constraining
   # compiler cores. Overrides only reduce the existing safe resource bounds.
@@ -329,19 +263,15 @@ nfb_eval_flags() {
   # nix-fast-build's own default rather than emit a bogus ceiling.
   mem_mib=$(awk '/^MemTotal:/ {printf "%d", $2 / 1024; exit}' /proc/meminfo 2>/dev/null) || mem_mib=0
   if [ "${mem_mib:-0}" -gt 0 ]; then
-    max_memory_workers=$(((mem_mib * 60 / 100) / (NAT_UPDATE_JOBS * 1024)))
+    max_memory_workers=$(((mem_mib * 60 / 100) / 1024))
     [ "$max_memory_workers" -ge 1 ] || {
-      echo "Evaluator budget is below 1024 MiB per worker; reduce NAT_UPDATE_JOBS." >&2
+      echo "Evaluator budget is below 1024 MiB per worker." >&2
       return 1
     }
     [ "$workers" -le "$max_memory_workers" ] || workers="$max_memory_workers"
-    mem_per_worker=$(((mem_mib * 60 / 100) / (NAT_UPDATE_JOBS * workers)))
-    # Below ~1 GiB a worker thrashes on restart. The memory worker cap above
-    # normally prevents this; retain the refusal as an arithmetic guard.
-    if [ "$mem_per_worker" -lt 1024 ]; then
-      echo "Evaluator budget is below 1024 MiB per worker; reduce NAT_UPDATE_JOBS or NAT_UPDATE_EVAL_WORKERS." >&2
-      return 1
-    fi
+    # Below ~1 GiB a worker thrashes on restart; the worker cap above
+    # guarantees each one at least that much.
+    mem_per_worker=$(((mem_mib * 60 / 100) / workers))
     if [ -n "${NAT_UPDATE_EVAL_MAX_MEMORY:-}" ]; then
       [[ $NAT_UPDATE_EVAL_MAX_MEMORY =~ ^[1-9][0-9]*$ ]] || return 1
       [ "$NAT_UPDATE_EVAL_MAX_MEMORY" -ge 1024 ] || return 1
@@ -423,8 +353,8 @@ run_nfb_build() {
   # `|| exit_code=$?` localizes errexit suppression to this single call
   # (NOT a blanket `set +e`) — we want to inspect the exit code AND
   # continue to the JSON/stderr gates regardless.
-  # nfb_eval_flags bounds the evaluator fan-out, which ninja's -j would
-  # otherwise multiply into a memory overcommit that kills the runner.
+  # nfb_eval_flags bounds the evaluator fan-out, which would otherwise
+  # overcommit memory and kill the runner.
   # Word-splitting is intended and safe: the function emits only flag
   # names and integers it computed itself.
   "$@" "${eval_flags[@]}" --result-file "$rf" --result-format json \
@@ -646,9 +576,9 @@ fix_sidecar_hashes() {
   # lines under it, and `building '...'`. Merged, every one of those is
   # read back below as if it were a store path and EXECUTED, so a repair
   # in which every fixer succeeded still reports failure. Letting stderr
-  # flow to the inherited stream keeps it visible in real time: the ninja
-  # rule already tees the whole target through
-  # `2>&1 | tee .update-logs/input-<name>.log`.
+  # flow to the inherited stream keeps it visible in real time: CI's prepare
+  # step already tees the whole target through
+  # `2>&1 | tee .update-logs/prepare.log`.
   if ! paths=$(nix build --impure --no-link --print-out-paths --expr "$expr"); then
     log_failure "could not resolve sidecar hash fixers (nix error above)"
     return 1
@@ -769,9 +699,8 @@ regenerate_sidecars() {
 # $2 is the failed attributes, newline-separated. The CI matrix reads this file
 # into the target's receipt (update-matrix.py prepare) and fails the lane only
 # AFTER publication (update-matrix.py verdict), so the red PR is still opened
-# or refreshed and the sweep still goes red. Local Ninja runs have no verdict
-# step; the log line is their signal. Returns non-zero when the record cannot
-# be written, so the caller can refuse to ship a failure nobody would see.
+# or refreshed and the sweep still goes red. Returns non-zero when the record
+# cannot be written, so the caller can refuse to ship a failure nobody would see.
 record_verify_failure() {
   local name=$1 attrs=${2:-}
   [ -n "$attrs" ] || attrs="<failed attributes not reported>"

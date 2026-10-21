@@ -1,7 +1,7 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-17 — devenv input bumps verify shell entry after
-> successful package verification and hold back on entry failure.
+> **Last verified:** 2026-10-20 — updates run only as CI's per-target matrix,
+> and package lanes never build.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -12,48 +12,41 @@
 > 2026-10-06, after sweep 37463596606 read green while pnpm_12 failed on the
 > nixpkgs lane under a `::warning::`).
 >
-> Full lineage: `git show ed5898b1:dev/fragments/pipeline/update-pipeline.md`.
+> **Settled — do not relitigate.** The local Ninja DAG runner (`update:all`,
+> `config/generate-update-ninja.nix`, `dependsOn` edges) was removed on
+> 2026-10-20: CI's per-target matrix had replaced it and nothing ran it. Run
+> updates by dispatching the `Update` workflow, not by re-adding a local runner.
+>
+> Full lineage: `git show 2914eac3:dev/fragments/pipeline/update-pipeline.md`.
 
-### Execution models: local Ninja and CI matrix
+### Execution model: one CI runner per target
 
-Local updates use Ninja as a DAG executor. CI uses one independent runner per
-input or package, discovered from the same lock and owner registry; see
-`ci-update-workflow.md` for publication, receipts, and checkout isolation.
-`dependsOn` remains local scheduling policy: predecessor branches do not feed
-changes into another target's worktree. CI package workers omit only the final
-informational build; hashes, extracted files, and formatting remain preparation
-work, while native PR CI validates the completed branch. Local input
-verification reduces evaluator workers when the core-derived count would violate
-the 60% memory budget. If no viable evaluator can start, that setup failure
-holds the input back instead of being classified as an executed, ordinary red
-build. Before each verifier attempt, the updater enumerates the package
-universe. The pinned producer must then report exactly one evaluation per
-attribute, and every successful evaluation needs cached/local or build evidence;
-aliases may share one build through a common derivation path. Empty, partial, or
-malformed coverage is incomplete verification and holds the input back after the
-retry. The retry also distinguishes Nix's fixed-output hash mismatch from a
-compiler or test failure. Missing cargoDeps/pnpmDeps fixers can still require
-human repair (issue #1570), but a known unresolved hash now holds the input
-branch back; a fully covered update with an ordinary build failure remains
-eligible for a red PR.
+CI uses one independent runner per input or package, discovered from the lock
+and owner registry; see `ci-update-workflow.md` for publication, receipts, and
+checkout isolation. Each runner's `update-matrix.py prepare` runs
+`update-init.sh` to clean stale state (abort stuck git ops, delete old
+`update/*` branches, clear the report file), then one target script. No target
+reads another's branch. Package workers never build: hashes, extracted files,
+and formatting are preparation work, and native PR CI validates the completed
+branch. Input verification reduces evaluator workers when the core-derived count
+would violate the 60% memory budget. If no viable evaluator can start, that
+setup failure holds the input back instead of being classified as an executed,
+ordinary red build. Before each verifier attempt, the updater enumerates the
+package universe. The pinned producer must then report exactly one evaluation
+per attribute, and every successful evaluation needs cached/local or build
+evidence; aliases may share one build through a common derivation path. Empty,
+partial, or malformed coverage is incomplete verification and holds the input
+back after the retry. The retry also distinguishes Nix's fixed-output hash
+mismatch from a compiler or test failure. Missing cargoDeps/pnpmDeps fixers can
+still require human repair (issue #1570), but a known unresolved hash now holds
+the input branch back; a fully covered update with an ordinary build failure
+remains eligible for a red PR.
 
 Verifier failures can overlap. `run_nfb_build` returns incomplete coverage (4)
 before an observed fixed-output mismatch (3), so code 4 does not mean there is
 nothing to repair. Keep the input worker's repair attempt before re-verifying;
 skipping repair solely for code 4 can strand a repairable update. Setup failure
 (2) still exits before repair because verification could not start.
-
-The local pipeline uses the Ninja DAG. A nix expression
-(`config/generate-update-ninja.nix`) reads `flake.lock` and
-`config.update.targets` (the `.#.updateTargets` flake output) to emit
-`.update.ninja` with dependency edges (e.g., agnix and git-absorb depend on
-`rust-overlay` input being updated first, via their `dependsOn`).
-`update-init.sh` runs once as the root target to clean stale state (abort stuck
-git ops, delete old `update/*` branches, clear the report file). Every package
-depends on that initialization plus its explicit `dependsOn` predecessors. It
-does not depend on the separate nixpkgs or nix-update input targets: their
-branches never feed state into the package worktree, so those edges would only
-serialize independent work.
 
 Targets fall into three categories:
 
@@ -82,12 +75,9 @@ Targets fall into three categories:
   a target with `passthru.extracted` has neither that nor `--use-update-script`.
   The Beads binary target is a grouped package: its `passthru.updateScript` runs
   independent Beads and Dolt release updaters in sequence, so either upstream
-  can move while the target still produces one branch, one build of `.#beads`,
-  and one PR. The paired Dolt remains a nested package dependency, not a second
-  registry row or Ninja edge. The `treefmt-nix` input target waits for the other
-  isolated targets, then the final `update-report` target runs
-  `update-report.sh` to print a summary grouped by status. There is no
-  base-checkout format/build finalizer because it cannot observe changes
+  can move while the target still produces one branch and one PR. The paired
+  Dolt remains a nested package dependency, not a second registry row. There is
+  no base-checkout format/build finalizer because it cannot observe changes
   committed only on target branches.
 
   Semble's grouped script tracks the CLI, model2vec, vicinity and the grammar
@@ -201,16 +191,15 @@ registry every package contributes a row to. It replaced the flat, top-level
 `config/update-matrix.nix`, which was dissolved.
 
 - **`lib/update.nix`** — a plain module declaring `options.update.targets`, an
-  `attrsOf (submodule { file; flags; git; dependsOn; })`, plus the sibling
+  `attrsOf (submodule { file; flags; git; })`, plus the sibling
   `options.update.excludePatterns`. `file` is a repo-relative POSIX path STRING
   (never a Nix path literal), `null` for binary packages; `git` is the upstream
-  URL for main-tracking rev-bump, `null` for binary packages; `dependsOn` names
-  DAG predecessors (e.g. `["rust-overlay"]`). For the reference submodule shape,
-  read the sibling registry in `lib/fragments-registry.nix`, which uses the same
-  `attrsOf (submodule …)` shape and separates option declarations from
-  contributions. Owner registries and workspace policy now compose through
-  `lib/facets/registry.nix`; see `docs/repository-layout.md` for the settled
-  ownership boundary.
+  URL for main-tracking rev-bump, `null` for binary packages. For the reference
+  submodule shape, read the sibling registry in `lib/fragments-registry.nix`,
+  which uses the same `attrsOf (submodule …)` shape and separates option
+  declarations from contributions. Owner registries and workspace policy now
+  compose through `lib/facets/registry.nix`; see `docs/repository-layout.md` for
+  the settled ownership boundary.
 - **`config/update-targets.nix`** — workspace exclusion policy only.
 - **`packages/<owner>/registry.nix`** — each owner contributes its update rows.
   `file = repoPath ./packages/<namespace>/<package>/package.nix` derives the
@@ -234,10 +223,9 @@ registry every package contributes a row to. It replaced the flat, top-level
   ; ownership validation rejects competing package keys before priorities can
   hide them. `excludePatterns` remains available to the completeness check
   through the same result.
-- **Consumers** — `update-matrix.py` reads `updateTargets` for the CI matrix.
-  `config/generate-update-ninja.nix` reads the same registry for the ninja DAG
-  (flags space-joined, git, and `dependsOn` → `update-<dep>` edges);
-  `update-pkg.sh` reads `.#.updateTargets.<name>.file` for the rev-bump target.
+- **Consumers** — `update-matrix.py` reads `updateTargets` for the CI matrix and
+  passes `flags` and `git` to `update-pkg.sh` positionally; `update-pkg.sh`
+  reads `.#.updateTargets.<name>.file` for the rev-bump target.
 - **`checks/packaging/update-targets-parity.nix`** — the permanent bidirectional
   CI gate for target completeness and recipe resolution (the former
   `overlay-target-resolution.nix` folded into it). Packages → targets: every
@@ -269,8 +257,6 @@ Every target writes exactly one line to `.update-report.txt`:
   could not be WRITTEN: the lock update failed, a hash could not be derived, the
   formatter errored, devenv shell entry failed, or the commit failed. A failing
   BUILD is deliberately not on this list — see "What holds a target back" below.
-
-`update-report.sh` sorts entries by status and prints a summary.
 
 ### What holds a target back
 
@@ -311,10 +297,8 @@ would turn the same known-red PR into a red lane again. Other lanes keep running
 red-build PR is therefore red, where it used to stay green behind a
 `::warning::`.
 
-In CI only input lanes verify; package lanes run with
-`NAT_UPDATE_VERIFY_PACKAGES=0` and leave the build to native PR CI, so they
-never record a failure. Local Ninja has no verdict step: the record's red log
-line is its signal.
+Only input lanes verify; package lanes leave the build to native PR CI, so they
+never record a failure.
 
 **The bot touches an `update/*` branch -- push, PR title edit, auto-merge change
 -- only while origin's live head is exactly the SHA it expects as its own last
@@ -405,14 +389,12 @@ belt-and-braces, not the mechanism.
 | `checks/packaging/update-script-executable.nix` | Flake check: every `--use-update-script` argv[0] is executable |
 | `checks/packaging/update-target-meta-eval.nix`  | Flake check: nix-update's eval.nix forces every target         |
 | `checks/packaging/update-targets-parity.nix`    | Flake check: declared `file` == resolver output + inline rev   |
-| `config/generate-update-ninja.nix`              | Generates `.update.ninja` DAG from flake.lock + updateTargets  |
 | `config/update-targets.nix`                     | Workspace update exclusions                                    |
 | `dev/scripts/resolve-recipe-file.sh`            | Deterministic recipe resolution (fetch-block identity + guard) |
 | `dev/scripts/update-common.sh`                  | Shared functions (worktree, version, report, colors)           |
 | `dev/scripts/update-init.sh`                    | Pipeline initialization (clean stale state)                    |
 | `dev/scripts/update-input.sh`                   | Per-input update script                                        |
 | `dev/scripts/update-pkg.sh`                     | Per-package update script (rev bump + nix-update)              |
-| `dev/scripts/update-report.sh`                  | Report printer                                                 |
 | `lib/update.nix`                                | Declares `config.update.targets` (the option declaration)      |
 | `packages/<owner>/registry.nix`                 | Owner update targets, source paths, and cache metadata         |
 | `.github/workflows/update.yml`                  | CI workflow (Renovate-style per-dependency PRs)                |

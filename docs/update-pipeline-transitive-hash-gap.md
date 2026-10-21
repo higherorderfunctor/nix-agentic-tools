@@ -21,11 +21,11 @@
 ## TL;DR
 
 The Renovate-style per-input update pipeline (`dev/scripts/update-*.sh`,
-`config/generate-update-ninja.nix`, `.github/workflows/update.yml`) updates the
-**directly named** dependency hash for each PR but cannot refresh **transitive**
-hashes that change as a side effect of that update, cannot see intra-derivation
-version coupling, and silently disables build verification on every package. CI
-then validates PRs the pipeline itself can never have made pass.
+`.github/workflows/update.yml`) updates the **directly named** dependency hash
+for each PR but cannot refresh **transitive** hashes that change as a side
+effect of that update, cannot see intra-derivation version coupling, and
+silently disables build verification on every package. CI then validates PRs the
+pipeline itself can never have made pass.
 
 Four concrete failure modes have been observed (PRs #144, #145, #148, #160 on
 2026-05-20). Each maps to a distinct architectural gap, and each has a real
@@ -65,10 +65,9 @@ Different pnpm version → different offline-store layout → stored `pnpmDeps.h
 → `ERR_PNPM_NO_OFFLINE_TARBALL` for `dataloader-1.4.0.tgz` → `effect-mcp` build
 fails on both linux + darwin.
 
-The ninja DAG declares `update-effect-mcp` ordered after `update-nixpkgs`
-(`config/generate-update-ninja.nix:36-42`), but in CI that edge is purely
-cosmetic — base does not advance, so the second target cannot read the first's
-output.
+CI prepares every target on its own runner from the same pinned base, so the
+effect-mcp target cannot read the nixpkgs target's output, and no ordering
+between them would change that.
 
 ### Mode B — Shared let-binding invisible to nix-update (PR #145: modelcontextprotocol rev → filesystem-mcp npmDepsHash stale)
 
@@ -225,9 +224,8 @@ PR should also re-run `nix-update --version skip` against every overlay package
 whose hashes are derived from content shipped by that input (pnpmDeps for pnpm
 consumers, cargoHash for Rust consumers, npmDepsHash for npm consumers,
 vendorHash for Go consumers). The simplest implementation: after the input bump
-commits, iterate the matrix and run nix-update on each entry that names that
-input as a dep edge in the ninja DAG. Amend hash-only diffs into the input PR's
-commit.
+commits, iterate the matrix and run nix-update on each entry whose hashes derive
+from that input. Amend hash-only diffs into the input PR's commit.
 
 Trade-off: an input bump PR becomes much larger (potentially 10+ hash changes)
 but ci.yml gets a coherent unit to validate.
@@ -446,7 +444,6 @@ runs). That's a cosmetic cleanup, not load-bearing, and can wait.
 | `dev/scripts/update-common.sh` — `run_build()`                                                        | the dead-code `CI_MODE` short-circuit this row used to name is GONE from the script                                                                                              |
 | (removed)                                                                                             | `merge_to_branch` no longer exists in `update-common.sh`                                                                                                                         |
 | `dev/scripts/update-common.sh` — `report_held_back()`                                                 | already handles the build-failed case Gap 5 needs                                                                                                                                |
-| `config/generate-update-ninja.nix:36-42`                                                              | DAG edges — currently ordering-only, no content propagation (Gap 1)                                                                                                              |
 | `.github/workflows/update.yml` — step "Surface held-back updates as a warning"                        | emits `::warning::` under `if: always()`. It does NOT fail the job, so Gap 5 still has no gate — the old "Fail if any updates were held back" description was wrong              |
 | `lib/packaging.nix:20-40`                                                                             | `readCargoVersion`, `readCargoWorkspaceVersion`, `readPyprojectVersion`, `readPackageJsonVersion`, `readPythonDunderVersion` — not needed for Gap 5; kept for ref                |
 | `packages/model-context-protocol/packages/ai/mcpServers/modelContextProtocol/all-mcps/package.nix:32` | Shared `npmDepsHash` let-binding (Gap 2)                                                                                                                                         |
@@ -523,17 +520,16 @@ preference for landing on the dev branch without PR overhead):
   dead `rc=1`/`rc=2` dispatch arms in callers. Removes `UPDATE_CI=1` +
   `MERGE_LOCK` exports from `update.yml`. Updates
   `dev/fragments/pipeline/{ci-update-workflow,update-pipeline}.md`
-  - regenerates ecosystem steering. `WORKTREE_LOCK` preserved (real concurrency
-    safety; `git worktree add` is not thread-safe and ninja runs -j4). The
-    `wt_head == base_head` early-return preserved at callers — defensive and
-    what the held-back rollback path relies on.
+  - regenerates ecosystem steering. The `wt_head == base_head` early-return
+    preserved at callers — defensive and what the held-back rollback path relies
+    on.
 
 Real fixes pending:
 
 - **Gap 1** — design discussion needed (downstream refresh on input bumps;
-  touches the DAG model). Less urgent now that `update-input.sh` Phase 2 build
-  runs the full `nix-fast-build --flake .#ciPackages.${system}` against every
-  input bump, which catches Mode A transitively. Gap 1's narrower "refresh
+  touches how targets relate). Less urgent now that `update-input.sh` Phase 2
+  build runs the full `nix-fast-build --flake .#ciPackages.${system}` against
+  every input bump, which catches Mode A transitively. Gap 1's narrower "refresh
   hashes inline in the input PR" work would still produce a coherent unit of
   validation rather than separate red/held-back PRs, but isn't blocking anything
   today.
@@ -566,7 +562,7 @@ When Phase 2 build fails, the rollback path does this in order:
    src.hash) and Phase 1 (nix-update dep-hash) commits, putting the worktree
    branch back at base
 3. `report_held_back "$name" "nix-update or build failed" "$version_detail"`
-4. `exit 0` (so ninja moves on)
+4. `exit 0` (a held-back target is a reported outcome, not a script failure)
 
 Later, the PR-creation step in `update.yml:139-141` filters `update/*` branches
 on `wt_head == base_head` and skips the ones at base — so a held-back package

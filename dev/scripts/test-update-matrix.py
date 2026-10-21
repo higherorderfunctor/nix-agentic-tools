@@ -942,7 +942,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
                 self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
 
     def test_evaluator_caps_reject_values_below_memory_floor(self):
-        command = 'source "$1"; NAT_UPDATE_CORES=4; NAT_UPDATE_JOBS=1; nfb_eval_flags'
+        command = 'source "$1"; NAT_UPDATE_CORES=4; nfb_eval_flags'
         for memory, expected in (("512", 1), ("4096", 0)):
             env = dict(self.env, GITHUB_TOKEN="fixture", NAT_UPDATE_EVAL_WORKERS="1", NAT_UPDATE_EVAL_MAX_MEMORY=memory)
             result = subprocess.run(["bash", "-c", command, "test", str(SCRIPTS / "update-common.sh")], cwd=self.repo, env=env, capture_output=True, text=True)
@@ -953,14 +953,13 @@ if sys.argv[1:3] == ['pr', 'reopen']:
     def test_evaluator_minimum_cannot_exceed_total_memory_budget(self):
         command = '''source "$1"
 NAT_UPDATE_CORES=4
-NAT_UPDATE_JOBS=$TEST_JOBS
 awk() { printf '%s' "$TEST_MEMORY_MIB"; }
 nfb_eval_flags
 '''
-        for memory, jobs, workers, success in ((4096, 4, 1, False), (4096, 1, 4, True), (4096, 1, 1, True), (8192, 4, 4, True), (16384, 4, 1, True), (16384, 1, 4, True), (1024, 1, 1, False)):
-            with self.subTest(memory=memory, jobs=jobs, workers=workers):
+        for memory, workers, success in ((4096, 4, True), (4096, 1, True), (16384, 4, True), (1024, 1, False)):
+            with self.subTest(memory=memory, workers=workers):
                 env = dict(self.env, GITHUB_TOKEN="fixture", NAT_UPDATE_EVAL_WORKERS=str(workers),
-                           NAT_UPDATE_EVAL_MAX_MEMORY="4096", TEST_JOBS=str(jobs), TEST_MEMORY_MIB=str(memory))
+                           NAT_UPDATE_EVAL_MAX_MEMORY="4096", TEST_MEMORY_MIB=str(memory))
                 result = subprocess.run(["bash", "-c", command, "test", str(SCRIPTS / "update-common.sh")],
                                         cwd=self.repo, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode == 0, success, result.stderr)
@@ -969,9 +968,9 @@ nfb_eval_flags
                     actual_workers = int(flags[flags.index("--eval-workers") + 1])
                     allocation = int(flags[flags.index("--eval-max-memory-size") + 1])
                     self.assertGreaterEqual(allocation, 1024)
-                    self.assertLessEqual(allocation * jobs * actual_workers, memory * 60 // 100)
+                    self.assertLessEqual(allocation * actual_workers, memory * 60 // 100)
                 else:
-                    self.assertIn("reduce NAT_UPDATE_JOBS", result.stderr)
+                    self.assertIn("below 1024 MiB per worker", result.stderr)
 
     def test_human_amend_preserving_bot_author_is_preserved(self):
         self.git("checkout", "update/demo")
@@ -1190,7 +1189,6 @@ class PreparationTest(unittest.TestCase):
             NAT_UPDATE_WORKTREES_DIR=str(self.root / "worktrees"),
             NIX_CALLS=str(self.root / "nix-calls"),
             PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
-            WORKTREE_LOCK=str(self.root / "worktree.lock"),
         )
 
     def git(self, *args):
@@ -1319,10 +1317,6 @@ if args[:1] == ['run']:
     if mode.startswith('floor'):
         with open(os.environ['CALL_ORDER'], 'a') as f: f.write('nix-update\\n')
         raise SystemExit(0)
-    if mode == 'package-red':
-        with open('packages/demo/package.nix', 'a') as f: f.write('# dependency hash refreshed\\n')
-        print('Update 1.0.0 -> 2.0.0')
-        raise SystemExit(0)
     result = args[args.index('--result-file') + 1]
     if mode == 'input-hash':
         mismatch = "error: hash mismatch in fixed-output derivation '/nix/store/fixture-oxlint-pnpm-deps.drv':\\n         specified: sha256-OLD=\\n            got: sha256-NEW="
@@ -1370,7 +1364,7 @@ recipe.write_text(recipe.read_text().replace('goFloor = "1.25.12";', 'goFloor = 
         fixer.chmod(0o755)
         print(fixer)
         raise SystemExit(0)
-    raise SystemExit(23 if mode == 'package-red' else 0)
+    raise SystemExit(0)
 raise SystemExit(f'unhandled nix fixture arguments: {args}')
 """,
         )
@@ -1505,23 +1499,7 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         self.assertIn("source prefetch did not produce the marker source tree", report)
         self.assertNotIn("UPDATED: demo", report)
 
-    def test_complete_but_failing_build_package_remains_publishable(self):
-        result = subprocess.run(
-            ["bash", str(SCRIPTS / "update-pkg.sh"), "demo", "--version", "skip"],
-            cwd=self.repo,
-            env=dict(self.env, NIX_MODE="package-red"),
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        report = (self.repo / ".update-report.txt").read_text()
-        self.assertIn("UPDATED: demo", report)
-        self.assertIn("build verification failed", result.stderr)
-        failed = matrix.verify_failures(self.repo / ".update-logs", "demo", "UPDATED")
-        self.assertEqual(len(failed), 1)
-        self.assertTrue(failed[0].endswith(".demo"), failed)
-
-    def test_default_four_jobs_on_eight_gib_starts_the_verifier(self):
+    def test_eight_gib_starts_the_verifier_within_the_heap_bound(self):
         command = 'source "$1"; verify_all_packages'
         result = subprocess.run(
             ["bash", "-c", command, "test", str(SCRIPTS / "update-common.sh")],
@@ -1533,7 +1511,10 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = list(map(json.loads, (self.root / "nix-calls").read_text().splitlines()))
         verifier = next(call for call in calls if call[:1] == ["run"])
-        self.assertEqual(verifier[verifier.index("--eval-workers") + 1], "1")
+        workers = int(verifier[verifier.index("--eval-workers") + 1])
+        allocation = int(verifier[verifier.index("--eval-max-memory-size") + 1])
+        self.assertIn(workers, range(1, 5))
+        self.assertLessEqual(workers * allocation, 8192 * 60 // 100)
 
     def test_input_shell_entry_gate(self):
         cases = (

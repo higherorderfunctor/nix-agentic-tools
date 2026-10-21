@@ -1,8 +1,9 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-20 — the sweep's `mirror-health` job reports the
-> jail-nix mirror; `jail-smoke` and `checks-eval-darwin` are required contexts;
-> both systems' name evaluations are budgeted by function count.
+> **Last verified:** 2026-10-20 — the sweep is the only update entrypoint;
+> package workers never build; the `mirror-health` job reports the jail-nix
+> mirror; `jail-smoke` and `checks-eval-darwin` are required contexts; both
+> systems' name evaluations are budgeted by function count.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -30,9 +31,8 @@ force source-derived versions through `meta.position` and `checkedBy`. Keep
 `checks.update-discovery-ifd-free` runs the actual workflow step against the
 real registry with deliberately cold IFD package namespaces, and verifies the
 resulting matrix. Every input and package becomes one Linux matrix worker, with
-eight concurrent workers and `fail-fast: false`. The Ninja DAG remains the local
-update entrypoint; its ordering edges do not transfer changes between isolated
-branches, so CI workers need no cross-target edges.
+eight concurrent workers and `fail-fast: false`. Workers share no state, so the
+registry declares no cross-target ordering.
 
 Each worker runs the existing `update-input.sh` or `update-pkg.sh` in an
 ephemeral worktree and publishes its own `update/<name>` branch. A slow or
@@ -42,23 +42,23 @@ pinned main base.
 
 **A PR must already contain its locks, source and dependency hashes, extracted
 files, and formatting. Branch CI only validates; it never mutates a branch to
-finish an update.** The package worker skips only the final informational full
-build (`NAT_UPDATE_VERIFY_PACKAGES=0`). Hash derivation and embedded-file
-extraction still run before publication. Input workers retain build verification
-and its hash-repair pass because those repairs can mutate the prepared branch.
-After successful package verification, the `devenv` input alone must also enter
-its updated shell with the installed CLI (`devenv --no-tui shell true`); failure
-holds the bump back. This runs inside the existing preparation deadline. The
-shell's closure holds the patched Kiro, which `pushFilter` does not catch inside
-a closure, so the `devenv` lane sets `skipPush`. A writable update may open with
-failing build checks; an incomplete update is held back and its existing PR is
-preserved. A worker whose build verification failed still publishes and arms
-auto-merge, uploads its receipt, and then fails in
-`Fail on failed build verification` (`update-matrix.py verdict`) with an
-`::error::` naming the target, failed attributes and PR -- when that PR is new
-or its patch changed. A PR that already proposed the same patch, and a branch
-that is not the bot's own last push, are skips: a `::notice::`, and the lane
-stays green. The required checks keep auto-merge from landing a red PR.
+finish an update.** The package worker does not build the package; hash
+derivation and embedded-file extraction run before publication. Input workers
+retain build verification and its hash-repair pass because those repairs can
+mutate the prepared branch. After successful package verification, the `devenv`
+input alone must also enter its updated shell with the installed CLI
+(`devenv --no-tui shell true`); failure holds the bump back. This runs inside
+the existing preparation deadline. The shell's closure holds the patched Kiro,
+which `pushFilter` does not catch inside a closure, so the `devenv` lane sets
+`skipPush`. A writable update may open with failing build checks; an incomplete
+update is held back and its existing PR is preserved. A worker whose build
+verification failed still publishes and arms auto-merge, uploads its receipt,
+and then fails in `Fail on failed build verification`
+(`update-matrix.py verdict`) with an `::error::` naming the target, failed
+attributes and PR -- when that PR is new or its patch changed. A PR that already
+proposed the same patch, and a branch that is not the bot's own last push, are
+skips: a `::notice::`, and the lane stays green. The required checks keep
+auto-merge from landing a red PR.
 
 `update-matrix.py` requires a normal target return and exactly one final report
 before permitting publication. An early rev/source commit alone proves nothing:
@@ -71,9 +71,8 @@ Each worker has a 120-minute job ceiling, with preparation and setup sharing 105
 minutes from its first step. The remaining budget is reserved for publishing and
 cache finalization. CI sets one build and one evaluator per runner, with a 4 GiB
 evaluator ceiling and all native compiler cores. The common script's optional
-evaluator caps only reduce its existing resource bounds. Local Ninja keeps its
-coupled target/evaluator limits and informational package builds. Rust release
-profiles, fat LTO, and binary performance settings do not change.
+evaluator caps only reduce its existing resource bounds. Rust release profiles,
+fat LTO, and binary performance settings do not change.
 
 ### Authentication and experimental dispatches
 

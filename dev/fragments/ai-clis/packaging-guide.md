@@ -1,10 +1,11 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-17 — Codex adopts nixpkgs' output-root layout,
-> source-built voice and store-linked runtime; Kiro parses embedded rollout
-> JSON, preserving state fields; copies must agree. The byte-preserving patcher
-> remains strict. The devenv update lane realizes the patched Kiro through the
-> repo shell, so it does not push.
+> **Last verified:** 2026-10-20 — updates are dispatched as the CI `Update`
+> workflow. Codex adopts nixpkgs' output-root layout, source-built voice and
+> store-linked runtime; Kiro parses embedded rollout JSON, preserving state
+> fields; copies must agree. The byte-preserving patcher remains strict. The
+> devenv update lane realizes the patched Kiro through the repo shell, so it
+> does not push.
 
 ### Overview
 
@@ -294,5 +295,5 @@ nix build .#kiro-gateway        # Build Kiro Gateway
 # Unfree packages are not in `packages`; build them from the internal set
 nix build .#ciPackages.<system>.copilot-cli   # Build Copilot CLI
 nix build .#ciPackages.<system>.kiro-cli      # Build Kiro CLI
-nix run .#update                # Update all source versions via config.update.targets
+gh workflow run update.yml      # Dispatch the CI update sweep over config.update.targets
 ```

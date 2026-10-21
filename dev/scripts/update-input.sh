@@ -242,7 +242,7 @@ set +e
   # the sidecar-hash repair above.
   fmt_after=$(nix eval --raw .#formatter.x86_64-linux.outPath 2>/dev/null || echo "")
   if [ "$fmt_before" != "$fmt_after" ]; then
-    if ! run_build nix fmt; then
+    if ! nix fmt; then
       log_failure "formatter errored"
       exit 1
     fi

@@ -125,7 +125,7 @@
       ai.claude = {
         enable = true;
         files = {
-          ".claude/hooks/raw-probe".content.source = ../../../dev/scripts/update-report.sh;
+          ".claude/hooks/raw-probe".content.source = ./fixtures/tree/bin/tool;
           ".claude/settings.json".enable = false;
         };
         rules.probe.text = "probe";

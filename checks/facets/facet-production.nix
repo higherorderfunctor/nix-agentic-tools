@@ -31,12 +31,6 @@
         checks = builtins.mapAttrs (_: check: check.drvPath) checks;
         drvPath = package.drvPath;
         file = repository.update.targets.git-revise.file;
-        ninjaHasOwner = lib.hasInfix "build update-git-revise: update-pkg" (
-          import ${../../config/generate-update-ninja.nix} {
-            flakeLock.nodes.root.inputs = {};
-            updateTargets = repository.update.targets;
-          }
-        );
         unfree = lib.optionalAttrs (consumerPkgs.ai ? facet-unfree-control) {
           drvPath = consumerPkgs.ai.facet-unfree-control.drvPath;
         };
@@ -60,7 +54,6 @@
       nix-instantiate --eval --strict --json ${probe} --argstr root "$PWD/repository" > after.json
       jq -e -s '
         (.[0].checks | length) > 0 and
-        .[0].ninjaHasOwner and
         (.[0] | del(.file)) == (.[1] | del(.file)) and
         .[0].file == "packages/git-revise/packages/ai/gitTools/git-revise/package.nix" and
         .[1].file == "packages/relocated-owner/packages/ai/gitTools/git-revise/package.nix"

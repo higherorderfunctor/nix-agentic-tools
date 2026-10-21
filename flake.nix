@@ -73,13 +73,10 @@
     ...
   } @ inputs: let
     inherit (nixpkgs) lib;
-    # Shared shell-hardening settings (bashOptions / shoptHeader /
-    # shellcheckFlags) — see config/shell-strict.nix.
-    shellStrict = import ./config/shell-strict.nix;
     forAllSystems = lib.genAttrs repository.supportedSystems;
     # This flake's one package set per system (repository.natSets, with
-    # allowUnfree): checks, repo documents, the CI shell, apps and the
-    # formatter read it directly. Shared, so they cost one nixpkgs evaluation.
+    # allowUnfree): checks, repo documents, the CI shell and the formatter
+    # read it directly. Shared, so they cost one nixpkgs evaluation.
     pkgsFor = system: repository.natSets.${system};
     # What the public outputs hand out: every derivation checked by a plain
     # import of this flake's nixpkgs with default config, so an unfree leaf
@@ -288,26 +285,6 @@
           nodejs
           prefetch-npm-deps
         ];
-      };
-    });
-
-    # ── Apps ──────────────────────────────────────────────────────────
-    apps = forAllSystems (system: let
-      pkgs = pkgsFor system;
-      ninjaFile = pkgs.writeText "update.ninja" (import ./config/generate-update-ninja.nix {inherit (self) updateTargets;});
-    in {
-      generate-update-ninja = {
-        type = "app";
-        program = "${pkgs.writeShellApplication {
-          name = "generate-update-ninja";
-          extraShellCheckFlags = shellStrict.shellcheckFlags;
-          inherit (shellStrict) bashOptions;
-          text = ''
-            ${shellStrict.shoptHeader}
-            ${pkgs.coreutils}/bin/cp "${ninjaFile}" .update.ninja
-            echo "Generated .update.ninja"
-          '';
-        }}/bin/generate-update-ninja";
       };
     });
 

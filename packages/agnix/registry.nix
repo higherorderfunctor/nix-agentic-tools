@@ -6,7 +6,6 @@
       file = repoPath ./packages/ai/agnix/package.nix;
       flags = ["--version" "skip"];
       git = "https://github.com/agent-sh/agnix.git";
-      dependsOn = ["rust-overlay"];
     };
   };
 }

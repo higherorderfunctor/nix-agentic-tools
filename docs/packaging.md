@@ -7,9 +7,9 @@ Quick-reference for how each package is sourced, built, and updated.
 Main-tracking packages pin `rev` + `hash` inline in their native recipe under
 `packages/<owner>/packages/`. Binary/release packages use owner-local sidecars
 described below. Versions are computed at eval time via
-`lib/packaging.nix:mkVersion` (`{upstream}+{shortRev}`). Updates use the
-composed registry and ninja DAG:
-`nix run .#generate-update-ninja && ninja -j4 -v -f .update.ninja update-report`
+`lib/packaging.nix:mkVersion` (`{upstream}+{shortRev}`). Updates run in CI: the
+`Update` workflow reads the composed registry and prepares each target on its
+own runner (`dev/scripts/update-matrix.py`).
 
 - **Main-tracking**: `git ls-remote` for rev, `nix flake prefetch` for hash,
   `nix-update --version skip` for dep hashes. Config in `config.update.targets`

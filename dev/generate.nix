@@ -1365,18 +1365,16 @@
 
     ## Updating Dependencies
 
-    ```bash
-    devenv tasks run update:all   # update all inputs and packages via ninja DAG
-    ```
-
-    After updating, rebuild affected packages to verify hashes:
+    The `Update` workflow (`.github/workflows/update.yml`) sweeps every input
+    and package four times a day and opens one PR per dependency that moved.
+    Run it on demand, optionally for named targets:
 
     ```bash
-    nix build .#<package>
+    gh workflow run update.yml -f targets=nixpkgs,agnix
     ```
 
-    If a hash mismatch occurs, copy the expected hash from the error and
-    update `packages/mcp-servers/hashes.json` (or the relevant sidecar).
+    Branch CI builds each update PR. A red one is a dependency that needs a
+    fix pushed to its `update/<name>` branch.
 
     ## Code Standards
 
