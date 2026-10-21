@@ -1642,19 +1642,91 @@ function isWriteOnly(node, ts) {
   return false;
 }
 
+// The member a dotted or string-keyed access names, else undefined.
+function memberName(node, ts) {
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  if (
+    ts.isElementAccessExpression(node) &&
+    ts.isStringLiteralLike(node.argumentExpression)
+  )
+    return node.argumentExpression.text;
+  return undefined;
+}
+
+// Whether `node` is the process object: `process` on `globalThis`, a default
+// or namespace import of the builtin module under any local name, or an
+// identifier named `process` that its checker symbol identifies as the global.
+// Any other local binding of that name may or may not hold the real one, so it
+// fails the extraction.
+function isProcessObject(node, context) {
+  const { checker, ts } = context;
+  const member = memberName(node, ts);
+  if (member !== undefined)
+    return (
+      member === "process" &&
+      ts.isIdentifier(node.expression) &&
+      checker.getSymbolAtLocation(node.expression) ===
+        checker.resolveName(
+          "globalThis",
+          undefined,
+          ts.SymbolFlags.Value,
+          false,
+        )
+    );
+  if (!ts.isIdentifier(node)) return false;
+  const symbol = checker.getSymbolAtLocation(node);
+  const declaration = symbol?.declarations?.[0];
+  const imported =
+    declaration &&
+    (ts.isImportClause(declaration) || ts.isNamespaceImport(declaration))
+      ? ts.findAncestor(declaration, ts.isImportDeclaration)
+      : undefined;
+  if (["node:process", "process"].includes(imported?.moduleSpecifier.text))
+    return true;
+  if (node.text !== "process") return false;
+  if (
+    symbol ===
+    checker.resolveName("process", undefined, ts.SymbolFlags.Value, false)
+  )
+    return true;
+  const sourceFile = node.getSourceFile();
+  fail(
+    `${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1} takes env from a local binding named process, which the checker cannot identify as the environment`,
+  );
+}
+
+// `process.env` on the process object.
+function isProcessEnvironment(node, context) {
+  return (
+    context.ts.isPropertyAccessExpression(node) &&
+    node.name.text === "env" &&
+    isProcessObject(node.expression, context)
+  );
+}
+
+// `const { env } = process`: a binding element that holds the environment
+// object. A rest element (`{ ...env }`) copies `process` itself.
+function bindsProcessEnvironment(node, context) {
+  const { ts } = context;
+  return (
+    ts.isBindingElement(node) &&
+    !node.dotDotDotToken &&
+    ts.isObjectBindingPattern(node.parent) &&
+    (node.propertyName ?? node.name).text === "env" &&
+    Boolean(node.parent.parent.initializer) &&
+    isProcessObject(
+      unwrapExpression(node.parent.parent.initializer, ts),
+      context,
+    )
+  );
+}
+
 function environmentReads(sourceFile, context) {
   const { checker, ts } = context;
   const found = new Set();
   const environmentSymbols = new Set();
   function isEnvironmentExpression(node) {
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "process" &&
-      node.name.text === "env"
-    ) {
-      return true;
-    }
+    if (isProcessEnvironment(node, context)) return true;
     if (ts.isIdentifier(node)) {
       const symbol = checker.getSymbolAtLocation(node);
       return symbol ? environmentSymbols.has(symbol) : false;
@@ -1685,6 +1757,13 @@ function environmentReads(sourceFile, context) {
     ) {
       const symbol = checker.getSymbolAtLocation(node.name);
       if (symbol) environmentSymbols.add(symbol);
+    }
+    if (bindsProcessEnvironment(node, context)) {
+      if (!ts.isIdentifier(node.name))
+        fail(
+          `${sourceFile.getSourceFile().fileName} takes process.env apart by destructuring (${node.getText()}), so the names it reads cannot be listed`,
+        );
+      environmentSymbols.add(checker.getSymbolAtLocation(node.name));
     }
     ts.forEachChild(node, identifyAliases);
   }
@@ -1818,19 +1897,15 @@ function statementEnvironmentReads(statement, context) {
   const { checker, ts } = context;
   const found = environmentReads(statement, context);
   function visit(node) {
-    const isEnvironmentObject =
-      ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "process" &&
-      node.name.text === "env";
     const parent = node.parent;
     if (
-      isEnvironmentObject &&
-      !(
-        (ts.isPropertyAccessExpression(parent) ||
-          ts.isElementAccessExpression(parent)) &&
-        parent.expression === node
-      )
+      (isProcessEnvironment(node, context) &&
+        !(
+          (ts.isPropertyAccessExpression(parent) ||
+            ts.isElementAccessExpression(parent)) &&
+          parent.expression === node
+        )) ||
+      bindsProcessEnvironment(node, context)
     ) {
       let callee;
       if (ts.isCallExpression(parent) && parent.arguments.includes(node)) {
@@ -1857,7 +1932,10 @@ function statementEnvironmentReads(statement, context) {
   return found;
 }
 
-// Names a top-level statement assigns on every path through it.
+// Names a top-level statement assigns on every path through it. Only
+// `process.env` spelled out establishes an overwrite: the other spellings of
+// the process object are recognized for reads, and counting their writes would
+// let a read through a spelling not yet recognized pair with a counted write.
 function definiteEnvironmentWrites(statement, context) {
   const { ts } = context;
   if (
@@ -1866,19 +1944,28 @@ function definiteEnvironmentWrites(statement, context) {
     statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
   ) {
     const target = statement.expression.left;
-    const isEnvironment = (node) =>
-      ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "process" &&
-      node.name.text === "env";
+    const object = target.expression;
+    if (
+      (ts.isPropertyAccessExpression(target) ||
+        ts.isElementAccessExpression(target)) &&
+      isProcessEnvironment(object, context) &&
+      !(
+        ts.isPropertyAccessExpression(object) &&
+        ts.isIdentifier(object.expression) &&
+        object.expression.text === "process"
+      )
+    )
+      fail(
+        `src/entry.ts assigns through ${object.getText()}, which the overwrite analysis counts only as process.env spelled out: ${statement.getText()}`,
+      );
     if (
       ts.isPropertyAccessExpression(target) &&
-      isEnvironment(target.expression)
+      isProcessEnvironment(target.expression, context)
     )
       return new Set([target.name.text]);
     if (
       ts.isElementAccessExpression(target) &&
-      isEnvironment(target.expression)
+      isProcessEnvironment(target.expression, context)
     ) {
       const name = stringConstant(target.argumentExpression, context);
       if (name === undefined)
@@ -1938,11 +2025,6 @@ function launchOverwrites(entrySource, program, context) {
   const read = new Set();
   const overwritten = new Set();
   let suspended;
-  const environmentObject = (node) =>
-    ts.isPropertyAccessExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === "process" &&
-    node.name.text === "env";
   // The name an environment assignment or delete targets, else undefined.
   function assignedName(node) {
     let target;
@@ -1959,7 +2041,7 @@ function launchOverwrites(entrySource, program, context) {
         ts.isPropertyAccessExpression(target) ||
         ts.isElementAccessExpression(target)
       ) ||
-      !environmentObject(target.expression)
+      !isProcessEnvironment(target.expression, context)
     )
       return undefined;
     return ts.isPropertyAccessExpression(target)

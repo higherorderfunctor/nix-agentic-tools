@@ -8,7 +8,8 @@ applyTo: "packages/kimchi/**"
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-10-21 — the entry-overwrite analysis counts only
-> top-level writes and fails on any environment write inside a function.
+> top-level writes spelled `process.env`, fails on any environment write inside
+> a function, and identifies the process object by its checker symbol.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -165,10 +166,21 @@ Kimchi's entry point overwrites it before anything reads it. That flag is
 derived, not annotated: the extractor walks `src/entry.ts`'s top-level
 statements in order and marks a variable fixed when a statement assigns it on
 every path and no earlier statement reads it, counting what a callee handed
-`process.env` reads from it. Function bodies are not walked: 1.17 moved the
-async startup into `async function main()`, called as `void main()`, so a
-declared function's reads count from the start, and a direct `process.env`
-assignment or `delete` inside any function fails the extraction.
+`process.env` reads from it. The process object is `process` when the checker
+resolves it to the global (no extraction program has Node's types, so that
+global is whatever the program declares, or nothing), `process` on `globalThis`,
+or a default or namespace import of `node:process` or `process` under any local
+name; the `env` of any other local binding named `process` fails.
+`const { env } = process` makes `env` an alias of the environment outside
+entry.ts and fails inside it. Only a write spelled `process.env` in entry.ts
+makes a variable fixed; a write through any other recognized spelling fails. A
+read in a form the extractor does not recognize, such as `process["env"]` or a
+named import from `node:process`, stays invisible to the order check: a name
+read that way before a counted write is still marked fixed, even when another,
+recognized read is what discovered the name. Function bodies are not walked:
+1.17 moved the async startup into `async function main()`, called as
+`void main()`, so a declared function's reads count from the start, and a direct
+`process.env` assignment or `delete` inside any function fails the extraction.
 `PI_CODING_AGENT_DIR` is assigned too, but read and preserved first, so it stays
 settable. The analysis also fails instead of guessing when a module entry.ts
 statically imports reads the same name, or when an assignment follows entry.ts's
