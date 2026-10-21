@@ -84,8 +84,8 @@ in
     dontStrip = true;
     installPhase = ''
       runHook preInstall
-      mkdir -p "$out/bin" "$out/share"
-      cp -R . "$out/share/codeql"
+      mkdir -p "$out/bin" "$out/share" # bare-commands: ok (stdenv builder PATH)
+      cp -R . "$out/share/codeql" # bare-commands: ok (stdenv builder PATH)
       # The launcher follows symlinks back to its distribution directory.
       ln -s "$out/share/codeql/codeql" "$out/bin/codeql"
       runHook postInstall
