@@ -446,7 +446,7 @@ set +e
     # Explicit `exit`, because this body is the CONDITION of the `if ! (`
     # above and bash disables errexit for a condition — a bare failing
     # call falls through to the commit below instead of aborting.
-    if ! run_build nix fmt; then
+    if ! nix fmt; then
       log_failure "formatter errored"
       exit 1
     fi

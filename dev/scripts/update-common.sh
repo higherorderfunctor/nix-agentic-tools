@@ -221,12 +221,6 @@ teardown_worktree() {
   return 0
 }
 
-# Build verification. Runs the actual build to catch Mode C/D failures
-# before PRs open — see docs/update-pipeline-transitive-hash-gap.md § Gap 5.
-run_build() {
-  "$@"
-}
-
 # Core count, resolved once; the evaluator bound below is expressed against it.
 NAT_UPDATE_CORES=$(nproc 2>/dev/null) || NAT_UPDATE_CORES=0
 

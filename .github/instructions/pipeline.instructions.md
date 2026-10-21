@@ -808,10 +808,10 @@ Targets fall into three categories:
   a target with `passthru.extracted` has neither that nor `--use-update-script`.
   The Beads binary target is a grouped package: its `passthru.updateScript` runs
   independent Beads and Dolt release updaters in sequence, so either upstream
-  can move while the target still produces one branch, one build of `.#beads`,
-  and one PR. The paired Dolt remains a nested package dependency, not a second
-  registry row. There is no base-checkout format/build finalizer because it
-  cannot observe changes committed only on target branches.
+  can move while the target still produces one branch and one PR. The paired
+  Dolt remains a nested package dependency, not a second registry row. There is
+  no base-checkout format/build finalizer because it cannot observe changes
+  committed only on target branches.
 
   Semble's grouped script tracks the CLI, model2vec, vicinity and the grammar
   wheels, then regenerates both snapshots. Human-reviewed template hashes stay
