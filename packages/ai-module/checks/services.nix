@@ -131,6 +131,15 @@
         {ai = definitions;}
       ];
     }).config;
+  # Systemd refuses the start after `burst` starts inside the interval. A
+  # daemon that exits at once starts every `restartSec`, so its start number
+  # `burst + 1` lands at `burst * restartSec`.
+  tripsCrashLoop = {
+    burst,
+    intervalSec,
+    restartSec ? 5,
+  }:
+    burst * restartSec < intervalSec;
   succeeds = value: (builtins.tryEval (builtins.deepSeq value true)).success;
   failures = config: map (item: item.message) (builtins.filter (item: !item.assertion) config.assertions);
   collision = backend: definitions: expected: failures (evaluateOwners backend definitions) == [expected];
@@ -331,15 +340,32 @@ in {
             Unit = {
               After = ["network.target"];
               Description = "${restart} (ai.services)";
+              StartLimitBurst = 5;
+              StartLimitIntervalSec = 300;
             };
           }
-          && process.restart.on
-          == (
-            if restart == "on-failure"
-            then "on_failure"
-            else restart
-          )
+          && process.restart
+          == {
+            max = 4;
+            on =
+              if restart == "on-failure"
+              then "on_failure"
+              else restart;
+          }
           && !(process ? watch)) (builtins.attrNames entries)
+        # The limit trips an instant crash loop: its sixth start is refused
+        # when it falls inside the interval. systemd's default 10 s interval
+        # with a 5 s restart does not, so the predicate separates the two.
+        && tripsCrashLoop {
+          burst = 5;
+          intervalSec = 300;
+        }
+        && !(tripsCrashLoop {
+          burst = 5;
+          intervalSec = 10;
+        })
+        && lib.all (unit: unit.Unit.StartLimitBurst == 5 && unit.Unit.StartLimitIntervalSec == 300) (builtins.attrValues hm.systemd.user.services)
+        && lib.all (process: process.restart.max == 4) (builtins.attrValues devenv.processes)
         && devenv.processes.watched.watch.paths == expectedTriggers
         && services.triggers hm.ai.services.watched == expectedTriggers
         && hm.systemd.user.services.watched.Unit.After == ["network.target" "sops-nix.service"]

@@ -310,11 +310,33 @@ fails evaluation. `select` resolves an instance name to
 `http://127.0.0.1:<port>` or to the reason it cannot: the name is missing or the
 instance is disabled. CLIProxyAPI and CPA Manager Plus use it.
 
-| Backend             | Lowering                                                                                                                                                                                                   |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home Manager Linux  | User unit: `After = network.target`; secret readers get `Wants` and `After` on provider units, and `WantedBy` the providers' defined targets, or `default.target`; `RestartSec = 5`, `never` becomes `no`. |
-| Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                                                                                      |
-| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `watch.paths` is present only for nonempty triggers.                                                                  |
+| Backend             | Lowering                                                                                                                                                                                                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home Manager Linux  | User unit: `After = network.target`; secret readers get `Wants` and `After` on provider units, and `WantedBy` the providers' defined targets, or `default.target`; `RestartSec = 5`, `StartLimitBurst = 5`, `StartLimitIntervalSec = 300`; `never` becomes `no`. |
+| Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                                                                                                                                            |
+| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `restart.max = 4`; `watch.paths` is present only for nonempty triggers.                                                                                                     |
+
+### Start limit
+
+A daemon that always exits non-zero must end failed, so alerts on a failed unit
+fire. Restarts are `RestartSec = 5` apart, and systemd's default
+`StartLimitIntervalSec=10s` and `StartLimitBurst=5` can never trip: the sixth
+start of an instant crash loop lands 5 x 5 = 25 s after the first, and a 10 s
+window holds at most three starts. The unit then stays in
+`activating (auto-restart)` for good. `restartPolicy` in `lib/services.nix` is
+the one definition: five starts in 300 s. An instant crash loop trips at 25 s; a
+daemon that stays up about a minute between crashes (5 x 60 s) never does. The
+limit applies to every `restart` value, including `always`, and to every
+service; no consumer needs to tune it, so there is no option. Add one when a
+named consumer does.
+
+Devenv's process-compose maps the burst to `restart.max`. systemd counts starts
+and process-compose counts restarts after the first start, so the same limit is
+`burst - 1 = 4`. This is an explicit difference, not parity: the devenv count is
+for the process's lifetime with no interval, since `restart.window` would move
+supervision from process-compose to devenv's native supervisor for every service
+and nothing needs that. A dev-shell process that crashes five times stays down
+until the shell restarts it.
 
 Home Manager Linux reserves `services-reconcile`. The Home Manager launcher of a
 service with triggers hashes every trigger path and its bytes before it reads
