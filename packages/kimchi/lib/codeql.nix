@@ -1,7 +1,8 @@
 # The pinned Kimchi release as one CodeQL database, and `runQueries`, which
 # evaluates a query pack against it. Three layers, so a query edit rebuilds
 # only its pack and its results, never the database: `source` and `database`
-# move only with the pins, each `runQueries` result with its pack. See
+# move with the pins, the engine and the flake's nixpkgs (stdenv, bash, jq,
+# coreutils, patch), each `runQueries` result with its pack. See
 # ../docs/kimchi-codeql.md for the source-root decision and the measurements.
 #
 # Every derivation name carries `codeql`, which the credentialed cachix steps'
@@ -90,8 +91,8 @@
   # The database directory under $out/db, without its creation logs. A
   # directory, not a bundle: a query writes its cache into the database, so
   # every consumer copies it first, and copying the directory is faster than
-  # unpacking a bundle. Input-addressed, so a check cache serves it while the
-  # pins are unchanged; it is not bit-reproducible.
+  # unpacking a bundle. Input-addressed, so a check cache serves it while its
+  # inputs are unchanged; it is not bit-reproducible.
   database = pkgs.runCommand "kimchi-codeql-database-${version}" {inherit meta;} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :

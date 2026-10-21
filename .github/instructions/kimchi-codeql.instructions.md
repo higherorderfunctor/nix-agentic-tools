@@ -7,7 +7,7 @@ applyTo: "packages/kimchi/checks/kimchi-codeql.nix,packages/kimchi/lib/codeql.ni
 
 ## Kimchi CodeQL database
 
-> **Last verified:** 2026-10-21 (commit a656886e) — `passthru.codeql` carries
+> **Last verified:** 2026-10-21 (commit f8707ca8) — `passthru.codeql` carries
 > `source`, `database`, `runQueries`, `createDatabase` and `engine`; the
 > `kimchi-codeql-database` check runs the smoke pack; `codeql:kimchi-db` creates
 > the same database locally. No fact reads it yet.
@@ -17,10 +17,11 @@ applyTo: "packages/kimchi/checks/kimchi-codeql.nix,packages/kimchi/lib/codeql.ni
 `packages/kimchi/lib/codeql.nix`, reached through
 `self.ciPackages.<system>.kimchi.passthru.codeql`:
 
-- **`source`**: the tree the database is created from. It moves only with the
-  Kimchi or pi pins.
+- **`source`**: the tree the database is created from. It moves with the Kimchi
+  or pi pins and with the flake's nixpkgs (stdenv, bash, jq, coreutils, patch).
 - **`database`**: one CodeQL database of `source`, under `$out/db`. It moves
-  with `source` and the engine.
+  with `source`, the engine and nixpkgs, so a nixpkgs bump costs one database
+  rebuild of about 85 s.
 - **`runQueries { name; queries; models ? []; }`**: every query of a
   `mkQueryPack` result, run against a copy of `database` by the
   `customizePackage` engine, with optional `mkModelPack` results.
@@ -35,7 +36,7 @@ Every derivation name contains `codeql`, so the credentialed cachix steps'
 `pushFilter: kiro-cli|codeql` keeps all of them out of the public cache. The
 database is input-addressed and not bit-reproducible (`codeql-database.yml`
 records its creation time). The Hestia check cache serves it again for as long
-as the pins and the engine stay the same.
+as the pins, the engine and the flake's nixpkgs stay the same.
 
 ### The source root
 
