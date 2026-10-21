@@ -1,8 +1,9 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-20 — a `checks/` concern without `default.nix` (a
-> fixture flake) is not discovered; check-name laziness is gated by the
-> `check-laziness` assertion in facet-mock.
+> **Last verified:** 2026-10-21 — package trees and ordinary owner overlays
+> deep-merge through one `mergeContribution` helper; a `checks/` concern without
+> `default.nix` (a fixture flake) is not discovered; check-name laziness is
+> gated by the `check-laziness` assertion in facet-mock.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -110,6 +111,8 @@ Three evaluation boundaries are easy to break:
 Namespace merging stops at derivations. A generic recursive attrset merge would
 retain fields from a previous package while replacing its `drvPath`, creating a
 hybrid package. Preserve namespace neighbors and replace package leaves whole.
+`mergeContribution` in `lib/facets.nix` is that merge, for the package tree, for
+each ordinary owner overlay, and for the exported overlay's re-exported leaves.
 
 Package recipes receive `pkgs` through native `callPackage` scopes built by
 `buildOverlay`. Shared helpers arrive as `scopeArgs` from

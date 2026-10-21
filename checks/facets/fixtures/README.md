@@ -18,7 +18,8 @@ and metadata provenance without importing the metadata-only files. The fixture
 consumer evaluates raw module paths with the native module system.
 
 Packages use `makeScope`, `callPackage`, and `packagesFromDirectoryRecursive`;
-overlays use lexical `composeManyExtensions`; declarative values use
+overlays use lexical `composeManyExtensions`, each contribution deep-merged into
+`prev` with `recursiveUpdateUntil` up to derivations; declarative values use
 `evalModules` with explicit types. The only custom merge is exclusive-owner
 validation before those native mechanisms run. The mixed-priority negative is
 the project constraint that requires it: native module priority filtering would
@@ -56,10 +57,15 @@ a direct call at the original path.
 Negative fixtures cover duplicate leaves, leaf/container conflicts in both
 orders, reserved names at nested depths (including explicit scope arguments),
 and ordinary overlays attempting to claim generated package leaves or either
-conflicting prefix. A prior derivation at a generated package leaf is replaced
-whole, while neighboring namespace contents survive. The former uppercase-name
-and empty-namespace negative fixtures are now positive controls: native
-discovery accepts both.
+conflicting prefix. Owner overlays return only the leaves they claim: `alpha`
+adds `ai.devTools.alpha-note` beside the `alpha-tool` derivation. The
+`overlay-sparse` and `overlay-re-emit` scenarios run against a sibling
+derivation whose `outPath` aborts: the sparse shape never forces it, and the
+re-emitting shape still passes the claims check beside a plain sibling but
+forces the aborting one. A prior derivation at a generated package leaf is
+replaced whole, while neighboring namespace contents survive. The former
+uppercase-name and empty-namespace negative fixtures are now positive controls:
+native discovery accepts both.
 
 ## Native check composition
 

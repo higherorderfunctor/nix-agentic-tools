@@ -68,6 +68,14 @@
 
   ordinaryAttrs = value: isAttrs value && !isDerivation value;
 
+  # Deep-merge `contribution` into `prev` beneath the names it sets. Merging
+  # stops at derivations and other non-attrset values, which the contribution
+  # replaces whole; the siblings it does not name keep `prev`'s values.
+  mergeContribution = prev: contribution:
+    lib.recursiveUpdateUntil (_: before: after: !(ordinaryAttrs before && ordinaryAttrs after))
+    (lib.intersectAttrs contribution prev)
+    contribution;
+
   pathsUnder = prefix: value:
     if ordinaryAttrs value
     then let
@@ -83,15 +91,16 @@
   in
     compared.success && compared.value;
 
+  # The leaf paths a contribution writes once mergeContribution has merged it
+  # into `prev`. Only the contribution's own names are walked: a sibling it
+  # does not name keeps `prev`'s value, and comparing it anyway would force it
+  # (`==` on two derivations forces both `outPath`s).
   changedLeafPaths = prefix: beforePresent: before: after:
     if beforePresent && ordinaryAttrs before && ordinaryAttrs after
     then
       concatMap (
-        name:
-          if after ? ${name}
-          then changedLeafPaths (prefix ++ [name]) (before ? ${name}) before.${name} after.${name}
-          else pathsUnder (prefix ++ [name]) before.${name}
-      ) (unique (attrNames before ++ attrNames after))
+        name: changedLeafPaths (prefix ++ [name]) (before ? ${name}) before.${name} after.${name}
+      ) (attrNames after)
     else if beforePresent && valuesEqual before after
     then []
     else pathsUnder prefix after;
@@ -135,6 +144,10 @@
   in
     module // {_file = toString claim.source;};
 in rec {
+  # The exported overlay in repository.nix merges its re-exported leaves the
+  # same way.
+  inherit mergeContribution;
+
   # Flake packages must be flat derivations. Validate the lossy projection
   # before constructing its attrset so equal basenames cannot overwrite.
   flattenPackages = {
@@ -461,19 +474,14 @@ in rec {
             (ensure (unwritten == []) "owner '${item.claim.owner}' overlay at '${toString item.claim.source}' claims unwritten leaf '${concatStringsSep "." (builtins.head unwritten)}'")
           ];
         in
-          deepSeq validations contribution
+          deepSeq validations (mergeContribution prev contribution)
       )
       loaded;
   in
     deepSeq exclusive {
       inherit ownershipClaims;
       overlay = lib.composeManyExtensions (
-        optional (packageWorld != null) (_final: prev:
-          lib.intersectAttrs packageWorld.packages (
-            lib.recursiveUpdateUntil (_: before: after: !(ordinaryAttrs before && ordinaryAttrs after))
-            prev
-            packageWorld.packages
-          ))
+        optional (packageWorld != null) (_final: prev: mergeContribution prev packageWorld.packages)
         ++ checkedOverlays
       );
     };
