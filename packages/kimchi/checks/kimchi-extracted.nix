@@ -73,10 +73,16 @@
             'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
           mutant "$kimchi" duplicate-live-schema src/agent-discovery/agents/claude-code.ts \
             'import { homedir } from "node:os"' $'import "../../extensions/model-catalog/model-metadata.js"\nimport { homedir } from "node:os"'
+          # Accepted, not rejected: a property key spelled like the suspending
+          # main() is not a reference to it.
+          mutant "$kimchi" entry-property-name src/entry.ts \
+            'const rawArgv = process.argv.slice(2)' $'const packageMetadata = { main: "./cli.js" }\nvoid packageMetadata\nconst rawArgv = process.argv.slice(2)'
+          mutant "$kimchi" entry-function-write src/entry.ts \
+            'installPasteInterceptor()' $'installPasteInterceptor()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
           mutant "$kimchi" entry-imported-read src/auxiliary-files/resolver.ts \
             'if (env.XDG_DATA_HOME) {' 'if (env.XDG_DATA_HOME && !process.env.KIMCHI_CODING_AGENT_DIR) {'
           mutant "$kimchi" entry-late-write src/entry.ts \
-            'installPasteInterceptor()' $'installPasteInterceptor()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
+            'void main()' $'void main()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
           mutant "$kimchi" entry-overwrite src/entry.ts \
             'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "0"'
           mutant "$kimchi" entry-unread src/entry.ts \
@@ -212,6 +218,8 @@
             "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"$drifted_version\"" >> "$TMPDIR/proof"
           expect_rejection pi-scope-unread "$kimchi" \
             'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
+          expect_rejection entry-function-write "$TMPDIR/entry-function-write-source" \
+            'src/entry.ts assigns KIMCHI_NO_UPDATE_CHECK inside a function' >> "$TMPDIR/proof"
           expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
             'src/entry.ts assigns KIMCHI_CODING_AGENT_DIR before reading it, but' >> "$TMPDIR/proof"
           expect_rejection entry-late-write "$TMPDIR/entry-late-write-source" \
@@ -222,6 +230,8 @@
             'pi APP_NAME in' "$TMPDIR/pi-app-name-source" >> "$TMPDIR/proof"
 
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/real.json"'' ''"$pi"''}
+          ${runExtractor ''"$TMPDIR/entry-property-name-source"'' ''"$TMPDIR/entry-property-name.json"'' ''"$pi"''}
+          echo "entry-property-name (exit 0): a main property key does not suspend" >> "$TMPDIR/proof"
           ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"'' ''"$pi"''}
           if ${pkgs.jq}/bin/jq -e \
             '(.config.projectTier.honoredKeys | index("apiKey") == null and index("api_key") == null) and

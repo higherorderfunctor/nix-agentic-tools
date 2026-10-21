@@ -1912,12 +1912,17 @@ function definiteEnvironmentWrites(statement, context) {
 // pi's environment before pi loads; its top-level statements run in order
 // once the modules it statically imports have been evaluated. A variable
 // counts as overwritten when a top-level statement assigns it on every path
-// and no earlier statement (or a callee handed process.env) reads it. Anything
-// that would make that order unknowable fails the extraction: a read of the
+// and no earlier statement (or a callee handed process.env) reads it. Function
+// bodies run at points this walk does not follow, so their reads count from
+// the start and any environment write in one fails the extraction; Kimchi 1.17
+// moved its async startup into `async function main()`, called as
+// `void main()`, because bun's bytecode build rejects top-level await.
+// Anything else that would make the order unknowable fails too: a read of the
 // same name anywhere in the statically imported modules, or an assignment
-// after entry.ts first awaits or imports dynamically.
+// after entry.ts first awaits, imports dynamically or calls a declared
+// function that can.
 function launchOverwrites(entrySource, program, context) {
-  const { ts } = context;
+  const { checker, ts } = context;
   const imported = moduleClosure([entrySource], program, ts, {
     dynamic: false,
     types: false,
@@ -1933,39 +1938,99 @@ function launchOverwrites(entrySource, program, context) {
   const read = new Set();
   const overwritten = new Set();
   let suspended;
+  const environmentObject = (node) =>
+    ts.isPropertyAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === "process" &&
+    node.name.text === "env";
+  // The name an environment assignment or delete targets, else undefined.
+  function assignedName(node) {
+    let target;
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    )
+      target = node.left;
+    else if (ts.isDeleteExpression(node)) target = node.expression;
+    if (
+      !target ||
+      !(
+        ts.isPropertyAccessExpression(target) ||
+        ts.isElementAccessExpression(target)
+      ) ||
+      !environmentObject(target.expression)
+    )
+      return undefined;
+    return ts.isPropertyAccessExpression(target)
+      ? target.name.text
+      : (stringConstant(target.argumentExpression, context) ?? "<computed>");
+  }
+  const position = (node) =>
+    `src/entry.ts:${entrySource.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+  const isSuspension = (node) =>
+    ts.isAwaitExpression(node) ||
+    (ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword);
+  function some(node, test) {
+    return (
+      test(node) || Boolean(ts.forEachChild(node, (child) => some(child, test)))
+    );
+  }
+  function rejectFunctionWrites(node, inFunction) {
+    const name = inFunction ? assignedName(node) : undefined;
+    if (name !== undefined)
+      fail(
+        `src/entry.ts assigns ${name} inside a function at ${position(node)}, which runs at a point the analysis does not follow`,
+      );
+    ts.forEachChild(node, (child) =>
+      rejectFunctionWrites(child, inFunction || ts.isFunctionLike(child)),
+    );
+  }
+  rejectFunctionWrites(entrySource, false);
+  const suspending = new Set();
   for (const statement of entrySource.statements) {
-    if (ts.isImportDeclaration(statement)) continue;
+    if (!ts.isFunctionDeclaration(statement)) continue;
     for (const name of statementEnvironmentReads(statement, context))
       read.add(name);
+    const symbol =
+      statement.name && checker.getSymbolAtLocation(statement.name);
+    if (symbol && some(statement, isSuspension)) suspending.add(symbol);
+  }
+  // Children first: an assignment stores, and an await suspends, only after
+  // its operands are evaluated.
+  function scan(node) {
+    ts.forEachChild(node, scan);
+    const name = assignedName(node);
+    if (name !== undefined && suspended)
+      fail(
+        `src/entry.ts assigns ${name} after it suspends at ${suspended}, when dynamically imported code may already have read it`,
+      );
+    if (
+      !suspended &&
+      (isSuspension(node) ||
+        (ts.isIdentifier(node) &&
+          suspending.has(checker.getSymbolAtLocation(node))))
+    )
+      suspended = position(node);
+  }
+  for (const statement of entrySource.statements) {
+    if (
+      ts.isImportDeclaration(statement) ||
+      ts.isFunctionDeclaration(statement)
+    )
+      continue;
+    for (const name of statementEnvironmentReads(statement, context))
+      read.add(name);
+    scan(statement);
     for (const name of definiteEnvironmentWrites(statement, context)) {
       if (read.has(name) || overwritten.has(name)) continue;
-      if (suspended)
-        fail(
-          `src/entry.ts assigns ${name} after it suspends at ${suspended}, when dynamically imported code may already have read it`,
-        );
       if (importedReads.has(name))
         fail(
           `src/entry.ts assigns ${name} before reading it, but ${importedReads.get(name)}, which it imports, reads it too; whether that read runs first is not decidable here`,
         );
       overwritten.add(name);
     }
-    // Past an `await` or `import()`, modules loaded dynamically (by entry.ts
-    // or by anything it called) may have run.
-    function findSuspension(node) {
-      if (
-        !suspended &&
-        (ts.isAwaitExpression(node) ||
-          (ts.isCallExpression(node) &&
-            node.expression.kind === ts.SyntaxKind.ImportKeyword))
-      ) {
-        const { line } = entrySource.getLineAndCharacterOfPosition(
-          node.getStart(),
-        );
-        suspended = `src/entry.ts:${line + 1}`;
-      }
-      ts.forEachChild(node, findSuspension);
-    }
-    findSuspension(statement);
   }
   return overwritten;
 }
