@@ -121,12 +121,13 @@
     configure = ''
       ours=${config}
       theirs="''${CODEQL_CONFIG_FILE:-''${HOME:+$HOME/.config/codeql/config}}"
-      if [ -z "$theirs" ] || [ ! -e "$theirs" ]; then
+      # /dev/null is how a caller says it has no config file.
+      if [ -z "$theirs" ] || [ "$theirs" = /dev/null ] || [ ! -e "$theirs" ]; then
         export CODEQL_CONFIG_FILE="$ours"
         exec "$codeql" "$@"
       fi
       if [ ! -f "$theirs" ] || [ ! -r "$theirs" ]; then
-        echo "codeql: $theirs is not a readable file, so this customized codeql cannot merge its packs into it." >&2
+        echo "codeql: $theirs is not a regular readable file (the wrapper reads it more than once), so this customized codeql cannot merge its packs into it." >&2
         exit 2
       fi
       # grep exits 1 when every line of ours is in theirs, and 2 on an error,

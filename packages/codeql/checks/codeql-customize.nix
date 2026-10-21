@@ -66,11 +66,12 @@
 in {
   checks = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
     # A precompiled two-query pack resolves by name with no flag, and its
-    # queries return the fixture rows. A consumer's own config file, from
-    # CODEQL_CONFIG_FILE or HOME, still applies beside it, also with no final
-    # newline, and the merged file outlives the wrapper; one that sets
-    # --additional-packs is refused, indented too, one whose comment names it
-    # is not. The TypeScript file is extracted only with the engine's Node.
+    # queries return the fixture rows, also with CODEQL_CONFIG_FILE=/dev/null.
+    # A consumer's own config file, from CODEQL_CONFIG_FILE or HOME, still
+    # applies beside it, also with no final newline, and the merged file
+    # outlives the wrapper; one that sets --additional-packs is refused,
+    # indented too, one whose comment names it is not. The TypeScript file is
+    # extracted only with the engine's Node.
     codeql-custom-query-pack = let
       custom = engine.customizePackage {queries = [queries];};
     in
@@ -83,6 +84,8 @@ in {
         ! grep -q " $pack@" "$TMPDIR/plain-packs" || fail "the plain engine resolves $pack"
         "$codeql" resolve packs > "$TMPDIR/packs" 2>&1
         grep -q " $pack@" "$TMPDIR/packs" || fail "the customized engine does not resolve $pack"
+        CODEQL_CONFIG_FILE=/dev/null "$codeql" resolve packs > "$TMPDIR/devnull-packs" 2>&1 || fail "CODEQL_CONFIG_FILE=/dev/null: codeql failed: $(cat "$TMPDIR/devnull-packs")"
+        grep -q " $pack@" "$TMPDIR/devnull-packs" || fail "CODEQL_CONFIG_FILE=/dev/null hides $pack"
         second=nix-agentic-tools/fixture-second
         mkdir -p "$TMPDIR/second" "$TMPDIR/home/.config/codeql"
         printf 'name: %s\nversion: 0.0.0\n' "$second" > "$TMPDIR/second/qlpack.yml"
