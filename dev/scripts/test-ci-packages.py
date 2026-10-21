@@ -102,6 +102,59 @@ export -f curl nix
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
 
 
+    def test_codeql_assertion_requires_every_engine_and_source(self):
+        workflow = Path(__file__).parents[2] / ".github/workflows/ci.yml"
+        step = workflow.read_text().split("      - name: Assert no CodeQL engine is published\n", 1)[1]
+        lines = []
+        for line in step.split("        run: |\n", 1)[1].splitlines():
+            if line and not line.startswith("          "):
+                break
+            lines.append(line)
+        script = textwrap.dedent("\n".join(lines))
+        # Two engines, each with its source; MODE drops one source or all.
+        services = r'''set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+nix() {
+  case "$MODE" in empty) return ;; esac
+  printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/b-codeql-full-1.drv
+}
+nix-store() {
+  case "$2" in
+    --requisites)
+      printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/b-codeql-full-1.drv \
+        /nix/store/c-codeql-linux64.zip.drv /nix/store/e-glibc-1.drv
+      [ "$MODE" = missing ] || printf '%s\n' /nix/store/d-codeql-bundle-linux64.tar.zst.drv
+      ;;
+    --outputs) shift 2; for drv in "$@"; do printf '%s\n' "${drv%.drv}"; done ;;
+  esac
+}
+curl() {
+  case "$*" in *nix-cache-info*) return ;; esac
+  printf 'narinfo\n' >> "$RUNNER_TEMP/queries"
+  printf '%s' "$HTTP_CODE"
+}
+export -f curl nix nix-store
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            queries = Path(directory) / "queries"
+            for mode, http_code, success, queried in (
+                ("empty", "404", False, False),
+                ("missing", "404", False, False),
+                ("complete", "404", True, True),
+                ("complete", "200", False, True),
+            ):
+                with self.subTest(mode=mode, http_code=http_code):
+                    queries.unlink(missing_ok=True)
+                    env = dict(os.environ, CACHE="https://cache.invalid", HTTP_CODE=http_code,
+                               MODE=mode, RUNNER_TEMP=directory)
+                    result = subprocess.run(["bash", "-c", services + script], env=env,
+                                            capture_output=True, text=True,
+                                            cwd=Path(__file__).parents[2])
+                    self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+                    self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
+                    if success:
+                        self.assertEqual(len(queries.read_text().splitlines()), 4)
+
 class CoverageTest(unittest.TestCase):
     def setUp(self):
         self.names = ["alpha", "beta", "codeql-javascript", "codeql-new-engine", "delta", "epsilon", "gamma", "new-package", "kiro-cli-rollout-canary"]
