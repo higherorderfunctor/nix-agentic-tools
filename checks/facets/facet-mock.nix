@@ -589,6 +589,14 @@
           "/two/overlay.nix"
         ];
       })
+      # The re-emitting overlay shape walks every sibling it carries, and `==`
+      # on two derivations forces both `outPath`s. Sparse contributions avoid it.
+      (probe {
+        name = "overlay-re-emit-forcing";
+        scenario = "overlay-re-emit";
+        force = "overlay-forcing-sibling";
+        expected = ["overlay claims check forced a sibling outPath"];
+      })
       (probe {
         name = "overlay-undeclared";
         force = "overlay";
@@ -604,14 +612,6 @@
           "owner 'one' overlay"
           "claims unwritten leaf 'ai.shared'"
         ];
-      })
-      # The re-emitting overlay shape walks every sibling it carries, and `==`
-      # on two derivations forces both `outPath`s. Sparse contributions avoid it.
-      (probe {
-        name = "overlay-re-emit-forcing";
-        scenario = "overlay-re-emit";
-        force = "overlay-forcing-sibling";
-        expected = ["overlay claims check forced a sibling outPath"];
       })
 
       (probe {
