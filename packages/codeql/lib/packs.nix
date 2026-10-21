@@ -19,6 +19,10 @@
     then engineName
     else null;
 
+  # Checked at eval for a path `src`, and in the build for every other kind,
+  # which eval cannot read without import-from-derivation.
+  ownManifest = "`src` already holds a qlpack.yml; hand that directory to customizePackage as it is";
+
   errors = args: let
     unknown = builtins.attrNames (builtins.removeAttrs args ["language" "name" "src"]);
     language = args.language or defaultLanguage;
@@ -27,8 +31,7 @@
     ++ lib.optional (!(builtins.isString (args.name or null) && builtins.match "[a-z0-9-]+/[a-z0-9-]+" args.name != null))
     "`name` must be `<scope>/<name>` in lowercase letters, digits and hyphens"
     ++ lib.optional (!(args ? src)) "`src` is required"
-    ++ lib.optional (args ? src && builtins.isPath args.src && builtins.pathExists (args.src + "/qlpack.yml"))
-    "`src` already holds a qlpack.yml; hand that directory to customizePackage as it is"
+    ++ lib.optional (args ? src && builtins.isPath args.src && builtins.pathExists (args.src + "/qlpack.yml")) ownManifest
     ++ lib.optional (engineName == "bare") "codeql-bare carries no CodeQL libraries; build packs with a language engine or codeql-full"
     ++ lib.optional (engineName != "bare" && !(lib.elem language languages))
     "`language` must be one of ${lib.concatStringsSep ", " languages} on codeql-${engineName}${lib.optionalString (defaultLanguage == null) ", which has no default"}";
@@ -55,13 +58,14 @@
       )));
 
   build = kind: args: let
+    caller = "codeql.mk${lib.toSentenceCase kind}Pack";
     problems = errors args;
     pack = {
       inherit (args) name;
       language = args.language or defaultLanguage;
     };
   in
-    assert lib.assertMsg (problems == []) "codeql.mk${lib.toSentenceCase kind}Pack:\n${lib.concatStringsSep "\n" problems}";
+    assert lib.assertMsg (problems == []) "${caller}:\n${lib.concatStringsSep "\n" problems}";
       pkgs.runCommand "codeql-${kind}-pack-${lib.replaceStrings ["/"] ["-"] pack.name}" {
         nativeBuildInputs = lib.optional (kind == "query") engine;
         passthru.codeqlPack = pack // {inherit kind;};
@@ -73,6 +77,10 @@
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         cp -R --no-preserve=mode ${args.src} pack # bare-commands: ok (stdenv builder PATH)
+        if [ -e pack/qlpack.yml ]; then
+          echo ${lib.escapeShellArg "${caller}: ${ownManifest}"} >&2
+          exit 1
+        fi
         cp --no-preserve=mode ${qlpack kind pack} pack/qlpack.yml # bare-commands: ok (stdenv builder PATH)
         ${
           if kind == "query"

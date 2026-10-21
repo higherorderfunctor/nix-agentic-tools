@@ -40,7 +40,7 @@
         ++ lib.optional (language != null && !(lib.elem language languages)) "${at} is a ${language} pack, which ${engine.pname} does not carry"
       else if builtins.isPath entry
       then lib.optional (!builtins.pathExists (entry + "/qlpack.yml")) "${at} (${toString entry}) holds no qlpack.yml"
-      else ["${at} must be a directory or a pack derivation"]);
+      else ["${at} must be a path or a pack derivation"]);
 
   fail = problems: value:
     assert lib.assertMsg (problems == []) "codeql.customizePackage:\n${lib.concatStringsSep "\n" problems}"; value;
