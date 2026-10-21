@@ -1912,14 +1912,15 @@ function definiteEnvironmentWrites(statement, context) {
 // pi's environment before pi loads; its top-level statements run in order
 // once the modules it statically imports have been evaluated. A variable
 // counts as overwritten when a top-level statement assigns it on every path
-// and no earlier statement (or a callee handed process.env) reads it. Anything
-// that would make that order unknowable fails the extraction: a read of the
+// and no earlier statement (or a callee handed process.env) reads it. Function
+// bodies run at points this walk does not follow, so their reads count from
+// the start and any environment write in one fails the extraction; Kimchi 1.17
+// moved its async startup into `async function main()`, called as
+// `void main()`, because bun's bytecode build rejects top-level await.
+// Anything else that would make the order unknowable fails too: a read of the
 // same name anywhere in the statically imported modules, or an assignment
-// after entry.ts first awaits or imports dynamically, or inside a function
-// whose running point is unknown. A top-level call to a function entry.ts
-// declares (`void main()`) runs that body in place: Kimchi 1.17 moved its
-// startup into `async function main()` because bun's bytecode build rejects
-// top-level await.
+// after entry.ts first awaits, imports dynamically or calls a declared
+// function that can.
 function launchOverwrites(entrySource, program, context) {
   const { ts } = context;
   const imported = moduleClosure([entrySource], program, ts, {
@@ -1965,125 +1966,61 @@ function launchOverwrites(entrySource, program, context) {
       ? target.name.text
       : (stringConstant(target.argumentExpression, context) ?? "<computed>");
   }
-  const isFunction = (node) =>
-    ts.isFunctionDeclaration(node) ||
-    ts.isFunctionExpression(node) ||
-    ts.isArrowFunction(node) ||
-    ts.isMethodDeclaration(node);
-  function some(node, test, { crossFunctions }) {
-    if (test(node)) return true;
-    return Boolean(
-      ts.forEachChild(
-        node,
-        (child) =>
-          (crossFunctions || !isFunction(child)) &&
-          some(child, test, { crossFunctions }),
-      ),
-    );
-  }
+  const position = (node) =>
+    `src/entry.ts:${entrySource.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
   const isSuspension = (node) =>
     ts.isAwaitExpression(node) ||
     (ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword);
-  const position = (node) =>
-    `src/entry.ts:${entrySource.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
-  function calledName(statement) {
-    if (!ts.isExpressionStatement(statement)) return undefined;
-    let expression = statement.expression;
-    if (ts.isVoidExpression(expression) || ts.isAwaitExpression(expression))
-      expression = expression.expression;
-    if (
-      ts.isCallExpression(expression) &&
-      ts.isIdentifier(expression.expression)
-    )
-      return expression.expression;
-    return undefined;
+  function some(node, test) {
+    return (
+      test(node) || Boolean(ts.forEachChild(node, (child) => some(child, test)))
+    );
   }
-  // A declared function is walked where entry.ts calls it only when every
-  // other mention of its name is such a call (no callback, alias or
-  // reassignment can run it elsewhere) and its body cannot leave early, which
-  // would skip writes the walk counts as definite. Calling any other
-  // declaration suspends when its body can.
-  const callSites = new Set(
-    entrySource.statements.map(calledName).filter(Boolean),
-  );
-  const declared = new Map();
+  function rejectFunctionWrites(node, inFunction) {
+    const name = inFunction ? assignedName(node) : undefined;
+    if (name !== undefined)
+      fail(
+        `src/entry.ts assigns ${name} inside a function at ${position(node)}, which runs at a point the analysis does not follow`,
+      );
+    ts.forEachChild(node, (child) =>
+      rejectFunctionWrites(child, inFunction || ts.isFunctionLike(child)),
+    );
+  }
+  rejectFunctionWrites(entrySource, false);
+  const suspending = new Set();
   for (const statement of entrySource.statements) {
-    if (!ts.isFunctionDeclaration(statement) || !statement.name) continue;
-    const name = statement.name.text;
-    const escapes = some(
-      entrySource,
-      (node) =>
-        ts.isIdentifier(node) &&
-        node.text === name &&
-        node !== statement.name &&
-        !callSites.has(node),
-      { crossFunctions: true },
-    );
-    const exits =
-      !statement.body ||
-      statement.body.statements.some((child) =>
-        some(
-          child,
-          (node) => ts.isReturnStatement(node) || ts.isThrowStatement(node),
-          { crossFunctions: false },
-        ),
+    if (!ts.isFunctionDeclaration(statement)) continue;
+    for (const name of statementEnvironmentReads(statement, context))
+      read.add(name);
+    if (statement.name && some(statement, isSuspension))
+      suspending.add(statement.name.text);
+  }
+  // Children first: an assignment stores, and an await suspends, only after
+  // its operands are evaluated.
+  function scan(node) {
+    ts.forEachChild(node, scan);
+    const name = assignedName(node);
+    if (name !== undefined && suspended)
+      fail(
+        `src/entry.ts assigns ${name} after it suspends at ${suspended}, when dynamically imported code may already have read it`,
       );
-    declared.set(name, { statement, walked: !escapes && !exits });
-  }
-  // Every other declaration may run at any point, so its reads count from the
-  // start and no environment write in it can be placed.
-  for (const { statement, walked } of declared.values()) {
-    if (walked) continue;
-    for (const name of statementEnvironmentReads(statement, context))
-      read.add(name);
-    some(
-      statement,
-      (node) => {
-        const name = assignedName(node);
-        if (name !== undefined)
-          fail(
-            `src/entry.ts assigns ${name} inside ${statement.name.text}, which runs at no single place the analysis can follow`,
-          );
-        return false;
-      },
-      { crossFunctions: true },
-    );
-  }
-  function visit(statement) {
-    if (ts.isImportDeclaration(statement)) return;
-    if (ts.isFunctionDeclaration(statement)) return;
-    for (const name of statementEnvironmentReads(statement, context))
-      read.add(name);
-    const callee = declared.get(calledName(statement)?.text);
-    if (callee?.walked) callee.statement.body.statements.forEach(visit);
-    else if (
-      callee &&
+    if (
       !suspended &&
-      some(callee.statement, isSuspension, { crossFunctions: true })
+      (isSuspension(node) ||
+        (ts.isIdentifier(node) && suspending.has(node.text)))
     )
-      suspended = position(callee.statement);
-    // In source order: past an `await` or `import()`, modules loaded
-    // dynamically (by entry.ts or by anything it called) may have run, so any
-    // later environment write fails, as does one in a nested function, which
-    // runs at an unknown time.
-    function scan(node, nested) {
-      const name = assignedName(node);
-      if (name !== undefined && nested)
-        fail(
-          `src/entry.ts assigns ${name} inside a nested function, which runs at no single place the analysis can follow`,
-        );
-      if (name !== undefined && suspended)
-        fail(
-          `src/entry.ts assigns ${name} after it suspends at ${suspended}, when dynamically imported code may already have read it`,
-        );
-      if (!suspended && !nested && isSuspension(node))
-        suspended = position(node);
-      ts.forEachChild(node, (child) =>
-        scan(child, nested || isFunction(child)),
-      );
-    }
-    scan(statement, false);
+      suspended = position(node);
+  }
+  for (const statement of entrySource.statements) {
+    if (
+      ts.isImportDeclaration(statement) ||
+      ts.isFunctionDeclaration(statement)
+    )
+      continue;
+    for (const name of statementEnvironmentReads(statement, context))
+      read.add(name);
+    scan(statement);
     for (const name of definiteEnvironmentWrites(statement, context)) {
       if (read.has(name) || overwritten.has(name)) continue;
       if (importedReads.has(name))
@@ -2093,7 +2030,6 @@ function launchOverwrites(entrySource, program, context) {
       overwritten.add(name);
     }
   }
-  entrySource.statements.forEach(visit);
   return overwritten;
 }
 
