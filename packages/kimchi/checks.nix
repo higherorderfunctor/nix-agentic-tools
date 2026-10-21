@@ -2,6 +2,7 @@
   imports = [
     ./checks/command-shell.nix
     ./checks/docs-skill.nix
+    ./checks/kimchi-codeql.nix
     ./checks/kimchi-extracted.nix
     ./checks/module-eval.nix
     ./checks/native-options.nix

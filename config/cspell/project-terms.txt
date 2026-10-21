@@ -63,6 +63,7 @@ bigrams
 bitemporality
 blocklisted
 blockquotes
+bqrs
 brocode
 btop
 bubblewrap
@@ -433,6 +434,7 @@ steerchild
 stopword
 streamable
 strflocaltime
+strictcount
 strs
 subaction
 subdirs
