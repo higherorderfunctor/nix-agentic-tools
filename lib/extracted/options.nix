@@ -19,7 +19,8 @@
 #   exclusions   path → reason it has no option
 #   refinements  path → { type; refine; }: `refine {node; types;}` returns the
 #                value type for a node of the node `type` the row was written
-#                for; `types` is lib.types plus `duration` and `json`
+#                for; `types` is lib.types plus `duration` and `json`. A row on
+#                a node with a secret descendant fails evaluation.
 #   unread       node fields the owner's extractor writes and no option reads
 #
 # Returns:
@@ -58,10 +59,22 @@ in
     unknown = lib.concatLists (lib.mapAttrsToList (path: node:
       map (field: "${path}: unknown field `${field}`") (lib.subtractLists (known ++ unread) (builtins.attrNames node)))
     nodes);
+    # A refinement returns the WHOLE value type of its node, so on a container
+    # it replaces the generated type of every descendant, a redacted one
+    # included, and lets a plaintext secret through. A row that would apply
+    # (see refinementFits) on a node with a secret descendant is refused.
+    secretsUnder = path:
+      lib.filter (other: (lib.hasPrefix "${path}." other || lib.hasPrefix "${path}[]" other) && nodes.${other} ? secret) (builtins.attrNames nodes);
+    widening = lib.concatLists (lib.mapAttrsToList (path: row:
+      lib.optionals (nodes ? ${path} && row.type == nodes.${path}.type && !(nodes.${path} ? secret))
+      (map (secret: "${path} -> ${secret}") (secretsUnder path)))
+    refinements);
     checked =
-      if unknown == []
-      then nodes
-      else throw "lib/extracted/options: ${tool} nodes carry fields this generator does not read:\n  ${lib.concatStringsSep "\n  " unknown}";
+      if unknown != []
+      then throw "lib/extracted/options: ${tool} nodes carry fields this generator does not read:\n  ${lib.concatStringsSep "\n  " unknown}"
+      else if widening != []
+      then throw "lib/extracted/options: ${tool} refinement rows sit on a node with a secret descendant, so their type could replace the redacted one (row path -> secret path):\n  ${lib.concatStringsSep "\n  " widening}"
+      else nodes;
 
     # "" for a root node.
     parentOf = path: let
