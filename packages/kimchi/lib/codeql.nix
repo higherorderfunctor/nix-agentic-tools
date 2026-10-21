@@ -118,7 +118,7 @@
       inherit models;
       queries = [queries];
     };
-    pack = queries.codeqlPack.name or (throw "kimchi codeql.runQueries: `queries` must be a mkQueryPack result");
+    pack = queries.codeqlPack.name;
   in
     assert lib.assertMsg ((queries.codeqlPack.kind or null) == "query") "kimchi codeql.runQueries: `queries` must be a query pack";
       pkgs.runCommand "kimchi-codeql-${name}" {
