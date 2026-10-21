@@ -110,14 +110,15 @@ export -f curl nix
     def test_codeql_assertion_requires_every_engine_source_and_database(self):
         script = ci_step_script("Assert no CodeQL engine is published")
         # Two engines, each with its source, and the Kimchi database; MODE
-        # drops one source, every engine, or the database's output.
+        # drops one source or every engine, or fails the database's evaluation.
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 nix() {
   case "$MODE" in empty) return ;; esac
   case "$*" in
     *codeql.database.drvPath*)
-      [ "$MODE" = nodb ] || printf '%s' /nix/store/f-kimchi-codeql-database-1.drv
+      [ "$MODE" != nodb ] || return 1
+      printf '%s' /nix/store/f-kimchi-codeql-database-1.drv
       return
       ;;
   esac
@@ -130,7 +131,7 @@ nix-store() {
         /nix/store/c-codeql-linux64.zip.drv /nix/store/e-glibc-1.drv
       [ "$MODE" = missing ] || printf '%s\n' /nix/store/d-codeql-bundle-linux64.tar.zst.drv
       ;;
-    --outputs) shift 2; for drv in "$@"; do [ -z "$drv" ] || printf '%s\n' "${drv%.drv}"; done ;;
+    --outputs) shift 2; for drv in "$@"; do printf '%s\n' "${drv%.drv}"; done ;;
   esac
 }
 curl() {

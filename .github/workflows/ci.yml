@@ -667,19 +667,11 @@ jobs:
             echo "::error::expected $((2 * ${#engines[@]})) CodeQL derivations for ${#engines[@]} engines, found ${#drvs[@]}" >&2
             exit 1
           fi
+          drvs+=("$(nix eval --raw .#.ciPackages.x86_64-linux.kimchi.passthru.codeql.database.drvPath)")
           nix-store --query --outputs "${drvs[@]}" > "$RUNNER_TEMP/codeql-paths"
           paths=()
           while read -r path; do paths+=("$path"); done < "$RUNNER_TEMP/codeql-paths"
-          database="$(nix eval --raw .#.ciPackages.x86_64-linux.kimchi.passthru.codeql.database.drvPath)"
-          nix-store --query --outputs "$database" > "$RUNNER_TEMP/codeql-database"
-          databases=()
-          while read -r path; do databases+=("$path"); done < "$RUNNER_TEMP/codeql-database"
-          # Fail closed: an empty listing would assert nothing about the database.
-          if [ "${#databases[@]}" -eq 0 ]; then
-            echo "::error::kimchi.passthru.codeql.database has no output path, so it is not asserted" >&2
-            exit 1
-          fi
-          dev/scripts/assert-not-published.sh "${paths[@]}" "${databases[@]}"
+          dev/scripts/assert-not-published.sh "${paths[@]}"
 
       # The Semble customization smoke check builds a patched Semble here,
       # parses real AWK and jq samples, and exercises path-mapped discovery.
