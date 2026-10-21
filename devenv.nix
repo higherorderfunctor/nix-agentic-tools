@@ -54,6 +54,10 @@
   # instead of serving a stale shell. A developer who exports CI=1 gets the
   # diagnostic-lean interactive tool set, but the same validation declarations.
   isCI = builtins.getEnv "CI" != "";
+
+  # PROTOTYPE: the CodeQL CLI (lib/extracted/codeql), unfree and
+  # x86_64-linux only.
+  codeqlBundle = (import ./lib/extracted {inherit pkgs;}).codeql.bundle;
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -124,6 +128,13 @@ in {
       marksman
       nixd
       taplo
+    ]
+    # CodeQL for writing and running extraction queries by hand. Interactive
+    # only, like the LSP servers: under CI the shell never realizes it, so the
+    # update pipeline's devenv lane and the Devenv Diagnostic's store cache
+    # never hold a CLI whose terms forbid distributing it.
+    ++ lib.optionals (!isCI && lib.meta.availableOn pkgs.stdenv.hostPlatform codeqlBundle) [
+      codeqlBundle
     ]
     ++ [
       # Overlay packages — available via pkgs.ai.* after overlay

@@ -115,9 +115,10 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          pushFilter: kiro-cli
+          pushFilter: kiro-cli|codeql-bundle-javascript
           # The devenv lane enters the repo shell, whose closure holds the
           # patched Kiro; pushFilter skips matching roots, not closure members.
+          # (The shell's CodeQL bundle is gated off under CI; see devenv.nix.)
           skipPush: ${{ matrix.name == 'devenv' }}
       - uses: ./automation/.github/actions/git-bot-identity
         with:

@@ -1,7 +1,8 @@
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-17 — overlay parity uses the ordinary
-> `nixpkgs-stable` input; no patched evaluation source needs retention.
+> **Last verified:** 2026-10-20 — overlay parity uses the ordinary
+> `nixpkgs-stable` input; no patched evaluation source needs retention; every
+> credentialed push also filters the CodeQL bundle.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -53,12 +54,13 @@ devenv-signed paths is intentional.
 
 `publish-hestia` builds `ciHestia` before the test and check evaluator jobs. Its
 credentialed Cachix action publishes the Rust binary and keeps the
-`pushFilter: kiro-cli` exclusion. The package shards exclude `ci-hestia` because
-that early job owns its build. Jobs obtain the binary from the project Cachix
-cache, configured before `check-cache`; the daily GC job also enables that
-read-only substituter. On a cold main or same-repository PR run, the early job
-pays one Rust build before cache consumers start. Fork PRs have no publication
-token, so their test job builds the binary locally if it is absent from Cachix.
+`pushFilter: kiro-cli|codeql-bundle-javascript` exclusion. The package shards
+exclude `ci-hestia` because that early job owns its build. Jobs obtain the
+binary from the project Cachix cache, configured before `check-cache`; the daily
+GC job also enables that read-only substituter. On a cold main or
+same-repository PR run, the early job pays one Rust build before cache consumers
+start. Fork PRs have no publication token, so their test job builds the binary
+locally if it is absent from Cachix.
 
 Overlay parity imports the ordinary `nixpkgs-stable` flake source directly.
 Unlike devenv's patched nixpkgs output, it requires no evaluation-time source

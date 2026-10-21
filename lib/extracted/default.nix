@@ -113,6 +113,8 @@
     '';
 in {
   inherit (facts) children expect get hostRunOn load merge;
+  # PROTOTYPE: the CodeQL bundle and its query runners.
+  codeql = import ./codeql {inherit pkgs;};
   inherit (import ./reconcile.nix {inherit lib;}) reconcile;
   inherit goTest mkDriftCheck;
   index = facts.index pkgs;

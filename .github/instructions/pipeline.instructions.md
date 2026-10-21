@@ -12,7 +12,8 @@ applyTo: ".github/actions/check-cache/**,.github/actions/warm-ifd/**,.github/rep
 > matrix rows; the `mirror-health` job reports the jail-nix mirror; ci.yml runs
 > the required KVM job `service-secret-ordering`, which builds a dev-only
 > fixture flake; `jail-smoke` and `checks-eval-darwin` are required contexts;
-> both systems' name evaluations are budgeted by function count.
+> both systems' name evaluations are budgeted by function count; the pushFilter
+> also excludes the CodeQL bundle.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -271,7 +272,9 @@ compares nothing on Darwin. These jobs explicitly enable and assert the Nix
 sandbox; Darwin's Nix default does not provide that guarantee. Patched
 proprietary Kiro stays in those jobs without cache publication; every Cachix
 step holding the token, package matrix and update workers alike, carries
-`pushFilter: kiro-cli`.
+`pushFilter: kiro-cli|codeql-bundle-javascript`; the second alternative keeps
+the CodeQL bundle (lib/extracted/codeql), whose terms forbid distribution, out
+too.
 
 Codex facts are host-run, so a Linux update carries its fresh Linux raw into
 `extracted.json` and Darwin's side follows every unforked node while keeping its

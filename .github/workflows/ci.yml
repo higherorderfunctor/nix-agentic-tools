@@ -30,7 +30,7 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          pushFilter: kiro-cli
+          pushFilter: kiro-cli|codeql-bundle-javascript
       - name: Publish patched Hestia before cache consumers start
         run: |
           set -euETo pipefail
@@ -82,7 +82,7 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          pushFilter: kiro-cli
+          pushFilter: kiro-cli|codeql-bundle-javascript
       - name: Warm IFD sources (retry, best-effort)
         uses: ./.github/actions/warm-ifd
         with:
@@ -671,6 +671,31 @@ jobs:
         uses: ./.github/actions/warm-ifd
         with:
           systems: x86_64-linux aarch64-darwin
+
+      # TRIPWIRE for the CodeQL bundle (lib/extracted/codeql), the outcome
+      # assertion the kiro-patched job makes for the patched Kiro: the GitHub
+      # CodeQL Terms forbid distributing the CLI, and the pushFilter and
+      # ci-packages.py's EXCLUDED are only configuration. Every codeql-bundle
+      # output in the prototype check's build closure must answer 404. It
+      # evaluates and builds nothing, so it runs on every event, forks too.
+      - name: Assert the CodeQL bundle is not published
+        env:
+          CACHE: https://nix-agentic-tools.cachix.org
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          drv="$(nix eval --raw .#.checks.x86_64-linux.kimchi-codeql-network-targets.drvPath)"
+          nix-store --query --requisites "$drv" > "$RUNNER_TEMP/codeql-requisites"
+          mapfile -t drvs < <(command grep -E -- '-codeql-bundle-[^/]*\.drv$' "$RUNNER_TEMP/codeql-requisites" || :)
+          # Fail closed: the bundle and its source tarball are two
+          # derivations, so fewer means the listing no longer describes them.
+          if [ "${#drvs[@]}" -lt 2 ]; then
+            echo "::error::expected the bundle and its source among the check's derivations, found ${#drvs[@]}" >&2
+            exit 1
+          fi
+          nix-store --query --outputs "${drvs[@]}" > "$RUNNER_TEMP/codeql-paths"
+          mapfile -t paths < "$RUNNER_TEMP/codeql-paths"
+          dev/scripts/assert-not-published.sh "${paths[@]}"
 
       # The Semble customization smoke check builds a patched Semble here,
       # parses real AWK and jq samples, and exercises path-mapped discovery.

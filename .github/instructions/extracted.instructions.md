@@ -7,8 +7,8 @@ applyTo: "checks/extracted/**,lib/extracted/**,lib/git-tool-settings/**,packages
 
 # Extraction method: eval, then AST, then regex
 
-> **Last verified:** 2026-10-15 — operator rule, restated after the Kiro rollout
-> regex refused a new field in 2.30.0.
+> **Last verified:** 2026-10-20 — operator rule, restated after the Kiro rollout
+> regex refused a new field in 2.30.0; CodeQL (prototype) placed at tier 2.
 
 Every extractor picks the least brittle method its source allows. The method
 follows the SOURCE, not the author's habit.
@@ -35,6 +35,20 @@ follows the SOURCE, not the author's habit.
 Locating a JSON block inside a binary with a short anchor pattern, then decoding
 it with `json.JSONDecoder().raw_decode`, is tier 1. The anchor bounds the block,
 the parser reads the value, and a missing bound fails with its own message.
+
+CodeQL (`lib/extracted/codeql`, a prototype) is tier 2. A query reads a stored
+model of the source (AST, data flow, type tracking, and the TypeScript types
+recorded at extraction) and never runs the program or a live type checker, so a
+tier-1 extractor outranks it wherever both reach a fact; jq over the decoded
+string columns is fine. Two caveats bound what it sees. The JavaScript extractor
+skips `*.min.js` and `*-min.js`, JavaScript files averaging more than 200
+characters per line, and files over 10 MB, unless
+`CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true` and
+`CODEQL_EXTRACTOR_JAVASCRIPT_MAX_FILE_SIZE` lift those limits, so most of a
+bundled `dist/` is invisible. And its library models match on the imported
+module name, so a dependency a bundler inlined matches no model. Point it at the
+GitHub source tree, never an npm tarball: the CodeQL Terms allow automated
+database creation only for an OSI-licensed codebase hosted on GitHub.com.
 
 ## Rules
 

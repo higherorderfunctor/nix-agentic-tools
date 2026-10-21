@@ -9,9 +9,13 @@ from pathlib import Path
 from artifacts import downloaded
 
 # Generated documents are checked by `test`. Patched Hestia has a dedicated
-# early cache-writing job; patched Kiro has jobs without cache uploads.
+# early cache-writing job; patched Kiro has jobs without cache uploads. The
+# CodeQL bundle (lib/extracted/codeql) is not a package at all, and its terms
+# forbid distribution: listed so a future flat-set entry still never reaches a
+# cache-writing shard.
 EXCLUDED = {
     "ci-hestia",
+    "codeql-bundle-javascript",
     "kiro-cli-rollout-canary",
     "repo-contributing",
     "repo-readme",

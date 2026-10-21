@@ -25,6 +25,9 @@ userconfig
 WEZTERM
 WINDIR
 WSLENV
+Xext
+Xrender
+Xtst
 addy
 adoc
 affordances
@@ -61,6 +64,7 @@ bigrams
 bitemporality
 blocklisted
 blockquotes
+bqrs
 brocode
 btop
 bubblewrap
@@ -222,6 +226,7 @@ kirocrew
 kirodotdev
 kvim
 ldflags
+libasound
 libc
 libdl
 libexec
