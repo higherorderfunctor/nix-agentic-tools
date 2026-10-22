@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -31,15 +32,8 @@ func checkBody(r *http.Request, e *entry) bool {
 	if err != nil || mediaType != "application/json" || (params["charset"] != "" && !strings.EqualFold(params["charset"], "utf-8")) {
 		return false
 	}
-	encodings := r.Header.Values("Content-Encoding")
-	if len(encodings) > 1 || r.Body == nil {
-		return false
-	}
-	encoding := "identity"
-	if len(encodings) == 1 {
-		encoding = encodings[0]
-	}
-	if encoding != "identity" && encoding != "gzip" && encoding != "zstd" {
+	encoding, ok := wireEncoding(r.Header)
+	if !ok || r.Body == nil {
 		return false
 	}
 	wired, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes+1))
@@ -47,32 +41,8 @@ func checkBody(r *http.Request, e *entry) bool {
 	if err != nil || int64(len(wired)) > maxBodyBytes {
 		return false
 	}
-	var decoded []byte
-	switch encoding {
-	case "gzip":
-		reader, err := gzip.NewReader(bytes.NewReader(wired))
-		if err != nil {
-			return false
-		}
-		decoded, err = io.ReadAll(io.LimitReader(reader, maxBodyBytes+1))
-		closeErr := reader.Close()
-		if err != nil || closeErr != nil {
-			return false
-		}
-	case "zstd":
-		reader, err := zstd.NewReader(bytes.NewReader(wired), zstd.WithDecoderMaxMemory(uint64(maxBodyBytes*2)))
-		if err != nil {
-			return false
-		}
-		decoded, err = io.ReadAll(io.LimitReader(reader, maxBodyBytes+1))
-		reader.Close()
-		if err != nil {
-			return false
-		}
-	default:
-		decoded = wired
-	}
-	if int64(len(decoded)) > maxBodyBytes || !validBody(decoded, e) {
+	decoded, err := decodeWire(wired, encoding)
+	if err != nil || !validBody(decoded, e) {
 		return false
 	}
 	r.Body = io.NopCloser(bytes.NewReader(decoded))
@@ -80,6 +50,48 @@ func checkBody(r *http.Request, e *entry) bool {
 	r.Header.Set("Content-Length", strconv.Itoa(len(decoded)))
 	r.Header.Del("Content-Encoding")
 	return true
+}
+
+// wireEncoding returns the one Content-Encoding the gate can decode.
+func wireEncoding(header http.Header) (string, bool) {
+	values := header.Values("Content-Encoding")
+	if len(values) > 1 {
+		return "", false
+	}
+	encoding := "identity"
+	if len(values) == 1 {
+		encoding = values[0]
+	}
+	return encoding, encoding == "identity" || encoding == "gzip" || encoding == "zstd"
+}
+
+// decodeWire has the same decoded-size ceiling for calls and listings. The
+// caller limits the wire bytes, so an identity body needs no further check.
+func decodeWire(wired []byte, encoding string) ([]byte, error) {
+	var source io.Reader
+	switch encoding {
+	case "gzip":
+		reader, err := gzip.NewReader(bytes.NewReader(wired))
+		if err != nil {
+			return nil, err
+		}
+		defer reader.Close()
+		source = reader
+	case "zstd":
+		reader, err := zstd.NewReader(bytes.NewReader(wired), zstd.WithDecoderMaxMemory(uint64(maxBodyBytes*2)))
+		if err != nil {
+			return nil, err
+		}
+		defer reader.Close()
+		source = reader
+	default:
+		return wired, nil
+	}
+	decoded, err := io.ReadAll(io.LimitReader(source, maxBodyBytes+1))
+	if err == nil && int64(len(decoded)) > maxBodyBytes {
+		err = errors.New("decoded body exceeds limit")
+	}
+	return decoded, err
 }
 
 // validBody checks the syntax and names before relying on gjson's first-name

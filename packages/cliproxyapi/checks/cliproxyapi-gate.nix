@@ -19,8 +19,10 @@
   '';
   caddyfile = port:
     gate.caddyfile {
+      healthPort = port + 3;
       host = "127.0.0.1";
       inherit port;
+      upstreamPort = 28463;
     };
 
   # Every key holds "SECRET", so one grep finds any of them in a log.

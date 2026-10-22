@@ -102,8 +102,8 @@ func lastLine(log *bytes.Buffer) string {
 }
 
 // This contract is independent of the production routes table. Each route
-// accepts its own API credential; calls forward checked bytes, while listings
-// and websockets remain refused.
+// accepts its own API credential; calls and listings forward, while websockets
+// remain refused.
 func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 	g, log := newGate(t)
 	cases := []struct {
@@ -150,10 +150,10 @@ func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 			if err := g.ServeHTTP(w, r, next); err != nil {
 				t.Errorf("%s via %s: %v", c.target, name, err)
 			}
-			if forwarded != (c.class == classCall) {
+			if forwarded != (c.class != classWebsocket) {
 				t.Errorf("%s via %s: forwarded %v", c.target, name, forwarded)
 			}
-			if c.class != classCall {
+			if c.class == classWebsocket {
 				if w.Code != http.StatusNotFound || w.Body.Len() != 0 {
 					t.Errorf("%s via %s: got %d %q, want the empty 404", c.target, name, w.Code, w.Body)
 				}
@@ -239,7 +239,7 @@ func TestRefusals(t *testing.T) {
 		{"realtime", "GET", "/v1/realtime", bearer(allKey), 404, "route"},
 		{"keep-alive", "GET", "/keep-alive", bearer(allKey), 404, "route"},
 		{"root", "GET", "/", bearer(allKey), 404, "route"},
-		{"model detail", "GET", "/v1/models/m", bearer(allKey), 404, "route"},
+		{"model detail outside set", "GET", "/v1/models/absent", bearer(allKey), 404, "route"},
 		{"wrong method", "GET", "/v1/messages", bearer(allKey), 404, "route"},
 		{"api not admitted", "POST", "/v1/messages", bearer(chatKey), 404, "route"},
 
@@ -327,6 +327,10 @@ func TestLoadPolicy(t *testing.T) {
 		return `{"entries":[{"name":"a",` + fields + `}]}`
 	}
 	cases := map[string]struct{ policy, want string }{
+		"duplicate entry name": {`{"entries":[
+			{"name":"a","key":"secret-k1","internal":"secret-i1","apis":["chat"],"models":["m"]},
+			{"name":"a","key":"secret-k2","internal":"secret-i2","apis":["chat"],"models":["m"]}]}`, "duplicate entry name"},
+		"empty entry name": {`{"entries":[{"name":"","key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"]}]}`, "empty entry name"},
 		"client key is an internal key": {`{"entries":[
 			{"name":"a","key":"secret-k1","internal":"secret-k2","apis":["chat"],"models":["m"]},
 			{"name":"b","key":"secret-k2","internal":"secret-i","apis":["chat"],"models":["m"]}]}`, `"b": client key equals the internal key of entry "a"`},
@@ -340,11 +344,12 @@ func TestLoadPolicy(t *testing.T) {
 		"invalid secret field type": {single(`"key":{"secret":"secret-k"},"internal":"secret-i","apis":["chat"],"models":["m"]`), "invalid JSON or field"},
 		"malformed document":        {strings.TrimSuffix(validPolicy, "}"), "invalid JSON or field"},
 		"no apis":                   {single(`"key":"secret-k","internal":"secret-i","apis":[],"models":["m"]`), "no apis"},
+		"no entries":                {`{"entries":[]}`, "no entries"},
 		"no models":                 {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":[]`), "no models"},
 		"own internal key":          {single(`"key":"secret-k","internal":"secret-k","apis":["chat"],"models":["m"]`), "client key equals the internal key"},
 		"second object":             {validPolicy + ` {"key":"secret-tail"}`, "trailing data"},
 		"secret api value":          {single(`"key":"secret-k","internal":"secret-i","apis":["secret-k"],"models":["m"]`), "apis[0] is unknown"},
-		"unknown api":               {single(`"key":"secret-k","internal":"secret-i","apis":["gemini"],"models":["m"]`), `apis[0] is unknown`},
+		"unknown api":               {single(`"key":"secret-k","internal":"secret-i","apis":["unknown"],"models":["m"]`), `apis[0] is unknown`},
 		"unknown field":             {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"],"otherField":{}`), "invalid JSON or field"},
 	}
 	for name, c := range cases {
@@ -374,14 +379,15 @@ func TestCaddyfileDirective(t *testing.T) {
 		out, _, err := caddyconfig.GetAdapter("caddyfile").Adapt([]byte(site), nil)
 		return string(out), err
 	}
-	out, err := adapt("cpa_gate * /run/policy.json")
-	if err != nil || !strings.Contains(out, `"handler":"cpa_gate","policy":"/run/policy.json"`) {
+	out, err := adapt("cpa_gate * /run/policy.json http://127.0.0.1:8317")
+	if err != nil || !strings.Contains(out, `"handler":"cpa_gate","policy":"/run/policy.json","upstream":"http://127.0.0.1:8317"`) {
 		t.Errorf("got %s, %v", out, err)
 	}
 	for _, directive := range []string{
 		"cpa_gate /run/policy.json", // the path is taken as a matcher
 		"cpa_gate *",                // an empty `{$VAR}`
-		"cpa_gate * /a /b",
+		"cpa_gate * /run/policy.json", // no checker origin
+		"cpa_gate * /a /b /c",
 		"cpa_gate * /a {\n\t\t\tx\n\t\t}",
 	} {
 		if out, err := adapt(directive); err == nil {

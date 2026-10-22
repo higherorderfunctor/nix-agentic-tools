@@ -25,20 +25,25 @@ import (
 
 func init() {
 	caddy.RegisterModule(Gate{})
+	caddy.RegisterModule(Health{})
 	httpcaddyfile.RegisterHandlerDirective("cpa_gate", parseCaddyfile)
+	httpcaddyfile.RegisterHandlerDirective("cpa_gate_health", parseHealthCaddyfile)
 }
 
-// Gate is the module. A Caddyfile sets it with `cpa_gate * <policy path>`:
+// Gate is the module. A Caddyfile sets it with
+// `cpa_gate * <policy path> <loopback CPA origin>`:
 // Caddy reads the first argument of a handler directive as a matcher when it
 // starts with `/`, so an absolute path needs the `*` before it.
 type Gate struct {
 	// Policy is the path of the policy file. Keys never appear in the
 	// Caddyfile: Caddy splices `{$VAR}` values in before parsing and keeps
 	// them in the adapted config.
-	Policy string `json:"policy"`
+	Policy   string `json:"policy"`
+	Upstream string `json:"upstream"`
 
 	keys   map[[sha256.Size]byte]*entry
 	logger *zap.Logger
+	health *healthState
 }
 
 // Caddy provisions a module only through this interface, so a wrong
@@ -62,6 +67,11 @@ func (g *Gate) Provision(ctx caddy.Context) error {
 		return fmt.Errorf("cpa_gate: %w", err)
 	}
 	g.keys = keys
+	return g.startChecker()
+}
+
+func (g *Gate) Cleanup() error {
+	g.stopChecker()
 	return nil
 }
 
@@ -70,7 +80,7 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 	h.Next()
 	// An unset `{$VAR}` substitutes nothing, so it arrives here as a
 	// missing argument.
-	if !h.AllArgs(&g.Policy) {
+	if !h.AllArgs(&g.Policy, &g.Upstream) {
 		return nil, h.ArgErr()
 	}
 	if h.NextBlock(0) {
@@ -86,8 +96,8 @@ var (
 	queryCarriers  = []string{"auth_token", "key"}
 )
 
-// ServeHTTP authenticates and admits checked calls. Listings and websocket
-// frames remain refused until their separate checks are present.
+// ServeHTTP authenticates, admits checked calls and filters listings.
+// Websocket frames remain refused until their separate check is present.
 func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
@@ -98,6 +108,9 @@ func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return g.refuse(w, unauthorized, "-", "-", "key")
 	}
 	rt, ok := routes[r.Method+" "+r.URL.Path]
+	if !ok && r.Method == http.MethodGet {
+		rt, ok = detailRoute(r.URL.Path, e)
+	}
 	// RawPath is set only when the path was escaped some other way than
 	// Go would escape it, as when a slash arrives as %2F.
 	if !ok || r.URL.RawPath != "" || (rt.api != "" && !e.apis[rt.api]) || !queryAllowed(query, rt.query) {
@@ -117,6 +130,9 @@ func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return next.ServeHTTP(w, r)
 	}
 	rewrite(r, query, e.internal)
+	if rt.class == classListing {
+		return g.serveListing(w, r, next, e, rt.detail)
+	}
 	return g.refuse(w, notFound, e.name, rt.class, "pending")
 }
 

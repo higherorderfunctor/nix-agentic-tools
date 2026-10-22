@@ -100,9 +100,9 @@ before publication.
 
 # CLIProxyAPI front gate (cpa-gate)
 
-> **Last verified:** 2026-10-22 — the gate checks call bodies before forwarding,
-> retains constant-time key comparison and the Caddy pin refresh; listings and
-> websockets remain refused, and no module option enables it.
+> **Last verified:** 2026-10-22 — the gate checks call bodies, filters five CPA
+> listing shapes and detail responses, and reports listing health; websockets
+> remain refused, and no module option enables it.
 
 **cpa-gate is NOT a security boundary, and nothing wires it in yet.** A harness
 that runs under the same uid as the gate can read the policy file, which holds
@@ -118,7 +118,9 @@ key, so CPA applies its key allowlist to the principal the gate chose. The Go
 module is `src/cpa-gate` (module path `cpagate`, never fetched); the binary is
 Caddy's own `main` plus one import.
 
-`lib/gate.nix` renders the Caddyfile from the shared `lib/ai/caddy.nix` pieces.
+`lib/gate.nix` renders the Caddyfile from shared pieces. Only the listing paths
+have a downstream `reverse_proxy`; a second loopback site serves
+`cpa_gate_health`.
 
 ## Policy file
 
@@ -143,15 +145,15 @@ clear. The file is JSON:
 }
 ```
 
-`Provision` loads it and fails `caddy run` and `caddy validate` on an empty
-client or internal key, empty `apis` or `models`, an `apis` value no route
-names, two entries sharing a client key, a client key equal to any internal key,
-and any field this build does not enforce. A second JSON value or trailing junk
-is refused. Errors name entries and fields, never values; entry names are public
-metadata. In memory a client key is kept only as its SHA-256 digest;
-authentication scans all digests with constant-time comparisons. Each
-`hostedTools` type declares implied models inside the entry's set; the empty map
-denies every hosted tool.
+`Provision` fails on an empty `entries` list (health would report OK while
+serving nothing), empty or duplicate entry names (health is keyed by name),
+empty keys, `apis` or `models`, unknown API routes or policy fields, duplicate
+client keys, a client key equal to an internal key, and trailing JSON. Errors
+name entries and fields, never values; entry names are public metadata, since
+`/-/health` returns every one to any loopback caller without a credential.
+Client keys remain in memory only as SHA-256 digests, scanned with constant-time
+comparisons. Each `hostedTools` type declares implied models inside its entry's
+set; an empty map denies every hosted tool.
 
 ## Requests
 
@@ -172,12 +174,13 @@ denies every hosted tool.
    route. Then all five carriers go and `Authorization: Bearer <internal>` is
    set.
 
-| `apis`      | Routes                                                                                                               | Query            |
-| ----------- | -------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| any         | `GET /v1/models`                                                                                                     | `client_version` |
-| `anthropic` | `POST /v1/messages`, `POST /v1/messages/count_tokens`                                                                | `beta`           |
-| `chat`      | `POST /v1/chat/completions`                                                                                          | none             |
-| `responses` | `POST` `responses` and `responses/compact`, `GET responses` (websocket), each under `/v1/` and `/backend-api/codex/` | none             |
+| `apis`      | Routes                                                                                                               | Query                        |
+| ----------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| any         | `GET /v1/models`, `GET /v1/models/{id}`                                                                              | `client_version` on the list |
+| `anthropic` | `POST /v1/messages`, `POST /v1/messages/count_tokens`                                                                | `beta`                       |
+| `chat`      | `POST /v1/chat/completions`                                                                                          | none                         |
+| `gemini`    | `GET /v1beta/models`, `GET /v1beta/models/{name}`                                                                    | none                         |
+| `responses` | `POST` `responses` and `responses/compact`, `GET responses` (websocket), each under `/v1/` and `/backend-api/codex/` | none                         |
 
 Calls forward after a strict body check. The gate caps wire and decoded bodies
 at 32 MiB, accepts JSON with absent/`identity`/`gzip`/`zstd` encoding, and
@@ -189,15 +192,29 @@ data, trailing values and nesting beyond 128 levels. Only schemas at
 `tools[].input_schema`, `tools[].parameters`, `tools[].function.parameters`,
 `text.format.schema`, `response_format.json_schema.schema`, and
 `output_format.schema`, plus client tool arguments at their structural
-positions, are exempt from model checks. Listings and websocket routes remain
-refused with `"reason": "pending"`.
+positions, are exempt from model checks. Websocket routes remain refused with
+`"reason": "pending"`.
+
+Listings are parsed by wire shape, never by request header or user agent. Only
+exact allowed IDs survive, `first_id`/`last_id` are recomputed, and an object
+with a forbidden model directive becomes null (Codex's `upgrade.model`). A
+private writer buffers the response, so CPA's interim 1xx headers and trailers
+never reach the client. Everything else gets the empty 404: an unknown shape or
+envelope field, a paginated listing, non-200, an interrupted or oversized copy,
+and a disallowed or missing detail.
+
+`cpa_gate_health` serves `GET /-/health` on a separate loopback site. It starts
+failed, then probes each internal principal's `/v1/models` through serving's own
+decoder and interpreter, immediately and every 60 seconds. It reports each
+entry's `ok` and missing **count**, never model IDs or keys, and refuses any
+request carrying a client credential. Logs hold counts only.
 
 ## Refusals and logs
 
 - **401**, every authentication failure: `{"error":"Invalid API key"}`, CPA's
   own body for an unknown key (`sdk/access/errors.go`).
-- **404**, every route or body refusal and every pending route: no body, as
-  CPA's gin `NoRoute` answers.
+- **404**, every route, body, listing, detail or pending websocket refusal: no
+  body, as CPA's gin `NoRoute` answers.
 
 The handler writes refusals itself and returns nil. A returned error would make
 Caddy log the whole request. Its own line holds the entry name (`-` before
@@ -213,31 +230,19 @@ therefore deletes the whole `request>headers` map and `request>uri`.
 ## Package and updates
 
 `packages/ai/generic/cpa-gate` builds `cmd/cpa-gate` with `buildGoModule` and
-the locked Go, at the version and build tags of nixpkgs' `caddy`. It is not
-`caddy.withPlugins`, for three reasons:
+nixpkgs' Caddy version and build tags. `gate.json` pins `goFloor` and
+`vendorHash`; nixpkgs and direct updates regenerate it, `go.mod` and `go.sum`,
+and `cliproxyapi-gate-pins` checks the version.
 
-- `withPlugins` takes a plugin only as `module@version`.
-- It vendors everything into one fixed-output tree, whose hash would move on
-  every gate edit.
-- Its install check needs a version that a local path lacks.
-
-`buildGoModule` vendors only the dependencies, so `vendorHash` moves with
-`go.mod`. `gate.json` holds `goFloor` and `vendorHash`, the same sidecar keys
-the other Go recipes use.
-
-`src/cpa-gate/go.mod` requires the Caddy version nixpkgs ships. The package
-declares `updateFlakeInput = "nixpkgs"` and a `regenerateExtracted` script, so a
-nixpkgs update runs the same script as a direct package update and stages
-`gate.json`, `go.mod`, and `go.sum`. It runs `go get` for nixpkgs' Caddy, then
-`go mod tidy`, then the floor and vendor-hash fixers. `cliproxyapi-gate-pins`
-checks the resulting version.
+**Settled, do not relitigate:** the package is not `caddy.withPlugins`.
+`withPlugins` takes a plugin only as `module@version`; it vendors everything
+into one fixed-output tree whose hash would move on every gate edit; and its
+install check needs a version that a local path lacks.
 
 ## Checks
 
-- The Go tests run in the package's check phase: an independent route contract,
-  call forwarding, strict model parsing and compressed bodies, refusal controls,
-  complete policy loading and the directive. A test fails if any log or error
-  carries a key.
+- Go tests run in the package check phase, including a real Caddy copy of
+  listings and a test that no log or error carries a key.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
 - `cliproxyapi-gate-validate`: the real binary validates the rendered Caddyfile
   with a good policy, and refuses a shared key, a missing file and an empty
