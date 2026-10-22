@@ -1,8 +1,9 @@
 # CPA Manager Plus extraction: config.json and environment
 
-> **Last verified:** 2026-10-20 — patched Manager Plus 1.14.7 measures 28
+> **Last verified:** 2026-10-21 — patched Manager Plus 1.14.7 measures 28
 > config.json keys, `defaultTheme` with its values, and 33 environment variables
-> through the shared Go test extractor.
+> through the shared Go test extractor; annotations mark the key files
+> `secretFile`.
 
 ## Two surfaces
 
@@ -50,11 +51,12 @@ Not measured: value ranges and defaults (`collectorMode` values,
 ## Credentials
 
 `config.json` names key files (`managementKeyFile`, `adminKeyFile`,
-`dataKeyFile`), never keys. `extract/annotations.json` gives credential reasons
-for the three environment variables that carry a key itself, and
-`extract/rules.nix` reconciles them through the shared `reconcile`. The config
-surface has no rows, so a credential-shaped key added upstream fails until it
-gets one.
+`dataKeyFile`), never keys. `extract/annotations.json` gives `secret` reasons
+for the three environment variables that carry a key itself, and `secretFile`
+reasons for the three key files and the three `*_KEY_FILE` variables that
+override them; `extract/rules.nix` reconciles both fields through the shared
+`reconcile`. A credential-shaped key added upstream fails until it gets a row.
+The annotations are hand rows, so adding one changes no measured fact.
 
 ## Checks and updates
 

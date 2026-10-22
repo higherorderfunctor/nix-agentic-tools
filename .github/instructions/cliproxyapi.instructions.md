@@ -101,8 +101,8 @@ before publication.
 > through `lib/extracted/options.nix`, with five refinements; the clean render
 > passes native v8 validation and loads through CPA's `LoadConfig` in
 > `cliproxyapi-settings`; `ai.cliproxyapi.instances` renders it at start,
-> defaults its listener to loopback, and turns off the unprompted fetches the
-> pinned CPA has a switch for.
+> defaults its listener to loopback, turns off the unprompted fetches the pinned
+> CPA has a switch for, and types `server.tls.key` as a secret file.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -165,6 +165,11 @@ only: `access.api-keys[]`, `management.secret-key`, `server.github-token`,
 group and key `proxy-url`, `headers.<name>` and `api-key`. A proxy URL or a
 header that holds no credential still takes a reference (`redact.file` or
 `redact.command`), since the type cannot tell which values carry one.
+
+`server.tls.key`, the TLS private key file, is a `secretFile` node: it takes a
+reference, which the service launcher writes to a 0600 file that the rendered
+config names (`dev/fragments/redact/redact.md`, Secret files). `server.tls.cert`
+stays a plain path.
 
 `render settings` gives `{ content; secrets; }`: config.yaml as JSON text with
 each secret a `{$CLIPROXYAPI_<PATH>}` placeholder, list positions included
