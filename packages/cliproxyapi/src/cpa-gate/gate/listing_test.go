@@ -6,11 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -83,16 +84,28 @@ func TestRecordedCodexTemplateListingEqualsCallableSet(t *testing.T) {
 		t.Fatalf("CPA template fixture ID: %q, %v", id, ok)
 	}
 	e := &entry{models: map[string]bool{id: true}}
-	filtered, ok := filterListing(raw, e)
+	interpreted, ok := interpretListing(raw, e)
+	filtered := interpreted.body
 	if !ok || strings.Contains(string(filtered), "gpt-6.1-sol") || !bytes.Contains(filtered, []byte(`"upgrade":null`)) {
 		t.Fatalf("filtered CPA template: ok %v, leaked %v, upgrade null %v", ok, strings.Contains(string(filtered), "gpt-6.1-sol"), bytes.Contains(filtered, []byte(`"upgrade":null`)))
 	}
 	result, _, ok := parseListing(filtered)
-	if !ok || len(result["models"].([]any)) != len(e.models) {
+	if !ok {
+		t.Fatalf("filtered CPA template did not parse: %s", filtered)
+	}
+	returned := map[string]bool{}
+	for _, value := range result["models"].([]any) {
+		got, valid := listingID(value.(map[string]any), "models")
+		if !valid {
+			t.Fatalf("filtered row has no canonical ID: %v", value)
+		}
+		returned[got] = true
+	}
+	if !maps.Equal(returned, e.models) || !maps.Equal(returned, interpreted.ids) || !listingCoverage(e, interpreted.ids).OK {
 		t.Fatalf("filtered IDs differ from callable set: %s", filtered)
 	}
 	e.models["not-listed"] = true
-	if len(result["models"].([]any)) == len(e.models) {
+	if coverage := listingCoverage(e, interpreted.ids); coverage.OK || coverage.Missing != 1 {
 		t.Error("a callable model absent from the CPA listing passed the subset check")
 	}
 }
@@ -106,7 +119,9 @@ func TestListingRefusesUnrecognizedOrAmbiguousWireShapes(t *testing.T) {
 		"duplicate name": []byte(`{"data":[],"data":[{"id":"m"}]}`),
 		"escaped name": []byte(`{"d\u0061ta":[{"id":"m"}]}`),
 		"invalid utf8": append([]byte(`{"data":[{"id":"m","note":"`), 0xff, '"', '}', ']', '}'),
+		"mixed codex id row": []byte(`{"models":[{"slug":"m","id":"outside"}]}`),
 		"mixed codex gemini row": []byte(`{"models":[{"slug":"m","name":"models/outside"}]}`),
+		"mixed gemini id row": []byte(`{"models":[{"name":"models/m","id":"outside"}]}`),
 		"mismatched data identity": []byte(`{"data":[{"id":"m","name":"models/outside"}]}`),
 		"non ascii name": []byte(`{"data":[{"id":"m","modél":"outside"}]}`),
 		"paginated unseen rows": []byte(`{"data":[{"id":"m"}],"has_more":true}`),
@@ -163,6 +178,16 @@ func TestListingHandlerBoundsAndCleansTheResponse(t *testing.T) {
 	if _, err := capture.Write(bytes.Repeat([]byte{'x'}, int(maxBodyBytes)+1)); err == nil || capture.body.Len() != 0 {
 		t.Error("oversized upstream write was buffered")
 	}
+	r := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	r.Header.Set("Authorization", "Bearer "+allKey)
+	w = httptest.NewRecorder()
+	if err := g.ServeHTTP(w, r, caddyhttp.HandlerFunc(func(out http.ResponseWriter, _ *http.Request) error {
+		_, _ = io.WriteString(out, `{"object":"list","data":[{"id":"m"}]}`)
+		_, _ = out.Write(bytes.Repeat([]byte{' '}, int(maxBodyBytes)+1)) // caller ignores the write error
+		return nil
+	})); err != nil || w.Code != http.StatusNotFound || w.Body.Len() != 0 {
+		t.Errorf("ignored overflow accepted a valid prefix: %d %s %v", w.Code, w.Body, err)
+	}
 }
 
 func TestListingDecompressionIsBounded(t *testing.T) {
@@ -204,6 +229,17 @@ func TestDetailRoutesHaveTheSameUniformRefusal(t *testing.T) {
 		w := serve(t, g, r)
 		if w.Code != http.StatusNotFound || w.Body.Len() != 0 {
 			t.Errorf("%s: %d %s", target, w.Code, w.Body)
+		}
+	}
+	e := g.keys[sha256.Sum256([]byte(allKey))]
+	for _, raw := range []string{`{"id":"outside","slug":"m"}`, `{"id":"outside","name":"models/m"}`} {
+		if result, ok := filterDetail([]byte(raw), e, "/v1/models/m"); ok {
+			t.Errorf("conflicting detail identity accepted: %s", result)
+		}
+	}
+	for _, raw := range []string{`{"slug":"m"}`, `{"name":"models/m"}`} {
+		if result, ok := filterDetail([]byte(raw), e, "/v1/models/m"); !ok || len(result) == 0 {
+			t.Errorf("canonical detail refused: %s, %v", result, ok)
 		}
 	}
 }

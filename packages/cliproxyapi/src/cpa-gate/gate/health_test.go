@@ -3,7 +3,6 @@ package gate
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,18 +17,26 @@ func TestHealthChecksEachInternalListingAndKeepsModelsPrivate(t *testing.T) {
 		e.models = map[string]bool{model: true}
 		modelsByKey["Bearer "+e.internal] = model
 	}
-	visible := true
+	mode := "ordinary"
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/v1/models" || r.Header.Get("Accept-Encoding") != "identity" || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer secret-internal-") {
 			t.Errorf("checker request shape: %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if visible {
-			body, _ := json.Marshal(map[string]any{"object": "list", "data": []any{map[string]any{"id": modelsByKey[r.Header.Get("Authorization")]}}})
-			_, _ = w.Write(body)
-		} else {
-			_, _ = io.WriteString(w, `{"object":"list","data":[]}`)
+		row := map[string]any{"id": modelsByKey[r.Header.Get("Authorization")]}
+		root := map[string]any{"object": "list", "data": []any{row}}
+		switch mode {
+		case "empty":
+			root["data"] = []any{}
+		case "extra":
+			root["extra"] = "unrecognized"
+		case "has_more":
+			root["has_more"] = true
+		case "outside":
+			row["model"] = "outside"
 		}
+		body, _ := json.Marshal(root)
+		_, _ = w.Write(body)
 	}))
 	defer upstream.Close()
 	g.Upstream = upstream.URL
@@ -55,11 +62,20 @@ func TestHealthChecksEachInternalListingAndKeepsModelsPrivate(t *testing.T) {
 	if err := h.ServeHTTP(w, r, nil); err != nil || w.Code != http.StatusOK {
 		t.Errorf("listed callable set is unhealthy: %d %s %v", w.Code, w.Body, err)
 	}
-	visible = false
+	mode = "empty"
 	g.checkOnce(context.Background())
 	for _, result := range g.health.entries {
 		if result.OK || result.Missing != 1 {
 			t.Errorf("missing callable model is healthy: %+v", result)
+		}
+	}
+	for _, bad := range []string{"extra", "has_more", "outside"} {
+		mode = bad
+		g.checkOnce(context.Background())
+		for _, result := range g.health.entries {
+			if result.OK || result.Missing != 1 {
+				t.Errorf("%s listing reported healthy: %+v", bad, result)
+			}
 		}
 	}
 	if strings.Contains(log.String(), "private-model") || strings.Contains(log.String(), "secret") {

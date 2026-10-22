@@ -23,6 +23,7 @@ type listingCapture struct {
 	body    bytes.Buffer
 	status  int
 	interim bool
+	failed  bool
 }
 
 func (c *listingCapture) Header() http.Header { return c.header }
@@ -42,21 +43,34 @@ func (c *listingCapture) Write(p []byte) (int, error) {
 		c.status = http.StatusOK
 	}
 	if int64(len(p)) > maxBodyBytes-int64(c.body.Len()) {
+		c.failed = true
 		return 0, errors.New("listing exceeds limit")
 	}
-	return c.body.Write(p)
+	n, err := c.body.Write(p)
+	if err != nil {
+		c.failed = true
+	}
+	return n, err
 }
 
 func (c *listingCapture) Flush() {}
 
 // Listings are the only downstream responses the gate inspects.
-func (g *Gate) serveListing(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler, e *entry, detail bool) error {
+func (g *Gate) serveListing(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler, e *entry, detail bool) (err error) {
 	r.Header.Set("Accept-Encoding", "identity")
 	rec := &listingCapture{header: make(http.Header)}
+	defer func() {
+		if caught := recover(); caught != nil {
+			if caught != http.ErrAbortHandler {
+				panic(caught)
+			}
+			err = g.refuse(w, notFound, e.name, classListing, "upstream")
+		}
+	}()
 	if err := next.ServeHTTP(rec, r); err != nil {
 		return g.refuse(w, notFound, e.name, classListing, "upstream")
 	}
-	if rec.interim || rec.status != http.StatusOK {
+	if rec.failed || rec.interim || rec.status != http.StatusOK {
 		return g.refuse(w, notFound, e.name, classListing, "upstream")
 	}
 	decoded, ok := decodeListing(&rec.body, rec.header)
@@ -122,14 +136,20 @@ func parseListing(raw []byte) (map[string]any, gjson.Result, bool) {
 	return root, gjson.ParseBytes(raw), decoder.Decode(&trailing) == io.EOF
 }
 
-// filterListing handles the five CPA 8.0.38 producers by their wire shape:
+type listingResult struct {
+	body   []byte
+	ids    map[string]bool
+	openAI bool
+}
+
+// interpretListing handles the five CPA 8.0.38 producers by their wire shape:
 // OpenAI, Anthropic and Grok have data[].id; Codex has models[].slug;
 // Gemini has models[].name with a models/ prefix. Headers and user agents do
 // not select a parser. Unknown envelope fields fail closed.
-func filterListing(raw []byte, e *entry) ([]byte, bool) {
+func interpretListing(raw []byte, e *entry) (listingResult, bool) {
 	root, parsed, ok := parseListing(raw)
 	if !ok {
-		return nil, false
+		return listingResult{}, false
 	}
 	field := "data"
 	if _, found := root[field]; !found {
@@ -138,33 +158,33 @@ func filterListing(raw []byte, e *entry) ([]byte, bool) {
 	for name := range root {
 		if !(field == "data" && (name == "data" || name == "object" || name == "first_id" || name == "last_id" || name == "has_more")) &&
 			!(field == "models" && name == "models") {
-			return nil, false
+			return listingResult{}, false
 		}
 	}
 	rows, ok := root[field].([]any)
 	if !ok {
-		return nil, false
+		return listingResult{}, false
 	}
 	if object, present := root["object"]; present && object != "list" {
-		return nil, false
+		return listingResult{}, false
 	}
 	if more, present := root["has_more"]; present && more != false {
-		return nil, false
+		return listingResult{}, false
 	}
 	parsedRows := parsed.Get(field).Array()
 	if len(parsedRows) != len(rows) {
-		return nil, false
+		return listingResult{}, false
 	}
 	kept := make([]any, 0, len(rows))
 	ids := make([]string, 0, len(rows))
 	for i, value := range rows {
 		row, ok := value.(map[string]any)
 		if !ok {
-			return nil, false
+			return listingResult{}, false
 		}
 		id, ok := listingID(row, field)
 		if !ok {
-			return nil, false
+			return listingResult{}, false
 		}
 		if !e.models[id] {
 			continue
@@ -190,7 +210,19 @@ func filterListing(raw []byte, e *entry) ([]byte, bool) {
 		}
 	}
 	filtered, err := json.Marshal(root)
-	return filtered, err == nil
+	if err != nil {
+		return listingResult{}, false
+	}
+	result := listingResult{body: filtered, ids: make(map[string]bool, len(ids)), openAI: field == "data" && root["object"] == "list"}
+	for _, id := range ids {
+		result.ids[id] = true
+	}
+	return result, true
+}
+
+func filterListing(raw []byte, e *entry) ([]byte, bool) {
+	result, ok := interpretListing(raw, e)
+	return result.body, ok
 }
 
 func listingID(row map[string]any, field string) (string, bool) {
@@ -205,6 +237,9 @@ func listingID(row map[string]any, field string) (string, bool) {
 			}
 		}
 		return id, ok && id != ""
+	}
+	if _, found := row["id"]; found {
+		return "", false
 	}
 	if slug, present := row["slug"]; present {
 		if _, found := row["name"]; found {
@@ -257,10 +292,11 @@ func filterDetail(raw []byte, e *entry, path string) ([]byte, bool) {
 		return nil, false
 	}
 	id := path[strings.LastIndex(path, "/")+1:]
-	got, valid := listingID(row, "data")
-	if !valid {
-		got, valid = listingID(row, "models")
+	field := "models"
+	if _, hasID := row["id"]; hasID {
+		field = "data"
 	}
+	got, valid := listingID(row, field)
 	if !valid || got != id || !e.models[got] || !scrubModelRefs(parsed, row, e) {
 		return nil, false
 	}

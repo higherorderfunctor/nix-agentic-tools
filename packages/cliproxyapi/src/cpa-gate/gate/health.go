@@ -96,14 +96,8 @@ func (g *Gate) checkOnce(ctx context.Context) {
 	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	for _, e := range g.keys {
 		result := entryHealth{Missing: len(e.models)}
-		if ids, ok := fetchListing(ctx, client, g.Upstream, e.internal); ok {
-			result.Missing = 0
-			for model := range e.models {
-				if !ids[model] {
-					result.Missing++
-				}
-			}
-			result.OK = result.Missing == 0
+		if ids, ok := fetchListing(ctx, client, g.Upstream, e); ok {
+			result = listingCoverage(e, ids)
 		}
 		g.health.mu.Lock()
 		g.health.entries[e.name] = result
@@ -112,13 +106,24 @@ func (g *Gate) checkOnce(ctx context.Context) {
 	}
 }
 
-func fetchListing(ctx context.Context, client *http.Client, upstream, internal string) (map[string]bool, bool) {
+func listingCoverage(e *entry, ids map[string]bool) entryHealth {
+	result := entryHealth{}
+	for model := range e.models {
+		if !ids[model] {
+			result.Missing++
+		}
+	}
+	result.OK = result.Missing == 0
+	return result
+}
+
+func fetchListing(ctx context.Context, client *http.Client, upstream string, e *entry) (map[string]bool, bool) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, upstream+"/v1/models", nil)
 	if err != nil {
 		return nil, false
 	}
 	req.Header.Set("Accept-Encoding", "identity")
-	req.Header.Set("Authorization", "Bearer "+internal)
+	req.Header.Set("Authorization", "Bearer "+e.internal)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, false
@@ -135,27 +140,8 @@ func fetchListing(ctx context.Context, client *http.Client, upstream, internal s
 	if !ok {
 		return nil, false
 	}
-	root, _, ok := parseListing(decoded)
-	if !ok || root["object"] != "list" || root["models"] != nil {
-		return nil, false
-	}
-	rows, ok := root["data"].([]any)
-	if !ok {
-		return nil, false
-	}
-	ids := map[string]bool{}
-	for _, value := range rows {
-		row, ok := value.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		id, ok := listingID(row, "data")
-		if !ok {
-			return nil, false
-		}
-		ids[id] = true
-	}
-	return ids, true
+	result, ok := interpretListing(decoded, e)
+	return result.ids, ok && result.openAI
 }
 
 // Health is served on a separately bound loopback site. It holds only the
