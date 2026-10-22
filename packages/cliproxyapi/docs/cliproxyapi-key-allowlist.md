@@ -6,7 +6,8 @@
 > module refuses plugins beside it, null entries, and rules that cannot narrow
 > or match; CPA refuses two entries with one client key at every load, and a
 > refused initial load exits 1; a hot reload can serve a rotated credential
-> until its delete lands (documented, not fixed).
+> until its delete lands (documented, not fixed); a runtime routed through an
+> instance gets its entry from `ai.<runtime>.proxy.allow`.
 >
 > **Settled — do not relitigate.** Plugins fail open and split instances were
 > rejected (operator, 2026-10-21): one CPA instance enforces the allowlist in
@@ -40,17 +41,20 @@ access = {
 ```
 
 `api-key` is a secret like `access.api-keys[]`: the same redact reference
-appears in both and is lifted into a placeholder. A rule needs `provider` and
-`kind`, typed `enum ["apikey" "oauth"]`, so a provider alone never admits both
-an OAuth login and an API key. `provider` is the credential's provider as CPA
-records it, `openai-compatible-<name>` for an openai-compatibility group.
-Optional `ids` narrows a rule to credential IDs; an OAuth login's ID is its file
-path under the auth directory. A config API key's ID hashes the key, so narrow
-API keys by provider and `base-urls`. CPA reads an empty or absent list as
-unrestricted; how the module refuses an empty, null-holding or `mkIf`-emptied
-one is under Refinements in `cliproxyapi-settings.md`; a null entry in the list
-is refused by a module assertion on the merged value. A hand-written
-`config.yaml` has no such guard. There is no tag: CPA drops the v8 group `name`
+appears in both and is lifted into a placeholder. A runtime routed through the
+instance (`ai.<runtime>.proxy.instance`) writes both for its own key, from
+`ai.<runtime>.proxy.allow`; write entries by hand only for other clients. A rule
+needs `provider` and `kind`, typed `enum ["apikey" "oauth"]`, so a provider
+alone never admits both an OAuth login and an API key. `provider` is the
+credential's provider as CPA records it, `openai-compatible-<name>` for an
+openai-compatibility group. Optional `ids` narrows a rule to credential IDs; an
+OAuth login's ID is its file path under the auth directory. A config API key's
+ID hashes the key, so narrow API keys by provider and `base-urls`. CPA reads an
+empty or absent list as unrestricted; how the module refuses an empty,
+null-holding or `mkIf`-emptied one is under Refinements in
+`cliproxyapi-settings.md`; a null entry in the list is refused by a module
+assertion on the merged value. A hand-written `config.yaml` has no such guard.
+There is no tag: CPA drops the v8 group `name`
 (`internal/config/config_v8.go:389-410`). `kind` is matched against CPA's own
 `AuthKind()` (`sdk/cliproxy/auth/classification.go:30-50`), except that only a
 credential synthesized from config counts as `apikey`: the patch's

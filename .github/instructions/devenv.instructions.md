@@ -457,8 +457,9 @@ intentionally contributes one directory entry per skill.
 > service's `files` render at start in checked private runtime directories with
 > user-qualified fallbacks; private secret slots are cleared before reads and
 > exec, public variables reserve `_ai_`, tool instances use `lib/instances.nix`,
-> a restart trigger alone makes a unit a secret reader, and every service has a
-> start limit so a crash loop ends failed.
+> a restart trigger alone makes a unit a secret reader, every service has a
+> start limit so a crash loop ends failed, and an owner claims other resources
+> through `ai.<owner>.claims`.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -532,7 +533,10 @@ Exclusive paths, services and ports use the hidden `ai.claims.<group>.<key>`
 registry. Two claims fail, even with identical values, with
 `ai.claims.<group>.<key>: claimed by <a> and <b>`; owners are sorted and a
 disabled entry still claims. Port owners name `<owner>:<service>.ports.<name>`.
-Owners register resources; one registry validates every group.
+Owners register resources; one registry validates every group. A resource no
+layer-1 entry names goes in the hidden `ai.<owner>.claims.<group> = [keys]`,
+registered with the owner's name while the owner is enabled; a runtime routed
+through a CLIProxyAPI instance claims its client key in `proxy-client-key`.
 Ancestor/descendant paths fail as overlapping destinations. A key in the
 helper's `shared` list (root `AGENTS.md`) forwards unclaimed, so its composer
 stays the single owner; divergent equal-priority definitions there fail with

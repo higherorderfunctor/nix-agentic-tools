@@ -6,8 +6,9 @@
 > on the allowlist; the clean render passes native v8 validation and loads
 > through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
 > `ai.cliproxyapi.instances` renders it at start, defaults its listener to
-> loopback, and turns off the unprompted fetches the pinned CPA has a switch
-> for.
+> loopback, turns off the unprompted fetches the pinned CPA has a switch for,
+> and derives each routed runtime's `access.api-keys` and `access.key-allowlist`
+> entries.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -29,6 +30,11 @@ and `logs/` CLIProxyAPI resolves against its working directory are its own,
 execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
 reach only that copy and are lost at restart. `ai.proxy.instance` points the
 harnesses at an instance by name.
+
+Each enabled runtime routed through an instance adds its own key and allowlist
+entry there (`dev/fragments/ai-proxy/ai-proxy.md`, Runtime keys);
+`keyAllowlistCredentialsType` exports the generated
+`access.key-allowlist[].credentials` type its `allow` uses.
 
 ## Unprompted network calls
 

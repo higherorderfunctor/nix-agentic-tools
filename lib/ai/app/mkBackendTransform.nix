@@ -174,6 +174,27 @@
       }
     else null;
 
+  # What this runtime publishes to its instance, when it is enabled.
+  proxyClient =
+    if supportsPool "proxy"
+    then
+      proxyLib.client {
+        option = poolOptionName "proxy";
+        root = config.ai.proxy;
+        runtime = poolCfg.proxy;
+      }
+    else null;
+  # The instance lists the key and its allowlist entry, and the claim keeps
+  # the key this runtime's own. Gated like the files: a disabled runtime
+  # sends no requests, so its key opens nothing. A mkIf, not optionalAttrs:
+  # the client reads config.
+  proxyClientConfig = lib.mkIf (proxyClient != null) {
+    ai = {
+      ${appRecord.name}.claims.proxy-client-key = [(proxyLib.keyClaim proxyClient.key)];
+      internal.proxyClients.${appRecord.name} = proxyClient;
+    };
+  };
+
   # The jail folds field by field (`jailLib.resolve`). Null unless the result
   # enables it, or when the runtime does not consume the pool.
   resolvedJail =
@@ -464,13 +485,19 @@
     }
     // lib.optionalAttrs (supportsPool "proxy") {
       proxy = lib.mkOption {
-        type = lib.types.submodule {options = proxyLib.selectionOptions;};
+        type = lib.types.submodule {
+          options = proxyLib.runtimeOptions {
+            default = appRecord.proxyAllow or null;
+            inherit (appRecord) name;
+          };
+        };
         default = {};
         description = ''
           ${appRecord.name}'s proxy selection. When it selects anything
           (a `url` or an `instance`), it replaces `ai.proxy`'s selection as a whole for this
           runtime; otherwise the root selection applies. The resolved
           endpoint is `${lib.showOption (["ai" appRecord.name] ++ normalizedPath "proxy")}`.
+          Through an instance, `allow` limits what the key may reach.
         '';
       };
     }
@@ -825,6 +852,9 @@ in {
     (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
       assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
     })
+    (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
+      assertions = lib.mkIf cfg.enable (proxyLib.clientAssertions proxyClient);
+    })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let
         shared = builtins.attrNames (builtins.intersectAttrs rawAgents cfg.native.agents);
@@ -860,6 +890,7 @@ in {
     (lib.mkIf cfg.enable (lib.mkMerge [
       packageInstallConfig
       customConfig
+      proxyClientConfig
       sharedAgentsMdConfig
       {ai.${appRecord.name}.files = generatedFiles.layer1 generatedArgs;}
     ]))
