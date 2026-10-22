@@ -11,6 +11,7 @@ package gate
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -81,8 +82,8 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 // The carriers CPA reads a client key from
 // (internal/access/config_access/provider.go).
 var (
-	headerCarriers = []string{"Authorization", "X-Goog-Api-Key", "X-Api-Key"}
-	queryCarriers  = []string{"key", "auth_token"}
+	headerCarriers = []string{"Authorization", "X-Api-Key", "X-Goog-Api-Key"}
+	queryCarriers  = []string{"auth_token", "key"}
 )
 
 // ServeHTTP authenticates, matches the route and rewrites the credential.
@@ -136,7 +137,14 @@ func (g *Gate) authenticate(header http.Header, query url.Values) *entry {
 		}
 		token = rest
 	}
-	return g.keys[sha256.Sum256([]byte(token))]
+	sum := sha256.Sum256([]byte(token))
+	var selected *entry
+	for digest, e := range g.keys {
+		if subtle.ConstantTimeCompare(sum[:], digest[:]) == 1 {
+			selected = e
+		}
+	}
+	return selected
 }
 
 // rewrite removes every carrier and sets the internal key as the one

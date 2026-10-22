@@ -34,6 +34,5 @@
   };
   update.targets = {
     cliproxyapi = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/generic/cliproxyapi/package.nix)];};
-    cpa-gate = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/generic/cpa-gate/package.nix)];};
   };
 }

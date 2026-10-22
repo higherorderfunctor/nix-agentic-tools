@@ -100,10 +100,9 @@ before publication.
 
 # CLIProxyAPI front gate (cpa-gate)
 
-> **Last verified:** 2026-10-21 — first slice: the `cpa-gate` package, policy
-> load, single-carrier authentication with the internal-key rewrite, the route
-> and query allowlist and the uniform refusals; every allowed route is still
-> refused, and no module option enables the gate.
+> **Last verified:** 2026-10-22 — the refusal-only gate loads one complete
+> policy, compares key digests in constant time, and owns its Caddy pin refresh
+> on nixpkgs updates; no module option enables it.
 
 **cpa-gate is NOT a security boundary, and nothing wires it in yet.** A harness
 that runs under the same uid as the gate can read the policy file, which holds
@@ -119,17 +118,7 @@ key, so CPA applies its key allowlist to the principal the gate chose. The Go
 module is `src/cpa-gate` (module path `cpagate`, never fetched); the binary is
 Caddy's own `main` plus one import.
 
-The Caddyfile comes from `lib/gate.nix`, built from the shared
-`lib/ai/caddy.nix` pieces:
-
-```caddyfile
-:<port> {
-	bind <host>
-	route {
-		cpa_gate * {$CPA_GATE_POLICY}
-	}
-}
-```
+`lib/gate.nix` renders the Caddyfile from the shared `lib/ai/caddy.nix` pieces.
 
 ## Policy file
 
@@ -156,8 +145,10 @@ clear. The file is JSON:
 `Provision` loads it and fails `caddy run` and `caddy validate` on an empty
 client or internal key, empty `apis` or `models`, an `apis` value no route
 names, two entries sharing a client key, a client key equal to any internal key,
-and any field this build does not enforce. Errors name entries, never keys. In
-memory a client key is kept only as the SHA-256 that indexes its entry.
+and any field this build does not enforce. A second JSON value or trailing junk
+is refused. Errors name entries and fields, never values; entry names are public
+metadata. In memory a client key is kept only as its SHA-256 digest;
+authentication scans all digests with constant-time comparisons.
 
 ## Requests
 
@@ -166,8 +157,8 @@ memory a client key is kept only as the SHA-256 that indexes its entry.
    (`internal/access/config_access/provider.go`). The gate counts every value of
    all five: exactly one is allowed, so two carriers, a repeated header and a
    repeated query key are refused. `Authorization` must be `Bearer <key>`, with
-   the scheme in any case and one space. An unparsable query is refused here
-   too.
+   the scheme in any case, one separator space, and then the exact configured
+   key. An unparsable query is refused here too.
 2. **Route.** Method and path match the table in `gate/routes.go` exactly, and
    the path must carry no escaping Go would not produce (`RawPath` empty). So
    `//`, dot segments, a trailing slash, case variants and `%2F` miss. The
@@ -223,24 +214,27 @@ the locked Go, at the version and build tags of nixpkgs' `caddy`. It is not
 `go.mod`. `gate.json` holds `goFloor` and `vendorHash`, the same sidecar keys
 the other Go recipes use.
 
-`src/cpa-gate/go.mod` requires the Caddy version nixpkgs ships.
-`cliproxyapi-gate-pins` fails when nixpkgs moves, and so does the nixpkgs bump
-PR that moves it. The fix is the package's update script, also the `cpa-gate`
-update target: it runs `go get` for the nixpkgs Caddy, then `go mod tidy`, then
-the floor and vendor-hash fixers.
+`src/cpa-gate/go.mod` requires the Caddy version nixpkgs ships. The package
+declares `updateFlakeInput = "nixpkgs"` and a `regenerateExtracted` script, so a
+nixpkgs update runs the same script as a direct package update and stages
+`gate.json`, `go.mod`, and `go.sum`. It runs `go get` for nixpkgs' Caddy, then
+`go mod tidy`, then the floor and vendor-hash fixers. `cliproxyapi-gate-pins`
+checks the resulting version.
 
 ## Checks
 
-- The Go tests run in the package's check phase: every allowed route through
-  every carrier, the refusal table, the upgrade strip, policy load and the
-  directive. A test fails if any log line or error message carries a key.
+- The Go tests run in the package's check phase: an independent route contract
+  with admitted and denied API keys, every carrier, the refusal table, the
+  upgrade strip, complete policy loading and the directive. A test fails if any
+  log line or error message carries a key.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
 - `cliproxyapi-gate-validate`: the real binary validates the rendered Caddyfile
   with a good policy, and refuses a shared key, a missing file and an empty
   path.
 - `cliproxyapi-gate-log` (Linux): a running gate, and a site beside it whose
   upstream is down. A key in each carrier reaches neither log. Two controls each
-  keep one field and must show the key it hid.
+  keep one field and show its unredacted keys; Caddy also redacts Authorization
+  itself.
 
 <!-- Fragment: packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md -->
 

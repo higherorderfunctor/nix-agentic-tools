@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -21,7 +22,7 @@ type policy struct {
 }
 
 // entry is what the gate keeps of a policy entry. The client key is kept
-// only as the SHA-256 that indexes it.
+// only as its SHA-256 digest.
 type entry struct {
 	name     string
 	internal string
@@ -29,19 +30,22 @@ type entry struct {
 }
 
 // loadPolicy reads the policy at path and indexes its entries by the SHA-256
-// of their client key. It refuses a policy the gate cannot enforce, and its
-// errors name entries, never keys.
+// of their client key. Its errors name entries and fields, never values.
 func loadPolicy(path string) (map[[sha256.Size]byte]*entry, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("policy: read failed")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	// A field this build does not enforce is refused, not ignored.
 	decoder.DisallowUnknownFields()
 	var p policy
 	if err := decoder.Decode(&p); err != nil {
-		return nil, fmt.Errorf("policy %s: %w", path, err)
+		return nil, fmt.Errorf("policy: invalid JSON or field")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, fmt.Errorf("policy: trailing data")
 	}
 
 	keys := map[[sha256.Size]byte]*entry{}
@@ -58,9 +62,9 @@ func loadPolicy(path string) (map[[sha256.Size]byte]*entry, error) {
 			return nil, fmt.Errorf("entry %q: no models", pe.Name)
 		}
 		e := &entry{name: pe.Name, internal: pe.Internal, apis: map[string]bool{}}
-		for _, api := range pe.APIs {
+		for i, api := range pe.APIs {
 			if !knownAPI(api) {
-				return nil, fmt.Errorf("entry %q: unknown api %q", pe.Name, api)
+				return nil, fmt.Errorf("entry %q: apis[%d] is unknown", pe.Name, i)
 			}
 			e.apis[api] = true
 		}

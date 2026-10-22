@@ -2,15 +2,7 @@
 # front of CLIProxyAPI. NOT a security boundary while a harness shares its uid;
 # see docs/cliproxyapi-front-gate.md.
 #
-# It is its own Caddy main (cmd/cpa-gate, the file xcaddy generates), not
-# `caddy.withPlugins`: that takes a plugin only as `module@version`, fetched
-# into one fixed-output tree, so an in-repo module would need a tagged,
-# fetchable release before every hash. Here `buildGoModule` vendors only the
-# dependencies, so `vendorHash` moves with go.mod, not with gate edits.
-#
-# Caddy is the version nixpkgs ships: src/cpa-gate/go.mod requires it, and
-# `cliproxyapi-gate-pins` fails when nixpkgs moves. `passthru.updateScript`
-# moves go.mod to the nixpkgs version and re-derives gate.json.
+# The package and update tradeoffs are in docs/cliproxyapi-front-gate.md.
 {
   packageLib,
   pkgs,
@@ -31,6 +23,21 @@
     floor = goFloor;
     inherit pkgs pname;
   };
+  # Runs from the repository root, both for a direct package update and the
+  # nixpkgs input's sidecar regeneration.
+  updateScript = pkgs.writeShellScript "cpa-gate-update" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+
+    (
+      cd ${repoPath ../../../../src/cpa-gate}
+      # A Caddy that needs a newer Go fails here instead of downloading one.
+      export GOTOOLCHAIN=local
+      ${toolchain.go}/bin/go get github.com/caddyserver/caddy/v2@v${pkgs.caddy.version}
+      ${toolchain.go}/bin/go mod tidy
+    )
+    ${goUpdate.extract}
+  '';
 in
   toolchain.buildGoModule {
     inherit pname;
@@ -43,22 +50,16 @@ in
 
     passthru = {
       inherit (goUpdate) fixGoFloor fixVendorHash;
-      inherit goFloor;
+      inherit goFloor updateScript;
       goUpdateExtract = goUpdate.extract;
-      # Runs from the repository root, as every update script does.
-      updateScript = pkgs.writeShellScript "cpa-gate-update" ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-
-        (
-          cd ${repoPath ../../../../src/cpa-gate}
-          # A Caddy that needs a newer Go fails here instead of downloading one.
-          export GOTOOLCHAIN=local
-          ${toolchain.go}/bin/go get github.com/caddyserver/caddy/v2@v${pkgs.caddy.version}
-          ${toolchain.go}/bin/go mod tidy
-        )
-        ${goUpdate.extract}
-      '';
+      regenerateExtracted = updateScript.overrideAttrs (prev: {
+        passthru =
+          (prev.passthru or {})
+          // {
+            sidecars = map repoPath [../../../../gate.json ../../../../src/cpa-gate/go.mod ../../../../src/cpa-gate/go.sum];
+          };
+      });
+      updateFlakeInput = "nixpkgs";
     };
 
     meta = {

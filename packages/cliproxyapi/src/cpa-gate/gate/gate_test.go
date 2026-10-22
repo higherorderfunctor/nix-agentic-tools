@@ -19,16 +19,22 @@ import (
 // Every key below contains "secret", so one substring search proves that no
 // log line and no error message carries any of them.
 const (
-	allKey       = "secret-client-all"
-	allInternal  = "secret-internal-all"
-	chatKey      = "secret-client-chat"
-	chatInternal = "secret-internal-chat"
-	unknownKey   = "secret-client-unknown"
+	allInternal       = "secret-internal-all"
+	allKey            = "secret-client-all"
+	anthropicInternal = "secret-internal-anthropic"
+	anthropicKey      = "secret-client-anthropic"
+	chatInternal      = "secret-internal-chat"
+	chatKey           = "secret-client-chat"
+	responsesInternal = "secret-internal-responses"
+	responsesKey      = "secret-client-responses"
+	unknownKey        = "secret-client-unknown"
 )
 
 const validPolicy = `{"entries":[
 	{"name":"all","key":"` + allKey + `","internal":"` + allInternal + `","apis":["anthropic","chat","responses"],"models":["m"]},
-	{"name":"chat","key":"` + chatKey + `","internal":"` + chatInternal + `","apis":["chat"],"models":["m"]}
+	{"name":"anthropic","key":"` + anthropicKey + `","internal":"` + anthropicInternal + `","apis":["anthropic"],"models":["m"]},
+	{"name":"chat","key":"` + chatKey + `","internal":"` + chatInternal + `","apis":["chat"],"models":["m"]},
+	{"name":"responses","key":"` + responsesKey + `","internal":"` + responsesInternal + `","apis":["responses"],"models":["m"]}
 ]}`
 
 func writePolicy(t *testing.T, body string) string {
@@ -73,14 +79,14 @@ func serve(t *testing.T, g *Gate, r *http.Request) *httptest.ResponseRecorder {
 
 // carriers sets the key in each of the five places CPA reads one.
 var carriers = map[string]func(*http.Request, string){
+	"auth_token":    func(r *http.Request, key string) { addQuery(r, "auth_token", key) },
 	"authorization": func(r *http.Request, key string) { r.Header.Set("Authorization", "Bearer "+key) },
 	"bearer case":   func(r *http.Request, key string) { r.Header.Set("Authorization", "bEaReR "+key) },
+	"key":           func(r *http.Request, key string) { addQuery(r, "key", key) },
+	"x-api-key":     func(r *http.Request, key string) { r.Header.Set("X-Api-Key", key) },
 	"x-goog-api-key": func(r *http.Request, key string) {
 		r.Header.Set("X-Goog-Api-Key", key)
 	},
-	"x-api-key":  func(r *http.Request, key string) { r.Header.Set("X-Api-Key", key) },
-	"key":        func(r *http.Request, key string) { addQuery(r, "key", key) },
-	"auth_token": func(r *http.Request, key string) { addQuery(r, "auth_token", key) },
 }
 
 func addQuery(r *http.Request, name, value string) {
@@ -94,42 +100,66 @@ func lastLine(log *bytes.Buffer) string {
 	return lines[len(lines)-1]
 }
 
-// Every allowed route, through every carrier, reaches the end of the gate:
-// the credential is rewritten to the one internal key and the route is held
-// back for the check its class still needs.
+// This contract is independent of the production routes table. Each route
+// accepts its own API credential and refuses a credential for another API.
 func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 	g, log := newGate(t)
-	for target, rt := range routes {
-		method, path, _ := strings.Cut(target, " ")
+	cases := []struct {
+		target, class, query, key, internal, denied string
+	}{
+		{"GET /v1/models", "listing", "client_version", anthropicKey, anthropicInternal, ""},
+		{"GET /v1/models", "listing", "client_version", chatKey, chatInternal, ""},
+		{"GET /v1/models", "listing", "client_version", responsesKey, responsesInternal, ""},
+		{"POST /v1/messages", "call", "beta", anthropicKey, anthropicInternal, chatKey},
+		{"POST /v1/messages/count_tokens", "call", "beta", anthropicKey, anthropicInternal, chatKey},
+		{"POST /v1/chat/completions", "call", "", chatKey, chatInternal, anthropicKey},
+		{"GET /backend-api/codex/responses", "websocket", "", responsesKey, responsesInternal, chatKey},
+		{"GET /v1/responses", "websocket", "", responsesKey, responsesInternal, chatKey},
+		{"POST /backend-api/codex/responses", "call", "", responsesKey, responsesInternal, chatKey},
+		{"POST /backend-api/codex/responses/compact", "call", "", responsesKey, responsesInternal, chatKey},
+		{"POST /v1/responses", "call", "", responsesKey, responsesInternal, chatKey},
+		{"POST /v1/responses/compact", "call", "", responsesKey, responsesInternal, chatKey},
+	}
+	for _, c := range cases {
+		method, path, _ := strings.Cut(c.target, " ")
 		for name, carry := range carriers {
 			r := httptest.NewRequest(method, path, nil)
-			for _, q := range rt.query {
-				addQuery(r, q, "1")
+			if c.query != "" {
+				addQuery(r, c.query, "1")
 			}
-			carry(r, allKey)
+			carry(r, c.key)
 			w := serve(t, g, r)
 			if w.Code != http.StatusNotFound || w.Body.Len() != 0 {
-				t.Errorf("%s via %s: got %d %q, want the empty 404", target, name, w.Code, w.Body)
+				t.Errorf("%s via %s: got %d %q, want the empty 404", c.target, name, w.Code, w.Body)
 			}
-			if want := `"reason":"pending"`; !strings.Contains(lastLine(log), want) || !strings.Contains(lastLine(log), `"route":"`+rt.class+`"`) {
-				t.Errorf("%s via %s: log %s, want %s for class %s", target, name, lastLine(log), want, rt.class)
+			if line := lastLine(log); !strings.Contains(line, `"reason":"pending"`) || !strings.Contains(line, `"route":"`+c.class+`"`) {
+				t.Errorf("%s via %s: log %s, want pending %s", c.target, name, line, c.class)
 			}
-			if got := r.Header.Values("Authorization"); !slices.Equal(got, []string{"Bearer " + allInternal}) {
-				t.Errorf("%s via %s: Authorization %q after the rewrite", target, name, got)
+			if got := r.Header.Values("Authorization"); !slices.Equal(got, []string{"Bearer " + c.internal}) {
+				t.Errorf("%s via %s: Authorization %q after the rewrite", c.target, name, got)
 			}
 			for _, h := range []string{"X-Api-Key", "X-Goog-Api-Key"} {
 				if r.Header.Get(h) != "" {
-					t.Errorf("%s via %s: %s survived the rewrite", target, name, h)
+					t.Errorf("%s via %s: %s survived the rewrite", c.target, name, h)
 				}
 			}
 			q := r.URL.Query()
-			if q.Has("key") || q.Has("auth_token") {
-				t.Errorf("%s via %s: a query carrier survived the rewrite: %s", target, name, r.URL.RawQuery)
+			if q.Has("auth_token") || q.Has("key") {
+				t.Errorf("%s via %s: a query carrier survived the rewrite: %s", c.target, name, r.URL.RawQuery)
 			}
-			for _, k := range rt.query {
-				if q.Get(k) != "1" {
-					t.Errorf("%s via %s: the rewrite dropped the query key %s", target, name, k)
-				}
+			if c.query != "" && q.Get(c.query) != "1" {
+				t.Errorf("%s via %s: the rewrite dropped the query key %s", c.target, name, c.query)
+			}
+		}
+		if c.denied != "" {
+			r := httptest.NewRequest(method, path, nil)
+			r.Header.Set("Authorization", "Bearer "+c.denied)
+			w := serve(t, g, r)
+			if w.Code != http.StatusNotFound || !strings.Contains(lastLine(log), `"reason":"route"`) {
+				t.Errorf("%s: wrong API key accepted: %d %s", c.target, w.Code, lastLine(log))
+			}
+			if got := r.Header.Get("Authorization"); got != "Bearer "+c.denied {
+				t.Errorf("%s: denied credential was rewritten: %q", c.target, got)
 			}
 		}
 	}
@@ -263,8 +293,8 @@ func TestLoadPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(keys) != 2 {
-		t.Fatalf("got %d entries, want 2", len(keys))
+	if len(keys) != 4 {
+		t.Fatalf("got %d entries, want 4", len(keys))
 	}
 
 	single := func(fields string) string {
@@ -274,9 +304,14 @@ func TestLoadPolicy(t *testing.T) {
 		"empty client key":   {single(`"key":"","internal":"secret-i","apis":["chat"],"models":["m"]`), "empty client key"},
 		"empty internal key": {single(`"key":"secret-k","internal":"","apis":["chat"],"models":["m"]`), "empty internal key"},
 		"no apis":            {single(`"key":"secret-k","internal":"secret-i","apis":[],"models":["m"]`), "no apis"},
-		"unknown api":        {single(`"key":"secret-k","internal":"secret-i","apis":["gemini"],"models":["m"]`), `unknown api "gemini"`},
+		"unknown api":        {single(`"key":"secret-k","internal":"secret-i","apis":["gemini"],"models":["m"]`), `apis[0] is unknown`},
 		"no models":          {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":[]`), "no models"},
-		"unknown field":      {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"],"hostedTools":{}`), `unknown field "hostedTools"`},
+		"unknown field":      {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"],"hostedTools":{}`), "invalid JSON or field"},
+		"invalid secret field type": {single(`"key":{"secret":"secret-k"},"internal":"secret-i","apis":["chat"],"models":["m"]`), "invalid JSON or field"},
+		"malformed document": {strings.TrimSuffix(validPolicy, "}"), "invalid JSON or field"},
+		"invalid JSON": {validPolicy + ` secret-tail`, "trailing data"},
+		"second object": {validPolicy + ` {"key":"secret-tail"}`, "trailing data"},
+		"secret api value": {single(`"key":"secret-k","internal":"secret-i","apis":["secret-k"],"models":["m"]`), "apis[0] is unknown"},
 		"duplicate client key": {`{"entries":[
 			{"name":"a","key":"secret-k","internal":"secret-i1","apis":["chat"],"models":["m"]},
 			{"name":"b","key":"secret-k","internal":"secret-i2","apis":["chat"],"models":["m"]}]}`, `"a" and "b" share a client key`},
@@ -295,6 +330,9 @@ func TestLoadPolicy(t *testing.T) {
 		case strings.Contains(err.Error(), "secret"):
 			t.Errorf("%s: the error carries a key: %v", name, err)
 		}
+	}
+	if _, err := loadPolicy(writePolicy(t, validPolicy+" \n\t")); err != nil {
+		t.Errorf("valid policy with trailing whitespace: %v", err)
 	}
 	if _, err := loadPolicy(filepath.Join(t.TempDir(), "absent.json")); err == nil {
 		t.Error("an absent policy file loaded")

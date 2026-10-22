@@ -1,7 +1,4 @@
-# The cpa-gate Caddyfile, built from the shared lib/ai/caddy.nix pieces. It
-# carries the policy file's PATH as a `{$VAR}` token and never a key: Caddy
-# splices a `{$VAR}` value in before parsing and keeps it in the adapted
-# config.
+# The Caddyfile carries only the policy path; see docs/cliproxyapi-front-gate.md.
 {
   lib,
   pkgs,

@@ -25,11 +25,11 @@
 
   # Every key holds "SECRET", so one grep finds any of them in a log.
   entry = name: {
-    inherit name;
-    key = "client-SECRET-${name}";
-    internal = "internal-SECRET-${name}";
     apis = ["responses"];
+    internal = "internal-SECRET-${name}";
+    key = "client-SECRET-${name}";
     models = ["m"];
+    inherit name;
   };
   policy = entries: lib.escapeShellArg (builtins.toJSON {inherit entries;});
 
@@ -90,7 +90,7 @@ in {
 
         validate "$PWD/good.json"
         refused "$PWD/shared.json" 'share a client key'
-        refused "$PWD/absent.json" 'no such file'
+        refused "$PWD/absent.json" 'read failed'
         # An empty or unset variable substitutes nothing: no path at all.
         refused "" 'argument count'
         touch "$out"
@@ -99,9 +99,9 @@ in {
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       # A running gate, and a site beside it whose upstream is down: the
       # gate forwards nothing yet, so the 502 there is what makes Caddy log
-      # an error carrying the request. A key in `?key=`, `X-Api-Key` and
-      # `X-Goog-Api-Key` must reach neither log. The two controls drop one
-      # delete each and must show the key it hid.
+      # an error carrying the request. Every credential carrier must reach
+      # neither log. Controls drop each field and expose its unredacted keys;
+      # Caddy itself redacts Authorization even with headers retained.
       cliproxyapi-gate-log = let
         withFailingSite =
           caddyfile 28461
@@ -119,7 +119,7 @@ in {
         pkgs.runCommand "cliproxyapi-gate-log" {} ''
           ${strict}
           ${isolate}
-          printf '%s' ${policy [(entry "probe")]} > policy.json
+          printf '%s' ${policy [(entry "authorization") (entry "probe")]} > policy.json
           export ${gate.policyVariable}="$PWD/policy.json"
           # cspell:ignore noproxy
           curl() {
@@ -130,6 +130,7 @@ in {
           run() {
             ${exe} run --config "$1" --adapter caddyfile 2> "$2" &
             local pid=$! attempt port url header
+            local auth_header='Authorization: Bearer client-SECRET-authorization'
             for attempt in {1..100}; do
               if curl http://127.0.0.1:28461/ && curl http://127.0.0.1:28462/; then
                 break
@@ -145,6 +146,8 @@ in {
               url="http://127.0.0.1:$port/v1/responses"
               curl -X POST "$url?key=client-SECRET-probe"
               curl -X POST "$url?key=query-SECRET"
+              curl -X POST "$url?auth_token=token-SECRET"
+              curl -X POST --header "$auth_header" "$url"
               for header in 'X-Api-Key: header-SECRET' 'X-Goog-Api-Key: goog-SECRET'; do
                 curl -X POST --header "$header" "$url"
               done
@@ -167,13 +170,20 @@ in {
             exit 1
           fi
           expect fixed.log '"probe"' "the gate's own line for the known key"
+          expect fixed.log '"authorization"' "the gate's own line for Authorization"
           expect fixed.log 'connection refused' "the error entry the filter must clean"
 
           run ${config "uri-kept" (without "request>uri")} uri-kept.log
+          expect uri-kept.log token-SECRET "the control keeping request>uri"
           expect uri-kept.log query-SECRET "the control keeping request>uri"
           run ${config "headers-kept" (without "request>headers")} headers-kept.log
           expect headers-kept.log header-SECRET "the control keeping request>headers"
           expect headers-kept.log goog-SECRET "the control keeping request>headers"
+          expect headers-kept.log '"authorization"' "Authorization reached the gate with Caddy's built-in redaction"
+          if grep -F client-SECRET-authorization headers-kept.log >&2; then
+            echo "FAIL: Authorization reached the retained-header log" >&2
+            exit 1
+          fi
           touch "$out"
         '';
     };
