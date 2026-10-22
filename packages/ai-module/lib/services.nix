@@ -188,6 +188,19 @@
         '';
       };
   enabled = lib.filterAttrs (_: entry: entry.enable);
+  # The one restart policy every backend lowers from. A daemon that exits at
+  # once is restarted `restartSec` apart, so its sixth start lands at
+  # 5 x 5 = 25 s: systemd's default 10 s interval never sees more than three
+  # starts and never trips, leaving a crash loop in activating/auto-restart.
+  # Five starts in five minutes trips an instant crash loop after 25 s and
+  # leaves a daemon that stays up about a minute between crashes alone.
+  restartPolicy = {
+    restartSec = 5;
+    startLimit = {
+      burst = 5;
+      intervalSec = 300;
+    };
+  };
   launch = stamp: pkgs: name: entry: "${mkLauncher {inherit pkgs name entry stamp;}}/bin/ai-service-${name}";
   # A reference, or a trigger file: a restartOnChange path is read at start
   # like a file reference, so it waits for the providers as one does.
@@ -237,13 +250,15 @@
             if entry.restart == "never"
             then "no"
             else entry.restart;
-          RestartSec = 5;
+          RestartSec = restartPolicy.restartSec;
         };
         # Wants=, not Requires= or After= alone: DESIGN.md, Services.
         Unit =
           {
             After = ["network.target"] ++ lib.optionals secretReader providerUnits;
             Description = "${name} (ai.services)";
+            StartLimitBurst = restartPolicy.startLimit.burst;
+            StartLimitIntervalSec = restartPolicy.startLimit.intervalSec;
           }
           // lib.optionalAttrs secretReader {Wants = providerUnits;};
       }) (enabled services));
@@ -253,10 +268,17 @@
       name: entry:
         {
           exec = launch false pkgs name entry;
-          restart.on =
-            if entry.restart == "on-failure"
-            then "on_failure"
-            else entry.restart;
+          restart = {
+            # systemd counts starts and devenv's native supervisor counts
+            # restarts after the first start, so the same limit is one less
+            # burst, over the same sliding window; DESIGN.md, Start limit.
+            max = restartPolicy.startLimit.burst - 1;
+            on =
+              if entry.restart == "on-failure"
+              then "on_failure"
+              else entry.restart;
+            window = restartPolicy.startLimit.intervalSec;
+          };
         }
         // lib.optionalAttrs (triggers entry != []) {watch.paths = triggers entry;}
     ) (enabled services);

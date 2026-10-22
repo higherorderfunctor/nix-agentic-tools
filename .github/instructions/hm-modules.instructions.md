@@ -522,14 +522,15 @@ noted above.
 
 ## ai-module Files, Activation and Services Contract
 
-> **Last verified:** 2026-10-20 — secret providers supply activation nodes and
+> **Last verified:** 2026-10-21 — secret providers supply activation nodes and
 > Home Manager service unit ordering; repository modules reach Home Manager and
 > devenv file and activation sinks only through ai-module's three layers, apart
 > from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
 > service's `files` render at start in checked private runtime directories with
 > user-qualified fallbacks; private secret slots are cleared before reads and
 > exec, public variables reserve `_ai_`, tool instances use `lib/instances.nix`,
-> and a restart trigger alone makes a unit a secret reader.
+> a restart trigger alone makes a unit a secret reader, and every service has a
+> start limit so a crash loop ends failed.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -642,7 +643,11 @@ its invocation ID under the runtime directory before exec, and one generated
 reader whose stamp differs from the files, through `systemd.user.systemctlPath`;
 a failed provider or reader, a restart that does not stamp current bytes, or an
 unreachable running user manager fails activation. Devenv uses `watch.paths`.
-Only ai-module writes these daemon sinks.
+Every service has one start limit, defined once as `restartPolicy` in
+`lib/services.nix`: five starts in 300 s with `RestartSec=5`. Linux Home Manager
+writes `StartLimitBurst` and `StartLimitIntervalSec` in `[Unit]`; devenv writes
+`restart.max = 4` and `restart.window = 300`. Only ai-module writes these daemon
+sinks.
 
 ### State and ownership
 

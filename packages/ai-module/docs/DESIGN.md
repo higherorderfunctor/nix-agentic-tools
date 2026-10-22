@@ -310,11 +310,72 @@ fails evaluation. `select` resolves an instance name to
 `http://127.0.0.1:<port>` or to the reason it cannot: the name is missing or the
 instance is disabled. CLIProxyAPI and CPA Manager Plus use it.
 
-| Backend             | Lowering                                                                                                                                                                                                   |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home Manager Linux  | User unit: `After = network.target`; secret readers get `Wants` and `After` on provider units, and `WantedBy` the providers' defined targets, or `default.target`; `RestartSec = 5`, `never` becomes `no`. |
-| Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                                                                                      |
-| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `watch.paths` is present only for nonempty triggers.                                                                  |
+| Backend             | Lowering                                                                                                                                                                                                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home Manager Linux  | User unit: `After = network.target`; secret readers get `Wants` and `After` on provider units, and `WantedBy` the providers' defined targets, or `default.target`; `RestartSec = 5`, `StartLimitBurst = 5`, `StartLimitIntervalSec = 300`; `never` becomes `no`. |
+| Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                                                                                                                                            |
+| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `restart.max = 4`, `restart.window = 300`; `watch.paths` is present only for nonempty triggers.                                                                             |
+
+### Start limit
+
+A daemon that fails within about 55 s of each start ends failed, so alerts on a
+failed unit fire; an instant crash loop ends failed after 25 s. Restarts are
+`RestartSec = 5` apart, and systemd's default `StartLimitIntervalSec=10s` and
+`StartLimitBurst=5` can never trip: the sixth start of an instant crash loop
+lands 5 x 5 = 25 s after the first, and a 10 s window holds at most three
+starts. The unit then stays in `activating (auto-restart)` for good.
+`restartPolicy` in `lib/services.nix` is the one definition: five starts in 300
+s. A daemon that lives longer than about 55 s per start (5 x (55 + 5) = 300 s)
+never trips it. The trade-off: a start-time dependency absent for longer than
+about 25 s, such as a keyring or the network at login, is now terminal where the
+unit used to retry for good. Recover with `systemctl --user reset-failed <unit>`
+and a start; the same command clears a trip that would refuse a fix-and-switch
+inside the 300 s interval, because the start limit also applies to manual starts
+and survives `daemon-reload`. The limit applies to every `restart` value,
+including `always`, and to every service; no consumer needs to tune it, so there
+is no option. Add one when a named consumer does.
+
+Devenv's native supervisor applies the same limit as `restart.max = 4` and
+`restart.window = 300`: it counts restarts after the first start in a sliding
+window, so five starts in 300 s.
+
+#### Recipe: a desktop notification when a service fails
+
+This is a personal recipe, not a module default and not an option. Home Manager
+only: devenv has no systemd, and its supervisor has no `OnFailure=`. A Home
+Manager `ai.services.<name>` entry becomes the user unit `<name>.service`, and
+`systemd.user.services.<name>` is an ordinary Home Manager attribute that merges
+with the generated definition, so a consumer adds `Unit.OnFailure` without
+touching the module. systemd then requests the templated unit on failure, with
+the failing unit's name as the instance `%i`.
+
+```nix
+{pkgs, ...}: {
+  systemd.user.services = {
+    # Replace cliproxyapi with the ai.services key.
+    cliproxyapi.Unit.OnFailure = ["notify-failure@%n.service"];
+
+    "notify-failure@" = {
+      Service = {
+        ExecStart = "${pkgs.libnotify}/bin/notify-send --urgency=critical --app-name=systemd 'Service failed' '%i failed; see journalctl --user -u %i'";
+        Type = "oneshot";
+      };
+      Unit.Description = "Notify that %i failed";
+    };
+  };
+}
+```
+
+`notify-send` needs a reachable user session bus and a running desktop
+notification server; a headless session may have neither, and the notification
+is lost. With the default `RestartMode=normal`, each failure before an automatic
+restart passes through the failed state and triggers `OnFailure=`, as does the
+terminal start-limit failure. It does not fire for a stop. A consumer who wants
+a notification only when systemd gives up can also set
+`Service.RestartMode = "direct"` on that unit (systemd 254+), which skips
+`OnFailure=` for failures followed by an automatic restart
+(`systemd.service(5)`, `RestartMode=`). After the unit gives up, recover with
+`systemctl --user reset-failed <unit>` as above.
 
 Home Manager Linux reserves `services-reconcile`. The Home Manager launcher of a
 service with triggers hashes every trigger path and its bytes before it reads
