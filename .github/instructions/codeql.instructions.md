@@ -116,11 +116,12 @@ expected set and the `--select`. An update PR still runs the smoke check in
 
 ## CodeQL packs and customizePackage
 
-> **Last verified:** 2026-10-21 (commit 966494a9) — `ai.devTools.codeql` carries
+> **Last verified:** 2026-10-21 (commit 019ba0f0) — `ai.devTools.codeql` carries
 > `mkQueryPack` and `mkModelPack`, which return pack specs; every engine's
 > `customizePackage` realizes them; packs reach CodeQL through a generated
 > `CODEQL_CONFIG_FILE`; query packs are precompiled; the wrapper execs codeql
-> over a merged config named by its content.
+> over a merged config named by its content, reused only when no other line sets
+> its options.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 javascript
 > bundle and rejected:
@@ -216,14 +217,13 @@ the content, so the file outlives the wrapper and a `codeql` that codeql starts
 reads it too. Each run writes it again and renames it into place over any file
 of that name.
 
-A file that already holds every line of the wrapper's config is used as it is,
-because it comes from a `codeql` this wrapper started, such as a build command
-calling `codeql`.
-
 A consumer file that sets `--additional-packs` or `--model-packs` exits 2 with a
 message. The wrapper adds lines and does not join option values, and CodeQL
 keeps one value per option, so the added lines would silently drop one side's
-packs.
+packs. The one file used as it is holds every line of the wrapper's config and
+sets those options with no other line: the merged file that a `codeql` this
+wrapper started reads, such as a build command's. Any other line setting either
+option, beside those lines too, is refused.
 
 ### Precompilation
 

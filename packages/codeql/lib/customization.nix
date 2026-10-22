@@ -138,8 +138,10 @@
     # With packs, the wrapper points CODEQL_CONFIG_FILE at its config. A
     # consumer's own file (CODEQL_CONFIG_FILE, else CodeQL's per-user default)
     # is merged: theirs first, then ours, in a file named by its content. A
-    # file that already holds every line of ours is a codeql this wrapper
-    # started, and is used as it is.
+    # file that holds every line of ours, and sets ours's options with no
+    # other line, is the merged file a codeql this wrapper started reads, and
+    # is used as it is. Any other line setting those options is refused, so a
+    # file holding ours as well cannot add packs that CodeQL would drop.
     configure = ''
       ours=${config}
       theirs="''${CODEQL_CONFIG_FILE:-''${HOME:+$HOME/.config/codeql/config}}"
@@ -152,28 +154,35 @@
         echo "codeql: $theirs is not a regular readable file (the wrapper reads it more than once), so this customized codeql cannot merge its packs into it." >&2
         exit 2
       fi
-      # grep exits 1 when every line of ours is in theirs, and 2 on an error,
-      # which must take neither branch.
+      # grep exits 1 when it selects no line, and 2 on an error, which must
+      # take no branch. A line that starts with the option, after leading
+      # whitespace, sets it: CodeQL ignores a comment and the `--option=value`
+      # form.
+      owned=""
+      found=0
+      owned="$(${grep} -E -- '^[[:space:]]*(${lib.concatStringsSep "|" (options spec)})( |$)' "$theirs")" || found=$?
+      case "$found" in
+        0 | 1) ;;
+        *) exit 2 ;;
+      esac
+      # foreign=0: theirs sets an option ours sets with a line that is not ours.
+      foreign=1
+      if [ -n "$owned" ]; then
+        foreign=0
+        ${grep} -qvxFf "$ours" <<<"$owned" || foreign=$?
+      fi
+      # covered=1: every line of ours is in theirs.
       covered=0
       ${grep} -qvxFf "$theirs" "$ours" || covered=$?
-      case "$covered" in
-        0) ;;
-        1) exec "$codeql" "$@" ;;
-        *) exit 2 ;;
+      case "$foreign:$covered" in
+        1:1) exec "$codeql" "$@" ;;
+        *2*) exit 2 ;;
       esac
-      # A line that starts with the option, after leading whitespace, sets it:
-      # CodeQL ignores a comment and the `--option=value` form.
-      clash=0
-      ${grep} -qE -- '^[[:space:]]*(${lib.concatStringsSep "|" (options spec)})( |$)' "$theirs" || clash=$?
-      case "$clash" in
-        0)
-          echo "codeql: $theirs sets ${lib.concatStringsSep " or " (options spec)}, which this customized codeql sets from customizePackage." >&2
-          echo "codeql: the wrapper adds its lines to yours and does not join option values, and CodeQL keeps one value per option, so one side's packs would be lost; give those packs to customizePackage instead." >&2
-          exit 2
-          ;;
-        1) ;;
-        *) exit 2 ;;
-      esac
+      if [ -n "$owned" ]; then
+        echo "codeql: $theirs sets ${lib.concatStringsSep " or " (options spec)}, which this customized codeql sets from customizePackage." >&2
+        echo "codeql: the wrapper adds its lines to yours and does not join option values, and CodeQL keeps one value per option, so one side's packs would be lost; give those packs to customizePackage instead." >&2
+        exit 2
+      fi
       # The echo ends a last line that has no newline, which would otherwise
       # run into our first line. The merged file is named by its content and
       # outlives this wrapper, which execs codeql, so a codeql that codeql

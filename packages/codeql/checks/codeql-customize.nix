@@ -75,8 +75,9 @@ in {
     # or a link to it.
     # A consumer's own config file, from CODEQL_CONFIG_FILE or HOME, still
     # applies beside it, also with no final newline, and the merged file
-    # outlives the wrapper; one that sets --additional-packs is refused,
-    # indented too, one whose comment names it is not. The TypeScript file is
+    # outlives the wrapper and is used as it is when given back; one that sets
+    # --additional-packs is refused, indented too or beside a merged file's
+    # lines, one whose comment names it is not. The TypeScript file is
     # extracted only with the engine's Node.
     codeql-custom-query-pack = let
       custom = engine.customizePackage {queries = [queries];};
@@ -128,6 +129,14 @@ in {
         echo JUNK > "''${persisted[0]}"
         XDG_RUNTIME_DIR="$TMPDIR/run" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" merged runtime-rewrite
         grep -q -- '^--additional-packs ' "''${persisted[0]}" && ! grep -qx JUNK "''${persisted[0]}" || fail "a run kept the stale ''${persisted[0]}: $(cat "''${persisted[0]}")"
+        # A merged file is used as it is, and a line beside ours that sets an
+        # option ours sets is still refused.
+        CODEQL_CONFIG_FILE="''${persisted[0]}" merged generated
+        { cat "''${persisted[0]}"; printf -- '--additional-packs %s\n' "$TMPDIR"; } > "$TMPDIR/generated-clash-config"
+        status=0
+        CODEQL_CONFIG_FILE="$TMPDIR/generated-clash-config" "$codeql" resolve packs 2> "$TMPDIR/generated-clash.err" || status=$?
+        [ "$status" = 2 ] || fail "a merged config with a second --additional-packs line exited $status, not 2"
+        grep -q customizePackage "$TMPDIR/generated-clash.err" || fail "the generated-clash message does not name customizePackage"
         # An XDG_RUNTIME_DIR that is not a directory falls back to TMPDIR.
         XDG_RUNTIME_DIR="$TMPDIR/missing" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" merged runtime-missing
         printf -- '# --additional-packs comes from customizePackage\n--search-path %s\n' "$TMPDIR/second" > "$TMPDIR/comment-config"
@@ -183,7 +192,8 @@ in {
     # `fakehttp` a RequestForgery::Sink, and a second model pack does the same
     # for `fetchUrl`. Each model pack is added by customizing the customized
     # package, so the check also covers appending and the aggregate pack. A
-    # consumer --model-packs line is refused once there are models.
+    # consumer --model-packs line is refused once there are models, also beside
+    # the lines of a merged config, which is otherwise used as it is.
     codeql-model-pack-mutation = let
       queriesOnly = engine.customizePackage {queries = [sinkQueries];};
       withModels = (queriesOnly.customizePackage {models = [models];}).customizePackage {models = [fetchModels];};
@@ -203,6 +213,19 @@ in {
         nix-agentic-tools/request-forgery-sinks client.js:3 request-forgery sink
         nix-agentic-tools/request-forgery-sinks client.js:4 request-forgery sink
         EOF
+        # The merged file a consumer config yields gives the same rows used as
+        # it is, and refuses a line beside ours that sets either option.
+        mkdir "$TMPDIR/run"
+        printf -- '--threads 1\n' > "$TMPDIR/consumer-config"
+        XDG_RUNTIME_DIR="$TMPDIR/run" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" ${withModels}/bin/codeql resolve packs > /dev/null
+        generated=("$TMPDIR"/run/codeql-config-*)
+        CODEQL_CONFIG_FILE="''${generated[0]}" results ${withModels}/bin/codeql "$TMPDIR/db" "$pack" | diff - "$out" || fail "the merged config used as it is gives other rows"
+        for option in "--model-packs $pack" "--additional-packs $TMPDIR"; do
+          { cat "''${generated[0]}"; printf '%s\n' "$option"; } > "$TMPDIR/generated-clash-config"
+          status=0
+          CODEQL_CONFIG_FILE="$TMPDIR/generated-clash-config" ${withModels}/bin/codeql resolve packs 2> /dev/null || status=$?
+          [ "$status" = 2 ] || fail "a merged config with a consumer ''${option%% *} line exited $status, not 2"
+        done
       '';
 
     # Pack specs at eval, building no engine. A spec is plain data, so one spec
