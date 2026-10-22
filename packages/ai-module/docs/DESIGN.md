@@ -339,6 +339,42 @@ Devenv's native supervisor applies the same limit as `restart.max = 4` and
 `restart.window = 300`: it counts restarts after the first start in a sliding
 window, so five starts in 300 s.
 
+#### Recipe: a desktop notification when a service fails
+
+This is a personal recipe, not a module default and not an option. Home Manager
+only: devenv has no systemd, and its supervisor has no `OnFailure=`. A Home
+Manager `ai.services.<name>` entry becomes the user unit `<name>.service`, and
+`systemd.user.services.<name>` is an ordinary Home Manager attribute that merges
+with the generated definition, so a consumer adds `Unit.OnFailure` without
+touching the module. systemd then starts the templated unit once per failure,
+with the failing unit's name as the instance `%i`.
+
+```nix
+{pkgs, ...}: {
+  systemd.user.services = {
+    # Replace cliproxyapi with the ai.services key.
+    cliproxyapi.Unit.OnFailure = ["notify-failure@%n.service"];
+
+    "notify-failure@" = {
+      Unit.Description = "Notify that %i failed";
+      Service = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.libnotify}/bin/notify-send --urgency=critical --app-name=systemd 'Service failed' '%i failed; see journalctl --user -u %i'";
+      };
+    };
+  };
+}
+```
+
+`notify-send` talks to the session bus, so it needs `DBUS_SESSION_BUS_ADDRESS`
+in the user manager's environment. GNOME imports it at login; a manager started
+outside a graphical session, such as over SSH with linger, has no bus address
+and the notification is lost. `OnFailure=` fires on every failure of the unit,
+including the start-limit failure that ends a crash loop, so a daemon that
+crashes five times in 300 s notifies once, when it gives up. It does not fire
+for a stop, nor for the intermediate restarts before the limit trips. After it
+fires, recover with `systemctl --user reset-failed <unit>` as above.
+
 Home Manager Linux reserves `services-reconcile`. The Home Manager launcher of a
 service with triggers hashes every trigger path and its bytes before it reads
 any secret, so a file replaced during a start leaves the stamp older than the

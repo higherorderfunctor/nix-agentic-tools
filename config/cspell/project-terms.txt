@@ -228,6 +228,7 @@ libexec
 libgcc
 libgit
 libm
+libnotify
 libopus
 libpthread
 librt
