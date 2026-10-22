@@ -22,7 +22,6 @@ type listingCapture struct {
 	header  http.Header
 	body    bytes.Buffer
 	status  int
-	interim bool
 	failed  bool
 }
 
@@ -30,7 +29,6 @@ func (c *listingCapture) Header() http.Header { return c.header }
 
 func (c *listingCapture) WriteHeader(status int) {
 	if status < 200 {
-		c.interim = true
 		return
 	}
 	if c.status == 0 {
@@ -70,7 +68,7 @@ func (g *Gate) serveListing(w http.ResponseWriter, r *http.Request, next caddyht
 	if err := next.ServeHTTP(rec, r); err != nil {
 		return g.refuse(w, notFound, e.name, classListing, "upstream")
 	}
-	if rec.failed || rec.interim || rec.status != http.StatusOK {
+	if rec.failed || rec.status != http.StatusOK {
 		return g.refuse(w, notFound, e.name, classListing, "upstream")
 	}
 	decoded, ok := decodeListing(&rec.body, rec.header)
