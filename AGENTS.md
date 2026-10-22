@@ -541,6 +541,13 @@ hoc machinery beside an existing abstraction.
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
+- **PROPOSAL (not yet vetted): runtime proxy keys are pulled by the instance.**
+  A runtime routed through `ai.cliproxyapi.instances.<n>` publishes its key and
+  its rules (`ai.<runtime>.proxy.allow`) at `ai.internal.proxyClients`, and the
+  instance's derived settings list the key and its allowlist entry; the key is
+  an `ai.claims.proxy-client-key` claim. Pushing into the instance would create
+  one a typo names, and a hand-written copy would be a second owner. See
+  `lib/ai/proxy/default.nix` and `packages/cliproxyapi/modules/instances.nix`.
 - **PROPOSAL (not yet vetted): harness sandboxing is ours.** The host sandbox
   (the microvm) is the real protection. `ai.jail` / `ai.<runtime>.jail`
   (jail.nix, bubblewrap) is an extra layer that keeps a harness from damaging

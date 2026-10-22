@@ -1056,6 +1056,14 @@ in
     # codex-code-mode-host is a helper codex spawns, not an entry point: the
     # jail passes it through, so it runs inside codex's jail.
     executables = ["codex"];
+    # CLIProxyAPI records a codex login as provider `codex` (sdk/auth/codex.go,
+    # Provider), kind oauth.
+    proxyAllow = [
+      {
+        kind = "oauth";
+        provider = "codex";
+      }
+    ];
     surfaceSupport = {
       agents = {
         gaps = [

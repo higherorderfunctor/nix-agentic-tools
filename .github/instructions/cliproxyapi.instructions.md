@@ -124,13 +124,16 @@ eligible credentials are unavailable gets `auth_not_found`. Model listings still
 expose all models.
 
 An entry identifies one client key and grants a list of credential rules. The
-client key is a redact reference shared with `access.api-keys[]`. A rule
-requires `provider` and `kind` (`oauth` or `apikey`); `ids` and `base-urls`
-narrow it further. The provider is CPA's credential provider, including
-`openai-compatible-<name>` for compatibility groups. An OAuth credential's ID is
-its auth-file path. A config API key's ID hashes its secret, so use provider and
-`base-urls` to address a group through rotation. The settings types and module
-refinements are documented in `cliproxyapi-settings.md`.
+client key is a redact reference shared with `access.api-keys[]`. A runtime
+routed through the instance (`ai.<runtime>.proxy.instance`) writes both for its
+own key, from `ai.<runtime>.proxy.allow`; write entries by hand only for other
+clients. A rule requires `provider` and `kind` (`oauth` or `apikey`); `ids` and
+`base-urls` narrow it further. The provider is CPA's credential provider,
+including `openai-compatible-<name>` for compatibility groups. An OAuth
+credential's ID is its auth-file path. A config API key's ID hashes its secret,
+so use provider and `base-urls` to address a group through rotation. The
+settings types and module refinements are documented in
+`cliproxyapi-settings.md`.
 
 The `apikey` kind matches only credentials synthesized from config. A
 store-loaded login can temporarily classify as `apikey` from its file or a Meta
@@ -213,7 +216,8 @@ change, then run the module assertions and Go check in CI.
 > through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
 > `ai.cliproxyapi.instances` renders it at start, defaults its listener to
 > loopback, turns off the unprompted fetches the pinned CPA has a switch for,
-> and types `server.tls.key` as a secret file.
+> types `server.tls.key` as a secret file, and derives each routed runtime's
+> `access.api-keys` and `access.key-allowlist` entries.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -235,6 +239,11 @@ and `logs/` CLIProxyAPI resolves against its working directory are its own,
 execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
 reach only that copy and are lost at restart. `ai.proxy.instance` points the
 harnesses at an instance by name.
+
+Each enabled runtime routed through an instance adds its own key and allowlist
+entry there (`dev/fragments/ai-proxy/ai-proxy.md`, Runtime keys);
+`keyAllowlistCredentialsType` exports the generated
+`access.key-allowlist[].credentials` type its `allow` uses.
 
 ## Unprompted network calls
 

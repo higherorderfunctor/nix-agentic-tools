@@ -15,8 +15,9 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 > directories, chosen after the declared environment applies, with
 > user-qualified fallbacks; private secret slots are cleared before reads and
 > exec, public variables reserve `_ai_`, tool instances use `lib/instances.nix`,
-> a restart trigger alone makes a unit a secret reader, and every service has a
-> start limit so a crash loop ends failed.
+> a restart trigger alone makes a unit a secret reader, every service has a
+> start limit so a crash loop ends failed, and an owner claims other resources
+> through `ai.<owner>.claims`.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -90,7 +91,10 @@ Exclusive paths, services and ports use the hidden `ai.claims.<group>.<key>`
 registry. Two claims fail, even with identical values, with
 `ai.claims.<group>.<key>: claimed by <a> and <b>`; owners are sorted and a
 disabled entry still claims. Port owners name `<owner>:<service>.ports.<name>`.
-Owners register resources; one registry validates every group.
+Owners register resources; one registry validates every group. A resource no
+layer-1 entry names goes in the hidden `ai.<owner>.claims.<group> = [keys]`,
+registered with the owner's name while the owner is enabled; a runtime routed
+through a CLIProxyAPI instance claims its client key in `proxy-client-key`.
 Ancestor/descendant paths fail as overlapping destinations. A key in the
 helper's `shared` list (root `AGENTS.md`) forwards unclaimed, so its composer
 stays the single owner; divergent equal-priority definitions there fail with
@@ -1520,7 +1524,7 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-17 — non-AI owners use the same layer-1 helper;
+> **Last verified:** 2026-10-21 — non-AI owners use the same layer-1 helper;
 > delivery facts derive delivered and absent cells, keyed withdrawal and
 > normalized gaps from option and runtime declarations; `poolOptions` covers
 > `agentsDir` and `environmentVariables` only; `optionNamespaces` places
@@ -1532,10 +1536,10 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 > hooks, settings and steering legacy ledgers declared outside its enable gate;
 > Kimchi stages every surface, with every legacy ledger ungated; Codex stages
 > every surface and declares both copy ledgers while disabled; hand rows are
-> confined to the policy-only permissions surface; Claude's
-> `native.unpinLaunchEffort` is declared for Home Manager only, so delivery
-> facts carry no supplement rows; backend lowering and validation live only in
-> ai-module.
+> confined to the policy-only permissions surface; `proxyAllow` needs the proxy
+> pool; Claude's `native.unpinLaunchEffort` is declared for Home Manager only,
+> so delivery facts carry no supplement rows; backend lowering and validation
+> live only in ai-module.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1848,8 +1852,9 @@ cells without policy edits.
   `environmentVariables`, one the record's `surfaceSupport` omits, or
   `agentsDir` without `agents`. It also rejects `agentNativeType` without
   `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
-  `agentsDescriptionSuffix` without the agents pool, and an empty or non-string
-  `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
+  `agentsDescriptionSuffix` without the agents pool, an empty or non-string
+  `agentsDirSuffixes`, and `proxyAllow` (the default of `ai.<name>.proxy.allow`)
+  without the proxy pool. The native pair is tested for presence, so an explicit
   null counts as set.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`

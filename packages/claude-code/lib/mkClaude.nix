@@ -245,6 +245,14 @@ in
     contextFilename = "CLAUDE.md";
     executables = ["claude"];
     inherit (claudeProxy) installPackage;
+    # CLIProxyAPI records a claude login as provider `claude` (sdk/auth/claude.go,
+    # Provider), kind oauth.
+    proxyAllow = [
+      {
+        kind = "oauth";
+        provider = "claude";
+      }
+    ];
     surfaceSupport = {
       agents = {};
       context = {};

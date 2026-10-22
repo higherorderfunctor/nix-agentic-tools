@@ -1,11 +1,9 @@
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-18 — root and per-runtime `url` or `instance` +
-> redacted `key` selection, resolved directly into null or `{key; url;}` at
-> `ai.<runtime>.normalized.proxy`; an `instance` names an
-> `ai.cliproxyapi.instances` entry and resolves to its loopback origin; Claude
-> and Codex consume references through credential helpers using `redact.assign`.
-> Other runtimes declare no proxy support and warn through delivery policy.
+> **Last verified:** 2026-10-21 — root and per-runtime `url` or `instance`
+> selections resolve to `{key; url;}`; a runtime routed through an instance gets
+> its own key, allowlist entry and key claim there; Claude and Codex consume the
+> key through credential helpers, and other runtimes warn.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -22,9 +20,10 @@ credential proxy.
   standard decomposition warning. Claude and Codex declare support; the other
   runtimes warn rather than dropping a selection silently.
 - `mkBackendTransform.nix`, for a record whose `surfaceSupport` declares
-  `proxy`, declares `ai.<runtime>.proxy` (same selection options as the root)
-  and `ai.<runtime>.normalized.proxy`. The callbacks get it as
-  `normalized.proxy` and `resolvedProxy`.
+  `proxy`, declares `ai.<runtime>.proxy` (the root's selection options plus
+  `allow`) and `ai.<runtime>.normalized.proxy`. The callbacks get it as
+  `normalized.proxy` and `resolvedProxy`. Inside the runtime's enable gate it
+  publishes the runtime's client and key claim (below).
 
 ### Selection and the resolved endpoint
 
@@ -32,14 +31,13 @@ A selection is `url` + `key` for a proxy configured by hand, or `instance` +
 `key` for one this flake runs. `instance` names an `ai.cliproxyapi.instances`
 entry (`packages/cliproxyapi/modules/instances.nix`) and resolves through
 `packages/ai-module/lib/instances.nix`'s `select` to `http://127.0.0.1:<port>`;
-`key` is the same reference the instance lists in `settings.access.api-keys`,
-`redacted` on both sides. `url` and `instance` are mutually exclusive. A
-selection without a key, a key without a selection, or an instance that is
-missing or disabled fails as an assertion at either scope, outside the runtime
-enable gate; such an instance resolves to null. A selection without a key is
-rejected because the harness would send its own login token, if any, to the
-proxy. The instances are read as `config.ai.cliproxyapi.instances or {}`, since
-an evaluation without the owner module (the factory harness) has none.
+`url` and `instance` are mutually exclusive. A selection without a key, a key
+without a selection, or an instance that is missing or disabled fails as an
+assertion at either scope, outside the runtime enable gate; such an instance
+resolves to null. A selection without a key is rejected because the harness
+would send its own login token, if any, to the proxy. The instances are read as
+`config.ai.cliproxyapi.instances or {}`, since an evaluation without the owner
+module (the factory harness) has none.
 
 A per-runtime selection that selects anything (a `url` or an `instance`)
 replaces the root selection WHOLE. Fields never mix across levels: a runtime
@@ -58,15 +56,65 @@ resolved value for its destination format. A key's contents cannot be
 charset-checked at evaluation; never substitute the runtime value unescaped into
 JSON, TOML or shell source. The `url` pattern validates only the proxy origin.
 
+### Runtime keys and the allowlist
+
+A runtime routed through an instance owns its client key there. The transform
+publishes `proxyLib.client` — `{instance; key; allow; credentials; option;}` —
+at `ai.internal.proxyClients.<runtime>`, and
+`packages/cliproxyapi/modules/instances.nix` reads its instance's clients
+(`clientsOf`) in the instance's derived settings: each key joins
+`access.api-keys` and gets one `access.key-allowlist` entry whose `credentials`
+are `allow`. CPA then fails closed for every listed key
+(`cliproxyapi-key-allowlist.md`), so the key reaches only those credentials. The
+launcher gets the same `key` through `normalized.proxy`, so the published key
+and the presented key are one reference.
+
+The instance pulls; the runtime never writes `ai.cliproxyapi.instances`. A
+pushed definition would create the instance a typo names, hiding the "not an
+entry" assertion, and checking existence from inside that definition recurses.
+`ai.internal` is an option group, outside the root-pool provenance guard.
+
+`allow` takes `access.key-allowlist[].credentials`'s generated type
+(`cliproxyapi.keyAllowlistCredentialsType`), so a bad `kind` fails at the
+runtime option. Its default is the record's `proxyAllow`: Claude's and Codex's
+own OAuth login (`sdk/auth/{claude,codex}.go`, `Provider`). A runtime without
+one has no default; an enabled runtime routed through an instance without
+`allow` is refused. `allow` is not part of the selection: it applies whichever
+scope selects. Set it to narrow the own login by `ids` or to reach a
+hand-written block.
+
+Refused at evaluation, inside the enable gate:
+
+- One key REFERENCE on two runtimes: each claims
+  `proxy-client-key.<reference as JSON>` through `ai.<runtime>.claims`, so the
+  claim registry fails. A root `instance` selection therefore serves one enabled
+  runtime; another selects with its own key. The claim compares references, not
+  resolved values. Two different references that resolve to one value (trimmed)
+  pass evaluation and are refused by CPA instead, which fails closed: at start
+  it logs the error naming the entries by index and never the key, and exits
+  non-zero; on a hot reload it keeps the running config and allowlist. Operator
+  decision 2026-10-21; `packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md`.
+- A runtime key also listed by hand in `access.api-keys`, or given a
+  hand-written `access.key-allowlist` entry: a second owner could widen or
+  contradict its rules. The count compares against the runtime clients with that
+  key, so a shared key reports only the claim.
+
+A `url` selection and a disabled runtime publish nothing. A hand-written key of
+some other client stays allowed, but once any runtime routes through the
+instance the allowlist is set, so that key needs its own hand-written entry.
+
 ### Checks
 
 `checks/ai-proxy/module-eval.nix` covers selection validation, redacted key
 refusal and the per-runtime override through a test runtime that declares
-`proxy`, each with the instance case on both backends. The unsupported-runtime
-warnings are `ai-warnings-delivery`'s generated cases, driven by its `proxy`
-sample (the url form). `checks/ai-factory/factory-eval.nix` carries `proxy` in
-its every-surface request set. `packages/claude-code/checks/claude-proxy.nix`
-checks settings and runs the file, command and concat helpers on both backends.
+`proxy`, each with the instance case on both backends.
+`module-ai-proxy-instance-clients` routes Claude and Codex through one instance
+and holds every routing refusal in one table, `routingCases`. The
+unsupported-runtime warnings are `ai-warnings-delivery`'s generated cases,
+driven by its `proxy` sample (the url form).
+`checks/ai-factory/factory-eval.nix` carries `proxy` in its every-surface
+request set. `packages/claude-code/checks/claude-proxy.nix` checks settings and
+runs the file, command and concat helpers on both backends.
 `packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix` checks Codex's provider
 settings and session flags, runs the reference helpers, and sends requests
 through the pinned Codex to loopback proxies on both backends.
