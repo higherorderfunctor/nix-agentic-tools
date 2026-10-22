@@ -90,11 +90,12 @@ Exclusive paths, services and ports use the hidden `ai.claims.<group>.<key>`
 registry. Two claims fail, even with identical values, with
 `ai.claims.<group>.<key>: claimed by <a> and <b>`; owners are sorted and a
 disabled entry still claims. Port owners name `<owner>:<service>.ports.<name>`.
-Owners register resources; one registry validates every group.
-Ancestor/descendant paths fail as overlapping destinations. A key in the
-helper's `shared` list (root `AGENTS.md`) forwards unclaimed, so its composer
-stays the single owner; divergent equal-priority definitions there fail with
-conflict text naming `lib/runtime.nix`, not the owners.
+Owners register resources; one registry validates every group. Other resources,
+such as a proxy client key, use `ai.<owner>.claims.<group> = [keys]` while that
+owner is enabled. Ancestor/descendant paths fail as overlapping destinations. A
+key in the helper's `shared` list (root `AGENTS.md`) forwards unclaimed, so its
+composer stays the single owner; divergent equal-priority definitions there fail
+with conflict text naming `lib/runtime.nix`, not the owners.
 
 ### Services
 
@@ -1520,7 +1521,7 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-17 — non-AI owners use the same layer-1 helper;
+> **Last verified:** 2026-10-21 — non-AI owners use the same layer-1 helper;
 > delivery facts derive delivered and absent cells, keyed withdrawal and
 > normalized gaps from option and runtime declarations; `poolOptions` covers
 > `agentsDir` and `environmentVariables` only; `optionNamespaces` places
@@ -1848,8 +1849,9 @@ cells without policy edits.
   `environmentVariables`, one the record's `surfaceSupport` omits, or
   `agentsDir` without `agents`. It also rejects `agentNativeType` without
   `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
-  `agentsDescriptionSuffix` without the agents pool, and an empty or non-string
-  `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
+  `agentsDescriptionSuffix` without the agents pool, an empty or non-string
+  `agentsDirSuffixes`, and `proxyAllow` (the default of `ai.<name>.proxy.allow`)
+  without the proxy pool. The native pair is tested for presence, so an explicit
   null counts as set.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`

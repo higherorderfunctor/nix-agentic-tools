@@ -24,13 +24,15 @@ eligible credentials are unavailable gets `auth_not_found`. Model listings still
 expose all models.
 
 An entry identifies one client key and grants a list of credential rules. The
-client key is a redact reference shared with `access.api-keys[]`. A rule
-requires `provider` and `kind` (`oauth` or `apikey`); `ids` and `base-urls`
-narrow it further. The provider is CPA's credential provider, including
-`openai-compatible-<name>` for compatibility groups. An OAuth credential's ID is
-its auth-file path. A config API key's ID hashes its secret, so use provider and
-`base-urls` to address a group through rotation. The settings types and module
-refinements are documented in `cliproxyapi-settings.md`.
+client key is a redact reference shared with `access.api-keys[]`. An
+instance-routed runtime derives both entries from `ai.<runtime>.proxy.allow`;
+write entries by hand only for other clients. A rule requires `provider` and
+`kind` (`oauth` or `apikey`); `ids` and `base-urls` narrow it further. The
+provider is CPA's credential provider, including `openai-compatible-<name>` for
+compatibility groups. An OAuth credential's ID is its auth-file path. A config
+API key's ID hashes its secret, so use provider and `base-urls` to address a
+group through rotation. The settings types and module refinements are in
+`cliproxyapi-settings.md`.
 
 The `apikey` kind matches only credentials synthesized from config. A
 store-loaded login can temporarily classify as `apikey` from its file or a Meta

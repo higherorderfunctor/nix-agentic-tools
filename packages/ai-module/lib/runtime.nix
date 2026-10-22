@@ -1,4 +1,5 @@
-# Layer 1: `ai.<name>.{activation,files,legacyLedgers,services}` forward to the root.
+# Layer 1: `ai.<name>.{activation,files,legacyLedgers,services}` forward to the root,
+# and `ai.<name>.claims` registers the owner's other exclusive resources.
 # `_file` attributes the forwarded definitions to this file, the one root
 # writer the module-provenance guard exempts. Keys in `shared` forward without
 # a claim, so their composer stays the single owner.
@@ -30,6 +31,15 @@ in {
     activation = lib.mkOption {
       type = lib.types.attrsOf activation.entryType;
       default = {};
+    };
+    # Files, services and ports claim themselves below; this is for a
+    # resource no layer-1 entry names, such as a proxy client key.
+    claims = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+      default = {};
+      internal = true;
+      visible = false;
+      description = "Exclusive resources this owner claims beyond its files, services and ports: `ai.claims` group → keys.";
     };
     files = lib.mkOption {
       type = lib.types.attrsOf fileLib.entryType;
@@ -64,13 +74,16 @@ in {
     (lib.mkIf enabled {
       ai = {
         # Every declared key claims its resources, disabled entries included.
-        claims = {
-          path = lib.genAttrs (lib.subtractLists shared (builtins.attrNames own.files)) (_: [name]);
-          port = lib.mkMerge (lib.mapAttrsToList (service: entry:
-            lib.mkMerge (lib.mapAttrsToList (port: value: {${toString value} = ["${name}:${service}.ports.${port}"];}) entry.ports))
-          own.services);
-          service = lib.genAttrs (builtins.attrNames own.services) (_: [name]);
-        };
+        claims = lib.mkMerge [
+          (lib.mapAttrs (_: keys: lib.genAttrs keys (_: [name])) own.claims)
+          {
+            path = lib.genAttrs (lib.subtractLists shared (builtins.attrNames own.files)) (_: [name]);
+            port = lib.mkMerge (lib.mapAttrsToList (service: entry:
+              lib.mkMerge (lib.mapAttrsToList (port: value: {${toString value} = ["${name}:${service}.ports.${port}"];}) entry.ports))
+            own.services);
+            service = lib.genAttrs (builtins.attrNames own.services) (_: [name]);
+          }
+        ];
         files = forward "files";
         services = forward "services";
       };
