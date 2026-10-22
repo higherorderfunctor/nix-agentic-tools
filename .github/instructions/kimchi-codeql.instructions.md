@@ -232,16 +232,16 @@ input of the transform. `rules.nix` applies them downstream, against
 
 `kimchi-codeql-environment-guard` runs the pack and transform over each tree
 under `checks/fixtures/codeql-environment/`, laid out like the real source root
-and extracted by `kimchi-codeql-create-database <dir> <tree>`. `reads` holds six
-read shapes absent from the pinned tree in one Kimchi file: bracket `env`, an
-asserted environment, a process alias, bracket `globalThis.process`, literal
-`require("process")`, and `+=`; concatenation remains unevaluated. The pinned
-release's byte identity covers its actual read shapes, including pi's APP_NAME
-and bundled imports. `overwrites` holds the launch-order mix; `fail-shapes`,
-`fail-order` and `fail-sources` retain every refusal assertion, with helper
-declarations merged into their case. A new shape goes into one of these trees,
-not into a mutant of the real source: a real-tree mutant costs a database build
-each.
+and extracted by `kimchi-codeql-create-database <dir> <tree>`. `reads` holds
+seven read shapes absent from the pinned tree in one Kimchi file: bracket `env`,
+an asserted environment, a process alias, bracket `globalThis.process`, literal
+`require("process")`, a namespace process import, and `+=`; concatenation
+remains unevaluated. The pinned release's byte identity covers its actual read
+shapes, including pi's APP_NAME and bundled imports. `overwrites` holds the
+launch-order mix; `fail-shapes`, `fail-order` and `fail-sources` retain every
+refusal assertion, with helper declarations merged into their case. A new shape
+goes into one of these trees, not into a mutant of the real source: a real-tree
+mutant costs a database build each.
 
 ### Running it without Nix
 

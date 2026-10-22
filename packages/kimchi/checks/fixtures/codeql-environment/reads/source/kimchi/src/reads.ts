@@ -1,3 +1,5 @@
+import * as proc from "node:process";
+void proc.env.S18_NAMESPACE_IMPORT;
 void process["env"].S15_PROCESS_BRACKET_ENV;
 void (process.env as Record<string, string>).S21_AS_PAREN;
 const pp = process;
