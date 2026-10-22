@@ -110,9 +110,10 @@
     mv "$TMPDIR/kimchi/db" "$out/db" # bare-commands: ok (runCommand builder PATH)
   '';
 
-  # `runQueries { name; queries; models ? []; }`: every query of `queries`, a
-  # mkQueryPack result, run against `database` with `models` (mkModelPack
-  # results) through customizePackage. `$out/<query>.json` holds every result
+  # `runQueries { name; queries; models ? []; }`: every query of `queries`, an
+  # `ai.devTools.codeql.mkQueryPack` spec, run against `database` with `models`
+  # (mkModelPack specs) through customizePackage, which realizes both against
+  # `engine`. `$out/<query>.json` holds every result
   # set of `<query>.ql`, decoded, its tuples sorted. Select strings, relative
   # paths and numbers: an entity or an absolute location carries the build
   # directory into the output.
@@ -125,9 +126,9 @@
       inherit models;
       queries = [queries];
     };
-    pack = queries.codeqlPack.name;
+    pack = queries.name;
   in
-    assert lib.assertMsg ((queries.codeqlPack.kind or null) == "query") "kimchi codeql.runQueries: `queries` must be a query pack";
+    assert lib.assertMsg (lib.isType "codeql-pack-spec" queries) "kimchi codeql.runQueries: `queries` must be an ai.devTools.codeql.mkQueryPack spec";
       pkgs.runCommand "kimchi-codeql-${name}" {
         nativeBuildInputs = [customized pkgs.jq];
         inherit meta;

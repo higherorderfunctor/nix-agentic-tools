@@ -17,7 +17,7 @@ in {
     kimchi-codeql-database = let
       results = codeql.runQueries {
         name = "smoke";
-        queries = codeql.engine.mkQueryPack {
+        queries = pkgs.ai.devTools.codeql.mkQueryPack {
           name = "nix-agentic-tools/kimchi-smoke";
           src = ../ql/smoke;
         };
