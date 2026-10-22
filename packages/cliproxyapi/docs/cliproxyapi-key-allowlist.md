@@ -64,7 +64,7 @@ directly bypasses loading, so the Manager compiles duplicate entries into an
 allowlist granting no key any credential. Empty client keys bind no request.
 
 The eligibility predicate covers the legacy candidate loop, scheduler fast path,
-retry, and cooldown waits. `SelectAuth` always uses the legacy loop; only mixed
+retry, and cooldown waits. `SelectAuth` always uses the legacy loop; mixed
 `Execute` with a built-in selector exercises the scheduler fast path. Plugin
 schedulers receive only surviving candidates. Two 8.0.38 paths bypass that
 predicate: Home dispatch, which is refused, and the Antigravity credits

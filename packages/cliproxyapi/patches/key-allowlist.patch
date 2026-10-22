@@ -20,7 +20,7 @@ index 960d5e5..9bac730 100644
  		cfg = &config.Config{}
 diff --git a/internal/access/config_access/key_allowlist_test.go b/internal/access/config_access/key_allowlist_test.go
 new file mode 100644
-index 0000000..3858f86
+index 0000000..7dea5e5
 --- /dev/null
 +++ b/internal/access/config_access/key_allowlist_test.go
 @@ -0,0 +1,256 @@
@@ -187,8 +187,8 @@ index 0000000..3858f86
 +		key  string
 +		want []string
 +	}{
-+		// A base URL differing by a trailing slash names no credential.
 +		{key: "key-both", want: []string{"https://api.z.ai/api/anthropic", "https://other.example/anthropic"}},
++		// A base URL differing by a trailing slash names no credential.
 +		{key: "key-nearmiss"},
 +		// A base-urls rule never matches the OAuth login that carries a matching base_url.
 +		{key: "key-oauth"},
