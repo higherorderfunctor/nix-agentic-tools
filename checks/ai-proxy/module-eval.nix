@@ -8,6 +8,7 @@
 }: let
   inherit (harness) aiBase evalDevenv evalDevenvModules evalHm evalHmModules mkTest;
 
+  inherit (import ../../lib/extracted/render.nix {inherit lib;}) fill;
   redact = import ../../lib/redact {inherit lib;};
   # The key a selected CLIProxyAPI instance accepts: one reference on both
   # sides, in the instance's access list and in the selection.
@@ -64,10 +65,7 @@
     kind = "oauth";
     inherit provider;
   };
-  succeeds = value: (builtins.tryEval (builtins.deepSeq value true)).success;
-
-  # One refusal per distinct route into a key or rule. `thrown` means the
-  # option type or renderer refused it before assertions were available.
+  # One refusal per distinct route into a key or rule.
   routingCases = let
     accepted = ai: {
       inherit ai;
@@ -79,7 +77,7 @@
     };
     refused = fragment: ai: {
       inherit ai;
-      expect = outcome: lib.isList outcome && lib.any (lib.hasInfix fragment) outcome;
+      expect = outcome: lib.any (lib.hasInfix fragment) outcome;
     };
     claimed = "ai.claims.proxy-client-key.${proxyLib.keyClaim (runtimeKey "claude")}: claimed by claude and codex";
     handWritten = settings: {
@@ -88,6 +86,7 @@
     };
   in {
     # Accepted.
+    "a disabled runtime without allow" = accepted {testapp.proxy = routed "testapp";};
     "a hand-written key of another client" = accepted (handWritten {access.api-keys = [instanceKey];});
 
     # Refused by an assertion.
@@ -126,31 +125,21 @@ in {
         # reference; null when a reference was written into it as is.
         rendered = result: let
           inherit (file result) content secrets;
-          fill = value:
-            if builtins.isList value
-            then map fill value
-            else if builtins.isAttrs value
-            then lib.mapAttrs (_: fill) value
-            else if builtins.isString value
-            then secrets.${lib.removeSuffix "}" (lib.removePrefix "{$" value)} or value
-            else value;
         in
           if lib.hasInfix "_redact" content
           then null
-          else fill (builtins.fromJSON content);
+          else builtins.fromJSON (fill secrets content);
         claim = name: {${proxyLib.keyClaim (runtimeKey name)} = [name];};
         outcome = ai: let
           result = evaluate ai;
           messages = failedMessages result;
         in
-          if !succeeds messages
-          then "thrown"
-          else if messages != [] || succeeds (file result).content
+          if messages != []
           then messages
-          else "thrown";
+          else builtins.deepSeq (file result).content messages;
         both = evaluate {
-          claude.proxy = routed "claude";
           codex.proxy = routed "codex";
+          proxy = routed "claude";
         };
         narrowRule = {
           base-urls = [zai];
@@ -187,6 +176,7 @@ in {
             (rendered codexOff).access
             == accessFor ["claude"]
             && codexOff.config.ai.claims.proxy-client-key == claim "claude";
+          "distinct clients are accepted" = failedMessages both == [];
           "generated api-keys and allowlist" = (rendered both).access == accessFor ["claude" "codex"];
           "launcher keys" = lib.all (name:
             both.config.ai.${name}.normalized.proxy
@@ -197,8 +187,7 @@ in {
           "url selection adds nothing" = !((rendered byUrl) ? access) && byUrl.config.ai.internal.proxyClients == {};
         };
       in
-        lib.optional (routingCases == {}) (label "no routing cases")
-        ++ lib.concatLists (lib.mapAttrsToList (name: case: lib.optional (!case.expect (outcome case.ai)) (label "case `${name}`")) routingCases)
+        lib.concatLists (lib.mapAttrsToList (name: case: lib.optional (!case.expect (outcome case.ai)) (label "case `${name}`")) routingCases)
         ++ lib.concatLists (lib.mapAttrsToList (name: holds: lib.optional (!holds) (label name)) observations))
       ["devenv" "hm"];
     in
