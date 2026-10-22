@@ -527,10 +527,14 @@ hoc machinery beside an existing abstraction.
   `packages/ai-module/modules/common.nix`.
 - **PROPOSAL (not yet vetted): runtime proxy keys are pulled by the instance.**
   A runtime routed through `ai.cliproxyapi.instances.<n>` publishes its key and
-  its rules (`ai.<runtime>.proxy.allow`) at `ai.internal.proxyClients`, and the
-  instance's derived settings list the key and its allowlist entry; the key is
-  an `ai.claims.proxy-client-key` claim. Pushing into the instance would create
-  one a typo names, and a hand-written copy would be a second owner. See
+  its rules (`ai.<runtime>.proxy.allow` plus one base-URL rule per enabled
+  instance provider) at `ai.internal.proxyClients`, and the instance's derived
+  settings list the key and its allowlist entry; the key is an
+  `ai.claims.proxy-client-key` claim. Instance `providers` lower into
+  `settings.api-keys` blocks through one API table
+  (`packages/cliproxyapi/lib/providers.nix`); each runtime names the API it
+  speaks on its record (`proxyApi`). Pushing into the instance would create one
+  a typo names, and a hand-written copy would be a second owner. See
   `lib/ai/proxy/default.nix` and `packages/cliproxyapi/modules/instances.nix`.
 - **PROPOSAL (not yet vetted): harness sandboxing is ours.** The host sandbox
   (the microvm) is the real protection. `ai.jail` / `ai.<runtime>.jail`

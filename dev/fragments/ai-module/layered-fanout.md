@@ -12,10 +12,10 @@
 > hooks, settings and steering legacy ledgers declared outside its enable gate;
 > Kimchi stages every surface, with every legacy ledger ungated; Codex stages
 > every surface and declares both copy ledgers while disabled; hand rows are
-> confined to the policy-only permissions surface; `proxyAllow` needs the proxy
-> pool; Claude's `native.unpinLaunchEffort` is declared for Home Manager only,
-> so delivery facts carry no supplement rows; backend lowering and validation
-> live only in ai-module.
+> confined to the policy-only permissions surface; `proxyAllow` and `proxyApi`
+> need the proxy pool; Claude's `native.unpinLaunchEffort` is declared for Home
+> Manager only, so delivery facts carry no supplement rows; backend lowering and
+> validation live only in ai-module.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -329,9 +329,11 @@ cells without policy edits.
   `agentsDir` without `agents`. It also rejects `agentNativeType` without
   `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
   `agentsDescriptionSuffix` without the agents pool, an empty or non-string
-  `agentsDirSuffixes`, and `proxyAllow` (the default of `ai.<name>.proxy.allow`)
-  without the proxy pool. The native pair is tested for presence, so an explicit
-  null counts as set.
+  `agentsDirSuffixes`, `proxyAllow` (the default of `ai.<name>.proxy.allow`)
+  without the proxy pool, and `proxyApi` (the default of each
+  `ai.<name>.proxy.providers.<p>.api`) without the proxy pool or naming no
+  provider API. The native pair is tested for presence, so an explicit null
+  counts as set.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus

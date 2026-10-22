@@ -19,7 +19,8 @@
 # come as a pair; they, `agentsDirSuffixes` and `agentsDescriptionSuffix` need
 # the `agents` pool; and `agentsDirSuffixes` must be a non-empty list of
 # strings, since an empty one makes `agentsDir` expand nothing. `proxyAllow`
-# needs the `proxy` pool, whose `allow` option it defaults.
+# and `proxyApi` need the `proxy` pool, whose `allow` and `providers.<p>.api`
+# options they default, and `proxyApi` must name a provider API.
 #
 # `executables` names the launcher package's user entry points, each of which
 # gets its own jail; every other bin is passed through and runs inside the
@@ -35,6 +36,7 @@
   # The pools whose option `mkBackendTransform.nix` declares through
   # `poolOption`, and so the only ones `poolOptions` can override.
   poolOptionPools = ["environmentVariables"];
+  proxyApiNames = (import ../proxy {inherit lib;}).apiNames;
   sharedAgentsMdKeys = ["hasOnDemandIndex" "index" "key" "maxBytes" "rules"];
   supportKeys = ["backends" "gaps" "reason"];
   gapKeys = ["each" "path" "reason" "when"];
@@ -111,7 +113,9 @@ in {
     && lib.assertMsg (!(record ? agentsDirSuffixes) || (record.agentsDirSuffixes != [] && lib.all lib.isString record.agentsDirSuffixes))
     "ai runtime ${name}: agentsDirSuffixes must be a non-empty list of strings."
     && lib.assertMsg (!(record ? proxyAllow) || lib.elem "proxy" supportedSurfaces)
-    "ai runtime ${name}: proxyAllow is the default of ai.${name}.proxy.allow and needs the proxy pool in surfaceSupport.";
+    "ai runtime ${name}: proxyAllow is the default of ai.${name}.proxy.allow and needs the proxy pool in surfaceSupport."
+    && lib.assertMsg (!(record ? proxyApi) || lib.elem "proxy" supportedSurfaces && lib.elem record.proxyApi proxyApiNames)
+    "ai runtime ${name}: proxyApi is the default of ai.${name}.proxy.providers.<name>.api, needs the proxy pool in surfaceSupport, and must be one of ${listed proxyApiNames}.";
 
   contentTargets = name: result: let
     unknown = unknownIn contentTargetsKeys result;

@@ -7,7 +7,9 @@
 > or match; CPA refuses two entries with one client key at every load, and a
 > refused initial load exits 1; a hot reload can serve a rotated credential
 > until its delete lands (documented, not fixed); a runtime routed through an
-> instance gets its entry from `ai.<runtime>.proxy.allow`.
+> instance gets its entry from `ai.<runtime>.proxy.allow` and one `base-urls`
+> rule per enabled instance provider, naming the provider CPA's own
+> normalization records.
 >
 > **Settled — do not relitigate.** Plugins fail open and split instances were
 > rejected (operator, 2026-10-21): one CPA instance enforces the allowlist in
@@ -43,16 +45,19 @@ access = {
 `api-key` is a secret like `access.api-keys[]`: the same redact reference
 appears in both and is lifted into a placeholder. A runtime routed through the
 instance (`ai.<runtime>.proxy.instance`) writes both for its own key, from
-`ai.<runtime>.proxy.allow`; write entries by hand only for other clients. A rule
-needs `provider` and `kind`, typed `enum ["apikey" "oauth"]`, so a provider
-alone never admits both an OAuth login and an API key. `provider` is the
-credential's provider as CPA records it, `openai-compatible-<name>` for an
-openai-compatibility group. Optional `ids` narrows a rule to credential IDs; an
-OAuth login's ID is its file path under the auth directory. A config API key's
-ID hashes the key, so narrow API keys by provider and `base-urls`. CPA reads an
-empty or absent list as unrestricted; how the module refuses an empty,
-null-holding or `mkIf`-emptied one is under Refinements in
-`cliproxyapi-settings.md`; a null entry in the list is refused by a module
+`ai.<runtime>.proxy.allow` and its enabled `providers`; write entries by hand
+only for other clients. A rule needs `provider` and `kind`, typed
+`enum ["apikey" "oauth"]`, so a provider alone never admits both an OAuth login
+and an API key. `provider` is the credential's provider as CPA records it,
+`openai-compatible-<name>` for an openai-compatibility group, its name
+lowercased; `openai-compatibility` and a name already carrying the prefix stay
+as they are (`OpenAICompatibleProviderKey`, `internal/util/provider.go`), and a
+provider's generated rule follows the same rule. Optional `ids` narrows a rule
+to credential IDs; an OAuth login's ID is its file path under the auth
+directory. A config API key's ID hashes the key, so narrow API keys by provider
+and `base-urls`. CPA reads an empty or absent list as unrestricted; how the
+module refuses an empty, null-holding or `mkIf`-emptied one is under Refinements
+in `cliproxyapi-settings.md`; a null entry in the list is refused by a module
 assertion on the merged value. A hand-written `config.yaml` has no such guard.
 There is no tag: CPA drops the v8 group `name`
 (`internal/config/config_v8.go:389-410`). `kind` is matched against CPA's own
@@ -115,6 +120,10 @@ changes: `omitempty` keeps it out of saved configs.
 
 ### Several providers on one protocol
 
+`ai.cliproxyapi.instances.<n>.providers` writes these blocks and rules for you
+(`dev/fragments/ai-proxy/ai-proxy.md`, Providers); the shape below is what it
+generates, and what a hand-written block for another client needs.
+
 Two `api-keys.claude` groups, say z.ai and a second Anthropic-format provider,
 are one provider (`claude`) and one kind (`apikey`), and their IDs hash the
 secret. Optional `base-urls` tells them apart: a rule with it matches only an
@@ -132,12 +141,14 @@ credentials = [
 ```
 
 The comparison is the one CPA stores: the config synthesizer copies each block's
-`base-url` into the credential's `base_url` attribute trimmed and otherwise
-unchanged
+`base-url` into the credential's `base_url` attribute trimmed (Go's
+`strings.TrimSpace`, every Unicode space) and otherwise unchanged
 (`internal/watcher/synthesizer/config.go:107-109,169-171,253-255,321,367,424`;
 the sanitizers in `internal/config/config_normalization.go` only trim too). So
 the URL must match the block's `base-url` exactly: scheme, host, path, case and
-a trailing slash all count. Per family:
+a trailing slash all count. Nix cannot reproduce that trim; how the instance
+module keeps it out of the comparison is under Providers in `ai-proxy.md`. Per
+family:
 
 - `claude`, `gemini`, `interactions`: `base_url` is set only when the block sets
   `base-url`. A block left on the default endpoint has none, and no `base-urls`

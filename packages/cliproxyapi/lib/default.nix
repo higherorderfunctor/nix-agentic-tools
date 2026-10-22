@@ -65,6 +65,8 @@ in {
     # `access.key-allowlist[].credentials`'s own type, so a rule written
     # elsewhere (`ai.<runtime>.proxy.allow`) is checked where it is written.
     keyAllowlistCredentialsType = (subOptions (subOptions (subOptions generated.type).access.type).key-allowlist.type).credentials.type;
+    # Named upstream API-key providers (./providers.nix).
+    providers = import ./providers.nix {inherit lib;};
     inherit refinements;
     inherit (generated) report sample;
     # settings → { content; secrets; }: config.yaml as JSON text, each secret
