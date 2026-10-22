@@ -16,8 +16,8 @@ const (
 type route struct {
 	// api is the policy `apis` value that admits the route; "" admits it
 	// for every entry.
-	api   string
-	class string
+	api    string
+	class  string
 	detail bool
 	// query lists the query keys the route takes besides the key carriers.
 	query []string
@@ -43,14 +43,14 @@ var routes = map[string]route{
 	"POST /v1/responses/compact":                {api: "responses", class: classCall},
 }
 
-// Detail paths have a model ID in place of a literal route-table segment.
-// Match one unescaped segment and the entry's byte-exact model set.
+// Detail paths have a model ID in place of a literal route-table segment, so
+// they match the entry's byte-exact model set instead of the table.
 func detailRoute(path string, e *entry) (route, bool) {
 	for _, prefix := range []struct{ path, api string }{
 		{"/v1/models/", ""},
 		{"/v1beta/models/", "gemini"},
 	} {
-		if id, ok := strings.CutPrefix(path, prefix.path); ok && id != "" && !strings.Contains(id, "/") && e.models[id] {
+		if id, ok := strings.CutPrefix(path, prefix.path); ok && e.models[id] {
 			return route{api: prefix.api, class: classListing, detail: true}, true
 		}
 	}

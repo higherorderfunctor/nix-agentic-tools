@@ -1,7 +1,6 @@
 package gate
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -39,9 +38,12 @@ var healthRegistry = struct {
 // failed state before the asynchronous first check. A dead CPA never looks
 // healthy merely because Caddy started.
 func (g *Gate) startChecker() error {
+	// The probe sends every internal key, and appends a path to the string, so
+	// the upstream must be exactly `http://<loopback IP>:<port>`: a bare host
+	// would probe another port than reverse_proxy, and a `?x` or `#x` suffix
+	// would swallow the `/v1/models` path.
 	u, err := url.Parse(g.Upstream)
-	if err != nil || u == nil || u.Scheme != "http" || net.ParseIP(u.Hostname()) == nil || !net.ParseIP(u.Hostname()).IsLoopback() ||
-		u.Port() == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || g.Upstream != "http://"+u.Host || u.Port() == "" || !net.ParseIP(u.Hostname()).IsLoopback() {
 		return fmt.Errorf("cpa_gate: upstream must be a loopback HTTP origin")
 	}
 	state := &healthState{entries: map[string]entryHealth{}, done: make(chan struct{})}
@@ -93,6 +95,7 @@ func (g *Gate) stopChecker() {
 // checkOnce asks CPA's OpenAI listing as each internal principal. It logs
 // counts only. The policy model set remains in memory, never in health JSON.
 func (g *Gate) checkOnce(ctx context.Context) {
+	// A redirect must not carry an internal key to wherever Location points.
 	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	for _, e := range g.keys {
 		result := entryHealth{Missing: len(e.models)}
@@ -136,7 +139,7 @@ func fetchListing(ctx context.Context, client *http.Client, upstream string, e *
 	if err != nil || int64(len(wired)) > maxBodyBytes {
 		return nil, false
 	}
-	decoded, ok := decodeListing(bytes.NewBuffer(wired), resp.Header)
+	decoded, ok := decodeListing(wired, resp.Header)
 	if !ok {
 		return nil, false
 	}
@@ -195,7 +198,6 @@ func (h *Health) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.H
 		Entries map[string]entryHealth `json:"entries"`
 	}{Entries: entries})
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Length", fmt.Sprint(len(body)))
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
 	return nil

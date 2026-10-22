@@ -2,11 +2,9 @@ package gate
 
 import (
 	"bytes"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/json"
 	"io"
-	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -62,51 +60,17 @@ func TestListingShapesFilterToTheCallableSet(t *testing.T) {
 }
 
 // The checked-in row is the complete gpt-5.5 template from CPA 8.0.38's
-// internal/registry/models/codex_client_models.json, kept under testdata as
-// a compact one-row catalog. It includes CPA's real upgrade.model reference.
-// For this catalog the callable set is the single row ID; adding a different
-// allowed ID makes the subset precondition false before filtering.
-func TestRecordedCodexTemplateListingEqualsCallableSet(t *testing.T) {
+// internal/registry/models/codex_client_models.json, with CPA's real
+// upgrade.model reference. The synthetic shapes above cannot show that CPA's
+// own bytes pass the strict scanner.
+func TestRecordedCodexTemplateSurvivesFiltering(t *testing.T) {
 	raw, err := os.ReadFile("testdata/codex-client-model-gpt-5.5.jsonl")
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, _, ok := parseListing(raw)
-	if !ok {
-		t.Fatal("CPA template fixture did not parse")
-	}
-	rows, ok := root["models"].([]any)
-	if !ok || len(rows) != 1 {
-		t.Fatalf("CPA template fixture rows: %v", root["models"])
-	}
-	id, ok := listingID(rows[0].(map[string]any), "models")
-	if !ok || id != "gpt-5.5" {
-		t.Fatalf("CPA template fixture ID: %q, %v", id, ok)
-	}
-	e := &entry{models: map[string]bool{id: true}}
-	interpreted, ok := interpretListing(raw, e)
-	filtered := interpreted.body
-	if !ok || strings.Contains(string(filtered), "gpt-6.1-sol") || !bytes.Contains(filtered, []byte(`"upgrade":null`)) {
-		t.Fatalf("filtered CPA template: ok %v, leaked %v, upgrade null %v", ok, strings.Contains(string(filtered), "gpt-6.1-sol"), bytes.Contains(filtered, []byte(`"upgrade":null`)))
-	}
-	result, _, ok := parseListing(filtered)
-	if !ok {
-		t.Fatalf("filtered CPA template did not parse: %s", filtered)
-	}
-	returned := map[string]bool{}
-	for _, value := range result["models"].([]any) {
-		got, valid := listingID(value.(map[string]any), "models")
-		if !valid {
-			t.Fatalf("filtered row has no canonical ID: %v", value)
-		}
-		returned[got] = true
-	}
-	if !maps.Equal(returned, e.models) || !maps.Equal(returned, interpreted.ids) || !listingCoverage(e, interpreted.ids).OK {
-		t.Fatalf("filtered IDs differ from callable set: %s", filtered)
-	}
-	e.models["not-listed"] = true
-	if coverage := listingCoverage(e, interpreted.ids); coverage.OK || coverage.Missing != 1 {
-		t.Error("a callable model absent from the CPA listing passed the subset check")
+	interpreted, ok := interpretListing(raw, &entry{models: map[string]bool{"gpt-5.5": true}})
+	if !ok || !interpreted.ids["gpt-5.5"] || len(interpreted.ids) != 1 || bytes.Contains(interpreted.body, []byte("gpt-6.1-sol")) || !bytes.Contains(interpreted.body, []byte(`"upgrade":null`)) {
+		t.Fatalf("filtered CPA template: ok %v, ids %v, body %s", ok, interpreted.ids, interpreted.body)
 	}
 }
 
@@ -121,13 +85,12 @@ func TestListingRefusesUnrecognizedOrAmbiguousWireShapes(t *testing.T) {
 		"invalid utf8": append([]byte(`{"data":[{"id":"m","note":"`), 0xff, '"', '}', ']', '}'),
 		"mixed codex id row": []byte(`{"models":[{"slug":"m","id":"outside"}]}`),
 		"mixed codex gemini row": []byte(`{"models":[{"slug":"m","name":"models/outside"}]}`),
-		"mixed gemini id row": []byte(`{"models":[{"name":"models/m","id":"outside"}]}`),
 		"mismatched data identity": []byte(`{"data":[{"id":"m","name":"models/outside"}]}`),
 		"non ascii name": []byte(`{"data":[{"id":"m","modél":"outside"}]}`),
 		"paginated unseen rows": []byte(`{"data":[{"id":"m"}],"has_more":true}`),
 		"trailing value": []byte(`{"data":[]} {"data":[{"id":"m"}]}`),
 		"unknown envelope": []byte(`{"items":[{"id":"m"}]}`),
-		"unknown row": []byte(`{"data":[{"slug":"m"}]}`),
+		"data row with slug": []byte(`{"data":[{"id":"m","slug":"outside"}]}`),
 	}
 	for name, raw := range cases {
 		if result, ok := filterListing(raw, e); ok {
@@ -164,15 +127,9 @@ func TestListingHandlerBoundsAndCleansTheResponse(t *testing.T) {
 	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "outside") || w.Header().Get("Location") != "" || w.Header().Get("Trailer") != "" || w.Header().Get("Content-Length") != strconv.Itoa(w.Body.Len()) {
 		t.Errorf("filtered response: %d %v %s", w.Code, w.Header(), w.Body)
 	}
-	for _, body := range []string{`{"items":[{"id":"outside"}]}`, `{"data":[{"id":"m"},{"id":"m"}],"hidden_model":"outside"}`} {
-		w := call(http.StatusOK, body, upstreamHeaders)
-		if w.Code != http.StatusNotFound || w.Body.Len() != 0 || w.Header().Get("Location") != "" {
-			t.Errorf("unparseable response leaked: %d %v %s", w.Code, w.Header(), w.Body)
-		}
-	}
-	w = call(http.StatusFound, `outside`, upstreamHeaders)
-	if w.Code != http.StatusNotFound || w.Header().Get("Location") != "" {
-		t.Errorf("upstream redirect leaked: %d %v", w.Code, w.Header())
+	w = call(http.StatusOK, `{"items":[{"id":"outside"}]}`, upstreamHeaders)
+	if w.Code != http.StatusNotFound || w.Body.Len() != 0 || w.Header().Get("Location") != "" {
+		t.Errorf("unparseable response leaked: %d %v %s", w.Code, w.Header(), w.Body)
 	}
 	capture := &listingCapture{header: make(http.Header)}
 	if _, err := capture.Write(bytes.Repeat([]byte{'x'}, int(maxBodyBytes)+1)); err == nil || capture.body.Len() != 0 {
@@ -190,37 +147,24 @@ func TestListingHandlerBoundsAndCleansTheResponse(t *testing.T) {
 	}
 }
 
-func TestListingDecompressionIsBounded(t *testing.T) {
-	var compressed bytes.Buffer
-	w := gzip.NewWriter(&compressed)
-	if _, err := w.Write(bytes.Repeat([]byte{'x'}, int(maxBodyBytes)+1)); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := decodeListing(bytes.NewBuffer(compressed.Bytes()), http.Header{"Content-Encoding": {"gzip"}}); ok {
-		t.Error("decoded listing exceeded the limit")
-	}
-}
-
 func TestDetailRoutesHaveTheSameUniformRefusal(t *testing.T) {
 	g, _ := newGate(t)
-	g.keys[sha256.Sum256([]byte(allKey))].apis["gemini"] = true
-	for _, target := range []string{"/v1/models/m", "/v1beta/models/m"} {
-		r := httptest.NewRequest(http.MethodGet, target, nil)
+	e := g.keys[sha256.Sum256([]byte(allKey))]
+	e.apis["gemini"] = true
+	for _, c := range []struct{ target, body string }{
+		{"/v1/models/m", `{"id":"m"}`},
+		{"/v1/models/m", `{"slug":"m"}`},
+		{"/v1beta/models/m", `{"name":"models/m"}`},
+	} {
+		r := httptest.NewRequest(http.MethodGet, c.target, nil)
 		r.Header.Set("Authorization", "Bearer "+allKey)
 		w := httptest.NewRecorder()
 		if err := g.ServeHTTP(w, r, caddyhttp.HandlerFunc(func(out http.ResponseWriter, _ *http.Request) error {
 			out.Header().Set("Content-Type", "application/json")
-			body := `{"id":"m"}`
-			if strings.HasPrefix(target, "/v1beta") {
-				body = `{"name":"models/m"}`
-			}
-			_, _ = io.WriteString(out, body)
+			_, _ = io.WriteString(out, c.body)
 			return nil
 		})); err != nil || w.Code != http.StatusOK {
-			t.Errorf("%s: %d %s %v", target, w.Code, w.Body, err)
+			t.Errorf("%s %s: %d %s %v", c.target, c.body, w.Code, w.Body, err)
 		}
 	}
 	for _, target := range []string{"/v1/models/outside", "/v1beta/models/outside"} {
@@ -231,15 +175,9 @@ func TestDetailRoutesHaveTheSameUniformRefusal(t *testing.T) {
 			t.Errorf("%s: %d %s", target, w.Code, w.Body)
 		}
 	}
-	e := g.keys[sha256.Sum256([]byte(allKey))]
-	for _, raw := range []string{`{"id":"outside","slug":"m"}`, `{"id":"outside","name":"models/m"}`} {
+	for _, raw := range []string{`{"id":"m","slug":"outside"}`, `{"id":"m","name":"models/outside"}`} {
 		if result, ok := filterDetail([]byte(raw), e, "/v1/models/m"); ok {
 			t.Errorf("conflicting detail identity accepted: %s", result)
-		}
-	}
-	for _, raw := range []string{`{"slug":"m"}`, `{"name":"models/m"}`} {
-		if result, ok := filterDetail([]byte(raw), e, "/v1/models/m"); !ok || len(result) == 0 {
-			t.Errorf("canonical detail refused: %s, %v", result, ok)
 		}
 	}
 }

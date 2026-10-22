@@ -18,8 +18,9 @@ key, so CPA applies its key allowlist to the principal the gate chose. The Go
 module is `src/cpa-gate` (module path `cpagate`, never fetched); the binary is
 Caddy's own `main` plus one import.
 
-`lib/gate.nix` renders the Caddyfile from shared pieces. Only listings have a
-downstream `reverse_proxy`; calls retain the prior module behavior.
+`lib/gate.nix` renders the Caddyfile from shared pieces. Only the listing paths
+have a downstream `reverse_proxy`; a second loopback site serves
+`cpa_gate_health`.
 
 ## Policy file
 
@@ -44,12 +45,13 @@ clear. The file is JSON:
 }
 ```
 
-`Provision` fails on empty keys, `apis` or `models`; unknown API routes or
-policy fields; duplicate client keys or a client key equal to an internal key;
-and trailing JSON. Errors name entries and fields, never values. Client keys
-remain in memory only as SHA-256 digests, scanned with constant-time
-comparisons. Each `hostedTools` type declares implied models inside its entry's
-set; an empty map denies every hosted tool.
+`Provision` fails on an empty `entries` list (health would report OK while
+serving nothing), duplicate entry names (health is keyed by name), empty keys,
+`apis` or `models`, unknown API routes or policy fields, duplicate client keys,
+a client key equal to an internal key, and trailing JSON. Errors name entries
+and fields, never values. Client keys remain in memory only as SHA-256 digests,
+scanned with constant-time comparisons. Each `hostedTools` type declares implied
+models inside its entry's set; an empty map denies every hosted tool.
 
 ## Requests
 
@@ -91,22 +93,20 @@ data, trailing values and nesting beyond 128 levels. Only schemas at
 positions, are exempt from model checks. Websocket routes remain refused with
 `"reason": "pending"`.
 
-Listings are classified by response shape: OpenAI, Anthropic and Grok use
-`data[].id`; Codex uses `models[].slug`; Gemini uses `models[].name` with a
-`models/` prefix. Only exact allowed IDs survive. The gate recomputes
-`first_id`/`last_id` and nulls nested objects with forbidden model directives,
-including Codex's `upgrade.model`. Unknown shapes, malformed JSON, non-200
-responses, interrupted copies and oversized or invalid compressed listings get
-an empty 404. Disallowed or missing details do too. The gate requests
-`Accept-Encoding: identity`, caps wire and decoded listings at 32 MiB, and
-publishes rewritten JSON with a new `Content-Length`.
+Listings are parsed by wire shape, never by request header or user agent; the
+five CPA 8.0.38 producers are named in `interpretListing`. Only exact allowed
+IDs survive, `first_id`/`last_id` are recomputed, and an object with a forbidden
+model directive becomes null (Codex's `upgrade.model`). A private writer buffers
+the response, so CPA's interim 1xx headers and trailers never reach the client.
+Everything else gets the empty 404: an unknown shape or envelope field, a
+paginated listing, non-200, an interrupted or oversized copy, and a disallowed
+or missing detail.
 
-The separate `cpa_gate_health` handler serves `GET /-/health` on loopback. Its
-registry starts failed, checks each internal principal's accepted OpenAI listing
-immediately and every 60 seconds, then unregisters on Caddy cleanup. It reports
-each entry's `ok` and missing **count**, never model IDs or keys; client
-credentials cannot call it. Logs contain counts only. Duplicate or empty entry
-names are refused.
+`cpa_gate_health` serves `GET /-/health` on a separate loopback site. It starts
+failed, then probes each internal principal's `/v1/models` through serving's own
+decoder and interpreter, immediately and every 60 seconds. It reports each
+entry's `ok` and missing **count**, never model IDs or keys, and refuses any
+request carrying a client credential. Logs hold counts only.
 
 ## Refusals and logs
 
@@ -137,9 +137,8 @@ nixpkgs' Caddy version and build tags. `gate.json` pins `goFloor` and
 
 ## Checks
 
-- Go tests run in the package check phase. They cover routes, calls, parsing,
-  all five listings, real Caddy response copies, health and refusal controls;
-  logs and errors are checked for keys.
+- Go tests run in the package check phase, including a real Caddy copy of
+  listings and a test that no log or error carries a key.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
 - `cliproxyapi-gate-validate`: the real binary validates the rendered Caddyfile
   with a good policy, and refuses a shared key, a missing file and an empty

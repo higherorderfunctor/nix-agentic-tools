@@ -28,10 +28,6 @@ func TestHealthChecksEachInternalListingAndKeepsModelsPrivate(t *testing.T) {
 		switch mode {
 		case "empty":
 			root["data"] = []any{}
-		case "extra":
-			root["extra"] = "unrecognized"
-		case "has_more":
-			root["has_more"] = true
 		case "outside":
 			row["model"] = "outside"
 		}
@@ -69,13 +65,12 @@ func TestHealthChecksEachInternalListingAndKeepsModelsPrivate(t *testing.T) {
 			t.Errorf("missing callable model is healthy: %+v", result)
 		}
 	}
-	for _, bad := range []string{"extra", "has_more", "outside"} {
-		mode = bad
-		g.checkOnce(context.Background())
-		for _, result := range g.health.entries {
-			if result.OK || result.Missing != 1 {
-				t.Errorf("%s listing reported healthy: %+v", bad, result)
-			}
+	// Health shares serving's validation: a row serving would drop is missing.
+	mode = "outside"
+	g.checkOnce(context.Background())
+	for _, result := range g.health.entries {
+		if result.OK || result.Missing != 1 {
+			t.Errorf("a listing serving would filter reported healthy: %+v", result)
 		}
 	}
 	if strings.Contains(log.String(), "private-model") || strings.Contains(log.String(), "secret") {

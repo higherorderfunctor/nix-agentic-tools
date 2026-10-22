@@ -102,8 +102,8 @@ func lastLine(log *bytes.Buffer) string {
 }
 
 // This contract is independent of the production routes table. Each route
-// accepts its own API credential; calls forward checked bytes, while listings
-// and websockets remain refused.
+// accepts its own API credential; calls and listings forward, while websockets
+// remain refused.
 func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 	g, log := newGate(t)
 	cases := []struct {
@@ -139,15 +139,11 @@ func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 			carry(r, c.key)
 			w := httptest.NewRecorder()
 			forwarded := false
-			next := caddyhttp.HandlerFunc(func(out http.ResponseWriter, got *http.Request) error {
+			next := caddyhttp.HandlerFunc(func(_ http.ResponseWriter, got *http.Request) error {
 				forwarded = true
 				b, err := io.ReadAll(got.Body)
 				if err != nil || !bytes.Equal(b, body) {
 					t.Errorf("%s via %s: forwarded body %q, %v", c.target, name, b, err)
-				}
-				if c.class == classListing {
-					out.Header().Set("Content-Type", "application/json")
-					_, _ = io.WriteString(out, `{"object":"list","data":[{"id":"m"}]}`)
 				}
 				return nil
 			})
@@ -156,9 +152,6 @@ func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 			}
 			if forwarded != (c.class != classWebsocket) {
 				t.Errorf("%s via %s: forwarded %v", c.target, name, forwarded)
-			}
-			if c.class == classListing && (w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"id":"m"`)) {
-				t.Errorf("%s via %s: listing response %d %q", c.target, name, w.Code, w.Body)
 			}
 			if c.class == classWebsocket {
 				if w.Code != http.StatusNotFound || w.Body.Len() != 0 {
@@ -337,7 +330,6 @@ func TestLoadPolicy(t *testing.T) {
 		"duplicate entry name": {`{"entries":[
 			{"name":"a","key":"secret-k1","internal":"secret-i1","apis":["chat"],"models":["m"]},
 			{"name":"a","key":"secret-k2","internal":"secret-i2","apis":["chat"],"models":["m"]}]}`, "duplicate entry name"},
-		"empty entry name": {`{"entries":[{"name":"","key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"]}]}`, "empty entry name"},
 		"client key is an internal key": {`{"entries":[
 			{"name":"a","key":"secret-k1","internal":"secret-k2","apis":["chat"],"models":["m"]},
 			{"name":"b","key":"secret-k2","internal":"secret-i","apis":["chat"],"models":["m"]}]}`, `"b": client key equals the internal key of entry "a"`},

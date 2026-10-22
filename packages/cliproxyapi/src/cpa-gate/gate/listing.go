@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
-	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,10 +17,10 @@ import (
 // CPA cannot reach the client before filtering. Writes stop at the same limit
 // used for decoded request bodies.
 type listingCapture struct {
-	header  http.Header
-	body    bytes.Buffer
-	status  int
-	failed  bool
+	header http.Header
+	body   bytes.Buffer
+	status int
+	failed bool
 }
 
 func (c *listingCapture) Header() http.Header { return c.header }
@@ -65,13 +63,10 @@ func (g *Gate) serveListing(w http.ResponseWriter, r *http.Request, next caddyht
 			err = g.refuse(w, notFound, e.name, classListing, "upstream")
 		}
 	}()
-	if err := next.ServeHTTP(rec, r); err != nil {
+	if err := next.ServeHTTP(rec, r); err != nil || rec.failed || rec.status != http.StatusOK {
 		return g.refuse(w, notFound, e.name, classListing, "upstream")
 	}
-	if rec.failed || rec.status != http.StatusOK {
-		return g.refuse(w, notFound, e.name, classListing, "upstream")
-	}
-	decoded, ok := decodeListing(&rec.body, rec.header)
+	decoded, ok := decodeListing(rec.body.Bytes(), rec.header)
 	if !ok {
 		return g.refuse(w, notFound, e.name, classListing, "shape")
 	}
@@ -91,33 +86,21 @@ func (g *Gate) serveListing(w http.ResponseWriter, r *http.Request, next caddyht
 	return nil
 }
 
-func decodeListing(buf *bytes.Buffer, header http.Header) ([]byte, bool) {
-	if value := header.Get("Content-Type"); value != "" {
-		mediaType, _, err := mime.ParseMediaType(value)
-		if err != nil || mediaType != "application/json" {
-			return nil, false
-		}
-	}
-	encodings := header.Values("Content-Encoding")
-	if len(encodings) > 1 {
+func decodeListing(raw []byte, header http.Header) ([]byte, bool) {
+	encoding, ok := wireEncoding(header)
+	if !ok {
 		return nil, false
 	}
-	encoding := "identity"
-	if len(encodings) == 1 {
-		encoding = encodings[0]
-	}
-	if encoding != "identity" && encoding != "gzip" && encoding != "zstd" {
-		return nil, false
-	}
-	decoded, err := decodeWire(buf.Bytes(), encoding)
+	decoded, err := decodeWire(raw, encoding)
 	return decoded, err == nil
 }
 
-// parseListing shares PR3's strict lexical walk before any decoder can fold
-// names or choose a different duplicate. A listing need not name a model at
-// its root, unlike a call.
+// parseListing shares the call path's strict lexical walk before any decoder
+// can fold names or choose a different duplicate. gjson.ValidBytes also refuses
+// a trailing value; utf8.Valid is separate because json.Decoder would turn
+// invalid bytes into U+FFFD.
 func parseListing(raw []byte) (map[string]any, gjson.Result, bool) {
-	if len(raw) == 0 || !utf8.Valid(raw) || !gjson.ValidBytes(raw) || raw[firstNonSpace(raw)] != '{' {
+	if !utf8.Valid(raw) || !gjson.ValidBytes(raw) {
 		return nil, gjson.Result{}, false
 	}
 	s := strictScanner{body: raw, text: string(raw)}
@@ -130,8 +113,7 @@ func parseListing(raw []byte) (map[string]any, gjson.Result, bool) {
 	if err := decoder.Decode(&root); err != nil || root == nil {
 		return nil, gjson.Result{}, false
 	}
-	var trailing any
-	return root, gjson.ParseBytes(raw), decoder.Decode(&trailing) == io.EOF
+	return root, gjson.ParseBytes(raw), true
 }
 
 type listingResult struct {
@@ -170,9 +152,6 @@ func interpretListing(raw []byte, e *entry) (listingResult, bool) {
 		return listingResult{}, false
 	}
 	parsedRows := parsed.Get(field).Array()
-	if len(parsedRows) != len(rows) {
-		return listingResult{}, false
-	}
 	kept := make([]any, 0, len(rows))
 	ids := make([]string, 0, len(rows))
 	for i, value := range rows {
