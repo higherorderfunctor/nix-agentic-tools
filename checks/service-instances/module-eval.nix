@@ -187,34 +187,26 @@
       ${pkgs.coreutils}/bin/stat -c '%a' "$PWD" "$PWD/auth" > "$RECEIVED/modes"
     '';
   };
-  runnable =
+  runnableFor = overrides:
     (evalHm (withInstances {
-      cliproxyapi.instances.main = {
-        package = fakeProxy;
-        settings = {
-          access.api-keys = [(redact.file "/build/client-key")];
-          management.secret-key = redact.file "/build/management-key";
-        };
-        stateDir = "/build/state/main";
-      };
+      cliproxyapi.instances.main =
+        lib.recursiveUpdate {
+          package = fakeProxy;
+          settings = {
+            access.api-keys = [(redact.file "/build/client-key")];
+            management.secret-key = redact.file "/build/management-key";
+          };
+          stateDir = "/build/state/main";
+        }
+        overrides;
     })).config;
+  runnable = runnableFor {};
   # The same stand-in with the model catalog fetches and the panel updater
   # turned back on.
-  phoneHomeOn =
-    (evalHm (withInstances {
-      cliproxyapi.instances.main = {
-        fetchModelCatalogs = true;
-        package = fakeProxy;
-        settings = {
-          access.api-keys = [(redact.file "/build/client-key")];
-          management = {
-            disable-auto-update-panel = false;
-            secret-key = redact.file "/build/management-key";
-          };
-        };
-        stateDir = "/build/state/main";
-      };
-    })).config;
+  phoneHomeOn = runnableFor {
+    fetchModelCatalogs = true;
+    settings.management.disable-auto-update-panel = false;
+  };
 in {
   checks =
     {
