@@ -92,10 +92,7 @@ build. Only these patches are guaranteed to be in the database.
 database: a read-only one fails with `Error acquiring the IMB cache lock`. So
 every consumer copies the database first. Measured locally on the 214 MB
 database: copying the directory took 0.1 s, unzipping its 100 MB
-`codeql database bundle` 1.3 s, and building that bundle 10 s. `$out/db` drops
-the creation `log/`. Both the derivation and the devenv task create it with
-`createDatabase` (`kimchi-codeql-create-database <dir>`), which copies `source`
-to `<dir>/source` and creates `<dir>/db`.
+`codeql database bundle` 1.3 s, and building that bundle 10 s.
 
 ### Running a query without Nix
 
