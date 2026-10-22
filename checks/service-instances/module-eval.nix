@@ -105,13 +105,89 @@
     }
     && failures (evaluate backend (withInstances {})) == [];
 
-  # A plaintext secret, a port the instance fixes set to another value, and
-  # an upstream that names no enabled instance are all refused.
+  # CLIProxyAPI settings on the main instance, by case name: the settings and
+  # what evaluating them gives, `thrown` when an option type or the render
+  # refuses them, else the failed assertions.
+  settingsCases = let
+    accepted = settings: {
+      inherit settings;
+      expect = [];
+    };
+    fails = message: settings: {
+      inherit settings;
+      expect = [message];
+    };
+    thrown = settings: {
+      inherit settings;
+      expect = "thrown";
+    };
+    # One client key with one rule: a valid API-key rule, then `rule` on top.
+    allowing = rule: {
+      access.key-allowlist = [
+        {
+          api-key = clientKey;
+          credentials = [
+            ({
+                kind = "apikey";
+                provider = "claude";
+              }
+              // rule)
+          ];
+        }
+      ];
+    };
+    emptied = field: fails "ai.cliproxyapi.instances.main: settings.access.key-allowlist[].credentials[].${field} merged to an empty list, which CPA reads as no restriction on that dimension and admits every credential of the provider and kind. Leave the option unset to leave it unrestricted, or list at least one value." (allowing {${field} = [(lib.mkIf false "x")];});
+    nullEntry = fails "ai.cliproxyapi.instances.main: settings.access.key-allowlist has a null entry, which the renderer drops: a list of only nulls renders as [] and switches enforcement off for every key. Remove the null entry, or set the list to [] to switch the allowlist off.";
+    oauth.kind = "oauth";
+    urls = ["https://api.z.ai/api/anthropic"];
+  in {
+    # Accepted, and rendered.
+    "allowlist switched off" = accepted {access.key-allowlist = [];};
+    "apikey rule narrowed by base-urls and ids" = accepted (allowing {
+      base-urls = urls;
+      ids = ["claude-apikey"];
+    });
+    "mkIf lists that keep an element" = accepted (allowing {
+      base-urls = [(lib.mkIf true "x") (lib.mkIf false "y")];
+      ids = [(lib.mkIf true "x") (lib.mkIf false "y")];
+    });
+    "oauth rule narrowed by ids" = accepted (allowing (oauth // {ids = ["claude-oauth"];}));
+    "plugins without an allowlist" = accepted {plugins.enabled = true;};
+
+    # Refused by an assertion. The types check definitions, so a list of only
+    # `mkIf false` elements passes them and merges to [], which CPA reads as
+    # unrestricted; the assertion on the merged value refuses it, per field.
+    "base-urls emptied by mkIf" = emptied "base-urls";
+    "ids emptied by mkIf" = emptied "ids";
+    "null allowlist entry" = nullEntry {access.key-allowlist = [null];};
+    "null allowlist entry beside a rule" = nullEntry {access.key-allowlist = [null] ++ (allowing {}).access.key-allowlist;};
+    "oauth rule with base-urls" = fails "ai.cliproxyapi.instances.main: settings.access.key-allowlist has a rule with kind = \"oauth\" and base-urls, which can never match: base-urls compare an API-key credential's base URL and never match an OAuth login. Use kind = \"apikey\" or drop base-urls." (allowing (oauth // {base-urls = urls;}));
+    # Its one failure also proves a bare rule, with no ids or base-urls, passes.
+    "plugins beside the allowlist" = fails "ai.cliproxyapi.instances.main: settings.plugins.enabled = true voids settings.access.key-allowlist: plugin executors choose credentials outside it and can read every credential through host.auth.get. Disable plugins or drop the allowlist." (allowing oauth // {plugins.enabled = true;});
+
+    # Refused at evaluation.
+    "empty base-urls" = thrown (allowing {base-urls = [];});
+    "empty ids" = thrown (allowing {ids = [];});
+    "null base-urls element" = thrown (allowing {base-urls = [null];});
+    "null ids element" = thrown (allowing {ids = [null];});
+    "plaintext client key" = thrown {access.api-keys = ["plain-client-key"];};
+    "port other than the instance's" = thrown {server.port = 9999;};
+    "unknown kind" = thrown (allowing {kind = "wrong";});
+  };
+
+  # Every settings case, an upstream that names no enabled instance, and each
+  # Manager Plus admin key and path refusal.
   refusals = backend: let
-    entry = ai: (evaluate backend (withInstances ai)).config.ai.services.cliproxyapi-main.files;
+    outcome = settings: let
+      result = evaluate backend (withInstances {cliproxyapi.instances.main.settings = settings;});
+    in
+      if succeeds result.config.ai.services.cliproxyapi-main.files
+      then failures result
+      else "thrown";
   in
-    !(succeeds (entry {cliproxyapi.instances.main.settings.access.api-keys = ["plain-client-key"];}))
-    && !(succeeds (entry {cliproxyapi.instances.main.settings.server.port = 9999;}))
+    settingsCases
+    != {}
+    && lib.all lib.id (lib.mapAttrsToList (name: case: outcome case.settings == case.expect || builtins.trace "${backend}: settings case `${name}` failed" false) settingsCases)
     && failures (evaluate backend (withInstances {cpa-manager-plus.instances.main.upstream = "missing";}))
     == ["ai.cpa-manager-plus.instances.main.upstream names `missing`, which is not an `ai.cliproxyapi.instances` entry."]
     && failures (evaluate backend (withInstances {cliproxyapi.instances.main.enable = false;}))
