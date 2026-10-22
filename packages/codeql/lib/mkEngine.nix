@@ -12,8 +12,8 @@
 #
 # `nodejs` (the javascript engine's only) is the Node the TypeScript extractor
 # runs, through SEMMLE_TYPESCRIPT_NODE_RUNTIME; `.override { nodejs = ...; }`
-# swaps it. Every engine carries `customizePackage`, `mkQueryPack` and
-# `mkModelPack` (./customization.nix, ./packs.nix).
+# swaps it. Every engine carries `customizePackage` (./customization.nix),
+# which realizes the namespace's pack specs (./specs.nix) against it.
 {
   engine,
   nodejs ? null,
@@ -97,16 +97,11 @@ in
     # Every engine carries the same script, which bumps every asset from one
     # tag; the `codeql-full` update target runs it.
     passthru =
-      import ./packs.nix {
-        engine = finalAttrs.finalPackage;
-        engineName = engine;
-        languages = carried;
-        inherit pkgs;
-      }
-      // lib.optionalAttrs (nodejs != null) {inherit nodejs;}
+      lib.optionalAttrs (nodejs != null) {inherit nodejs;}
       // {
         customizePackage = import ./customization.nix {
           engine = finalAttrs.finalPackage;
+          engineName = engine;
           languages = carried;
           inherit pkgs;
         };

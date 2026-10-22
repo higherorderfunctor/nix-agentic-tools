@@ -1,9 +1,10 @@
 ## CodeQL packs and customizePackage
 
-> **Last verified:** 2026-10-21 (commit 7d85f150) — every engine carries
-> `customizePackage`, `mkQueryPack` and `mkModelPack`; packs reach CodeQL
-> through a generated `CODEQL_CONFIG_FILE`; query packs are precompiled; the
-> wrapper execs codeql over a merged config named by its content.
+> **Last verified:** 2026-10-21 (commit 966494a9) — `ai.devTools.codeql` carries
+> `mkQueryPack` and `mkModelPack`, which return pack specs; every engine's
+> `customizePackage` realizes them; packs reach CodeQL through a generated
+> `CODEQL_CONFIG_FILE`; query packs are precompiled; the wrapper execs codeql
+> over a merged config named by its content.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 javascript
 > bundle and rejected:
@@ -17,10 +18,7 @@
 > - **`--search-path` for the packs.** It survives a command-line
 >   `--additional-packs`, but `--model-packs` finds extension packs only through
 >   `--additional-packs`.
-> - **`ai.devTools.codeql.mkQueryPack` through an owner `overlay.nix`.** The
->   overlay check (`lib/facets.nix` `changedLeafPaths`) compares every sibling
->   leaf of `ai` with `==`, which forces each derivation's outPath, so reading
->   any `pkgs.ai` attribute would instantiate every `ai` package.
+> - **Engine passthru builders:** a stopgap for the overlay forcing #2810 fixed.
 > - **A child codeql with a trap that deletes the merged config.** The 2.27.3
 >   launcher runs java in the foreground and traps only EXIT, INT and TERM, so a
 >   HUP left the JVM running on a deleted config, and the wrapper cannot reach
@@ -30,28 +28,41 @@
 ### Surface
 
 ```nix
-engine = ai.devTools.codeql.codeql-javascript;
-engine.customizePackage { queries = [ ./ql ]; models = [ ./models ]; extraPackages = [ pkgs.gnumake ]; }
-engine.mkQueryPack { name = "me/my-queries"; src = ./ql; }     # language defaults to the engine's
-engine.mkModelPack { name = "me/my-models"; src = ./models; }
-engine.override { nodejs = pkgs.nodejs-slim; }
+codeql = ai.devTools.codeql;
+codeql.codeql-javascript.customizePackage {
+  queries = [ (codeql.mkQueryPack { name = "me/my-queries"; src = ./ql; }) ./plain-dir ];
+  models = [ (codeql.mkModelPack { name = "me/my-models"; src = ./models; }) ];
+  extraPackages = [ pkgs.gnumake ];
+}
+codeql.codeql-javascript.override { nodejs = pkgs.nodejs-slim; }
 ```
 
-The builders are passthru on each engine, because a query pack is compiled
-against one engine. `language` defaults to a language bundle's own, must be
-named on `codeql-full`, and must be a language the engine carries; `codeql-bare`
-has no libraries and throws. `customizePackage` refuses a builder result whose
-language the engine does not carry. Every field is optional, and a bad spec or
-argument throws (`lib/customization.nix`, `lib/packs.nix`). `queries` and
-`models` take a directory holding a qlpack.yml or a builder result.
-`customizePackage` on a customized package appends. A store path given twice, in
-one call or across calls, is used once. Two builder results with one pack name
-throw. A plain directory's pack name is not checked at eval time; CodeQL reports
-a pack found in two locations when the packs are used.
+`mkQueryPack` and `mkModelPack` return a pack spec, plain data
+(`_type = "codeql-pack-spec"`, `kind`, `name`, `src`), and read no engine
+(`lib/specs.nix`). The flake's `lib.ai.devTools.codeql` exports the same two
+functions for a caller without the overlay.
+
+A spec is not a derivation until an engine realizes it, because a query pack
+compiles against one engine's bundled `codeql/<language>-all`: the same spec
+realized by two engines is two packs. A builder that returned a derivation would
+pick an engine before the consumer named one, so the namespace could not offer
+it beside the eleven engines. `customizePackage` realizes each spec against the
+engine it is called on (`lib/packs.nix`). A model pack's content is only its
+language's, so two engines that carry it realize one derivation.
+
+A language bundle supplies the language, and a spec's `language`, when given,
+must be the bundle's. `codeql-full` needs `language` on the spec and throws
+naming the field without it; `codeql-bare` has no libraries and throws. Every
+field is optional, and a bad argument throws. `queries` and `models` take a
+directory holding a qlpack.yml, a pack derivation or a spec of that field's
+kind. `customizePackage` on a customized package appends. A store path given
+twice, in one call or across calls, is used once, and two realized specs with
+one pack name throw. A plain directory's pack name is not checked at eval time;
+CodeQL reports a pack found in two locations when the packs are used.
 
 The result has `bin/codeql`, a wrapper of the engine's, and `share/codeql`, a
 link to the engine's. Nothing of the distribution is copied. Its `unwrapped` is
-the engine, and it carries the engine's `mkQueryPack` and `mkModelPack`.
+the engine, and its `packs` holds the realized `queries` and `models`.
 
 ### How packs become visible
 
@@ -100,14 +111,14 @@ packs.
 
 ### Precompilation
 
-`mkQueryPack` writes its qlpack.yml, with `codeql/<language>-all: "*"`, over
-`src`, then runs `codeql pack create`. That needs no network: dependencies
-resolve from the engine's bundled packs. The output is the pack with `.qlx`
-plans, a lock file and the libraries it uses under `.codeql/libraries`, about 11
-MB for javascript. In CI the two-query fixture compiled in 66 s and the
-RequestForgery query in 98 s.
+A query spec's realization writes its qlpack.yml, with
+`codeql/<language>-all: "*"`, over `src`, then runs `codeql pack create`. That
+needs no network: dependencies resolve from the engine's bundled packs. The
+output is the pack with `.qlx` plans, a lock file and the libraries it uses
+under `.codeql/libraries`, about 11 MB for javascript. In CI the two-query
+fixture compiled in 66 s and the RequestForgery query in 98 s.
 
-`mkModelPack` only writes its qlpack.yml (`extensionTargets`,
+A model spec's realization only writes its qlpack.yml (`extensionTargets`,
 `dataExtensions: ["*.model.yml"]`). A directory given as it is stays uncompiled
 and resolves the same way.
 
@@ -123,24 +134,16 @@ the packs and exactly `request(...)` and `fetchUrl(...)` with them.
 
 ### Checks
 
-`codeql-custom-query-pack` checks:
+`checks/codeql-customize.nix`; each check's comment lists its arms. All are
+x86_64-linux only, and their `$out` holds text. `codeql-custom-query-pack`
+covers the `.qlx` plans, resolution, the merge with a consumer config and its
+refusals, and the engine's Node. `codeql-extra-packages` runs a program from
+`extraPackages` as `database create --command`, which runs the customized codeql
+again. `codeql-model-pack-mutation` checks the rows above, appending, and the
+refusal of a consumer `--model-packs` line.
 
-- the `.qlx` plans;
-- resolution with no flag and with `CODEQL_CONFIG_FILE=/dev/null`, while the
-  plain engine does not resolve the pack;
-- the merge with a consumer config file from `CODEQL_CONFIG_FILE` or `HOME`,
-  with and without a final newline, where its `--search-path` pack still
-  resolves; one merged file left by two runs, consumer line first; the refusal
-  of a clashing one, indented too, and no refusal for a comment naming the
-  option;
-- the engine's Node in the extractor log;
-- the four rows of a two-query pack (one query imports a `.qll`) over a `.js`
-  and a `.ts` file.
-
-`codeql-extra-packages` runs a program from `extraPackages` as
-`database create --command`, which the plain engine cannot find. The program
-runs the customized `codeql resolve packs`, with and without a consumer config,
-and must list the pack. `codeql-model-pack-mutation` checks the rows above and a
-`fetchUrl` row from a second model pack, adding each pack by customizing the
-customized package, and the refusal of a consumer `--model-packs` line. All
-three are x86_64-linux only. Their `$out` holds text.
+`codeql-pack-specs` builds no engine. At eval, a spec is no derivation, a query
+spec realized by `codeql-javascript` and `codeql-full` is two derivations and a
+model spec one, and `codeql-bare`, `codeql-full` without `language` and a spec
+in the other kind's field throw. `tryEval` cannot read a message, so a probe
+evaluates `lib/customization.nix` over a stand-in engine and greps each refusal.

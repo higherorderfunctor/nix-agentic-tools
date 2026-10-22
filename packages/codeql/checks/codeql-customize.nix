@@ -1,27 +1,32 @@
-# `customizePackage`, `mkQueryPack` and `mkModelPack` on the javascript engine,
-# the one CI builds. Each check creates a database of a fixture tree under
-# ./fixtures and analyzes it; `$out` holds the result rows only. See
-# docs/codeql.md.
+# `customizePackage` on the javascript engine, the one CI builds, with pack
+# specs from `ai.devTools.codeql.mkQueryPack` and `mkModelPack`. Each check
+# that builds creates a database of a fixture tree under ./fixtures and
+# analyzes it; `$out` holds the result rows only. `codeql-pack-specs` only
+# evaluates engines. See docs/customize.md.
 {
   lib,
   pkgs,
   self,
   ...
 }: let
-  engine = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.codeql-javascript;
-  queries = engine.mkQueryPack {
+  inherit (pkgs.stdenv.hostPlatform) system;
+  packages = self.ciPackages.${system};
+  engine = packages.codeql-javascript;
+  # The namespace as a consumer reads it from the package set.
+  codeql = pkgs.ai.devTools.codeql;
+  queries = codeql.mkQueryPack {
     name = "nix-agentic-tools/fixture-queries";
     src = ./fixtures/queries;
   };
-  sinkQueries = engine.mkQueryPack {
+  sinkQueries = codeql.mkQueryPack {
     name = "nix-agentic-tools/fixture-sinks";
     src = ./fixtures/model-queries;
   };
-  fetchModels = engine.mkModelPack {
+  fetchModels = codeql.mkModelPack {
     name = "nix-agentic-tools/fixture-fetch-models";
     src = ./fixtures/fetch-models;
   };
-  models = engine.mkModelPack {
+  models = codeql.mkModelPack {
     name = "nix-agentic-tools/fixture-models";
     src = ./fixtures/models;
   };
@@ -80,7 +85,7 @@ in {
         plain=${engine}/bin/codeql
         codeql=${custom}/bin/codeql
         pack=nix-agentic-tools/fixture-queries
-        [ -n "$(find ${queries} -name '*.qlx' -print -quit)" ] || fail "mkQueryPack left no precompiled .qlx"
+        [ -n "$(find ${builtins.head custom.packs.queries} -name '*.qlx' -print -quit)" ] || fail "the realized query pack has no precompiled .qlx"
         "$plain" resolve packs > "$TMPDIR/plain-packs" 2>&1
         ! grep -q " $pack@" "$TMPDIR/plain-packs" || fail "the plain engine resolves $pack"
         "$codeql" resolve packs > "$TMPDIR/packs" 2>&1
@@ -199,5 +204,100 @@ in {
         nix-agentic-tools/request-forgery-sinks client.js:4 request-forgery sink
         EOF
       '';
+
+    # Pack specs at eval, building no engine. A spec is plain data, so one spec
+    # realized by two engines is two query packs, each compiled against its
+    # engine; a model pack's content is only its language's, so it is one
+    # derivation. codeql-bare, codeql-full without `language` and a spec in the
+    # other kind's field throw. tryEval cannot see a message, so a probe
+    # evaluates customization.nix over a stand-in engine, which nothing reads
+    # before the refusals, and each refusal must name its cause.
+    codeql-pack-specs = let
+      drvOf = value: builtins.unsafeDiscardStringContext value.drvPath;
+      named = codeql.mkQueryPack {
+        name = "nix-agentic-tools/fixture-queries";
+        src = ./fixtures/queries;
+        language = "javascript";
+      };
+      namedModels = codeql.mkModelPack {
+        name = "nix-agentic-tools/fixture-models";
+        src = ./fixtures/models;
+        language = "javascript";
+      };
+      realizedBy = target: field: entry: builtins.head (target.customizePackage {${field} = [entry];}).packs.${field};
+      throws = target: field: entry: !(builtins.tryEval (drvOf (target.customizePackage {${field} = [entry];}))).success;
+      failures =
+        lib.optional (lib.isDerivation queries) "mkQueryPack returned a derivation"
+        ++ lib.optional (self.lib.ai.devTools.codeql.mkQueryPack {inherit (queries) name src;} != queries)
+        "lib.ai.devTools.codeql.mkQueryPack gives another spec than the package set's"
+        ++ lib.optional (drvOf (realizedBy engine "queries" named) == drvOf (realizedBy packages.codeql-full "queries" named))
+        "one query spec realized by codeql-javascript and codeql-full is one derivation"
+        ++ lib.optional (drvOf (realizedBy engine "models" namedModels) != drvOf (realizedBy packages.codeql-full "models" namedModels))
+        "one model spec realized by codeql-javascript and codeql-full is two derivations"
+        ++ lib.optional (!throws packages.codeql-bare "queries" queries) "codeql-bare realized a query spec"
+        ++ lib.optional (!throws packages.codeql-full "queries" queries) "codeql-full realized a query spec with no language"
+        ++ lib.optional (throws packages.codeql-full "queries" named) "codeql-full refused a query spec with a language"
+        ++ lib.optional (!throws engine "models" queries) "a query spec in `models` was taken";
+      probe = pkgs.writeText "codeql-pack-specs.nix" ''
+        {case}: let
+          pkgs = import ${pkgs.path} {system = ${builtins.toJSON system};};
+          inherit (pkgs) lib;
+          specs = import ${../lib}/specs.nix {inherit lib;};
+          customize = engineName: languages:
+            import ${../lib}/customization.nix {
+              engine = {
+                outPath = "/nonexistent";
+                pname = "codeql-''${engineName}";
+                version = "0";
+                meta = {
+                  description = "stand-in";
+                  license = lib.licenses.mit;
+                  mainProgram = "codeql";
+                  platforms = lib.platforms.all;
+                };
+              };
+              inherit engineName languages pkgs;
+            };
+          query = specs.mkQueryPack {
+            name = "me/q";
+            src = ${./fixtures/queries};
+          };
+          model = specs.mkModelPack {
+            name = "me/m";
+            src = ${./fixtures/models};
+            language = "javascript";
+          };
+          cases = {
+            bare = customize "bare" [] {queries = [query];};
+            control = customize "full" ["javascript" "python"] {models = [model];};
+            full = customize "full" ["javascript" "python"] {queries = [query];};
+            kind = customize "javascript" ["javascript"] {models = [query];};
+          };
+        in
+          builtins.seq cases.''${case}.drvPath true
+      '';
+    in
+      assert lib.assertMsg (failures == []) "codeql-pack-specs:\n${lib.concatStringsSep "\n" failures}";
+        pkgs.runCommand "codeql-pack-specs" {nativeBuildInputs = [pkgs.nix];} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          export HOME="$TMPDIR"
+          fail() {
+            echo "codeql-pack-specs: $*" >&2
+            exit 1
+          }
+          # `refuses <case> <text>`: the probe fails and its error holds <text>.
+          refuses() {
+            if nix-instantiate --eval --strict --store dummy:// ${probe} --argstr case "$1" > /dev/null 2> "$TMPDIR/$1.err"; then
+              fail "$1 was realized"
+            fi
+            grep -qF -- "$2" "$TMPDIR/$1.err" || fail "$1 failed without naming $2: $(cat "$TMPDIR/$1.err")"
+            echo "$1: $2" >> "$out"
+          }
+          nix-instantiate --eval --strict --store dummy:// ${probe} --argstr case control > /dev/null 2> "$TMPDIR/control.err" || fail "the control did not evaluate: $(cat "$TMPDIR/control.err")"
+          refuses bare "codeql-bare carries no CodeQL libraries"
+          refuses full "codeql-full needs \`language\` on the spec"
+          refuses kind "is a query pack spec; put it in \`queries\`"
+        '';
   };
 }

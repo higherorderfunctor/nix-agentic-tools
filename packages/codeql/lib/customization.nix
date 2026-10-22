@@ -4,21 +4,30 @@
 # for a bad spec. Customizing the result appends to its spec.
 #
 # A spec is `{ queries ? []; models ? []; extraPackages ? []; }`. `queries` and
-# `models` hold directories with a qlpack.yml or `mkQueryPack`/`mkModelPack`
-# results. The wrapper hands CodeQL a config file (CODEQL_CONFIG_FILE) of
+# `models` hold directories with a qlpack.yml, pack derivations, or
+# `mkQueryPack`/`mkModelPack` specs (./specs.nix), each realized against this
+# engine (./packs.nix). The wrapper hands CodeQL a config file (CODEQL_CONFIG_FILE) of
 # `--additional-packs` with every pack, and, with models, `--model-packs` with
 # one generated pack holding every model's data extensions: CodeQL keeps one
 # value per config option, and applies a model pack only when it is named. See
-# ../docs/codeql.md for the measurements and the merge with a consumer's own
+# ../docs/customize.md for the measurements and the merge with a consumer's own
 # config file.
 {
   engine,
+  engineName,
   # The languages the engine carries CodeQL libraries for.
   languages,
   pkgs,
 }: let
   inherit (pkgs) lib;
+  specs = import ./specs.nix {inherit lib;};
+  packs = import ./packs.nix {inherit engine engineName languages pkgs specs;};
   fields = ["extraPackages" "models" "queries"];
+  # The field each kind of pack goes in.
+  fieldOf = {
+    model = "models";
+    query = "queries";
+  };
   modelsName = "nix-agentic-tools/customized-models";
   # Interpolation copies a directory into the store; toString would not.
   storePath = entry: "${entry}";
@@ -34,18 +43,30 @@
       tagged = entry.codeqlPack.kind or null;
       language = entry.codeqlPack.language or null;
     in
-      if lib.isDerivation entry
+      if specs.isSpec entry
       then
-        lib.optional (tagged != null && tagged != kind) "${at} is a ${tagged} pack; put it in `${tagged}s`"
+        if entry.kind != kind
+        then ["${at} (${entry.name}) is a ${entry.kind} pack spec; put it in `${fieldOf.${entry.kind}}`"]
+        else packs.errors at entry
+      else if lib.isDerivation entry
+      then
+        lib.optional (tagged != null && tagged != kind) "${at} is a ${tagged} pack; put it in `${fieldOf.${tagged}}`"
         ++ lib.optional (language != null && !(lib.elem language languages)) "${at} is a ${language} pack, which ${engine.pname} does not carry"
       else if builtins.isPath entry
       then lib.optional (!builtins.pathExists (entry + "/qlpack.yml")) "${at} (${toString entry}) holds no qlpack.yml"
-      else ["${at} must be a path or a pack derivation"]);
+      else ["${at} must be a path, a pack spec or a pack derivation"]);
 
   fail = problems: value:
     assert lib.assertMsg (problems == []) "codeql.customizePackage:\n${lib.concatStringsSep "\n" problems}"; value;
 
-  # One spec's shape and entries, named by the caller's own indices.
+  # A pack spec becomes this engine's pack; every other entry is kept.
+  realized = entry:
+    if specs.isSpec entry
+    then packs.realize entry
+    else entry;
+
+  # One spec's shape and entries, named by the caller's own indices, with each
+  # pack spec realized.
   checked = spec: let
     unknown = builtins.attrNames (builtins.removeAttrs spec fields);
     lists = builtins.filter (field: !builtins.isList (spec.${field} or [])) fields;
@@ -58,7 +79,7 @@
         ++ lib.concatLists (packErrors "models" "model" (spec.models or []))
         ++ lib.concatLists (lib.imap1 (index: entry: lib.optional (!lib.isDerivation entry) "`extraPackages.${toString index}` must be a package") (spec.extraPackages or []))
       )
-    ) (lib.genAttrs fields (field: spec.${field} or []));
+    ) (lib.genAttrs fields (field: map realized (spec.${field} or [])));
 
   # Each store path once, in first-given order.
   uniqueEntries = lib.foldl' (kept: entry:
@@ -67,11 +88,11 @@
     else kept ++ [entry]) [];
 
   # Checked specs joined, each store path kept once, and then one pack name per
-  # builder result, over the joined spec, across appending calls too. A plain
-  # directory's pack name is not read here; CodeQL reports a pack found in two
-  # locations when the packs are used.
-  merged = specs: let
-    spec = lib.mapAttrs (_: uniqueEntries) (lib.zipAttrsWith (_: lib.concatLists) specs);
+  # realized pack spec, over the joined spec, across appending calls too. A
+  # plain directory's pack name is not read here; CodeQL reports a pack found in
+  # two locations when the packs are used.
+  merged = given: let
+    spec = lib.mapAttrs (_: uniqueEntries) (lib.zipAttrsWith (_: lib.concatLists) given);
     names = lib.concatMap (entry: lib.optional (entry ? codeqlPack.name) entry.codeqlPack.name) (spec.queries ++ spec.models);
   in
     fail (map (name: "pack ${name} is given from more than one path") (lib.unique (builtins.filter (name: lib.count (other: other == name) names > 1) names))) spec;
@@ -189,8 +210,8 @@
   in
     pkgs.runCommand "${engine.pname}-customized-${engine.version}" {
       passthru = {
-        inherit (engine) mkModelPack mkQueryPack;
         customizePackage = more: build (merged [spec (checked more)]);
+        packs = {inherit (spec) models queries;};
         unwrapped = engine;
       };
       meta = {inherit (engine.meta) description license mainProgram platforms;};
