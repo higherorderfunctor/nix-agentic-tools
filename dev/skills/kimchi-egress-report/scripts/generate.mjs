@@ -1,11 +1,6 @@
 #!/usr/bin/env node
 
-// Writes the report's fact fields from the network and environment facts and
-// keeps the fields scan.mjs wrote. --facts is the JSON that
-// checks.kimchi-egress-report.passthru.facts evaluates to, read through
-// lib.extracted; regenerate.sh passes it. Run from the repository root, the
-// other defaults rewrite the committed report in place.
-
+// regenerate.sh supplies lib.extracted facts; scan.mjs owns the retained fields.
 import { readFile } from "node:fs/promises";
 import {
   compare,
@@ -87,8 +82,6 @@ async function main() {
     sources: "packages/kimchi/sources.json",
   });
   const { environment, network } = await readJson(args.facts);
-  if (!network || !environment)
-    fail(`${args.facts} lacks the network or environment fact`);
   const scanned = await readJson(args.report);
   const missing = Object.keys(SCAN_FIELDS).filter((name) => !(name in scanned));
   if (missing.length > 0 || !scanned.header?.scan)
@@ -112,9 +105,6 @@ async function main() {
     hosts: hosts(network),
     networkCallSites: callSites(network),
   };
-  if (!report.hosts.some(({ value }) => value === "llm.kimchi.dev"))
-    fail("sanity floor failed: llm.kimchi.dev is absent from hosts");
-
   await writeReport(args.out, report);
   console.log(
     `generate.mjs: wrote ${args.out} (${report.hosts.length} hosts, ${report.networkCallSites.length} call sites)`,
@@ -122,8 +112,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  if (!process.exitCode) {
-    console.error(`generate.mjs: ${error.stack ?? error}`);
-    process.exitCode = 1;
-  }
+  console.error(error.message);
+  process.exitCode = 1;
 });

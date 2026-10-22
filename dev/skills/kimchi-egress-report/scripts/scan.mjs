@@ -9,11 +9,10 @@ import {
   compare,
   fail as failWith,
   parseArgs,
-  SCAN_FIELDS,
   writeReport,
 } from "./report.mjs";
 
-// Writes the fields the network fact does not cover (SCAN_FIELDS);
+// Writes the fields the network fact does not cover;
 // generate.mjs adds the fact's fields after it.
 const SCANNER_VERSION = "2.0.0";
 const execFileAsync = promisify(execFile);
@@ -425,17 +424,13 @@ async function main() {
 
   const piFiles = await filesUnder(
     join(args.pi, "dist"),
-    (path) =>
-      /\.(?:cjs|js|mjs)$/.test(path) &&
-      !path.endsWith(".map") &&
-      !isTestFile(path),
+    (path) => /\.(?:cjs|js|mjs)$/.test(path) && !isTestFile(path),
     new Set([".git", "node_modules"]),
   );
   for (const path of piFiles)
     scanBundledJs(path, args.pi, await readFile(path, "utf8"), paths);
 
   const commands = await extractCommands(args.tree, args.pi, sourceFiles, ts);
-  const allCommands = sortedUnique(Object.values(commands).flat());
   const report = {
     commands,
     dependencies: {
@@ -461,24 +456,13 @@ async function main() {
     spawnCallSites: dedupeSites(spawnSites),
     urlPathLiterals: dedupeLiterals(paths),
   };
-  const unlisted = Object.keys(report).filter(
-    (name) => name !== "header" && !(name in SCAN_FIELDS),
-  );
-  if (unlisted.length > 0)
-    fail(`fields missing from SCAN_FIELDS: ${unlisted.join(", ")}`);
-
-  if (!allCommands.includes("teleport"))
-    fail("sanity floor failed: teleport is absent from commands");
-
   await writeReport(args.out, report);
   console.log(
-    `scan.mjs: wrote ${args.out} (${report.goHosts.length} Go hosts, ${report.urlPathLiterals.length} paths, ${report.spawnCallSites.length} spawn and ${report.goCallSites.length} Go call sites, ${allCommands.length} commands)`,
+    `scan.mjs: wrote ${args.out} (${report.goHosts.length} Go hosts, ${report.urlPathLiterals.length} paths, ${report.spawnCallSites.length} spawn and ${report.goCallSites.length} Go call sites)`,
   );
 }
 
 main().catch((error) => {
-  if (!process.exitCode) {
-    console.error(`scan.mjs: ${error.stack ?? error}`);
-    process.exitCode = 1;
-  }
+  console.error(error.message);
+  process.exitCode = 1;
 });

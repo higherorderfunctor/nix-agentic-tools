@@ -1,17 +1,4 @@
-# Drift gate for packages/kimchi/egress-report.json against its facts.
-#
-# The report's `endpointVariables`, `hosts` and `networkCallSites` are a
-# function of Kimchi's `network` and `environment` facts and `sources.json`;
-# generate.mjs computes them and keeps the fields scan.mjs wrote. This re-runs
-# it and fails when the result differs from the committed report, so a fact
-# refresh cannot leave the report behind. The comparison is of parsed JSON:
-# treefmt owns the layout.
-#
-# `passthru.facts` is the generator's input, read through lib.extracted.
-# regenerate.sh evaluates it with `nix eval`, so regenerating builds nothing.
-#
-# What it does not cover: the scanner's fields (`header.provenance` names
-# them). They need the release trees, and the skill refreshes them on request.
+# Regenerate through lib.extracted; compare parsed JSON because treefmt owns layout.
 {
   lib,
   pkgs,

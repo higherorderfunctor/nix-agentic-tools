@@ -1,6 +1,4 @@
-// What packages/kimchi/egress-report.json holds, and who writes each field.
-// scan.mjs writes the scanner's fields; generate.mjs writes the facts' fields
-// and keeps the scanner's.
+// Field ownership for both report writers.
 
 import { writeFile } from "node:fs/promises";
 
@@ -26,9 +24,7 @@ export function compare(left, right) {
 }
 
 export function fail(script, message) {
-  console.error(`${script}: ${message}`);
-  process.exitCode = 1;
-  throw new Error(message);
+  throw new Error(`${script}: ${message}`);
 }
 
 // `options` maps each --name to its default; a null default is required.

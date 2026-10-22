@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-22 — the report's network fields come from the
 > `network` and `environment` facts, read through `lib.extracted`, by
 > `generate.mjs`; `scan.mjs` 2.0.0 writes only the fields the facts do not
-> cover; `checks.kimchi-egress-report` ties the report to the facts.
+> cover; the drift check compares parsed JSON; regeneration uses installed
+> `treefmt`.
 
 `packages/kimchi/egress-report.json` is the review artifact for the pinned
 release's network surface. It has two writers, and `header.provenance` names the
@@ -34,25 +35,19 @@ keep its `kimchi/` and `pi/` labels.
 because `checks.kimchi-extracted` fails when the committed facts are not the
 pin's. `header.scan` is the release `scan.mjs` read, and it can trail.
 
-### Why the scanner keeps six fields
+### Refreshing the report
 
-The `network` fact is a JavaScript database's, so Go is outside it. It holds URL
-literals and host literals that reach a target, and no scheme-less path
-literals, so `urlPathLiterals` has no equivalent. Spawned executables are not
-network requests to it. `commands` and `dependencies` are not network facts.
+`checks.kimchi-egress-report.passthru.facts` reads the committed facts through
+`lib.extracted.get` and `children`. `regenerate.sh` evaluates it with
+`nix eval`, runs the generator, then formats with installed `treefmt`. Kimchi's
+update script calls it after fact regeneration. The check compares parsed JSON
+with the committed report and prints a diff on drift. No generator reads
+`extracted.json` directly, as required by `checks.extracted-contract-guard`.
 
-### The update cycle
-
-The generator never reads `extracted.json` itself:
-`checks.extracted-contract-guard` forbids that outside `lib/extracted/`. The
-check's `passthru.facts` reads the facts with `lib.extracted.get` and
-`children`, and `regenerate.sh` evaluates it with `nix eval`, which builds
-nothing. Kimchi's update script runs `regenerate.sh` after it regenerates the
-facts, from the repository root, so every bump refreshes the fact fields and
-`checks.kimchi-egress-report` stays green. The scanner's fields change only when
-the operator asks for a scan, because it needs the release trees. The generator
-refuses a report that lacks a scanner field, and an env target with no
-`environment` row.
+The generator refuses missing scanner fields and env targets without an
+`environment` row. Scanner fields change only on an operator-requested scan:
+commands, dependencies and spawned executables are outside the network fact; Go
+is outside its JavaScript database; scheme-less paths have no fact equivalent.
 
 ### What the regex scanner reported that the fact does not
 
