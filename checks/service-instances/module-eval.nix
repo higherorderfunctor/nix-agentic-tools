@@ -58,7 +58,11 @@
     && builtins.fromJSON proxy.files.config.content
     == {
       access.api-keys = [(placeholder "CLIPROXYAPI_ACCESS_API_KEYS_0")];
-      management.secret-key = placeholder "CLIPROXYAPI_MANAGEMENT_SECRET_KEY";
+      management = {
+        # The panel is not downloaded unprompted unless a consumer asks.
+        disable-auto-update-panel = true;
+        secret-key = placeholder "CLIPROXYAPI_MANAGEMENT_SECRET_KEY";
+      };
       oauth.auth-dir = "${root}/cliproxyapi/main/auth";
       server = {
         host = "127.0.0.1";
@@ -66,6 +70,20 @@
       };
     }
     && (evaluate backend (withInstances {cliproxyapi.instances.main.settings.server.host = "192.0.2.1";})).config.ai.cliproxyapi.instances.main.settings.server.host == "192.0.2.1"
+    && !config.ai.cliproxyapi.instances.main.fetchModelCatalogs
+    && builtins.fromJSON (evaluate backend (withInstances {cliproxyapi.instances.main.settings.management.disable-auto-update-panel = false;})).config.ai.services.cliproxyapi-main.files.config.content
+    == {
+      access.api-keys = [(placeholder "CLIPROXYAPI_ACCESS_API_KEYS_0")];
+      management = {
+        disable-auto-update-panel = false;
+        secret-key = placeholder "CLIPROXYAPI_MANAGEMENT_SECRET_KEY";
+      };
+      oauth.auth-dir = "${root}/cliproxyapi/main/auth";
+      server = {
+        host = "127.0.0.1";
+        port = 8400;
+      };
+    }
     && proxy.environment == {}
     && lib.hasSuffix "/bin/cliproxyapi-main" (lib.head proxy.command)
     && services.triggers proxy == ["/run/secrets/cpa-client-key" "/run/secrets/cpa-management-key"]
@@ -169,17 +187,26 @@
       ${pkgs.coreutils}/bin/stat -c '%a' "$PWD" "$PWD/auth" > "$RECEIVED/modes"
     '';
   };
-  runnable =
+  runnableFor = overrides:
     (evalHm (withInstances {
-      cliproxyapi.instances.main = {
-        package = fakeProxy;
-        settings = {
-          access.api-keys = [(redact.file "/build/client-key")];
-          management.secret-key = redact.file "/build/management-key";
-        };
-        stateDir = "/build/state/main";
-      };
+      cliproxyapi.instances.main =
+        lib.recursiveUpdate {
+          package = fakeProxy;
+          settings = {
+            access.api-keys = [(redact.file "/build/client-key")];
+            management.secret-key = redact.file "/build/management-key";
+          };
+          stateDir = "/build/state/main";
+        }
+        overrides;
     })).config;
+  runnable = runnableFor {};
+  # The same stand-in with the model catalog fetches and the panel updater
+  # turned back on.
+  phoneHomeOn = runnableFor {
+    fetchModelCatalogs = true;
+    settings.management.disable-auto-update-panel = false;
+  };
 in {
   checks =
     {
@@ -262,6 +289,7 @@ in {
           processes+=("$!")
           ready "''${processes[0]}" http://127.0.0.1:28417/healthz cpa.log
           ${pkgs.jq}/bin/jq -e '.status == "ok"' health.json
+          grep -F 'Local model mode' cpa.log
           main=${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart}
           declared=${declaredDatabase.systemd.user.services.cpa-manager-plus-main.Service.ExecStart}
           manager() {
@@ -378,11 +406,14 @@ in {
       # Linux Home Manager emits the units, and the launcher renders the
       # config the run script hands to CLIProxyAPI from inside its state.
       module-service-instances-run = let
-        launcher = services.mkLauncher {
-          inherit pkgs;
-          entry = runnable.ai.services.cliproxyapi-main;
-          name = "cliproxyapi-main";
-        };
+        launcherFor = config:
+          services.mkLauncher {
+            inherit pkgs;
+            entry = config.ai.services.cliproxyapi-main;
+            name = "cliproxyapi-main";
+          };
+        launcher = launcherFor runnable;
+        launcherOn = launcherFor phoneHomeOn;
       in
         assert lib.assertMsg (
           lib.all (name: lib.hasSuffix "/bin/ai-service-${name}" hm.systemd.user.services.${name}.Service.ExecStart) ["cliproxyapi-main" "cpa-manager-plus-main"]
@@ -400,10 +431,18 @@ in {
             export XDG_RUNTIME_DIR="$TMPDIR/run" RECEIVED="$TMPDIR/received"
             mkdir -p "$RECEIVED" "$XDG_RUNTIME_DIR"
             ${launcher}/bin/ai-service-cliproxyapi-main
-            printf '%s\n' "--config $XDG_RUNTIME_DIR/ai-service-cliproxyapi-main/config.json" /build/state/main > expected
+            # Off by default: embedded catalogs and no panel updater.
+            printf '%s\n' "--config $XDG_RUNTIME_DIR/ai-service-cliproxyapi-main/config.json --local-model" /build/state/main > expected
             ${pkgs.diffutils}/bin/diff -u expected "$RECEIVED/argv"
             test "$(${pkgs.coreutils}/bin/tr '\n' ' ' < "$RECEIVED/modes")" = '700 700 '
-            ${pkgs.jq}/bin/jq -e '.access."api-keys" == ["client-secret"] and .management."secret-key" == "management-secret" and .oauth."auth-dir" == "/build/state/main/auth"' "$RECEIVED/config.json"
+            ${pkgs.jq}/bin/jq -e '.access."api-keys" == ["client-secret"] and .management."secret-key" == "management-secret" and .management."disable-auto-update-panel" == true and .oauth."auth-dir" == "/build/state/main/auth"' "$RECEIVED/config.json"
+            # A consumer override turns both back on.
+            export RECEIVED="$TMPDIR/received-on" XDG_RUNTIME_DIR="$TMPDIR/run-on"
+            mkdir -p "$RECEIVED" "$XDG_RUNTIME_DIR"
+            ${launcherOn}/bin/ai-service-cliproxyapi-main
+            printf '%s\n' "--config $XDG_RUNTIME_DIR/ai-service-cliproxyapi-main/config.json" /build/state/main > expected-on
+            ${pkgs.diffutils}/bin/diff -u expected-on "$RECEIVED/argv"
+            ${pkgs.jq}/bin/jq -e '.management."disable-auto-update-panel" == false' "$RECEIVED/config.json"
             touch "$out"
           '';
     }
