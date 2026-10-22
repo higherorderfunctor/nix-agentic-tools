@@ -25,6 +25,9 @@ userconfig
 WEZTERM
 WINDIR
 WSLENV
+Xext
+Xrender
+Xtst
 addy
 adoc
 affordances
@@ -89,6 +92,7 @@ cliproxyapi
 clis
 cliutil
 cmdbuilder
+codeqlmanifest
 codesign
 codewhisperer
 collab
@@ -221,11 +225,14 @@ kirocrew
 kirodotdev
 kvim
 ldflags
+libasound
 libc
 libdl
 libexec
+libfreetype
 libgcc
 libgit
+liblttng
 libm
 libopus
 libpthread
@@ -345,6 +352,7 @@ purpleclay
 pycache
 pythonnousersite
 qiiiiii
+qlpacks
 qwen
 rawfile
 rcodesign

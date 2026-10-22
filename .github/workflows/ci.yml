@@ -30,7 +30,7 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          pushFilter: kiro-cli
+          pushFilter: kiro-cli|codeql
       - name: Publish patched Hestia before cache consumers start
         run: |
           set -euETo pipefail
@@ -82,7 +82,7 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          pushFilter: kiro-cli
+          pushFilter: kiro-cli|codeql
       - name: Warm IFD sources (retry, best-effort)
         uses: ./.github/actions/warm-ifd
         with:
@@ -412,6 +412,7 @@ jobs:
                 .github/actions/warm-ifd/* | \
                   .github/workflows/ci.yml | \
                   config/systems.nix | \
+                  dev/scripts/assert-not-published.sh | \
                   flake.lock | \
                   flake.nix | \
                   lib/extracted/* | \
@@ -500,10 +501,10 @@ jobs:
             --option substituters "https://cache.nixos.org https://devenv.cachix.org")"
           printf 'out=%s\n' "$out" >> "$GITHUB_OUTPUT"
 
-      # TRIPWIRE. The exclusion above and the `pushFilter: kiro-cli` on every
-      # credentialed cachix-action step are both configuration, and this repo
-      # already learned that a mitigation with an unwatched hole reads exactly
-      # like a working one: #665 excluded this attribute from the
+      # TRIPWIRE. The exclusion above and the `pushFilter: kiro-cli|codeql` on
+      # every credentialed cachix-action step are both configuration, and this
+      # repo already learned that a mitigation with an unwatched hole reads
+      # exactly like a working one: #665 excluded this attribute from the
       # cache-writing build and the patched binary was published anyway for
       # eleven days, through update.yml's whole-package-set verification build.
       # So assert the OUTCOME rather than trusting either knob — ask the cache
@@ -521,17 +522,6 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
 
-          # Positive control FIRST. Every assertion below is "the answer was
-          # not 200", which a typo'd host would satisfy unconditionally — a
-          # tripwire that can only pass is worse than none. The cache-info
-          # endpoint is always 200 for a live cache and, unlike any store
-          # path, does not go missing right after a version bump.
-          if ! curl --fail --silent --show-error "$CACHE/nix-cache-info" >/dev/null; then
-            echo "::error::positive control failed: $CACHE is unreachable, so the" \
-                 "checks below prove nothing"
-            exit 1
-          fi
-
           # Process substitution would hide enumeration failure from errexit.
           closure_file="$RUNNER_TEMP/patched-closure"
           if ! nix path-info --recursive "$OUT" > "$closure_file"; then
@@ -547,52 +537,21 @@ jobs:
           # shared FHS pieces (dispatcher, `-init`, `-fhsenv-profile`) alike.
           # The shared pieces used to be subtracted because they were published
           # before the pushFilter existed; the operator purged them, so nothing
-          # kiro may answer 200 any more. Compare BASENAMES (`${path##*/}`):
+          # kiro may answer 200 any more. Select on BASENAMES (`${path##*/}`):
           # `nix path-info` output shape has varied between nix versions, and
-          # the store hash plus name identifies a path either way.
-          #
-          # Fail CLOSED on an unusable listing. A well-formed list with no kiro
-          # path in it would make the loop below ask nothing and pass, so
-          # require one: it proves the enumeration describes the package under
-          # test.
-          if ! command grep -F -- kiro "$closure_file" >/dev/null; then
-            echo "::error::the patched closure listing names no *kiro* path —" \
-                 "refusing to assert, since the loop below would ask nothing" >&2
-            exit 1
-          fi
-
-          published=0
+          # the store hash plus name identifies a path either way. No
+          # bash 4 builtins: macOS runs this step with bash 3.2.
+          paths=()
           while read -r path; do
-            name="${path##*/}"
-            case "$name" in *kiro*) ;; *) continue ;; esac
-            hash="${name%%-*}"
-            code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-              "$CACHE/${hash}.narinfo")"
-            # Only 404 proves absence. A transient failure reports 000 and a
-            # 5xx reports the upstream error, and treating either as "not 200"
-            # would let the tripwire pass without having asked anything — the
-            # same can-only-pass failure the positive control above guards.
-            case "$code" in
-              404) echo "ok (absent): $name" ;;
-              200)
-                echo "::error::patched Kiro path is PUBLISHED: $path"
-                published=$((published + 1))
-                ;;
-              *)
-                echo "::error::inconclusive HTTP $code for $name — treating as failure"
-                published=$((published + 1))
-                ;;
-            esac
+            case "${path##*/}" in *kiro*) paths+=("$path") ;; esac
           done < "$closure_file"
 
-          if [ "$published" -ne 0 ]; then
-            echo "::error::${published} patched path(s) failed the not-published" \
-                 "assertion against $CACHE (published, or inconclusive — see above)." \
-                 "Check the cachix-action pushFilter in ci.yml and update.yml" \
-                 "and ci-packages.py's EXCLUDED set."
-            exit 1
-          fi
-          echo "No patched Kiro path is fetchable from $CACHE."
+          # The shared HTTP assertion: a positive control against the cache
+          # first, then only a 404 counts as absent. It refuses an empty path
+          # list, so a well-formed listing with no kiro path in it fails rather
+          # than asking nothing and passing. The `+` form expands an empty
+          # array under bash 3.2's nounset.
+          dev/scripts/assert-not-published.sh ${paths[@]+"${paths[@]}"}
 
   # Validation entrypoint: `nix flake check` is the single source of truth for
   # repo health. In addition to structural evaluation and formatting, it runs
@@ -671,6 +630,45 @@ jobs:
         uses: ./.github/actions/warm-ifd
         with:
           systems: x86_64-linux aarch64-darwin
+
+      # TRIPWIRE for the CodeQL engines (packages/codeql), the outcome
+      # assertion the kiro-patched job makes for the patched Kiro: the GitHub
+      # CodeQL Terms forbid distributing the CLI, and the pushFilter and
+      # ci-packages.py's EXCLUDED_PREFIXES are only configuration. Every engine
+      # and every engine's source asset must answer 404. It evaluates the engine
+      # paths without building any engine, so it runs on every event, forks too.
+      - name: Assert no CodeQL engine is published
+        env:
+          CACHE: https://nix-agentic-tools.cachix.org
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          nix eval --raw .#.ciPackages.x86_64-linux --apply 'packages:
+            builtins.concatStringsSep "" (map (name: packages.${name}.drvPath + "\n")
+              (builtins.filter (name: builtins.substring 0 7 name == "codeql-") (builtins.attrNames packages)))' \
+            > "$RUNNER_TEMP/codeql-engines"
+          engines=()
+          while read -r drv; do engines+=("$drv"); done < "$RUNNER_TEMP/codeql-engines"
+          if [ "${#engines[@]}" -eq 0 ]; then
+            echo "::error::ciPackages names no codeql-* engine, so there is nothing to assert" >&2
+            exit 1
+          fi
+          nix-store --query --requisites "${engines[@]}" > "$RUNNER_TEMP/codeql-requisites"
+          drvs=()
+          while read -r drv; do
+            case "${drv##*/}" in *codeql*.drv) drvs+=("$drv") ;; esac
+          done < "$RUNNER_TEMP/codeql-requisites"
+          # Fail closed: each engine is two derivations, itself and its
+          # source asset, so any other count means the listing no longer
+          # describes them.
+          if [ "${#drvs[@]}" -ne $((2 * ${#engines[@]})) ]; then
+            echo "::error::expected $((2 * ${#engines[@]})) CodeQL derivations for ${#engines[@]} engines, found ${#drvs[@]}" >&2
+            exit 1
+          fi
+          nix-store --query --outputs "${drvs[@]}" > "$RUNNER_TEMP/codeql-paths"
+          paths=()
+          while read -r path; do paths+=("$path"); done < "$RUNNER_TEMP/codeql-paths"
+          dev/scripts/assert-not-published.sh "${paths[@]}"
 
       # The Semble customization smoke check builds a patched Semble here,
       # parses real AWK and jq samples, and exercises path-mapped discovery.

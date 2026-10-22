@@ -16,17 +16,30 @@ ci = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ci)
 
 
+def ci_step_script(name):
+    """The dedented `run:` body of the ci.yml step called `name`."""
+    workflow = Path(__file__).parents[2] / ".github/workflows/ci.yml"
+    step = workflow.read_text().split(f"      - name: {name}\n", 1)[1]
+    lines = []
+    for line in step.split("        run: |\n", 1)[1].splitlines():
+        if line and not line.startswith("          "):
+            break
+        lines.append(line)
+    return textwrap.dedent("\n".join(lines))
+
+
 class CachixPushFilterTest(unittest.TestCase):
-    def test_every_credentialed_cachix_step_filters_kiro(self):
+    def test_every_credentialed_cachix_step_filters_kiro_and_codeql(self):
         # cachix-action with a token pushes every path the job realizes, so the
-        # audit is by credential: any step holding the token must exclude kiro.
+        # audit is by credential: any step holding the token must exclude kiro
+        # and the CodeQL engines, whose terms forbid distributing them.
         steps = 0
         for workflow in sorted((Path(__file__).parents[2] / ".github/workflows").glob("*.yml")):
             for chunk in workflow.read_text().split("uses: cachix/cachix-action@")[1:]:
                 step = chunk.split("\n      - ", 1)[0]
                 if "CACHIX_AUTH_TOKEN" in step:
                     steps += 1
-                    self.assertIn("pushFilter: kiro-cli\n", step + "\n", workflow.name)
+                    self.assertIn("pushFilter: kiro-cli|codeql\n", step + "\n", workflow.name)
         self.assertGreater(steps, 0)
 
     def test_devenv_update_lane_does_not_push(self):
@@ -39,15 +52,12 @@ class CachixPushFilterTest(unittest.TestCase):
 
 class CacheAssertionTest(unittest.TestCase):
     def test_patched_cache_assertion_requires_complete_enumeration(self):
-        workflow = Path(__file__).parents[2] / ".github/workflows/ci.yml"
-        step = workflow.read_text().split("      - name: Assert the patched output is not published\n", 1)[1]
-        lines = []
-        for line in step.split("        run: |\n", 1)[1].splitlines():
-            if line and not line.startswith("          "):
-                break
-            lines.append(line)
-        script = textwrap.dedent("\n".join(lines))
+        script = ci_step_script("Assert the patched output is not published")
+        # The macOS leg runs this step with /bin/bash 3.2, which has neither.
+        self.assertNotRegex(script, r"\b(mapfile|readarray)\b")
         # Execute the workflow's shell, replacing only the external services.
+        # Exported, so dev/scripts/assert-not-published.sh, which the step
+        # calls, sees the same mocks.
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 nix() {
@@ -60,6 +70,7 @@ nix() {
     partial) printf '%s\n' "$OUT"; return 1 ;;
     empty) return ;;
     missing) printf '%s\n' /nix/store/unrelated; return ;;
+    root-only) printf '%s\n' "$OUT"; return ;;
     *) printf '%s\n' "$OUT" /nix/store/base-kiro ;;
   esac
 }
@@ -68,6 +79,7 @@ curl() {
   printf 'narinfo\n' >> "$RUNNER_TEMP/queries"
   printf '%s' "$HTTP_CODE"
 }
+export -f curl nix
 '''
         with tempfile.TemporaryDirectory() as directory:
             queries = Path(directory) / "queries"
@@ -76,6 +88,8 @@ curl() {
                 ("partial", "404", False, False),
                 ("empty", "404", False, False),
                 ("missing", "404", False, False),
+                # A listing with its root but no kiro path asks nothing.
+                ("root-only", "404", False, False),
                 ("complete", "404", True, True),
                 ("complete", "200", False, True),
                 ("complete", "503", False, True),
@@ -83,24 +97,81 @@ curl() {
                 with self.subTest(mode=mode, http_code=http_code):
                     queries.unlink(missing_ok=True)
                     env = dict(os.environ, CACHE="https://cache.invalid", HTTP_CODE=http_code,
-                               MODE=mode, OUT="/nix/store/patched-kiro", RUNNER_TEMP=directory,
+                               MODE=mode, RUNNER_TEMP=directory,
+                               OUT="/nix/store/patched-other" if mode == "root-only" else "/nix/store/patched-kiro",
                                SYSTEM="x86_64-linux")
                     result = subprocess.run(["bash", "-c", services + script], env=env,
-                                            capture_output=True, text=True)
+                                            capture_output=True, text=True,
+                                            cwd=Path(__file__).parents[2])
                     self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
 
 
+    def test_codeql_assertion_requires_every_engine_and_source(self):
+        script = ci_step_script("Assert no CodeQL engine is published")
+        # Two engines, each with its source; MODE drops one source or all.
+        services = r'''set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+nix() {
+  case "$MODE" in empty) return ;; esac
+  printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/b-codeql-full-1.drv
+}
+nix-store() {
+  case "$2" in
+    --requisites)
+      printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/b-codeql-full-1.drv \
+        /nix/store/c-codeql-linux64.zip.drv /nix/store/e-glibc-1.drv
+      [ "$MODE" = missing ] || printf '%s\n' /nix/store/d-codeql-bundle-linux64.tar.zst.drv
+      ;;
+    --outputs) shift 2; for drv in "$@"; do printf '%s\n' "${drv%.drv}"; done ;;
+  esac
+}
+curl() {
+  case "$*" in *nix-cache-info*) return ;; esac
+  printf 'narinfo\n' >> "$RUNNER_TEMP/queries"
+  printf '%s' "$HTTP_CODE"
+}
+export -f curl nix nix-store
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            queries = Path(directory) / "queries"
+            for mode, http_code, success, queried in (
+                ("empty", "404", False, False),
+                ("missing", "404", False, False),
+                ("complete", "404", True, True),
+                ("complete", "200", False, True),
+            ):
+                with self.subTest(mode=mode, http_code=http_code):
+                    queries.unlink(missing_ok=True)
+                    env = dict(os.environ, CACHE="https://cache.invalid", HTTP_CODE=http_code,
+                               MODE=mode, RUNNER_TEMP=directory)
+                    result = subprocess.run(["bash", "-c", services + script], env=env,
+                                            capture_output=True, text=True,
+                                            cwd=Path(__file__).parents[2])
+                    self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+                    self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
+                    if success:
+                        self.assertEqual(len(queries.read_text().splitlines()), 4)
+
 class CoverageTest(unittest.TestCase):
     def setUp(self):
-        self.names = ["alpha", "beta", "delta", "epsilon", "gamma", "new-package", "kiro-cli-rollout-canary"]
+        self.names = ["alpha", "beta", "codeql-javascript", "codeql-new-engine", "delta", "epsilon", "gamma", "new-package", "kiro-cli-rollout-canary"]
         self.plans = [ci.partition(self.names, i, 5) for i in range(5)]
 
-    def test_added_package_is_covered_and_patched_kiro_excluded(self):
+    def test_added_package_is_covered_and_unpublishable_excluded(self):
         ci.validate_coverage(self.plans, 5)
         names = [n for p in self.plans for n in p["packages"]]
         self.assertEqual(names.count("new-package"), 1)
         self.assertNotIn("kiro-cli-rollout-canary", names)
+        # Every engine, including one added later, by prefix.
+        self.assertFalse([n for n in names if n.startswith("codeql-")])
+
+    def test_update_lanes_build_every_package_but_the_engines(self):
+        packages = ci.update_packages(self.names)
+        self.assertIn("kiro-cli-rollout-canary", packages)
+        self.assertFalse([n for n in packages if n.startswith("codeql-")])
+        with self.assertRaises(ValueError):
+            ci.update_packages(["codeql-javascript"])
 
     def test_missing_duplicate_or_different_source_shards_fail(self):
         changed = copy.deepcopy(self.plans)

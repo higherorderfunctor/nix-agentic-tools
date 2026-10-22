@@ -1304,7 +1304,7 @@ if args[:1] == ['eval']:
         print(json.dumps(specs.get(mode, {'mode': 'archive'})))
     elif 'builtins.currentSystem' in joined: print('x86_64-linux')
     elif 'builtins.attrNames' in joined:
-        print(json.dumps(['alpha', 'beta'] if mode == 'input-partial' else ['oxlint'] if mode.startswith('input-') else ['demo']))
+        print(json.dumps(['alpha', 'beta'] if mode == 'input-partial' else ['oxlint'] if mode.startswith('input-') else ['codeql-javascript', 'demo'] if mode == 'nfb-success' else ['demo']))
     elif 'updateTargets.demo.file' in joined: print('packages/demo/package.nix')
     elif 'formatter.x86_64-linux.outPath' in joined: print('/fixture/formatter')
     elif 'generate-devenv-yaml.nix' in joined: print('inputs: {}')
@@ -1532,6 +1532,10 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         allocation = int(verifier[verifier.index("--eval-max-memory-size") + 1])
         self.assertIn(workers, range(1, 5))
         self.assertLessEqual(workers * allocation, 8192 * 60 // 100)
+        # The CodeQL engines are neither expected nor built by the input lanes.
+        select = verifier[verifier.index("--select") + 1]
+        self.assertIn('"demo"', select)
+        self.assertNotIn("codeql-", select)
 
     def test_input_shell_entry_gate(self):
         cases = (

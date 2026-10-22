@@ -122,6 +122,11 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`packages/cliproxyapi/docs/cliproxyapi-extraction.md`](packages/cliproxyapi/docs/cliproxyapi-extraction.md)
     - [`packages/cliproxyapi/docs/cliproxyapi-settings.md`](packages/cliproxyapi/docs/cliproxyapi-settings.md)
+- **`codeql`**
+  - Match:
+    - `packages/codeql/**`
+  - Read:
+    - [`packages/codeql/docs/codeql.md`](packages/codeql/docs/codeql.md)
 - **`codex-daemon`**
   - Match:
     - `packages/chatgpt-codex/**`

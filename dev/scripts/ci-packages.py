@@ -9,27 +9,52 @@ from pathlib import Path
 from artifacts import downloaded
 
 # Generated documents are checked by `test`. Patched Hestia has a dedicated
-# early cache-writing job; patched Kiro has jobs without cache uploads.
+# early cache-writing job; patched Kiro has jobs without cache uploads. The
+# CodeQL engines' terms forbid distributing them, and CI builds one of them
+# through a check: excluded by prefix, so a new engine can never reach a
+# cache-writing shard.
 EXCLUDED = {
     "ci-hestia",
     "kiro-cli-rollout-canary",
     "repo-contributing",
     "repo-readme",
 }
+EXCLUDED_PREFIXES = ("codeql-",)
 
 
-def partition(names, index, count):
+def checked_names(names):
     if not isinstance(names, list) or not names or len(names) != len(set(names)):
         raise ValueError("package enumeration must be a nonempty unique list")
     if any(not re.fullmatch(r"[a-zA-Z0-9_+-]+", name) for name in names):
         raise ValueError("unexpected package attribute name")
+    return names
+
+
+def select_expression(names):
+    quoted = " ".join(json.dumps(name) for name in names)
+    return f"packages: builtins.listToAttrs (map (name: {{ inherit name; value = packages.${{name}}; }}) [ {quoted} ])"
+
+
+def partition(names, index, count):
+    checked_names(names)
     if not 0 <= index < count:
         raise ValueError("invalid shard index/count")
-    universe = sorted(set(names) - EXCLUDED)
+    universe = sorted(name for name in set(names) - EXCLUDED if not name.startswith(EXCLUDED_PREFIXES))
     selected = universe[index::count]
     if not selected:
         raise ValueError("empty package shard")
     return {"count": count, "index": index, "packages": selected, "universe": universe}
+
+
+# The update pipeline's input lanes build every other package, the
+# deliberately built EXCLUDED members included, but never an engine: its
+# runtime proof is the CodeQL smoke check, and an absent engine would be
+# fetched from upstream on every input bump.
+def update_packages(names):
+    packages = sorted(name for name in checked_names(names) if not name.startswith(EXCLUDED_PREFIXES))
+    if not packages:
+        raise ValueError("empty update package set")
+    return packages
 
 
 def result_rows(results):
@@ -99,6 +124,9 @@ def main():
     verify = sub.add_parser("verify")
     verify.add_argument("plan", type=Path)
     verify.add_argument("results", type=Path)
+    update_plan = sub.add_parser("update-plan")
+    update_plan.add_argument("names", type=Path)
+    update_plan.add_argument("output", type=Path)
     update_verify = sub.add_parser("update-verify")
     update_verify.add_argument("packages", type=Path)
     update_verify.add_argument("results", type=Path)
@@ -109,8 +137,11 @@ def main():
     if args.command == "plan":
         data = partition(json.loads(args.names.read_text()), args.index, args.count)
         args.output.write_text(json.dumps(data, indent=2) + "\n")
-        names = " ".join(json.dumps(name) for name in data["packages"])
-        print(f"packages: builtins.listToAttrs (map (name: {{ inherit name; value = packages.${{name}}; }}) [ {names} ])")
+        print(select_expression(data["packages"]))
+    elif args.command == "update-plan":
+        packages = update_packages(json.loads(args.names.read_text()))
+        args.output.write_text(json.dumps(packages) + "\n")
+        print(select_expression(packages))
     elif args.command == "verify":
         validate_results(json.loads(args.plan.read_text()), json.loads(args.results.read_text()))
     elif args.command == "update-verify":

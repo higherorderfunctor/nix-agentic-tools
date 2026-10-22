@@ -1,7 +1,9 @@
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-10-17 — overlay parity uses the ordinary
-> `nixpkgs-stable` input; no patched evaluation source needs retention.
+> **Last verified:** 2026-10-21 — overlay parity uses the ordinary
+> `nixpkgs-stable` input; no patched evaluation source needs retention; every
+> credentialed push also filters the CodeQL engines, which the private check
+> cache deliberately holds.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -49,16 +51,21 @@ action's release attestation; the source hash and in-repo build pin its bytes.
 Its post-build hook retains check outputs and runtime closures in GitHub Actions
 cache, independently of public Cachix publication. The signature filter excludes
 only `cache.nixos.org-1` and `nix-agentic-tools.cachix.org-1`; retaining
-devenv-signed paths is intentional.
+devenv-signed paths is intentional. This private Actions cache deliberately
+holds the CodeQL engine a check builds (packages/codeql): that is CI-internal
+storage, not distribution under the GitHub CodeQL Terms. The engines' guards
+(the Cachix `pushFilter`, ci-packages.py's exclusion and the `test` job's
+narinfo tripwire) target public publication only.
 
 `publish-hestia` builds `ciHestia` before the test and check evaluator jobs. Its
 credentialed Cachix action publishes the Rust binary and keeps the
-`pushFilter: kiro-cli` exclusion. The package shards exclude `ci-hestia` because
-that early job owns its build. Jobs obtain the binary from the project Cachix
-cache, configured before `check-cache`; the daily GC job also enables that
-read-only substituter. On a cold main or same-repository PR run, the early job
-pays one Rust build before cache consumers start. Fork PRs have no publication
-token, so their test job builds the binary locally if it is absent from Cachix.
+`pushFilter: kiro-cli|codeql` exclusion. The package shards exclude `ci-hestia`
+because that early job owns its build. Jobs obtain the binary from the project
+Cachix cache, configured before `check-cache`; the daily GC job also enables
+that read-only substituter. On a cold main or same-repository PR run, the early
+job pays one Rust build before cache consumers start. Fork PRs have no
+publication token, so their test job builds the binary locally if it is absent
+from Cachix.
 
 Overlay parity imports the ordinary `nixpkgs-stable` flake source directly.
 Unlike devenv's patched nixpkgs output, it requires no evaluation-time source
