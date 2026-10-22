@@ -1,0 +1,22 @@
+# Extracted release data
+/packages/*/extracted/extracted.json linguist-generated=true
+/packages/kimchi/egress-report.json linguist-generated=true
+
+# Generated instructions and repository documents
+/.github/instructions/*.md linguist-generated=true
+/AGENTS.md linguist-generated=true
+/CONTRIBUTING.md linguist-generated=true
+/README.md linguist-generated=true
+
+# Generated reference diagrams
+/dev/references/kimchi-surface/kimchi-capabilities.svg linguist-generated=true
+/dev/references/kimchi-surface/kimchi-endpoints.svg linguist-generated=true
+
+# Resolved dependency locks
+/devenv.lock linguist-generated=true
+/flake.lock linguist-generated=true
+/packages/aihubmix-mcp/src/aihubmix-mcp-package-lock.json linguist-generated=true
+/packages/markdownlint-cli2/packages/ai/devTools/markdownlint-cli2/package-lock.json linguist-generated=true
+
+# Workspace input projection
+/devenv.yaml linguist-generated=true
