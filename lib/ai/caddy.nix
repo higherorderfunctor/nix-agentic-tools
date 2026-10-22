@@ -14,12 +14,8 @@
   # adapted JSON holds the literal value; `persist_config off` in
   # `globalBlock` keeps that JSON out of autosave.json.
   #
-  # Built by explicit concatenation rather than string interpolation, and
-  # that is not stylistic: in Nix `$${` is an ESCAPE for a literal `${`
-  # in both quoted and indented strings, so the natural-looking
-  # `"{$${var}}"` emits `{${var}}` with no substitution at all. It looks
-  # right, evaluates without error, and silently produces a Caddyfile
-  # that forwards to a literal unexpanded token.
+  # Keep the concatenation: in Nix `$${` is an escape for a literal `${`,
+  # so `"{$${var}}"` silently emits an unexpanded token.
   envRef = var: "{" + "$" + var + "}";
 
   # The global options block. `admin off` closes the admin endpoint;
@@ -61,20 +57,7 @@
   # with `header_up -<name>` so the upstream sees the request the client
   # sent. `header_up -<name>` deletes rather than overwrites.
   #
-  # Note the scope: this list hides the PROXY, not the client. Deleting
-  # what the CLIENT sends is a different question with a different answer
-  # — it was tried on 2026-08-12 and removed, because stripping client
-  # defaults produced a header set no ordinary client sends, which is more
-  # distinctive, not less. Do not add client headers to this list.
-  #
-  # Not cosmetic. These announce a proxy hop to the far end: they can
-  # trip WAF rules, change how an upstream derives a client identity, and
-  # they leak the loopback address and port the client actually used.
-  #
-  # `Via` belongs here for the same reason as the X-Forwarded-* trio and
-  # is the one people forget: Caddy sends `Via: 1.1 Caddy`, which both
-  # announces the hop and names the proxy. Measured — dropping the
-  # X-Forwarded-* headers does NOT cover it.
+  # Strip proxy-added headers only; never add client headers here.
   #
   # This list is not derived from anything, so a Caddy release adding a
   # FIFTH header would go unnoticed here. The diff-the-two-requests probe
@@ -107,9 +90,9 @@
   # `config`. `name` must be unique per daemon; `caddy` is the build to
   # run.
   runCaddy = {
-    name,
     caddy,
     config,
+    name,
   }: ''
     _state="''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}/${name}"
     ${pkgs.coreutils}/bin/mkdir -p "$_state"

@@ -167,6 +167,10 @@ in {
           touch "$out"
         '';
 
+      # An empty delete list renders an unfiltered global log, which writes
+      # every request header to the journal, so the shared helper throws.
+      module-mcp-proxy-caddy-empty-log-deletes-throws = mkTest "mcp-proxy-caddy-empty-log-deletes-throws" (!(builtins.tryEval ((import ../../lib/ai/caddy.nix {inherit lib pkgs;}).globalBlock {logDeletes = [];})).success);
+
       # The proxy renders its Caddyfile from the shared lib/ai/caddy.nix
       # helpers. This pins the whole rendering to a copy taken before they
       # were extracted, so a helper change made for another caller cannot
@@ -392,10 +396,6 @@ in {
           lib.hasInfix "request>headers delete" cf
           && !(lib.hasInfix "format console" cf)
       );
-
-      # An empty delete list renders an unfiltered global log, which writes
-      # every request header to the journal, so the shared helper throws.
-      module-mcp-proxy-caddy-empty-log-deletes-throws = mkTest "mcp-proxy-caddy-empty-log-deletes-throws" (!(builtins.tryEval ((import ../../lib/ai/caddy.nix {inherit lib pkgs;}).globalBlock {logDeletes = [];})).success);
 
       # Caddy's reverse_proxy ERROR logs embed the whole request header map,
       # and its built-in `log_credentials` covers only Authorization/Cookie —
