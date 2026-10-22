@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-// Writes the report's fact fields from the committed network and environment
-// facts and keeps the fields scan.mjs wrote. It reads committed files only, so
-// it needs no Nix build. Run from the repository root, the defaults rewrite
-// the committed report in place.
+// Writes the report's fact fields from the network and environment facts and
+// keeps the fields scan.mjs wrote. --facts is the JSON that
+// checks.kimchi-egress-report.passthru.facts evaluates to, read through
+// lib.extracted; regenerate.sh passes it. Run from the repository root, the
+// other defaults rewrite the committed report in place.
 
 import { readFile } from "node:fs/promises";
 import {
@@ -80,7 +81,7 @@ function callSites(network) {
 
 async function main() {
   const args = parseArgs("generate.mjs", process.argv.slice(2), {
-    facts: "packages/kimchi/extracted/extracted.json",
+    facts: null,
     out: "packages/kimchi/egress-report.json",
     report: "packages/kimchi/egress-report.json",
     sources: "packages/kimchi/sources.json",

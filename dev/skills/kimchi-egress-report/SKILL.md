@@ -10,9 +10,10 @@ names the one behind each field:
 
 - **The network fact** writes `hosts` and `networkCallSites`, and with the
   environment fact `endpointVariables`. `scripts/generate.mjs` derives them from
-  the committed `packages/kimchi/extracted/extracted.json`. Kimchi's update
-  script runs it after every bump, and `checks.kimchi-egress-report` fails when
-  the report differs from its output. `header.facts` names the release.
+  the committed facts, read through `lib.extracted`. Kimchi's update script runs
+  `scripts/regenerate.sh` after every bump, and `checks.kimchi-egress-report`
+  fails when the report differs from its output. `header.facts` names the
+  release.
 - **`scripts/scan.mjs`** writes the fields the fact does not cover: `commands`,
   `dependencies`, `goCallSites`, `goHosts`, `spawnCallSites` and
   `urlPathLiterals`. It needs the release trees, so it runs only when the
@@ -58,12 +59,13 @@ repository path. The installed skill copy is from `main` and may be stale.
 
 ## 3. Generate and diff
 
-The scan writes its fields only. The generator adds the fact's fields and needs
-no Nix build:
+The scan writes its fields only. `regenerate.sh` adds the facts' fields. It
+evaluates `checks.<system>.kimchi-egress-report.passthru.facts` with `nix eval`,
+which builds nothing, runs `generate.mjs` over the result, and formats the
+report:
 
 ```bash
-node dev/skills/kimchi-egress-report/scripts/generate.mjs
-treefmt packages/kimchi/egress-report.json
+dev/skills/kimchi-egress-report/scripts/regenerate.sh
 git diff packages/kimchi/egress-report.json
 ```
 

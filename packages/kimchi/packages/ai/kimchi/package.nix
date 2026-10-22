@@ -188,8 +188,8 @@
 
     # The egress report's fact fields follow the regenerated network fact, or
     # checks.kimchi-egress-report fails. Its scanner fields wait for a scan.
-    ${pkgs.nodejs}/bin/node dev/skills/kimchi-egress-report/scripts/generate.mjs
-    ${pkgs.nix}/bin/nix fmt -- packages/kimchi/egress-report.json
+    PATH="${lib.makeBinPath [pkgs.coreutils pkgs.nix pkgs.nodejs]}:$PATH" \
+      dev/skills/kimchi-egress-report/scripts/regenerate.sh
   '';
 
   fixPnpmDepsHash = packageLib.mkHashFix {

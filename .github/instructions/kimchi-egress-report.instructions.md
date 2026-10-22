@@ -7,10 +7,10 @@ applyTo: "checks/references/kimchi-egress-report.nix,dev/skills/kimchi-egress-re
 
 ## Kimchi egress report
 
-> **Last verified:** 2026-10-21 — the report's network fields come from the
-> committed `network` and `environment` facts through `generate.mjs`; `scan.mjs`
-> 2.0.0 writes only the fields the facts do not cover;
-> `checks.kimchi-egress-report` ties the report to the facts.
+> **Last verified:** 2026-10-22 — the report's network fields come from the
+> `network` and `environment` facts, read through `lib.extracted`, by
+> `generate.mjs`; `scan.mjs` 2.0.0 writes only the fields the facts do not
+> cover; `checks.kimchi-egress-report` ties the report to the facts.
 
 `packages/kimchi/egress-report.json` is the review artifact for the pinned
 release's network surface. It has two writers, and `header.provenance` names the
@@ -50,12 +50,16 @@ network requests to it. `commands` and `dependencies` are not network facts.
 
 ### The update cycle
 
-Kimchi's update script runs `generate.mjs` after it regenerates the facts, so
-every bump refreshes the fact fields and `checks.kimchi-egress-report` stays
-green. It runs from the repository root, as the regenerate command does. The
-scanner's fields change only when the operator asks for a scan, because it needs
-the release trees. The generator refuses a report that lacks a scanner field,
-and an env target with no `environment` row.
+The generator never reads `extracted.json` itself:
+`checks.extracted-contract-guard` forbids that outside `lib/extracted/`. The
+check's `passthru.facts` reads the facts with `lib.extracted.get` and
+`children`, and `regenerate.sh` evaluates it with `nix eval`, which builds
+nothing. Kimchi's update script runs `regenerate.sh` after it regenerates the
+facts, from the repository root, so every bump refreshes the fact fields and
+`checks.kimchi-egress-report` stays green. The scanner's fields change only when
+the operator asks for a scan, because it needs the release trees. The generator
+refuses a report that lacks a scanner field, and an env target with no
+`environment` row.
 
 ### What the regex scanner reported that the fact does not
 
