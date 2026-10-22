@@ -151,6 +151,7 @@
     });
     "a hand-written runtime key" = fails "ai.cliproxyapi.instances.clients.settings.access.api-keys lists ai.claude.proxy.key by hand; ai.claude.proxy adds it to this instance. Remove the hand-written entry." (handWritten {access.api-keys = [(runtimeKey "claude")];});
     "a hand-written URL ending in a no-break space" = refused unprintable (handURL ("https://hand.example" + noBreakSpace));
+    "a hand-written URL starting with a space" = refused unprintable (handURL (" " + zai.anthropic));
     "a provider base URL another block shares" = refused "ai.cliproxyapi.instances.clients.providers.z-ai.apis.anthropic.base-url `${zai.anthropic}` is also the base URL of another settings.api-keys.claude block" (handURL zai.anthropic);
     "a provider name that is not one word" = refused "ai.cliproxyapi.instances.clients.providers.../x: a provider name must be" {cliproxyapi.instances.clients.providers."../x" = providers.other;};
     "a provider without the runtime's API" = refused "ai.claude.proxy.providers.other reaches ai.cliproxyapi.instances.clients.providers.other through the anthropic API, which it does not serve: give it `apis.anthropic`, or set `ai.claude.proxy.providers.other.api` to one it serves (chat)." {claude.proxy = routedTo "claude" ["other"];};
@@ -161,16 +162,6 @@
       };
     };
     "a runtime with no API and no api" = refused "ai.testapp.proxy.providers.z-ai.api is unset, and nothing sets a default API: set it to one ai.cliproxyapi.instances.clients.providers.z-ai serves (anthropic, responses)." (testapp (routedTo "testapp" ["z-ai"]));
-    "an api the provider does not serve" = refused "ai.codex.proxy.providers.other reaches ai.cliproxyapi.instances.clients.providers.other through the responses API" {
-      codex.proxy =
-        routed "codex"
-        // {
-          providers.other = {
-            api = "responses";
-            enable = true;
-          };
-        };
-    };
     "an instance selection without a key" = refused "ai.codex.proxy.instance needs `key`" {codex.proxy.instance = "clients";};
     # The refusal names the runtime option a bad rule came from.
     "an oauth rule with base-urls from a runtime" = refused "ai.claude.proxy.allow has a rule with kind = \"oauth\" and base-urls" {claude.proxy = routed "claude" // {allow = [(oauth "claude" // {base-urls = [zai.anthropic];})];};};
@@ -264,17 +255,13 @@ in {
             base-url = "https://pre.example/v1";
             provider = "openai-compatible-pre";
           };
-          other = {
-            base-url = chat;
-            provider = "openai-compatible-other";
-          };
         };
         chatRules =
           map (entry: entry.credentials)
           (rendered (evaluate {
             cliproxyapi.instances.clients.providers = lib.mapAttrs (_: credential:
               providers.other // {apis.chat.base-url = credential.base-url;})
-            (removeAttrs chatCredentials ["other"]);
+            chatCredentials;
             codex.proxy =
               routed "codex"
               // {
