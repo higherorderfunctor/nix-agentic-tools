@@ -273,11 +273,11 @@
             # restarts after the first start, so the same limit is one less
             # burst, over the same sliding window; DESIGN.md, Start limit.
             max = restartPolicy.startLimit.burst - 1;
-            window = restartPolicy.startLimit.intervalSec;
             on =
               if entry.restart == "on-failure"
               then "on_failure"
               else entry.restart;
+            window = restartPolicy.startLimit.intervalSec;
           };
         }
         // lib.optionalAttrs (triggers entry != []) {watch.paths = triggers entry;}

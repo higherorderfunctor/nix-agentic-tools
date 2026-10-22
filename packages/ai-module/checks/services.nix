@@ -338,11 +338,11 @@ in {
           && process.restart
           == {
             max = 4;
-            window = 300;
             on =
               if restart == "on-failure"
               then "on_failure"
               else restart;
+            window = 300;
           }
           && !(process ? watch)) (builtins.attrNames entries)
         && lib.all (unit: unit.Unit.StartLimitBurst == 5 && unit.Unit.StartLimitIntervalSec == 300) (builtins.attrValues hm.systemd.user.services)

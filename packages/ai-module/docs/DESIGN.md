@@ -346,8 +346,8 @@ only: devenv has no systemd, and its supervisor has no `OnFailure=`. A Home
 Manager `ai.services.<name>` entry becomes the user unit `<name>.service`, and
 `systemd.user.services.<name>` is an ordinary Home Manager attribute that merges
 with the generated definition, so a consumer adds `Unit.OnFailure` without
-touching the module. systemd then starts the templated unit once per failure,
-with the failing unit's name as the instance `%i`.
+touching the module. systemd then requests the templated unit on failure, with
+the failing unit's name as the instance `%i`.
 
 ```nix
 {pkgs, ...}: {
@@ -356,24 +356,26 @@ with the failing unit's name as the instance `%i`.
     cliproxyapi.Unit.OnFailure = ["notify-failure@%n.service"];
 
     "notify-failure@" = {
-      Unit.Description = "Notify that %i failed";
       Service = {
-        Type = "oneshot";
         ExecStart = "${pkgs.libnotify}/bin/notify-send --urgency=critical --app-name=systemd 'Service failed' '%i failed; see journalctl --user -u %i'";
+        Type = "oneshot";
       };
+      Unit.Description = "Notify that %i failed";
     };
   };
 }
 ```
 
-`notify-send` talks to the session bus, so it needs `DBUS_SESSION_BUS_ADDRESS`
-in the user manager's environment. GNOME imports it at login; a manager started
-outside a graphical session, such as over SSH with linger, has no bus address
-and the notification is lost. `OnFailure=` fires on every failure of the unit,
-including the start-limit failure that ends a crash loop, so a daemon that
-crashes five times in 300 s notifies once, when it gives up. It does not fire
-for a stop, nor for the intermediate restarts before the limit trips. After it
-fires, recover with `systemctl --user reset-failed <unit>` as above.
+`notify-send` needs a reachable user session bus and a running desktop
+notification server; a headless session may have neither, and the notification
+is lost. With the default `RestartMode=normal`, each failure before an automatic
+restart passes through the failed state and triggers `OnFailure=`, as does the
+terminal start-limit failure. It does not fire for a stop. A consumer who wants
+a notification only when systemd gives up can also set
+`Service.RestartMode = "direct"` on that unit (systemd 254+), which skips
+`OnFailure=` for failures followed by an automatic restart
+(`systemd.service(5)`, `RestartMode=`). After the unit gives up, recover with
+`systemctl --user reset-failed <unit>` as above.
 
 Home Manager Linux reserves `services-reconcile`. The Home Manager launcher of a
 service with triggers hashes every trigger path and its bytes before it reads
