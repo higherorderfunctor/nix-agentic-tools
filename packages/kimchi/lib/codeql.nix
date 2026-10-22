@@ -25,8 +25,11 @@
 
   # Kimchi's own TypeScript without tests and mocks, as extract.mjs reads it,
   # and each pi package's dist under `scope`, with Kimchi's pnpm patches
-  # applied the way the build's pnpm applies them. Source maps are dropped:
-  # the extractor does not read them, and they are a third of pi's bytes.
+  # applied the way the build's pnpm applies them. Kimchi's upstream
+  # postinstall rewrite (scripts/patch-pi-ai-oauth.js, which replaces pi-ai's
+  # dist/auth/oauth/oauth-page.js) is not applied, as extract.mjs does not
+  # apply it. Source maps are dropped: the extractor does not read them, and
+  # they are a third of pi's bytes.
   source =
     pkgs.runCommand "kimchi-codeql-source-${version}" {
       nativeBuildInputs = [pkgs.jq];

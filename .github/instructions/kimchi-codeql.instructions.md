@@ -52,7 +52,9 @@ kimchi/node_modules/@earendil-works/<pi package>/{package.json,dist/}
 - **Kimchi's GitHub release source, not the build's patched tree.** This is the
   tree `extract.mjs` reads, so a CodeQL fact and an `extract.mjs` fact describe
   the same code. This repository's packaging patches (`command-shell.patch`,
-  `package-identity.patch`, ...) are not in it.
+  `package-identity.patch`, ...) are not in it, and neither is Kimchi's upstream
+  postinstall rewrite: `scripts/patch-pi-ai-oauth.js` replaces pi-ai's
+  `dist/auth/oauth/oauth-page.js`, and `extract.mjs` does not apply it.
 - **pi's four packages sit under `kimchi/node_modules`**, where Kimchi's imports
   resolve them. Measured: 506 of Kimchi's 508 `@earendil-works/*` import
   declarations resolve to a pi module in the database. `extract.mjs` scans only
@@ -60,8 +62,7 @@ kimchi/node_modules/@earendil-works/<pi package>/{package.json,dist/}
   patch `+` lines; the database holds all four `dist/` trees, patched. A fact
   difference there is a source-root difference, not an extractor bug.
 - **Kimchi's own `node_modules` (its pnpm store) is not in it.** That is every
-  third-party dependency. The pi bundle chunks already hold what pi bundles from
-  its own dependencies.
+  third-party dependency except what pi's bundle inlines (below).
 - **Source maps are dropped.** The extractor does not read them, and they are
   13.5 MB of pi's dist.
 - **The extractor skips `node_modules` by default.**
@@ -86,8 +87,7 @@ Kimchi's `package.json` `pnpm.patchedDependencies` names its pi patches
 (pi-coding-agent, pi-ai and pi-tui at 0.85.1). Each one is applied to the
 carried tree with `patch -p1 --fuzz=0`, as pnpm applies them in the build. A
 patch for a pi package that is not carried, or for another version, fails the
-build: a database without the patch would silently describe code that Kimchi
-does not run.
+build. Only these patches are guaranteed to be in the database.
 
 ### The database is a directory
 
@@ -97,9 +97,9 @@ database: a read-only one fails with `Error acquiring the IMB cache lock`. So
 every consumer copies the database first. Measured locally on the 214 MB
 database: copying the directory took 0.1 s, unzipping its 100 MB
 `codeql database bundle` 1.3 s, and building that bundle 10 s. `$out/db` drops
-the creation `log/`. `createDatabase` (`kimchi-codeql-create-database <dir>`) is
-the single place that creates it. It copies `source` to `<dir>/source` and
-creates `<dir>/db`. The derivation and the devenv task both run it.
+the creation `log/`. Both the derivation and the devenv task create it with
+`createDatabase` (`kimchi-codeql-create-database <dir>`), which copies `source`
+to `<dir>/source` and creates `<dir>/db`.
 
 ### Running a query without Nix
 
