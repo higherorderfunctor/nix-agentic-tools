@@ -1,10 +1,4 @@
-# The pinned Kimchi release's CodeQL database (lib/codeql.nix), through
-# `runQueries` and the one-query pack under ../ql/smoke. The query counts each
-# file's process.env reads by name; the rows must include a read in Kimchi's
-# own source, one in a minified pi bundle chunk, and the read of
-# KIMCHI_WHEEL_SCROLL_LINES that only Kimchi's pi-tui patch adds. So the
-# source root, the minified-file flag and the patch step each hold. `$out`
-# holds the decoded JSON only. x86_64-linux only, as the engine is.
+# Smoke check of the Kimchi CodeQL database through `runQueries`.
 {
   lib,
   pkgs,

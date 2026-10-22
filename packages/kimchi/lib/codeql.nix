@@ -110,13 +110,8 @@
     mv "$TMPDIR/kimchi/db" "$out/db" # bare-commands: ok (runCommand builder PATH)
   '';
 
-  # `runQueries { name; queries; models ? []; }`: every query of `queries`, an
-  # `ai.devTools.codeql.mkQueryPack` spec, run against `database` with `models`
-  # (mkModelPack specs) through customizePackage, which realizes both against
-  # `engine`. `$out/<query>.json` holds every result
-  # set of `<query>.ql`, decoded, its tuples sorted. Select strings, relative
-  # paths and numbers: an entity or an absolute location carries the build
-  # directory into the output.
+  # Select strings, relative paths and numbers: an entity or an absolute
+  # location carries the build directory into the output.
   runQueries = {
     name,
     queries,
