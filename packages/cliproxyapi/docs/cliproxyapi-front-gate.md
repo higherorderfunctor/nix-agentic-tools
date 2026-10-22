@@ -26,16 +26,18 @@ The Caddyfile comes from `lib/gate.nix`, built from the shared
 :<port> {
 	bind <host>
 	route {
-		cpa_gate {$CPA_GATE_POLICY}
+		cpa_gate * {$CPA_GATE_POLICY}
 	}
 }
 ```
 
 ## Policy file
 
-`CPA_GATE_POLICY` carries the policy file's **path**, never a key. A key in a
-Caddyfile `{$VAR}` would be spliced in before parsing, an unset one becomes an
-empty string, and the adapted config holds the value in clear. The file is JSON:
+`CPA_GATE_POLICY` carries the policy file's **path**, never a key. The `*`
+matcher is required: Caddy takes a first argument that starts with `/` as a path
+matcher. A key in a Caddyfile `{$VAR}` would be spliced in before parsing, an
+unset one becomes an empty string, and the adapted config holds the value in
+clear. The file is JSON:
 
 ```json
 {

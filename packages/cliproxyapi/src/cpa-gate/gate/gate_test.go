@@ -10,8 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
-	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
+	"github.com/caddyserver/caddy/v2/caddyconfig"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -302,21 +301,26 @@ func TestLoadPolicy(t *testing.T) {
 	}
 }
 
-func TestParseCaddyfile(t *testing.T) {
-	parse := func(input string) (*Gate, error) {
-		h, err := parseCaddyfile(httpcaddyfile.Helper{Dispenser: caddyfile.NewTestDispenser(input)})
-		if err != nil {
-			return nil, err
-		}
-		return h.(*Gate), nil
+// The directive goes through Caddy's own adapter, which strips a leading
+// matcher token before the module's parser sees the arguments.
+func TestCaddyfileDirective(t *testing.T) {
+	adapt := func(directive string) (string, error) {
+		site := ":8080 {\n\troute {\n\t\t" + directive + "\n\t}\n}\n"
+		out, _, err := caddyconfig.GetAdapter("caddyfile").Adapt([]byte(site), nil)
+		return string(out), err
 	}
-	g, err := parse("cpa_gate /run/policy.json")
-	if err != nil || g.Policy != "/run/policy.json" {
-		t.Errorf("got %+v, %v", g, err)
+	out, err := adapt("cpa_gate * /run/policy.json")
+	if err != nil || !strings.Contains(out, `"handler":"cpa_gate","policy":"/run/policy.json"`) {
+		t.Errorf("got %s, %v", out, err)
 	}
-	for _, input := range []string{"cpa_gate", "cpa_gate /a /b", "cpa_gate /a {\n\tx\n}"} {
-		if _, err := parse(input); err == nil {
-			t.Errorf("%q parsed", input)
+	for _, directive := range []string{
+		"cpa_gate /run/policy.json", // the path is taken as a matcher
+		"cpa_gate *",                // an empty `{$VAR}`
+		"cpa_gate * /a /b",
+		"cpa_gate * /a {\n\t\t\tx\n\t\t}",
+	} {
+		if out, err := adapt(directive); err == nil {
+			t.Errorf("%q adapted: %s", directive, out)
 		}
 	}
 }

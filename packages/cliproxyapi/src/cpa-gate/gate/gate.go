@@ -27,7 +27,9 @@ func init() {
 	httpcaddyfile.RegisterHandlerDirective("cpa_gate", parseCaddyfile)
 }
 
-// Gate is the module. A Caddyfile sets it with `cpa_gate <policy path>`.
+// Gate is the module. A Caddyfile sets it with `cpa_gate * <policy path>`:
+// Caddy reads the first argument of a handler directive as a matcher when it
+// starts with `/`, so an absolute path needs the `*` before it.
 type Gate struct {
 	// Policy is the path of the policy file. Keys never appear in the
 	// Caddyfile: Caddy splices `{$VAR}` values in before parsing and keeps

@@ -25,7 +25,9 @@ in {
       ":${toString port} {"
       "\tbind ${host}"
       "\troute {"
-      "\t\tcpa_gate ${caddy.envRef policyVariable}"
+      # `*` is the matcher token: Caddy takes a first argument starting
+      # with `/` as a path matcher, and the policy path is absolute.
+      "\t\tcpa_gate * ${caddy.envRef policyVariable}"
       "\t}"
       "}"
       ""
