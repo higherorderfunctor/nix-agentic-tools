@@ -137,9 +137,9 @@
     },
     "tui": { "segment": "internal", "treatment_percent": 50 },
     "v3_prompt": {
-      "internal_treatment_percent": 75,
+      "internal_treatment_percent": 100,
       "segment": "all",
-      "treatment_percent": 10
+      "treatment_percent": 25
     },
     "voice": { "segment": "all", "treatment_percent": 100 },
     "workflows": { "segment": "all", "treatment_percent": 100 }
