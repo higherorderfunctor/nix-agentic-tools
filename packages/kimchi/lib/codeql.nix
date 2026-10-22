@@ -19,8 +19,9 @@
 }: let
   inherit (pkgs) lib;
   meta = {inherit (engine.meta) platforms;};
-  # The pi packages land here, where Kimchi's imports resolve them.
-  scope = "kimchi/node_modules/@earendil-works";
+  # The pi packages land under `scope`, where Kimchi's imports resolve them.
+  nodeModules = "kimchi/node_modules";
+  scope = "${nodeModules}/@earendil-works";
 
   # Kimchi's own TypeScript without tests and mocks, as extract.mjs reads it,
   # and each pi package's dist under `scope`, with Kimchi's pnpm patches
@@ -38,7 +39,7 @@
       find "$out/kimchi/src" -name __mocks__ -type d -prune -exec rm -rf {} +
       find "$out/kimchi/src" -name '*.test.ts' -type f -delete
       for tree in ${lib.escapeShellArgs (map toString pi)}; do
-        dest="$out/kimchi/node_modules/$(jq -er .name "$tree/package.json")"
+        dest="$out/${nodeModules}/$(jq -er .name "$tree/package.json")"
         mkdir -p "$dest" # bare-commands: ok (runCommand builder PATH)
         cp -R --no-preserve=mode "$tree/dist" "$tree/package.json" "$dest/" # bare-commands: ok (runCommand builder PATH)
       done
@@ -49,7 +50,7 @@
         ${kimchi}/package.json > patches
       [ -s patches ] || { echo "kimchi-codeql-source: Kimchi patches no pi package" >&2; exit 1; }
       while IFS=$'\t' read -r key file; do
-        dest="$out/kimchi/node_modules/''${key%@*}"
+        dest="$out/${nodeModules}/''${key%@*}"
         [ -f "$dest/package.json" ] || { echo "kimchi-codeql-source: $key is patched but not carried" >&2; exit 1; }
         carried="$(jq -er .version "$dest/package.json")"
         [ "$carried" = "''${key##*@}" ] || { echo "kimchi-codeql-source: $key is patched, but $carried is carried" >&2; exit 1; }
