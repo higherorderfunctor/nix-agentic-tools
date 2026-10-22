@@ -278,6 +278,13 @@ for it. When several entries match, their guidance composes.
     - [`packages/kimchi/docs/kimchi-codeql.md`](packages/kimchi/docs/kimchi-codeql.md)
     - [`packages/kimchi/docs/kimchi-codeql-environment.md`](packages/kimchi/docs/kimchi-codeql-environment.md)
     - [`packages/kimchi/docs/kimchi-codeql-network.md`](packages/kimchi/docs/kimchi-codeql-network.md)
+- **`kimchi-egress-report`**
+  - Match:
+    - `checks/references/kimchi-egress-report.nix`
+    - `dev/skills/kimchi-egress-report/**`
+    - `packages/kimchi/egress-report.json`
+  - Read:
+    - [`packages/kimchi/docs/kimchi-egress-report.md`](packages/kimchi/docs/kimchi-egress-report.md)
 - **`kiro-agents`**
   - Match:
     - `packages/kiro-cli/checks/module-eval.nix`

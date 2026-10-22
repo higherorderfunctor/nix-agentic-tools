@@ -1,37 +1,23 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import {
+  compare,
+  fail as failWith,
+  parseArgs,
+  SCAN_FIELDS,
+  writeReport,
+} from "./report.mjs";
 
-const SCANNER_VERSION = "1.0.0";
+// Writes the fields the network fact does not cover (SCAN_FIELDS);
+// generate.mjs adds the fact's fields after it.
+const SCANNER_VERSION = "2.0.0";
 const execFileAsync = promisify(execFile);
-
-function compare(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function fail(message) {
-  console.error(`scan.mjs: ${message}`);
-  process.exitCode = 1;
-  throw new Error(message);
-}
-
-function parseArgs(argv) {
-  const args = {};
-  for (let index = 0; index < argv.length; index++) {
-    const argument = argv[index];
-    if (!argument.startsWith("--") || !argv[index + 1])
-      fail(`invalid argument: ${argument}`);
-    args[argument.slice(2)] = argv[++index];
-  }
-  for (const required of ["out", "pi", "sources", "tree", "typescript"]) {
-    if (!args[required]) fail(`missing --${required} <path>`);
-  }
-  return args;
-}
+const fail = (message) => failWith("scan.mjs", message);
 
 const EXCLUDED_DIRS = new Set([".git", "__mocks__", "dist", "node_modules"]);
 const isTestFile = (path) => /\.(?:spec|test)\.[jt]sx?$/.test(path);
@@ -119,19 +105,6 @@ function addLiteral(value, file, literals) {
   else if (looksLikePath(value)) literals.paths.push({ file, value });
 }
 
-const NETWORK_CALL_NAMES = new Set([
-  "axios",
-  "axios.get",
-  "axios.post",
-  "fetch",
-  "got",
-  "http.get",
-  "http.request",
-  "https.get",
-  "https.request",
-  "undici.fetch",
-  "undici.request",
-]);
 const NETWORK_TOOLS = new Set([
   "curl",
   "git",
@@ -162,7 +135,7 @@ function calleeText(expression, ts) {
   return expression.getText();
 }
 
-function scanTsFile(path, root, text, ts, sites, literals) {
+function scanTsFile(path, root, text, ts, sites, paths) {
   const scriptKind = path.endsWith(".tsx")
     ? ts.ScriptKind.TSX
     : path.endsWith(".jsx")
@@ -180,29 +153,24 @@ function scanTsFile(path, root, text, ts, sites, literals) {
   const file = sourceLabel(path, root);
 
   function visit(node) {
-    if (ts.isStringLiteralLike(node)) addLiteral(node.text, file, literals);
-    if (ts.isNewExpression(node) || ts.isCallExpression(node)) {
+    if (ts.isStringLiteralLike(node))
+      addLiteral(node.text, file, { hosts: [], paths });
+    if (ts.isCallExpression(node)) {
       const callee = calleeText(node.expression, ts);
-      const firstArgument = node.arguments?.[0];
-      const target = firstArgument?.getText(source) ?? "<none>";
-      const category =
-        ts.isNewExpression(node) && callee === "EventSource"
-          ? "eventsource"
-          : ts.isNewExpression(node) && callee === "WebSocket"
-            ? "websocket"
-            : NETWORK_CALL_NAMES.has(callee)
-              ? "http"
-              : null;
-      if (category) {
-        sites.push({ callee, category, file, target });
-      } else if (
+      const firstArgument = node.arguments[0];
+      if (
         SPAWN_CALL_NAMES.has(callee) &&
         firstArgument &&
         ts.isStringLiteralLike(firstArgument)
       ) {
         const tool = firstArgument.text.trim().split(/\s+/, 1)[0];
         if (NETWORK_TOOLS.has(tool))
-          sites.push({ callee, category: "spawn", file, target });
+          sites.push({
+            callee,
+            category: "spawn",
+            file,
+            target: firstArgument.getText(source),
+          });
       }
     }
     ts.forEachChild(node, visit);
@@ -248,10 +216,10 @@ function scanGoFile(path, root, text, sites, literals) {
 
 const JS_STRING_RE = /"((?:[^"\\]|\\.){1,200})"|'((?:[^'\\]|\\.){1,200})'/g;
 
-function scanBundledJs(path, root, text, literals) {
+function scanBundledJs(path, root, text, paths) {
   const file = sourceLabel(path, root, "pi");
   for (const match of text.matchAll(JS_STRING_RE))
-    addLiteral(match[1] ?? match[2], file, literals);
+    addLiteral(match[1] ?? match[2], file, { hosts: [], paths });
 }
 
 function dedupeLiterals(entries) {
@@ -342,27 +310,6 @@ function sortedUnique(values) {
   return [...new Set(values)].sort(compare);
 }
 
-function sortedObject(object) {
-  return Object.fromEntries(
-    Object.entries(object).sort(([left], [right]) => compare(left, right)),
-  );
-}
-
-function formatReport(report) {
-  const formatted = JSON.stringify(report, null, 2).replace(
-    /^(\s*)"files": \[\n((?:\s+"(?:[^"\\]|\\.)*",?\n)+)\1\]/gm,
-    (block, indent, entries) => {
-      const values = entries
-        .trim()
-        .split("\n")
-        .map((line) => line.trim().replace(/,$/, ""));
-      const inline = `${indent}"files": [${values.join(", ")}]`;
-      return inline.length + 1 <= 80 ? inline : block;
-    },
-  );
-  return `${formatted}\n`;
-}
-
 async function narHash(path) {
   const { stdout } = await execFileAsync("nix", [
     "hash",
@@ -422,7 +369,13 @@ async function extractCommands(treeRoot, piRoot, files, ts) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseArgs("scan.mjs", process.argv.slice(2), {
+    out: null,
+    pi: null,
+    sources: null,
+    tree: null,
+    typescript: null,
+  });
   const tsModule = await import(pathToFileURL(args.typescript).href);
   const ts = tsModule.default ?? tsModule;
   const sources = JSON.parse(await readFile(args.sources, "utf8"));
@@ -446,8 +399,9 @@ async function main() {
     fail(
       "Kimchi's direct pi dependency does not match packages/kimchi/sources.json",
     );
-  const literals = { hosts: [], paths: [] };
-  const sites = [];
+  const paths = [];
+  const spawnSites = [];
+  const go = { hosts: [], paths, sites: [] };
 
   const sourceFiles = await filesUnder(
     args.tree,
@@ -459,8 +413,8 @@ async function main() {
       args.tree,
       await readFile(path, "utf8"),
       ts,
-      sites,
-      literals,
+      spawnSites,
+      paths,
     );
   }
   const goFiles = await filesUnder(
@@ -468,7 +422,7 @@ async function main() {
     (path) => path.endsWith(".go") && !path.endsWith("_test.go"),
   );
   for (const path of goFiles)
-    scanGoFile(path, args.tree, await readFile(path, "utf8"), sites, literals);
+    scanGoFile(path, args.tree, await readFile(path, "utf8"), go.sites, go);
 
   const piFiles = await filesUnder(
     join(args.pi, "dist"),
@@ -479,42 +433,47 @@ async function main() {
     new Set([".git", "node_modules"]),
   );
   for (const path of piFiles)
-    scanBundledJs(path, args.pi, await readFile(path, "utf8"), literals);
+    scanBundledJs(path, args.pi, await readFile(path, "utf8"), paths);
 
   const commands = await extractCommands(args.tree, args.pi, sourceFiles, ts);
   const allCommands = sortedUnique(Object.values(commands).flat());
   const report = {
     commands,
     dependencies: {
-      kimchiDirect: sortedObject(kimchiPackage.dependencies ?? {}),
-      piPackages: sortedObject({
+      kimchiDirect: kimchiPackage.dependencies ?? {},
+      piPackages: {
         "@earendil-works/pi-agent-core":
           sources.extraction.piAgentCorePackage.version,
         "@earendil-works/pi-ai": sources.extraction.piAiPackage.version,
         "@earendil-works/pi-coding-agent": sources.extraction.piPackage.version,
         "@earendil-works/pi-tui": sources.extraction.piTuiPackage.version,
-      }),
+      },
     },
+    goCallSites: dedupeSites(go.sites),
+    goHosts: dedupeLiterals(go.hosts),
     header: {
-      kimchiSourceHash: sources.extraction.kimchiSource.hash,
-      kimchiVersion: sources.version,
-      piVersion: piPackage.version,
-      scannerVersion: SCANNER_VERSION,
+      scan: {
+        kimchiSourceHash: sources.extraction.kimchiSource.hash,
+        kimchiVersion: sources.version,
+        piVersion: piPackage.version,
+        scannerVersion: SCANNER_VERSION,
+      },
     },
-    hosts: dedupeLiterals(literals.hosts),
-    networkCallSites: dedupeSites(sites),
-    urlPathLiterals: dedupeLiterals(literals.paths),
+    spawnCallSites: dedupeSites(spawnSites),
+    urlPathLiterals: dedupeLiterals(paths),
   };
+  const unlisted = Object.keys(report).filter(
+    (name) => name !== "header" && !(name in SCAN_FIELDS),
+  );
+  if (unlisted.length > 0)
+    fail(`fields missing from SCAN_FIELDS: ${unlisted.join(", ")}`);
 
-  if (!report.hosts.some(({ value }) => value === "llm.kimchi.dev")) {
-    fail("sanity floor failed: llm.kimchi.dev is absent from hosts");
-  }
   if (!allCommands.includes("teleport"))
     fail("sanity floor failed: teleport is absent from commands");
 
-  await writeFile(args.out, formatReport(report));
+  await writeReport(args.out, report);
   console.log(
-    `scan.mjs: wrote ${args.out} (${report.hosts.length} hosts, ${report.urlPathLiterals.length} paths, ${report.networkCallSites.length} call sites, ${allCommands.length} commands)`,
+    `scan.mjs: wrote ${args.out} (${report.goHosts.length} Go hosts, ${report.urlPathLiterals.length} paths, ${report.spawnCallSites.length} spawn and ${report.goCallSites.length} Go call sites, ${allCommands.length} commands)`,
   );
 }
 

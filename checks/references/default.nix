@@ -1,1 +1,6 @@
-{imports = [./kimchi-surface-diagrams.nix];}
+{
+  imports = [
+    ./kimchi-egress-report.nix
+    ./kimchi-surface-diagrams.nix
+  ];
+}
