@@ -3,9 +3,10 @@
 > **Last verified:** 2026-10-21 — `lib/extracted/options.nix` types the
 > CLIProxyAPI and CPA Manager Plus node trees with nullable container children
 > and `secretFile` nodes, and refuses a refinement row that would apply on a
-> node with a secret or secret-file descendant; `render.nix` lifts secrets and
-> secret files into `{$NAME}` placeholders and refuses a malformed `_redact`
-> marker; `goTest` runs each owner's loader check.
+> node with a secret or secret-file descendant; a refinement row on a list node
+> receives its element type; `render.nix` lifts secrets and secret files into
+> `{$NAME}` placeholders and refuses a malformed `_redact` marker; `goTest` runs
+> each owner's loader check.
 
 Two owners, CLIProxyAPI and CPA Manager Plus, get typed settings from their
 reconciled facts through one generator. The four older generators
@@ -48,10 +49,12 @@ element, `.<name>` for a map value). It needs only `lib`.
 
 Owner tables, keyed by path: `exclusions` (path → reason; no option) and
 `refinements` (path → `{ type; refine; }`, applied only while the node still has
-the `type` the row was written for). `report` lists `staleExclusions`,
-`staleRefinements`, `untyped` (a type or a list/map with no element node that
-nothing maps) and `misplaced` (a node whose parent is missing or cannot hold
-it); every list is empty for a current owner.
+the `type` the row was written for; a row on a list node whose `[]` node exists
+also receives `elementType`, the generated element type before `nullOr`, so it
+can refuse null elements without retyping the element). `report` lists
+`staleExclusions`, `staleRefinements`, `untyped` (a type or a list/map with no
+element node that nothing maps) and `misplaced` (a node whose parent is missing
+or cannot hold it); every list is empty for a current owner.
 
 `sample { overrides; }` sets every leaf from its node: `true`, `1`, `1.5`,
 `"sample"`, `"1s"`, the first enum value, one list element, one map entry
