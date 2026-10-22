@@ -69,7 +69,8 @@ its placeholder with a path. Lifting uses `redact.isRedacted` and
 `redact.isAsFile`, never a test of its own. Any other set with a `_redact` key
 (`redact.isReserved`, after nulls are dropped), even in untyped JSON such as
 CLIProxyAPI's `plugins.configs`, is refused through `redact.sealed`. Two paths
-that sanitize to one name fail evaluation.
+that sanitize to one name fail evaluation. `render.nix` exports the token
+(`placeholder`, `placeholderName`) for `packages/ai-module/lib/services.nix`.
 
 `content` is JSON text for both owners, YAML included: JSON is YAML 1.2, and
 CLIProxyAPI's yaml.v3 loader reads it (its loader check proves it). One quoting

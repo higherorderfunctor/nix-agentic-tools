@@ -1,8 +1,8 @@
 ## Redact: secrets kept out of the Nix store
 
 > **Last verified:** 2026-10-21 — `types.secretFile` tags a reference for path
-> delivery, and every consumer that takes the value refuses it; any set with a
-> `_redact` key is reserved; secret-name classification lives privately in
+> delivery by the `ai.services` launcher only; any set with a `_redact` key is
+> reserved; secret-name classification lives privately in
 > `lib/redact/classify.nix`, over the suffix table in
 > `lib/open-keys/patterns.nix`.
 
@@ -87,9 +87,13 @@ types such an option `types.secretFile`; the consumer still writes
 `redacted` refuses and tags the rest as `{_redact.asFile = <reference>;}`; a
 tagged definition passes unchanged, so one secretFile option can feed another.
 
-`filePaths` sees through the tag, so restart triggers and provider ordering come
-from the reference. Wherever the value itself is taken, a tagged value fails
-evaluation: `sealed` says only an `ai.services` launcher delivers it, so
+Only the `ai.services` launcher delivers a tagged value
+(`packages/ai-module/docs/DESIGN.md`, Services): it writes the value to a 0600
+file in the service's runtime directory and passes that path where the value
+would go. A `redact.file` reference is copied too, so every secret file has one
+mode, owner and lifetime. `filePaths` sees through the tag, so restart triggers
+and provider ordering come from the reference. Anywhere else a tagged value
+fails evaluation: `sealed` says only an `ai.services` launcher delivers it, so
 `assign` and `redacted` never hand a path to a consumer that takes the value.
 
 ### Delivery: `assign`, a function and not a type
