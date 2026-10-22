@@ -98,8 +98,8 @@ in {
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       # A running gate, and a site beside it whose upstream is down: the
-      # gate forwards nothing yet, so the 502 there is what makes Caddy log
-      # an error carrying the request. Every credential carrier must reach
+      # gate refuses this request without a checked body; the 502 on the
+      # other site makes Caddy log an error. Every credential carrier reaches
       # neither log. Controls drop each field and expose its unredacted keys;
       # Caddy itself redacts Authorization even with headers retained.
       cliproxyapi-gate-log = let

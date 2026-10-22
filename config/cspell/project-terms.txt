@@ -195,6 +195,7 @@ githubcopilot
 gitidentity
 gitref
 gitrevise
+gjson
 glab
 globalthis
 gluetun
@@ -250,6 +251,7 @@ kiro
 kirocli
 kirocrew
 kirodotdev
+klauspost
 kvim
 ldflags
 libasound
@@ -479,6 +481,7 @@ sysprompt
 taplo
 tengu
 testapp
+tidwall
 timespec
 tmpfs
 toctou

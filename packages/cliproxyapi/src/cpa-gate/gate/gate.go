@@ -86,11 +86,9 @@ var (
 	queryCarriers  = []string{"auth_token", "key"}
 )
 
-// ServeHTTP authenticates, matches the route and rewrites the credential.
-// No route class is forwarded yet: request bodies, listings and websocket
-// frames each need a check of their own first, so every route the
-// allowlist admits is still refused, with the unknown-route response.
-func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.Handler) error {
+// ServeHTTP authenticates and admits checked calls. Listings and websocket
+// frames remain refused until their separate checks are present.
+func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		return g.refuse(w, unauthorized, "-", "-", "query")
@@ -110,6 +108,13 @@ func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.Han
 	if rt.class != classWebsocket {
 		r.Header.Del("Connection")
 		r.Header.Del("Upgrade")
+	}
+	if rt.class == classCall {
+		if !checkBody(r, e) {
+			return g.refuse(w, notFound, e.name, rt.class, "body")
+		}
+		rewrite(r, query, e.internal)
+		return next.ServeHTTP(w, r)
 	}
 	rewrite(r, query, e.internal)
 	return g.refuse(w, notFound, e.name, rt.class, "pending")

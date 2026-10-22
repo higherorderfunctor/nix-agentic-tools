@@ -2,6 +2,7 @@ package gate
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -101,7 +102,8 @@ func lastLine(log *bytes.Buffer) string {
 }
 
 // This contract is independent of the production routes table. Each route
-// accepts its own API credential and refuses a credential for another API.
+// accepts its own API credential; calls forward checked bytes, while listings
+// and websockets remain refused.
 func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 	g, log := newGate(t)
 	cases := []struct {
@@ -123,17 +125,41 @@ func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 	for _, c := range cases {
 		method, path, _ := strings.Cut(c.target, " ")
 		for name, carry := range carriers {
-			r := httptest.NewRequest(method, path, nil)
+			var body []byte
+			if c.class == classCall {
+				body = []byte(`{"model":"m"}`)
+			}
+			r := httptest.NewRequest(method, path, bytes.NewReader(body))
+			if c.class == classCall {
+				r.Header.Set("Content-Type", "application/json")
+			}
 			if c.query != "" {
 				addQuery(r, c.query, "1")
 			}
 			carry(r, c.key)
-			w := serve(t, g, r)
-			if w.Code != http.StatusNotFound || w.Body.Len() != 0 {
-				t.Errorf("%s via %s: got %d %q, want the empty 404", c.target, name, w.Code, w.Body)
+			w := httptest.NewRecorder()
+			forwarded := false
+			next := caddyhttp.HandlerFunc(func(_ http.ResponseWriter, got *http.Request) error {
+				forwarded = true
+				b, err := io.ReadAll(got.Body)
+				if err != nil || !bytes.Equal(b, body) {
+					t.Errorf("%s via %s: forwarded body %q, %v", c.target, name, b, err)
+				}
+				return nil
+			})
+			if err := g.ServeHTTP(w, r, next); err != nil {
+				t.Errorf("%s via %s: %v", c.target, name, err)
 			}
-			if line := lastLine(log); !strings.Contains(line, `"reason":"pending"`) || !strings.Contains(line, `"route":"`+c.class+`"`) {
-				t.Errorf("%s via %s: log %s, want pending %s", c.target, name, line, c.class)
+			if forwarded != (c.class == classCall) {
+				t.Errorf("%s via %s: forwarded %v", c.target, name, forwarded)
+			}
+			if c.class != classCall {
+				if w.Code != http.StatusNotFound || w.Body.Len() != 0 {
+					t.Errorf("%s via %s: got %d %q, want the empty 404", c.target, name, w.Code, w.Body)
+				}
+				if line := lastLine(log); !strings.Contains(line, `"reason":"pending"`) || !strings.Contains(line, `"route":"`+c.class+`"`) {
+					t.Errorf("%s via %s: log %s, want pending %s", c.target, name, line, c.class)
+				}
 			}
 			if got := r.Header.Values("Authorization"); !slices.Equal(got, []string{"Bearer " + c.internal}) {
 				t.Errorf("%s via %s: Authorization %q after the rewrite", c.target, name, got)
@@ -304,21 +330,22 @@ func TestLoadPolicy(t *testing.T) {
 		"client key is an internal key": {`{"entries":[
 			{"name":"a","key":"secret-k1","internal":"secret-k2","apis":["chat"],"models":["m"]},
 			{"name":"b","key":"secret-k2","internal":"secret-i","apis":["chat"],"models":["m"]}]}`, `"b": client key equals the internal key of entry "a"`},
-		"duplicate client key":          {`{"entries":[
+		"duplicate client key": {`{"entries":[
 			{"name":"a","key":"secret-k","internal":"secret-i1","apis":["chat"],"models":["m"]},
 			{"name":"b","key":"secret-k","internal":"secret-i2","apis":["chat"],"models":["m"]}]}`, `"a" and "b" share a client key`},
-		"empty client key":              {single(`"key":"","internal":"secret-i","apis":["chat"],"models":["m"]`), "empty client key"},
-		"empty internal key":            {single(`"key":"secret-k","internal":"","apis":["chat"],"models":["m"]`), "empty internal key"},
-		"invalid JSON":                  {validPolicy + ` secret-tail`, "trailing data"},
-		"invalid secret field type":     {single(`"key":{"secret":"secret-k"},"internal":"secret-i","apis":["chat"],"models":["m"]`), "invalid JSON or field"},
-		"malformed document":            {strings.TrimSuffix(validPolicy, "}"), "invalid JSON or field"},
-		"no apis":                       {single(`"key":"secret-k","internal":"secret-i","apis":[],"models":["m"]`), "no apis"},
-		"no models":                     {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":[]`), "no models"},
-		"own internal key":              {single(`"key":"secret-k","internal":"secret-k","apis":["chat"],"models":["m"]`), "client key equals the internal key"},
-		"second object":                 {validPolicy + ` {"key":"secret-tail"}`, "trailing data"},
-		"secret api value":              {single(`"key":"secret-k","internal":"secret-i","apis":["secret-k"],"models":["m"]`), "apis[0] is unknown"},
-		"unknown api":                   {single(`"key":"secret-k","internal":"secret-i","apis":["gemini"],"models":["m"]`), `apis[0] is unknown`},
-		"unknown field":                 {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"],"hostedTools":{}`), "invalid JSON or field"},
+		"empty client key":          {single(`"key":"","internal":"secret-i","apis":["chat"],"models":["m"]`), "empty client key"},
+		"empty internal key":        {single(`"key":"secret-k","internal":"","apis":["chat"],"models":["m"]`), "empty internal key"},
+		"empty model":               {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":[""]`), "empty model"},
+		"invalid JSON":              {validPolicy + ` secret-tail`, "trailing data"},
+		"invalid secret field type": {single(`"key":{"secret":"secret-k"},"internal":"secret-i","apis":["chat"],"models":["m"]`), "invalid JSON or field"},
+		"malformed document":        {strings.TrimSuffix(validPolicy, "}"), "invalid JSON or field"},
+		"no apis":                   {single(`"key":"secret-k","internal":"secret-i","apis":[],"models":["m"]`), "no apis"},
+		"no models":                 {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":[]`), "no models"},
+		"own internal key":          {single(`"key":"secret-k","internal":"secret-k","apis":["chat"],"models":["m"]`), "client key equals the internal key"},
+		"second object":             {validPolicy + ` {"key":"secret-tail"}`, "trailing data"},
+		"secret api value":          {single(`"key":"secret-k","internal":"secret-i","apis":["secret-k"],"models":["m"]`), "apis[0] is unknown"},
+		"unknown api":               {single(`"key":"secret-k","internal":"secret-i","apis":["gemini"],"models":["m"]`), `apis[0] is unknown`},
+		"unknown field":             {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"],"otherField":{}`), "invalid JSON or field"},
 	}
 	for name, c := range cases {
 		_, err := loadPolicy(writePolicy(t, c.policy))
