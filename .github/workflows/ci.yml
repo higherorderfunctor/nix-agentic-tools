@@ -639,7 +639,7 @@ jobs:
       # (kimchi.passthru.codeql.database, which the check cache may hold but
       # public Cachix must not) must answer 404. It evaluates those paths
       # without building any of them, so it runs on every event, forks too.
-      - name: Assert no CodeQL engine is published
+      - name: Assert no CodeQL engine or database is published
         env:
           CACHE: https://nix-agentic-tools.cachix.org
         run: |

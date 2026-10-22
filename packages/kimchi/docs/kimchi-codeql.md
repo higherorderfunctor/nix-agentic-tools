@@ -28,11 +28,11 @@ location carries the build directory into the JSON.
 
 Every derivation name contains `codeql`, so the credentialed cachix steps'
 `pushFilter: kiro-cli|codeql` keeps all of them out of the public cache. The
-`Assert no CodeQL engine is published` tripwire in `ci.yml` also asserts that
-the database's output answers 404 there. The database is input-addressed and not
-bit-reproducible (`codeql-database.yml` records its creation time). The Hestia
-check cache serves it again for as long as the pins, the engine and the flake's
-nixpkgs stay the same.
+`Assert no CodeQL engine or database is published` tripwire in `ci.yml` also
+asserts that the database's output answers 404 there. The database is
+input-addressed and not bit-reproducible (`codeql-database.yml` records its
+creation time). The Hestia check cache serves it again for as long as the pins,
+the engine and the flake's nixpkgs stay the same.
 
 ### The source root
 

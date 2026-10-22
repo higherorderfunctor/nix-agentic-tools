@@ -108,7 +108,7 @@ export -f curl nix
 
 
     def test_codeql_assertion_requires_every_engine_source_and_database(self):
-        script = ci_step_script("Assert no CodeQL engine is published")
+        script = ci_step_script("Assert no CodeQL engine or database is published")
         # Two engines, each with its source, and the Kimchi database; MODE
         # drops one source or every engine, or fails the database's evaluation.
         services = r'''set -euETo pipefail
