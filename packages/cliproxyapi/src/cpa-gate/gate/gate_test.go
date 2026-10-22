@@ -301,24 +301,24 @@ func TestLoadPolicy(t *testing.T) {
 		return `{"entries":[{"name":"a",` + fields + `}]}`
 	}
 	cases := map[string]struct{ policy, want string }{
-		"empty client key":   {single(`"key":"","internal":"secret-i","apis":["chat"],"models":["m"]`), "empty client key"},
-		"empty internal key": {single(`"key":"secret-k","internal":"","apis":["chat"],"models":["m"]`), "empty internal key"},
-		"no apis":            {single(`"key":"secret-k","internal":"secret-i","apis":[],"models":["m"]`), "no apis"},
-		"unknown api":        {single(`"key":"secret-k","internal":"secret-i","apis":["gemini"],"models":["m"]`), `apis[0] is unknown`},
-		"no models":          {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":[]`), "no models"},
-		"unknown field":      {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"],"hostedTools":{}`), "invalid JSON or field"},
-		"invalid secret field type": {single(`"key":{"secret":"secret-k"},"internal":"secret-i","apis":["chat"],"models":["m"]`), "invalid JSON or field"},
-		"malformed document": {strings.TrimSuffix(validPolicy, "}"), "invalid JSON or field"},
-		"invalid JSON": {validPolicy + ` secret-tail`, "trailing data"},
-		"second object": {validPolicy + ` {"key":"secret-tail"}`, "trailing data"},
-		"secret api value": {single(`"key":"secret-k","internal":"secret-i","apis":["secret-k"],"models":["m"]`), "apis[0] is unknown"},
-		"duplicate client key": {`{"entries":[
-			{"name":"a","key":"secret-k","internal":"secret-i1","apis":["chat"],"models":["m"]},
-			{"name":"b","key":"secret-k","internal":"secret-i2","apis":["chat"],"models":["m"]}]}`, `"a" and "b" share a client key`},
 		"client key is an internal key": {`{"entries":[
 			{"name":"a","key":"secret-k1","internal":"secret-k2","apis":["chat"],"models":["m"]},
 			{"name":"b","key":"secret-k2","internal":"secret-i","apis":["chat"],"models":["m"]}]}`, `"b": client key equals the internal key of entry "a"`},
-		"own internal key": {single(`"key":"secret-k","internal":"secret-k","apis":["chat"],"models":["m"]`), "client key equals the internal key"},
+		"duplicate client key":          {`{"entries":[
+			{"name":"a","key":"secret-k","internal":"secret-i1","apis":["chat"],"models":["m"]},
+			{"name":"b","key":"secret-k","internal":"secret-i2","apis":["chat"],"models":["m"]}]}`, `"a" and "b" share a client key`},
+		"empty client key":              {single(`"key":"","internal":"secret-i","apis":["chat"],"models":["m"]`), "empty client key"},
+		"empty internal key":            {single(`"key":"secret-k","internal":"","apis":["chat"],"models":["m"]`), "empty internal key"},
+		"invalid JSON":                  {validPolicy + ` secret-tail`, "trailing data"},
+		"invalid secret field type":     {single(`"key":{"secret":"secret-k"},"internal":"secret-i","apis":["chat"],"models":["m"]`), "invalid JSON or field"},
+		"malformed document":            {strings.TrimSuffix(validPolicy, "}"), "invalid JSON or field"},
+		"no apis":                       {single(`"key":"secret-k","internal":"secret-i","apis":[],"models":["m"]`), "no apis"},
+		"no models":                     {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":[]`), "no models"},
+		"own internal key":              {single(`"key":"secret-k","internal":"secret-k","apis":["chat"],"models":["m"]`), "client key equals the internal key"},
+		"second object":                 {validPolicy + ` {"key":"secret-tail"}`, "trailing data"},
+		"secret api value":              {single(`"key":"secret-k","internal":"secret-i","apis":["secret-k"],"models":["m"]`), "apis[0] is unknown"},
+		"unknown api":                   {single(`"key":"secret-k","internal":"secret-i","apis":["gemini"],"models":["m"]`), `apis[0] is unknown`},
+		"unknown field":                 {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"],"hostedTools":{}`), "invalid JSON or field"},
 	}
 	for name, c := range cases {
 		_, err := loadPolicy(writePolicy(t, c.policy))
