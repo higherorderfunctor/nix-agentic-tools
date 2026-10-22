@@ -508,6 +508,15 @@ in {
           visible = false;
           description = "This flake's package tree (`ai.*`) for the module's pkgs: `ai.internal.roots.ai`.";
         };
+        # Written by each enabled runtime's transform, read by the instance
+        # it names (lib/ai/proxy's `client` and `clientsOf`).
+        proxyClients = lib.mkOption {
+          type = lib.types.attrsOf lib.types.raw;
+          default = {};
+          internal = true;
+          visible = false;
+          description = "Per runtime routed through an `ai.cliproxyapi.instances` entry: `{instance; key; allow; option;}`.";
+        };
         # Every root a module site reads (`ai`, `docs`, `*-content`).
         roots = lib.mkOption {
           type = lib.types.raw;

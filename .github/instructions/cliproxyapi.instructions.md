@@ -7,8 +7,9 @@ applyTo: "packages/cliproxyapi/**"
 
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-18 — CPA 8.0.33 custom YAML decoders are probed
-> through yaml.v3; the shared `goTestExtract` runs the extractor.
+> **Last verified:** 2026-10-21 — CPA 8.0.38 custom YAML decoders are probed
+> through yaml.v3; the shared `goTestExtract` runs the extractor over the
+> patched `src`.
 
 ## Why reflection also needs the v8 tables
 
@@ -34,9 +35,11 @@ The v8 group loader does not read `auth-index`, so those fields are omitted.
 ## Measured data
 
 The package's `passthru.extracted` is `lib/extracted`'s `goTestExtract`: it
-copies the source and the package's `goModules`, installs the extractor test
-beside the shared `lib/extracted/go/nat_shared_test.go` (node types, the field
-walk, the output) and runs it with the package's Go toolchain. `GOPROXY=off`,
+copies `package.src`, the `applyPatches` tree, so the facts include what
+`patches/key-allowlist.patch` adds to the config schema. It also copies the
+package's `goModules`, installs the extractor test beside the shared
+`lib/extracted/go/nat_shared_test.go` (node types, the field walk, the output)
+and runs it with the package's Go toolchain. `GOPROXY=off`,
 `GOFLAGS=-mod=vendor` and `GOTOOLCHAIN=local` keep extraction offline. The
 YAML-specific typing (durations, `yaml.Node`, decoder probes) stays here.
 
@@ -93,16 +96,127 @@ The package exposes `passthru.extracted`. Its update script calls the shared
 floor and vendor hash, so a release bump carries its new configuration shape
 before publication.
 
+<!-- Fragment: packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md -->
+
+# CLIProxyAPI client-key allowlist
+
+> **Last verified:** 2026-10-22 — the patch applies to CPA 8.0.38 with no fuzz;
+> loading rejects duplicate client keys and startup exits 1 on refusal. Hot
+> reload can briefly serve a retired config credential under newly widened
+> rules, so rotation that also widens access requires a restart or an `ids`
+> rule.
+
+## Why selection lives in CPA
+
+One CPA instance must bind an authenticated client key to eligible upstream
+credentials. A plugin cannot enforce this: if its scheduler fails, unloads, or
+returns unhandled, native selection resumes over the full pool. Home mode never
+invokes the plugin scheduler. The instance module therefore refuses
+`plugins.enabled` with a nonempty allowlist, and CPA refuses Home dispatch while
+the allowlist is set. Separate instances were rejected by the operator on
+2026-10-21.
+
+CPA's access middleware records the authenticated key for headers, `?key=`, and
+`?auth_token=`. The patch uses that recorded principal in candidate selection.
+Missing or unknown keys select nothing while the allowlist is set; an absent or
+empty allowlist leaves native selection unchanged. A configured key whose
+eligible credentials are unavailable gets `auth_not_found`. Model listings still
+expose all models.
+
+An entry identifies one client key and grants a list of credential rules. The
+client key is a redact reference shared with `access.api-keys[]`. An
+instance-routed runtime derives both entries from `ai.<runtime>.proxy.allow`;
+write entries by hand only for other clients. A rule requires `provider` and
+`kind` (`oauth` or `apikey`); `ids` and `base-urls` narrow it further. The
+provider is CPA's credential provider, including `openai-compatible-<name>` for
+compatibility groups. An OAuth credential's ID is its auth-file path. A config
+API key's ID hashes its secret, so use provider and `base-urls` to address a
+group through rotation. The settings types and module refinements are in
+`cliproxyapi-settings.md`.
+
+The `apikey` kind matches only credentials synthesized from config. A
+store-loaded login can temporarily classify as `apikey` from its file or a Meta
+refresh before the watcher marks it `oauth`; allowing it through an `apikey`
+rule would cross the intended boundary. An OAuth rule can match such a login by
+ID once its kind is OAuth. Whoever writes the auth directory controls
+file-sourced provider and ID, so high-value OAuth rules should use `ids`.
+
+`base-urls` compares the credential's trimmed `base_url` with each listed URL
+after trimming. Scheme, host, path, case, and trailing slash still matter. A
+group without an explicit base URL may have no attribute and cannot match this
+narrowing; set `base-url` explicitly for default-endpoint Claude, Gemini, and
+Interactions groups. A rule with `base-urls` never matches OAuth, even if an
+OAuth login carries that attribute; the instance module refuses that
+combination. A listed URL absent from the configured groups is accepted but
+selects nothing. Key-less OpenAI compatibility groups have no matching kind and
+cannot be reached while the allowlist is set.
+
+## Duplicate keys and load paths
+
+Two entries with the same trimmed client key would merge rules into one
+principal and widen access. CPA rejects them by entry index, without logging the
+secret. Validation runs after decoding in both `LoadConfigOptional` and
+`ParseConfigBytes`: cloud-deploy turns decode errors into an empty config, so
+validation inside the decoder would erase a refusal. Initial load (including
+cloud-deploy's optional load), hot reload, management writes, and Home pushes
+all reach one of these paths. Startup exits 1 before serving; hot reload retains
+the previous config and retries a later valid write; management `PUT` answers
+422 without writing; a Home push is refused. A caller that constructs `Config`
+directly bypasses loading, so the Manager compiles duplicate entries into an
+allowlist granting no key any credential. Empty client keys bind no request.
+
+The eligibility predicate covers the legacy candidate loop, scheduler fast path,
+retry, and cooldown waits. `SelectAuth` always uses the legacy loop; mixed
+`Execute` with a built-in selector exercises the scheduler fast path. Plugin
+schedulers receive only surviving candidates. Two 8.0.38 paths bypass that
+predicate: Home dispatch, which is refused, and the Antigravity credits
+fallback, which checks the allowlist itself. The fallback matters when selection
+fails because a client key has no Antigravity rule. Plugin executors and
+`host.auth.get` bypass eligibility; this is why enabling plugins must be
+refused. `checks/key_allowlist_loops_test.go`, a go/types scan joined to the
+auth package, fails on a `range` over `Manager.auths` whose own body calls no
+allowlist predicate, unless the function is on its commented exemption list. It
+does not see an indexed lookup (`m.auths[id]`), an alias of the map, the map
+passed to a helper, or a loop over a copy (`snapshotAuths`, `List`), so a bump
+that touches candidate selection still needs source review even if it is green.
+
+## Reload ordering limitation
+
+The watcher publishes the new allowlist before it re-synthesizes config
+credentials and asynchronously deletes retired IDs. During that interval an old
+credential remains selectable if the new rule grants its provider or base URL.
+For example, a reload rotates a Claude key at URL A from secret `sOld` to `sNew`
+and grants client K URL A: K may briefly spend on `sOld`. The interval has not
+been measured. The secret stays server-side. Narrowing and revocation take
+effect first; `ids` rules are safe because the new secret produces a new ID. A
+service restart registers credentials before listening and has no such window.
+Publishing the allowlist after credential replacement would instead delay
+revocation and could fail open, so that reorder was rejected.
+
+## Bumping CPA
+
+The package applies `patches/key-allowlist.patch` to the pinned source with
+`-p1 --fuzz=0`; extraction and the Go check read that patched source. Fetch the
+version from `sources.json` into scratch, verify its unpacked NAR hash, apply
+the patch with `patch --dry-run -p1 --fuzz=0`, and inspect every changed
+candidate-selection loop before regenerating the diff. Offset-only moves may
+apply; changed context fails. The Go check covers behavior; the loop scan misses
+the shapes listed above. Regenerate the extracted settings facts after a schema
+change, then run the module assertions and Go check in CI.
+
 <!-- Fragment: packages/cliproxyapi/docs/cliproxyapi-settings.md -->
 
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-21 — 909 config nodes give the settings type
-> through `lib/extracted/options.nix`, with five refinements; the clean render
-> passes native v8 validation and loads through CPA's `LoadConfig` in
-> `cliproxyapi-settings`; `ai.cliproxyapi.instances` renders it at start,
-> defaults its listener to loopback, turns off the unprompted fetches the pinned
-> CPA has a switch for, and types `server.tls.key` as a secret file.
+> **Last verified:** 2026-10-21 — 926 config nodes, including the patched
+> `access.key-allowlist`, give the settings type through
+> `lib/extracted/options.nix`, with eight refinements and one module assertion
+> on the allowlist; the clean render passes native v8 validation and loads
+> through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
+> `ai.cliproxyapi.instances` renders it at start, defaults its listener to
+> loopback, turns off the unprompted fetches the pinned CPA has a switch for,
+> types `server.tls.key` as a secret file, and derives each routed runtime's
+> `access.api-keys` and `access.key-allowlist` entries.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -124,6 +238,10 @@ and `logs/` CLIProxyAPI resolves against its working directory are its own,
 execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
 reach only that copy and are lost at restart. `ai.proxy.instance` points the
 harnesses at an instance by name.
+
+An enabled instance-routed runtime adds its key and allowlist entry. The `allow`
+option uses `keyAllowlistCredentialsType`, generated from CPA's credential-rule
+settings.
 
 ## Unprompted network calls
 
@@ -160,11 +278,12 @@ takes a patch to CPA, not a setting; that is an open decision.
 ## Secrets
 
 Every path an `extract/annotations.json` row marks takes a redact reference
-only: `access.api-keys[]`, `management.secret-key`, `server.github-token`,
-`requests.proxy-url`, the ICE server `credential`, and per upstream family the
-group and key `proxy-url`, `headers.<name>` and `api-key`. A proxy URL or a
-header that holds no credential still takes a reference (`redact.file` or
-`redact.command`), since the type cannot tell which values carry one.
+only: `access.api-keys[]`, `access.key-allowlist[].api-key`,
+`management.secret-key`, `server.github-token`, `requests.proxy-url`, the ICE
+server `credential`, and per upstream family the group and key `proxy-url`,
+`headers.<name>` and `api-key`. A proxy URL or a header that holds no credential
+still takes a reference (`redact.file` or `redact.command`), since the type
+cannot tell which values carry one.
 
 `server.tls.key`, the TLS private key file, is a `secretFile` node: it takes a
 reference, which the service launcher writes to a 0600 file that the rendered
@@ -180,8 +299,20 @@ be a writable copy, never the store path.
 
 ## Refinements
 
-Each narrows a measured type using a native constraint in `internal/config/`:
+Each narrows a measured type using a native constraint in `internal/config/`, or
+in the allowlist patch:
 
+- `access.key-allowlist[].credentials[].{base-urls,ids}`:
+  `nonEmptyListOf elementType`, the generated string type. The patch reads an
+  empty or absent list as no restriction on that dimension, and the renderer
+  drops null elements, so an empty list, or `[null]`, would widen the rule to
+  every credential of its provider and kind. The type checks definitions, so
+  `[(mkIf false "x")]` passes it and merges to `[]`; a module assertion
+  (`modules/instances.nix`) refuses any merged empty list. Leave the option
+  unset to leave a dimension open.
+- `access.key-allowlist[].credentials[].kind`: `enum ["apikey" "oauth"]`; the
+  patch matches a rule only when its kind normalizes to a credential kind
+  (`normalizeAuthKind`), so any other value would silently allow nothing.
 - `client.codex.web-search-result-cache.ttl`: measured `string`, typed as a Go
   duration, because `Validate` in `sdk_config.go` refuses a TTL that is neither
   a duration nor integer seconds; the type admits the duration form only.
@@ -194,6 +325,13 @@ Each narrows a measured type using a native constraint in `internal/config/`:
 The duration refinement checks grammar only; positivity, numeric bounds and
 overflow remain native validation. `multimedia.disable-image-generation` keeps
 the extracted `any` type, including native string aliases such as `"off"`.
+
+`access.key-allowlist` itself has no refinement. Its elements hold the secret
+`api-key`, and the generator refuses a refinement row on a node with a secret
+descendant. A module assertion on the merged value (`modules/instances.nix`)
+refuses any null entry instead: the renderer drops nulls, so a list of only
+nulls, or `[null]`, would render as `[]`, which the patch reads as no allowlist,
+and enforcement would be off for every key. An explicit `[]` stays valid.
 
 Cross-field rules stay outside the type: `stale-after` at least three snapshot
 intervals, in-flight byte bounds, live media relay port ranges, trusted proxies

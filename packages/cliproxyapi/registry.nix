@@ -15,6 +15,11 @@
       {
         dir = facetOwner;
         location = "package";
+        name = "cliproxyapi-key-allowlist";
+      }
+      {
+        dir = facetOwner;
+        location = "package";
         name = "cliproxyapi-settings";
       }
     ];

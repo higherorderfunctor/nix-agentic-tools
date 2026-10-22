@@ -10,6 +10,38 @@
       "type": "list"
     },
     "access.api-keys[]": { "type": "string" },
+    "access.key-allowlist": {
+      "description": "KeyAllowlist restricts each client key to the upstream credentials it may\nuse. While it has any entry, a client key without one selects nothing.",
+      "type": "list"
+    },
+    "access.key-allowlist[]": { "type": "object" },
+    "access.key-allowlist[].api-key": {
+      "description": "APIKey is the client key, as listed in access.api-keys.",
+      "type": "string"
+    },
+    "access.key-allowlist[].credentials": {
+      "description": "Credentials lists the rules a credential must match one of.",
+      "type": "list"
+    },
+    "access.key-allowlist[].credentials[]": { "type": "object" },
+    "access.key-allowlist[].credentials[].base-urls": {
+      "description": "BaseURLs, when set, narrows the rule to API-key credentials whose\nbase-url is one of these, compared as CPA stores it (trimmed, otherwise\nexact). It never matches an OAuth login or a credential without a base-url.",
+      "type": "list"
+    },
+    "access.key-allowlist[].credentials[].base-urls[]": { "type": "string" },
+    "access.key-allowlist[].credentials[].ids": {
+      "description": "IDs, when set, narrows the rule to these credential IDs; an OAuth login's\nID is its file path relative to the auth directory.",
+      "type": "list"
+    },
+    "access.key-allowlist[].credentials[].ids[]": { "type": "string" },
+    "access.key-allowlist[].credentials[].kind": {
+      "description": "Kind is the credential kind, oauth or apikey. A rule with any other kind matches nothing.",
+      "type": "string"
+    },
+    "access.key-allowlist[].credentials[].provider": {
+      "description": "Provider is the credential's provider as CPA records it, such as claude,\ncodex or gemini, and openai-compatible-<name> for an openai-compatibility group.",
+      "type": "string"
+    },
     "api-keys": { "type": "object" },
     "api-keys.claude": {
       "description": "ClaudeKey defines a list of Claude API key configurations as specified in the YAML configuration file.",

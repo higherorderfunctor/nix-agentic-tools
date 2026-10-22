@@ -105,13 +105,89 @@
     }
     && failures (evaluate backend (withInstances {})) == [];
 
-  # A plaintext secret, a port the instance fixes set to another value, and
-  # an upstream that names no enabled instance are all refused.
+  # CLIProxyAPI settings on the main instance, by case name: the settings and
+  # what evaluating them gives, `thrown` when an option type or the render
+  # refuses them, else the failed assertions.
+  settingsCases = let
+    accepted = settings: {
+      inherit settings;
+      expect = [];
+    };
+    fails = message: settings: {
+      inherit settings;
+      expect = [message];
+    };
+    thrown = settings: {
+      inherit settings;
+      expect = "thrown";
+    };
+    # One client key with one rule: a valid API-key rule, then `rule` on top.
+    allowing = rule: {
+      access.key-allowlist = [
+        {
+          api-key = clientKey;
+          credentials = [
+            ({
+                kind = "apikey";
+                provider = "claude";
+              }
+              // rule)
+          ];
+        }
+      ];
+    };
+    emptied = field: fails "ai.cliproxyapi.instances.main: settings.access.key-allowlist[].credentials[].${field} merged to an empty list, which CPA reads as no restriction on that dimension and admits every credential of the provider and kind. Leave the option unset to leave it unrestricted, or list at least one value." (allowing {${field} = [(lib.mkIf false "x")];});
+    nullEntry = fails "ai.cliproxyapi.instances.main: settings.access.key-allowlist has a null entry, which the renderer drops: a list of only nulls renders as [] and switches enforcement off for every key. Remove the null entry, or set the list to [] to switch the allowlist off.";
+    oauth.kind = "oauth";
+    urls = ["https://api.z.ai/api/anthropic"];
+  in {
+    # Accepted, and rendered.
+    "allowlist switched off" = accepted {access.key-allowlist = [];};
+    "apikey rule narrowed by base-urls and ids" = accepted (allowing {
+      base-urls = urls;
+      ids = ["claude-apikey"];
+    });
+    "mkIf lists that keep an element" = accepted (allowing {
+      base-urls = [(lib.mkIf true "x") (lib.mkIf false "y")];
+      ids = [(lib.mkIf true "x") (lib.mkIf false "y")];
+    });
+    "oauth rule narrowed by ids" = accepted (allowing (oauth // {ids = ["claude-oauth"];}));
+    "plugins without an allowlist" = accepted {plugins.enabled = true;};
+
+    # Refused by an assertion. The types check definitions, so a list of only
+    # `mkIf false` elements passes them and merges to [], which CPA reads as
+    # unrestricted; the assertion on the merged value refuses it, per field.
+    "base-urls emptied by mkIf" = emptied "base-urls";
+    "ids emptied by mkIf" = emptied "ids";
+    "null allowlist entry" = nullEntry {access.key-allowlist = [null];};
+    "null allowlist entry beside a rule" = nullEntry {access.key-allowlist = [null] ++ (allowing {}).access.key-allowlist;};
+    "oauth rule with base-urls" = fails "ai.cliproxyapi.instances.main: settings.access.key-allowlist has a rule with kind = \"oauth\" and base-urls, which can never match: base-urls compare an API-key credential's base URL and never match an OAuth login. Use kind = \"apikey\" or drop base-urls." (allowing (oauth // {base-urls = urls;}));
+    # Its one failure also proves a bare rule, with no ids or base-urls, passes.
+    "plugins beside the allowlist" = fails "ai.cliproxyapi.instances.main: settings.plugins.enabled = true voids settings.access.key-allowlist: plugin executors choose credentials outside it and can read every credential through host.auth.get. Disable plugins or drop the allowlist." (allowing oauth // {plugins.enabled = true;});
+
+    # Refused at evaluation.
+    "empty base-urls" = thrown (allowing {base-urls = [];});
+    "empty ids" = thrown (allowing {ids = [];});
+    "null base-urls element" = thrown (allowing {base-urls = [null];});
+    "null ids element" = thrown (allowing {ids = [null];});
+    "plaintext client key" = thrown {access.api-keys = ["plain-client-key"];};
+    "port other than the instance's" = thrown {server.port = 9999;};
+    "unknown kind" = thrown (allowing {kind = "wrong";});
+  };
+
+  # Every settings case, an upstream that names no enabled instance, and each
+  # Manager Plus admin key and path refusal.
   refusals = backend: let
-    entry = ai: (evaluate backend (withInstances ai)).config.ai.services.cliproxyapi-main.files;
+    outcome = settings: let
+      result = evaluate backend (withInstances {cliproxyapi.instances.main.settings = settings;});
+    in
+      if succeeds result.config.ai.services.cliproxyapi-main.files
+      then failures result
+      else "thrown";
   in
-    !(succeeds (entry {cliproxyapi.instances.main.settings.access.api-keys = ["plain-client-key"];}))
-    && !(succeeds (entry {cliproxyapi.instances.main.settings.server.port = 9999;}))
+    settingsCases
+    != {}
+    && lib.all lib.id (lib.mapAttrsToList (name: case: outcome case.settings == case.expect || builtins.trace "${backend}: settings case `${name}` failed" false) settingsCases)
     && failures (evaluate backend (withInstances {cpa-manager-plus.instances.main.upstream = "missing";}))
     == ["ai.cpa-manager-plus.instances.main.upstream names `missing`, which is not an `ai.cliproxyapi.instances` entry."]
     && failures (evaluate backend (withInstances {cliproxyapi.instances.main.enable = false;}))
@@ -313,6 +389,54 @@
     fetchModelCatalogs = true;
     settings.management.disable-auto-update-panel = false;
   };
+
+  cliproxyapi = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi;
+  # A client key read at start from /build/key-<name>, and its allowlist entry
+  # with one API-key rule.
+  fileKey = name: redact.file "/build/key-${name}";
+  allow = name: rule: {
+    api-key = fileKey name;
+    credentials = [({kind = "apikey";} // rule)];
+  };
+  daemonInstance = port: names: settings: {
+    inherit port;
+    package = cliproxyapi;
+    settings =
+      settings
+      // {
+        access = settings.access // {api-keys = map fileKey names;};
+      };
+    stateDir = "/build/state/${toString port}";
+  };
+
+  # Shell for a check that starts real daemons: each started process joins
+  # `processes` and is killed on exit; `ready <pid> <url> <log>` polls `url`
+  # into health.json and prints the log if the process dies first.
+  # The user manager sets XDG_RUNTIME_DIR and INVOCATION_ID for every unit.
+  daemonHarness = invocation: ''
+    export HOME="$TMPDIR/home" XDG_RUNTIME_DIR="$TMPDIR/run" INVOCATION_ID=${invocation}
+    mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
+    processes=()
+    cleanup() {
+      for pid in "''${processes[@]}"; do kill -KILL "$pid" 2>/dev/null || :; done
+      wait || :
+    }
+    trap cleanup EXIT
+    ready() {
+      local pid=$1 url=$2 log=$3
+      for attempt in {1..100}; do
+        # cspell:ignore noproxy
+        if ${pkgs.curl}/bin/curl --noproxy '*' --max-time 1 --silent --fail "$url" > health.json; then
+          return 0
+        fi
+        if ! kill -0 "$pid" 2>/dev/null; then break; fi
+        sleep 0.1
+      done
+      cat "$log" >&2
+      echo "service did not become ready: $url" >&2
+      return 1
+    }
+  '';
 in {
   checks =
     {
@@ -333,7 +457,7 @@ in {
         daemons = manager:
           (evalHm (withInstances {
             cliproxyapi.instances.main = {
-              package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi;
+              package = cliproxyapi;
               port = 28417;
               settings = {
                 access.api-keys = [(redact.file "/build/client-key")];
@@ -370,29 +494,7 @@ in {
           printf '%s' client-test-secret > /build/client-key
           printf '%s' management-test-secret > /build/management-key
           printf '%s\n' admin-key-a > /build/admin-key
-          # The user manager sets XDG_RUNTIME_DIR and INVOCATION_ID for every unit.
-          export HOME="$TMPDIR/home" XDG_RUNTIME_DIR="$TMPDIR/run" INVOCATION_ID=real-daemons
-          mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
-          processes=()
-          cleanup() {
-            for pid in "''${processes[@]}"; do kill -KILL "$pid" 2>/dev/null || :; done
-            wait || :
-          }
-          trap cleanup EXIT
-          ready() {
-            local pid=$1 url=$2 log=$3
-            for attempt in {1..100}; do
-              # cspell:ignore noproxy
-              if ${pkgs.curl}/bin/curl --noproxy '*' --max-time 1 --silent --fail "$url" > health.json; then
-                return 0
-              fi
-              if ! kill -0 "$pid" 2>/dev/null; then break; fi
-              sleep 0.1
-            done
-            cat "$log" >&2
-            echo "service did not become ready: $url" >&2
-            return 1
-          }
+          ${daemonHarness "real-daemons"}
           ${real.systemd.user.services.cliproxyapi-main.Service.ExecStart} > cpa.log 2>&1 &
           processes+=("$!")
           ready "''${processes[0]}" http://127.0.0.1:28417/healthz cpa.log
@@ -543,6 +645,114 @@ in {
               exit 1
             fi
           done
+          touch "$out"
+        '';
+      # The packaged CPA accepts the allowed client key and refuses another
+      # configured key before it can reach the stand-in upstream. Authentication
+      # refuses an unknown key before selection.
+      module-service-instances-key-allowlist = let
+        proxy =
+          (evalHm {
+            ai.cliproxyapi.instances.main = daemonInstance 28419 ["a" "other"] {
+              access.key-allowlist = [
+                (
+                  allow "a" {provider = "openai-compatible-alpha";}
+                )
+              ];
+              api-keys.openai-compatibility = [
+                {
+                  name = "alpha";
+                  base-url = "http://127.0.0.1:28420/v1";
+                  keys = [{api-key = redact.file "/build/upstream-alpha";}];
+                  models = [{name = "shared-model";}];
+                }
+              ];
+            };
+          }).config;
+      in
+        pkgs.runCommandLocal "module-test-service-instances-key-allowlist" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          printf '%s' key-a > /build/key-a
+          printf '%s' key-other > /build/key-other
+          printf '%s' upstream-alpha > /build/upstream-alpha
+          ${daemonHarness "key-allowlist"}
+          ${pkgs.python3}/bin/python3 ${./stand-in-upstream.py} alpha 28420 alpha.log 2> alpha.err &
+          processes+=("$!")
+          ready "$!" http://127.0.0.1:28420/ alpha.err
+          ${proxy.systemd.user.services.cliproxyapi-main.Service.ExecStart} > cpa.log 2>&1 &
+          processes+=("$!")
+          ready "$!" http://127.0.0.1:28419/healthz cpa.log
+          request() {
+            local status=$1 answer=$2 key=$3 code
+            code=$(${pkgs.curl}/bin/curl --noproxy '*' --max-time 10 --silent --output response.json --write-out '%{http_code}' \
+              --header 'Content-Type: application/json' --header "Authorization: Bearer $key" \
+              --data '{"model":"shared-model","messages":[{"role":"user","content":"hi"}]}' \
+              http://127.0.0.1:28419/v1/chat/completions)
+            if [ "$code" != "$status" ] || ! ${pkgs.jq}/bin/jq -e --arg answer "$answer" '(.choices[0].message.content? // .error.message? // .error? // "") | contains($answer)' response.json > /dev/null 2>&1; then
+              echo "FAIL: $key: $code, want $status $answer" >&2
+              cat response.json cpa.log >&2
+              return 1
+            fi
+            echo "ok: $key: $code $answer"
+          }
+          request 200 alpha key-a
+          request 503 auth_not_found key-other
+          request 401 "Invalid API key" key-unknown
+          test "$(cat alpha.log)" = '/v1/chat/completions Bearer upstream-alpha'
+          touch "$out"
+        '';
+      # Two access.key-allowlist entries whose keys are different redact.file
+      # references, so evaluation cannot compare them, resolve at start to one
+      # key once trimmed. Merged, that key would hold both entries' rules; the
+      # packaged CPA refuses the config instead, naming the entries by index and
+      # never the key, and the patch makes main exit with a non-zero status
+      # before serving (packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md).
+      # Positive control: a second instance with distinct keys, started the same
+      # way, comes up and keeps running, so the exit comes from the refusal.
+      module-service-instances-key-allowlist-duplicate = let
+        instance = port: names:
+          daemonInstance port names {
+            access.key-allowlist = lib.zipListsWith (name: provider: allow name {inherit provider;}) names ["claude" "codex"];
+          };
+        proxy =
+          (evalHm {
+            ai.cliproxyapi.instances = {
+              duplicate = instance 28424 ["a" "twin"];
+              valid = instance 28425 ["ok-a" "ok-b"];
+            };
+          }).config;
+        exec = name: proxy.systemd.user.services."cliproxyapi-${name}".Service.ExecStart;
+      in
+        pkgs.runCommandLocal "module-test-service-instances-key-allowlist-duplicate" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          printf '%s' key-same > /build/key-a
+          printf ' %s\n' key-same > /build/key-twin
+          printf '%s' key-ok-a > /build/key-ok-a
+          printf '%s' key-ok-b > /build/key-ok-b
+          ${daemonHarness "key-allowlist-duplicate"}
+          ${exec "valid"} > valid.log 2>&1 &
+          processes+=("$!")
+          ready "$!" http://127.0.0.1:28425/healthz valid.log
+          status=0
+          timeout --kill-after=5 30 ${exec "duplicate"} > cpa.log 2>&1 || status=$?
+          cat cpa.log
+          # 124 and 137 are timeout's own: CPA was still running after 30 s.
+          case $status in
+            0 | 124 | 137)
+              echo "FAIL: CPA with two entries for one client key gave status $status, want its own non-zero exit" >&2
+              false
+              ;;
+          esac
+          echo "ok: the refused config exited with status $status"
+          grep -F 'failed to load config: access.key-allowlist: entries 0, 1 have the same api-key after trimming' cpa.log
+          if grep -F key-same cpa.log; then
+            echo "FAIL: the refusal printed the client key" >&2
+            false
+          fi
+          ready "''${processes[0]}" http://127.0.0.1:28425/healthz valid.log
+          echo "ok: the valid config still runs"
           touch "$out"
         '';
       # Linux Home Manager emits the units, and the launcher renders the

@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-17 — non-AI owners use the same layer-1 helper;
+> **Last verified:** 2026-10-21 — non-AI owners use the same layer-1 helper;
 > delivery facts derive delivered and absent cells, keyed withdrawal and
 > normalized gaps from option and runtime declarations; `poolOptions` covers
 > `agentsDir` and `environmentVariables` only; `optionNamespaces` places
@@ -328,8 +328,9 @@ cells without policy edits.
   `environmentVariables`, one the record's `surfaceSupport` omits, or
   `agentsDir` without `agents`. It also rejects `agentNativeType` without
   `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
-  `agentsDescriptionSuffix` without the agents pool, and an empty or non-string
-  `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
+  `agentsDescriptionSuffix` without the agents pool, an empty or non-string
+  `agentsDirSuffixes`, and `proxyAllow` (the default of `ai.<name>.proxy.allow`)
+  without the proxy pool. The native pair is tested for presence, so an explicit
   null counts as set.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
