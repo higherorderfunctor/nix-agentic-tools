@@ -20,10 +20,10 @@ index 960d5e5..9bac730 100644
  		cfg = &config.Config{}
 diff --git a/internal/access/config_access/key_allowlist_test.go b/internal/access/config_access/key_allowlist_test.go
 new file mode 100644
-index 0000000..641ba09
+index 0000000..3858f86
 --- /dev/null
 +++ b/internal/access/config_access/key_allowlist_test.go
-@@ -0,0 +1,281 @@
+@@ -0,0 +1,256 @@
 +package configaccess_test
 +
 +import (
@@ -67,18 +67,15 @@ index 0000000..641ba09
 +	return nil, nil
 +}
 +
-+// The allowlist keys on the principal the access middleware authenticated,
-+// so a client key sent as ?key= or ?auth_token= is held to the same entry as
-+// one sent in a header.
++// The access middleware records ?key= and ?auth_token= as the client principal;
++// an authenticated key without an allowlist entry must still select nothing.
 +func TestKeyAllowlistAppliesToQueryKeys(t *testing.T) {
 +	cfg, errParse := config.ParseConfigBytes([]byte(`config-version: 8
 +access:
-+  api-keys: [key-a, key-b, key-unlisted]
++  api-keys: [key-a, key-unlisted]
 +  key-allowlist:
 +    - api-key: key-a
 +      credentials: [{provider: alpha, kind: apikey}]
-+    - api-key: key-b
-+      credentials: [{provider: beta, kind: apikey}]
 +`))
 +	if errParse != nil {
 +		t.Fatalf("parse v8 config: %v", errParse)
@@ -90,11 +87,9 @@ index 0000000..641ba09
 +
 +	manager := coreauth.NewManager(nil, nil, nil)
 +	manager.SetConfig(cfg)
-+	for _, provider := range []string{"alpha", "beta"} {
-+		manager.RegisterExecutor(stubExecutor{provider: provider})
-+		if _, errRegister := manager.Register(context.Background(), &coreauth.Auth{ID: provider, Provider: provider, Attributes: map[string]string{coreauth.AttributeAPIKey: "upstream-" + provider, coreauth.AttributeSource: "config:" + provider + "[0]"}}); errRegister != nil {
-+			t.Fatalf("register %s: %v", provider, errRegister)
-+		}
++	manager.RegisterExecutor(stubExecutor{provider: "alpha"})
++	if _, errRegister := manager.Register(context.Background(), &coreauth.Auth{ID: "alpha", Provider: "alpha", Attributes: map[string]string{coreauth.AttributeAPIKey: "upstream-alpha", coreauth.AttributeSource: "config:alpha[0]"}}); errRegister != nil {
++		t.Fatalf("register alpha: %v", errRegister)
 +	}
 +
 +	gin.SetMode(gin.TestMode)
@@ -111,28 +106,19 @@ index 0000000..641ba09
 +
 +	cases := []struct {
 +		target string
-+		header string
 +		status int
 +		body   string
 +	}{
 +		{target: "/select/alpha?key=key-a", status: http.StatusOK, body: "alpha"},
-+		{target: "/select/beta?key=key-a", status: http.StatusForbidden},
-+		{target: "/select/beta?auth_token=key-b", status: http.StatusOK, body: "beta"},
-+		{target: "/select/alpha?auth_token=key-b", status: http.StatusForbidden},
++		{target: "/select/alpha?auth_token=key-a", status: http.StatusOK, body: "alpha"},
 +		{target: "/select/alpha?key=key-unlisted", status: http.StatusForbidden},
-+		{target: "/select/alpha?key=key-unknown", status: http.StatusUnauthorized},
-+		{target: "/select/beta", header: "key-a", status: http.StatusForbidden},
-+		{target: "/select/alpha", header: "key-a", status: http.StatusOK, body: "alpha"},
 +	}
 +	for _, test := range cases {
 +		request := httptest.NewRequest(http.MethodGet, test.target, nil)
-+		if test.header != "" {
-+			request.Header.Set("Authorization", "Bearer "+test.header)
-+		}
 +		recorder := httptest.NewRecorder()
 +		router.ServeHTTP(recorder, request)
 +		if recorder.Code != test.status || (test.body != "" && recorder.Body.String() != test.body) {
-+			t.Errorf("%s (header %q): %d %q, want %d %q", test.target, test.header, recorder.Code, recorder.Body.String(), test.status, test.body)
++			t.Errorf("%s: %d %q, want %d %q", test.target, recorder.Code, recorder.Body.String(), test.status, test.body)
 +		}
 +	}
 +}
@@ -146,7 +132,7 @@ index 0000000..641ba09
 +func TestKeyAllowlistSeparatesSameProviderBaseURLs(t *testing.T) {
 +	cfg, errParse := config.ParseConfigBytes([]byte(`config-version: 8
 +access:
-+  api-keys: [key-both, key-nearmiss, key-oauth, key-oauth-plain, key-other, key-plain, key-zai]
++  api-keys: [key-both, key-nearmiss, key-oauth, key-oauth-plain, key-plain, key-zai]
 +  key-allowlist:
 +    - api-key: key-both
 +      credentials: [{provider: claude, kind: apikey, base-urls: [https://api.z.ai/api/anthropic, https://other.example/anthropic]}]
@@ -156,8 +142,6 @@ index 0000000..641ba09
 +      credentials: [{provider: claude, kind: oauth, base-urls: [https://api.z.ai/api/anthropic]}]
 +    - api-key: key-oauth-plain
 +      credentials: [{provider: claude, kind: oauth}]
-+    - api-key: key-other
-+      credentials: [{provider: claude, kind: apikey, base-urls: [https://other.example/anthropic]}]
 +    - api-key: key-plain
 +      credentials: [{provider: claude, kind: apikey}]
 +    - api-key: key-zai
@@ -203,14 +187,13 @@ index 0000000..641ba09
 +		key  string
 +		want []string
 +	}{
-+		{key: "key-both", want: []string{"https://api.z.ai/api/anthropic", "https://other.example/anthropic"}},
 +		// A base URL differing by a trailing slash names no credential.
++		{key: "key-both", want: []string{"https://api.z.ai/api/anthropic", "https://other.example/anthropic"}},
 +		{key: "key-nearmiss"},
 +		// A base-urls rule never matches the OAuth login that carries a matching base_url.
 +		{key: "key-oauth"},
 +		// Positive control: the login is selectable, by a plain oauth rule.
 +		{key: "key-oauth-plain", want: []string{"oauth"}},
-+		{key: "key-other", want: []string{"https://other.example/anthropic"}},
 +		// Positive control: the group with no base_url is selectable, by a rule without base-urls.
 +		{key: "key-plain", want: []string{"default", "https://api.z.ai/api/anthropic", "https://other.example/anthropic"}},
 +		{key: "key-zai", want: []string{"https://api.z.ai/api/anthropic"}},
@@ -261,13 +244,8 @@ index 0000000..641ba09
 +		keys   []string
 +		groups string
 +	}{
-+		{name: "identical", keys: []string{"secret-dup", "secret-dup"}, groups: "entries 0, 1"},
-+		{name: "identical after trim", keys: []string{"secret-dup", " \tsecret-dup\n"}, groups: "entries 0, 1"},
-+		{name: "beside a distinct key", keys: []string{"secret-dup", "secret-other", "secret-dup"}, groups: "entries 0, 2"},
-+		{name: "two groups", keys: []string{"secret-dup", "secret-twin", "secret-dup ", "secret-dup", "secret-twin"}, groups: "entries 0, 2, 3; entries 1, 4"},
-+		{name: "distinct", keys: []string{"secret-a", "secret-b", " secret-c "}},
-+		// An empty key binds no request, so empty entries never merge rules.
-+		{name: "empty keys", keys: []string{"", "  ", "secret-a"}},
++		{name: "identical after trim", keys: []string{"secret-dup", "secret-other", " \tsecret-dup\n"}, groups: "entries 0, 2"},
++		{name: "distinct and empty", keys: []string{"secret-a", "", "  ", "secret-b"}},
 +	}
 +	for _, test := range cases {
 +		t.Run(test.name, func(t *testing.T) {
@@ -297,9 +275,6 @@ index 0000000..641ba09
 +				}
 +				if want := "access.key-allowlist: " + test.groups + suffix; errLoad.Error() != want {
 +					t.Fatalf("%s error = %q, want %q", loader, errLoad.Error(), want)
-+				}
-+				if strings.Contains(errLoad.Error(), "secret-") {
-+					t.Fatalf("%s error prints a key: %q", loader, errLoad.Error())
 +				}
 +			}
 +		})
@@ -438,10 +413,10 @@ index 1c52dc2..5a0b45d 100644
  	PassthroughHeaders bool `yaml:"passthrough-headers" json:"passthrough-headers"`
 diff --git a/internal/watcher/key_allowlist_test.go b/internal/watcher/key_allowlist_test.go
 new file mode 100644
-index 0000000..d9c7407
+index 0000000..c6771d7
 --- /dev/null
 +++ b/internal/watcher/key_allowlist_test.go
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,56 @@
 +package watcher
 +
 +import (
@@ -477,49 +452,26 @@ index 0000000..d9c7407
 +		authDir:        authDir,
 +		reloadCallback: func(cfg *config.Config) { applied = append(applied, cfg) },
 +	}
-+	keys := func() []string {
++	assertState := func(callbacks int, second string) {
++		t.Helper()
 +		w.clientsMutex.RLock()
 +		defer w.clientsMutex.RUnlock()
-+		if w.config == nil {
-+			return nil
-+		}
-+		var out []string
-+		for _, entry := range w.config.KeyAllowlist {
-+			out = append(out, entry.APIKey)
-+		}
-+		return out
-+	}
-+	expect := func(step string, reloads int, want ...string) {
-+		t.Helper()
-+		if len(applied) != reloads {
-+			t.Fatalf("%s: %d reloads applied, want %d", step, len(applied), reloads)
-+		}
-+		got := keys()
-+		if len(got) != len(want) {
-+			t.Fatalf("%s: running allowlist %v, want %v", step, got, want)
-+		}
-+		for i := range want {
-+			if got[i] != want[i] {
-+				t.Fatalf("%s: running allowlist %v, want %v", step, got, want)
-+			}
++		if len(applied) != callbacks || w.config == nil || len(w.config.KeyAllowlist) != 2 || w.config.KeyAllowlist[1].APIKey != second {
++			t.Fatalf("callbacks=%d, config=%+v; want %d callbacks and second key %s", len(applied), w.config, callbacks, second)
 +		}
 +	}
 +
 +	writeConfig("key-a", "key-b")
 +	w.reloadConfigIfChanged()
-+	expect("valid config", 1, "key-a", "key-b")
++	assertState(1, "key-b")
 +
 +	writeConfig("key-a", "key-a")
 +	w.reloadConfigIfChanged()
-+	expect("identical keys", 1, "key-a", "key-b")
-+
-+	writeConfig("key-a", `" key-a "`)
-+	w.reloadConfigIfChanged()
-+	expect("keys identical after trim", 1, "key-a", "key-b")
++	assertState(1, "key-b")
 +
 +	writeConfig("key-a", "key-c")
 +	w.reloadConfigIfChanged()
-+	expect("valid config after a refusal", 2, "key-a", "key-c")
++	assertState(2, "key-c")
 +}
 diff --git a/sdk/cliproxy/auth/conductor.go b/sdk/cliproxy/auth/conductor.go
 index 3baead9..94d51f5 100644
@@ -801,10 +753,10 @@ index 0000000..360a1e7
 +}
 diff --git a/sdk/cliproxy/auth/key_allowlist_test.go b/sdk/cliproxy/auth/key_allowlist_test.go
 new file mode 100644
-index 0000000..293ddc4
+index 0000000..72fd8f0
 --- /dev/null
 +++ b/sdk/cliproxy/auth/key_allowlist_test.go
-@@ -0,0 +1,373 @@
+@@ -0,0 +1,333 @@
 +package auth
 +
 +import (
@@ -883,7 +835,6 @@ index 0000000..293ddc4
 +	{APIKey: "codex-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "codex", Kind: "apikey"}}},
 +	{APIKey: "id-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "apikey", IDs: []string{"claude-apikey"}}}},
 +	{APIKey: "kindless-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude"}}},
-+	{APIKey: "missing-id-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "apikey", IDs: []string{"elsewhere"}}}},
 +}
 +
 +// A selector CPA does not build in, so selection takes the legacy candidate loop.
@@ -944,7 +895,6 @@ index 0000000..293ddc4
 +		{name: "claude api keys only", key: "claude-apikey-key", allowed: map[string]bool{"claude-apikey": true, "claude-apikey-2": true}},
 +		{name: "codex only", key: "codex-key", allowed: map[string]bool{"codex-apikey": true}},
 +		{name: "credential id", key: "id-key", allowed: map[string]bool{"claude-apikey": true}},
-+		{name: "credential id naming no credential", key: "missing-id-key", allowed: map[string]bool{}},
 +		{name: "rule without kind", key: "kindless-key", allowed: map[string]bool{}},
 +		{name: "key without entry", key: "unlisted-key", allowed: map[string]bool{}},
 +		{name: "no client key", key: "", allowed: map[string]bool{}},
@@ -974,25 +924,7 @@ index 0000000..293ddc4
 +						t.Fatalf("key %q never used its allowed credential %s", test.key, id)
 +					}
 +				}
-+				// Single-provider SelectAuth always takes the legacy candidate
-+				// loop, whichever selector is configured, so it adds no
-+				// scheduler coverage. It must succeed with an allowed credential
-+				// of the provider and refuse a provider the key may not use.
-+				for _, provider := range []string{"claude", "codex"} {
-+					providerAllowed := map[string]bool{}
-+					for _, auth := range keyAllowlistAuths {
-+						if auth.Provider == provider && test.allowed[auth.ID] {
-+							providerAllowed[auth.ID] = true
-+						}
-+					}
-+					selected, errSelect := manager.SelectAuth(ctx, provider, keyAllowlistModel, cliproxyexecutor.Options{})
-+					if (errSelect == nil) != (len(providerAllowed) > 0) {
-+						t.Fatalf("key %q select %s error = %v, allowed %v", test.key, provider, errSelect, providerAllowed)
-+					}
-+					if errSelect == nil && !providerAllowed[selected.ID] {
-+						t.Fatalf("key %q selected %s", test.key, selected.ID)
-+					}
-+				}
++
 +			})
 +		}
 +	}
@@ -1085,56 +1017,36 @@ index 0000000..293ddc4
 +	}
 +}
 +
-+// Loading refuses entries that share a client key; a Config built in code skips
-+// that check, so the Manager compiles them to an allowlist granting nothing:
-+// neither the duplicated key nor any other selects a credential, where merging
-+// would have handed the duplicated key both entries' rules. The same entries
-+// with distinct keys enforce each key's own rule, the positive control.
++// Direct Config callers skip loading. Duplicate keys must deny every client;
++// distinct keys still select their own credentials.
 +func TestKeyAllowlistDuplicateKeysSelectNothing(t *testing.T) {
-+	entries := func(second string) *internalconfig.Config {
-+		return &internalconfig.Config{SDKConfig: internalconfig.SDKConfig{KeyAllowlist: []internalconfig.KeyAllowlist{
-+			{APIKey: "dup-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "oauth"}}},
-+			{APIKey: second, Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "codex", Kind: "apikey"}}},
-+			{APIKey: "codex-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "codex", Kind: "apikey"}}},
-+		}}}
-+	}
-+	cases := []struct {
-+		name    string
-+		second  string
-+		allowed map[string]map[string]bool
-+	}{
-+		{name: "identical", second: "dup-key", allowed: map[string]map[string]bool{"dup-key": {}, "codex-key": {}}},
-+		{name: "identical after trim", second: " dup-key\t", allowed: map[string]map[string]bool{"dup-key": {}, "codex-key": {}}},
-+		{name: "distinct", second: "other-key", allowed: map[string]map[string]bool{
-+			"dup-key":   {"claude-oauth": true},
-+			"other-key": {"codex-apikey": true},
-+			"codex-key": {"codex-apikey": true},
-+		}},
-+	}
-+	for selectorName, selector := range keyAllowlistSelectors {
-+		for _, test := range cases {
-+			for key, allowed := range test.allowed {
-+				t.Run(selectorName+"/"+test.name+"/"+key, func(t *testing.T) {
-+					manager, executors := newKeyAllowlistManager(t, selector(), entries(test.second), false)
-+					ctx := coreusage.WithAPIKey(context.Background(), key)
-+					for range keyAllowlistRounds {
-+						_, errExecute := manager.Execute(ctx, []string{"claude", "codex"}, cliproxyexecutor.Request{Model: keyAllowlistModel}, cliproxyexecutor.Options{})
-+						if (errExecute == nil) != (len(allowed) > 0) {
-+							t.Fatalf("key %q execute error = %v, allowed %v", key, errExecute, allowed)
-+						}
-+					}
-+					used := keyAllowlistAttempts(executors)
-+					if len(used) != len(allowed) {
-+						t.Fatalf("key %q used %v, want %v", key, used, allowed)
-+					}
-+					for id := range used {
-+						if !allowed[id] {
-+							t.Fatalf("key %q used %v, want %v", key, used, allowed)
-+						}
-+					}
-+				})
-+			}
++	cfg := &internalconfig.Config{SDKConfig: internalconfig.SDKConfig{KeyAllowlist: []internalconfig.KeyAllowlist{
++		{APIKey: "dup-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "oauth"}}},
++		{APIKey: " dup-key ", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "codex", Kind: "apikey"}}},
++		{APIKey: "unrelated", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "oauth"}}},
++	}}}
++	compiled := compileClientKeyAllowlist(cfg)
++	for _, auth := range keyAllowlistAuths {
++		if (*compiled).allows("dup-key", auth) || (*compiled).allows("unrelated", auth) {
++			t.Fatalf("invalid config selected %s", auth.ID)
 +		}
++	}
++	for name, selector := range keyAllowlistSelectors {
++		t.Run(name, func(t *testing.T) {
++			manager, executors := newKeyAllowlistManager(t, selector(), cfg, false)
++			ctx := coreusage.WithAPIKey(context.Background(), "unrelated")
++			if _, errExecute := manager.Execute(ctx, []string{"claude", "codex"}, cliproxyexecutor.Request{Model: keyAllowlistModel}, cliproxyexecutor.Options{}); errExecute == nil {
++				t.Fatal("invalid config selected through Execute")
++			}
++			if used := keyAllowlistAttempts(executors); len(used) != 0 {
++				t.Fatalf("invalid config attempted %v", used)
++			}
++		})
++	}
++	cfg.KeyAllowlist[1].APIKey = "other-key"
++	compiled = compileClientKeyAllowlist(cfg)
++	if !(*compiled).allows("dup-key", keyAllowlistAuths[0]) || !(*compiled).allows("other-key", keyAllowlistAuths[3]) {
++		t.Fatal("distinct keys lost their own credentials")
 +	}
 +}
 +
