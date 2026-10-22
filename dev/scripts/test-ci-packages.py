@@ -109,8 +109,11 @@ export -f curl nix
 
     def test_codeql_assertion_requires_every_engine_source_and_database(self):
         script = ci_step_script("Assert no CodeQL engine or database is published")
-        # Two engines, each with its source, and the Kimchi database; MODE
-        # drops one source or every engine, or fails the database's evaluation.
+        # Two engines, each with its source, the Kimchi release database, and
+        # the network check with its fixture database and customized engine.
+        # MODE drops one source, every engine, the fixture database or the
+        # customized engine, or fails an evaluation; PUBLISHED names the hash
+        # whose narinfo answers 200.
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 nix() {
@@ -121,46 +124,69 @@ nix() {
       printf '%s' /nix/store/f-kimchi-codeql-database-1.drv
       return
       ;;
+    *kimchi-codeql-network.drvPath*)
+      [ "$MODE" != no-check ] || return 1
+      printf '%s' /nix/store/g-kimchi-codeql-network-check.drv
+      return
+      ;;
   esac
   printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/b-codeql-full-1.drv
 }
 nix-store() {
-  case "$2" in
-    --requisites)
+  case "$2:$3" in
+    --requisites:*/f-kimchi-codeql-database-1.drv)
+      printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/f-kimchi-codeql-database-1.drv \
+        /nix/store/g-kimchi-codeql-network-check.drv /nix/store/e-glibc-1.drv
+      [ "$MODE" = no-fixture ] || printf '%s\n' /nix/store/h-kimchi-codeql-database-network-fixture.drv
+      [ "$MODE" = no-customized ] || printf '%s\n' /nix/store/i-codeql-javascript-customized-1.drv
+      ;;
+    --requisites:*)
       printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/b-codeql-full-1.drv \
         /nix/store/c-codeql-linux64.zip.drv /nix/store/e-glibc-1.drv
       [ "$MODE" = missing ] || printf '%s\n' /nix/store/d-codeql-bundle-linux64.tar.zst.drv
       ;;
-    --outputs) shift 2; for drv in "$@"; do printf '%s\n' "${drv%.drv}"; done ;;
+    --outputs:*) shift 2; for drv in "$@"; do printf '%s\n' "${drv%.drv}"; done ;;
   esac
 }
 curl() {
   case "$*" in *nix-cache-info*) return ;; esac
   printf 'narinfo\n' >> "$RUNNER_TEMP/queries"
-  printf '%s' "$HTTP_CODE"
+  case "$*" in
+    */"$PUBLISHED".narinfo*) printf 200 ;;
+    *) printf '%s' "$HTTP_CODE" ;;
+  esac
 }
 export -f curl nix nix-store
 '''
         with tempfile.TemporaryDirectory() as directory:
             queries = Path(directory) / "queries"
-            for mode, http_code, success, queried in (
-                ("empty", "404", False, False),
-                ("missing", "404", False, False),
-                ("nodb", "404", False, False),
-                ("complete", "404", True, True),
-                ("complete", "200", False, True),
+            for mode, http_code, published, success, queried in (
+                ("empty", "404", "", False, False),
+                ("missing", "404", "", False, False),
+                ("nodb", "404", "", False, False),
+                ("no-check", "404", "", False, False),
+                ("no-fixture", "404", "", False, False),
+                ("no-customized", "404", "", False, False),
+                ("complete", "404", "", True, True),
+                ("complete", "200", "", False, True),
+                # The fixture database or the customized engine alone published.
+                ("complete", "404", "h", False, True),
+                ("complete", "404", "i", False, True),
             ):
-                with self.subTest(mode=mode, http_code=http_code):
+                with self.subTest(mode=mode, http_code=http_code, published=published):
                     queries.unlink(missing_ok=True)
                     env = dict(os.environ, CACHE="https://cache.invalid", HTTP_CODE=http_code,
-                               MODE=mode, RUNNER_TEMP=directory)
+                               MODE=mode, PUBLISHED=published or "none", RUNNER_TEMP=directory)
                     result = subprocess.run(["bash", "-c", services + script], env=env,
                                             capture_output=True, text=True,
                                             cwd=Path(__file__).parents[2])
                     self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
                     if success:
-                        self.assertEqual(len(queries.read_text().splitlines()), 5)
+                        # Four engine derivations, the release and fixture
+                        # databases, the check and the customized engine; the
+                        # engine the check needs again is asked once.
+                        self.assertEqual(len(queries.read_text().splitlines()), 8)
 
 class CoverageTest(unittest.TestCase):
     def setUp(self):
