@@ -157,24 +157,23 @@ secret. Validation runs after decoding in both `LoadConfigOptional` and
 `ParseConfigBytes`: cloud-deploy turns decode errors into an empty config, so
 validation inside the decoder would erase a refusal. Initial load (including
 cloud-deploy's optional load), hot reload, management writes, and Home pushes
-all reach one of these paths. Startup exits 1 before
-serving; hot reload retains the previous config and retries a later valid write;
-management `PUT` answers 422 without writing; a Home push is refused. A caller
-that constructs `Config` directly bypasses loading, so the Manager compiles
-duplicate entries into an allowlist granting no key any credential. Empty client
-keys bind no request.
+all reach one of these paths. Startup exits 1 before serving; hot reload retains
+the previous config and retries a later valid write; management `PUT` answers
+422 without writing; a Home push is refused. A caller that constructs `Config`
+directly bypasses loading, so the Manager compiles duplicate entries into an
+allowlist granting no key any credential. Empty client keys bind no request.
 
-The eligibility predicate covers the legacy candidate loop, scheduler fast
-path, retry, and cooldown waits. `SelectAuth` always uses the legacy loop; only
-mixed `Execute` with a built-in selector exercises the scheduler fast path.
-Plugin schedulers receive only surviving candidates.
-Two 8.0.38 paths bypass that predicate: Home dispatch, which is refused, and the
-Antigravity credits fallback, which checks the allowlist itself. The fallback
-matters when selection fails because a client key has no Antigravity rule.
-Plugin executors and `host.auth.get` bypass eligibility; this is why enabling
-plugins must be refused. New candidate loops on an upstream bump need source
-review even if Go tests pass: an indexed lookup or loop over a copy can skip the
-predicate without a compile failure.
+The eligibility predicate covers the legacy candidate loop, scheduler fast path,
+retry, and cooldown waits. `SelectAuth` always uses the legacy loop; mixed
+`Execute` with a built-in selector exercises the scheduler fast path. Plugin
+schedulers receive only surviving candidates. Two 8.0.38 paths bypass that
+predicate: Home dispatch, which is refused, and the Antigravity credits
+fallback, which checks the allowlist itself. The fallback matters when selection
+fails because a client key has no Antigravity rule. Plugin executors and
+`host.auth.get` bypass eligibility; this is why enabling plugins must be
+refused. New candidate loops on an upstream bump need source review even if Go
+tests pass: an indexed lookup or loop over a copy can skip the predicate without
+a compile failure.
 
 ## Reload ordering limitation
 
