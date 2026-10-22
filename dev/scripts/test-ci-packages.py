@@ -16,6 +16,18 @@ ci = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ci)
 
 
+def ci_step_script(name):
+    """The dedented `run:` body of the ci.yml step called `name`."""
+    workflow = Path(__file__).parents[2] / ".github/workflows/ci.yml"
+    step = workflow.read_text().split(f"      - name: {name}\n", 1)[1]
+    lines = []
+    for line in step.split("        run: |\n", 1)[1].splitlines():
+        if line and not line.startswith("          "):
+            break
+        lines.append(line)
+    return textwrap.dedent("\n".join(lines))
+
+
 class CachixPushFilterTest(unittest.TestCase):
     def test_every_credentialed_cachix_step_filters_kiro_and_codeql(self):
         # cachix-action with a token pushes every path the job realizes, so the
@@ -40,14 +52,7 @@ class CachixPushFilterTest(unittest.TestCase):
 
 class CacheAssertionTest(unittest.TestCase):
     def test_patched_cache_assertion_requires_complete_enumeration(self):
-        workflow = Path(__file__).parents[2] / ".github/workflows/ci.yml"
-        step = workflow.read_text().split("      - name: Assert the patched output is not published\n", 1)[1]
-        lines = []
-        for line in step.split("        run: |\n", 1)[1].splitlines():
-            if line and not line.startswith("          "):
-                break
-            lines.append(line)
-        script = textwrap.dedent("\n".join(lines))
+        script = ci_step_script("Assert the patched output is not published")
         # The macOS leg runs this step with /bin/bash 3.2, which has neither.
         self.assertNotRegex(script, r"\b(mapfile|readarray)\b")
         # Execute the workflow's shell, replacing only the external services.
@@ -103,14 +108,7 @@ export -f curl nix
 
 
     def test_codeql_assertion_requires_every_engine_and_source(self):
-        workflow = Path(__file__).parents[2] / ".github/workflows/ci.yml"
-        step = workflow.read_text().split("      - name: Assert no CodeQL engine is published\n", 1)[1]
-        lines = []
-        for line in step.split("        run: |\n", 1)[1].splitlines():
-            if line and not line.startswith("          "):
-                break
-            lines.append(line)
-        script = textwrap.dedent("\n".join(lines))
+        script = ci_step_script("Assert no CodeQL engine is published")
         # Two engines, each with its source; MODE drops one source or all.
         services = r'''set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
