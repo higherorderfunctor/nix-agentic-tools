@@ -1,8 +1,3 @@
-# `mkEngine { engine; }`: one CodeQL engine derivation, `codeql-<engine>`,
-# from its entry in ../sources.json. Every engine is the same CLI release
-# unpacked, patched and installed the same way; only the asset differs. See
-# ../docs/codeql.md for what each engine holds.
-#
 # Unfree under the GitHub CodeQL Terms, which forbid sharing, publishing or
 # distributing the CLI. So no engine may reach the public Cachix cache: every
 # credentialed cachix-action step filters `codeql`, ci-packages.py excludes

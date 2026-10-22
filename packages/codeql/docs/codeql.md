@@ -1,6 +1,6 @@
 ## CodeQL engines
 
-> **Last verified:** 2026-10-21 (commit b37f61b0) — eleven engines at 2.27.3
+> **Last verified:** 2026-10-21 (commit d2ecea76) — eleven engines at 2.27.3
 > from one `mkEngine` factory; CI builds javascript and evaluates the rest; the
 > update input lanes build none.
 
@@ -40,9 +40,6 @@ its path (`lib/facets.nix` `flattenPackages`): `ai.devTools.codeql.javascript`
 would publish a flat package called `javascript`. The `codeql` namespace keeps
 the engines together under `ai.devTools`, and the prefix keeps every flat name
 unique and matched by the `codeql` push filter.
-
-`lib/mkEngine.nix` is the one body. Each call site passes only `engine`;
-`sources.json` holds the url and hash per engine under one `version`.
 
 `autoPatchelfIgnoreMissingDeps` lists the JREs' X11, font and sound libraries
 and the .NET runtime's LTTng provider. The list was measured over every x86-64
