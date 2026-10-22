@@ -194,18 +194,23 @@ predicate ambiguousConstant(VarAccess v) {
  */
 DataFlow::SourceNode envObject() { result = NodeJSLib::process().getAPropertyRead("env") }
 
+/**
+ * The name the property read `r` reads: its property name, or its computed
+ * key evaluated. None for a key that cannot be evaluated, and for a delete
+ * operand, which CodeQL reports as a read but is a write.
+ */
+string readName(DataFlow::PropRead r) {
+  not r.asExpr() = any(DeleteExpr d).getOperand() and
+  (
+    result = r.getPropertyName()
+    or
+    not exists(r.getPropertyName()) and result = constValue(r.getPropertyNameExpr())
+  )
+}
+
 /** A named read of the environment at `site`, and the name it reads. */
 predicate envRead(DataFlow::Node site, string name) {
-  exists(DataFlow::PropRead r | r = envObject().getAPropertyRead() |
-    site = r and
-    // CodeQL reports a delete operand as a read; it is a write.
-    not r.asExpr() = any(DeleteExpr d).getOperand() and
-    (
-      name = r.getPropertyName()
-      or
-      not exists(r.getPropertyName()) and name = constValue(r.getPropertyNameExpr())
-    )
-  )
+  exists(DataFlow::PropRead r | r = envObject().getAPropertyRead() | site = r and name = readName(r))
   or
   // pi's provider helper reads the variable its first argument names.
   exists(CallExpr c | c = site.asExpr() |

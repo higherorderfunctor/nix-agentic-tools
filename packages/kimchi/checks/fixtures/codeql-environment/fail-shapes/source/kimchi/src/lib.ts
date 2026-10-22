@@ -13,3 +13,9 @@ export function shadow() {
   const process = { env: { SHADOWED: "" } };
   return process.env.SHADOWED;
 }
+export function dynamicKey(
+  env: Record<string, string | undefined>,
+  key = String(Date.now()),
+) {
+  return env[key];
+}

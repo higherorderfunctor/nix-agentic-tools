@@ -5,3 +5,4 @@ src/entry.ts hands process.env to whole = process.env, and the names that reads 
 src/entry.ts takes process.env apart by destructuring, so the names it reads cannot be listed (kimchi/src/entry.ts:5)
 takes env from a local binding named process, which cannot be identified as the environment (kimchi/src/lib.ts:14)
 takes process.env apart by destructuring, so the names it reads cannot be listed (kimchi/src/lib.ts:8)
+the environment parameter env is indexed by a name that cannot be evaluated, so the names it reads cannot be listed (kimchi/src/lib.ts:20)

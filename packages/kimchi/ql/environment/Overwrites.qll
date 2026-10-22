@@ -29,6 +29,13 @@ predicate isSpelledProcessEnv(PropAccess pa) {
   pa.getBase().(VarAccess).getName() = "process"
 }
 
+/** The member `pa` names: its property name, or its computed key evaluated, else none. */
+string memberName(PropAccess pa) {
+  result = pa.getPropertyName()
+  or
+  not exists(pa.getPropertyName()) and result = constValue(pa.(IndexExpr).getIndex())
+}
+
 /** The name an assignment (any operator) or delete in `n` targets, else none. */
 string assignedName(Expr n, PropAccess target) {
   (
@@ -38,14 +45,9 @@ string assignedName(Expr n, PropAccess target) {
   ) and
   target.getBase() = envObject().asExpr() and
   (
-    result = target.getPropertyName()
+    result = memberName(target)
     or
-    not exists(target.getPropertyName()) and
-    (
-      result = constValue(target.(IndexExpr).getIndex())
-      or
-      not exists(constValue(target.(IndexExpr).getIndex())) and result = "<computed>"
-    )
+    not exists(memberName(target)) and result = "<computed>"
   )
 }
 
@@ -88,7 +90,7 @@ predicate handedTo(Expr arg, Function callee, int index) {
 /** Names a callee reads through the parameter it receives `process.env` as. */
 string parameterRead(Function callee, int index) {
   exists(SimpleParameter p | p = callee.getParameter(index) |
-    result = DataFlow::parameterNode(p).getAPropertyRead().getPropertyName()
+    result = readName(DataFlow::parameterNode(p).getAPropertyRead())
   )
 }
 
@@ -253,6 +255,17 @@ predicate overwriteFailure(string message, string where_) {
     message =
       "the environment parameter " + p.getName() + " is used as a whole, so the names it reads cannot be listed" and
     where_ = use.getFile().getRelativePath() + ":" + use.getLocation().getStartLine()
+  )
+  or
+  // a handed-to parameter's member whose name cannot be evaluated
+  exists(Function callee, int index, SimpleParameter p, PropAccess pa |
+    handedTo(_, callee, index) and
+    p = callee.getParameter(index) and
+    pa.getBase().(VarAccess).getVariable() = p.getVariable() and
+    not exists(memberName(pa)) and
+    message =
+      "the environment parameter " + p.getName() + " is indexed by a name that cannot be evaluated, so the names it reads cannot be listed" and
+    where_ = pa.getFile().getRelativePath() + ":" + pa.getLocation().getStartLine()
   )
   or
   // a computed name in a top-level process.env assignment

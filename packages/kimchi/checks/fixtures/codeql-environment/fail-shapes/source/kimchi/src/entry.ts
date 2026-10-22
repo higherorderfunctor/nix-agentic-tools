@@ -1,5 +1,5 @@
 import * as proc from "node:process";
-import { destructuredHelper } from "./lib.js";
+import { destructuredHelper, dynamicKey } from "./lib.js";
 
 proc.env.ALIASED_WRITE = "1";
 const { env } = process;
@@ -9,3 +9,4 @@ process.env[k] = "1";
 destructuredHelper(process.env);
 const whole = process.env;
 void whole;
+dynamicKey(process.env);

@@ -191,12 +191,13 @@ takes `kimchi/package.json`'s `piConfig.name`, as at runtime. `+` is not folded,
 a `delete` operand is not a read, `+=` and `??=` are.
 
 `LaunchOverwrites.ql` names the variables `entry.ts` fixes on every launch, by
-the rules `launchOverwrites` applied: top-level statements in order, writes
-through `process.env` spelled out only, reads in function declarations and in
-functions handed `process.env` counted first, and a failure for every shape that
-makes the order unknowable. "After it suspends" follows the extractor's
-children-first walk by end position, not the control-flow graph, which would
-accept `if (c) { await 0 } else { process.env.X = "1" }`.
+the rules `launchOverwrites` applied: top-level statements in order; writes
+through `process.env` spelled out only; reads in function declarations and in
+functions handed `process.env` counted first, a parameter's computed key
+evaluated like any other and refused when it cannot be; and a failure for every
+shape that makes the order unknowable. "After it suspends" follows the
+extractor's children-first walk by end position, not the control-flow graph,
+which would accept `if (c) { await 0 } else { process.env.X = "1" }`.
 
 Either query emits `fail` rows instead of guessing; the transform fails on any,
 naming each, and the `extracted` build fails with it.
