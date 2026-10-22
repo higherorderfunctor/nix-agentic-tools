@@ -2,8 +2,9 @@
 
 > **Last verified:** 2026-10-21 — an owner overlay returns only the leaves it
 > claims and the composer deep-merges each one into `prev`, stopping at
-> derivations; Go check names come from one declared table; the flake has no
-> `apps` output.
+> derivations; nat-overlay-parity compares package leaves and checks owner
+> overlay leaves for presence; Go check names come from one declared table; the
+> flake has no `apps` output.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -170,8 +171,12 @@ from devenv. Each import retains its caller's license configuration. The hello
 drvPath positive control fails if the two package sets stop differing.
 
 - **A** the overlay over the foreign nixpkgs gives `ciPackages`' drv for every
-  claimed leaf, and the claim list equals the `ciPackages` leaves except the
-  named CI-only rollout canary, whose absence from public surfaces is asserted.
+  claimed package leaf, and the claim list equals the `ciPackages` leaves except
+  the named CI-only rollout canary, whose absence from public surfaces is
+  asserted. A leaf an owner `overlay.nix` claims (the checks context's
+  `overlayClaimedPaths`) has no `ciPackages` counterpart and need not be a
+  derivation, so A asserts only that the overlay carries it, with and without an
+  opt-in; B and C skip it.
 - **B** `packages` and `legacyPackages` give `ciPackages`' drvs for public
   leaves; CI-only leaves remain absent, and only unfree leaves are missing from
   `packages`, and they refuse in `legacyPackages`; every free claimed leaf

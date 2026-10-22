@@ -143,6 +143,7 @@ evals
 execpolicy
 execve
 extensionless
+fakehttp
 fanout
 fanouts
 fastmcp
@@ -176,6 +177,7 @@ gitrevise
 glab
 gluetun
 gnugrep
+gnumake
 gnused
 gnutar
 gocache
@@ -352,6 +354,7 @@ purpleclay
 pycache
 pythonnousersite
 qiiiiii
+qlpack
 qlpacks
 qwen
 rawfile
@@ -471,6 +474,7 @@ unapprove
 unbuildable
 uncacheable
 uncallable
+uncompiled
 undmg
 unforked
 ungated

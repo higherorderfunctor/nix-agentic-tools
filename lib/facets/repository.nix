@@ -35,8 +35,8 @@
   packageRoots =
     lib.unique (map (claim: builtins.head claim.keyPath)
       (lib.concatMap (owner: owner.contributions.packages) index.owners));
-  # Leaf paths claimed by owner overlay.nix contributions (none in production
-  # today). Only `claims` is read, so `context` stays lazy.
+  # Leaf paths claimed by owner overlay.nix contributions. Only `claims` is
+  # read, so `context` stays lazy.
   ordinaryClaimsFor = context:
     lib.concatMap (owner: let
       claim = owner.contributions.overlay;
@@ -180,6 +180,11 @@
     treefmtNix = inputs.treefmt-nix;
   };
   checkWorldFor = {rootModules ? [], ...} @ context: let
+    claimContext = {
+      inherit inputs lib;
+      inherit (packageWorldFor context.pkgs) packages;
+      system = context.pkgs.stdenv.hostPlatform.system;
+    };
     # The module harness over any package set; `harness` is it over the
     # checks' own. The overlay parity gate re-instantiates it over a foreign
     # nixpkgs with `injectAi = false`.
@@ -198,12 +203,11 @@
         builtins.removeAttrs context ["rootModules"]
         // {
           inherit buildOverlay extractedLib gitToolExtraction harnessFor inputs lib natSystemOf rootsFor;
-          # The leaf paths the exported overlay re-exports on this system.
-          claimedPaths = claimedPaths {
-            inherit inputs lib;
-            inherit (packageWorldFor context.pkgs) packages;
-            system = context.pkgs.stdenv.hostPlatform.system;
-          };
+          # The leaf paths the exported overlay re-exports on this system, and
+          # those of them that owner overlay.nix files claim rather than
+          # package recipes.
+          claimedPaths = claimedPaths claimContext;
+          overlayClaimedPaths = ordinaryClaimsFor claimContext;
           harness = harnessFor {};
         };
     };

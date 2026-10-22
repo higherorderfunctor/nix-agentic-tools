@@ -9,8 +9,14 @@
 #
 # The Terms allow automated database creation only for an OSI-licensed
 # codebase hosted and maintained on GitHub.com.
+#
+# `nodejs` (the javascript engine's only) is the Node the TypeScript extractor
+# runs, through SEMMLE_TYPESCRIPT_NODE_RUNTIME; `.override { nodejs = ...; }`
+# swaps it. Every engine carries `customizePackage` (./customization.nix),
+# which realizes the namespace's pack specs (./specs.nix) against it.
 {
   engine,
+  nodejs ? null,
   packageLib,
   pkgs,
   repoPath,
@@ -29,20 +35,28 @@
     then "https://github.com/github/codeql-cli-binaries/releases/download/v${version}/codeql-linux64.zip"
     else "https://github.com/${bundleRepo}/releases/download/${bundleTagPrefix}${version}/codeql-bundle${lib.optionalString (name != "full") "-${name}"}-linux64.tar.zst";
   engines = builtins.attrNames (builtins.removeAttrs sources ["version"]);
+  languages = builtins.filter (name: !(lib.elem name ["bare" "full"])) engines;
+  # The languages this engine carries CodeQL libraries for.
+  carried =
+    if engine == "full"
+    then languages
+    else lib.intersectLists [engine] languages;
   zip = lib.hasSuffix ".zip" source.url;
 in
-  pkgs.stdenv.mkDerivation {
+  pkgs.stdenv.mkDerivation (finalAttrs: {
     pname = "codeql-${engine}";
     inherit (sources) version;
     src = pkgs.fetchurl {inherit (source) hash url;};
-    nativeBuildInputs = [
-      pkgs.autoPatchelfHook
-      (
-        if zip
-        then pkgs.unzip
-        else pkgs.zstd
-      )
-    ];
+    nativeBuildInputs =
+      [
+        pkgs.autoPatchelfHook
+        (
+          if zip
+          then pkgs.unzip
+          else pkgs.zstd
+        )
+      ]
+      ++ lib.optional (nodejs != null) pkgs.makeWrapper;
     buildInputs = [pkgs.stdenv.cc.cc.lib pkgs.zlib];
     # Libraries the headless CLI never loads: the bundled JREs' desktop, font
     # and sound support, and the .NET runtime's LTTng trace provider. Measured
@@ -73,19 +87,33 @@ in
       mkdir -p "$out/bin" "$out/share" # bare-commands: ok (stdenv builder PATH)
       cp -R . "$out/share/codeql" # bare-commands: ok (stdenv builder PATH)
       # The launcher follows symlinks back to its distribution directory.
-      ln -s "$out/share/codeql/codeql" "$out/bin/codeql"
+      ${
+        if nodejs == null
+        then ''ln -s "$out/share/codeql/codeql" "$out/bin/codeql"''
+        else ''makeWrapper "$out/share/codeql/codeql" "$out/bin/codeql" --set SEMMLE_TYPESCRIPT_NODE_RUNTIME ${lib.getExe nodejs}''
+      }
       runHook postInstall
     '';
     # Every engine carries the same script, which bumps every asset from one
     # tag; the `codeql-full` update target runs it.
-    passthru.updateScript = packageLib.mkUpdateScript {
-      inherit pkgs;
-      # Keyed by engine rather than by platform: each entry is one asset.
-      platforms = lib.genAttrs engines assetUrl;
-      pname = "codeql";
-      sourcesFile = repoPath ../sources.json;
-      versionCheck.cmd = "${pkgs.gitMinimal}/bin/git ls-remote --tags --refs https://github.com/${bundleRepo} 'refs/tags/${bundleTagPrefix}*' | ${pkgs.gnused}/bin/sed -n 's|.*refs/tags/${bundleTagPrefix}\\([0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*\\)$|\\1|p' | ${pkgs.coreutils}/bin/sort -V | ${pkgs.coreutils}/bin/tail -n 1";
-    };
+    passthru =
+      lib.optionalAttrs (nodejs != null) {inherit nodejs;}
+      // {
+        customizePackage = import ./customization.nix {
+          engine = finalAttrs.finalPackage;
+          engineName = engine;
+          languages = carried;
+          inherit pkgs;
+        };
+        updateScript = packageLib.mkUpdateScript {
+          inherit pkgs;
+          # Keyed by engine rather than by platform: each entry is one asset.
+          platforms = lib.genAttrs engines assetUrl;
+          pname = "codeql";
+          sourcesFile = repoPath ../sources.json;
+          versionCheck.cmd = "${pkgs.gitMinimal}/bin/git ls-remote --tags --refs https://github.com/${bundleRepo} 'refs/tags/${bundleTagPrefix}*' | ${pkgs.gnused}/bin/sed -n 's|.*refs/tags/${bundleTagPrefix}\\([0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*\\)$|\\1|p' | ${pkgs.coreutils}/bin/sort -V | ${pkgs.coreutils}/bin/tail -n 1";
+        };
+      };
     meta = {
       description =
         if engine == "bare"
@@ -99,4 +127,4 @@ in
       platforms = ["x86_64-linux"];
       sourceProvenance = [lib.sourceTypes.binaryBytecode lib.sourceTypes.binaryNativeCode];
     };
-  }
+  })

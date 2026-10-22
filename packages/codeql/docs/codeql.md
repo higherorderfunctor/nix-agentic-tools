@@ -1,8 +1,9 @@
 ## CodeQL engines
 
-> **Last verified:** 2026-10-21 (commit d2ecea76) — eleven engines at 2.27.3
-> from one `mkEngine` factory; CI builds javascript and evaluates the rest; the
-> update input lanes build none.
+> **Last verified:** 2026-10-21 (commit 044e6939) — eleven engines at 2.27.3
+> from one `mkEngine` factory; the javascript engine wraps its launcher with a
+> Node; CI builds javascript and evaluates the rest; the update input lanes
+> build none. Packs and `customizePackage`: customize.md.
 
 ### What a bundle is
 
@@ -33,7 +34,11 @@ The languages are actions, cpp, csharp, go, java, javascript, python, ruby and
 rust. All are x86_64-linux only (each recipe directory has a `platforms.nix`, so
 the attribute is absent on Darwin). Each installs to `$out/share/codeql` with
 `bin/codeql` symlinked to the launcher, which resolves its distribution by
-following the symlink.
+following the symlink. The javascript engine's `bin/codeql` is instead a
+`makeWrapper` of the launcher that sets `SEMMLE_TYPESCRIPT_NODE_RUNTIME` to its
+`nodejs` argument (`passthru.nodejs`, swapped with
+`.override { nodejs = ...; }`): the TypeScript extractor runs Node, and the
+bundle ships none.
 
 The leaf name repeats `codeql` because a flat package name is the last key of
 its path (`lib/facets.nix` `flattenPackages`): `ai.devTools.codeql.javascript`

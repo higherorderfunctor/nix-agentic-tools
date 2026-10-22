@@ -10,7 +10,9 @@
 # drvPath or out path strings, or whether one evaluates; nothing is built.
 #
 #   A  the overlay over a foreign nixpkgs gives `ciPackages`' drv for every
-#      claimed leaf, and the claim list is complete except named CI-only leaves
+#      claimed package leaf, and the claim list is complete except named
+#      CI-only leaves; every leaf an owner overlay.nix claims (a function, not
+#      a package) is there too, with and without an opt-in
 #   B  `packages` and `legacyPackages` give `ciPackages`' drvs; only the unfree
 #      leaves are missing from `packages`, and they refuse in `legacyPackages`;
 #      every free leaf also evaluates on this flake's nixpkgs with NO config,
@@ -39,6 +41,7 @@
   inputs,
   lib,
   natSystemOf,
+  overlayClaimedPaths,
   pkgs,
   rootsFor,
   self,
@@ -63,14 +66,30 @@
   overlaid = foreign.extend overlay;
 
   # ── A: overlay re-export ───────────────────────────────────────────
+  # The leaves package recipes claim; owner overlay leaves have no ciPackages
+  # counterpart and are checked for presence only.
+  packagePaths = lib.subtractLists overlayClaimedPaths claimedPaths;
   repoDocs = builtins.filter (lib.hasPrefix "repo-") (builtins.attrNames ciPackages);
   # This validation recipe must stay outside every public package surface.
   ciOnlyNames = ["ci-hestia" "kiro-cli-rollout-canary"];
   leafNames = sorted (lib.subtractLists (ciOnlyNames ++ repoDocs) (builtins.attrNames ciPackages));
-  claimNames = sorted (lib.unique (map lib.last claimedPaths));
+  claimNames = sorted (lib.unique (map lib.last packagePaths));
   overlayMismatches =
     map (keyPath: "overlay ${lib.concatStringsSep "." keyPath} differs from ciPackages.${lib.last keyPath}")
-    (builtins.filter (keyPath: drvOf (lib.getAttrFromPath keyPath overlaid) != drvOf ciPackages.${lib.last keyPath}) claimedPaths);
+    (builtins.filter (keyPath: drvOf (lib.getAttrFromPath keyPath overlaid) != drvOf ciPackages.${lib.last keyPath}) packagePaths)
+    ++ lib.concatMap (keyPath:
+      map (set: "overlay ${lib.concatStringsSep "." keyPath} is missing ${set.label}")
+      (builtins.filter (set: !lib.hasAttrByPath keyPath set.value) [
+        {
+          label = "with allowUnfree";
+          value = overlaid;
+        }
+        {
+          label = "without an opt-in";
+          value = freeOverlaid;
+        }
+      ]))
+    overlayClaimedPaths;
 
   # ── B: the public outputs ──────────────────────────────────────────
   # Both are checked by a plain import of this flake's nixpkgs (default
@@ -96,7 +115,7 @@
     ++ map (name: "legacyPackages.${name} is unfree and evaluated without an opt-in")
     (builtins.filter (name: (evaluation legacyPackages.${name}).success) unfreeNames)
     ++ map (keyPath: "${lib.concatStringsSep "." keyPath} is free but does not evaluate without allowUnfree; an unfree dependency would reach consumers unchecked")
-    (builtins.filter (keyPath: !isUnfree (lib.last keyPath) && !(evaluation (lib.getAttrFromPath keyPath strict)).success) claimedPaths);
+    (builtins.filter (keyPath: !isUnfree (lib.last keyPath) && !(evaluation (lib.getAttrFromPath keyPath strict)).success) packagePaths);
 
   # ── C: the consumer's own meta check ───────────────────────────────
   # The overlay over the foreign nixpkgs with no opt-in: each claimed leaf is
@@ -114,7 +133,7 @@
     else
       lib.optional (!(result.success && result.value == drvOf ciPackages.${name})) "${path} is free and does not give ciPackages' drv without an opt-in"
       ++ lib.optional (!(lib.getAttrFromPath keyPath freeOverlaid).meta.available) "${path} is free and reports meta.available = false without an opt-in")
-  claimedPaths;
+  packagePaths;
   claudeDrv = drvOf ciPackages.claude-code;
   givesClaude = set: let
     result = evaluation set.ai.claude-code;
@@ -418,6 +437,7 @@ in {
           shopt -s inherit_errexit 2>/dev/null || :
           {
             echo "claims: ${toString (builtins.length claimedPaths)}"
+            echo "owner overlay claims: ${toString (builtins.length overlayClaimedPaths)}"
             echo "packages compared: ${toString (builtins.length publicNames)}"
             echo "unfree leaves: ${toString (builtins.length unfreeNames)}"
             echo "module rows: ${toString (lib.foldl' (n: backend: n + builtins.length (rows backend) + builtins.length (sourceRows backend) + builtins.length (builtins.attrNames (guardPaths backend))) 0 ["hm" "devenv"])} per run, 2 runs"
