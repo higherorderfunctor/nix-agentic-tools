@@ -1,10 +1,11 @@
 ## Kimchi network fact
 
-> **Last verified:** 2026-10-21 — `network` is measured on x86_64-linux by
-> `ql/network` with the `ql/models/{sdk,undici}` packs through `runQueries`; a
-> modeled request is an invocation of its row's own callee and takes its library
-> from that row; a host constant reaches a `hostname` by value flow; the
-> fixture's minified chunk is one the extractor skips without the flag.
+> **Last verified:** 2026-10-22 — Kimchi 1.17.2; `network` is measured on
+> x86_64-linux by `ql/network` with the `ql/models/{sdk,undici}` packs through
+> `runQueries`; a modeled request is an invocation of its row's own callee and
+> takes its library from that row; a host constant reaches a `hostname` by value
+> flow; the fixture's minified chunk is one the extractor skips without the
+> flag.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 bundle and
 > rejected:
@@ -38,7 +39,7 @@ with `--ram=8192` (53.8 s).
   Kimchi's tree (`src/...`) or to its `node_modules` (`@earendil-works/...`).
   **`line`** only: a minified chunk puts many call sites on one line, and they
   share a row per library.
-- **`library`**: `fetch`, `node-http`, `websocket`, `axios`, `net`, `undici`,
+- **`library`**: `fetch`, `node-http`, `websocket`, `axios`, `undici`,
   `sdk:<package>` for another modeled package, or `sdk:<class>` for a
   `new C({baseURL})` matched by option name, because a bundle inlines the SDK
   and its import is gone. Any such class matches, a non-client one included,
@@ -93,10 +94,6 @@ to a logger is one sink node, and both calls would match. For the same reason
   (`"'@modelcontextprotocol/sdk/client/sse.js'"`). Unquoted, it matches nothing,
   without an error.
 
-Measured on 2026-10-21 over 54 call shapes: the prototype of PR #2771 found 21,
-this query 38 without the model packs and 54 with them. The check's fixture is
-that set less a test-file case, plus the negative controls below.
-
 ### Bundles and minified chunks
 
 The release database already sets
@@ -125,17 +122,19 @@ reaches its SDK clients only through runtime model selection. Those URLs stay in
 `codeql.databaseOf`, which lays it out as the release tree, so `readBy`, the
 `node_modules` include and the minified flag hold too. It requires the fact's
 rows to equal `checks/fixtures/network-expected.txt`. That file has one line per
-target and covers one call per library and bundle shape. Its negative controls
-are a docs-only URL, a browser-only URL, a module-local `fetch` in `src/` and in
-the minified chunk, and `new this.constructor({baseURL})`. Each must appear only
-as an unattributed literal. A host constant joined into a URL's path is no host.
-Options objects also handed to `console` or an imported logger must yield the
-SDK's row and not the logger's, and one handed to two SDKs a row per SDK, each
-with its own package. `chunk-minified.js` averages over 200 characters a line,
-so the extractor skips it without the flag (measured: files averaging 173 were
-kept, 231 skipped), and its 5 rows go. The expected lines name fixture line
-numbers, so reformatting a fixture file means regenerating them. biome leaves
-the chunks under `node_modules` as they are.
+target. The source cases share one file, with a separate module for the local
+`fetch` negative; the three bundle chunks retain helper and minified shapes. Its
+negative controls are a docs-only URL, a browser-only URL, a module-local
+`fetch` in `src/` and in the minified chunk, and
+`new this.constructor({baseURL})`. Each must appear only as an unattributed
+literal. A host constant joined into a URL's path is no host. Options objects
+also handed to `console` or an imported logger must yield the SDK's row and not
+the logger's, and one handed to two SDKs a row per SDK, each with its own
+package. `chunk-minified.js` averages over 200 characters a line, so the
+extractor skips it without the flag (measured: files averaging 173 were kept,
+231 skipped), and its 5 rows go. The expected lines name fixture line numbers,
+so reformatting a fixture file means regenerating them. biome leaves the chunks
+under `node_modules` as they are.
 
 ### Running it without Nix
 

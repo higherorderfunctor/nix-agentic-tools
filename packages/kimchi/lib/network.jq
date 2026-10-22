@@ -49,9 +49,8 @@ def host:
     ),
     unattributed: (
       .unattributed.tuples
-      | map(.[1] | located) as $where
-      | [range(0; length) as $i | .[$i] as [$value, $_, $line]
-         | $where[$i] + {line: $line, value: $value, host: (($value | host) // null)}]
+      | map(. as [$value, $file, $line]
+        | ($file | located) + {line: $line, value: $value, host: (($value | host) // null)})
       | unique
       | sort_by([.readBy, .file, .line, .value])
     )

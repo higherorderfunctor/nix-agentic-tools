@@ -138,9 +138,9 @@ class BaseUrlClientConstruction extends ClientRequest::Range, DataFlow::NewNode 
 
 /**
  * Gets the library a request uses, as the fact names it: `fetch`,
- * `node-http`, `websocket`, `axios`, `net`, `undici`, `sdk:<package>` for
+ * `node-http`, `websocket`, `axios`, `undici`, `sdk:<package>` for
  * any other modeled package, `sdk:<class>` for a client matched by its
- * base-URL option, else `other`.
+ * base-URL option.
  */
 string requestLibrary(ClientRequest r) {
   (r instanceof ClientRequest::FetchUrlRequest or r instanceof TrackedFetchRequest) and
@@ -153,24 +153,11 @@ string requestLibrary(ClientRequest r) {
   (r instanceof ClientRequest::AxiosUrlRequest or r instanceof ClientRequest::AxiosInstanceRequest) and
   result = "axios"
   or
-  r instanceof ClientRequest::NetSocketRequest and result = "net"
-  or
   result = "sdk:" + r.(BaseUrlClientConstruction).getCalleeName()
   or
   exists(string p | p = r.(ModeledClientRequest).getModelPackage() |
     if p = "undici" or p.matches("undici.%") then result = "undici" else result = "sdk:" + p
   )
-  or
-  not r instanceof ClientRequest::FetchUrlRequest and
-  not r instanceof TrackedFetchRequest and
-  not r instanceof NodeJSLib::NodeJSClientRequest and
-  not r instanceof ClientWebSocket::ClientSocket and
-  not r instanceof ClientRequest::AxiosUrlRequest and
-  not r instanceof ClientRequest::AxiosInstanceRequest and
-  not r instanceof ClientRequest::NetSocketRequest and
-  not r instanceof BaseUrlClientConstruction and
-  not r instanceof ModeledClientRequest and
-  result = "other"
 }
 
 /** Gets a node that names where `r` connects: its URL, host, or a host-like option. */
@@ -196,7 +183,7 @@ predicate urlStep(DataFlow::Node pred, DataFlow::Node succ) {
   )
   or
   exists(DataFlow::MethodCallNode call |
-    call.getMethodName() = ["toString", "toJSON"] and
+    call.getMethodName() = "toString" and
     pred = call.getReceiver() and
     succ = call
   )
@@ -252,7 +239,7 @@ class TrackedFetchRequest extends ClientRequest::Range {
     exists(DataFlow::SourceNode f | f = fetchRef(DataFlow::TypeTracker::end()) |
       this = f.getACall() and url = this.getArgument(0)
       or
-      this = f.getAMethodCall(["call", "apply"]) and url = this.getArgument(1)
+      this = f.getAMethodCall("call") and url = this.getArgument(1)
     )
   }
 

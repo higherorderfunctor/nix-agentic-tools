@@ -108,9 +108,6 @@
         --pi-tui-package ${piTuiPackage} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js \
         | ${pkgs.jq}/bin/jq -S ${lib.concatStrings (lib.mapAttrsToList (name: fact: "--slurpfile ${name} ${fact} ") codeqlFacts)}'. + ($ARGS.named | map_values(.[0]))' > "$out"
-      echo 'KIMCHI_FRESH_EXTRACT_BEGIN'
-      cat "$out"
-      echo 'KIMCHI_FRESH_EXTRACT_END'
     '';
 
   # `mkUpdateScript` records the version alone (`platforms = {}`), so this

@@ -2417,13 +2417,13 @@
         "bundledModule": null,
         "file": "src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 187,
+        "line": 189,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "argument",
-            "origin": "src/extensions/pr-cost-reporting/worker.ts:187",
+            "origin": "src/extensions/pr-cost-reporting/worker.ts:189",
             "value": "input"
           }
         ]
@@ -2564,7 +2564,7 @@
         "bundledModule": null,
         "file": "src/models.ts",
         "library": "fetch",
-        "line": 197,
+        "line": 204,
         "readBy": "kimchi",
         "targets": [
           {
