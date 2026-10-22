@@ -7,8 +7,8 @@ applyTo: "checks/ai-proxy/**,lib/ai/proxy/**,packages/chatgpt-codex/lib/proxy.ni
 
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-21 — instance-routed runtimes publish their own key
-> and allowlist entry; key references are claimed across runtimes.
+> **Last verified:** 2026-10-22 — instance-routed runtimes publish claimed keys
+> and allowlist rules scoped to providers.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -26,9 +26,9 @@ credential proxy.
   runtimes warn rather than dropping a selection silently.
 - `mkBackendTransform.nix`, for a record whose `surfaceSupport` declares
   `proxy`, declares `ai.<runtime>.proxy` (the root's selection options plus
-  `allow`) and `ai.<runtime>.normalized.proxy`. The callbacks get it as
-  `normalized.proxy` and `resolvedProxy`. Enabled runtimes publish their client
-  key and claim.
+  `allow` and `providers`) and `ai.<runtime>.normalized.proxy`. The callbacks
+  get it as `normalized.proxy` and `resolvedProxy`. Inside the runtime's enable
+  gate it publishes the runtime's client and key claim.
 
 ### Selection and the resolved endpoint
 
@@ -65,18 +65,37 @@ JSON, TOML or shell source. The `url` pattern validates only the proxy origin.
 
 A runtime routed through an instance publishes its key and `allow` rules at
 `ai.internal.proxyClients.<runtime>`. The instance adds that key to
-`access.api-keys` and maps `allow` to its `access.key-allowlist` entry. The
-launcher presents the same key through `normalized.proxy`; CPA fails closed for
-each listed key (see `cliproxyapi-key-allowlist.md`).
+`access.api-keys` and maps `allow` plus one rule per enabled provider to its
+`access.key-allowlist` entry. The launcher presents the same key through
+`normalized.proxy`; CPA fails closed for each listed key (see
+`cliproxyapi-key-allowlist.md`).
 
 The instance reads published clients. A runtime must not define the instance:
 that would make a misspelled name look valid, and checking existence from the
 definition would recurse.
 
 `allow` uses CPA's generated credential-rule type. Claude and Codex default to
-their own OAuth provider; another runtime must set `allow` when it routes
-through an instance. It applies to either root or runtime selection. Narrow it
-by `ids` or name a hand-written credential block.
+their own OAuth provider; another runtime must set `allow` or enable a provider
+when it routes through an instance. `allow` and `providers` apply whichever
+scope selects. Set `allow = []` to drop the own login; a rule can narrow it by
+`ids` or name a hand-written credential block.
+
+### Providers
+
+`ai.cliproxyapi.instances.<n>.providers.<name>` supplies a key, models and base
+URLs for the `anthropic`, `chat` or `responses` API. The API table in
+`packages/cliproxyapi/lib/providers.nix` lowers each to CPA's credential family;
+the settings list joins provider blocks with hand-written blocks. A runtime
+enables one through `ai.<runtime>.proxy.providers.<name>.enable`; its optional
+`api` defaults to its record's `proxyApi` (Claude `anthropic`, Codex
+`responses`). The generated allowlist rule names the selected block's provider
+and base URL.
+
+CPA trims base URLs with Go's `strings.TrimSpace`, which Nix cannot reproduce
+for every Unicode space. Provider URLs are printable ASCII, hand-written URLs in
+their family must have printable edges, and blocks in that family cannot share
+the provider's URL. These checks make CPA's exact match agree with Nix's.
+Provider names are plain ASCII words so Go and Nix also normalize them alike.
 
 Refused at evaluation, inside the enable gate:
 
@@ -95,15 +114,7 @@ instance the allowlist is set, so that key needs its own hand-written entry.
 
 ### Checks
 
-`checks/ai-proxy/module-eval.nix` covers selection validation, redacted key
-refusal and the per-runtime override through a test runtime that declares
-`proxy`, each with the instance case on both backends.
-`module-ai-proxy-instance-clients` checks the derived access list, claims,
-runtime endpoints, and routing refusals on both backends. Unsupported runtimes
-are covered by `ai-warnings-delivery`. `checks/ai-factory/factory-eval.nix`
-carries `proxy` in its every-surface request set.
-`packages/claude-code/checks/claude-proxy.nix` checks settings and runs the
-file, command and concat helpers on both backends.
-`packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix` checks Codex's provider
-settings and session flags, runs the reference helpers, and sends requests
-through the pinned Codex to loopback proxies on both backends.
+`module-ai-proxy-instance-clients` checks generated blocks, claims, rules and
+refusals on both backends. `module-service-instances-runtime-providers` sends
+Anthropic and Responses requests through the packaged CPA. The other proxy
+checks cover selection, key references and runtime delivery.

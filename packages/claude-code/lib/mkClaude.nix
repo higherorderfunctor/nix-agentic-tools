@@ -253,6 +253,8 @@ in
         provider = "claude";
       }
     ];
+    # Claude Code speaks the Anthropic Messages API.
+    proxyApi = "anthropic";
     surfaceSupport = {
       agents = {};
       context = {};

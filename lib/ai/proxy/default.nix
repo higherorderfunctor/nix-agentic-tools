@@ -6,6 +6,7 @@
 #     `ai.<runtime>.proxy` (mkBackendTransform.nix);
 #   * selection validation, shared by both assertion sites;
 #   * `resolve`, the root-to-runtime fold behind `ai.<runtime>.normalized.proxy`;
+#   * `providersFor`, enabled provider rules resolved against the instance;
 #   * `client` publishes routed runtime keys; `clientsOf` selects them for an
 #     instance's access list and allowlist.
 {lib}: let
@@ -13,6 +14,7 @@
   redact = import ../../redact {inherit lib;};
   instancesLib = import ../../../packages/ai-module/lib/instances.nix {inherit lib;};
   inherit (import ../../../packages/cliproxyapi/lib/default.nix {inherit lib;}) cliproxyapi;
+  apiNames = builtins.attrNames cliproxyapi.providers.apis;
 
   # The origin only: each runtime appends its own protocol path, so a path
   # here would be doubled. `[]]` avoids an escape libstdc++'s ERE rejects.
@@ -45,10 +47,10 @@
         origin becomes that instance's `http://127.0.0.1:<port>`. Pair it with
         `key`. Each enabled runtime this selection reaches adds `key` to the
         instance's `settings.access.api-keys`, with an
-        `access.key-allowlist` entry from its `ai.<runtime>.proxy.allow`, so
-        do not list the key there by hand. Evaluation claims the key's
-        reference; CLIProxyAPI refuses distinct references that resolve to the
-        same value at start or on reload.
+        `access.key-allowlist` entry from its `ai.<runtime>.proxy.allow` and
+        enabled providers, so do not list the key there by hand. Evaluation
+        claims the key's reference; CLIProxyAPI refuses distinct references
+        that resolve to the same value at start or on reload.
       '';
     };
     key = mkOption {
@@ -81,11 +83,9 @@
     then runtime
     else root;
 
-  # `ai.<runtime>.proxy`: the selection, plus the credentials the runtime's
-  # key may reach through an instance. `allow` is not part of the selection,
-  # so it holds whichever scope selects. `default` is the runtime's own login
-  # (`proxyAllow` on its record), or null when it has none.
+  # `allow` and `providers` apply to whichever selection scope wins.
   runtimeOptions = {
+    api,
     default,
     name,
   }:
@@ -110,7 +110,33 @@
             if default == null
             then "${name} has no native CLIProxyAPI provider, so an instance selection needs this set."
             else "The default is ${name}'s own login."
-          } Unused with `url`, whose proxy is configured by hand.
+          } Enabled providers add rules beside these; set `allow = []` to use
+          only providers. Unused with `url`.
+        '';
+      };
+      providers = mkOption {
+        type = types.attrsOf (types.submodule {
+          options = {
+            api = mkOption {
+              type = types.nullOr (types.enum apiNames);
+              default = null;
+              description = ''
+                The provider API ${name} reaches it through${
+                  if api == null
+                  then "; ${name} speaks none by default, so set it"
+                  else ". Null means `${api}`, the API ${name} speaks"
+                }. The provider must serve it.
+              '';
+            };
+            enable = lib.mkEnableOption "routing ${name} to this provider of the selected instance";
+          };
+        });
+        default = {};
+        example = lib.literalExpression ''{z-ai.enable = true;}'';
+        description = ''
+          Providers of the selected instance that ${name}'s key may reach.
+          Each enabled provider adds a base-URL rule on the selected API.
+          Requires an `instance` selection.
         '';
       };
     };
@@ -172,10 +198,56 @@
       inherit url;
     };
 
-  # A url selection is configured by hand; an instance selection publishes its
-  # key and rules only when the runtime is enabled by the caller.
+  # A missing instance resolves no provider; selection validation reports it.
+  providersFor = {
+    api,
+    instances,
+    option,
+    providers,
+    selection,
+  }: let
+    enabled = lib.filterAttrs (_: choice: choice.enable) providers;
+    instance =
+      if selection.instance == null
+      then null
+      else instances.${selection.instance} or null;
+    declared = "ai.cliproxyapi.instances.${selection.instance}.providers";
+    one = name: choice: let
+      provider = instance.providers.${name} or null;
+      chosen =
+        if choice.api != null
+        then choice.api
+        else api;
+      served = builtins.attrNames (cliproxyapi.providers.served provider);
+      path = "${option}.providers.${name}";
+    in
+      if selection.instance == null
+      then {problem = "${path} needs an `instance` selection: the module routes to a provider only through an instance it configures, never a `url` proxy.";}
+      else if instance == null
+      then {}
+      else if provider == null
+      then {problem = "${path} names `${name}`, which is not a `${declared}` entry.";}
+      else if chosen == null
+      then {problem = "${path}.api is unset, and nothing sets a default API: set it to one ${declared}.${name} serves (${lib.concatStringsSep ", " served}).";}
+      else if !lib.elem chosen served
+      then {problem = "${path} reaches ${declared}.${name} through the ${chosen} API, which it does not serve: give it `apis.${chosen}`, or set `${path}.api` to one it serves (${lib.concatStringsSep ", " served}).";}
+      else {
+        resolved = {
+          inherit name;
+          rule = cliproxyapi.providers.rule name provider chosen;
+        };
+      };
+    results = lib.mapAttrsToList one enabled;
+  in {
+    problems = lib.concatMap (result: lib.toList (result.problem or [])) results;
+    resolved = lib.concatMap (result: lib.toList (result.resolved or [])) results;
+  };
+
+  # A url selection is configured by hand; an enabled instance selection
+  # publishes its key, `allow` rules, and resolved provider rules.
   client = {
     option,
+    providers,
     root,
     runtime,
   }: let
@@ -187,6 +259,7 @@
       inherit option;
       inherit (selection) instance key;
       inherit (runtime) allow;
+      inherit providers;
     };
 
   # The published clients of instance `name`, ordered by runtime name.
@@ -196,9 +269,11 @@
   # equal references are one key; the claim prints the reference, never a value.
   keyClaim = key: builtins.unsafeDiscardStringContext (builtins.toJSON key);
 
-  clientAssertions = client:
-    toAssertions (lib.optional (client != null && client.allow == null)
-      "${client.option}.allow is unset, and ${client.option}.instance needs it: the instance's key allowlist fails closed, so name the credentials this key may select.");
+  # `providers` is `providersFor`'s result.
+  clientAssertions = client: providers:
+    toAssertions (providers.problems
+      ++ lib.optional (client != null && client.allow == null && providers.resolved == [])
+      "${client.option}.allow is unset and no provider is enabled, and ${client.option}.instance needs one of them: the instance's key allowlist fails closed, so name the credentials this key may select.");
 
   rootOption = mkOption {
     type = types.submodule {
@@ -232,14 +307,17 @@
   };
 in {
   inherit
+    apiNames
     assertionsFor
     client
     clientAssertions
     clientsOf
     keyClaim
+    providersFor
     resolve
     resolvedType
     rootOption
     runtimeOptions
+    selectionFor
     ;
 }

@@ -174,12 +174,23 @@
       }
     else null;
 
+  # The runtime's enabled providers against its instance; `proxyApi` on the
+  # record is the API it speaks.
+  proxyProviders = proxyLib.providersFor {
+    api = appRecord.proxyApi or null;
+    instances = config.ai.cliproxyapi.instances or {};
+    option = poolOptionName "proxy";
+    inherit (poolCfg.proxy) providers;
+    selection = proxyLib.selectionFor config.ai.proxy poolCfg.proxy;
+  };
+
   # What this runtime publishes to its instance, when it is enabled.
   proxyClient =
     if supportsPool "proxy"
     then
       proxyLib.client {
         option = poolOptionName "proxy";
+        providers = proxyProviders.resolved;
         root = config.ai.proxy;
         runtime = poolCfg.proxy;
       }
@@ -487,6 +498,7 @@
       proxy = lib.mkOption {
         type = lib.types.submodule {
           options = proxyLib.runtimeOptions {
+            api = appRecord.proxyApi or null;
             default = appRecord.proxyAllow or null;
             inherit (appRecord) name;
           };
@@ -497,7 +509,8 @@
           (a `url` or an `instance`), it replaces `ai.proxy`'s selection as a whole for this
           runtime; otherwise the root selection applies. The resolved
           endpoint is `${lib.showOption (["ai" appRecord.name] ++ normalizedPath "proxy")}`.
-          Through an instance, `allow` limits what the key may reach.
+          Through an instance, `allow` and `providers` limit what the key
+          may reach.
         '';
       };
     }
@@ -853,7 +866,7 @@ in {
       assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
     })
     (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
-      assertions = lib.mkIf cfg.enable (proxyLib.clientAssertions proxyClient);
+      assertions = lib.mkIf cfg.enable (proxyLib.clientAssertions proxyClient proxyProviders);
     })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let

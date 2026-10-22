@@ -9,7 +9,7 @@
   self,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) claudeSettings evalDevenv evalHm mkTest;
   redact = import ../../lib/redact {inherit lib;};
   services = import ../../packages/ai-module/lib/services.nix {inherit lib;};
   strictShellApplication = import ../../lib/strict-shell-application.nix;
@@ -409,6 +409,73 @@
     stateDir = "/build/state/${toString port}";
   };
 
+  # A stand-in upstream's key, read at start from /build/upstream-<name>.
+  upstreamKey = name: redact.file "/build/upstream-${name}";
+  # The claude executor appends /v1/messages to the base URL itself.
+  claudeBaseURL = port: "http://127.0.0.1:${toString port}";
+  # Run packaged CPA against stand-ins; each successful request must reach
+  # exactly its named upstream with that upstream's credential.
+  # cspell:ignore healthz
+  keyAllowlistCheck = {
+    ai,
+    name,
+    port,
+    requests,
+    upstreams,
+    verify ? _: "",
+  }: let
+    proxy =
+      (evalHm (lib.recursiveUpdate {
+        ai.cliproxyapi.instances.main = {
+          package = cliproxyapi;
+          inherit port;
+          stateDir = "/build/state/cpa";
+        };
+      } {inherit ai;})).config;
+  in
+    pkgs.runCommandLocal "module-test-service-instances-${name}" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      for name in a b other; do printf '%s' "key-$name" > "/build/key-$name"; done
+      ${verify proxy}
+      ${daemonHarness name}
+      upstreams=(${lib.escapeShellArgs upstreams})
+      for upstream in "''${upstreams[@]}"; do
+        IFS=: read -r name port path <<< "$upstream"
+        printf '%s' "upstream-$name" > "/build/upstream-$name"
+        ${pkgs.python3}/bin/python3 ${./stand-in-upstream.py} "$name" "$port" "$name.log" 2> "$name.err" &
+        processes+=("$!")
+        ready "$!" "http://127.0.0.1:$port/" "$name.err"
+      done
+      ${proxy.systemd.user.services.cliproxyapi-main.Service.ExecStart} > cpa.log 2>&1 &
+      processes+=("$!")
+      ready "$!" http://127.0.0.1:${toString port}/healthz cpa.log
+      request() {
+        local status=$1 answer=$2 api=$3 model=$4 key=$5 code path data
+        case "$api" in
+          anthropic) path=/v1/messages data="{\"model\":\"$model\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" ;;
+          chat) path=/v1/chat/completions data="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" ;;
+          responses) path=/v1/responses data="{\"model\":\"$model\",\"input\":\"hi\"}" ;;
+        esac
+        code=$(${pkgs.curl}/bin/curl --noproxy '*' --max-time 10 --silent --output response.json --write-out '%{http_code}' \
+          --header 'Content-Type: application/json' --header "Authorization: Bearer $key" \
+          --data "$data" "http://127.0.0.1:${toString port}$path")
+        if [ "$code" != "$status" ] || ! ${pkgs.jq}/bin/jq -e --arg answer "$answer" '(.choices[0].message.content? // .content[0].text? // .output[0].content[0].text? // .error.message? // .error? // "") | contains($answer)' response.json > /dev/null 2>&1; then
+          echo "FAIL: $key, $api $model: $code, want $status $answer" >&2
+          cat response.json cpa.log >&2
+          return 1
+        fi
+        echo "ok: $key, $api $model: $code $answer"
+      }
+      ${requests}
+      for upstream in "''${upstreams[@]}"; do
+        IFS=: read -r name port path <<< "$upstream"
+        test "$(cat "$name.log")" = "$path Bearer upstream-$name"
+        echo "ok: $name received one call with its own credential"
+      done
+      touch "$out"
+    '';
+
   # Shell for a check that starts real daemons: each started process joins
   # `processes` and is killed on exit; `ready <pid> <url> <log>` polls `url`
   # into health.json and prints the log if the process dies first.
@@ -647,61 +714,32 @@ in {
           done
           touch "$out"
         '';
-      # The packaged CPA accepts the allowed client key and refuses another
-      # configured key before it can reach the stand-in upstream. Authentication
-      # refuses an unknown key before selection.
+      # A configured key outside the allowlist and an unknown key are refused.
       module-service-instances-key-allowlist = let
-        proxy =
-          (evalHm {
-            ai.cliproxyapi.instances.main = daemonInstance 28419 ["a" "other"] {
-              access.key-allowlist = [
-                (
-                  allow "a" {provider = "openai-compatible-alpha";}
-                )
-              ];
-              api-keys.openai-compatibility = [
-                {
-                  name = "alpha";
-                  base-url = "http://127.0.0.1:28420/v1";
-                  keys = [{api-key = redact.file "/build/upstream-alpha";}];
-                  models = [{name = "shared-model";}];
-                }
-              ];
-            };
-          }).config;
+        upstream = {
+          name = "alpha";
+          base-url = "http://127.0.0.1:28420/v1";
+          keys = [{api-key = upstreamKey "alpha";}];
+          models = [{name = "shared-model";}];
+        };
       in
-        pkgs.runCommandLocal "module-test-service-instances-key-allowlist" {} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          printf '%s' key-a > /build/key-a
-          printf '%s' key-other > /build/key-other
-          printf '%s' upstream-alpha > /build/upstream-alpha
-          ${daemonHarness "key-allowlist"}
-          ${pkgs.python3}/bin/python3 ${./stand-in-upstream.py} alpha 28420 alpha.log 2> alpha.err &
-          processes+=("$!")
-          ready "$!" http://127.0.0.1:28420/ alpha.err
-          ${proxy.systemd.user.services.cliproxyapi-main.Service.ExecStart} > cpa.log 2>&1 &
-          processes+=("$!")
-          ready "$!" http://127.0.0.1:28419/healthz cpa.log
-          request() {
-            local status=$1 answer=$2 key=$3 code
-            code=$(${pkgs.curl}/bin/curl --noproxy '*' --max-time 10 --silent --output response.json --write-out '%{http_code}' \
-              --header 'Content-Type: application/json' --header "Authorization: Bearer $key" \
-              --data '{"model":"shared-model","messages":[{"role":"user","content":"hi"}]}' \
-              http://127.0.0.1:28419/v1/chat/completions)
-            if [ "$code" != "$status" ] || ! ${pkgs.jq}/bin/jq -e --arg answer "$answer" '(.choices[0].message.content? // .error.message? // .error? // "") | contains($answer)' response.json > /dev/null 2>&1; then
-              echo "FAIL: $key: $code, want $status $answer" >&2
-              cat response.json cpa.log >&2
-              return 1
-            fi
-            echo "ok: $key: $code $answer"
-          }
-          request 200 alpha key-a
-          request 503 auth_not_found key-other
-          request 401 "Invalid API key" key-unknown
-          test "$(cat alpha.log)" = '/v1/chat/completions Bearer upstream-alpha'
-          touch "$out"
-        '';
+        keyAllowlistCheck {
+          ai.cliproxyapi.instances.main.settings = {
+            access = {
+              api-keys = map fileKey ["a" "other"];
+              key-allowlist = [(allow "a" {provider = "openai-compatible-alpha";})];
+            };
+            api-keys.openai-compatibility = [upstream];
+          };
+          name = "key-allowlist";
+          port = 28419;
+          requests = ''
+            request 200 alpha chat shared-model key-a
+            request 503 auth_not_found chat shared-model key-other
+            request 401 "Invalid API key" chat shared-model key-unknown
+          '';
+          upstreams = ["alpha:28420:/v1/chat/completions"];
+        };
       # Two access.key-allowlist entries whose keys are different redact.file
       # references, so evaluation cannot compare them, resolve at start to one
       # key once trimmed. Merged, that key would hold both entries' rules; the
@@ -755,6 +793,52 @@ in {
           echo "ok: the valid config still runs"
           touch "$out"
         '';
+      # Each runtime's generated key reaches its named provider on its API.
+      module-service-instances-runtime-providers = let
+        provider = name: port: {
+          apis = {
+            anthropic.base-url = claudeBaseURL port;
+            responses.base-url = "${claudeBaseURL port}/v1";
+          };
+          key = upstreamKey name;
+          models = ["glm-shared" "${name}-model"];
+        };
+        runtime = name: provider: {
+          instance = "main";
+          key = fileKey name;
+          providers.${provider}.enable = true;
+        };
+      in
+        keyAllowlistCheck {
+          ai = {
+            claude = {
+              enable = true;
+              proxy = runtime "a" "zai";
+            };
+            cliproxyapi.instances.main.providers = {
+              other = provider "other" 28428;
+              zai = provider "zai" 28427;
+            };
+            codex = {
+              enable = true;
+              proxy = runtime "b" "other";
+            };
+          };
+          name = "runtime-providers";
+          port = 28426;
+          requests = ''
+            request 200 zai anthropic glm-shared key-a
+            request 200 other responses glm-shared key-b
+            request 503 auth_not_found anthropic other-model key-a
+            request 503 auth_not_found responses zai-model key-b
+          '';
+          upstreams = ["zai:28427:/v1/messages?beta=true" "other:28428:/v1/responses"];
+          verify = config: ''
+            test "$(${pkgs.bash}/bin/bash -c ${lib.escapeShellArg (claudeSettings {inherit config;}).apiKeyHelper})" = key-a
+            test "$(${config.ai.codex.files.".codex/config.toml".content.value.model_providers.ai-proxy.auth.command})" = key-b
+            echo "ok: Claude's key helper resolves key-a, Codex's key-b"
+          '';
+        };
       # Linux Home Manager emits the units, and the launcher renders the
       # config the run script hands to CLIProxyAPI from inside its state.
       module-service-instances-run = let
