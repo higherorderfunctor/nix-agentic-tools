@@ -15,12 +15,10 @@
   };
   # `kimchi-codeql-environment <results>`: the surface from a runner output
   # directory, or a failure naming every "fail" row.
-  transform = pkgs.writeShellApplication {
+  transform = import ../../../lib/strict-shell-application.nix pkgs {
     name = "kimchi-codeql-environment";
-    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
     runtimeInputs = [pkgs.jq];
     text = ''
-      shopt -s inherit_errexit 2>/dev/null || :
       if [ "$#" -ne 1 ]; then
         echo "usage: kimchi-codeql-environment <results>" >&2
         exit 2

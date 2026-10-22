@@ -145,12 +145,10 @@
     pack = queries.name;
   in
     assert lib.assertMsg (lib.isType "codeql-pack-spec" queries) "kimchi codeql.mkQueryRunner: `queries` must be a query pack";
-      pkgs.writeShellApplication {
+      import ../../../lib/strict-shell-application.nix pkgs {
         name = "kimchi-codeql-run-queries";
-        bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
         runtimeInputs = [customized pkgs.coreutils pkgs.findutils pkgs.jq];
         text = ''
-          shopt -s inherit_errexit 2>/dev/null || :
           if [ "$#" -ne 2 ]; then
             echo "usage: kimchi-codeql-run-queries <db> <out>" >&2
             exit 2
