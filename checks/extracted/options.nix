@@ -216,6 +216,68 @@
       && accepts refined.type {ids = ["x"];}
       && !(accepts refined.type {ids = [];})
       && !(accepts refined.type {other = ["cleartext"];});
+    # A row on a list node gets the generated element type, so it can refuse
+    # null elements and keep the element shape.
+    refinement-sees-the-list-element-type = let
+      refined = generate {
+        nodes = {
+          list.type = "list";
+          "list[]".type = "int";
+        };
+        refinements.list = {
+          type = "list";
+          refine = {
+            elementType,
+            types,
+            ...
+          }:
+            types.listOf elementType;
+        };
+      };
+      listType = refined.options.list.type;
+    in
+      refined.report.staleRefinements
+      == []
+      && accepts listType [1 2]
+      && !(accepts listType [1 null])
+      && !(accepts listType ["x"]);
+    # elementType is passed only to a row on a list node that has a `[]` node:
+    # an `any` node with a `[]` child and a bare list get none.
+    refinement-sees-no-element-type-without-a-list-element = let
+      # "bool" when the row received elementType, "int" when it did not; a
+      # stale row would be neither.
+      received = type: nodes: let
+        built = generate {
+          inherit nodes;
+          refinements.list = {
+            inherit type;
+            refine = args:
+              if args ? elementType
+              then args.types.bool
+              else args.types.int;
+          };
+        };
+        listType = built.options.list.type;
+      in
+        if built.report.staleRefinements != []
+        then "stale"
+        else if accepts listType true && !(accepts listType 1)
+        then "bool"
+        else if accepts listType 1 && !(accepts listType true)
+        then "int"
+        else "unknown";
+    in
+      received "list" {
+        list.type = "list";
+        "list[]".type = "int";
+      }
+      == "bool"
+      && received "any" {
+        list.type = "any";
+        "list[]".type = "int";
+      }
+      == "int"
+      && received "list" {list.type = "list";} == "int";
     # A row whose path is gone, whose node type changed, or whose node is a
     # secret (no row widens a secret) is stale.
     stale-refinements-are-reported =

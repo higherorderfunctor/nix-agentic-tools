@@ -19,10 +19,13 @@
 #                learns a fact must teach this generator too
 #   tool         the program's name, used in descriptions
 #   exclusions   path → reason it has no option
-#   refinements  path → { type; refine; }: `refine {node; types;}` returns the
-#                value type for a node of the node `type` the row was written
-#                for; `types` is lib.types plus `duration` and `json`. A row on
-#                a node with a secret descendant fails evaluation
+#   refinements  path → { type; refine; }: `refine {node; types; elementType;}`
+#                returns the value type for a node of the node `type` the row
+#                was written for; `types` is lib.types plus `duration` and
+#                `json`; `elementType` (a list node whose `[]` node exists
+#                only) is that element's generated type, before nullOr, so a
+#                row can refuse null elements and keep the element shape. A
+#                row on a node with a secret descendant fails evaluation
 #                when it would apply (same node type, node not itself secret).
 #   unread       node fields the owner's extractor writes and no option reads
 #
@@ -149,10 +152,13 @@ in
     in
       if refinements ? ${path} && refinementFits path refinements.${path}
       then
-        refinements.${path}.refine {
-          inherit node;
-          types = types // {inherit duration json;};
-        }
+        refinements.${path}.refine ({
+            inherit node;
+            types = types // {inherit duration json;};
+          }
+          // lib.optionalAttrs (t == "list" && checked ? ${element path}) {
+            elementType = typeOf (element path);
+          })
       else if node ? secret
       then redact.types.redacted
       else if node ? secretFile
