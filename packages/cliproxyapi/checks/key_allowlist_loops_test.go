@@ -1,15 +1,7 @@
 // Joined into the patched sdk/cliproxy/auth package by
-// checks/cliproxyapi-key-allowlist.nix. The allowlist lives in
-// authSelectionEligibility.allows, so a candidate loop that never calls it
-// selects outside the allowlist. The signature change in
-// patches/key-allowlist.patch catches new calls to the eligibility
-// constructor only. This test fails on a range statement over the
-// Manager.auths field whose own body calls no allowlist predicate, in a
-// function or in a closure, each judged on its own. It sees nothing else (see
-// keyAllowlistLoopsWithoutAllows), so a CPA bump that touches candidate
-// selection still needs a reviewer. It reads the AST with go/types rather
-// than grepping, because a loop is recognized by what it ranges over (the
-// field, under any receiver name) and a call by its receiver's type.
+// checks/cliproxyapi-key-allowlist.nix. The signature change in
+// patches/key-allowlist.patch catches eligibility-constructor callers only.
+// See keyAllowlistLoopsWithoutAllows for this scan's scope and limits.
 package auth
 
 import (

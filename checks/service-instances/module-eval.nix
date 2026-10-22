@@ -675,11 +675,7 @@ in {
             echo "FAIL: the refusal printed the client key" >&2
             false
           fi
-          if ! kill -0 "''${processes[0]}" 2>/dev/null; then
-            cat valid.log >&2
-            echo "FAIL: the valid config did not keep running" >&2
-            false
-          fi
+          ready "''${processes[0]}" http://127.0.0.1:28425/healthz valid.log
           echo "ok: the valid config still runs"
           touch "$out"
         '';
