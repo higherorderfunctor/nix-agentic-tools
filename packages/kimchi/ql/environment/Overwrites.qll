@@ -58,6 +58,21 @@ Stmt scanned(int i) {
   not result instanceof FunctionDeclStmt
 }
 
+/**
+ * The statements the definite-write walk enters: the scanned ones, the
+ * children of a block it enters, and both arms of an if it enters that has an
+ * else. A one-armed if, a loop or a try is not entered.
+ */
+Stmt walked() {
+  result = scanned(_)
+  or
+  result = walked().(BlockStmt).getAStmt()
+  or
+  exists(IfStmt ifs | ifs = walked() and exists(ifs.getElse()) |
+    result = ifs.getThen() or result = ifs.getElse()
+  )
+}
+
 /** Names `s` assigns on every path through it. */
 string definiteWrite(Stmt s) {
   exists(AssignExpr a, PropAccess target |
@@ -215,7 +230,7 @@ predicate overwriteFailure(string message, string where_) {
   or
   // an assignment through a spelling other than process.env
   exists(AssignExpr a, PropAccess target |
-    a = scanned(_).(ExprStmt).getExpr() and
+    a = walked().(ExprStmt).getExpr() and
     target = a.getLhs() and
     target.getBase() = envObject().asExpr() and
     not isSpelledProcessEnv(target.getBase()) and
@@ -268,9 +283,9 @@ predicate overwriteFailure(string message, string where_) {
     where_ = pa.getFile().getRelativePath() + ":" + pa.getLocation().getStartLine()
   )
   or
-  // a computed name in a top-level process.env assignment
+  // a computed name in a walked process.env assignment
   exists(AssignExpr a, PropAccess target |
-    a = scanned(_).(ExprStmt).getExpr() and
+    a = walked().(ExprStmt).getExpr() and
     target = a.getLhs() and
     isSpelledProcessEnv(target.getBase()) and
     assignedName(a, target) = "<computed>" and

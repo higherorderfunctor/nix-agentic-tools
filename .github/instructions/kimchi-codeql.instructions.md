@@ -191,9 +191,10 @@ takes `kimchi/package.json`'s `piConfig.name`, as at runtime. `+` is not folded,
 a `delete` operand is not a read, `+=` and `??=` are.
 
 `LaunchOverwrites.ql` names the variables `entry.ts` fixes on every launch, by
-the rules `launchOverwrites` applied: top-level statements in order; writes
-through `process.env` spelled out only; reads in function declarations and in
-functions handed `process.env` counted first, a parameter's computed key
+the rules `launchOverwrites` applied: top-level statements in order, entering
+blocks and both arms of an if with an else, for writes and their refusals alike;
+writes through `process.env` spelled out only; reads in function declarations
+and in functions handed `process.env` counted first, a parameter's computed key
 evaluated like any other and refused when it cannot be; and a failure for every
 shape that makes the order unknowable. "After it suspends" follows the
 extractor's children-first walk by end position, not the control-flow graph,

@@ -10,3 +10,12 @@ destructuredHelper(process.env);
 const whole = process.env;
 void whole;
 dynamicKey(process.env);
+{
+  process.env[k] = "1";
+  proc.env.ALIASED_IN_BLOCK = "1";
+}
+if (Math.random()) {
+  process.env[k] = "1";
+} else {
+  proc.env.ALIASED_IN_ELSE = "1";
+}
