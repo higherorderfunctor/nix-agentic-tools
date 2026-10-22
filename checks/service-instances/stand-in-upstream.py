@@ -1,6 +1,6 @@
 # A stand-in upstream for ./module-eval.nix: it answers every OpenAI chat
-# completion, and every Anthropic message (a path under /v1/messages), with
-# its own name and appends "<path> <authorization>" to its log, so the check
+# completion with its own name and appends "<path> <authorization>" to its
+# log, so the check
 # can tell which upstream a client key reached. A GET answers 200 for
 # readiness. Arguments: name, port, log path.
 import http.server
@@ -27,18 +27,6 @@ def chat_completion():
     }
 
 
-def message():
-    return {
-        "content": [{"text": NAME, "type": "text"}],
-        "id": "msg_" + NAME,
-        "model": "claude-shared",
-        "role": "assistant",
-        "stop_reason": "end_turn",
-        "stop_sequence": None,
-        "type": "message",
-        "usage": {"input_tokens": 1, "output_tokens": 1},
-    }
-
 
 class Upstream(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -50,8 +38,7 @@ class Upstream(http.server.BaseHTTPRequestHandler):
         self.rfile.read(int(self.headers.get("Content-Length", 0)))
         with open(LOG, "a") as handle:
             handle.write(f"{self.path} {self.headers.get('Authorization')}\n")
-        anthropic = self.path.startswith("/v1/messages")
-        body = json.dumps(message() if anthropic else chat_completion()).encode()
+        body = json.dumps(chat_completion()).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))

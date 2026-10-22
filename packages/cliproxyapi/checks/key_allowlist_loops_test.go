@@ -18,7 +18,6 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -44,19 +43,9 @@ var keyAllowlistLoopExemptions = map[string]string{
 	"authAutoRefreshLoop.rebuild":           "schedules background token refreshes, serves no request",
 }
 
-// keyAllowlistBypassFixtures are the positive controls, each a bare loop the
-// check must flag: in a function of its own, beside a filtered loop in the
-// same function, and in a closure of a function whose own loop is filtered.
-var keyAllowlistBypassFixtures = map[string]string{"zz_bypass_fixture.go": `package auth
-
-func (m *Manager) keyAllowlistBypassStandalone() *Auth {
-	for _, auth := range m.auths {
-		return auth
-	}
-	return nil
-}
-
-func (m *Manager) keyAllowlistBypassBesideFiltered(eligibility authSelectionEligibility) *Auth {
+// A filtered loop cannot hide a second bare loop or one in its closure.
+const keyAllowlistBypassFixture = `package auth
+func (m *Manager) keyAllowlistBypass(eligibility authSelectionEligibility) *Auth {
 	for _, auth := range m.auths {
 		if !eligibility.allows(auth) {
 			continue
@@ -68,8 +57,7 @@ func (m *Manager) keyAllowlistBypassBesideFiltered(eligibility authSelectionElig
 	}
 	return nil
 }
-
-func (m *Manager) keyAllowlistBypassInClosure(eligibility authSelectionEligibility) func() *Auth {
+func (m *Manager) keyAllowlistBypassClosure(eligibility authSelectionEligibility) func() *Auth {
 	for _, auth := range m.auths {
 		if !eligibility.allows(auth) {
 			return nil
@@ -82,7 +70,7 @@ func (m *Manager) keyAllowlistBypassInClosure(eligibility authSelectionEligibili
 		return nil
 	}
 }
-`}
+`
 
 // keyAllowlistLoopsWithoutAllows type-checks the package from source and
 // returns every unit holding a range statement over the Manager's credential
@@ -100,7 +88,7 @@ func (m *Manager) keyAllowlistBypassInClosure(eligibility authSelectionEligibili
 // predicate. In 8.0.38 none of these chooses a request's credential outside
 // allows; that is a review obligation on each bump, not something this test
 // checks.
-func keyAllowlistLoopsWithoutAllows(t *testing.T, extra map[string]string) []string {
+func keyAllowlistLoopsWithoutAllows(t *testing.T, fixture bool) []string {
 	t.Helper()
 	fileSet := token.NewFileSet()
 	var files []*ast.File
@@ -108,17 +96,18 @@ func keyAllowlistLoopsWithoutAllows(t *testing.T, extra map[string]string) []str
 	if err != nil {
 		t.Fatal(err)
 	}
-	sources := map[string]any{}
 	for _, path := range paths {
-		if !strings.HasSuffix(path, "_test.go") {
-			sources[path] = nil
+		if strings.HasSuffix(path, "_test.go") {
+			continue
 		}
+		file, err := parser.ParseFile(fileSet, path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, file)
 	}
-	for name, source := range extra {
-		sources[name] = source
-	}
-	for name, source := range sources {
-		file, err := parser.ParseFile(fileSet, name, source, 0)
+	if fixture {
+		file, err := parser.ParseFile(fileSet, "zz_bypass_fixture.go", keyAllowlistBypassFixture, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -242,37 +231,27 @@ func (emptyImporter) Import(path string) (*types.Package, error) {
 }
 
 func TestKeyAllowlistCandidateLoopsCallAllows(t *testing.T) {
-	if _, err := os.Stat("conductor_selection.go"); err != nil {
-		t.Fatalf("run from sdk/cliproxy/auth: %v", err)
+	var flagged []string
+	for _, name := range keyAllowlistLoopsWithoutAllows(t, true) {
+		if strings.HasPrefix(name, "Manager.keyAllowlistBypass") {
+			flagged = append(flagged, name)
+		}
 	}
-	t.Run("positive control", func(t *testing.T) {
-		var flagged []string
-		for _, name := range keyAllowlistLoopsWithoutAllows(t, keyAllowlistBypassFixtures) {
-			if strings.HasPrefix(name, "Manager.keyAllowlistBypass") {
-				flagged = append(flagged, name)
-			}
+	want := "Manager.keyAllowlistBypass Manager.keyAllowlistBypassClosure.func1"
+	if got := strings.Join(flagged, " "); got != want {
+		t.Fatalf("bare candidate loops flagged: got %q, want %q", got, want)
+	}
+
+	present := map[string]bool{}
+	for _, name := range keyAllowlistLoopsWithoutAllows(t, false) {
+		present[name] = true
+		if _, ok := keyAllowlistLoopExemptions[name]; !ok {
+			t.Errorf("%s has a loop over Manager.auths whose body calls no allowlist predicate: filter that loop through authSelectionEligibility.allows, or exempt the unit in keyAllowlistLoopExemptions with the reason it does not choose a request's credential", name)
 		}
-		want := "Manager.keyAllowlistBypassBesideFiltered Manager.keyAllowlistBypassInClosure.func1 Manager.keyAllowlistBypassStandalone"
-		if got := strings.Join(flagged, " "); got != want {
-			t.Fatalf("bare candidate loops flagged: got %q, want %q", got, want)
+	}
+	for name := range keyAllowlistLoopExemptions {
+		if !present[name] {
+			t.Errorf("exemption %s no longer matches a loop; delete it", name)
 		}
-	})
-	t.Run("patched tree", func(t *testing.T) {
-		for _, name := range keyAllowlistLoopsWithoutAllows(t, nil) {
-			if _, ok := keyAllowlistLoopExemptions[name]; !ok {
-				t.Errorf("%s has a loop over Manager.auths whose body calls no allowlist predicate: filter that loop through authSelectionEligibility.allows, or exempt the unit in keyAllowlistLoopExemptions with the reason it does not choose a request's credential", name)
-			}
-		}
-	})
-	t.Run("exemptions still exist", func(t *testing.T) {
-		present := map[string]bool{}
-		for _, name := range keyAllowlistLoopsWithoutAllows(t, nil) {
-			present[name] = true
-		}
-		for name := range keyAllowlistLoopExemptions {
-			if !present[name] {
-				t.Errorf("exemption %s no longer matches a loop; delete it", name)
-			}
-		}
-	})
+	}
 }

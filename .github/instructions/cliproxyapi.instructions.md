@@ -178,12 +178,6 @@ does not see an indexed lookup (`m.auths[id]`), an alias of the map, the map
 passed to a helper, or a loop over a copy (`snapshotAuths`, `List`), so a bump
 that touches candidate selection still needs source review even if it is green.
 
-`module-service-instances-key-allowlist` starts the packaged CPA from its Home
-Manager unit against stand-in API-key upstreams; it has no OAuth login, so only
-the Go test proves the OAuth exclusion.
-`module-service-instances-key-allowlist-duplicate` starts CPA with two
-`redact.file` keys that resolve to one, beside a positive-control instance.
-
 ## Reload ordering limitation
 
 The watcher publishes the new allowlist before it re-synthesizes config
