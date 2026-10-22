@@ -5,6 +5,8 @@
  */
 
 import javascript
+private import semmle.javascript.frameworks.data.internal.ApiGraphModels as Mad
+private import semmle.javascript.frameworks.data.internal.ApiGraphModelsExtensions as MadRows
 
 /**
  * Holds if `call` calls the esbuild helper `name`, under its own name or an
@@ -73,22 +75,34 @@ private API::Node modelAncestor(API::Node sink) {
 }
 
 /**
- * An invocation whose argument, or a property of an options argument (one or
- * two levels deep), is a `request-forgery` models-as-data sink. Makes every
- * row of that kind a `ClientRequest`, so a library needs only model rows.
+ * Holds if `sink` is the node a `request-forgery` row names, and `callee` the
+ * node its path names before its last `Argument` token.
  */
-class ModeledClientRequest extends ClientRequest::Range {
+private predicate modeledSink(API::Node callee, API::Node sink) {
+  exists(string type, Mad::AccessPath path, int n |
+    MadRows::sinkModel(type, path, "request-forgery", _) and
+    n = max(int i | path.getToken(i).getName() = "Argument") and
+    callee = Mad::getNodeFromPath(type, path, n) and
+    sink = Mad::getNodeFromPath(type, path, path.getNumToken())
+  )
+}
+
+/**
+ * An invocation of a modeled callee whose argument, or a member of it one or
+ * two levels deep, is that row's `request-forgery` sink. Another call handed
+ * the same options object (a logger) is not one. Makes every row of that kind
+ * a `ClientRequest`, so a library needs only model rows.
+ */
+class ModeledClientRequest extends ClientRequest::Range, API::InvokeNode {
   API::Node sink;
 
   ModeledClientRequest() {
-    sink = ModelOutput::getASinkNode("request-forgery") and
-    exists(DataFlow::Node arg | arg = this.getAnArgument() |
-      sink.asSink() = arg
-      or
-      sink.asSink() = arg.getALocalSource().getAPropertyWrite().getRhs()
-      or
-      sink.asSink() =
-        arg.getALocalSource().getAPropertyWrite().getRhs().getALocalSource().getAPropertyWrite().getRhs()
+    exists(API::Node modeled, API::Node param |
+      modeledSink(modeled, sink) and
+      this = modeled.getAnInvocation() and
+      param = this.getParameter(_)
+    |
+      sink = [param, param.getMember(_), param.getMember(_).getMember(_)]
     )
   }
 
@@ -114,6 +128,8 @@ class BaseUrlClientConstruction extends ClientRequest::Range, DataFlow::NewNode 
 
   BaseUrlClientConstruction() {
     url = this.getOptionArgument(0, ["baseURL", "baseUrl"]) and
+    // `new this.constructor({...})` copies a client and names no class
+    not this.getCalleeName() = "constructor" and
     not this instanceof ModeledClientRequest
   }
 

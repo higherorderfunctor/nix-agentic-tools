@@ -27,6 +27,9 @@ kimchi src/sdk.ts:11 sdk:@anthropic-ai/sdk - url https://s02-anthropic-sdk.test 
 kimchi src/sdk.ts:14 sdk:@modelcontextprotocol/sdk/client/streamableHttp.js - url https://s03-mcp-http.test/mcp s03-mcp-http.test src/sdk.ts:14
 kimchi src/sdk.ts:17 sdk:@modelcontextprotocol/sdk/client/sse.js - url https://s04-mcp-sse.test/sse s04-mcp-sse.test src/sdk.ts:17
 kimchi src/sdk.ts:19 axios - url https://s05-axios.test/v1 s05-axios.test src/sdk.ts:19
+kimchi src/shared-options.ts:11 sdk:openai - url https://o01-shared-sdk-options.test/v1 o01-shared-sdk-options.test src/shared-options.ts:7
+kimchi src/shared-options.ts:21 undici - url https://o02-shared-undici-options.test o02-shared-undici-options.test src/shared-options.ts:16
+kimchi src/shared-options.ts:31 sdk:openai - url https://o03-shared-logger-options.test/v1 o03-shared-logger-options.test src/shared-options.ts:27
 kimchi src/template.ts:4 fetch - url https://t01-template.test t01-template.test src/template.ts:1
 kimchi src/template.ts:8 fetch - url https://t02-concat.test/v1/ t02-concat.test src/template.ts:8
 kimchi src/template.ts:13 fetch - host t03-hostonly.test t03-hostonly.test src/template.ts:11
@@ -47,10 +50,10 @@ kimchi src/url.ts:14 fetch - url https://n03-url-href.test/v1 n03-url-href.test 
 kimchi src/ws.ts:4 websocket - url wss://w01-global-ws.test/socket w01-global-ws.test src/ws.ts:4
 kimchi src/ws.ts:6 websocket - url wss://w02-ws-lib.test/socket w02-ws-lib.test src/ws.ts:6
 kimchi src/ws.ts:11 websocket - url wss://w03-ws-field.test/pty w03-ws-field.test src/ws.ts:14
-pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:3 node-http - url https://m01-minified-https.test/v1 m01-minified-https.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:3
-pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:5 node-http node_modules/undici/index.js argument x - @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:5
-pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:5 undici - url https://m02-minified-undici.test/v1 m02-minified-undici.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:5
-pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:7 fetch - url https://m03-minified-fetch-alias.test/v1 m03-minified-fetch-alias.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:7
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:1 node-http - url https://m01-minified-https.test/v1 m01-minified-https.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:1
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 fetch - url https://m03-minified-fetch-alias.test/v1 m03-minified-fetch-alias.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 node-http node_modules/undici/index.js argument x - @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 undici - url https://m02-minified-undici.test/v1 m02-minified-undici.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:4 fetch node_modules/undici/index.js argument input - @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:4
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:4 node-http node_modules/undici/index.js argument url - @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:4
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:6 undici - url https://b01-bundled-undici-request.test/v1 b01-bundled-undici-request.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:6
@@ -65,4 +68,5 @@ unattributed kimchi src/fetch-global.ts:29 https://f06-docs-only.test/readme f06
 unattributed kimchi src/local-fetch.ts:7 https://f07-local-fetch.test/v1 f07-local-fetch.test
 unattributed kimchi src/regions.ts:4 https://r01-app-us.test r01-app-us.test
 unattributed kimchi src/regions.ts:8 https://r01-app-eu.test r01-app-eu.test
-unattributed pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:9 https://m04-not-a-request.test/v1 m04-not-a-request.test
+unattributed pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 https://m04-local-fetch.test/v1 m04-local-fetch.test
+unattributed pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:22 https://b08-this-constructor.test/v1 b08-this-constructor.test

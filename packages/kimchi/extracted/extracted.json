@@ -2967,15 +2967,15 @@
       },
       {
         "bundledModule": null,
-        "file": "@earendil-works/pi-ai/dist/api/google-generative-ai.js",
+        "file": "@earendil-works/pi-ai/dist/api/google-vertex.js",
         "library": "sdk:@google/genai",
-        "line": 276,
+        "line": 274,
         "readBy": "pi",
         "targets": [
           {
             "host": null,
-            "kind": "property",
-            "origin": "@earendil-works/pi-ai/dist/api/google-generative-ai.js:276",
+            "kind": "dynamic",
+            "origin": "@earendil-works/pi-ai/dist/api/google-vertex.js:274",
             "value": "baseUrl"
           }
         ]
@@ -2984,13 +2984,13 @@
         "bundledModule": null,
         "file": "@earendil-works/pi-ai/dist/api/google-vertex.js",
         "library": "sdk:@google/genai",
-        "line": 305,
+        "line": 284,
         "readBy": "pi",
         "targets": [
           {
             "host": null,
             "kind": "dynamic",
-            "origin": "@earendil-works/pi-ai/dist/api/google-vertex.js:305",
+            "origin": "@earendil-works/pi-ai/dist/api/google-vertex.js:284",
             "value": "baseUrl"
           }
         ]
@@ -3718,21 +3718,6 @@
             "kind": "argument",
             "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js:25",
             "value": "url"
-          }
-        ]
-      },
-      {
-        "bundledModule": null,
-        "file": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js",
-        "library": "sdk:constructor",
-        "line": 25,
-        "readBy": "pi",
-        "targets": [
-          {
-            "host": null,
-            "kind": "property",
-            "origin": "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-NUHFSC37.js:25",
-            "value": "baseURL"
           }
         ]
       },

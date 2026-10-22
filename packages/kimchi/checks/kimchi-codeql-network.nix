@@ -1,12 +1,14 @@
 # The `network` fact's query, model packs and transform (lib/network.nix) on
 # the fixture tree under ./fixtures/network, laid out as the release database
 # is: Kimchi's src/ and a pi package with esbuild bundle chunks, one of them
-# minified. Every row of the fact must equal ./fixtures/network-expected.txt,
-# one line per call-site target, then one per URL literal no call site reads.
-# The negative controls (a docs-only URL, a browser-only URL, a local
-# function named fetch, an unrelated minified call) are expected only as
-# unattributed literals. `$out` holds the fact JSON only. x86_64-linux only,
-# as the engine is.
+# minified enough that the extractor skips it without the minified flag. Every
+# row of the fact must equal ./fixtures/network-expected.txt, one line per
+# call-site target, then one per URL literal no call site reads. The negative
+# controls (a docs-only URL, a browser-only URL, a local function named fetch
+# in src/ and in the minified chunk, `new this.constructor({baseURL})`) are
+# expected only as unattributed literals, and the logger calls handed an SDK's
+# options object not at all. `$out` holds the fact JSON only. x86_64-linux
+# only, as the engine is.
 {
   lib,
   pkgs,
@@ -19,7 +21,7 @@ in {
     kimchi-codeql-network = let
       fact = network.factOf "network-fixture" (codeql.databaseOf "network-fixture" ./fixtures/network);
     in
-      pkgs.runCommand "kimchi-codeql-network" {nativeBuildInputs = [pkgs.diffutils pkgs.jq];} ''
+      pkgs.runCommand "kimchi-codeql-network-check" {nativeBuildInputs = [pkgs.diffutils pkgs.jq];} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         # Every field in order, `-` for null.

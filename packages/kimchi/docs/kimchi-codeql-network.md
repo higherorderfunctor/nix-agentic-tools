@@ -1,8 +1,9 @@
 ## Kimchi network fact
 
 > **Last verified:** 2026-10-21 — `network` is measured on x86_64-linux by
-> `ql/network` with the `ql/models/{sdk,undici}` packs through `runQueries`, and
-> `kimchi-codeql-network` holds the fixture's rows.
+> `ql/network` with the `ql/models/{sdk,undici}` packs through `runQueries`; a
+> modeled request is an invocation of its row's own callee; the fixture's
+> minified chunk is one the extractor skips without the flag.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 bundle and
 > rejected:
@@ -21,7 +22,10 @@ the release database with `codeql.runQueries`, and reshapes the result with
 adds it to `extract.mjs`'s output as `network`. Every CodeQL fact joins there,
 from `codeqlFacts`. Other hosts carry no CodeQL facts, and the declaration lists
 x86_64-linux only. `extractedRules.results.network.entries` is the fact. The
-regenerate command builds the database and runs the queries.
+regenerate command builds the database and runs the queries, so kimchi's update
+script now does too on update.yml's runner, with no check cache: the engine
+customization, the database, the pack compile (1m54s on CI) and an evaluation
+with `--ram=8192` (53.8 s).
 
 ```text
 {callSites: [{readBy, file, line, library, bundledModule,
@@ -36,7 +40,8 @@ regenerate command builds the database and runs the queries.
 - **`library`**: `fetch`, `node-http`, `websocket`, `axios`, `net`, `undici`,
   `sdk:<package>` for another modeled package, or `sdk:<class>` for a
   `new C({baseURL})` matched by option name, because a bundle inlines the SDK
-  and its import is gone.
+  and its import is gone. Any such class matches, a non-client one included,
+  except `new this.constructor({...})`, which names no class.
 - **`bundledModule`**: the esbuild `__commonJS` key enclosing the call, such as
   `node_modules/undici/index.js`. It means a dependency pi inlined.
 - **`unattributed`**: URL literals no call site reads. The regex-scan inventory
@@ -69,9 +74,11 @@ WebSocket and `ws`, axios, got and others as `ClientRequest`. It has no undici
 model at all (`grep -rln undici` over javascript-all 2.10.4 finds nothing). A
 models-as-data row alone never makes a `ClientRequest`: `request-forgery` rows
 only become `RequestForgery::Sink`s. `ModeledClientRequest` in
-`ql/network/Network.qll` bridges them: an invocation whose argument, or a
-property of an options argument one or two levels deep, is a `request-forgery`
-model sink becomes a `ClientRequest`. After that, a library needs only rows.
+`ql/network/Network.qll` bridges them: an invocation of the callee a
+`request-forgery` row names, whose argument or a member of it one or two levels
+deep is that row's sink, becomes a `ClientRequest`. After that, a library needs
+only rows. The sink alone is not enough: an options object handed to the SDK and
+to a logger is one sink node, and both calls would match.
 
 - **`ql/models/undici`**: the `undici.Dispatcher` type (every agent, pool and
   client class, `getGlobalDispatcher`, `compose`), its per-call `origin`, the
@@ -85,7 +92,7 @@ model sink becomes a `ClientRequest`. After that, a library needs only rows.
 
 Measured on 2026-10-21 over 54 call shapes: the prototype of PR #2771 found 21,
 this query 38 without the model packs and 54 with them. The check's fixture is
-that set less a test-file case, plus a module-local `fetch`.
+that set less a test-file case, plus the negative controls below.
 
 ### Bundles and minified chunks
 
@@ -116,17 +123,23 @@ reaches its SDK clients only through runtime model selection. Those URLs stay in
 `node_modules` include and the minified flag hold too. It requires the fact's
 rows to equal `checks/fixtures/network-expected.txt`. That file has one line per
 target and covers one call per library and bundle shape. Its negative controls
-are a docs-only URL, a browser-only URL, a module-local `fetch` and an unrelated
-minified call. Each must appear only as an unattributed literal. The expected
-lines name fixture line numbers, so reformatting a fixture file means
-regenerating them. biome leaves the chunks under `node_modules` as they are.
+are a docs-only URL, a browser-only URL, a module-local `fetch` in `src/` and in
+the minified chunk, and `new this.constructor({baseURL})`. Each must appear only
+as an unattributed literal. Options objects also handed to `console` or an
+imported logger must yield the SDK's row and not the logger's.
+`chunk-minified.js` averages over 200 characters a line, so the extractor skips
+it without the flag (measured: files averaging 173 were kept, 231 skipped), and
+its 5 rows go. The expected lines name fixture line numbers, so reformatting a
+fixture file means regenerating them. biome leaves the chunks under
+`node_modules` as they are.
 
 ### Running it without Nix
 
-`codeql:kimchi-db` and the query loop in `kimchi-codeql.md` run
-`ql/network/NetworkCallSites.ql` too, without the model packs. They have no
-qlpack.yml, as `mkModelPack` writes it. For the full rows, give CodeQL one model
-pack holding both directories' `*.model.yml`, with `library: true`,
+`codeql:kimchi-db` creates the database, and the query loop in
+`kimchi-codeql.md` can then run `ql/network/NetworkCallSites.ql` on it, without
+the model packs. The pack directories have no qlpack.yml, as `mkModelPack`
+writes it. For the full rows, give CodeQL one model pack holding both
+directories' `*.model.yml`, with `library: true`,
 `extensionTargets: {codeql/javascript-all: "*"}`, `--additional-packs` and
 `--model-packs`, as `customizePackage` does. Measured locally with 6 threads:
 the query compiled in 93 s and evaluated on the release database in 51 s.
