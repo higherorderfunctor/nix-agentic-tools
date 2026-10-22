@@ -89,20 +89,20 @@ function sourceLabel(path, root, prefix = "kimchi") {
   return `${prefix}/${relative(root, path)}`;
 }
 
-function addLiteral(value, file, literals) {
+// Callers without a hosts accumulator collect paths only.
+function addLiteral(value, file, { hosts, paths }) {
   if (/^(?:https?|wss?):\/\//i.test(value)) {
     try {
       const url = new URL(value);
-      literals.hosts.push({ file, value: url.hostname });
-      if (url.pathname !== "/")
-        literals.paths.push({ file, value: url.pathname });
+      hosts?.push({ file, value: url.hostname });
+      if (url.pathname !== "/") paths.push({ file, value: url.pathname });
       return;
     } catch {
       // A scheme-like string that is not a URL can still be classified below.
     }
   }
-  if (looksLikeHost(value)) literals.hosts.push({ file, value });
-  else if (looksLikePath(value)) literals.paths.push({ file, value });
+  if (hosts && looksLikeHost(value)) hosts.push({ file, value });
+  else if (looksLikePath(value)) paths.push({ file, value });
 }
 
 const NETWORK_TOOLS = new Set([
@@ -153,8 +153,7 @@ function scanTsFile(path, root, text, ts, sites, paths) {
   const file = sourceLabel(path, root);
 
   function visit(node) {
-    if (ts.isStringLiteralLike(node))
-      addLiteral(node.text, file, { hosts: [], paths });
+    if (ts.isStringLiteralLike(node)) addLiteral(node.text, file, { paths });
     if (ts.isCallExpression(node)) {
       const callee = calleeText(node.expression, ts);
       const firstArgument = node.arguments[0];
@@ -219,7 +218,7 @@ const JS_STRING_RE = /"((?:[^"\\]|\\.){1,200})"|'((?:[^'\\]|\\.){1,200})'/g;
 function scanBundledJs(path, root, text, paths) {
   const file = sourceLabel(path, root, "pi");
   for (const match of text.matchAll(JS_STRING_RE))
-    addLiteral(match[1] ?? match[2], file, { hosts: [], paths });
+    addLiteral(match[1] ?? match[2], file, { paths });
 }
 
 function dedupeLiterals(entries) {
