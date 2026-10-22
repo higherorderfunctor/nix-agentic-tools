@@ -1,10 +1,11 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-10-19 — MCP credential settings and HTTP references
+> **Last verified:** 2026-10-21 — MCP credential settings and HTTP references
 > use redact; consumers derive environment names, resolve full concat values
 > with redact.assign, and abort on failed reads. Kiro headers resolve at launch,
 > URLs during files-engine apply after the secrets point. Proxy daemons use
-> ai.services and scoped service claims on both backends; a generic `toolPolicy`
+> ai.services and scoped service claims on both backends and render their
+> Caddyfile from the shared `lib/ai/caddy.nix` helpers; a generic `toolPolicy`
 > rides the client entry to each runtime's per-tool surface. A remote server
 > owner declares a `meta.external` module whose reserved `settings`
 > `lib/mcp.nix:resolveRemote` turns into `url` plus an `Authorization` header in
@@ -86,7 +87,11 @@ activation entry.
 
 `proxy.enable` on a `type = "http"` server moves the credential OFF the client
 entirely. `lib/ai/mcpProxy.nix` builds the Caddy daemon and its lowered client
-entry; `lib/ai/sharedOptions.nix` owns declaration identity and declares
+entry. It builds its Caddyfile and run script with the `lib/ai/caddy.nix`
+helpers (`envRef`, `globalBlock`, `strippedHopHeaders`, `proxyTuning`,
+`runCaddy`), which any other Caddy daemon in this repo reuses;
+`checks/mcp-proxy/example.Caddyfile` pins the proxy's rendering byte for byte.
+`lib/ai/sharedOptions.nix` owns declaration identity and declares
 `ai.internal.services.mcp-proxy-<name>`. ai-module lowers its ordinary service
 lifecycle. The daemon reads each secret from its file at START, injects the
 headers outbound, and listens UNAUTHENTICATED on loopback. Clients get
@@ -171,7 +176,7 @@ local user can read it. Measured 2026-08-06: a process spawned as
 `cmdline`. This is why nothing is passed as an argument and everything goes
 through the environment.
 
-**Three traps worth knowing before editing `mcpProxy.nix`:**
+**Three traps worth knowing before editing `mcpProxy.nix` or `caddy.nix`:**
 
 - **`bind <host>` is the ONLY thing that restricts the listener**, and getting
   this wrong is a security bug, not a cosmetic one: a bare `:<port>` site
@@ -187,8 +192,8 @@ through the environment.
 - **`$${` is a Nix ESCAPE for a literal `${`** in BOTH quoted and indented
   strings. The natural-looking `"{$${var}}"` therefore emits `{${var}}` — no
   substitution, no error, and a Caddyfile that proxies to an unexpanded token.
-  The `envRef` helper builds the token by explicit concatenation for exactly
-  this reason; do not "simplify" it back into an interpolated string.
+  `lib/ai/caddy.nix`'s `envRef` builds the token by explicit concatenation for
+  exactly this reason; do not "simplify" it back into an interpolated string.
 - **`reverse_proxy` rejects a PATH in its upstream.** An upstream url may carry
   one, and it may itself be a secret, so it cannot be split at eval time. The
   wrapper splits it in shell at runtime into origin + path and applies the path
@@ -290,6 +295,8 @@ environ / argv / Caddyfile / mcp.json and did not contemplate the journal.
 
 The fix drops the **WHOLE HEADER MAP** — `request>headers delete` in Caddy's
 `filter` encoder, wrapping console — and never names a secret field.
+`globalBlock` in `lib/ai/caddy.nix` renders it and throws on an empty delete
+list.
 
 **That distinction is the point, and the first attempt got it wrong.** The
 original fix emitted one `delete` per credential-bearing header. It worked, and
