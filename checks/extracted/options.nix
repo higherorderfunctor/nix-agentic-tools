@@ -108,10 +108,7 @@
     # A refinement returns the whole value type, so on a container it would
     # replace a redacted descendant: refused, for list, map and object rows.
     refinement-over-a-secret-descendant-is-refused = let
-      row = {
-        type = "list";
-        refine = {types, ...}: types.listOf types.str;
-      };
+      row.refine = {types, ...}: types.listOf types.str;
       refined = path: nodes:
         generate {
           inherit nodes;
