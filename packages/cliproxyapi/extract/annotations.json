@@ -29,6 +29,9 @@
     },
     "server.github-token": {
       "secret": "A GitHub token CPA sends with its release and asset downloads."
+    },
+    "server.tls.key": {
+      "secretFile": "The TLS private key file the HTTPS listener loads."
     }
   }
 }

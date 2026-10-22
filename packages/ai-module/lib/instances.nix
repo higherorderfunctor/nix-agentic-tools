@@ -42,8 +42,7 @@ in {
   # file's path; `arguments` are the shell words after the executable, per instance,
   # and `directories` the state subdirectories created with `stateDir`.
   # `preStart` is shell the run script runs in `stateDir`, with `variable`
-  # exported, before it execs the executable; `restartOnChange` adds the
-  # service's restart triggers.
+  # exported, before it execs the executable.
   # `packagePath` is the default package's path under `ai.internal.packages`
   # and `packageText` its documentation.
   module = {
@@ -58,7 +57,6 @@ in {
     packageText,
     preStart ? _: "",
     render,
-    restartOnChange ? _: [],
     settingsType,
     tool,
     variable,
@@ -160,7 +158,6 @@ in {
           inherit variable;
         };
         ports.main = instance.port;
-        restartOnChange = restartOnChange instance;
       })
     instances;
   };

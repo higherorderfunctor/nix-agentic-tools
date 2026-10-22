@@ -1,13 +1,33 @@
 {
+  "config": {
+    "adminKeyFile": {
+      "secretFile": "The file holding the Manager Plus admin key (cpamp_...); the instance resets the stored credential from it on every start."
+    },
+    "dataKeyFile": {
+      "secretFile": "The file holding the key that encrypts the CPA connection Manager Plus stores in SQLite."
+    },
+    "managementKeyFile": {
+      "secretFile": "The file holding the CPA management key Manager Plus sends to CPA's management API."
+    }
+  },
   "environment": {
     "CPA_MANAGEMENT_KEY": {
       "secret": "The CPA management key Manager Plus sends to CPA's management API; it grants control of CPA and every login behind it."
     },
+    "CPA_MANAGEMENT_KEY_FILE": {
+      "secretFile": "The file holding the CPA management key; it overrides managementKeyFile."
+    },
     "CPA_MANAGER_ADMIN_KEY": {
       "secret": "The Manager Plus admin key (cpamp_...); it logs in to the panel and its management API."
     },
+    "CPA_MANAGER_ADMIN_KEY_FILE": {
+      "secretFile": "The file holding the Manager Plus admin key; it overrides adminKeyFile."
+    },
     "CPA_MANAGER_DATA_KEY": {
       "secret": "The key that encrypts the CPA connection Manager Plus stores in SQLite."
+    },
+    "CPA_MANAGER_DATA_KEY_FILE": {
+      "secretFile": "The file holding the SQLite data encryption key; it overrides dataKeyFile."
     }
   }
 }

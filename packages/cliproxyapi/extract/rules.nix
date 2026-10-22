@@ -9,7 +9,7 @@ in
   reconcile {
     config = {
       facts = get aggregate "config";
-      fields = ["secret"];
+      fields = ["secret" "secretFile"];
       patterns = lib.filterAttrs isPattern rows.config;
       rows = lib.filterAttrs (name: row: !isPattern name row) rows.config;
       secretNeeds = ["secret"];

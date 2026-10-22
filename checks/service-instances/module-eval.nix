@@ -1,3 +1,4 @@
+# cspell:ignore ADMINKEYFILE DATAKEYFILE MANAGEMENTKEYFILE
 # `ai.<owner>.instances` for CLIProxyAPI and CPA Manager Plus through the
 # shared helper (packages/ai-module/lib/instances.nix): each instance is one
 # `ai.services` entry with a rendered config file, on both backends.
@@ -13,6 +14,7 @@
   services = import ../../packages/ai-module/lib/services.nix {inherit lib;};
   strictShellApplication = import ../../lib/strict-shell-application.nix;
 
+  adminKey = redact.file "/run/secrets/cpa-admin-key";
   clientKey = redact.file "/run/secrets/cpa-client-key";
   managementKey = redact.file "/run/secrets/cpa-management-key";
   placeholder = name: "{" + "$" + name + "}";
@@ -117,26 +119,22 @@
     # Each other admin key form is steered to adminKeyFile, never ignored.
     && failures (evaluate backend (withInstances {
       cpa-manager-plus.instances.main.settings = {
-        config.adminKeyFile = "admin.key";
+        config.adminKeyFile = adminKey;
         environment = {
-          CPA_MANAGER_ADMIN_KEY = redact.file "/run/secrets/cpa-admin-key";
-          CPA_MANAGER_ADMIN_KEY_FILE = "/run/secrets/cpa-admin-key";
+          CPA_MANAGER_ADMIN_KEY = adminKey;
+          CPA_MANAGER_ADMIN_KEY_FILE = adminKey;
         };
       };
     }))
     == [
       "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY only on its first start, while the instance applies adminKeyFile on every start."
       "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY_FILE: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY_FILE only on its first start, while the instance applies adminKeyFile on every start."
-      "ai.cpa-manager-plus.instances.main.settings.config.adminKeyFile: must be an absolute path with no empty, `.` or `..` segment and no trailing whitespace, not `admin.key`."
     ]
-    # Bootstrap trims the path it reads; a trailing space would name another file.
-    && failures (evaluate backend (withInstances {cpa-manager-plus.instances.main.settings.config.adminKeyFile = "/run/secrets/cpa-admin-key ";}))
-    == ["ai.cpa-manager-plus.instances.main.settings.config.adminKeyFile: must be an absolute path with no empty, `.` or `..` segment and no trailing whitespace, not `/run/secrets/cpa-admin-key `."]
     # With adminKeyFile, every input that places the database must be a path
     # Manager Plus opens as written; without it, none is refused.
     && failures (evaluate backend (withInstances {
       cpa-manager-plus.instances.main = {
-        settings = unclean // {config = unclean.config // {adminKeyFile = "/run/secrets/cpa-admin-key";};};
+        settings = unclean // {config = unclean.config // {adminKeyFile = adminKey;};};
         stateDir = "/srv/state/../manager";
       };
     }))
@@ -155,17 +153,107 @@
     };
   };
 
-  # adminKeyFile restarts the instance when its bytes change.
-  keyed = backend:
-    services.triggers (evaluate backend (withInstances {cpa-manager-plus.instances.main.settings.config.adminKeyFile = "/run/secrets/cpa-admin-key";})).config.ai.services.cpa-manager-plus-main
-    == ["/run/secrets/cpa-admin-key" "/run/secrets/cpa-management-key"];
+  # Secret-file settings (redact.types.secretFile), one row per case: the
+  # instance declarations, and what each named service receives, a subset of
+  # its config file's `secrets` and of its `environment`, or null where
+  # evaluation refuses. Delivery is checked in packages/ai-module/checks.
+  asFile = value: {_redact.asFile = value;};
+  dataKey = redact.command "/run/current-system/sw/bin/read-data-key";
+  joined = redact.concat [managementKey];
+  tlsKey = redact.file "/run/secrets/tls.key";
+  secretFiles = [
+    {
+      name = "a TLS key is a secret file";
+      input.cliproxyapi.instances.main.settings.server.tls = {
+        cert = "/etc/cliproxyapi/tls.crt";
+        enable = true;
+        key = tlsKey;
+      };
+      expect.cliproxyapi-main.secrets.CLIPROXYAPI_SERVER_TLS_KEY = asFile tlsKey;
+    }
+    {
+      name = "untyped plugin JSON lifts a reference";
+      input.cliproxyapi.instances.main.settings.plugins.configs.example.token = tlsKey;
+      expect.cliproxyapi-main.secrets.CLIPROXYAPI_PLUGINS_CONFIGS_EXAMPLE_TOKEN = tlsKey;
+    }
+    {
+      name = "untyped plugin JSON refuses a malformed marker";
+      input.cliproxyapi.instances.main.settings.plugins.configs.example.token._redact.concat = ["literal"];
+      expect.cliproxyapi-main = null;
+    }
+    {
+      # dataKeyPath, where Manager Plus writes the key it generates, stays a path.
+      name = "the key files are secret files";
+      input.cpa-manager-plus.instances.main.settings = {
+        config = {
+          adminKeyFile = adminKey;
+          dataKeyFile = dataKey;
+          dataKeyPath = "/srv/manager/data.key";
+          managementKeyFile = joined;
+        };
+        environment = {
+          CPA_MANAGEMENT_KEY_FILE = joined;
+          CPA_MANAGER_DATA_KEY_FILE = dataKey;
+          CPA_MANAGER_DATA_KEY_PATH = "/srv/manager/data.key";
+        };
+      };
+      expect.cpa-manager-plus-main = {
+        environment = {
+          CPA_MANAGEMENT_KEY_FILE = asFile joined;
+          CPA_MANAGER_DATA_KEY_FILE = asFile dataKey;
+          CPA_MANAGER_DATA_KEY_PATH = "/srv/manager/data.key";
+        };
+        secrets = {
+          CPA_MANAGER_PLUS_ADMINKEYFILE = asFile adminKey;
+          CPA_MANAGER_PLUS_DATAKEYFILE = asFile dataKey;
+          CPA_MANAGER_PLUS_MANAGEMENTKEYFILE = asFile joined;
+        };
+      };
+    }
+  ];
+  delivers = {
+    input,
+    expect,
+    ...
+  }: let
+    inherit ((evalHm (withInstances input)).config.ai) services;
+    holds = service: want: let
+      entry = services.${service};
+      have = {
+        inherit (entry) environment;
+        inherit (entry.files.config) secrets;
+      };
+    in
+      if want == null
+      then !(succeeds entry.files)
+      else lib.all (field: builtins.intersectAttrs want.${field} have.${field} == want.${field}) (builtins.attrNames want);
+  in
+    lib.all lib.id (lib.mapAttrsToList holds expect);
+  # A vacuous table passes: no rows, or a row whose expectation is empty at
+  # any level, so each of those fails.
+  nonempty = set: set != {};
+  tableComplete =
+    secretFiles
+    != []
+    && lib.all (row:
+      row.name
+      != ""
+      && nonempty row.input
+      && nonempty row.expect
+      && lib.all (service: let
+        want = row.expect.${service};
+      in
+        want == null || (nonempty want && lib.all (field: nonempty want.${field}) (builtins.attrNames want)))
+      (builtins.attrNames row.expect))
+    secretFiles;
+  undelivered = map (row: row.name) (lib.filter (row: !delivers row) secretFiles);
 
   # adminKeyFile alone, with no upstream management key, still waits for the
   # secret providers; `disabled` has neither and stays a plain unit.
   standalone =
     (evalHm (withInstances {
       cpa-manager-plus.instances.main = {
-        settings.config.adminKeyFile = "/run/secrets/cpa-admin-key";
+        settings.config.adminKeyFile = adminKey;
         upstream = null;
       };
     })).config;
@@ -187,6 +275,24 @@
       ${pkgs.coreutils}/bin/stat -c '%a' "$PWD" "$PWD/auth" > "$RECEIVED/modes"
     '';
   };
+  # A stand-in Manager Plus that records the environment of each call, the
+  # reset and the daemon.
+  fakeManager = strictShellApplication pkgs {
+    name = "cpa-manager-plus";
+    text = ''
+      call="''${1:-daemon}"
+      ${pkgs.coreutils}/bin/env > "$RECEIVED/$call.env"
+    '';
+  };
+  managed =
+    (evalHm (withInstances {
+      cpa-manager-plus.instances.main = {
+        package = fakeManager;
+        settings.config.adminKeyFile = redact.file "/build/admin-key";
+        stateDir = "/build/state/managed";
+        upstream = null;
+      };
+    })).config;
   runnableFor = overrides:
     (evalHm (withInstances {
       cliproxyapi.instances.main =
@@ -211,11 +317,13 @@ in {
   checks =
     {
       module-service-instances = mkTest "service-instances" (
-        lib.all (backend: entries backend && keyed backend && refusals backend) ["devenv" "hm"]
-        && devenv.processes.cliproxyapi-main.watch.paths == ["/run/secrets/cpa-client-key" "/run/secrets/cpa-management-key"]
-        && devenv.processes.cpa-manager-plus-main.watch.paths == ["/run/secrets/cpa-management-key"]
-        && !disabled.ai.services.cliproxyapi-main.enable
-        && disabled.ai.claims.port."8400" == ["cliproxyapi:cliproxyapi-main.ports.main"]
+        assert lib.assertMsg tableComplete "service-instances secret-file table has an empty row";
+        assert lib.assertMsg (undelivered == []) "service-instances secret files failed: ${builtins.toJSON undelivered}";
+          lib.all (backend: entries backend && refusals backend) ["devenv" "hm"]
+          && devenv.processes.cliproxyapi-main.watch.paths == ["/run/secrets/cpa-client-key" "/run/secrets/cpa-management-key"]
+          && devenv.processes.cpa-manager-plus-main.watch.paths == ["/run/secrets/cpa-management-key"]
+          && !disabled.ai.services.cliproxyapi-main.enable
+          && disabled.ai.claims.port."8400" == ["cliproxyapi:cliproxyapi-main.ports.main"]
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
@@ -237,7 +345,7 @@ in {
               {
                 package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cpa-manager-plus;
                 port = 28418;
-                settings.config.adminKeyFile = "/build/admin-key";
+                settings.config.adminKeyFile = redact.file "/build/admin-key";
                 stateDir = "/build/state/manager";
               }
               // manager;
@@ -248,7 +356,7 @@ in {
         declaredDatabase = daemons {
           settings = {
             config = {
-              adminKeyFile = "/build/admin-key";
+              adminKeyFile = redact.file "/build/admin-key";
               defaultTheme = "dark";
             };
             environment.USAGE_DB_PATH = "/build/state/declared-db/usage.sqlite";
@@ -308,14 +416,14 @@ in {
             echo "defaultTheme: $(${pkgs.jq}/bin/jq -c .defaultTheme info.json)"
             ${pkgs.jq}/bin/jq -e --arg theme "$1" '.defaultTheme == $theme' info.json > /dev/null
           }
-          # A first start refuses a key file that is blank to strings.TrimSpace,
-          # here a lone no-break space, before bootstrap could generate and log a key.
+          # A start refuses a key that is blank to strings.TrimSpace, here a
+          # lone no-break space, before bootstrap could generate and log a key.
           printf '\302\240\n' > /build/admin-key
           if "$main" > blank.log 2>&1; then
             echo "a blank admin key file started Manager Plus" >&2
             exit 1
           fi
-          ${pkgs.gnugrep}/bin/grep -F 'is unreadable or blank' blank.log
+          ${pkgs.gnugrep}/bin/grep -F 'settings.config.adminKeyFile: the key is blank to strings.TrimSpace' blank.log
           printf '%s\n' admin-key-a > /build/admin-key
           manager "$main" manager.log
           ${pkgs.jq}/bin/jq -e '.ok == true and .service == "cpa-manager-plus"' health.json
@@ -401,6 +509,40 @@ in {
             || grep -F -e admin-key-a -e admin-key-b -e admin-key-c -e admin-key-d -e admin-key-env manager*.log; then
             false
           fi
+          touch "$out"
+        '';
+      # The run script's scratch variable for the trimmed admin key never
+      # reaches a child process, whatever the environment exports.
+      module-service-instances-admin-key = let
+        launcher = services.mkLauncher {
+          inherit pkgs;
+          entry = managed.ai.services.cpa-manager-plus-main;
+          name = "cpa-manager-plus-main";
+        };
+      in
+        pkgs.runCommandLocal "module-test-service-instances-admin-key" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          printf '%s\n' dummy-admin-key > /build/admin-key
+          mkdir -p /build/state/managed
+          printf '%s' database > /build/state/managed/usage.sqlite
+          export XDG_RUNTIME_DIR="$TMPDIR/run" RECEIVED="$TMPDIR/received"
+          mkdir -p "$RECEIVED" "$XDG_RUNTIME_DIR"
+          # Control for the detection: an exported scratch name does reach a
+          # child that nothing clears.
+          stripped_key=ambient-leak ${fakeManager}/bin/cpa-manager-plus
+          ${pkgs.gnugrep}/bin/grep -Fx 'stripped_key=ambient-leak' "$RECEIVED/daemon.env"
+          rm "$RECEIVED"/*
+          # The same name, exported with the key's own value and a stale one,
+          # reaches neither the reset nor the daemon.
+          stripped_key=dummy-admin-key ${launcher}/bin/ai-service-cpa-manager-plus-main
+          for call in reset-admin-key daemon; do
+            test -s "$RECEIVED/$call.env"
+            if ${pkgs.gnugrep}/bin/grep -F -e stripped_key -e dummy-admin-key -e ambient-leak "$RECEIVED/$call.env"; then
+              echo "the admin key reached the $call environment" >&2
+              exit 1
+            fi
+          done
           touch "$out"
         '';
       # Linux Home Manager emits the units, and the launcher renders the
