@@ -271,10 +271,7 @@ in {
       (claimedPaths context);
     # Same merge as facets.realizeOverlay: keep the consumer's neighbours in a
     # shared namespace, replace only the claimed leaves.
-    reexported =
-      lib.recursiveUpdateUntil (_: before: after: !(ordinaryAttrs before && ordinaryAttrs after))
-      prev
-      tree;
+    reexported = facets.mergeContribution prev tree;
     built = buildOverlay final prev;
   in
     lib.genAttrs (rootNamesFor context) (name:

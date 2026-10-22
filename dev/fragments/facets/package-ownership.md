@@ -1,8 +1,9 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-20 — a `checks/` concern without `default.nix` (a
-> fixture flake) is not discovered; check-name laziness is gated by the
-> `check-laziness` assertion in facet-mock.
+> **Last verified:** 2026-10-21 — package trees and ordinary owner overlays
+> deep-merge through one `mergeContribution` helper; a `checks/` concern without
+> `default.nix` (a fixture flake) is not discovered; check-name laziness is
+> gated by the `check-laziness` assertion in facet-mock.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components

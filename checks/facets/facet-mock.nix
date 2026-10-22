@@ -202,6 +202,9 @@
         && overlayResult.ai.devTools.seed == inputs.fixture.sentinel
         && !(overlayResult.ai.devTools.alpha-tool ? previousPackageOnly)
         && overlayResult.ai.gitTools.git-revise.drvPath == gitRevise.drvPath;
+      overlay-sparse-leaf =
+        overlayResult.ai.devTools.alpha-note
+        == "${inputs.fixture.sentinel}:alpha-note";
       package-identity =
         packageWorld.scopes.git-revise.ai.gitTools.git-revise.drvPath
         == gitRevise.drvPath
@@ -324,6 +327,19 @@
               base.ai.seed = inputs.fixture.sentinel;
               result = lib.fix (final: base // world.overlay final base);
             in builtins.deepSeq result true
+          ''
+          else if probe.force == "overlay-forcing-sibling" || probe.force == "overlay-plain-sibling"
+          then ''
+            let
+              world = loader.realizeOverlay { inherit context index; };
+              base.ai.seed = inputs.fixture.sentinel;
+              base.ai.devTools.sibling = ${
+              if probe.force == "overlay-forcing-sibling"
+              then ''{type = "derivation"; outPath = abort "overlay claims check forced a sibling outPath";}''
+              else ''"plain"''
+            };
+              result = lib.fix (final: base // world.overlay final base);
+            in assert result.ai.devTools ? sibling; builtins.deepSeq result.ai.devTools.added true
           ''
           else if probe.force == "package-overlay"
           then ''
@@ -573,6 +589,14 @@
           "/two/overlay.nix"
         ];
       })
+      # The re-emitting overlay shape walks every sibling it carries, and `==`
+      # on two derivations forces both `outPath`s. Sparse contributions avoid it.
+      (probe {
+        name = "overlay-re-emit-forcing";
+        scenario = "overlay-re-emit";
+        force = "overlay-forcing-sibling";
+        expected = ["overlay claims check forced a sibling outPath"];
+      })
       (probe {
         name = "overlay-undeclared";
         force = "overlay";
@@ -712,6 +736,18 @@
       (probe {
         name = "overlay-dotted-alias";
         force = "overlay";
+        expected = [];
+      })
+      (probe {
+        name = "overlay-re-emit-plain";
+        scenario = "overlay-re-emit";
+        force = "overlay-plain-sibling";
+        expected = [];
+      })
+      (probe {
+        name = "overlay-sparse-forcing";
+        scenario = "overlay-sparse";
+        force = "overlay-forcing-sibling";
         expected = [];
       })
     ];

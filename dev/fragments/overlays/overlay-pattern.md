@@ -1,8 +1,9 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-20 — Go check names come from one declared table; a
-> completeness check compares both original passthru discoveries; the flake has
-> no `apps` output.
+> **Last verified:** 2026-10-21 — an owner overlay returns only the leaves it
+> claims and the composer deep-merges each one into `prev`, stopping at
+> derivations; Go check names come from one declared table; the flake has no
+> `apps` output.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -21,6 +22,11 @@
 >   check-meta sources. The operator rejected it on 2026-10-04: modelling
 >   nixpkgs' key set is a list that drifts on every bump. The consumer's own
 >   `mkDerivation` judges a probe instead.
+> - **Do not skip derivations in the overlay claims check's `valuesEqual`.**
+>   Issue #2809 proposed it to stop the check forcing sibling `outPath`s. It was
+>   rejected on 2026-10-21: an overlay that replaces an existing derivation must
+>   still count as writing that leaf. The composer deep-merges sparse
+>   contributions and walks only the names they set instead.
 
 `lib/facets/repository.nix` discovers native package trees below
 `packages/<owner>/packages/` and exposes them through `overlays.default`. AI
@@ -996,3 +1002,12 @@ An ordinary overlay contribution is different: `overlay.nix` declares static
 independent of package evaluation, and let the shared composer handle ordering,
 exclusive ownership, and consumer policy. Package recipes do not use the former
 three-argument overlay curry.
+
+Return only the leaves you claim, for example
+`{ai.devTools.example.mkThing = ...;}`. The composer deep-merges the result into
+`prev` with `mergeContribution` in `lib/facets.nix`, stopping at derivations,
+which it replaces whole, and the claims check walks only the names the result
+sets. Do not re-emit `prev` (`ai = prev.ai // {...}`): it still merges, but the
+check then compares every carried sibling with `==`, which forces both
+`outPath`s of every sibling derivation. The `overlay-re-emit-forcing` probe in
+`checks/facets/facet-mock.nix` pins that hazard.
