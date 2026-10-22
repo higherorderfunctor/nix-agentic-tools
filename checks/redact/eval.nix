@@ -22,6 +22,8 @@
   command = redact.command "/run/current-system/sw/bin/read-token";
   bearer = redact.concat ["Bearer " file];
   maybe = redact.types.maybeRedacted;
+  secretFile = redact.types.secretFile;
+  asFile = value: {_redact.asFile = value;};
   reader = lib.getExe (import ../../lib/redact/reader.nix {inherit pkgs;});
   assign = variable: value: export:
     redact.assign {
@@ -94,6 +96,8 @@
     "environment refuses a leading digit" = !accepts redact.types.environment {"1X" = "x";};
     "environment refuses an invalid name set to null" = !accepts redact.types.environment {"BAD-NAME" = null;};
 
+    "filePaths sees through the tag" = redact.filePaths (asFile bearer) == ["/run/secrets/token"];
+
     # assign: one function for every value. The reader's argv is the label,
     # kinds, paths and literal parts, and the path need not exist: nothing is
     # read at evaluation.
@@ -113,10 +117,34 @@
     "assign refuses an invalid name" = !succeeds (assign "BAD-NAME" "x" true);
     "assign refuses an int" = !succeeds (assign "TOKEN" 1 true);
     "assign refuses a malformed marker" = !succeeds (assign "TOKEN" {_redact.file = "relative";} true);
+    # A non-service launcher delivers values only, so a secret file fails.
+    "assign refuses a secretFile value" = !succeeds (assign "TOKEN" (asFile file) true);
   };
-  failed = builtins.attrNames (lib.filterAttrs (_: passed: !passed) cases);
+  # secretFile takes what redacted takes and tags it for path delivery. One
+  # row per case: the type, the definition, and the merged value or `refused`.
+  refused = "refused";
+  row = name: type: input: expect:
+    lib.nameValuePair name (
+      if expect == refused
+      then !accepts type input
+      else evaluate type input == expect
+    );
+  secretRows = [
+    (row "secretFile tags a reference" secretFile file (asFile file))
+    (row "secretFile keeps a tagged value" secretFile (asFile file) (asFile file))
+    (row "secretFile refuses a store file" secretFile {_redact.file = "${builtins.storeDir}/aaaa-source/secret";} refused)
+    (row "secretFile refuses a tagged literal" secretFile (asFile "literal-secret") refused)
+    (row "orSecretFile refuses a mix" (redact.types.orSecretFile redact.types.redacted) (lib.mkMerge [file (asFile file)]) refused)
+    (row "environment takes a secretFile value" redact.types.environment {CPA_MANAGER_ADMIN_KEY_FILE = asFile file;} {CPA_MANAGER_ADMIN_KEY_FILE = asFile file;})
+  ];
+  secretFiles = builtins.listToAttrs secretRows;
+  # An empty table, or a repeated row name that listToAttrs drops, passes
+  # vacuously, so both fail here.
+  tableComplete = secretRows != [] && builtins.length (builtins.attrNames secretFiles) == builtins.length secretRows;
+  failed = builtins.attrNames (lib.filterAttrs (_: passed: !passed) (cases // secretFiles));
 in {
   checks.redact-eval = harness.mkTest "redact-eval" (
+    assert lib.assertMsg tableComplete "redact-eval secretFiles table is empty or repeats a row name";
     assert lib.assertMsg (failed == []) "redact-eval failed: ${builtins.toJSON failed}"; true
   );
 }

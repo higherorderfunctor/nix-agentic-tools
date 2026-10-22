@@ -9,6 +9,7 @@
     "--api-key" = true;
     "absorb.token" = true;
     access_key = true;
+    adminKeyFile = false;
     apiKey = true;
     api_key = true;
     apikey = true;
@@ -19,6 +20,11 @@
     client_key = false;
     clientsecret = true;
     configDir = false;
+    CPA_MANAGEMENT_KEY = true;
+    CPA_MANAGEMENT_KEY_FILE = false;
+    CPA_MANAGER_ADMIN_KEY = true;
+    CPA_MANAGER_DATA_KEY = true;
+    CPA_MANAGER_DATA_KEY_PATH = false;
     credential = true;
     credentials = true;
     deviceId = false;
@@ -26,12 +32,14 @@
     GITLAB_HOST = false;
     gitTokens = true;
     GLAB_CONFIG_DIR = false;
+    has-metadata-key = false;
     host = false;
     IDToken = true;
     job_token = true;
     JWTSecret = true;
     keepRecentTokens = false;
     KIMCHI_API_KEY = true;
+    managementKey = true;
     maxTokens = false;
     myAPIToken = true;
     oauth2_refresh_token = true;
@@ -47,6 +55,7 @@
     SECRET_KEY = true;
     secretKey = true;
     selfHostedUrl = false;
+    SORT_KEY = false;
     token = true;
     tokenEndpoint = false;
     "toolSearch.minTokens" = false;

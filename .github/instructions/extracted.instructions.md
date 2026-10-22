@@ -629,9 +629,10 @@ raw this host carries and omit the foreign one.
 
 > **Last verified:** 2026-10-21 — `lib/extracted/options.nix` types the
 > CLIProxyAPI and CPA Manager Plus node trees with nullable container children
-> and refuses a refinement row that would apply on a node with a secret
-> descendant; `render.nix` lifts secrets into `{$NAME}` placeholders; `goTest`
-> runs each owner's loader check.
+> and `secretFile` nodes, and refuses a refinement row that would apply on a
+> node with a secret or secret-file descendant; `render.nix` lifts secrets and
+> secret files into `{$NAME}` placeholders and refuses a malformed `_redact`
+> marker; `goTest` runs each owner's loader check.
 
 Two owners, CLIProxyAPI and CPA Manager Plus, get typed settings from their
 reconciled facts through one generator. The four older generators
@@ -661,8 +662,14 @@ element, `.<name>` for a map value). It needs only `lib`.
   `nullOr redact.types.redacted`, including list elements and map values. Its
   non-null type accepts references only. No refinement row widens a secret: a
   row on one is reported stale, and a row that would apply on any node with a
-  secret descendant fails evaluation, naming both paths, because the row returns
-  the whole value type and would replace the redacted descendant.
+  secret or secret-file descendant fails evaluation, naming both paths, because
+  the row returns the whole value type and would replace the redacted
+  descendant.
+- A node carrying `secretFile` (a reason, like `secret`) is
+  `nullOr redact.types.secretFile`, delivered as a file path
+  (`dev/fragments/redact/redact.md`, Secret files). It marks a key file the tool
+  reads, such as `adminKeyFile`, never a path it writes, such as `dataKeyPath`.
+  A node with both fields fails evaluation; a refinement row on one is stale.
 - Node fields it does not read fail evaluation unless the owner lists them in
   `unread`, so an extractor that learns a fact must teach the generator.
 
@@ -675,8 +682,8 @@ it); every list is empty for a current owner.
 
 `sample { overrides; }` sets every leaf from its node: `true`, `1`, `1.5`,
 `"sample"`, `"1s"`, the first enum value, one list element, one map entry
-`sample`, a dummy `redact.file` for a secret. An override names a node path and
-replaces that value; one naming no node fails.
+`sample`, a dummy `redact.file` for a secret or a secret file. An override names
+a node path and replaces that value; one naming no node fails.
 
 ## The render (`lib/extracted/render.nix`)
 
@@ -684,7 +691,12 @@ replaces that value; one naming no node fails.
 dropped recursively, inside lists too. Each redact reference becomes the whole
 JSON string `"{$<PREFIX>_<PATH>}"`, the env-reference token
 `lib/ai/mcpProxy.nix` writes into its Caddyfile, and `secrets` maps that name to
-the reference. Two paths that sanitize to one name fail evaluation.
+the reference; a secret-file value keeps its tag there, so the launcher fills
+its placeholder with a path. Lifting uses `redact.isRedacted` and
+`redact.isAsFile`, never a test of its own. Any other set with a `_redact` key
+(`redact.isReserved`, after nulls are dropped), even in untyped JSON such as
+CLIProxyAPI's `plugins.configs`, is refused through `redact.sealed`. Two paths
+that sanitize to one name fail evaluation.
 
 `content` is JSON text for both owners, YAML included: JSON is YAML 1.2, and
 CLIProxyAPI's yaml.v3 loader reads it (its loader check proves it). One quoting

@@ -1,9 +1,10 @@
 ## Redact: secrets kept out of the Nix store
 
-> **Last verified:** 2026-10-17 — packaged MCP credentials, HTTP values, proxy
-> injection, Kiro MCP delivery, glab and Kimchi credentials consume redact
-> references, and `ai.proxy.key` takes `redacted` (never cleartext); secret-name
-> classification lives privately in `lib/redact/classify.nix`.
+> **Last verified:** 2026-10-21 — `types.secretFile` tags a reference for path
+> delivery, and every consumer that takes the value refuses it; any set with a
+> `_redact` key is reserved; secret-name classification lives privately in
+> `lib/redact/classify.nix`, over the suffix table in
+> `lib/open-keys/patterns.nix`.
 
 `lib/redact` is a pure `{lib}` import, exported as `lib.redact`. A value either
 is cleartext, which is visible and lands in the store, or names where a secret
@@ -32,8 +33,13 @@ dependency of that launcher. Nothing checks what a program contains, so a script
 that embeds a secret is not caught.
 
 The marker shape is the only representation. `isMarker`, `isReference`,
-`isConcat` and `isRedacted` in `default.nix` are the one copy of that logic.
-Constructors, types and `assign` all reach it through `sealed`.
+`isConcat`, `isRedacted` and `isAsFile` in `default.nix` are the one copy of
+that logic. Constructors, types and `assign` all reach it through `sealed`.
+`isRedacted`, `isAsFile`, `isPath`, `isReserved` and `sealed` are exported, so a
+consumer that walks values (`lib/extracted/render.nix`) uses this copy too.
+`_redact` is reserved syntax: `isReserved` holds for any set with the key, valid
+or not, and a reserved set that is no reference is refused through `sealed`,
+judged after null attributes are dropped.
 
 ### Why refusals never print the value
 
@@ -62,11 +68,29 @@ Two consequences:
   declared cleartext.
 - `types.environment` is `attrsOf` a type that also takes null. A name that
   `lib/redact/classify.nix` flags as secret requires `redacted`. Any other name
-  takes `maybeRedacted str`. Names must be shell identifiers, even when the
-  value is null. A null defined beside a value is refused as a conflict, without
-  the value. null drops the definition and `assign` emits nothing for it, so an
-  inherited variable is not unset; removing one is up to the consumer's
-  launcher.
+  takes `maybeRedacted str`. Either also takes a `secretFile` value, for
+  `ai.services`. Names must be shell identifiers, even when the value is null. A
+  null defined beside a value is refused as a conflict, without the value. null
+  drops the definition and `assign` emits nothing for it, so an inherited
+  variable is not unset; removing one is up to the consumer's launcher.
+- `types.secretFile` takes what `redacted` takes and tags it; see Secret files.
+- `types.orSecretFile t` takes a value of `t` or a tagged value, for a field
+  `ai.services` delivers. A tagged and an untagged definition of one option are
+  refused together rather than tagging the other.
+
+### Secret files: path delivery
+
+Some settings want the path of a file holding the secret, not the value: CPA
+Manager Plus's key files, CLIProxyAPI's `server.tls.key`. The option definer
+types such an option `types.secretFile`; the consumer still writes
+`redact.file`, `redact.command` or `redact.concat`. Its merge refuses what
+`redacted` refuses and tags the rest as `{_redact.asFile = <reference>;}`; a
+tagged definition passes unchanged, so one secretFile option can feed another.
+
+`filePaths` sees through the tag, so restart triggers and provider ordering come
+from the reference. Wherever the value itself is taken, a tagged value fails
+evaluation: `sealed` says only an `ai.services` launcher delivers it, so
+`assign` and `redacted` never hand a path to a consumer that takes the value.
 
 ### Delivery: `assign`, a function and not a type
 

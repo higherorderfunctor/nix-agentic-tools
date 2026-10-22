@@ -1,9 +1,10 @@
 ## Open keys: advisory inspection and explicit refusal
 
-> **Last verified:** 2026-10-14 — shared pure key inspection replaces the
+> **Last verified:** 2026-10-21 — shared pure key inspection replaces the
 > owner-local spelling walker; printed string suppressions round-trip quoted
 > segments, maps and lists; unused suppressions warn and retain their raw text.
-> Kiro retains its separate complete workspace delivery allowlist.
+> Kiro retains its separate complete workspace delivery allowlist. The suffix
+> table names `admin_key`, `data_key` and `management_key`, not a bare `key`.
 
 `lib/open-keys` is a pure `{lib}` import. It has no module, package, file
 writer, or runtime dependency. Owners supply schema data and choose the policy:

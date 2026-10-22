@@ -2,7 +2,9 @@
 # resolves them at start. Needs only nixpkgs lib.
 #
 # `render { prefix; settings; }` drops every null, recursively and inside
-# lists, and replaces each redact reference with a placeholder:
+# lists, and replaces each redact reference with a placeholder; a
+# redact.types.secretFile value keeps its tag in `secrets`, so the launcher
+# fills its placeholder with the path of the file it writes, not the value:
 #
 #   { content = <JSON text>; secrets = { <NAME> = <redact reference>; }; }
 #
@@ -17,7 +19,8 @@
 # 1.2, so a YAML reader takes the same file; it is text at evaluation, where
 # `pkgs.formats.*.generate` gives a derivation and quotes `{$NAME}` its own way.
 {lib}: let
-  isReference = value: builtins.isAttrs value && builtins.attrNames value == ["_redact"];
+  redact = import ../redact {inherit lib;};
+  isReference = value: redact.isRedacted value || redact.isAsFile value;
   sanitize = segment:
     lib.concatStrings (map (c:
       if builtins.match "[A-Z0-9]" c != null
@@ -27,7 +30,17 @@
   placeholder = name: "{" + "$" + name + "}";
 
   # path → value → { value; secrets = [ { name; path; reference; } ]; }
-  lift = prefix: path: value:
+  # Nulls are dropped before anything is tested, so the value tested is the
+  # value written. `_redact` is reserved: an attribute set that has it must be
+  # a valid reference, wherever it sits and whatever else it holds, untyped
+  # JSON included. Anything else is refused by redact's `sealed`, which never
+  # prints the value.
+  lift = prefix: path: raw: let
+    value =
+      if builtins.isAttrs raw
+      then lib.filterAttrs (_: v: v != null) raw
+      else raw;
+  in
     if isReference value
     then let
       name = lib.concatMapStringsSep "_" sanitize ([prefix] ++ path);
@@ -40,10 +53,11 @@
         }
       ];
     }
+    else if redact.isReserved value
+    then redact.sealed "lib/extracted/render: ${prefix}.${lib.concatMapStringsSep "." toString path}" value
     else if builtins.isAttrs value
     then let
-      kept = lib.filterAttrs (_: v: v != null) value;
-      lifted = lib.mapAttrs (key: lift prefix (path ++ [key])) kept;
+      lifted = lib.mapAttrs (key: lift prefix (path ++ [key])) value;
     in {
       value = lib.mapAttrs (_: entry: entry.value) lifted;
       secrets = lib.concatMap (entry: entry.secrets) (builtins.attrValues lifted);

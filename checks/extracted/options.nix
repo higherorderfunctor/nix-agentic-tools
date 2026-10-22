@@ -40,6 +40,10 @@
       type = "string";
     };
     "group.wait".type = "duration";
+    "group.key-file" = {
+      secretFile = "a key file";
+      type = "string";
+    };
     items.type = "list";
     "items[]".type = "object";
     "items[].name".type = "string";
@@ -70,6 +74,19 @@
     enum-takes-its-values = accepts settings {group.mode = "a";} && !(accepts settings {group.mode = "c";});
     secret-refuses-a-string = !(accepts settings {group.token = "cleartext";});
     secret-takes-a-reference = accepts settings {group.token = file;};
+    secret-file-tags-a-reference =
+      (typeOf tree."group.key-file").merge ["key"] [
+        {
+          file = "probe";
+          value = file;
+        }
+      ]
+      == {_redact.asFile = file;};
+    secret-and-secret-file-fail = throws (one {
+      secret = "a credential";
+      secretFile = "a key file";
+      type = "string";
+    });
     duration-takes-go-grammar = accepts settings {group.wait = "1h2m3.5s";} && accepts settings {group.wait = "0";};
     duration-refuses-prose = !(accepts settings {group.wait = "5 minutes";});
     list-of-objects = accepts settings {items = [{name = "x";}];} && !(accepts settings {items = [{bogus = "x";}];});
@@ -139,6 +156,14 @@
       (refined "ids" {
         ids.type = "object";
         "ids.token" = secretLeaf;
+      }).options
+      && throws
+      (refined "ids" {
+        ids.type = "list";
+        "ids[]" = {
+          secretFile = "a key file";
+          type = "string";
+        };
       }).options;
     # Rows that would not apply are reported stale, not thrown: a node type
     # that differs from the row's, and a node that is itself secret.
@@ -201,15 +226,19 @@
             secret = "a credential";
             type = "string";
           };
+          secret-file = {
+            secretFile = "a key file";
+            type = "string";
+          };
         };
-        refinements = lib.genAttrs ["changed" "gone" "secret"] (_: {
+        refinements = lib.genAttrs ["changed" "gone" "secret" "secret-file"] (_: {
           type = "string";
           refine = {types, ...}: types.str;
         });
       })
       .report
       .staleRefinements
-      == ["changed" "gone" "secret"];
+      == ["changed" "gone" "secret" "secret-file"];
     stale-exclusions-are-reported =
       (generate {
         exclusions.gone = "probe";
@@ -301,6 +330,47 @@
         PROBE_SECRET_ITEMS_0 = file;
         PROBE_SECRET_LABELS_PRESENT = file;
       };
+    # A secret file's placeholder keeps the tag, so the launcher fills it with
+    # a path; a plain reference beside it, its null sibling dropped first,
+    # still fills with the value.
+    render-lifts-a-secret-file = let
+      rendered = render {
+        prefix = "PROBE";
+        settings = {
+          key-file = {_redact.asFile = file;};
+          token = {
+            inherit (file) _redact;
+            x = null;
+          };
+          bearer = {_redact.concat = ["literal " file];};
+        };
+      };
+    in
+      rendered.content
+      == builtins.toJSON {
+        bearer = "{" + "$" + "PROBE_BEARER}";
+        key-file = "{" + "$" + "PROBE_KEY_FILE}";
+        token = "{" + "$" + "PROBE_TOKEN}";
+      }
+      && rendered.secrets
+      == {
+        PROBE_BEARER = {_redact.concat = ["literal " file];};
+        PROBE_KEY_FILE = {_redact.asFile = file;};
+        PROBE_TOKEN = file;
+      };
+    # `_redact` is reserved: a set that has it and is no valid reference is
+    # refused wherever it sits, whatever else it holds, never written as data.
+    render-refuses-a-malformed-marker = lib.all (marker:
+      throws (render {
+        prefix = "PROBE";
+        settings.free.nested = [marker];
+      })) [
+      {_redact.concat = ["literal"];}
+      {
+        _redact.file = "/run/x";
+        x = 1;
+      }
+    ];
     render-refuses-a-shared-name = throws (render {
       prefix = "PROBE";
       settings = {

@@ -8,11 +8,13 @@
 # Every option is `nullOr T` with `default = null`; null leaves the key out of
 # the rendered file, so the tool applies its own default. Objects are closed
 # submodules: a key upstream removes fails a consumer that still sets it. A
-# node carrying the annotation field `secret` takes only a redact reference.
+# node carrying the annotation field `secret` takes only a redact reference;
+# one carrying `secretFile` takes one too, and the service launcher writes its
+# value to a 0600 file and gives the option that file's path.
 #
 # Arguments:
 #   nodes        path → node: `type`, and optionally `description`, `enum`,
-#                `secret`, `template`; any other field fails
+#                `secret`, `secretFile`, `template`; any other field fails
 #                evaluation unless `unread` names it, so an extractor that
 #                learns a fact must teach this generator too
 #   tool         the program's name, used in descriptions
@@ -29,9 +31,9 @@
 #   report   { misplaced; staleExclusions; staleRefinements; untyped; },
 #            every list empty for a current owner
 #   sample   { overrides ? {} }: one value for every non-excluded leaf, a list
-#            or map holding one element, a secret a dummy reference; an
-#            override (path → value) replaces the value at its path. For a
-#            check that feeds the render to the tool's own loader.
+#            or map holding one element, a secret or secret file a dummy
+#            reference; an override (path → value) replaces the value at its
+#            path. For a check that feeds the render to the tool's own loader.
 {lib}: let
   inherit (lib) types;
   redact = import ../redact {inherit lib;};
@@ -48,7 +50,9 @@
     inherit duration;
     string = types.str;
   };
-  known = ["description" "enum" "secret" "template" "type"];
+  known = ["description" "enum" "secret" "secretFile" "template" "type"];
+  # Either annotation makes a node take a redact reference only.
+  isSecret = node: node ? secret || node ? secretFile;
 in
   {
     nodes,
@@ -65,20 +69,23 @@ in
     # included, and lets a plaintext secret through. A row that would apply
     # (see fits) on a node with a secret descendant is refused.
     secretsUnder = path:
-      lib.filter (other: (lib.hasPrefix "${path}." other || lib.hasPrefix "${path}[]" other) && nodes.${other} ? secret) (builtins.attrNames nodes);
+      lib.filter (other: (lib.hasPrefix "${path}." other || lib.hasPrefix "${path}[]" other) && isSecret nodes.${other}) (builtins.attrNames nodes);
     # Whether a row applies to `tree`; `widening` asks of the raw nodes,
     # `refinementFits` of the checked ones, so reading the latter forces the
     # throws in `checked`.
-    fits = tree: path: row: tree ? ${path} && row.type == tree.${path}.type && !(tree.${path} ? secret);
+    fits = tree: path: row: tree ? ${path} && row.type == tree.${path}.type && !(isSecret tree.${path});
     widening = lib.concatLists (lib.mapAttrsToList (path: row:
       lib.optionals (fits nodes path row)
       (map (secret: "${path} -> ${secret}") (secretsUnder path)))
     refinements);
+    both = builtins.attrNames (lib.filterAttrs (_: node: node ? secret && node ? secretFile) nodes);
     checked =
       if unknown != []
       then throw "lib/extracted/options: ${tool} nodes carry fields this generator does not read:\n  ${lib.concatStringsSep "\n  " unknown}"
       else if widening != []
       then throw "lib/extracted/options: ${tool} refinement rows sit on a node with a secret descendant, so their type could replace the redacted one (row path -> secret path):\n  ${lib.concatStringsSep "\n  " widening}"
+      else if both != []
+      then throw "lib/extracted/options: ${tool} nodes are both `secret` and `secretFile`: ${lib.concatStringsSep ", " both}"
       else nodes;
 
     # "" for a root node.
@@ -123,7 +130,7 @@ in
     in
       if refinements ? ${path} && refinementFits path refinements.${path}
       then null
-      else if node ? secret || type == "any" || type == "object" || scalars ? ${type}
+      else if isSecret node || type == "any" || type == "object" || scalars ? ${type}
       then null
       else if type == "list" && !(checked ? ${element path})
       then "a list with no `${element path}` node"
@@ -134,7 +141,8 @@ in
       else "no option type for node type `${type}`";
 
     # path → the value type, before nullOr. A secret is always a reference: a
-    # refinement row on a secret node is stale, so no row can widen it.
+    # refinement row on a secret or secret-file node is stale, so no row can
+    # widen it.
     typeOf = path: let
       node = checked.${path};
       t = node.type;
@@ -147,6 +155,8 @@ in
         }
       else if node ? secret
       then redact.types.redacted
+      else if node ? secretFile
+      then redact.types.secretFile
       else if t == "object"
       then types.submodule {options = optionsOf path;}
       else if t == "list"
@@ -170,6 +180,7 @@ in
         ++ lib.optional (node ? template) "Upstream template: ${node.template}"
         ++ lib.optional (node ? enum) "One of ${lib.concatMapStringsSep ", " code node.enum}."
         ++ lib.optional (node ? secret) "A secret (${node.secret}); it takes a redact reference only, lifted out of the rendered file."
+        ++ lib.optional (node ? secretFile) "A secret file (${node.secretFile}); it takes a redact reference only, whose value the service launcher writes to a 0600 file at each start, giving ${tool} that file's path."
         ++ [
           "Null leaves it unset, so ${tool} applies its own default."
         ]
@@ -194,7 +205,7 @@ in
         path
       }
       or (
-        if node ? secret
+        if isSecret node
         then redact.file "/run/secrets/sample"
         else if t == "object"
         then sampleTree overrides path
