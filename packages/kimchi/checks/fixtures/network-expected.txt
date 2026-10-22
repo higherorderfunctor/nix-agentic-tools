@@ -13,6 +13,9 @@ kimchi src/node-http.ts:10 node-http - url https://h02-https-get.test/v1 h02-htt
 kimchi src/node-http.ts:14 node-http - host h03-https-options.test h03-https-options.test src/node-http.ts:15
 kimchi src/node-http.ts:22 node-http - url https://h04-https-named.test/v1 h04-https-named.test src/node-http.ts:22
 kimchi src/node-http.ts:26 node-http - url https://h05-https-get-named.test/v1 h05-https-get-named.test src/node-http.ts:26
+kimchi src/node-http.ts:31 node-http - host h06-module-const.test h06-module-const.test src/node-http.ts:29
+kimchi src/node-http.ts:36 node-http - host h07-local-const.test h07-local-const.test src/node-http.ts:35
+kimchi src/node-http.ts:41 node-http - url https://h08-base.test/ h08-base.test src/node-http.ts:41
 kimchi src/regions.ts:22 fetch - url https://r01-api-eu.test r01-api-eu.test src/regions.ts:9
 kimchi src/regions.ts:22 fetch - url https://r01-api-us.test r01-api-us.test src/regions.ts:5
 kimchi src/regions.ts:40 fetch - url https://r01-api-us.test r01-api-us.test src/regions.ts:5

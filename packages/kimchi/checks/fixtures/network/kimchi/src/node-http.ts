@@ -25,3 +25,18 @@ export function h04() {
 export function h05() {
   return httpsGet("https://h05-https-get-named.test/v1", { headers: {} });
 }
+// H06 https.request with a module constant as its hostname
+const H06_HOST = "h06-module-const.test";
+export function h06() {
+  return https.request({ hostname: H06_HOST, path: "/v1" });
+}
+// H07 https.request with a local constant as its hostname
+export function h07() {
+  const host = "h07-local-const.test";
+  return https.request({ hostname: host, path: "/v1" });
+}
+// H08 a host-shaped constant joined into a URL's path, not after "://": not a host origin, negative control
+const H08_SEGMENT = "h08-path-segment.test";
+export function h08() {
+  return https.get("https://h08-base.test/" + H08_SEGMENT);
+}

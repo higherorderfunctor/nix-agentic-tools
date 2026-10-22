@@ -3,8 +3,8 @@
 > **Last verified:** 2026-10-21 — `network` is measured on x86_64-linux by
 > `ql/network` with the `ql/models/{sdk,undici}` packs through `runQueries`; a
 > modeled request is an invocation of its row's own callee and takes its library
-> from that row; the fixture's minified chunk is one the extractor skips without
-> the flag.
+> from that row; a host constant reaches a `hostname` by value flow; the
+> fixture's minified chunk is one the extractor skips without the flag.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 bundle and
 > rejected:
@@ -51,12 +51,13 @@ with `--ram=8192` (53.8 s).
 ### Target kinds
 
 `url` is a string with a scheme, `host` a scheme-less host literal joined after
-`://` or given as `hostname`, `env` a `process.env` read (its value is the
-name). When none of them reaches any target, the target is classified instead:
-`argument` (a parameter's name), `property` (a property's name) or `dynamic`
-(the expression's text, which CodeQL truncates in the middle with `...`). A
-target read from a Kimchi config key is `property` or `dynamic`: the fact does
-not name the config path.
+`://` or that is a target's whole value (`hostname: "h"`, or `hostname: HOST` by
+value flow from `const HOST = "h"`), `env` a `process.env` read (its value is
+the name). When none of them reaches any target, the target is classified
+instead: `argument` (a parameter's name), `property` (a property's name) or
+`dynamic` (the expression's text, which CodeQL truncates in the middle with
+`...`). A target read from a Kimchi config key is `property` or `dynamic`: the
+fact does not name the config path.
 
 Origins are taint flow: an origin influences the target and is not proof that it
 is the whole of it. A wrapper takes every caller's origins. Kimchi's
@@ -127,13 +128,14 @@ rows to equal `checks/fixtures/network-expected.txt`. That file has one line per
 target and covers one call per library and bundle shape. Its negative controls
 are a docs-only URL, a browser-only URL, a module-local `fetch` in `src/` and in
 the minified chunk, and `new this.constructor({baseURL})`. Each must appear only
-as an unattributed literal. Options objects also handed to `console` or an
-imported logger must yield the SDK's row and not the logger's, and one handed to
-two SDKs a row per SDK, each with its own package. `chunk-minified.js` averages
-over 200 characters a line, so the extractor skips it without the flag
-(measured: files averaging 173 were kept, 231 skipped), and its 5 rows go. The
-expected lines name fixture line numbers, so reformatting a fixture file means
-regenerating them. biome leaves the chunks under `node_modules` as they are.
+as an unattributed literal. A host constant joined into a URL's path is no host.
+Options objects also handed to `console` or an imported logger must yield the
+SDK's row and not the logger's, and one handed to two SDKs a row per SDK, each
+with its own package. `chunk-minified.js` averages over 200 characters a line,
+so the extractor skips it without the flag (measured: files averaging 173 were
+kept, 231 skipped), and its 5 rows go. The expected lines name fixture line
+numbers, so reformatting a fixture file means regenerating them. biome leaves
+the chunks under `node_modules` as they are.
 
 ### Running it without Nix
 

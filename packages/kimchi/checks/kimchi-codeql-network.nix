@@ -6,9 +6,10 @@
 # call-site target, then one per URL literal no call site reads. The negative
 # controls (a docs-only URL, a browser-only URL, a local function named fetch
 # in src/ and in the minified chunk, `new this.constructor({baseURL})`) are
-# expected only as unattributed literals, and the logger calls handed an SDK's
-# options object not at all. `$out` holds the fact JSON only. x86_64-linux
-# only, as the engine is.
+# expected only as unattributed literals, the logger calls handed an SDK's
+# options object not at all, and a host constant joined into a URL's path not
+# as a host. `$out` holds the fact JSON only. x86_64-linux only, as the engine
+# is.
 {
   lib,
   pkgs,

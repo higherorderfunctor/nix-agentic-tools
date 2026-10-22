@@ -44,13 +44,27 @@ module HostJoinConfig implements DataFlow::ConfigSig {
 module HostJoinFlow = DataFlow::Global<HostJoinConfig>;
 
 /**
+ * Value flow of a host-shaped literal to a request's target, through
+ * variables and constants. Value flow only: a host-shaped string joined into
+ * a longer one (a URL's path) is not the target, so it is no host origin.
+ */
+module HostTargetConfig implements DataFlow::ConfigSig {
+  predicate isSource(DataFlow::Node node) { hostShaped(node, _) }
+
+  predicate isSink(DataFlow::Node node) { node = requestTarget(_) }
+}
+
+module HostTargetFlow = DataFlow::Global<HostTargetConfig>;
+
+/**
  * Holds if `node` is a scheme-less host literal that is a request's target
- * itself (`https.request({ hostname: "h" })`), or that flows into a URL right
- * after a constant ending in `://`.
+ * (`https.request({ hostname: "h" })`, or `hostname: HOST` with
+ * `const HOST = "h"`), or that flows into a URL right after a constant
+ * ending in `://`.
  */
 predicate hostLiteral(DataFlow::Node node, string value) {
   hostShaped(node, value) and
-  (node = requestTarget(_) or HostJoinFlow::flowFrom(node))
+  (node = requestTarget(_) or HostTargetFlow::flowFrom(node) or HostJoinFlow::flowFrom(node))
 }
 
 /** Holds if `node` reads the environment variable `name`. */
