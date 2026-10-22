@@ -22,6 +22,15 @@
 # by every tool subprocess, and Home Manager's launcher environment does not
 # reach devenv's. `requires_openai_auth` stays false, or Codex sends a ChatGPT
 # login's token to the proxy.
+#
+# ── Providers ─────────────────────────────────────────────────────────
+# Codex lists the proxy's models with no setting: `auth.command` makes it
+# fetch `<base_url>/models?client_version=`, which CLIProxyAPI answers in
+# Codex's own catalog shape, merged into the bundled list. Codex has no
+# per-provider default model, so Home Manager writes one profile per enabled
+# provider, `<configDir>/<name>.config.toml`, selecting its first model:
+# `codex -p <name>`. A profile lives in CODEX_HOME, which devenv does not
+# own, so devenv writes none and warns.
 {
   inlineToml,
   lib,
@@ -75,6 +84,19 @@
     model_provider = ids.hm;
     model_providers.${ids.hm} = providerFor ids.hm endpoint;
   };
+
+  # Home Manager's profile documents: file name under configDir → settings.
+  hmProfiles = resolvedProxy:
+    lib.listToAttrs (map (provider:
+        lib.nameValuePair "${provider.name}.config.toml" {
+          model = lib.head provider.models;
+          model_provider = ids.hm;
+        })
+      (
+        if resolvedProxy == null
+        then []
+        else resolvedProxy.providers
+      ));
 in {
-  inherit hmSettings launcherFlags;
+  inherit hmProfiles hmSettings launcherFlags;
 }

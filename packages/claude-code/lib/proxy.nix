@@ -5,6 +5,9 @@
 # The resolved endpoint (see lib/ai/proxy/default.nix) lands in
 # `native.settings`, so the settings.json each backend already writes (user on
 # Home Manager, project on devenv).
+#
+# Each enabled provider's models become `/model` picker rows; where each
+# backend delivers them, and why, is in dev/fragments/ai-proxy/ai-proxy-runtimes.md.
 {
   lib,
   pkgs,
@@ -17,6 +20,7 @@
   render = {
     key,
     url,
+    ...
   }: let
     helper = import ../../../lib/strict-shell-application.nix pkgs {
       name = "claude-proxy-key";
@@ -45,6 +49,21 @@
     };
   };
 
+  # One row per model of each enabled provider, in provider order. Claude
+  # labels a row with its model id when it has no label.
+  pickerRows = resolvedProxy:
+    lib.concatMap (provider:
+      map (model: {
+        description = "${provider.name} through CLIProxyAPI";
+        inherit model;
+      })
+      provider.models)
+    (
+      if resolvedProxy == null
+      then []
+      else resolvedProxy.providers
+    );
+
   # Without a proxy these reach api.anthropic.com and downloads.claude.ai
   # directly. Defaults, so a consumer can turn either back on.
   quietEnv = {
@@ -54,19 +73,32 @@
 in {
   # Claude reads and caches this descriptor before applying settings env.
   # A settings-only blank therefore still leaks its key to the selected proxy.
+  # devenv's picker rows travel as `--settings`, the one non-user scope a
+  # project can reach; they replace any user `modelPicker` in that session,
+  # since the highest scope that defines it wins outright.
   installPackage = {
+    backend,
     cfg,
     resolvedProxy,
     ...
-  }:
+  }: let
+    rows = pickerRows resolvedProxy;
+    # toFile: the rows hold no store paths, and evaluation can read it back.
+    picker = builtins.toFile "claude-proxy-model-picker.json" (builtins.toJSON {modelPicker.options = rows;});
+  in
     lib.ai.mkLauncher pkgs {
       exe = "claude";
-      flags = lib.optional (resolvedProxy != null) "--unset CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR";
+      flags =
+        lib.optional (resolvedProxy != null) "--unset CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR"
+        ++ lib.optional (backend == "devenv" && rows != []) "--add-flags ${lib.escapeShellArg "--settings ${picker}"}";
       name = "claude-code-proxy";
       inherit (cfg) package;
     };
 
-  config = {resolvedProxy}:
+  config = {
+    backend,
+    resolvedProxy,
+  }:
     lib.mkMerge [
       (lib.mkIf (resolvedProxy != null) {
         ai.claude.native.settings.env = lib.mapAttrs (_: lib.mkDefault) quietEnv;
@@ -75,6 +107,9 @@ in {
       # is a definition conflict, not a silent override either way.
       (lib.mkIf (resolvedProxy != null) {
         ai.claude.native.settings = render resolvedProxy;
+      })
+      (lib.mkIf (backend == "hm" && pickerRows resolvedProxy != []) {
+        ai.claude.native.settings.modelPicker.options = pickerRows resolvedProxy;
       })
     ];
 }

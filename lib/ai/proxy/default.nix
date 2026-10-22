@@ -30,6 +30,24 @@
         type = redact.types.redacted;
         description = "The proxy client key the harness presents.";
       };
+      # What a runtime offers in its model choice: each enabled provider and
+      # the models its instance lists for it.
+      providers = mkOption {
+        type = types.listOf (types.submodule {
+          options = {
+            models = mkOption {
+              type = types.nonEmptyListOf types.str;
+              description = "The provider's models.";
+            };
+            name = mkOption {
+              type = types.str;
+              description = "The provider's `ai.cliproxyapi.instances.<n>.providers` name.";
+            };
+          };
+        });
+        default = [];
+        description = "The enabled providers of an instance selection, in name order.";
+      };
       # Typed, not only asserted: normalized options are a public input, and
       # a value set here directly skips the selection assertions.
       url = mkOption {
@@ -151,7 +169,8 @@
           reach. Each enabled one adds a rule to the key's
           `access.key-allowlist` entry for that provider's block on `api`,
           addressed by its base URL, so another provider on the same API
-          stays out of reach. An `instance` selection is required.
+          stays out of reach. Its models join ${name}'s model choice. An
+          `instance` selection is required.
         '';
       };
     };
@@ -194,9 +213,11 @@
   });
   assertionsFor = instances: path: selection: toAssertions (problems instances path selection);
 
-  # An instance that cannot be selected resolves to null; its assertion says why.
+  # An instance that cannot be selected resolves to null; its assertion says
+  # why. `providers` is `providersFor`'s `resolved`.
   resolve = {
     instances,
+    providers,
     root,
     runtime,
   }: let
@@ -211,11 +232,13 @@
     else {
       inherit (selection) key;
       inherit url;
+      providers = map (provider: {inherit (provider) models name;}) providers;
     };
 
   # The enabled `providers` of a runtime, resolved against its selection's
-  # instance: `resolved`, in name order, each with the rule that reaches
-  # only its block on the chosen API, and `problems`, as assertion messages. `api` is the runtime's own API, or null. A missing
+  # instance: `resolved`, in name order, each with its models and the rule
+  # that reaches only its block on the chosen API, and `problems`, as
+  # assertion messages. `api` is the runtime's own API, or null. A missing
   # instance resolves nothing; the selection's assertion says why.
   providersFor = {
     api,
@@ -252,6 +275,7 @@
       else {
         resolved = {
           inherit name;
+          inherit (provider) models;
           rule = cliproxyapi.providers.rule name provider chosen;
         };
       };

@@ -629,7 +629,7 @@ in
           ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
         })
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
-        (claudeProxy.config {inherit resolvedProxy;})
+        (claudeProxy.config {inherit backend resolvedProxy;})
         # L2b → L3: expand `ai.claude.hookScriptsDir` into
         # `ai.claude.hookScripts`. Content is `readFile`'d into
         # `lib.types.lines` via hooksFromDir.

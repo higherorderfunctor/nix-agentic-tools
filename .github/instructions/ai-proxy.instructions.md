@@ -8,10 +8,10 @@ applyTo: "checks/ai-proxy/**,lib/ai/proxy/**,packages/chatgpt-codex/lib/proxy.ni
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
 > **Last verified:** 2026-10-21 — root and per-runtime `url` or `instance`
-> selections resolve to `{key; url;}`; a runtime routed through an instance gets
-> its own key, allowlist entry and key claim there, and enables the instance's
-> `providers` by name; Claude and Codex consume the key through credential
-> helpers, and other runtimes warn.
+> selections resolve to `{key; providers; url;}`; a runtime routed through an
+> instance gets its own key, allowlist entry and key claim there, and enables
+> the instance's `providers` by name; Claude and Codex consume the key through
+> credential helpers, and other runtimes warn.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -50,8 +50,8 @@ module (the factory harness) has none.
 A per-runtime selection that selects anything (a `url` or an `instance`)
 replaces the root selection WHOLE. Fields never mix across levels: a runtime
 `key` alone leaves the root selection in force and fails its own assertion. The
-resolved value is null or `{key; url;}`. `url` is the origin only: each runtime
-appends its own protocol path, so a path would be doubled.
+resolved value is null or `{key; providers; url;}`. `url` is the origin only:
+each runtime appends its own protocol path, so a path would be doubled.
 
 `key` requires `redact.types.redacted`: `redact.file`, `redact.command` or
 `redact.concat` with a reference. It authenticates access to the proxy's
@@ -113,7 +113,10 @@ So a provider base URL must be printable ASCII (`https?://[!-~]+`), a
 hand-written block in a provider's family must start and end with a printable
 ASCII character, and no other block of the family may share a provider's URL:
 with both URLs trim-free the exact comparison equals CPA's. A provider name must
-be one plain word, since it becomes a group name and a credential provider.
+be one plain word, since it becomes a group name and Codex's profile file name.
+
+`normalized.proxy.providers` is `[{name; models;}]`: Claude turns it into
+`/model` picker rows and Codex into `-p` profiles (`ai-proxy-runtimes.md`).
 
 Refused at evaluation, inside the enable gate:
 
