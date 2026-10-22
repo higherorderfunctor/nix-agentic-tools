@@ -4,6 +4,7 @@ AWSLAMBDA
 bindingset
 Boehm
 CFFIXED
+chatcmpl
 cliproxy
 CLOUDSDK
 COLORFGBG

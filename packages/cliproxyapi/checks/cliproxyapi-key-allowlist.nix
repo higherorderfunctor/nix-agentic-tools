@@ -3,8 +3,10 @@
 # The auth package proves the predicate on every selection path; the access
 # package proves query-parameter keys through the real middleware and that every
 # config load refuses entries sharing a client key; the watcher package proves a
-# hot reload that meets them keeps the running config. No check finds a
-# candidate loop that skips the predicate, so a CPA bump needs review.
+# hot reload that meets them keeps the running config. The auth
+# package also gets key_allowlist_loops_test.go, which fails when a range over
+# Manager.auths has no predicate call in its own body; other shapes still need
+# review on a CPA bump.
 {
   extractedLib,
   lib,
@@ -27,6 +29,6 @@ in {
     }) {
       "internal/access/config_access" = {};
       "internal/watcher" = {};
-      "sdk/cliproxy/auth" = {};
+      "sdk/cliproxy/auth"."key_allowlist_loops_test.go" = ./key_allowlist_loops_test.go;
     });
 }

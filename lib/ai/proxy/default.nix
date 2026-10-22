@@ -5,11 +5,14 @@
 #   * option declarations: root `ai.proxy` (sharedOptions.nix) and per-runtime
 #     `ai.<runtime>.proxy` (mkBackendTransform.nix);
 #   * selection validation, shared by both assertion sites;
-#   * `resolve`, the root-to-runtime fold behind `ai.<runtime>.normalized.proxy`.
+#   * `resolve`, the root-to-runtime fold behind `ai.<runtime>.normalized.proxy`;
+#   * `client` publishes routed runtime keys; `clientsOf` selects them for an
+#     instance's access list and allowlist.
 {lib}: let
   inherit (lib) mkOption types;
   redact = import ../../redact {inherit lib;};
   instancesLib = import ../../../packages/ai-module/lib/instances.nix {inherit lib;};
+  inherit (import ../../../packages/cliproxyapi/lib/default.nix {inherit lib;}) cliproxyapi;
 
   # The origin only: each runtime appends its own protocol path, so a path
   # here would be doubled. `[]]` avoids an escape libstdc++'s ERE rejects.
@@ -40,8 +43,12 @@
       description = ''
         An `ai.cliproxyapi.instances` entry to use instead of `url`: the
         origin becomes that instance's `http://127.0.0.1:<port>`. Pair it with
-        `key`, the same reference the instance lists in
-        `settings.access.api-keys`.
+        `key`. Each enabled runtime this selection reaches adds `key` to the
+        instance's `settings.access.api-keys`, with an
+        `access.key-allowlist` entry from its `ai.<runtime>.proxy.allow`, so
+        do not list the key there by hand. Evaluation claims the key's
+        reference; CLIProxyAPI refuses distinct references that resolve to the
+        same value at start or on reload.
       '';
     };
     key = mkOption {
@@ -52,6 +59,7 @@
         against the proxy's `access.api-keys`, never an upstream credential.
         Use `redact.file`, `redact.command` or `redact.concat` to keep the key
         out of the Nix store; its value is read when a consuming harness starts.
+        Give each runtime a key with a distinct value.
       '';
     };
     url = mkOption {
@@ -65,6 +73,47 @@
   };
 
   isSelected = selection: selection.url != null || selection.instance != null;
+
+  # A per-runtime selection replaces the root one as a whole; fields never mix
+  # across the two levels, so a runtime cannot pair its key with a root url.
+  selectionFor = root: runtime:
+    if isSelected runtime
+    then runtime
+    else root;
+
+  # `ai.<runtime>.proxy`: the selection, plus the credentials the runtime's
+  # key may reach through an instance. `allow` is not part of the selection,
+  # so it holds whichever scope selects. `default` is the runtime's own login
+  # (`proxyAllow` on its record), or null when it has none.
+  runtimeOptions = {
+    default,
+    name,
+  }:
+    selectionOptions
+    // {
+      allow = mkOption {
+        type = cliproxyapi.keyAllowlistCredentialsType;
+        inherit default;
+        example = [
+          {
+            kind = "oauth";
+            provider = "claude";
+          }
+        ];
+        description = ''
+          The credentials ${name}'s client key may select when its proxy
+          selection names an `instance`: that key's
+          `access.key-allowlist` entry in the instance, one rule per
+          credential `provider` and `kind` (`oauth` or `apikey`), optionally
+          narrowed by `ids`. The instance fails closed, so a request with
+          this key reaches nothing else. ${
+            if default == null
+            then "${name} has no native CLIProxyAPI provider, so an instance selection needs this set."
+            else "The default is ${name}'s own login."
+          } Unused with `url`, whose proxy is configured by hand.
+        '';
+      };
+    };
 
   # `ai.cliproxyapi.instances` is read where a selection is validated or
   # resolved; an evaluation without the owner module has no instances.
@@ -104,18 +153,13 @@
   });
   assertionsFor = instances: path: selection: toAssertions (problems instances path selection);
 
-  # A per-runtime selection replaces the root one as a whole; fields never mix
-  # across the two levels, so a runtime cannot pair its key with a root url.
   # An instance that cannot be selected resolves to null; its assertion says why.
   resolve = {
     instances,
     root,
     runtime,
   }: let
-    selection =
-      if isSelected runtime
-      then runtime
-      else root;
+    selection = selectionFor root runtime;
     url =
       if selection.instance != null
       then (instanceSelection instances [] selection).url or null
@@ -127,6 +171,34 @@
       inherit (selection) key;
       inherit url;
     };
+
+  # A url selection is configured by hand; an instance selection publishes its
+  # key and rules only when the runtime is enabled by the caller.
+  client = {
+    option,
+    root,
+    runtime,
+  }: let
+    selection = selectionFor root runtime;
+  in
+    if selection.instance == null || selection.key == null
+    then null
+    else {
+      inherit option;
+      inherit (selection) instance key;
+      inherit (runtime) allow;
+    };
+
+  # The published clients of instance `name`, ordered by runtime name.
+  clientsOf = config: name: builtins.filter (client: client.instance == name) (builtins.attrValues (config.ai.internal.proxyClients or {}));
+
+  # A client key's `ai.claims.proxy-client-key` key. A reference is data, so
+  # equal references are one key; the claim prints the reference, never a value.
+  keyClaim = key: builtins.unsafeDiscardStringContext (builtins.toJSON key);
+
+  clientAssertions = client:
+    toAssertions (lib.optional (client != null && client.allow == null)
+      "${client.option}.allow is unset, and ${client.option}.instance needs it: the instance's key allowlist fails closed, so name the credentials this key may select.");
 
   rootOption = mkOption {
     type = types.submodule {
@@ -140,7 +212,10 @@
       MCP proxy.
 
       Select the endpoint with `url` and `key`, or with `instance` (an
-      `ai.cliproxyapi.instances` entry) and `key`.
+      `ai.cliproxyapi.instances` entry) and `key`. An instance gets each
+      routed runtime's key and allowlist entry from the module; every
+      runtime needs its own key, so a root `instance` selection serves one
+      enabled runtime, and each other runtime selects with its own.
       `ai.<runtime>.proxy`, declared only for a runtime that consumes
       this surface, replaces this selection as a whole for that runtime.
 
@@ -158,9 +233,13 @@
 in {
   inherit
     assertionsFor
+    client
+    clientAssertions
+    clientsOf
+    keyClaim
     resolve
     resolvedType
     rootOption
-    selectionOptions
+    runtimeOptions
     ;
 }

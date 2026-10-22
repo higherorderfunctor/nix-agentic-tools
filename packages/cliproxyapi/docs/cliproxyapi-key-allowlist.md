@@ -24,13 +24,15 @@ eligible credentials are unavailable gets `auth_not_found`. Model listings still
 expose all models.
 
 An entry identifies one client key and grants a list of credential rules. The
-client key is a redact reference shared with `access.api-keys[]`. A rule
-requires `provider` and `kind` (`oauth` or `apikey`); `ids` and `base-urls`
-narrow it further. The provider is CPA's credential provider, including
-`openai-compatible-<name>` for compatibility groups. An OAuth credential's ID is
-its auth-file path. A config API key's ID hashes its secret, so use provider and
-`base-urls` to address a group through rotation. The settings types and module
-refinements are documented in `cliproxyapi-settings.md`.
+client key is a redact reference shared with `access.api-keys[]`. An
+instance-routed runtime derives both entries from `ai.<runtime>.proxy.allow`;
+write entries by hand only for other clients. A rule requires `provider` and
+`kind` (`oauth` or `apikey`); `ids` and `base-urls` narrow it further. The
+provider is CPA's credential provider, including `openai-compatible-<name>` for
+compatibility groups. An OAuth credential's ID is its auth-file path. A config
+API key's ID hashes its secret, so use provider and `base-urls` to address a
+group through rotation. The settings types and module refinements are in
+`cliproxyapi-settings.md`.
 
 The `apikey` kind matches only credentials synthesized from config. A
 store-loaded login can temporarily classify as `apikey` from its file or a Meta
@@ -71,9 +73,12 @@ predicate: Home dispatch, which is refused, and the Antigravity credits
 fallback, which checks the allowlist itself. The fallback matters when selection
 fails because a client key has no Antigravity rule. Plugin executors and
 `host.auth.get` bypass eligibility; this is why enabling plugins must be
-refused. New candidate loops on an upstream bump need source review even if Go
-tests pass: an indexed lookup or loop over a copy can skip the predicate without
-a compile failure.
+refused. `checks/key_allowlist_loops_test.go`, a go/types scan joined to the
+auth package, fails on a `range` over `Manager.auths` whose own body calls no
+allowlist predicate, unless the function is on its commented exemption list. It
+does not see an indexed lookup (`m.auths[id]`), an alias of the map, the map
+passed to a helper, or a loop over a copy (`snapshotAuths`, `List`), so a bump
+that touches candidate selection still needs source review even if it is green.
 
 ## Reload ordering limitation
 
@@ -95,7 +100,6 @@ The package applies `patches/key-allowlist.patch` to the pinned source with
 version from `sources.json` into scratch, verify its unpacked NAR hash, apply
 the patch with `patch --dry-run -p1 --fuzz=0`, and inspect every changed
 candidate-selection loop before regenerating the diff. Offset-only moves may
-apply; changed context fails. The Go check covers behavior, but cannot discover
-a newly added loop that never calls eligibility. Regenerate the extracted
-settings facts after a schema change, then run the module assertions and Go
-check in CI.
+apply; changed context fails. The Go check covers behavior; the loop scan misses
+the shapes listed above. Regenerate the extracted settings facts after a schema
+change, then run the module assertions and Go check in CI.

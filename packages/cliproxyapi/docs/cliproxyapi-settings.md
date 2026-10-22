@@ -7,7 +7,8 @@
 > through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
 > `ai.cliproxyapi.instances` renders it at start, defaults its listener to
 > loopback, turns off the unprompted fetches the pinned CPA has a switch for,
-> and types `server.tls.key` as a secret file.
+> types `server.tls.key` as a secret file, and derives each routed runtime's
+> `access.api-keys` and `access.key-allowlist` entries.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -29,6 +30,10 @@ and `logs/` CLIProxyAPI resolves against its working directory are its own,
 execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
 reach only that copy and are lost at restart. `ai.proxy.instance` points the
 harnesses at an instance by name.
+
+An enabled instance-routed runtime adds its key and allowlist entry. The `allow`
+option uses `keyAllowlistCredentialsType`, generated from CPA's credential-rule
+settings.
 
 ## Unprompted network calls
 

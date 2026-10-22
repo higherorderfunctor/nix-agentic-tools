@@ -18,7 +18,8 @@
 # The agent fields are closed too: `agentNativeType` and `agentTransformer`
 # come as a pair; they, `agentsDirSuffixes` and `agentsDescriptionSuffix` need
 # the `agents` pool; and `agentsDirSuffixes` must be a non-empty list of
-# strings, since an empty one makes `agentsDir` expand nothing.
+# strings, since an empty one makes `agentsDir` expand nothing. `proxyAllow`
+# needs the `proxy` pool, whose `allow` option it defaults.
 #
 # `executables` names the launcher package's user entry points, each of which
 # gets its own jail; every other bin is passed through and runs inside the
@@ -108,7 +109,9 @@ in {
     && lib.assertMsg (!(record ? agentsDirSuffixes || record ? agentsDescriptionSuffix) || lib.elem "agents" supportedSurfaces)
     "ai runtime ${name}: agentsDirSuffixes and agentsDescriptionSuffix need the agents pool in surfaceSupport."
     && lib.assertMsg (!(record ? agentsDirSuffixes) || (record.agentsDirSuffixes != [] && lib.all lib.isString record.agentsDirSuffixes))
-    "ai runtime ${name}: agentsDirSuffixes must be a non-empty list of strings.";
+    "ai runtime ${name}: agentsDirSuffixes must be a non-empty list of strings."
+    && lib.assertMsg (!(record ? proxyAllow) || lib.elem "proxy" supportedSurfaces)
+    "ai runtime ${name}: proxyAllow is the default of ai.${name}.proxy.allow and needs the proxy pool in surfaceSupport.";
 
   contentTargets = name: result: let
     unknown = unknownIn contentTargetsKeys result;

@@ -8,6 +8,7 @@
 }: let
   inherit (harness) aiBase evalDevenv evalDevenvModules evalHm evalHmModules mkTest;
 
+  inherit (import ../../lib/extracted/render.nix {inherit lib;}) fill;
   redact = import ../../lib/redact {inherit lib;};
   # The key a selected CLIProxyAPI instance accepts: one reference on both
   # sides, in the instance's access list and in the selection.
@@ -43,8 +44,155 @@
       (aiBase.app.${backend + "Transform"} record)
       {inherit config;}
     ];
+
+  # Both runtimes route through one instance without manually listed keys.
+  proxyLib = import ../../lib/ai/proxy {inherit lib;};
+  runtimeKey = name: redact.file "/run/secrets/cpa-${name}-key";
+  routed = name: {
+    instance = "clients";
+    key = runtimeKey name;
+  };
+  zai = "https://api.z.ai/api/anthropic";
+  routedEval = backend: ai:
+    evalApp backend (lib.recursiveUpdate {
+      ai = {
+        claude.enable = true;
+        cliproxyapi.instances.clients.port = 8402;
+        codex.enable = true;
+      };
+    } {inherit ai;});
+  oauth = provider: {
+    kind = "oauth";
+    inherit provider;
+  };
+  # One refusal per distinct route into a key or rule.
+  routingCases = let
+    accepted = ai: {
+      inherit ai;
+      expect = outcome: outcome == [];
+    };
+    fails = message: ai: {
+      inherit ai;
+      expect = outcome: outcome == [message];
+    };
+    refused = fragment: ai: {
+      inherit ai;
+      expect = outcome: lib.any (lib.hasInfix fragment) outcome;
+    };
+    claimed = "ai.claims.proxy-client-key.${proxyLib.keyClaim (runtimeKey "claude")}: claimed by claude and codex";
+    handWritten = settings: {
+      claude.proxy = routed "claude";
+      cliproxyapi.instances.clients.settings = settings;
+    };
+  in {
+    # Accepted.
+    "a disabled runtime without allow" = accepted {testapp.proxy = routed "testapp";};
+    "a hand-written key of another client" = accepted (handWritten {access.api-keys = [instanceKey];});
+
+    # Refused by an assertion.
+    "a hand-written allowlist entry for a runtime key" = fails "ai.cliproxyapi.instances.clients.settings.access.key-allowlist has a hand-written entry for ai.claude.proxy.key, whose entry ai.claude.proxy.allow sets. Remove the hand-written entry." (handWritten {
+      access.key-allowlist = [
+        {
+          api-key = runtimeKey "claude";
+          credentials = [(oauth "claude")];
+        }
+      ];
+    });
+    "a hand-written runtime key" = fails "ai.cliproxyapi.instances.clients.settings.access.api-keys lists ai.claude.proxy.key by hand; ai.claude.proxy adds it to this instance. Remove the hand-written entry." (handWritten {access.api-keys = [(runtimeKey "claude")];});
+    "a runtime with no default and no allow" = refused "ai.testapp.proxy.allow is unset" {
+      testapp = {
+        enable = true;
+        proxy = routed "testapp";
+      };
+    };
+    "an instance selection without a key" = refused "ai.codex.proxy.instance needs `key`" {codex.proxy.instance = "clients";};
+    # The refusal names the runtime option a bad rule came from.
+    "an oauth rule with base-urls from a runtime" = refused "ai.claude.proxy.allow has a rule with kind = \"oauth\" and base-urls" {claude.proxy = routed "claude" // {allow = [(oauth "claude" // {base-urls = [zai];})];};};
+    "one key on both runtimes" = refused claimed {
+      claude.proxy = routed "claude";
+      codex.proxy = routed "claude";
+    };
+  };
 in {
   checks = {
+    # Rendered keys, per-key rules, launcher references, and refusals.
+    module-ai-proxy-instance-clients = mkTest "ai-proxy-instance-clients" (let
+      problems = lib.concatMap (backend: let
+        evaluate = routedEval backend;
+        label = name: "${backend}: ${name}";
+        file = result: result.config.ai.services.cliproxyapi-clients.files.config;
+        # The rendered config with each secret placeholder replaced by its
+        # reference; null when a reference was written into it as is.
+        rendered = result: let
+          inherit (file result) content secrets;
+        in
+          if lib.hasInfix "_redact" content
+          then null
+          else builtins.fromJSON (fill secrets content);
+        claim = name: {${proxyLib.keyClaim (runtimeKey name)} = [name];};
+        outcome = ai: let
+          result = evaluate ai;
+          messages = failedMessages result;
+        in
+          if messages != []
+          then messages
+          else builtins.deepSeq (file result).content messages;
+        both = evaluate {
+          codex.proxy = routed "codex";
+          proxy = routed "claude";
+        };
+        narrowRule = {
+          base-urls = [zai];
+          kind = "apikey";
+          provider = "claude";
+        };
+        narrowed = evaluate {claude.proxy = routed "claude" // {allow = [narrowRule];};};
+        codexOff = evaluate {
+          claude.proxy = routed "claude";
+          codex = {
+            enable = false;
+            proxy = routed "codex";
+          };
+        };
+        byUrl = evaluate {
+          claude.proxy = {
+            key = runtimeKey "claude";
+            url = "http://127.0.0.1:8317";
+          };
+        };
+        accessFor = names: {
+          api-keys = map runtimeKey names;
+          key-allowlist =
+            map (name: {
+              api-key = runtimeKey name;
+              credentials = [(oauth name)];
+            })
+            names;
+        };
+        observations = {
+          "allow replaces the default" = map (entry: entry.credentials) (rendered narrowed).access.key-allowlist == [[narrowRule]];
+          "claims" = both.config.ai.claims.proxy-client-key == claim "claude" // claim "codex";
+          "disabled runtime adds nothing" =
+            (rendered codexOff).access
+            == accessFor ["claude"]
+            && codexOff.config.ai.claims.proxy-client-key == claim "claude";
+          "distinct clients are accepted" = failedMessages both == [];
+          "generated api-keys and allowlist" = (rendered both).access == accessFor ["claude" "codex"];
+          "launcher keys" = lib.all (name:
+            both.config.ai.${name}.normalized.proxy
+            == {
+              key = runtimeKey name;
+              url = "http://127.0.0.1:8402";
+            }) ["claude" "codex"];
+          "url selection adds nothing" = !((rendered byUrl) ? access) && byUrl.config.ai.internal.proxyClients == {};
+        };
+      in
+        lib.concatLists (lib.mapAttrsToList (name: case: lib.optional (!case.expect (outcome case.ai)) (label "case `${name}`")) routingCases)
+        ++ lib.concatLists (lib.mapAttrsToList (name: holds: lib.optional (!holds) (label name)) observations))
+      ["devenv" "hm"];
+    in
+      lib.assertMsg (problems == []) (lib.concatStringsSep "; " problems));
+
     # The authentication key requires a redact reference at both scopes;
     # cleartext and the retired credential branches cannot enter normalization.
     module-ai-proxy-redacted-key = mkTest "ai-proxy-redacted-key" (
@@ -87,8 +235,8 @@ in {
         };
       })
       == []
-      # An instance selection: valid with a key, refused without one, beside
-      # a url, or naming a missing or disabled instance.
+      # An instance selection: valid with a key, refused beside a url or when
+      # naming a missing or disabled instance. The runtime case checks no key.
       && lib.all (evaluate: let
         select = proxy: evaluate {ai = instances // {inherit proxy;};};
       in
@@ -97,7 +245,6 @@ in {
           key = instanceKey;
         })
         == []
-        && failsWith ["ai.proxy.instance needs `key`"] (select {instance = "main";})
         && failsWith ["ai.proxy.url and ai.proxy.instance both select a proxy"] (select {
           instance = "main";
           key = instanceKey;
@@ -178,12 +325,6 @@ in {
           inherit (work) key;
           url = "http://127.0.0.1:8400";
         }
-        && failsWith ["ai.testapp.proxy.instance names `missing`"] (evalApp backend {
-          ai.testapp.proxy = {
-            instance = "missing";
-            inherit (work) key;
-          };
-        })
         && resolved keyOnly == root
         && failsWith ["ai.testapp.proxy.key is set without `url`"] (evalApp backend keyOnly)
         && failsWith ["ai.testapp.proxy.url needs `key`"] (evalApp backend {
