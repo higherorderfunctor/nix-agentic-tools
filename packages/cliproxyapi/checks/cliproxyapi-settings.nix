@@ -15,6 +15,7 @@
   # internal/ that refuses the sample's generic value:
   overrides = {
     # refinements: the values they admit
+    "access.key-allowlist[].credentials[].kind" = "oauth";
     config-version = 8;
     # config/sdk_config.go: a Go duration or integer seconds
     "client.codex.web-search-result-cache.ttl" = "1s";

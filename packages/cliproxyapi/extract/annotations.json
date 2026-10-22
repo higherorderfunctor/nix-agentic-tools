@@ -3,6 +3,9 @@
     "access.api-keys[]": {
       "secret": "A client key the proxy accepts; it grants use of every login behind the proxy."
     },
+    "access.key-allowlist[].api-key": {
+      "secret": "A client key from access.api-keys; its entry decides which logins behind the proxy it may use."
+    },
     "api-keys.*[].headers.<name>": {
       "secret": "An upstream request header, which can carry a credential (an Authorization value)."
     },

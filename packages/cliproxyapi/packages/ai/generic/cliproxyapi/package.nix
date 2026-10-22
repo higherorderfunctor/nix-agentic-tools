@@ -26,7 +26,14 @@
       pkgs.cliproxyapi)
   .overrideAttrs (prev: {
       inherit (sources) version;
-      src = fetchzip {inherit (sources.src) url hash;};
+      # The patched tree is `src` itself, so the build, the extractor and the
+      # settings checks (which copy `package.src`) all read the allowlist.
+      src = pkgs.applyPatches {
+        src = fetchzip {inherit (sources.src) url hash;};
+        patches = [../../../../patches/key-allowlist.patch];
+        # A CPA release that changes the patched context fails here, loudly.
+        patchFlags = ["-p1" "--fuzz=0"];
+      };
       vendorHash = sources.vendorHash or lib.fakeHash;
       passthru =
         (prev.passthru or {})
