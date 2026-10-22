@@ -124,15 +124,14 @@ eligible credentials are unavailable gets `auth_not_found`. Model listings still
 expose all models.
 
 An entry identifies one client key and grants a list of credential rules. The
-client key is a redact reference shared with `access.api-keys[]`. A runtime
-routed through the instance (`ai.<runtime>.proxy.instance`) writes both for its
-own key, from `ai.<runtime>.proxy.allow`; write entries by hand only for other
-clients. A rule requires `provider` and `kind` (`oauth` or `apikey`); `ids` and
-`base-urls` narrow it further. The provider is CPA's credential provider,
-including `openai-compatible-<name>` for compatibility groups. An OAuth
-credential's ID is its auth-file path. A config API key's ID hashes its secret,
-so use provider and `base-urls` to address a group through rotation. The
-settings types and module refinements are documented in
+client key is a redact reference shared with `access.api-keys[]`. An
+instance-routed runtime derives both entries from `ai.<runtime>.proxy.allow`;
+write entries by hand only for other clients. A rule requires `provider` and
+`kind` (`oauth` or `apikey`); `ids` and `base-urls` narrow it further. The
+provider is CPA's credential provider, including `openai-compatible-<name>` for
+compatibility groups. An OAuth credential's ID is its auth-file path. A config
+API key's ID hashes its secret, so use provider and `base-urls` to address a
+group through rotation. The settings types and module refinements are in
 `cliproxyapi-settings.md`.
 
 The `apikey` kind matches only credentials synthesized from config. A
@@ -240,10 +239,9 @@ execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
 reach only that copy and are lost at restart. `ai.proxy.instance` points the
 harnesses at an instance by name.
 
-Each enabled runtime routed through an instance adds its own key and allowlist
-entry there (`dev/fragments/ai-proxy/ai-proxy.md`, Runtime keys);
-`keyAllowlistCredentialsType` exports the generated
-`access.key-allowlist[].credentials` type its `allow` uses.
+An enabled instance-routed runtime adds its key and allowlist entry. The `allow`
+option uses `keyAllowlistCredentialsType`, generated from CPA's credential-rule
+settings.
 
 ## Unprompted network calls
 

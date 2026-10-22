@@ -31,10 +31,9 @@ execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
 reach only that copy and are lost at restart. `ai.proxy.instance` points the
 harnesses at an instance by name.
 
-Each enabled runtime routed through an instance adds its own key and allowlist
-entry there (`dev/fragments/ai-proxy/ai-proxy.md`, Runtime keys);
-`keyAllowlistCredentialsType` exports the generated
-`access.key-allowlist[].credentials` type its `allow` uses.
+An enabled instance-routed runtime adds its key and allowlist entry. The `allow`
+option uses `keyAllowlistCredentialsType`, generated from CPA's credential-rule
+settings.
 
 ## Unprompted network calls
 

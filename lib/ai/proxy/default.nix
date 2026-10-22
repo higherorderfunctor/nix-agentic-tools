@@ -6,9 +6,8 @@
 #     `ai.<runtime>.proxy` (mkBackendTransform.nix);
 #   * selection validation, shared by both assertion sites;
 #   * `resolve`, the root-to-runtime fold behind `ai.<runtime>.normalized.proxy`;
-#   * `client`, what a runtime routed through an `ai.cliproxyapi.instances`
-#     entry publishes to `ai.internal.proxyClients`, and `clientsOf`, which
-#     the instance reads to list the runtime's key and its allowlist entry.
+#   * `client` publishes routed runtime keys; `clientsOf` selects them for an
+#     instance's access list and allowlist.
 {lib}: let
   inherit (lib) mkOption types;
   redact = import ../../redact {inherit lib;};
@@ -48,11 +47,8 @@
         instance's `settings.access.api-keys`, with an
         `access.key-allowlist` entry from its `ai.<runtime>.proxy.allow`, so
         do not list the key there by hand. Evaluation claims the key's
-        reference: two runtimes cannot route through instances with the same
-        reference. It compares references, not values, so two different
-        references that resolve to the same value pass evaluation; CLIProxyAPI
-        then refuses the config at start (the process exits and stays down) and
-        keeps the running one on a reload.
+        reference; CLIProxyAPI refuses distinct references that resolve to the
+        same value at start or on reload.
       '';
     };
     key = mkOption {
@@ -63,9 +59,7 @@
         against the proxy's `access.api-keys`, never an upstream credential.
         Use `redact.file`, `redact.command` or `redact.concat` to keep the key
         out of the Nix store; its value is read when a consuming harness starts.
-        Give each runtime a key whose value differs: evaluation cannot compare
-        values, and CLIProxyAPI refuses a config in which two allowlist entries
-        resolve to one key.
+        Give each runtime a key with a distinct value.
       '';
     };
     url = mkOption {
@@ -178,12 +172,8 @@
       inherit url;
     };
 
-  # What an enabled runtime routed through an instance publishes at
-  # `ai.internal.proxyClients.<runtime>`: null for a `url` selection, which
-  # the module does not configure, or one without a key, which its assertion
-  # refuses. `option` names the runtime's proxy option in messages. The
-  # instance need not exist: nothing reads a client no instance names.
-  # `credentials` is the key's allowlist entry: `allow`.
+  # A url selection is configured by hand; an instance selection publishes its
+  # key and rules only when the runtime is enabled by the caller.
   client = {
     option,
     root,
@@ -197,10 +187,6 @@
       inherit option;
       inherit (selection) instance key;
       inherit (runtime) allow;
-      credentials =
-        if runtime.allow == null
-        then []
-        else runtime.allow;
     };
 
   # The published clients of instance `name`, ordered by runtime name.

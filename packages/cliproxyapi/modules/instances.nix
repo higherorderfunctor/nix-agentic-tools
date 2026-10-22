@@ -17,16 +17,12 @@ backend: {
 }: let
   inherit (import ../lib/default.nix {inherit lib;}) cliproxyapi;
   proxyLib = import ../../../lib/ai/proxy {inherit lib;};
-  nonNull = value:
-    if value == null
-    then []
-    else value;
   # A runtime key also written by hand: a second owner of the key, or of its
   # allowlist entry, which would widen or contradict the runtime's rules.
   handWritten = name: instance: let
     clients = proxyLib.clientsOf config name;
     access = instance.settings.access or null;
-    listed = field: lib.filter (value: value != null) (nonNull (access.${field} or null));
+    listed = field: lib.filter (value: value != null) (lib.defaultTo [] (access.${field} or null));
     keys = listed "api-keys";
     entries = map (entry: entry.api-key) (listed "key-allowlist");
     extra = list: client: lib.count (key: key == client.key) list > lib.count (other: other.key == client.key) clients;
@@ -61,7 +57,7 @@ in {
             key-allowlist =
               map (client: {
                 api-key = client.key;
-                inherit (client) credentials;
+                credentials = lib.defaultTo [] client.allow;
               })
               clients;
           };
