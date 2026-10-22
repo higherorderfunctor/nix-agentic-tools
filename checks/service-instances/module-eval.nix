@@ -283,6 +283,44 @@
     fetchModelCatalogs = true;
     settings.management.disable-auto-update-panel = false;
   };
+
+  cliproxyapi = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi;
+  # A client key read at start from /build/key-<name>, and its allowlist entry
+  # with one API-key rule.
+  fileKey = name: redact.file "/build/key-${name}";
+  allow = name: rule: {
+    api-key = fileKey name;
+    credentials = [({kind = "apikey";} // rule)];
+  };
+
+  # Shell for a check that starts real daemons: each started process joins
+  # `processes` and is killed on exit; `ready <pid> <url> <log>` polls `url`
+  # into health.json and prints the log if the process dies first.
+  # The user manager sets XDG_RUNTIME_DIR and INVOCATION_ID for every unit.
+  daemonHarness = invocation: ''
+    export HOME="$TMPDIR/home" XDG_RUNTIME_DIR="$TMPDIR/run" INVOCATION_ID=${invocation}
+    mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
+    processes=()
+    cleanup() {
+      for pid in "''${processes[@]}"; do kill -KILL "$pid" 2>/dev/null || :; done
+      wait || :
+    }
+    trap cleanup EXIT
+    ready() {
+      local pid=$1 url=$2 log=$3
+      for attempt in {1..100}; do
+        # cspell:ignore noproxy
+        if ${pkgs.curl}/bin/curl --noproxy '*' --max-time 1 --silent --fail "$url" > health.json; then
+          return 0
+        fi
+        if ! kill -0 "$pid" 2>/dev/null; then break; fi
+        sleep 0.1
+      done
+      cat "$log" >&2
+      echo "service did not become ready: $url" >&2
+      return 1
+    }
+  '';
 in {
   checks =
     {
@@ -301,7 +339,7 @@ in {
         daemons = manager:
           (evalHm (withInstances {
             cliproxyapi.instances.main = {
-              package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi;
+              package = cliproxyapi;
               port = 28417;
               settings = {
                 access.api-keys = [(redact.file "/build/client-key")];
@@ -338,29 +376,7 @@ in {
           printf '%s' client-test-secret > /build/client-key
           printf '%s' management-test-secret > /build/management-key
           printf '%s\n' admin-key-a > /build/admin-key
-          # The user manager sets XDG_RUNTIME_DIR and INVOCATION_ID for every unit.
-          export HOME="$TMPDIR/home" XDG_RUNTIME_DIR="$TMPDIR/run" INVOCATION_ID=real-daemons
-          mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
-          processes=()
-          cleanup() {
-            for pid in "''${processes[@]}"; do kill -KILL "$pid" 2>/dev/null || :; done
-            wait || :
-          }
-          trap cleanup EXIT
-          ready() {
-            local pid=$1 url=$2 log=$3
-            for attempt in {1..100}; do
-              # cspell:ignore noproxy
-              if ${pkgs.curl}/bin/curl --noproxy '*' --max-time 1 --silent --fail "$url" > health.json; then
-                return 0
-              fi
-              if ! kill -0 "$pid" 2>/dev/null; then break; fi
-              sleep 0.1
-            done
-            cat "$log" >&2
-            echo "service did not become ready: $url" >&2
-            return 1
-          }
+          ${daemonHarness "real-daemons"}
           ${real.systemd.user.services.cliproxyapi-main.Service.ExecStart} > cpa.log 2>&1 &
           processes+=("$!")
           ready "''${processes[0]}" http://127.0.0.1:28417/healthz cpa.log
@@ -477,6 +493,180 @@ in {
             || grep -F -e admin-key-a -e admin-key-b -e admin-key-c -e admin-key-d -e admin-key-env manager*.log; then
             false
           fi
+          touch "$out"
+        '';
+      # access.key-allowlist (packages/cliproxyapi/patches/key-allowlist.patch)
+      # in the packaged CPA, against stand-in upstreams. Two client keys are
+      # each allowed one of two openai-compatibility providers that serve a
+      # shared model. Two more are each allowed one of two api-keys.claude
+      # groups, one provider on one protocol, told apart only by base-urls.
+      # Each key reaches only its own upstream, a request for another's model
+      # and a listed key with no entry select no credential, and an unknown key
+      # is refused at authentication. One request per query form shows the
+      # packaged server holds it to the key's entry; the access package's Go
+      # test covers the rest of that matrix through the real middleware.
+      module-service-instances-key-allowlist = let
+        upstream = name: port: {
+          inherit name;
+          base-url = "http://127.0.0.1:${toString port}/v1";
+          keys = [{api-key = redact.file "/build/upstream-${name}";}];
+          models = [{name = "shared-model";} {name = "${name}-model";}];
+        };
+        # The claude executor appends /v1/messages to the base URL itself.
+        claudeBaseURL = port: "http://127.0.0.1:${toString port}";
+        claude = name: port: {
+          inherit name;
+          base-url = claudeBaseURL port;
+          keys = [{api-key = redact.file "/build/upstream-${name}";}];
+          models = [{name = "claude-shared";}];
+        };
+        proxy =
+          (evalHm {
+            ai.cliproxyapi.instances.main = {
+              package = cliproxyapi;
+              port = 28419;
+              settings = {
+                access = {
+                  api-keys = map fileKey ["a" "b" "other" "unlisted" "zai"];
+                  key-allowlist = [
+                    (allow "a" {provider = "openai-compatible-alpha";})
+                    (allow "b" {provider = "openai-compatible-beta";})
+                    (allow "zai" {
+                      provider = "claude";
+                      base-urls = [(claudeBaseURL 28422)];
+                    })
+                    (allow "other" {
+                      provider = "claude";
+                      base-urls = [(claudeBaseURL 28423)];
+                    })
+                  ];
+                };
+                api-keys = {
+                  claude = [(claude "zai" 28422) (claude "other" 28423)];
+                  openai-compatibility = [(upstream "alpha" 28420) (upstream "beta" 28421)];
+                };
+              };
+              stateDir = "/build/state/cpa";
+            };
+          }).config;
+      in
+        pkgs.runCommandLocal "module-test-service-instances-key-allowlist" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          for name in a b other unlisted zai; do printf '%s' "key-$name" > "/build/key-$name"; done
+          for name in alpha beta other zai; do printf '%s' "upstream-$name" > "/build/upstream-$name"; done
+          ${daemonHarness "key-allowlist"}
+          for upstream in alpha:28420 beta:28421 zai:28422 other:28423; do
+            name=''${upstream%:*} port=''${upstream#*:}
+            ${pkgs.python3}/bin/python3 ${./stand-in-upstream.py} "$name" "$port" "$name.log" 2> "$name.err" &
+            processes+=("$!")
+            ready "$!" "http://127.0.0.1:$port/" "$name.err"
+          done
+          ${proxy.systemd.user.services.cliproxyapi-main.Service.ExecStart} > cpa.log 2>&1 &
+          processes+=("$!")
+          ready "$!" http://127.0.0.1:28419/healthz cpa.log
+          # request <status> <answer> <model> <query> [<client key header>]:
+          # an OpenAI chat completion for model, or an Anthropic message when
+          # model is claude-shared. A 200 answers with the upstream's name, a
+          # refusal carries its error.
+          request() {
+            local status=$1 answer=$2 model=$3 query=$4 key=''${5:-} code path=/v1/chat/completions extra=""
+            if [ "$model" = claude-shared ]; then path=/v1/messages extra=',"max_tokens":16'; fi
+            local args=(--noproxy '*' --max-time 10 --silent --output response.json --write-out '%{http_code}' --header 'Content-Type: application/json')
+            if [ -n "$key" ]; then args+=(--header "Authorization: Bearer $key"); fi
+            code=$(${pkgs.curl}/bin/curl "''${args[@]}" --data "{\"model\":\"$model\"$extra,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" "http://127.0.0.1:28419$path$query")
+            if [ "$code" != "$status" ] || ! ${pkgs.jq}/bin/jq -e --arg answer "$answer" '(.choices[0].message.content? // .content[0].text? // .error.message? // .error? // "") | contains($answer)' response.json > /dev/null 2>&1; then
+              echo "FAIL: header ''${key:-none}, query '$query', $model: $code, want $status $answer" >&2
+              cat response.json cpa.log >&2
+              return 1
+            fi
+            echo "ok: header ''${key:-none}, query '$query', $model: $code $answer"
+          }
+          # Consecutive requests per key: a rotation over both upstreams of a
+          # model would hand the second one to the other upstream.
+          for key in a:alpha b:beta; do
+            for round in 1 2 3; do request 200 "''${key#*:}" shared-model "" "key-''${key%:*}"; done
+          done
+          for key in zai other; do
+            for round in 1 2 3; do request 200 "$key" claude-shared "" "key-$key"; done
+          done
+          request 200 alpha alpha-model "" key-a
+          request 503 auth_not_found claude-shared "" key-a
+          request 503 auth_not_found beta-model "" key-a
+          request 503 auth_not_found shared-model "" key-unlisted
+          request 401 "Invalid API key" shared-model "" key-unknown
+          request 503 auth_not_found beta-model "?key=key-a"
+          request 200 beta shared-model "?auth_token=key-b"
+          # Every upstream call carried that upstream's own credential, as many
+          # as the 200s above that name it.
+          for upstream in alpha:4:/v1/chat/completions beta:4:/v1/chat/completions "zai:3:/v1/messages?beta=true" "other:3:/v1/messages?beta=true"; do
+            IFS=: read -r name calls path <<< "$upstream"
+            test "$(sort -u "$name.log")" = "$path Bearer upstream-$name"
+            test "$(wc -l < "$name.log")" -eq "$calls"
+            echo "ok: $name received $calls calls, all with its own credential"
+          done
+          touch "$out"
+        '';
+      # Two access.key-allowlist entries whose keys are different redact.file
+      # references, so evaluation cannot compare them, resolve at start to one
+      # key once trimmed. Merged, that key would hold both entries' rules; the
+      # packaged CPA refuses the config instead, naming the entries by index and
+      # never the key, and the patch makes main exit with a non-zero status
+      # before serving (packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md).
+      # Positive control: a second instance with distinct keys, started the same
+      # way, comes up and keeps running, so the exit comes from the refusal.
+      module-service-instances-key-allowlist-duplicate = let
+        instance = port: names: {
+          package = cliproxyapi;
+          inherit port;
+          settings.access = {
+            api-keys = map fileKey names;
+            key-allowlist = lib.zipListsWith (name: provider: allow name {inherit provider;}) names ["claude" "codex"];
+          };
+          stateDir = "/build/state/${toString port}";
+        };
+        proxy =
+          (evalHm {
+            ai.cliproxyapi.instances = {
+              duplicate = instance 28424 ["a" "twin"];
+              valid = instance 28425 ["ok-a" "ok-b"];
+            };
+          }).config;
+        exec = name: proxy.systemd.user.services."cliproxyapi-${name}".Service.ExecStart;
+      in
+        pkgs.runCommandLocal "module-test-service-instances-key-allowlist-duplicate" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          printf '%s' key-same > /build/key-a
+          printf ' %s\n' key-same > /build/key-twin
+          printf '%s' key-ok-a > /build/key-ok-a
+          printf '%s' key-ok-b > /build/key-ok-b
+          ${daemonHarness "key-allowlist-duplicate"}
+          ${exec "valid"} > valid.log 2>&1 &
+          processes+=("$!")
+          ready "$!" http://127.0.0.1:28425/healthz valid.log
+          status=0
+          timeout --kill-after=5 30 ${exec "duplicate"} > cpa.log 2>&1 || status=$?
+          cat cpa.log
+          # 124 and 137 are timeout's own: CPA was still running after 30 s.
+          case $status in
+            0 | 124 | 137)
+              echo "FAIL: CPA with two entries for one client key gave status $status, want its own non-zero exit" >&2
+              false
+              ;;
+          esac
+          echo "ok: the refused config exited with status $status"
+          grep -F 'failed to load config: access.key-allowlist: entries 0, 1 have the same api-key after trimming' cpa.log
+          if grep -F key-same cpa.log; then
+            echo "FAIL: the refusal printed the client key" >&2
+            false
+          fi
+          if ! kill -0 "''${processes[0]}" 2>/dev/null; then
+            cat valid.log >&2
+            echo "FAIL: the valid config did not keep running" >&2
+            false
+          fi
+          echo "ok: the valid config still runs"
           touch "$out"
         '';
       # Linux Home Manager emits the units, and the launcher renders the

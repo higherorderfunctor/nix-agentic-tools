@@ -206,14 +206,24 @@ moves it applies at an offset.
 - `cliproxyapi-key-allowlist` runs the patch's Go tests, which the package build
   skips (`subPackages` is `cmd/server`); each test's comment names what it
   proves. `SelectAuth` always takes the legacy candidate loop, so assertions
-  through it add no scheduler coverage.
-- No check finds a candidate loop that skips the predicate: a new `range` over
-  `Manager.auths`, an indexed lookup (`m.auths[id]`), a loop over a copy
-  (`snapshotAuths`, `List`), or the scheduler's own pools and pickers, which
-  match every entry on a nil predicate (`scheduler.go:1412,1647`). In 8.0.38
-  every scheduler pick entry point builds its predicate with
-  `scheduledAuthPredicate` (`scheduler.go:426,487,494`). A CPA bump that touches
-  candidate selection still needs a reviewer, green or not.
+  through it add no scheduler coverage. The check also joins
+  `checks/key_allowlist_loops_test.go` to the auth package: a go/types scan that
+  fails on a `range` over `Manager.auths` whose own body, closures judged apart,
+  calls no allowlist predicate, unless the function is on its commented
+  exemption list.
+- The scan does not see an indexed lookup (`m.auths[id]`), an alias of the map,
+  the map passed to a helper, a loop over a copy (`snapshotAuths`, `List`), or
+  the scheduler's own pools and pickers, which match every entry on a nil
+  predicate (`scheduler.go:1412,1647`). In 8.0.38 every scheduler pick entry
+  point builds its predicate with `scheduledAuthPredicate`
+  (`scheduler.go:426,487,494`). No check sees these shapes, so a CPA bump that
+  touches candidate selection still needs a reviewer, green or not.
+- `module-service-instances-key-allowlist` starts the packaged CPA from its Home
+  Manager unit against stand-in API-key upstreams. It has no OAuth login, so
+  only the Go test proves the OAuth exclusion.
+- `module-service-instances-key-allowlist-duplicate` starts the packaged CPA
+  with two `redact.file` keys that resolve to one, and a positive-control
+  instance.
 - `module-service-instances` holds the evaluation refusals and acceptances in
   one table, `settingsCases`.
 
