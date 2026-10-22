@@ -227,6 +227,43 @@
     variable = "SERVICE_CONFIG";
   };
   refused = entry: !(succeeds (fileLauncher entry).drvPath);
+  # Secret files: what a redact.types.secretFile option hands ai.services.
+  # Each reference kind is written to a 0600 file whose path reaches the
+  # variable or the config field; a plain reference beside them still
+  # delivers its value.
+  asFile = value: {_redact.asFile = value;};
+  secretFileReceiver = strictShellApplication pkgs {
+    name = "services-test-secret-file-receiver";
+    text = ''
+      printf '%s\n' "$COMMAND_FILE" "$CONCAT_FILE" "$FILE_FILE" > "$RECEIVED/paths"
+      printf '%s' "$VALUE" > "$RECEIVED/value"
+      ${pkgs.coreutils}/bin/cp "$SERVICE_CONFIG" "$RECEIVED/config.json"
+    '';
+  };
+  secretFiles = {
+    command = ["${secretFileReceiver}/bin/services-test-secret-file-receiver"];
+    environment = {
+      COMMAND_FILE = asFile (redact.command "${launcherReader}/bin/services-test-reader");
+      CONCAT_FILE = asFile (redact.concat ["Bearer " (redact.file "/build/secret-file")]);
+      FILE_FILE = asFile (redact.file "/build/secret-file");
+      VALUE = redact.file "/build/secret-file";
+    };
+    files.config = {
+      content = builtins.toJSON {
+        key-file = placeholder "KEY_FILE";
+        token = placeholder "TOKEN";
+      };
+      secrets = {
+        KEY_FILE = asFile (redact.file "/build/secret-file");
+        TOKEN = redact.file "/build/secret-file";
+      };
+      variable = "SERVICE_CONFIG";
+    };
+    restartOnChange = [];
+  };
+  commandOnly = backends.evaluate "hm" {
+    services.secret = daemon // {environment.KEY_FILE = asFile (redact.command "/run/current-system/sw/bin/read-key");};
+  };
   stampEntry = {
     command = ["${pkgs.coreutils}/bin/true"];
     enable = true;
@@ -492,6 +529,90 @@ in {
             mkdir "$TMPDIR/fallback"
             XDG_RUNTIME_DIR= TMPDIR="$TMPDIR/fallback" ${launcher}/bin/ai-service-files-test
             test "$(cat "$RECEIVED/path")" = "$TMPDIR/fallback/ai-service-$(id -u)-files-test/config.json"
+            touch "$out"
+          '';
+      # A declared XDG_RUNTIME_DIR or TMPDIR picks the runtime directory, as it
+      # picks the daemon's own: the files and the daemon agree on a root that
+      # differs from the one the launcher inherited.
+      ai-module-services-declared-root = let
+        launcherWith = environment:
+          fileLauncher ((fileEntry {inherit config;}) // {inherit environment;});
+        runtime = launcherWith {XDG_RUNTIME_DIR = "/build/declared-runtime";};
+        temporary = launcherWith {TMPDIR = "/build/declared-temporary";};
+      in
+        pkgs.runCommandLocal "ai-module-services-declared-root" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          printf '%s' value > /build/secret
+          export RECEIVED="$TMPDIR/received"
+          mkdir -p "$RECEIVED" /build/inherited-runtime /build/inherited-temporary /build/declared-runtime /build/declared-temporary
+          # The declared runtime root wins over the inherited one.
+          XDG_RUNTIME_DIR=/build/inherited-runtime ${runtime}/bin/ai-service-files-test
+          test "$(cat "$RECEIVED/path")" = /build/declared-runtime/ai-service-files-test/config.json
+          ${pkgs.gnugrep}/bin/grep -Fx XDG_RUNTIME_DIR=/build/declared-runtime "$RECEIVED/environment"
+          test ! -e /build/inherited-runtime/ai-service-files-test
+          # So does a declared TMPDIR, where no runtime root is set.
+          XDG_RUNTIME_DIR= TMPDIR=/build/inherited-temporary ${temporary}/bin/ai-service-files-test
+          test "$(cat "$RECEIVED/path")" = "/build/declared-temporary/ai-service-$(id -u)-files-test/config.json"
+          ${pkgs.gnugrep}/bin/grep -Fx TMPDIR=/build/declared-temporary "$RECEIVED/environment"
+          test ! -e "/build/inherited-temporary/ai-service-$(id -u)-files-test"
+          touch "$out"
+        '';
+      ai-module-services-secret-files = let
+        launcher = services.mkLauncher {
+          inherit pkgs;
+          entry = secretFiles;
+          name = "secret-files-test";
+        };
+      in
+        assert lib.assertMsg (
+          # The tag hides no trigger, and a command reads no file.
+          services.triggers secretFiles
+          == ["/build/secret-file"]
+          && services.triggers commandOnly.ai.services.secret == []
+          # A secret file waits for the providers as a reference does.
+          && commandOnly.systemd.user.services.secret.Unit.Wants == ["sops-nix.service"]
+          && (backends.evaluate "hm" {services.plain = daemon;}).systemd.user.services.plain.Unit.After == ["network.target"]
+        ) "ai-module-services-secret-files: triggers and ordering";
+        assert lib.assertMsg (
+          refused (secretFiles // {environment._KEY_FILE = asFile (redact.file "/build/secret-file");})
+          && !(refused secretFiles)
+        ) "ai-module-services-secret-files: a secret file name outside the file-name grammar was accepted";
+          pkgs.runCommandLocal "ai-module-services-secret-files" {} ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            printf '%s\n\n' 'file "value"' > /build/secret-file
+            export XDG_RUNTIME_DIR="$TMPDIR/run" RECEIVED="$TMPDIR/received"
+            mkdir -p "$XDG_RUNTIME_DIR" "$RECEIVED"
+            dir="$XDG_RUNTIME_DIR/ai-service-secret-files-test"
+            # Holds exactly the value, 0600, in the 0700 runtime directory.
+            holds() {
+              test "$(${pkgs.coreutils}/bin/stat -c '%a' "$1")" = 600
+              printf '%s' "$2" | ${pkgs.diffutils}/bin/cmp - "$1"
+            }
+            ${launcher}/bin/ai-service-secret-files-test
+            test "$(${pkgs.coreutils}/bin/stat -c '%a' "$dir")" = 700
+            printf '%s\n' "$dir/COMMAND_FILE" "$dir/CONCAT_FILE" "$dir/FILE_FILE" | ${pkgs.diffutils}/bin/diff -u - "$RECEIVED/paths"
+            holds "$dir/COMMAND_FILE" 'secret value'
+            holds "$dir/CONCAT_FILE" 'Bearer file "value"'
+            holds "$dir/FILE_FILE" 'file "value"'
+            holds "$dir/config-KEY_FILE" 'file "value"'
+            # Negative control: a plain reference delivers the value itself.
+            printf '%s' 'file "value"' | ${pkgs.diffutils}/bin/cmp - "$RECEIVED/value"
+            ${pkgs.jq}/bin/jq -e --arg path "$dir/config-KEY_FILE" --arg value 'file "value"' '. == {"key-file": $path, token: $value}' "$RECEIVED/config.json"
+            test "$(ls -A "$dir" | ${pkgs.coreutils}/bin/tr '\n' ' ')" = 'COMMAND_FILE CONCAT_FILE FILE_FILE config-KEY_FILE config.json '
+            # A changed reference is copied again at the next start.
+            printf '%s' rotated > /build/secret-file
+            ${launcher}/bin/ai-service-secret-files-test
+            holds "$dir/FILE_FILE" rotated
+            holds "$dir/config-KEY_FILE" rotated
+            # A failed read aborts the start before the daemon runs.
+            rm "$RECEIVED/paths"
+            if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-secret-files-test; then
+              echo "a failed secret-file read started the daemon" >&2
+              exit 1
+            fi
+            test ! -e "$RECEIVED/paths"
             touch "$out"
           '';
       ai-module-services-rotation = pkgs.runCommandLocal "ai-module-services-rotation" {} ''

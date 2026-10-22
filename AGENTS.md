@@ -513,6 +513,15 @@ hoc machinery beside an existing abstraction.
   secret-file patch or its own start script. See
   `packages/ai-module/lib/services.nix` and `packages/ai-module/docs/DESIGN.md`,
   Services.
+- **Secret files are delivered by `ai.services`.** A setting that wants the path
+  of a file holding a secret is typed `redact.types.secretFile`; the consumer
+  still writes a redact reference. The service launcher writes the value to a
+  0600 file in the service's runtime directory and delivers that path, and
+  restart triggers and provider ordering come from the reference as before. An
+  owner never copies a key to disk, probes a key file or wires its trigger by
+  hand, and a secret-file value reaching any other launcher fails evaluation.
+  See `lib/redact/default.nix`, `packages/ai-module/lib/services.nix` and
+  `dev/fragments/redact/redact.md`.
 - **Tool instances use the instances helper.** A tool with typed settings that
   runs as a daemon declares `ai.<owner>.instances.<name>` through
   `packages/ai-module/lib/instances.nix`: one service and port claim per

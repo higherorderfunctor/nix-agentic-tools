@@ -26,8 +26,13 @@
       if builtins.match "[A-Z0-9]" c != null
       then c
       else "_") (lib.stringToCharacters (lib.toUpper (toString segment))));
-  # Concatenated, not interpolated: `$${` is Nix's escape for a literal `${`.
+  # The token's one spelling; packages/ai-module/lib/services.nix reads it
+  # from here. Concatenated, not interpolated: `$${` is Nix's escape for a
+  # literal `${`. Bracket expressions in the pattern, since libstdc++'s ERE
+  # rejects an escaped brace.
+  identifier = "[A-Za-z_][A-Za-z0-9_]*";
   placeholder = name: "{" + "$" + name + "}";
+  placeholderPattern = "[{][$](" + identifier + ")[}]";
 
   # path → value → { value; secrets = [ { name; path; reference; } ]; }
   # Nulls are dropped before anything is tested, so the value tested is the
@@ -74,6 +79,14 @@
       secrets = [];
     };
 in {
+  inherit placeholder;
+  # The NAME of a string that is a whole placeholder, else null.
+  placeholderName = value: let
+    match = builtins.match placeholderPattern value;
+  in
+    if match == null
+    then null
+    else lib.head match;
   # The launcher's substitution, for checks that load a render: each
   # placeholder in `content` replaced by `values.<NAME>` as a JSON string.
   fill = values: content: let

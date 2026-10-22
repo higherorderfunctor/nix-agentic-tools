@@ -11,7 +11,8 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 > Home Manager service unit ordering; repository modules reach Home Manager and
 > devenv file and activation sinks only through ai-module's three layers, apart
 > from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
-> service's `files` render at start in checked private runtime directories with
+> service's `files` and secret files render at start in checked private runtime
+> directories, chosen after the declared environment applies, with
 > user-qualified fallbacks; private secret slots are cleared before reads and
 > exec, public variables reserve `_ai_`, tool instances use `lib/instances.nix`,
 > a restart trigger alone makes a unit a secret reader, and every service has a
@@ -99,19 +100,21 @@ conflict text naming `lib/runtime.nix`, not the owners.
 
 Declare a daemon through `ai.<owner>.services`; enabled owners forward to
 `ai.services`. Keys match `^[a-z0-9][a-z0-9_-]*$`. Fields are `command`
-(nonempty argv), `enable`, `environment` (strings or redact references), `files`
-(JSON `content` with `{$NAME}` placeholders, `secrets` NAME → reference, and the
-`variable` exported with the path), `ports`, `restart` and `restartOnChange`
-(absolute paths). A strict launcher reads secrets at start, renders each file
+(nonempty argv), `enable`, `environment` (strings, redact references or secret
+files), `files` (JSON `content` with `{$NAME}` placeholders, `secrets` NAME →
+reference or secret file, and the `variable` exported with the path), `ports`,
+`restart` and `restartOnChange` (absolute paths). A strict launcher reads
+secrets at start, renders each file and each `redact.types.secretFile` value
 0600 into a 0700 `$XDG_RUNTIME_DIR/ai-service-<key>` directory, or
-`${TMPDIR:-/tmp}/ai-service-<uid>-<key>` without XDG_RUNTIME_DIR, and execs argv
-on both backends. The runtime root must exist; an existing service directory
-must be owned by the current user and neither a symlink nor a non-directory. The
-launcher clears private secret slots before reading and before exec;
-`environment` names and file `variable` names reserve the `_ai_` prefix.
-Services read store paths and secrets, never engine-written files; oneshot and
-file-watch units remain outside this surface. A tool with typed settings
-declares named instances through `lib/instances.nix`, which lowers each
+`${TMPDIR:-/tmp}/ai-service-<uid>-<key>` without XDG_RUNTIME_DIR, both read
+after the declared environment applies, and execs argv on both backends; a
+secret file is delivered as its path. The root must exist; an existing service
+directory must be owned by the current user and neither a symlink nor a
+non-directory. The launcher clears private secret slots before reading and
+before exec; `environment` names and file `variable` names reserve the `_ai_`
+prefix. Services read store paths and secrets, never engine-written files;
+oneshot and file-watch units remain outside this surface. A tool with typed
+settings declares named instances through `lib/instances.nix`, which lowers each
 `ai.<owner>.instances.<name>` to the service `<owner>-<name>`.
 
 Linux Home Manager gives a secret-reading unit, one with a redact reference or a
