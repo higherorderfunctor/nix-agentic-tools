@@ -1,0 +1,1211 @@
+CLIProxyAPI: access.key-allowlist, a fail-closed per-client-key credential allowlist.
+
+Home dispatch and plugins choose credentials outside the allowlist: Home is
+refused while it is set, and the instance module refuses plugins beside it.
+Applied with --fuzz=0.
+Rationale: packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md.
+
+diff --git a/cmd/server/main.go b/cmd/server/main.go
+index 960d5e5..9bac730 100644
+--- a/cmd/server/main.go
++++ b/cmd/server/main.go
+@@ -598,7 +598,7 @@ func main() {
+ 	}
+ 	if err != nil {
+ 		log.Errorf("failed to load config: %v", err)
+-		return
++		os.Exit(1)
+ 	}
+ 	if cfg == nil {
+ 		cfg = &config.Config{}
+diff --git a/internal/access/config_access/key_allowlist_test.go b/internal/access/config_access/key_allowlist_test.go
+new file mode 100644
+index 0000000..641ba09
+--- /dev/null
++++ b/internal/access/config_access/key_allowlist_test.go
+@@ -0,0 +1,281 @@
++package configaccess_test
++
++import (
++	"context"
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/gin-gonic/gin"
++	configaccess "github.com/router-for-me/CLIProxyAPI/v8/internal/access/config_access"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/api"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/watcher/synthesizer"
++	sdkaccess "github.com/router-for-me/CLIProxyAPI/v8/sdk/access"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
++)
++
++type stubExecutor struct{ provider string }
++
++func (e stubExecutor) Identifier() string { return e.provider }
++func (stubExecutor) Execute(context.Context, *coreauth.Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
++	return cliproxyexecutor.Response{}, nil
++}
++func (stubExecutor) ExecuteStream(context.Context, *coreauth.Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
++	return nil, nil
++}
++func (stubExecutor) Refresh(_ context.Context, auth *coreauth.Auth) (*coreauth.Auth, error) {
++	return auth, nil
++}
++func (stubExecutor) CountTokens(context.Context, *coreauth.Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
++	return cliproxyexecutor.Response{}, nil
++}
++func (stubExecutor) HttpRequest(context.Context, *coreauth.Auth, *http.Request) (*http.Response, error) {
++	return nil, nil
++}
++
++// The allowlist keys on the principal the access middleware authenticated,
++// so a client key sent as ?key= or ?auth_token= is held to the same entry as
++// one sent in a header.
++func TestKeyAllowlistAppliesToQueryKeys(t *testing.T) {
++	cfg, errParse := config.ParseConfigBytes([]byte(`config-version: 8
++access:
++  api-keys: [key-a, key-b, key-unlisted]
++  key-allowlist:
++    - api-key: key-a
++      credentials: [{provider: alpha, kind: apikey}]
++    - api-key: key-b
++      credentials: [{provider: beta, kind: apikey}]
++`))
++	if errParse != nil {
++		t.Fatalf("parse v8 config: %v", errParse)
++	}
++	configaccess.Register(&cfg.SDKConfig)
++	t.Cleanup(func() { configaccess.Register(nil) })
++	access := sdkaccess.NewManager()
++	access.SetProviders(sdkaccess.RegisteredProviders())
++
++	manager := coreauth.NewManager(nil, nil, nil)
++	manager.SetConfig(cfg)
++	for _, provider := range []string{"alpha", "beta"} {
++		manager.RegisterExecutor(stubExecutor{provider: provider})
++		if _, errRegister := manager.Register(context.Background(), &coreauth.Auth{ID: provider, Provider: provider, Attributes: map[string]string{coreauth.AttributeAPIKey: "upstream-" + provider, coreauth.AttributeSource: "config:" + provider + "[0]"}}); errRegister != nil {
++			t.Fatalf("register %s: %v", provider, errRegister)
++		}
++	}
++
++	gin.SetMode(gin.TestMode)
++	router := gin.New()
++	router.Use(api.AuthMiddleware(access))
++	router.GET("/select/:provider", func(c *gin.Context) {
++		selected, errSelect := manager.SelectAuth(c.Request.Context(), c.Param("provider"), "", cliproxyexecutor.Options{})
++		if errSelect != nil {
++			c.String(http.StatusForbidden, errSelect.Error())
++			return
++		}
++		c.String(http.StatusOK, selected.ID)
++	})
++
++	cases := []struct {
++		target string
++		header string
++		status int
++		body   string
++	}{
++		{target: "/select/alpha?key=key-a", status: http.StatusOK, body: "alpha"},
++		{target: "/select/beta?key=key-a", status: http.StatusForbidden},
++		{target: "/select/beta?auth_token=key-b", status: http.StatusOK, body: "beta"},
++		{target: "/select/alpha?auth_token=key-b", status: http.StatusForbidden},
++		{target: "/select/alpha?key=key-unlisted", status: http.StatusForbidden},
++		{target: "/select/alpha?key=key-unknown", status: http.StatusUnauthorized},
++		{target: "/select/beta", header: "key-a", status: http.StatusForbidden},
++		{target: "/select/alpha", header: "key-a", status: http.StatusOK, body: "alpha"},
++	}
++	for _, test := range cases {
++		request := httptest.NewRequest(http.MethodGet, test.target, nil)
++		if test.header != "" {
++			request.Header.Set("Authorization", "Bearer "+test.header)
++		}
++		recorder := httptest.NewRecorder()
++		router.ServeHTTP(recorder, request)
++		if recorder.Code != test.status || (test.body != "" && recorder.Body.String() != test.body) {
++			t.Errorf("%s (header %q): %d %q, want %d %q", test.target, test.header, recorder.Code, recorder.Body.String(), test.status, test.body)
++		}
++	}
++}
++
++// Two api-keys.claude groups share provider and kind, and their IDs hash the
++// secret, so only base-urls tells them apart; a third group on the default
++// endpoint has no base_url at all. The credentials come from the config
++// synthesizer, which stores the base_url the rule compares. An OAuth login is
++// never matched by a base-urls rule, even one carrying a base_url attribute as
++// Kimi logins do, yet a plain oauth rule does select it.
++func TestKeyAllowlistSeparatesSameProviderBaseURLs(t *testing.T) {
++	cfg, errParse := config.ParseConfigBytes([]byte(`config-version: 8
++access:
++  api-keys: [key-both, key-nearmiss, key-oauth, key-oauth-plain, key-other, key-plain, key-zai]
++  key-allowlist:
++    - api-key: key-both
++      credentials: [{provider: claude, kind: apikey, base-urls: [https://api.z.ai/api/anthropic, https://other.example/anthropic]}]
++    - api-key: key-nearmiss
++      credentials: [{provider: claude, kind: apikey, base-urls: ["https://api.z.ai/api/anthropic/"]}]
++    - api-key: key-oauth
++      credentials: [{provider: claude, kind: oauth, base-urls: [https://api.z.ai/api/anthropic]}]
++    - api-key: key-oauth-plain
++      credentials: [{provider: claude, kind: oauth}]
++    - api-key: key-other
++      credentials: [{provider: claude, kind: apikey, base-urls: [https://other.example/anthropic]}]
++    - api-key: key-plain
++      credentials: [{provider: claude, kind: apikey}]
++    - api-key: key-zai
++      credentials: [{provider: claude, kind: apikey, base-urls: [" https://api.z.ai/api/anthropic "]}]
++api-keys:
++  claude:
++    - name: zai
++      base-url: https://api.z.ai/api/anthropic
++      keys: [{api-key: upstream-zai}]
++    - name: other
++      base-url: https://other.example/anthropic
++      keys: [{api-key: upstream-other}]
++    - name: default
++      keys: [{api-key: upstream-default}]
++`))
++	if errParse != nil {
++		t.Fatalf("parse v8 config: %v", errParse)
++	}
++	auths, errSynthesize := synthesizer.NewConfigSynthesizer().Synthesize(&synthesizer.SynthesisContext{Config: cfg, Now: time.Now(), IDGenerator: synthesizer.NewStableIDGenerator()})
++	if errSynthesize != nil || len(auths) != 3 {
++		t.Fatalf("synthesize: %d auths, %v", len(auths), errSynthesize)
++	}
++	auths = append(auths, &coreauth.Auth{ID: "claude-oauth", Provider: "claude", Attributes: map[string]string{coreauth.AttributeAuthKind: coreauth.AuthKindOAuth, "base_url": "https://api.z.ai/api/anthropic"}})
++	// Each credential under a name a case can list: its base URL, "default"
++	// for the group with none, "oauth" for the login.
++	labels := map[string]string{"claude-oauth": "oauth"}
++	manager := coreauth.NewManager(nil, nil, nil)
++	manager.SetConfig(cfg)
++	manager.RegisterExecutor(stubExecutor{provider: "claude"})
++	for _, auth := range auths {
++		if auth.ID != "claude-oauth" {
++			labels[auth.ID] = auth.Attributes["base_url"]
++			if labels[auth.ID] == "" {
++				labels[auth.ID] = "default"
++			}
++		}
++		if _, errRegister := manager.Register(context.Background(), auth); errRegister != nil {
++			t.Fatalf("register %s: %v", auth.ID, errRegister)
++		}
++	}
++
++	cases := []struct {
++		key  string
++		want []string
++	}{
++		{key: "key-both", want: []string{"https://api.z.ai/api/anthropic", "https://other.example/anthropic"}},
++		// A base URL differing by a trailing slash names no credential.
++		{key: "key-nearmiss"},
++		// A base-urls rule never matches the OAuth login that carries a matching base_url.
++		{key: "key-oauth"},
++		// Positive control: the login is selectable, by a plain oauth rule.
++		{key: "key-oauth-plain", want: []string{"oauth"}},
++		{key: "key-other", want: []string{"https://other.example/anthropic"}},
++		// Positive control: the group with no base_url is selectable, by a rule without base-urls.
++		{key: "key-plain", want: []string{"default", "https://api.z.ai/api/anthropic", "https://other.example/anthropic"}},
++		{key: "key-zai", want: []string{"https://api.z.ai/api/anthropic"}},
++	}
++	for _, test := range cases {
++		key, want := test.key, test.want
++		ctx := coreusage.WithAPIKey(context.Background(), key)
++		seen := map[string]bool{}
++		for range 12 {
++			selected, errSelect := manager.SelectAuth(ctx, "claude", "", cliproxyexecutor.Options{})
++			if errSelect != nil {
++				if len(want) > 0 {
++					t.Fatalf("%s: select: %v", key, errSelect)
++				}
++				continue
++			}
++			seen[labels[selected.ID]] = true
++		}
++		if len(seen) != len(want) {
++			t.Fatalf("%s reached %v, want %v", key, seen, want)
++		}
++		for _, label := range want {
++			if !seen[label] {
++				t.Fatalf("%s reached %v, want %v", key, seen, want)
++			}
++		}
++	}
++}
++
++// Entries that bind the same client key, verbatim or once trimmed, would merge
++// into one principal holding both entries' rules, so every load path refuses
++// them: ParseConfigBytes (Home, management), LoadConfig (startup, hot reload,
++// management) and cloud-deploy's optional load, which otherwise falls back to an
++// empty config on a parse error. The error names the entries by index and never
++// prints the key. Distinct keys load, and still enforce (TestKeyAllowlistAppliesToQueryKeys).
++func TestKeyAllowlistRefusesDuplicateKeys(t *testing.T) {
++	document := func(keys ...string) []byte {
++		var b strings.Builder
++		b.WriteString("config-version: 8\naccess:\n  key-allowlist:\n")
++		for _, key := range keys {
++			fmt.Fprintf(&b, "    - api-key: %q\n      credentials: [{provider: alpha, kind: apikey}]\n", key)
++		}
++		return []byte(b.String())
++	}
++	const suffix = " have the same api-key after trimming; give each client key one entry, since entries sharing a key would merge their credential rules"
++	cases := []struct {
++		name   string
++		keys   []string
++		groups string
++	}{
++		{name: "identical", keys: []string{"secret-dup", "secret-dup"}, groups: "entries 0, 1"},
++		{name: "identical after trim", keys: []string{"secret-dup", " \tsecret-dup\n"}, groups: "entries 0, 1"},
++		{name: "beside a distinct key", keys: []string{"secret-dup", "secret-other", "secret-dup"}, groups: "entries 0, 2"},
++		{name: "two groups", keys: []string{"secret-dup", "secret-twin", "secret-dup ", "secret-dup", "secret-twin"}, groups: "entries 0, 2, 3; entries 1, 4"},
++		{name: "distinct", keys: []string{"secret-a", "secret-b", " secret-c "}},
++		// An empty key binds no request, so empty entries never merge rules.
++		{name: "empty keys", keys: []string{"", "  ", "secret-a"}},
++	}
++	for _, test := range cases {
++		t.Run(test.name, func(t *testing.T) {
++			data := document(test.keys...)
++			path := filepath.Join(t.TempDir(), "config.yaml")
++			if errWrite := os.WriteFile(path, data, 0o600); errWrite != nil {
++				t.Fatalf("write config: %v", errWrite)
++			}
++			loads := map[string]func() (*config.Config, error){
++				"ParseConfigBytes":         func() (*config.Config, error) { return config.ParseConfigBytes(data) },
++				"LoadConfig":               func() (*config.Config, error) { return config.LoadConfig(path) },
++				"LoadConfigOptional/cloud": func() (*config.Config, error) { return config.LoadConfigOptional(path, true) },
++			}
++			for loader, load := range loads {
++				cfg, errLoad := load()
++				if test.groups == "" {
++					if errLoad != nil {
++						t.Fatalf("%s refused distinct keys: %v", loader, errLoad)
++					}
++					if len(cfg.KeyAllowlist) != len(test.keys) {
++						t.Fatalf("%s loaded %d entries, want %d", loader, len(cfg.KeyAllowlist), len(test.keys))
++					}
++					continue
++				}
++				if errLoad == nil {
++					t.Fatalf("%s accepted duplicate keys", loader)
++				}
++				if want := "access.key-allowlist: " + test.groups + suffix; errLoad.Error() != want {
++					t.Fatalf("%s error = %q, want %q", loader, errLoad.Error(), want)
++				}
++				if strings.Contains(errLoad.Error(), "secret-") {
++					t.Fatalf("%s error prints a key: %q", loader, errLoad.Error())
++				}
++			}
++		})
++	}
++}
+diff --git a/internal/config/config_load.go b/internal/config/config_load.go
+index baca01e..d218b56 100644
+--- a/internal/config/config_load.go
++++ b/internal/config/config_load.go
+@@ -239,6 +239,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
+ 	if errValidate := cfg.ValidateCredentialWeights(); errValidate != nil {
+ 		return nil, errValidate
+ 	}
++	if errValidate := ValidateKeyAllowlist(cfg.KeyAllowlist); errValidate != nil {
++		return nil, errValidate
++	}
+ 
+ 	// Hash remote management key if plaintext is detected (nested)
+ 	// We consider a value to be already hashed if it looks like a bcrypt hash ($2a$, $2b$, or $2y$ prefix).
+diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
+index 68bd7d9..6fbec04 100644
+--- a/internal/config/config_v8.go
++++ b/internal/config/config_v8.go
+@@ -73,7 +73,7 @@ func buildV8Paths() []configPath {
+ 		{"host", "server.host"}, {"port", "server.port"}, {"max-request-body-bytes", "server.max-request-body-bytes"}, {"trusted-proxies", "server.trusted-proxies"},
+ 		{"github-token", "server.github-token"},
+ 		{"tls", "server.tls"}, {"commercial-mode", "server.commercial-mode"}, {"discovery", "server.discovery"},
+-		{"remote-management", "management"}, {"api-keys", "access.api-keys"},
++		{"remote-management", "management"}, {"api-keys", "access.api-keys"}, {"key-allowlist", "access.key-allowlist"},
+ 		{"credential-concurrency", "credentials.concurrency"}, {"credential-in-flight", "credentials.in-flight"},
+ 		{"force-model-prefix", "routing.force-model-prefix"},
+ 		{"request-retry", "routing.retry.request-retry"}, {"max-retry-credentials", "routing.retry.max-retry-credentials"},
+diff --git a/internal/config/key_allowlist.go b/internal/config/key_allowlist.go
+new file mode 100644
+index 0000000..8fed490
+--- /dev/null
++++ b/internal/config/key_allowlist.go
+@@ -0,0 +1,69 @@
++package config
++
++import (
++	"fmt"
++	"strconv"
++	"strings"
++)
++
++// KeyAllowlist binds one client key to the upstream credentials its requests
++// may select. While access.key-allowlist has any entry, credential selection
++// fails closed: a request whose authenticated client key has no entry selects
++// no credential, and an entry selects only credentials one of its rules allows.
++type KeyAllowlist struct {
++	// APIKey is the client key, as listed in access.api-keys.
++	APIKey string `yaml:"api-key" json:"api-key"`
++	// Credentials lists the rules a credential must match one of.
++	Credentials []KeyAllowlistCredential `yaml:"credentials" json:"credentials"`
++}
++
++// ClientKey is the client key the entry binds, trimmed as credential selection
++// compares it. An empty result binds no request.
++func (e KeyAllowlist) ClientKey() string { return strings.TrimSpace(e.APIKey) }
++
++// KeyAllowlistCredential matches upstream credentials by provider and kind,
++// optionally narrowed to credential IDs and API-key base URLs.
++type KeyAllowlistCredential struct {
++	// Provider is the credential's provider as CPA records it, such as claude,
++	// codex or gemini, and openai-compatible-<name> for an openai-compatibility group.
++	Provider string `yaml:"provider" json:"provider"`
++	// Kind is the credential kind, oauth or apikey. A rule with any other kind matches nothing.
++	Kind string `yaml:"kind" json:"kind"`
++	// IDs, when set, narrows the rule to these credential IDs; an OAuth login's
++	// ID is its file path relative to the auth directory.
++	IDs []string `yaml:"ids,omitempty" json:"ids,omitempty"`
++	// BaseURLs, when set, narrows the rule to API-key credentials whose
++	// base-url is one of these, compared as CPA stores it (trimmed, otherwise
++	// exact). It never matches an OAuth login or a credential without a base-url.
++	BaseURLs []string `yaml:"base-urls,omitempty" json:"base-urls,omitempty"`
++}
++
++// ValidateKeyAllowlist refuses entries that bind the same client key. Selection
++// looks rules up by that key, so two such entries would act as one principal
++// holding the union of both entries' rules. The error names the entries by
++// index and never the key. Entries with an empty key bind no request and are
++// not compared.
++func ValidateKeyAllowlist(entries []KeyAllowlist) error {
++	indexes := make(map[string][]string, len(entries))
++	var order []string
++	for i, entry := range entries {
++		key := entry.ClientKey()
++		if key == "" {
++			continue
++		}
++		if len(indexes[key]) == 0 {
++			order = append(order, key)
++		}
++		indexes[key] = append(indexes[key], strconv.Itoa(i))
++	}
++	var duplicates []string
++	for _, key := range order {
++		if len(indexes[key]) > 1 {
++			duplicates = append(duplicates, "entries "+strings.Join(indexes[key], ", "))
++		}
++	}
++	if len(duplicates) == 0 {
++		return nil
++	}
++	return fmt.Errorf("access.key-allowlist: %s have the same api-key after trimming; give each client key one entry, since entries sharing a key would merge their credential rules", strings.Join(duplicates, "; "))
++}
+diff --git a/internal/config/parse.go b/internal/config/parse.go
+index c3442be..13a949f 100644
+--- a/internal/config/parse.go
++++ b/internal/config/parse.go
+@@ -58,6 +58,9 @@ func ParseConfigBytes(data []byte) (*Config, error) {
+ 	if errValidate := cfg.Codex.LiveMediaRelay.Validate(); errValidate != nil {
+ 		return nil, errValidate
+ 	}
++	if errValidate := ValidateKeyAllowlist(cfg.KeyAllowlist); errValidate != nil {
++		return nil, errValidate
++	}
+ 	if cfg.Discovery.ServiceType == "" {
+ 		cfg.Discovery.ServiceType = DefaultDiscoveryServiceType
+ 	}
+diff --git a/internal/config/sdk_config.go b/internal/config/sdk_config.go
+index 1c52dc2..5a0b45d 100644
+--- a/internal/config/sdk_config.go
++++ b/internal/config/sdk_config.go
+@@ -93,6 +93,10 @@ type SDKConfig struct {
+ 	// APIKeys is a list of keys for authenticating clients to this proxy server.
+ 	APIKeys []string `yaml:"api-keys" json:"api-keys"`
+ 
++	// KeyAllowlist restricts each client key to the upstream credentials it may
++	// use. While it has any entry, a client key without one selects nothing.
++	KeyAllowlist []KeyAllowlist `yaml:"key-allowlist,omitempty" json:"key-allowlist,omitempty"`
++
+ 	// PassthroughHeaders controls whether upstream response headers are forwarded to downstream clients.
+ 	// Default is false (disabled).
+ 	PassthroughHeaders bool `yaml:"passthrough-headers" json:"passthrough-headers"`
+diff --git a/internal/watcher/key_allowlist_test.go b/internal/watcher/key_allowlist_test.go
+new file mode 100644
+index 0000000..d9c7407
+--- /dev/null
++++ b/internal/watcher/key_allowlist_test.go
+@@ -0,0 +1,79 @@
++package watcher
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++)
++
++// A hot reload that meets access.key-allowlist entries sharing a client key is
++// refused: the running config, its allowlist and the client reload stay as they
++// were, never the merged union. The refused file's hash is not recorded, so the
++// next valid write applies.
++func TestKeyAllowlistReloadRefusesDuplicateKeys(t *testing.T) {
++	tmpDir := t.TempDir()
++	authDir := filepath.Join(tmpDir, "auth")
++	if err := os.MkdirAll(authDir, 0o755); err != nil {
++		t.Fatalf("create auth dir: %v", err)
++	}
++	configPath := filepath.Join(tmpDir, "config.yaml")
++	writeConfig := func(first, second string) {
++		data := "config-version: 8\noauth:\n  auth-dir: " + authDir + "\naccess:\n  key-allowlist:\n" +
++			"    - api-key: " + first + "\n      credentials: [{provider: alpha, kind: apikey}]\n" +
++			"    - api-key: " + second + "\n      credentials: [{provider: beta, kind: apikey}]\n"
++		if err := os.WriteFile(configPath, []byte(data), 0o600); err != nil {
++			t.Fatalf("write config: %v", err)
++		}
++	}
++	var applied []*config.Config
++	w := &Watcher{
++		configPath:     configPath,
++		authDir:        authDir,
++		reloadCallback: func(cfg *config.Config) { applied = append(applied, cfg) },
++	}
++	keys := func() []string {
++		w.clientsMutex.RLock()
++		defer w.clientsMutex.RUnlock()
++		if w.config == nil {
++			return nil
++		}
++		var out []string
++		for _, entry := range w.config.KeyAllowlist {
++			out = append(out, entry.APIKey)
++		}
++		return out
++	}
++	expect := func(step string, reloads int, want ...string) {
++		t.Helper()
++		if len(applied) != reloads {
++			t.Fatalf("%s: %d reloads applied, want %d", step, len(applied), reloads)
++		}
++		got := keys()
++		if len(got) != len(want) {
++			t.Fatalf("%s: running allowlist %v, want %v", step, got, want)
++		}
++		for i := range want {
++			if got[i] != want[i] {
++				t.Fatalf("%s: running allowlist %v, want %v", step, got, want)
++			}
++		}
++	}
++
++	writeConfig("key-a", "key-b")
++	w.reloadConfigIfChanged()
++	expect("valid config", 1, "key-a", "key-b")
++
++	writeConfig("key-a", "key-a")
++	w.reloadConfigIfChanged()
++	expect("identical keys", 1, "key-a", "key-b")
++
++	writeConfig("key-a", `" key-a "`)
++	w.reloadConfigIfChanged()
++	expect("keys identical after trim", 1, "key-a", "key-b")
++
++	writeConfig("key-a", "key-c")
++	w.reloadConfigIfChanged()
++	expect("valid config after a refusal", 2, "key-a", "key-c")
++}
+diff --git a/sdk/cliproxy/auth/conductor.go b/sdk/cliproxy/auth/conductor.go
+index 3baead9..94d51f5 100644
+--- a/sdk/cliproxy/auth/conductor.go
++++ b/sdk/cliproxy/auth/conductor.go
+@@ -221,6 +221,8 @@ type Manager struct {
+ 	// runtimeConfig stores the latest application config for request-time decisions.
+ 	// It is initialized in NewManager; never Load() before first Store().
+ 	runtimeConfig atomic.Value
++	// keyAllowlist is access.key-allowlist compiled from runtimeConfig.
++	keyAllowlist keyAllowlistPointer
+ 
+ 	// Optional HTTP RoundTripper provider injected by host.
+ 	rtProvider RoundTripperProvider
+@@ -276,6 +278,7 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
+ 		manager.ApplyHomeInFlightPublisherConfig(defaultInFlightConfig)
+ 	}
+ 	manager.scheduler = newAuthScheduler(selector)
++	manager.scheduler.keyAllowlist = &manager.keyAllowlist
+ 	return manager
+ }
+ 
+diff --git a/sdk/cliproxy/auth/conductor_cooldown.go b/sdk/cliproxy/auth/conductor_cooldown.go
+index e17090c..ec39215 100644
+--- a/sdk/cliproxy/auth/conductor_cooldown.go
++++ b/sdk/cliproxy/auth/conductor_cooldown.go
+@@ -161,6 +161,7 @@ func (m *Manager) setConfigSnapshotLocked(cfg *internalconfig.Config) bool {
+ 		m.homeSessionAliases.clear()
+ 	}
+ 	m.runtimeConfig.Store(cfg)
++	m.keyAllowlist.Store(compileClientKeyAllowlist(cfg))
+ 	clearedCooldowns := m.clearDisabledCooldownStates(cfg)
+ 	if clearedCooldowns && oldCooldownStore != nil {
+ 		m.mu.Lock()
+diff --git a/sdk/cliproxy/auth/conductor_home.go b/sdk/cliproxy/auth/conductor_home.go
+index 1810c78..3204c2a 100644
+--- a/sdk/cliproxy/auth/conductor_home.go
++++ b/sdk/cliproxy/auth/conductor_home.go
+@@ -952,6 +952,11 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
+ 	if m == nil {
+ 		return nil, &Error{Code: "auth_not_found", Message: "no auth available"}
+ 	}
++	if m.keyAllowlist.Load() != nil {
++		// Home dispatch chooses credentials outside authSelectionEligibility, so
++		// access.key-allowlist refuses it rather than enforce half a policy.
++		return nil, &Error{Code: "home_unavailable", Message: "home dispatch is unavailable while access.key-allowlist is configured", HTTPStatus: http.StatusServiceUnavailable}
++	}
+ 	if ctx == nil {
+ 		ctx = context.Background()
+ 	}
+@@ -1281,12 +1286,18 @@ func (m *Manager) findAllAntigravityCreditsCandidateAuths(ctx context.Context, r
+ 		return nil, nil
+ 	}
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
++	// The credits fallback picks outside authSelectionEligibility, and it runs
++	// after the allowlist emptied the pool, so it applies the allowlist itself.
++	keyAllowlist, clientKey := loadKeyAllowlist(ctx, &m.keyAllowlist)
+ 	var candidates []creditsCandidateEntry
+ 	m.mu.RLock()
+ 	for _, auth := range m.auths {
+ 		if auth == nil || auth.Disabled || auth.Status == StatusDisabled {
+ 			continue
+ 		}
++		if keyAllowlist != nil && !keyAllowlist.allows(clientKey, auth) {
++			continue
++		}
+ 		if pinnedAuthID != "" && auth.ID != pinnedAuthID {
+ 			continue
+ 		}
+diff --git a/sdk/cliproxy/auth/conductor_selection.go b/sdk/cliproxy/auth/conductor_selection.go
+index 7cdacb7..a68a87c 100644
+--- a/sdk/cliproxy/auth/conductor_selection.go
++++ b/sdk/cliproxy/auth/conductor_selection.go
+@@ -86,6 +86,9 @@ type authSelectionEligibility struct {
+ 	requiredKind     string
+ 	credentialPolicy string
+ 	disallowFreeAuth bool
++	// keyAllowlist, while configured, admits only clientKey's credentials.
++	keyAllowlist *clientKeyAllowlist
++	clientKey    string
+ }
+ 
+ func withRequiredAuthKind(ctx context.Context, requiredKind string) context.Context {
+@@ -104,8 +107,9 @@ func credentialPolicyFromContext(ctx context.Context) string {
+ 	return policy
+ }
+ 
+-func authSelectionEligibilityForRequest(ctx context.Context, opts cliproxyexecutor.Options) authSelectionEligibility {
++func authSelectionEligibilityForRequest(ctx context.Context, opts cliproxyexecutor.Options, keyAllowlist *keyAllowlistPointer) authSelectionEligibility {
+ 	eligibility := authSelectionEligibility{disallowFreeAuth: disallowFreeAuthFromMetadata(opts.Metadata)}
++	eligibility.keyAllowlist, eligibility.clientKey = loadKeyAllowlist(ctx, keyAllowlist)
+ 	if ctx != nil {
+ 		eligibility.requiredKind, _ = ctx.Value(requiredAuthKindContextKey{}).(string)
+ 		eligibility.credentialPolicy, _ = ctx.Value(credentialPolicyContextKey{}).(string)
+@@ -123,6 +127,9 @@ func (e authSelectionEligibility) allows(auth *Auth) bool {
+ 	if e.credentialPolicy != "" && !credentialPolicyAllows(e.credentialPolicy, auth) {
+ 		return false
+ 	}
++	if e.keyAllowlist != nil && !e.keyAllowlist.allows(e.clientKey, auth) {
++		return false
++	}
+ 	return !e.disallowFreeAuth || !isFreeCodexAuth(auth)
+ }
+ 
+@@ -1416,7 +1423,7 @@ func (m *Manager) shouldRetryAfterErrorWithAttempted(ctx context.Context, opts c
+ 		}
+ 		return *retryAfter, true
+ 	}
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+ 	if !isRequestRetryRoundError(err) || !m.retryAllowed(attempt, providers, model, eligibility, pinnedAuthID, defaultRequestRetry) {
+ 		return 0, false
+@@ -1825,7 +1832,7 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
+ 	opts.Metadata[cliproxyexecutor.SessionAffinityProviderMetadataKey] = provider
+ 
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 	pluginScheduler, schedulerAcross := m.snapshotPluginScheduler()
+ 
+ 	m.mu.RLock()
+@@ -2097,7 +2104,7 @@ func (m *Manager) pickNext(ctx context.Context, provider, model string, opts cli
+ 	if m.hasPluginScheduler() || !m.useSchedulerFastPath() {
+ 		return m.pickNextLegacy(ctx, provider, model, opts, tried)
+ 	}
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 	if strings.TrimSpace(model) != "" {
+ 		m.mu.RLock()
+ 		targetKey := canonicalSchedulingProvider(provider)
+@@ -2155,7 +2162,7 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
+ 	opts.Metadata[cliproxyexecutor.SessionAffinityProviderMetadataKey] = "mixed"
+ 
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 
+ 	providerSet := make(map[string]struct{}, len(providers))
+ 	for _, provider := range providers {
+@@ -2302,7 +2309,7 @@ func (m *Manager) pickNextMixed(ctx context.Context, providers []string, model s
+ 	if len(eligibleProviders) == 0 {
+ 		return nil, nil, "", &Error{Code: "auth_not_found", Message: "no auth available"}
+ 	}
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 	if strings.TrimSpace(model) != "" {
+ 		providerSet := make(map[string]struct{}, len(eligibleProviders))
+ 		for _, providerKey := range eligibleProviders {
+@@ -2406,7 +2413,7 @@ func (m *Manager) warnLogAuthUnavailable(ctx context.Context, providers []string
+ 	now := time.Now()
+ 	m.mu.RLock()
+ 	defer m.mu.RUnlock()
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+ 	providerSet := make(map[string]struct{}, len(providers))
+ 	for _, p := range providers {
+diff --git a/sdk/cliproxy/auth/conductor_subsecond_cooldown_test.go b/sdk/cliproxy/auth/conductor_subsecond_cooldown_test.go
+index d942147..0c7f9f0 100644
+--- a/sdk/cliproxy/auth/conductor_subsecond_cooldown_test.go
++++ b/sdk/cliproxy/auth/conductor_subsecond_cooldown_test.go
+@@ -226,7 +226,7 @@ func TestClosestCooldownWaitWithAttempted_ExpiredCooldownDoesNotTriggerZeroWaitF
+ 		t.Fatalf("Register returned error: %v", errRegister)
+ 	}
+ 
+-	eligibility := authSelectionEligibilityForRequest(context.Background(), cliproxyexecutor.Options{})
++	eligibility := authSelectionEligibilityForRequest(context.Background(), cliproxyexecutor.Options{}, nil)
+ 
+ 	// Case 1: auth was NOT attempted in the failed round (untried credential).
+ 	// Because its cooldown is expired, it should be immediately available (wait = 0, found = true).
+@@ -434,7 +434,7 @@ func TestClosestCooldownWaitWithAttempted_RespectsManagerAndProviderCoolingOverr
+ 	}
+ 
+ 	attempted := map[string]struct{}{auth.ID: {}}
+-	eligibility := authSelectionEligibilityForRequest(context.Background(), cliproxyexecutor.Options{})
++	eligibility := authSelectionEligibilityForRequest(context.Background(), cliproxyexecutor.Options{}, nil)
+ 
+ 	// 1. Without provider override (cooling enabled): attempted auth after 429 enforces wait >= 10s.
+ 	wait, found := manager.closestCooldownWaitWithAttempted([]string{"openai-compatibility"}, model, 0, eligibility, "", 5, http.StatusTooManyRequests, attempted)
+diff --git a/sdk/cliproxy/auth/key_allowlist.go b/sdk/cliproxy/auth/key_allowlist.go
+new file mode 100644
+index 0000000..360a1e7
+--- /dev/null
++++ b/sdk/cliproxy/auth/key_allowlist.go
+@@ -0,0 +1,93 @@
++package auth
++
++import (
++	"context"
++	"slices"
++	"strings"
++	"sync/atomic"
++
++	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
++	log "github.com/sirupsen/logrus"
++)
++
++// clientKeyAllowlist is access.key-allowlist compiled from one config
++// snapshot: the credential rules of each client key.
++type clientKeyAllowlist map[string][]internalconfig.KeyAllowlistCredential
++
++// keyAllowlistPointer holds a Manager's compiled allowlist; nil while unconfigured.
++type keyAllowlistPointer = atomic.Pointer[clientKeyAllowlist]
++
++// compileClientKeyAllowlist compiles cfg's allowlist. Loading refuses entries
++// that share a client key; a Config built in code skips that check, so here
++// they compile to an allowlist granting nothing rather than to a union of rules.
++func compileClientKeyAllowlist(cfg *internalconfig.Config) *clientKeyAllowlist {
++	if cfg == nil || len(cfg.KeyAllowlist) == 0 {
++		return nil
++	}
++	compiled := make(clientKeyAllowlist, len(cfg.KeyAllowlist))
++	if errValidate := internalconfig.ValidateKeyAllowlist(cfg.KeyAllowlist); errValidate != nil {
++		log.Errorf("%v; every client key selects no credential until this is fixed", errValidate)
++		return &compiled
++	}
++	for _, entry := range cfg.KeyAllowlist {
++		// An unauthenticated request has no client key; never grant it rules.
++		if key := entry.ClientKey(); key != "" {
++			compiled[key] = entry.Credentials
++		}
++	}
++	return &compiled
++}
++
++// loadKeyAllowlist returns the configured allowlist, if any, and the client key
++// the access middleware authenticated, so query-parameter keys count as
++// header keys do.
++func loadKeyAllowlist(ctx context.Context, pointer *keyAllowlistPointer) (*clientKeyAllowlist, string) {
++	if pointer == nil {
++		return nil, ""
++	}
++	allowlist := pointer.Load()
++	if allowlist == nil {
++		return nil, ""
++	}
++	return allowlist, coreusage.APIKeyFromContext(ctx)
++}
++
++// allows reports whether any of clientKey's rules allows auth. A key without
++// an entry, including an unauthenticated request, has no rules. Each rule
++// needs a provider and a valid kind, so a provider alone never admits both
++// OAuth and API-key credentials.
++func (a clientKeyAllowlist) allows(clientKey string, auth *Auth) bool {
++	for _, rule := range a[clientKey] {
++		kind := normalizeAuthKind(rule.Kind)
++		if kind != "" && kind == allowlistKind(auth) &&
++			strings.EqualFold(strings.TrimSpace(rule.Provider), strings.TrimSpace(auth.Provider)) &&
++			(len(rule.IDs) == 0 || slices.Contains(rule.IDs, auth.ID)) &&
++			(len(rule.BaseURLs) == 0 || (kind == AuthKindAPIKey && baseURLListed(rule.BaseURLs, auth))) {
++			return true
++		}
++	}
++	return false
++}
++
++// allowlistKind is the kind a rule may match: auth's AuthKind, except that only
++// a credential synthesized from config counts as an API key, the test
++// IsConfigAPIKeyAuth applies. A store- or file-sourced credential that
++// classifies as apikey, through an auth_kind field in its file or a runtime
++// api_key attribute such as a Meta refresh sets before the watcher's
++// auth_kind=oauth attribute replaces it, has no kind and matches no rule.
++func allowlistKind(auth *Auth) string {
++	if kind := auth.AuthKind(); kind != AuthKindAPIKey || IsConfigAPIKeyAuth(auth) {
++		return kind
++	}
++	return ""
++}
++
++// baseURLListed reports whether auth's base_url attribute, which the config
++// synthesizer stores trimmed (internal/watcher/synthesizer/config.go), is one
++// of baseURLs. Two API-key blocks of one provider share a kind and differ only
++// in it. A credential without a base_url matches no list.
++func baseURLListed(baseURLs []string, auth *Auth) bool {
++	base := strings.TrimSpace(auth.Attributes["base_url"])
++	return base != "" && slices.ContainsFunc(baseURLs, func(listed string) bool { return strings.TrimSpace(listed) == base })
++}
+diff --git a/sdk/cliproxy/auth/key_allowlist_test.go b/sdk/cliproxy/auth/key_allowlist_test.go
+new file mode 100644
+index 0000000..293ddc4
+--- /dev/null
++++ b/sdk/cliproxy/auth/key_allowlist_test.go
+@@ -0,0 +1,373 @@
++package auth
++
++import (
++	"context"
++	"errors"
++	"net/http"
++	"strings"
++	"sync"
++	"testing"
++
++	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
++	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
++)
++
++// keyAllowlistExecutor records the credential of every attempt and fails each
++// one when fail is set, so a retry would reach every credential it can.
++type keyAllowlistExecutor struct {
++	provider string
++	fail     bool
++	mu       sync.Mutex
++	used     []string
++}
++
++func (e *keyAllowlistExecutor) Identifier() string { return e.provider }
++
++func (e *keyAllowlistExecutor) Execute(_ context.Context, auth *Auth, _ cliproxyexecutor.Request, _ cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
++	e.mu.Lock()
++	e.used = append(e.used, auth.ID)
++	e.mu.Unlock()
++	if e.fail {
++		return cliproxyexecutor.Response{}, &Error{HTTPStatus: http.StatusInternalServerError, Message: "key allowlist test failure"}
++	}
++	return cliproxyexecutor.Response{Payload: []byte(auth.ID)}, nil
++}
++
++func (e *keyAllowlistExecutor) ExecuteStream(context.Context, *Auth, cliproxyexecutor.Request, cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error) {
++	return nil, errors.New("not used")
++}
++
++func (*keyAllowlistExecutor) Refresh(_ context.Context, auth *Auth) (*Auth, error) { return auth, nil }
++
++func (e *keyAllowlistExecutor) CountTokens(ctx context.Context, auth *Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
++	return e.Execute(ctx, auth, req, opts)
++}
++
++func (*keyAllowlistExecutor) HttpRequest(context.Context, *Auth, *http.Request) (*http.Response, error) {
++	return nil, nil
++}
++
++func (e *keyAllowlistExecutor) attempts() []string {
++	e.mu.Lock()
++	defer e.mu.Unlock()
++	return append([]string(nil), e.used...)
++}
++
++const keyAllowlistModel = "key-allowlist-model"
++
++// A Claude OAuth login, two Claude API keys and a Codex API key, all serving
++// one model, so only the allowlist separates them. The API keys carry the
++// config source the config synthesizer sets, which an apikey rule requires. The
++// second Claude API key
++// is a selectable credential of the same provider and kind that a rule naming
++// the first by ID must not reach.
++var keyAllowlistAuths = []*Auth{
++	{ID: "claude-oauth", Provider: "claude", Attributes: map[string]string{AttributeAuthKind: AuthKindOAuth}},
++	{ID: "claude-apikey", Provider: "claude", Attributes: map[string]string{AttributeAPIKey: "upstream-claude", AttributeSource: "config:claude[1]"}},
++	{ID: "claude-apikey-2", Provider: "claude", Attributes: map[string]string{AttributeAPIKey: "upstream-claude-2", AttributeSource: "config:claude[2]"}},
++	{ID: "codex-apikey", Provider: "codex", Attributes: map[string]string{AttributeAPIKey: "upstream-codex", AttributeSource: "config:codex[1]"}},
++}
++
++var keyAllowlistConfig = []internalconfig.KeyAllowlist{
++	{APIKey: "claude-oauth-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "oauth"}}},
++	{APIKey: "claude-apikey-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "apikey"}}},
++	{APIKey: "codex-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "codex", Kind: "apikey"}}},
++	{APIKey: "id-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "apikey", IDs: []string{"claude-apikey"}}}},
++	{APIKey: "kindless-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude"}}},
++	{APIKey: "missing-id-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "apikey", IDs: []string{"elsewhere"}}}},
++}
++
++// A selector CPA does not build in, so selection takes the legacy candidate loop.
++type keyAllowlistLegacySelector struct{ *RoundRobinSelector }
++
++// Selectors that take the legacy candidate loop and the scheduler fast path.
++var keyAllowlistSelectors = map[string]func() Selector{
++	"legacy":    func() Selector { return keyAllowlistLegacySelector{&RoundRobinSelector{}} },
++	"scheduler": func() Selector { return &RoundRobinSelector{} },
++}
++
++// Mixed selections per case: enough for a rotation to reach every credential
++// a key may use.
++const keyAllowlistRounds = 12
++
++func newKeyAllowlistManager(t *testing.T, selector Selector, cfg *internalconfig.Config, fail bool) (*Manager, map[string]*keyAllowlistExecutor) {
++	t.Helper()
++	manager := NewManager(nil, selector, nil)
++	manager.SetConfig(cfg)
++	manager.SetRetryConfig(3, 0, 0)
++	executors := map[string]*keyAllowlistExecutor{}
++	reg := registry.GetGlobalRegistry()
++	for _, auth := range keyAllowlistAuths {
++		if executors[auth.Provider] == nil {
++			executors[auth.Provider] = &keyAllowlistExecutor{provider: auth.Provider, fail: fail}
++			manager.RegisterExecutor(executors[auth.Provider])
++		}
++		reg.RegisterClient(auth.ID, auth.Provider, []*registry.ModelInfo{{ID: keyAllowlistModel}})
++		id := auth.ID
++		t.Cleanup(func() { reg.UnregisterClient(id) })
++		registered := auth.Clone()
++		registered.Metadata = map[string]any{"disable_cooling": true}
++		if _, errRegister := manager.Register(context.Background(), registered); errRegister != nil {
++			t.Fatalf("register %s: %v", auth.ID, errRegister)
++		}
++	}
++	return manager, executors
++}
++
++func keyAllowlistAttempts(executors map[string]*keyAllowlistExecutor) map[string]bool {
++	used := map[string]bool{}
++	for _, executor := range executors {
++		for _, id := range executor.attempts() {
++			used[id] = true
++		}
++	}
++	return used
++}
++
++func TestKeyAllowlistSelectsOnlyAllowedCredentials(t *testing.T) {
++	cfg := &internalconfig.Config{SDKConfig: internalconfig.SDKConfig{KeyAllowlist: keyAllowlistConfig}}
++	cases := []struct {
++		name    string
++		key     string
++		allowed map[string]bool
++	}{
++		{name: "claude oauth only", key: "claude-oauth-key", allowed: map[string]bool{"claude-oauth": true}},
++		{name: "claude api keys only", key: "claude-apikey-key", allowed: map[string]bool{"claude-apikey": true, "claude-apikey-2": true}},
++		{name: "codex only", key: "codex-key", allowed: map[string]bool{"codex-apikey": true}},
++		{name: "credential id", key: "id-key", allowed: map[string]bool{"claude-apikey": true}},
++		{name: "credential id naming no credential", key: "missing-id-key", allowed: map[string]bool{}},
++		{name: "rule without kind", key: "kindless-key", allowed: map[string]bool{}},
++		{name: "key without entry", key: "unlisted-key", allowed: map[string]bool{}},
++		{name: "no client key", key: "", allowed: map[string]bool{}},
++	}
++	for selectorName, selector := range keyAllowlistSelectors {
++		for _, test := range cases {
++			t.Run(selectorName+"/"+test.name, func(t *testing.T) {
++				manager, executors := newKeyAllowlistManager(t, selector(), cfg, false)
++				ctx := coreusage.WithAPIKey(context.Background(), test.key)
++				// Mixed selection over every provider, repeated so a rotation
++				// reaches every credential the key may use: each allowed one is
++				// used and no other is.
++				for range keyAllowlistRounds {
++					_, errExecute := manager.Execute(ctx, []string{"claude", "codex"}, cliproxyexecutor.Request{Model: keyAllowlistModel}, cliproxyexecutor.Options{})
++					if (errExecute == nil) != (len(test.allowed) > 0) {
++						t.Fatalf("execute error = %v, allowed %v", errExecute, test.allowed)
++					}
++				}
++				used := keyAllowlistAttempts(executors)
++				for id := range used {
++					if !test.allowed[id] {
++						t.Fatalf("key %q used credential %s", test.key, id)
++					}
++				}
++				for id := range test.allowed {
++					if !used[id] {
++						t.Fatalf("key %q never used its allowed credential %s", test.key, id)
++					}
++				}
++				// Single-provider SelectAuth always takes the legacy candidate
++				// loop, whichever selector is configured, so it adds no
++				// scheduler coverage. It must succeed with an allowed credential
++				// of the provider and refuse a provider the key may not use.
++				for _, provider := range []string{"claude", "codex"} {
++					providerAllowed := map[string]bool{}
++					for _, auth := range keyAllowlistAuths {
++						if auth.Provider == provider && test.allowed[auth.ID] {
++							providerAllowed[auth.ID] = true
++						}
++					}
++					selected, errSelect := manager.SelectAuth(ctx, provider, keyAllowlistModel, cliproxyexecutor.Options{})
++					if (errSelect == nil) != (len(providerAllowed) > 0) {
++						t.Fatalf("key %q select %s error = %v, allowed %v", test.key, provider, errSelect, providerAllowed)
++					}
++					if errSelect == nil && !providerAllowed[selected.ID] {
++						t.Fatalf("key %q selected %s", test.key, selected.ID)
++					}
++				}
++			})
++		}
++	}
++}
++
++func TestKeyAllowlistRetryStaysInsideTheAllowlist(t *testing.T) {
++	cfg := &internalconfig.Config{SDKConfig: internalconfig.SDKConfig{KeyAllowlist: keyAllowlistConfig}}
++	for selectorName, selector := range keyAllowlistSelectors {
++		t.Run(selectorName, func(t *testing.T) {
++			manager, executors := newKeyAllowlistManager(t, selector(), cfg, true)
++			ctx := coreusage.WithAPIKey(context.Background(), "claude-oauth-key")
++			if _, errExecute := manager.Execute(ctx, []string{"claude", "codex"}, cliproxyexecutor.Request{Model: keyAllowlistModel}, cliproxyexecutor.Options{}); errExecute == nil {
++				t.Fatal("execute succeeded against a failing upstream")
++			}
++			used := keyAllowlistAttempts(executors)
++			if !used["claude-oauth"] || len(used) != 1 {
++				t.Fatalf("retries used %v, want only claude-oauth", used)
++			}
++		})
++	}
++}
++
++func TestKeyAllowlistUnconfiguredRestrictsNothing(t *testing.T) {
++	manager, executors := newKeyAllowlistManager(t, &RoundRobinSelector{}, &internalconfig.Config{}, false)
++	for range keyAllowlistRounds {
++		if _, errExecute := manager.Execute(context.Background(), []string{"claude", "codex"}, cliproxyexecutor.Request{Model: keyAllowlistModel}, cliproxyexecutor.Options{}); errExecute != nil {
++			t.Fatalf("execute: %v", errExecute)
++		}
++	}
++	if used := keyAllowlistAttempts(executors); len(used) != len(keyAllowlistAuths) {
++		t.Fatalf("unconfigured rotation used %v, want every credential", used)
++	}
++}
++
++func TestKeyAllowlistRefusesHomeDispatch(t *testing.T) {
++	cfg := &internalconfig.Config{SDKConfig: internalconfig.SDKConfig{KeyAllowlist: keyAllowlistConfig}}
++	cfg.Home.Enabled = true
++	manager, executors := newKeyAllowlistManager(t, &RoundRobinSelector{}, cfg, false)
++	ctx := coreusage.WithAPIKey(context.Background(), "claude-oauth-key")
++	_, errExecute := manager.Execute(ctx, []string{"claude"}, cliproxyexecutor.Request{Model: keyAllowlistModel}, cliproxyexecutor.Options{})
++	_, errSelect := manager.SelectHomeAuthByKind(ctx, "claude", keyAllowlistModel, AuthKindOAuth, cliproxyexecutor.Options{})
++	for _, err := range []error{errExecute, errSelect} {
++		// The refusal, not the missing Home bundle this test never publishes.
++		var authErr *Error
++		if !errors.As(err, &authErr) || authErr.Code != "home_unavailable" || !strings.Contains(authErr.Message, "access.key-allowlist") {
++			t.Fatalf("error = %v, want the access.key-allowlist Home refusal", err)
++		}
++	}
++	if used := keyAllowlistAttempts(executors); len(used) != 0 {
++		t.Fatalf("Home mode used %v", used)
++	}
++}
++
++// The Antigravity credits fallback runs after selection failed, which is what
++// the allowlist does to a key that may not use the credential, and it picks
++// from the full pool outside authSelectionEligibility. The positive control
++// calls the fallback directly for a key with an antigravity rule, since an
++// allowed Execute can succeed without reaching it.
++func TestKeyAllowlistConfinesAntigravityCreditsFallback(t *testing.T) {
++	allowlist := append([]internalconfig.KeyAllowlist{
++		{APIKey: "antigravity-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "antigravity", Kind: "oauth"}}},
++	}, keyAllowlistConfig...)
++	cfg := &internalconfig.Config{SDKConfig: internalconfig.SDKConfig{KeyAllowlist: allowlist}}
++	cfg.QuotaExceeded.AntigravityCredits = true
++	manager := NewManager(nil, &RoundRobinSelector{}, nil)
++	manager.SetConfig(cfg)
++	executor := &keyAllowlistExecutor{provider: "antigravity"}
++	manager.RegisterExecutor(executor)
++	const model = "claude-key-allowlist-credits"
++	auth := &Auth{ID: "antigravity-oauth", Provider: "antigravity", Attributes: map[string]string{AttributeAuthKind: AuthKindOAuth}, Metadata: map[string]any{"disable_cooling": true}}
++	registry.GetGlobalRegistry().RegisterClient(auth.ID, auth.Provider, []*registry.ModelInfo{{ID: model}})
++	t.Cleanup(func() { registry.GetGlobalRegistry().UnregisterClient(auth.ID) })
++	if _, errRegister := manager.Register(context.Background(), auth); errRegister != nil {
++		t.Fatalf("register: %v", errRegister)
++	}
++	ctx := coreusage.WithAPIKey(context.Background(), "codex-key")
++	if _, errExecute := manager.Execute(ctx, []string{"antigravity"}, cliproxyexecutor.Request{Model: model}, cliproxyexecutor.Options{}); errExecute == nil {
++		t.Fatal("execute succeeded for a key without an antigravity rule")
++	}
++	if attempts := executor.attempts(); len(attempts) != 0 {
++		t.Fatalf("credits fallback used %v for a key without an antigravity rule", attempts)
++	}
++	allowedCtx := coreusage.WithAPIKey(context.Background(), "antigravity-key")
++	resp, ok, errCredits := manager.tryAntigravityCreditsExecute(allowedCtx, cliproxyexecutor.Request{Model: model}, cliproxyexecutor.Options{})
++	if errCredits != nil || !ok || string(resp.Payload) != auth.ID {
++		t.Fatalf("credits fallback for an allowed key = (%q, %v, %v), want (%q, true, nil)", resp.Payload, ok, errCredits, auth.ID)
++	}
++	if attempts := executor.attempts(); len(attempts) != 1 || attempts[0] != auth.ID {
++		t.Fatalf("credits fallback attempts = %v, want [%s]", attempts, auth.ID)
++	}
++}
++
++// Loading refuses entries that share a client key; a Config built in code skips
++// that check, so the Manager compiles them to an allowlist granting nothing:
++// neither the duplicated key nor any other selects a credential, where merging
++// would have handed the duplicated key both entries' rules. The same entries
++// with distinct keys enforce each key's own rule, the positive control.
++func TestKeyAllowlistDuplicateKeysSelectNothing(t *testing.T) {
++	entries := func(second string) *internalconfig.Config {
++		return &internalconfig.Config{SDKConfig: internalconfig.SDKConfig{KeyAllowlist: []internalconfig.KeyAllowlist{
++			{APIKey: "dup-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "oauth"}}},
++			{APIKey: second, Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "codex", Kind: "apikey"}}},
++			{APIKey: "codex-key", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "codex", Kind: "apikey"}}},
++		}}}
++	}
++	cases := []struct {
++		name    string
++		second  string
++		allowed map[string]map[string]bool
++	}{
++		{name: "identical", second: "dup-key", allowed: map[string]map[string]bool{"dup-key": {}, "codex-key": {}}},
++		{name: "identical after trim", second: " dup-key\t", allowed: map[string]map[string]bool{"dup-key": {}, "codex-key": {}}},
++		{name: "distinct", second: "other-key", allowed: map[string]map[string]bool{
++			"dup-key":   {"claude-oauth": true},
++			"other-key": {"codex-apikey": true},
++			"codex-key": {"codex-apikey": true},
++		}},
++	}
++	for selectorName, selector := range keyAllowlistSelectors {
++		for _, test := range cases {
++			for key, allowed := range test.allowed {
++				t.Run(selectorName+"/"+test.name+"/"+key, func(t *testing.T) {
++					manager, executors := newKeyAllowlistManager(t, selector(), entries(test.second), false)
++					ctx := coreusage.WithAPIKey(context.Background(), key)
++					for range keyAllowlistRounds {
++						_, errExecute := manager.Execute(ctx, []string{"claude", "codex"}, cliproxyexecutor.Request{Model: keyAllowlistModel}, cliproxyexecutor.Options{})
++						if (errExecute == nil) != (len(allowed) > 0) {
++							t.Fatalf("key %q execute error = %v, allowed %v", key, errExecute, allowed)
++						}
++					}
++					used := keyAllowlistAttempts(executors)
++					if len(used) != len(allowed) {
++						t.Fatalf("key %q used %v, want %v", key, used, allowed)
++					}
++					for id := range used {
++						if !allowed[id] {
++							t.Fatalf("key %q used %v, want %v", key, used, allowed)
++						}
++					}
++				})
++			}
++		}
++	}
++}
++
++// An apikey rule matches only a credential synthesized from config. A Meta
++// login loaded from the auth store, whose file has no auth_kind, gains api_key
++// and base_url attributes on refresh and classifies as apikey until the
++// watcher's auth_kind=oauth attribute replaces it; it must match no apikey
++// rule, with or without base-urls. Positive control: the same attributes with
++// a config source match both rules.
++func TestKeyAllowlistAPIKeyRulesNeedAConfigCredential(t *testing.T) {
++	const metaBaseURL = "https://api.meta.ai/v1"
++	refreshed := func(source map[string]string) *Auth {
++		attributes := map[string]string{AttributeAPIKey: "minted", "base_url": metaBaseURL}
++		for name, value := range source {
++			attributes[name] = value
++		}
++		return &Auth{ID: "meta.json", Provider: "meta", Attributes: attributes, Metadata: map[string]any{"access_token": "token", "email": "user@example.com"}}
++	}
++	allowlist := clientKeyAllowlist{
++		"meta-key":      {{Provider: "meta", Kind: "apikey"}},
++		"meta-base-key": {{Provider: "meta", Kind: "apikey", BaseURLs: []string{metaBaseURL}}},
++	}
++	cases := []struct {
++		name  string
++		auth  *Auth
++		allow bool
++	}{
++		{name: "store-loaded file", auth: refreshed(map[string]string{AttributePath: "/auths/meta.json", AttributeSource: "/auths/meta.json", AttributeSourceBackend: AuthSourceFile})},
++		{name: "config", auth: refreshed(map[string]string{AttributeSource: "config:meta[x]"}), allow: true},
++	}
++	for _, test := range cases {
++		// The file-sourced auth must reach allows as apikey, or this would
++		// test classification rather than the allowlist.
++		if kind := test.auth.AuthKind(); kind != AuthKindAPIKey {
++			t.Fatalf("%s: AuthKind() = %q, want %q", test.name, kind, AuthKindAPIKey)
++		}
++		for key := range allowlist {
++			if got := allowlist.allows(key, test.auth); got != test.allow {
++				t.Errorf("%s: key %q allows = %v, want %v", test.name, key, got, test.allow)
++			}
++		}
++	}
++}
+diff --git a/sdk/cliproxy/auth/scheduler.go b/sdk/cliproxy/auth/scheduler.go
+index 752a52d..6b1ae71 100644
+--- a/sdk/cliproxy/auth/scheduler.go
++++ b/sdk/cliproxy/auth/scheduler.go
+@@ -50,6 +50,8 @@ type authScheduler struct {
+ 	authGenerations     map[string]scheduledGenerationMeta
+ 	mixedCursors        map[string]int
+ 	mixedWeightedStates map[string]*smoothWeightedState
++	// keyAllowlist is the owning Manager's.
++	keyAllowlist *keyAllowlistPointer
+ }
+ 
+ // providerScheduler stores auth metadata and model shards for a single provider.
+@@ -405,7 +407,7 @@ func (s *authScheduler) pickSingleWithStrategy(ctx context.Context, provider, mo
+ 	providerKey := canonicalSchedulingProvider(provider)
+ 	modelKey := canonicalModelKey(model)
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, s.keyAllowlist)
+ 	preferWebsocket := cliproxyexecutor.DownstreamWebsocket(ctx) && providerPrefersWebsocketTransport(providerKey) && pinnedAuthID == ""
+ 
+ 	s.mu.Lock()
+@@ -464,7 +466,7 @@ func (s *authScheduler) pickMixedWithStrategy(ctx context.Context, providers []s
+ 		return picked, providerKey, nil
+ 	}
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, s.keyAllowlist)
+ 	modelKey := canonicalModelKey(model)
+ 
+ 	s.mu.Lock()

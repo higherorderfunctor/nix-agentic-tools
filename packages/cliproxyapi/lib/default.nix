@@ -13,7 +13,36 @@
       type = "string";
       refine = {types, ...}: types.duration;
     };
+    # CPA reads an absent or empty list in a rule as "no restriction on this
+    # dimension" (sdk/cliproxy/auth/key_allowlist.go: len(rule.IDs) == 0,
+    # len(rule.BaseURLs) == 0), so a list meant to narrow a rule that comes
+    # out empty would grant every credential of the provider and kind. The
+    # generated element type refuses null too: render drops null elements,
+    # which turns [null] into [] (lib/extracted/render.nix). This type checks
+    # the definitions; a list of only `mkIf false` elements merges to [] past
+    # it, so the module also asserts on the merged value
+    # (modules/instances.nix). Leave the option unset to leave a dimension
+    # unrestricted.
+    narrowing = {
+      type = "list";
+      refine = {
+        elementType,
+        types,
+        ...
+      }:
+        types.nonEmptyListOf elementType
+        // {description = "non-empty list of strings (an empty list would lift the restriction)";};
+    };
   in {
+    "access.key-allowlist[].credentials[].base-urls" = narrowing;
+    "access.key-allowlist[].credentials[].ids" = narrowing;
+    # The allowlist patch matches a rule only when its kind normalizes to a
+    # credential kind (sdk/cliproxy/auth/key_allowlist.go, through
+    # normalizeAuthKind in classification.go); any other value allows nothing.
+    "access.key-allowlist[].credentials[].kind" = {
+      type = "string";
+      refine = {types, ...}: types.enum ["apikey" "oauth"];
+    };
     "client.codex.web-search-result-cache.ttl" = duration;
     # The v8 loader refuses any other value (internal/config/config_v8.go,
     # flattenV8: "unsupported config-version (expected 8)").

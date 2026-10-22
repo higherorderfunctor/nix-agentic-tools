@@ -1,11 +1,13 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-21 — 909 config nodes give the settings type
-> through `lib/extracted/options.nix`, with five refinements; the clean render
-> passes native v8 validation and loads through CPA's `LoadConfig` in
-> `cliproxyapi-settings`; `ai.cliproxyapi.instances` renders it at start,
-> defaults its listener to loopback, turns off the unprompted fetches the pinned
-> CPA has a switch for, and types `server.tls.key` as a secret file.
+> **Last verified:** 2026-10-21 — 926 config nodes, including the patched
+> `access.key-allowlist`, give the settings type through
+> `lib/extracted/options.nix`, with eight refinements and one module assertion
+> on the allowlist; the clean render passes native v8 validation and loads
+> through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
+> `ai.cliproxyapi.instances` renders it at start, defaults its listener to
+> loopback, turns off the unprompted fetches the pinned CPA has a switch for,
+> and types `server.tls.key` as a secret file.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -63,11 +65,12 @@ takes a patch to CPA, not a setting; that is an open decision.
 ## Secrets
 
 Every path an `extract/annotations.json` row marks takes a redact reference
-only: `access.api-keys[]`, `management.secret-key`, `server.github-token`,
-`requests.proxy-url`, the ICE server `credential`, and per upstream family the
-group and key `proxy-url`, `headers.<name>` and `api-key`. A proxy URL or a
-header that holds no credential still takes a reference (`redact.file` or
-`redact.command`), since the type cannot tell which values carry one.
+only: `access.api-keys[]`, `access.key-allowlist[].api-key`,
+`management.secret-key`, `server.github-token`, `requests.proxy-url`, the ICE
+server `credential`, and per upstream family the group and key `proxy-url`,
+`headers.<name>` and `api-key`. A proxy URL or a header that holds no credential
+still takes a reference (`redact.file` or `redact.command`), since the type
+cannot tell which values carry one.
 
 `server.tls.key`, the TLS private key file, is a `secretFile` node: it takes a
 reference, which the service launcher writes to a 0600 file that the rendered
@@ -83,8 +86,20 @@ be a writable copy, never the store path.
 
 ## Refinements
 
-Each narrows a measured type using a native constraint in `internal/config/`:
+Each narrows a measured type using a native constraint in `internal/config/`, or
+in the allowlist patch:
 
+- `access.key-allowlist[].credentials[].{base-urls,ids}`:
+  `nonEmptyListOf elementType`, the generated string type. The patch reads an
+  empty or absent list as no restriction on that dimension, and the renderer
+  drops null elements, so an empty list, or `[null]`, would widen the rule to
+  every credential of its provider and kind. The type checks definitions, so
+  `[(mkIf false "x")]` passes it and merges to `[]`; a module assertion
+  (`modules/instances.nix`) refuses any merged empty list. Leave the option
+  unset to leave a dimension open.
+- `access.key-allowlist[].credentials[].kind`: `enum ["apikey" "oauth"]`; the
+  patch matches a rule only when its kind normalizes to a credential kind
+  (`normalizeAuthKind`), so any other value would silently allow nothing.
 - `client.codex.web-search-result-cache.ttl`: measured `string`, typed as a Go
   duration, because `Validate` in `sdk_config.go` refuses a TTL that is neither
   a duration nor integer seconds; the type admits the duration form only.
@@ -97,6 +112,13 @@ Each narrows a measured type using a native constraint in `internal/config/`:
 The duration refinement checks grammar only; positivity, numeric bounds and
 overflow remain native validation. `multimedia.disable-image-generation` keeps
 the extracted `any` type, including native string aliases such as `"off"`.
+
+`access.key-allowlist` itself has no refinement. Its elements hold the secret
+`api-key`, and the generator refuses a refinement row on a node with a secret
+descendant. A module assertion on the merged value (`modules/instances.nix`)
+refuses any null entry instead: the renderer drops nulls, so a list of only
+nulls, or `[null]`, would render as `[]`, which the patch reads as no allowlist,
+and enforcement would be off for every key. An explicit `[]` stays valid.
 
 Cross-field rules stay outside the type: `stale-after` at least three snapshot
 intervals, in-flight byte bounds, live media relay port ranges, trusted proxies
