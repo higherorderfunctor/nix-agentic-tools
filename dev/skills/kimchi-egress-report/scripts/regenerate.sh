@@ -10,4 +10,4 @@ facts="$(mktemp)"
 trap 'rm -f "$facts"' EXIT
 nix eval --json ".#checks.${system}.kimchi-egress-report.passthru.facts" >"$facts"
 node dev/skills/kimchi-egress-report/scripts/generate.mjs --facts "$facts"
-nix fmt -- packages/kimchi/egress-report.json
+treefmt packages/kimchi/egress-report.json

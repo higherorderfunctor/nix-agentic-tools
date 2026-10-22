@@ -168,7 +168,7 @@
         "src/extensions/billing/status.ts:180",
         "src/extensions/billing/status.ts:216",
         "src/extensions/memory/backend.ts:105",
-        "src/models.ts:197",
+        "src/models.ts:204",
         "src/utils/http.ts:90"
       ],
       "consumerOverridable": true,
@@ -256,8 +256,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-uNd5V+M6wK9/VhFD15uOs6y1PDvgS9qdOSanwXD9AXA=",
-      "kimchiVersion": "1.17.0",
+      "kimchiSourceHash": "sha256-neaGHSmAdLyvGxYM4Q+kl1v6n/aCNmn7AH194k1GLTA=",
+      "kimchiVersion": "1.17.2",
       "piVersion": "0.85.1"
     },
     "provenance": {
@@ -759,7 +759,7 @@
         "src/extensions/billing/status.ts:180",
         "src/extensions/billing/status.ts:216",
         "src/extensions/memory/backend.ts:105",
-        "src/models.ts:197",
+        "src/models.ts:204",
         "src/utils/http.ts:90"
       ],
       "files": ["src/regions.ts"],
@@ -770,7 +770,7 @@
         "src/extensions/billing/status.ts:180",
         "src/extensions/billing/status.ts:216",
         "src/extensions/memory/backend.ts:105",
-        "src/models.ts:197",
+        "src/models.ts:204",
         "src/utils/http.ts:90"
       ],
       "files": ["src/regions.ts"],
@@ -2635,13 +2635,13 @@
       "bundledModule": null,
       "file": "src/extensions/pr-cost-reporting/worker.ts",
       "library": "fetch",
-      "line": 187,
+      "line": 189,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "src/extensions/pr-cost-reporting/worker.ts:187",
+          "origin": "src/extensions/pr-cost-reporting/worker.ts:189",
           "value": "input"
         }
       ]
@@ -2782,7 +2782,7 @@
       "bundledModule": null,
       "file": "src/models.ts",
       "library": "fetch",
-      "line": 197,
+      "line": 204,
       "readBy": "kimchi",
       "targets": [
         {
