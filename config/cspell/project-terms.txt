@@ -1,12 +1,15 @@
+apikey
 AUTOUPDATER
 AWSLAMBDA
 bindingset
 Boehm
 CFFIXED
+cliproxy
 CLOUDSDK
 COLORFGBG
 COLORTERM
 Consolas
+cooldown
 DONT
 GHOSTTY
 globalconfig
@@ -18,9 +21,11 @@ Menlo
 NOSYSTEM
 NPROCESSORS
 nullish
+omitempty
 ONLN
 PATHEXT
 Patchelf
+pluginhost
 pnpmfile
 qll
 TERMUX
