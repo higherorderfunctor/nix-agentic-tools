@@ -131,10 +131,8 @@ therefore deletes the whole `request>headers` map and `request>uri`.
 
 `packages/ai/generic/cpa-gate` builds `cmd/cpa-gate` with `buildGoModule` and
 nixpkgs' Caddy version and build tags. `gate.json` pins `goFloor` and
-`vendorHash`.
-
-`go.mod` follows nixpkgs' Caddy. Updates regenerate `gate.json`, `go.mod` and
-`go.sum`; `cliproxyapi-gate-pins` checks the version.
+`vendorHash`; nixpkgs and direct updates regenerate it, `go.mod` and `go.sum`,
+and `cliproxyapi-gate-pins` checks the version.
 
 **Settled, do not relitigate:** the package is not `caddy.withPlugins`.
 `withPlugins` takes a plugin only as `module@version`; it vendors everything

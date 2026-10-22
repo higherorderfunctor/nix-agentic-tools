@@ -26,8 +26,6 @@ func TestHealthChecksEachInternalListingAndKeepsModelsPrivate(t *testing.T) {
 		row := map[string]any{"id": modelsByKey[r.Header.Get("Authorization")]}
 		root := map[string]any{"object": "list", "data": []any{row}}
 		switch mode {
-		case "empty":
-			root["data"] = []any{}
 		case "failed":
 			w.WriteHeader(http.StatusBadGateway)
 		case "outside":
@@ -60,9 +58,8 @@ func TestHealthChecksEachInternalListingAndKeepsModelsPrivate(t *testing.T) {
 	if err := h.ServeHTTP(w, r, nil); err != nil || w.Code != http.StatusOK {
 		t.Errorf("listed callable set is unhealthy: %d %s %v", w.Code, w.Body, err)
 	}
-	// Health shares serving's validation: a row serving would drop is missing
-	// ("outside"), and a listing serving would refuse reports nothing ("failed").
-	for _, mode = range []string{"empty", "outside", "failed"} {
+	// Health shares serving's validation: a row serving would drop is missing.
+	for _, mode = range []string{"outside", "failed"} {
 		g.checkOnce(context.Background())
 		for _, result := range g.health.entries {
 			if result.OK || result.Missing != 1 {

@@ -15,8 +15,7 @@ import (
 )
 
 // listingCapture owns its headers, so even interim headers and trailers from
-// CPA cannot reach the client before filtering. Writes stop at the same limit
-// used for decoded request bodies.
+// CPA cannot reach the client before filtering.
 type listingCapture struct {
 	header http.Header
 	body   bytes.Buffer
@@ -269,7 +268,7 @@ func filterDetail(raw []byte, e *entry, path string) ([]byte, bool) {
 		field = "data"
 	}
 	got, valid := listingID(row, field)
-	if !valid || got != id || !e.models[got] || !scrubModelRefs(parsed, row, e) {
+	if !valid || got != id || !scrubModelRefs(parsed, row, e) {
 		return nil, false
 	}
 	filtered, err := json.Marshal(row)
