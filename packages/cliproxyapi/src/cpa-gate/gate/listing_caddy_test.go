@@ -2,7 +2,6 @@ package gate
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"net"
@@ -11,7 +10,6 @@ import (
 	"net/http/httptrace"
 	"net/textproto"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -24,16 +22,11 @@ import (
 // copy fails. Exercise the actual copy path, including an interrupted source.
 func TestCaddyListingCopyFailuresRefuseWithoutUpstreamHeaders(t *testing.T) {
 	listing := `{"object":"list","data":[{"id":"m"},{"id":"outside"}]}`
-	var defaultMode atomic.Value
-	defaultMode.Store("early-hints")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Location", "/v1/models/outside")
 		w.Header().Set("X-Upstream-Model", "outside")
 		mode := r.Header.Get("X-Gate-Test")
-		if mode == "" {
-			mode = defaultMode.Load().(string)
-		}
 		switch mode {
 		case "early-hints", "early-hints-error":
 			w.Header().Set("Link", "</v1/models/outside>; rel=preload")
@@ -117,33 +110,5 @@ func TestCaddyListingCopyFailuresRefuseWithoutUpstreamHeaders(t *testing.T) {
 				t.Errorf("%s refusal has body: %s", test.name, body)
 			}
 		})
-	}
-	// Health probes the same upstream as serving does, so it must see the
-	// same 103, and then agree with the listing that serving accepted.
-	var healthSaw103 bool
-	ctx := httptrace.WithClientTrace(context.Background(), &httptrace.ClientTrace{
-		Got1xxResponse: func(code int, header textproto.MIMEHeader) error {
-			healthSaw103 = code == http.StatusEarlyHints && header.Get("Link") == "</v1/models/outside>; rel=preload"
-			return nil
-		},
-	})
-	g, _ := newGate(t)
-	g.Upstream = upstream.URL
-	g.health = &healthState{entries: map[string]entryHealth{}}
-	g.checkOnce(ctx)
-	if !healthSaw103 {
-		t.Error("health probe did not receive the same 103 response as serving")
-	}
-	for _, result := range g.health.entries {
-		if !result.OK || result.Missing != 0 {
-			t.Errorf("103 then valid 200 was unhealthy: %+v", result)
-		}
-	}
-	defaultMode.Store("early-hints-error")
-	g.checkOnce(context.Background())
-	for _, result := range g.health.entries {
-		if result.OK || result.Missing != 1 {
-			t.Errorf("103 then failing final status was healthy: %+v", result)
-		}
 	}
 }

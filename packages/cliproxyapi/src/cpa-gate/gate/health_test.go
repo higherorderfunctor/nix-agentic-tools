@@ -28,6 +28,8 @@ func TestHealthChecksEachInternalListingAndKeepsModelsPrivate(t *testing.T) {
 		switch mode {
 		case "empty":
 			root["data"] = []any{}
+		case "failed":
+			w.WriteHeader(http.StatusBadGateway)
 		case "outside":
 			row["model"] = "outside"
 		}
@@ -58,19 +60,14 @@ func TestHealthChecksEachInternalListingAndKeepsModelsPrivate(t *testing.T) {
 	if err := h.ServeHTTP(w, r, nil); err != nil || w.Code != http.StatusOK {
 		t.Errorf("listed callable set is unhealthy: %d %s %v", w.Code, w.Body, err)
 	}
-	mode = "empty"
-	g.checkOnce(context.Background())
-	for _, result := range g.health.entries {
-		if result.OK || result.Missing != 1 {
-			t.Errorf("missing callable model is healthy: %+v", result)
-		}
-	}
-	// Health shares serving's validation: a row serving would drop is missing.
-	mode = "outside"
-	g.checkOnce(context.Background())
-	for _, result := range g.health.entries {
-		if result.OK || result.Missing != 1 {
-			t.Errorf("a listing serving would filter reported healthy: %+v", result)
+	// Health shares serving's validation: a row serving would drop is missing
+	// ("outside"), and a listing serving would refuse reports nothing ("failed").
+	for _, mode = range []string{"empty", "outside", "failed"} {
+		g.checkOnce(context.Background())
+		for _, result := range g.health.entries {
+			if result.OK || result.Missing != 1 {
+				t.Errorf("%s listing reported healthy: %+v", mode, result)
+			}
 		}
 	}
 	if strings.Contains(log.String(), "private-model") || strings.Contains(log.String(), "secret") {

@@ -195,14 +195,13 @@ data, trailing values and nesting beyond 128 levels. Only schemas at
 positions, are exempt from model checks. Websocket routes remain refused with
 `"reason": "pending"`.
 
-Listings are parsed by wire shape, never by request header or user agent; the
-five CPA 8.0.38 producers are named in `interpretListing`. Only exact allowed
-IDs survive, `first_id`/`last_id` are recomputed, and an object with a forbidden
-model directive becomes null (Codex's `upgrade.model`). A private writer buffers
-the response, so CPA's interim 1xx headers and trailers never reach the client.
-Everything else gets the empty 404: an unknown shape or envelope field, a
-paginated listing, non-200, an interrupted or oversized copy, and a disallowed
-or missing detail.
+Listings are parsed by wire shape, never by request header or user agent. Only
+exact allowed IDs survive, `first_id`/`last_id` are recomputed, and an object
+with a forbidden model directive becomes null (Codex's `upgrade.model`). A
+private writer buffers the response, so CPA's interim 1xx headers and trailers
+never reach the client. Everything else gets the empty 404: an unknown shape or
+envelope field, a paginated listing, non-200, an interrupted or oversized copy,
+and a disallowed or missing detail.
 
 `cpa_gate_health` serves `GET /-/health` on a separate loopback site. It starts
 failed, then probes each internal principal's `/v1/models` through serving's own
@@ -232,7 +231,7 @@ therefore deletes the whole `request>headers` map and `request>uri`.
 
 `packages/ai/generic/cpa-gate` builds `cmd/cpa-gate` with `buildGoModule` and
 nixpkgs' Caddy version and build tags. `gate.json` pins `goFloor` and
-`vendorHash`; the latter changes with dependencies, not each gate edit.
+`vendorHash`.
 
 `go.mod` follows nixpkgs' Caddy. Updates regenerate `gate.json`, `go.mod` and
 `go.sum`; `cliproxyapi-gate-pins` checks the version.

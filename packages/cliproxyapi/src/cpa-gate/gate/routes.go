@@ -50,6 +50,8 @@ func detailRoute(path string, e *entry) (route, bool) {
 		{"/v1/models/", ""},
 		{"/v1beta/models/", "gemini"},
 	} {
+		// An ID holding "/" (policy model "org/m", GET /v1/models/org/m) is
+		// refused: filterDetail compares only the last path segment.
 		if id, ok := strings.CutPrefix(path, prefix.path); ok && !strings.Contains(id, "/") && e.models[id] {
 			return route{api: prefix.api, class: classListing, detail: true}, true
 		}

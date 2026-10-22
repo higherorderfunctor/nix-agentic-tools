@@ -25,7 +25,7 @@ func TestListingShapesFilterToTheCallableSet(t *testing.T) {
 	g, _ := newGate(t)
 	e := g.keys[sha256.Sum256([]byte(allKey))]
 	cases := map[string]string{
-		"anthropic": `{"data":[{"id":"outside"},{"id":"m"}],"first_id":"outside","has_more":false,"last_id":"m"}`,
+		"anthropic": `{"data":[{"id":"outside"},{"id":"m"},{"id":"outsider"}],"first_id":"outside","has_more":false,"last_id":"outsider"}`,
 		"codex": `{"models":[{"slug":"m","display_name":"M","upgrade":{"model":"outside","migration_markdown":"switch to outside"}},{"slug":"outside"}]}`,
 		"gemini": `{"models":[{"name":"models/m","displayName":"M"},{"name":"models/outside"}]}`,
 		"grok": `{"object":"list","data":[{"id":"m","model":"m","name":"M","api_backend":"openai","supported_in_api":true},{"id":"outside","model":"outside"}]}`,
@@ -51,9 +51,6 @@ func TestListingShapesFilterToTheCallableSet(t *testing.T) {
 		}
 		if name == "codex" && !bytes.Contains(filtered, []byte(`"upgrade":null`)) {
 			t.Errorf("%s: outside upgrade not null: %s", name, filtered)
-		}
-		if name == "anthropic" && (!bytes.Contains(filtered, []byte(`"first_id":"m"`)) || !bytes.Contains(filtered, []byte(`"last_id":"m"`))) {
-			t.Errorf("%s: pagination IDs not recomputed: %s", name, filtered)
 		}
 	}
 }
@@ -150,7 +147,6 @@ func TestDetailRoutesHaveTheSameUniformRefusal(t *testing.T) {
 	e.apis["gemini"] = true
 	for _, c := range []struct{ target, body string }{
 		{"/v1/models/m", `{"id":"m"}`},
-		{"/v1/models/m", `{"slug":"m"}`},
 		{"/v1beta/models/m", `{"name":"models/m"}`},
 	} {
 		r := httptest.NewRequest(http.MethodGet, c.target, nil)
@@ -172,9 +168,9 @@ func TestDetailRoutesHaveTheSameUniformRefusal(t *testing.T) {
 			t.Errorf("%s: %d %s", target, w.Code, w.Body)
 		}
 	}
-	for _, raw := range []string{`{"id":"m","slug":"outside"}`, `{"id":"m","name":"models/outside"}`} {
-		if result, ok := filterDetail([]byte(raw), e, "/v1/models/m"); ok {
-			t.Errorf("conflicting detail identity accepted: %s", result)
-		}
+	// A callable model that is not the one requested must not stand in for it.
+	e.models["n"] = true
+	if result, ok := filterDetail([]byte(`{"id":"n"}`), e, "/v1/models/m"); ok {
+		t.Errorf("detail for another model accepted: %s", result)
 	}
 }

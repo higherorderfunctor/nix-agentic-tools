@@ -79,6 +79,7 @@ func (g *Gate) startChecker() error {
 }
 
 func (g *Gate) stopChecker() {
+	// Caddy calls Cleanup after a failed Provision, before startChecker set g.health.
 	if g.health == nil {
 		return
 	}
@@ -180,18 +181,16 @@ func (h *Health) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.H
 		return writeHealthStatus(w, http.StatusServiceUnavailable)
 	}
 	state.mu.RLock()
-	entries := make(map[string]entryHealth, len(state.entries))
 	status := http.StatusOK
-	for name, result := range state.entries {
-		entries[name] = result
+	for _, result := range state.entries {
 		if !result.OK {
 			status = http.StatusServiceUnavailable
 		}
 	}
-	state.mu.RUnlock()
 	body, _ := json.Marshal(struct {
 		Entries map[string]entryHealth `json:"entries"`
-	}{Entries: entries})
+	}{Entries: state.entries})
+	state.mu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write(body)

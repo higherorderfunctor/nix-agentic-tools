@@ -83,6 +83,7 @@ func (g *Gate) serveListing(w http.ResponseWriter, r *http.Request, next caddyht
 }
 
 func decodeListing(raw []byte, header http.Header) ([]byte, bool) {
+	// A 200 listing labeled text/plain is refused, not sniffed as JSON.
 	if value := header.Get("Content-Type"); value != "" {
 		mediaType, _, err := mime.ParseMediaType(value)
 		if err != nil || mediaType != "application/json" {
@@ -98,7 +99,7 @@ func decodeListing(raw []byte, header http.Header) ([]byte, bool) {
 }
 
 // parseListing shares the call path's strict lexical walk before any decoder
-// can fold names or choose a different duplicate. gjson.ValidBytes also refuses
+// can fold names or choose a different duplicate. gjson.ValidBytes refuses
 // a trailing value; utf8.Valid is separate because json.Decoder would turn
 // invalid bytes into U+FFFD.
 func parseListing(raw []byte) (map[string]any, gjson.Result, bool) {
@@ -106,13 +107,13 @@ func parseListing(raw []byte) (map[string]any, gjson.Result, bool) {
 		return nil, gjson.Result{}, false
 	}
 	s := strictScanner{body: raw, text: string(raw)}
-	if !s.value(nil, false, 0) || !s.done() {
+	if !s.value(nil, false, 0) {
 		return nil, gjson.Result{}, false
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	var root map[string]any
-	if err := decoder.Decode(&root); err != nil || root == nil {
+	if err := decoder.Decode(&root); err != nil {
 		return nil, gjson.Result{}, false
 	}
 	return root, gjson.ParseBytes(raw), true
@@ -169,29 +170,21 @@ func interpretListing(raw []byte, e *entry) (listingResult, bool) {
 			continue
 		}
 		if !scrubModelRefs(parsedRows[i], row, e) {
-			// A top-level row with a forbidden model directive is omitted.
 			continue
 		}
 		kept = append(kept, row)
 		ids = append(ids, id)
 	}
 	root[field] = kept
-	if _, found := root["first_id"]; found {
-		root["first_id"] = ""
-		if len(ids) > 0 {
-			root["first_id"] = ids[0]
+	for key, at := range map[string]int{"first_id": 0, "last_id": len(ids) - 1} {
+		if _, found := root[key]; found {
+			root[key] = ""
+			if len(ids) > 0 {
+				root[key] = ids[at]
+			}
 		}
 	}
-	if _, found := root["last_id"]; found {
-		root["last_id"] = ""
-		if len(ids) > 0 {
-			root["last_id"] = ids[len(ids)-1]
-		}
-	}
-	filtered, err := json.Marshal(root)
-	if err != nil {
-		return listingResult{}, false
-	}
+	filtered, _ := json.Marshal(root)
 	result := listingResult{body: filtered, ids: make(map[string]bool, len(ids)), openAI: field == "data" && root["object"] == "list"}
 	for _, id := range ids {
 		result.ids[id] = true
@@ -234,7 +227,7 @@ func listingID(row map[string]any, field string) (string, bool) {
 
 // A model-like directive outside the set invalidates its enclosing object.
 // Nested objects become null, including Codex's upgrade object; a bad row is
-// dropped by filterListing. Other metadata remains from CPA.
+// dropped by interpretListing. Other metadata remains from CPA.
 func scrubModelRefs(node gjson.Result, output any, e *entry) bool {
 	switch value := output.(type) {
 	case map[string]any:
