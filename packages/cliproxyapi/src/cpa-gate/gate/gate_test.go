@@ -356,7 +356,7 @@ func TestLoadPolicy(t *testing.T) {
 		"own internal key":          {single(`"key":"secret-k","internal":"secret-k","apis":["chat"],"models":["m"]`), "client key equals the internal key"},
 		"second object":             {validPolicy + ` {"key":"secret-tail"}`, "trailing data"},
 		"secret api value":          {single(`"key":"secret-k","internal":"secret-i","apis":["secret-k"],"models":["m"]`), "apis[0] is unknown"},
-		"unknown api":               {single(`"key":"secret-k","internal":"secret-i","apis":["gemini"],"models":["m"]`), `apis[0] is unknown`},
+		"unknown api":               {single(`"key":"secret-k","internal":"secret-i","apis":["unknown"],"models":["m"]`), `apis[0] is unknown`},
 		"unknown field":             {single(`"key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"],"otherField":{}`), "invalid JSON or field"},
 	}
 	for name, c := range cases {
@@ -394,7 +394,7 @@ func TestCaddyfileDirective(t *testing.T) {
 		"cpa_gate /run/policy.json", // the path is taken as a matcher
 		"cpa_gate *",                // an empty `{$VAR}`
 		"cpa_gate * /run/policy.json", // no checker origin
-		"cpa_gate * /a /b",
+		"cpa_gate * /a /b /c",
 		"cpa_gate * /a {\n\t\t\tx\n\t\t}",
 	} {
 		if out, err := adapt(directive); err == nil {

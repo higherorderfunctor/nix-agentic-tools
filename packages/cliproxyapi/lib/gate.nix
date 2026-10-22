@@ -39,7 +39,9 @@ in {
         ""
         ":${toString healthPort} {"
         "\tbind 127.0.0.1"
-        "\tcpa_gate_health * ${caddy.envRef policyVariable}"
+        "\troute {"
+        "\t\tcpa_gate_health * ${caddy.envRef policyVariable}"
+        "\t}"
         "}"
         ""
       ]);
