@@ -1,0 +1,7 @@
+# For running a query from this directory against the codeql:kimchi-db
+# database, without Nix: docs/kimchi-codeql.md. Each subdirectory is also one
+# mkQueryPack source, which takes its own qlpack.yml from mkQueryPack.
+name: nix-agentic-tools/kimchi-queries
+version: 0.0.0
+dependencies:
+  codeql/javascript-all: "*"

@@ -43,6 +43,13 @@
   piAiPackage = fetchExtraction extraction.piAiPackage;
   piPackage = fetchExtraction extraction.piPackage;
   piTuiPackage = fetchExtraction extraction.piTuiPackage;
+  extractionSources = {
+    kimchi = kimchiSource;
+    pi = piPackage;
+    piAgentCore = piAgentCorePackage;
+    piAi = piAiPackage;
+    piTui = piTuiPackage;
+  };
   externalizeExtensions = import ../../../lib/externalizeExtensions.nix {inherit externalizedExtensions lib;};
 
   # Extend upstream's dependency-owned patch before either pnpm consumer sees
@@ -303,19 +310,21 @@ in
     '';
 
     passthru = {
+      # The release's CodeQL database and its query runner: ../../../lib/codeql.nix.
+      codeql = import ../../../lib/codeql.nix {
+        engine = pkgs.ai.devTools.codeql.codeql-javascript;
+        inherit (extractionSources) kimchi;
+        pi = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi"]);
+        inherit pkgs;
+        inherit (sources) version;
+      };
       inherit externalizedExtensions externalizeExtensions extracted fixPnpmDepsHash goFloor goModPath proxyHelper;
       inherit (goUpdate) fixGoFloor fixVendorHash;
       extractedRules = import ../../../extract/rules.nix {
         inherit extractedLib pkgs;
         inherit ((extractedLib {inherit pkgs;}).load {dir = ../../../extracted;}) aggregate;
       };
-      extractionSources = {
-        kimchi = kimchiSource;
-        pi = piPackage;
-        piAgentCore = piAgentCorePackage;
-        piAi = piAiPackage;
-        piTui = piTuiPackage;
-      };
+      inherit extractionSources;
       extractionSourceUrls.kimchi = extraction.kimchiSource.url;
       goUpdateExtract = goUpdate.extract;
       updateScript = packageLib.mkUpdateScript {

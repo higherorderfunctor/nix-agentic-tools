@@ -184,9 +184,11 @@ in {
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = let
     checkTasks = (import ./dev/tasks/check.nix {}).tasks;
+    codeqlTasks = (import ./dev/tasks/codeql.nix {inherit pkgs;}).tasks;
     generateTasks = (import ./dev/tasks/generate.nix {inherit lib pkgs;}).tasks;
   in
     checkTasks
+    // codeqlTasks
     // generateTasks
     // {
       # Keep full-corpus work as named diagnostics. Upstream wires both tasks

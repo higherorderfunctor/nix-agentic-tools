@@ -634,10 +634,12 @@ jobs:
       # TRIPWIRE for the CodeQL engines (packages/codeql), the outcome
       # assertion the kiro-patched job makes for the patched Kiro: the GitHub
       # CodeQL Terms forbid distributing the CLI, and the pushFilter and
-      # ci-packages.py's EXCLUDED_PREFIXES are only configuration. Every engine
-      # and every engine's source asset must answer 404. It evaluates the engine
-      # paths without building any engine, so it runs on every event, forks too.
-      - name: Assert no CodeQL engine is published
+      # ci-packages.py's EXCLUDED_PREFIXES are only configuration. Every engine,
+      # every engine's source asset and the Kimchi CodeQL database
+      # (kimchi.passthru.codeql.database, which the check cache may hold but
+      # public Cachix must not) must answer 404. It evaluates those paths
+      # without building any of them, so it runs on every event, forks too.
+      - name: Assert no CodeQL engine or database is published
         env:
           CACHE: https://nix-agentic-tools.cachix.org
         run: |
@@ -665,6 +667,7 @@ jobs:
             echo "::error::expected $((2 * ${#engines[@]})) CodeQL derivations for ${#engines[@]} engines, found ${#drvs[@]}" >&2
             exit 1
           fi
+          drvs+=("$(nix eval --raw .#.ciPackages.x86_64-linux.kimchi.passthru.codeql.database.drvPath)")
           nix-store --query --outputs "${drvs[@]}" > "$RUNNER_TEMP/codeql-paths"
           paths=()
           while read -r path; do paths+=("$path"); done < "$RUNNER_TEMP/codeql-paths"
