@@ -111,8 +111,6 @@ Three evaluation boundaries are easy to break:
 Namespace merging stops at derivations. A generic recursive attrset merge would
 retain fields from a previous package while replacing its `drvPath`, creating a
 hybrid package. Preserve namespace neighbors and replace package leaves whole.
-`mergeContribution` in `lib/facets.nix` is that merge, for the package tree, for
-each ordinary owner overlay, and for the exported overlay's re-exported leaves.
 
 Package recipes receive `pkgs` through native `callPackage` scopes built by
 `buildOverlay`. Shared helpers arrive as `scopeArgs` from

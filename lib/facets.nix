@@ -144,8 +144,6 @@
   in
     module // {_file = toString claim.source;};
 in rec {
-  # The exported overlay in repository.nix merges its re-exported leaves the
-  # same way.
   inherit mergeContribution;
 
   # Flake packages must be flat derivations. Validate the lossy projection
