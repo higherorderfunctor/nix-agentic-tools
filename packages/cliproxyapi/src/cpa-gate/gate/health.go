@@ -100,24 +100,19 @@ func (g *Gate) checkOnce(ctx context.Context) {
 	for _, e := range g.keys {
 		result := entryHealth{Missing: len(e.models)}
 		if ids, ok := fetchListing(ctx, client, g.Upstream, e); ok {
-			result = listingCoverage(e, ids)
+			result.Missing = 0
+			for model := range e.models {
+				if !ids[model] {
+					result.Missing++
+				}
+			}
+			result.OK = result.Missing == 0
 		}
 		g.health.mu.Lock()
 		g.health.entries[e.name] = result
 		g.health.mu.Unlock()
 		g.logger.Info("listing check", zap.Bool("ok", result.OK), zap.Int("missing", result.Missing))
 	}
-}
-
-func listingCoverage(e *entry, ids map[string]bool) entryHealth {
-	result := entryHealth{}
-	for model := range e.models {
-		if !ids[model] {
-			result.Missing++
-		}
-	}
-	result.OK = result.Missing == 0
-	return result
 }
 
 func fetchListing(ctx context.Context, client *http.Client, upstream string, e *entry) (map[string]bool, bool) {

@@ -330,6 +330,7 @@ func TestLoadPolicy(t *testing.T) {
 		"duplicate entry name": {`{"entries":[
 			{"name":"a","key":"secret-k1","internal":"secret-i1","apis":["chat"],"models":["m"]},
 			{"name":"a","key":"secret-k2","internal":"secret-i2","apis":["chat"],"models":["m"]}]}`, "duplicate entry name"},
+		"empty entry name": {`{"entries":[{"name":"","key":"secret-k","internal":"secret-i","apis":["chat"],"models":["m"]}]}`, "empty entry name"},
 		"client key is an internal key": {`{"entries":[
 			{"name":"a","key":"secret-k1","internal":"secret-k2","apis":["chat"],"models":["m"]},
 			{"name":"b","key":"secret-k2","internal":"secret-i","apis":["chat"],"models":["m"]}]}`, `"b": client key equals the internal key of entry "a"`},

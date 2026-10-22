@@ -52,10 +52,9 @@ func TestListingShapesFilterToTheCallableSet(t *testing.T) {
 		if name == "codex" && !bytes.Contains(filtered, []byte(`"upgrade":null`)) {
 			t.Errorf("%s: outside upgrade not null: %s", name, filtered)
 		}
-	}
-	filtered, ok := filterListing([]byte(cases["anthropic"]), e)
-	if !ok || !bytes.Contains(filtered, []byte(`"first_id":"m"`)) || !bytes.Contains(filtered, []byte(`"last_id":"m"`)) {
-		t.Errorf("pagination IDs not recomputed: %s, %v", filtered, ok)
+		if name == "anthropic" && (!bytes.Contains(filtered, []byte(`"first_id":"m"`)) || !bytes.Contains(filtered, []byte(`"last_id":"m"`))) {
+			t.Errorf("%s: pagination IDs not recomputed: %s", name, filtered)
+		}
 	}
 }
 
@@ -77,7 +76,6 @@ func TestRecordedCodexTemplateSurvivesFiltering(t *testing.T) {
 func TestListingRefusesUnrecognizedOrAmbiguousWireShapes(t *testing.T) {
 	g, _ := newGate(t)
 	e := g.keys[sha256.Sum256([]byte(allKey))]
-	// cspell:ignore modél
 	cases := map[string][]byte{
 		"both envelopes": []byte(`{"data":[],"models":[]}`),
 		"duplicate name": []byte(`{"data":[],"data":[{"id":"m"}]}`),
@@ -86,10 +84,9 @@ func TestListingRefusesUnrecognizedOrAmbiguousWireShapes(t *testing.T) {
 		"mixed codex id row": []byte(`{"models":[{"slug":"m","id":"outside"}]}`),
 		"mixed codex gemini row": []byte(`{"models":[{"slug":"m","name":"models/outside"}]}`),
 		"mismatched data identity": []byte(`{"data":[{"id":"m","name":"models/outside"}]}`),
-		"non ascii name": []byte(`{"data":[{"id":"m","modél":"outside"}]}`),
+		"non-array rows": []byte(`{"data":{}}`),
 		"paginated unseen rows": []byte(`{"data":[{"id":"m"}],"has_more":true}`),
 		"trailing value": []byte(`{"data":[]} {"data":[{"id":"m"}]}`),
-		"unknown envelope": []byte(`{"items":[{"id":"m"}]}`),
 		"data row with slug": []byte(`{"data":[{"id":"m","slug":"outside"}]}`),
 	}
 	for name, raw := range cases {

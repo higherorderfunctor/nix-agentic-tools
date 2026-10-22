@@ -59,6 +59,8 @@ func loadPolicy(path string) (map[[sha256.Size]byte]*entry, error) {
 	names := map[string]bool{}
 	for _, pe := range p.Entries {
 		switch {
+		case pe.Name == "":
+			return nil, fmt.Errorf("policy: empty entry name")
 		case names[pe.Name]:
 			return nil, fmt.Errorf("policy: duplicate entry name %q", pe.Name)
 		case pe.Key == "":

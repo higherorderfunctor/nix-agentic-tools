@@ -46,12 +46,14 @@ clear. The file is JSON:
 ```
 
 `Provision` fails on an empty `entries` list (health would report OK while
-serving nothing), duplicate entry names (health is keyed by name), empty keys,
-`apis` or `models`, unknown API routes or policy fields, duplicate client keys,
-a client key equal to an internal key, and trailing JSON. Errors name entries
-and fields, never values. Client keys remain in memory only as SHA-256 digests,
-scanned with constant-time comparisons. Each `hostedTools` type declares implied
-models inside its entry's set; an empty map denies every hosted tool.
+serving nothing), empty or duplicate entry names (health is keyed by name),
+empty keys, `apis` or `models`, unknown API routes or policy fields, duplicate
+client keys, a client key equal to an internal key, and trailing JSON. Errors
+name entries and fields, never values; entry names are public metadata, since
+`/-/health` returns every one to any loopback caller without a credential.
+Client keys remain in memory only as SHA-256 digests, scanned with constant-time
+comparisons. Each `hostedTools` type declares implied models inside its entry's
+set; an empty map denies every hosted tool.
 
 ## Requests
 
@@ -134,6 +136,11 @@ nixpkgs' Caddy version and build tags. `gate.json` pins `goFloor` and
 
 `go.mod` follows nixpkgs' Caddy. Updates regenerate `gate.json`, `go.mod` and
 `go.sum`; `cliproxyapi-gate-pins` checks the version.
+
+**Settled, do not relitigate:** the package is not `caddy.withPlugins`.
+`withPlugins` takes a plugin only as `module@version`; it vendors everything
+into one fixed-output tree whose hash would move on every gate edit; and its
+install check needs a version that a local path lacks.
 
 ## Checks
 

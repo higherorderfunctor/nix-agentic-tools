@@ -50,7 +50,7 @@ func detailRoute(path string, e *entry) (route, bool) {
 		{"/v1/models/", ""},
 		{"/v1beta/models/", "gemini"},
 	} {
-		if id, ok := strings.CutPrefix(path, prefix.path); ok && e.models[id] {
+		if id, ok := strings.CutPrefix(path, prefix.path); ok && !strings.Contains(id, "/") && e.models[id] {
 			return route{api: prefix.api, class: classListing, detail: true}, true
 		}
 	}

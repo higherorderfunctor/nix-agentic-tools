@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,17 +43,12 @@ func (c *listingCapture) Write(p []byte) (int, error) {
 		c.failed = true
 		return 0, errors.New("listing exceeds limit")
 	}
-	n, err := c.body.Write(p)
-	if err != nil {
-		c.failed = true
-	}
-	return n, err
+	return c.body.Write(p)
 }
-
-func (c *listingCapture) Flush() {}
 
 // Listings are the only downstream responses the gate inspects.
 func (g *Gate) serveListing(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler, e *entry, detail bool) (err error) {
+	// A client's Accept-Encoding passes through reverse_proxy, and wireEncoding refuses br.
 	r.Header.Set("Accept-Encoding", "identity")
 	rec := &listingCapture{header: make(http.Header)}
 	defer func() {
@@ -87,6 +83,12 @@ func (g *Gate) serveListing(w http.ResponseWriter, r *http.Request, next caddyht
 }
 
 func decodeListing(raw []byte, header http.Header) ([]byte, bool) {
+	if value := header.Get("Content-Type"); value != "" {
+		mediaType, _, err := mime.ParseMediaType(value)
+		if err != nil || mediaType != "application/json" {
+			return nil, false
+		}
+	}
 	encoding, ok := wireEncoding(header)
 	if !ok {
 		return nil, false
