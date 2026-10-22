@@ -1,8 +1,9 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-21 — the entry-overwrite analysis counts only
-> top-level writes spelled `process.env`, fails on any environment write inside
-> a function, and identifies the process object by its checker symbol.
+> **Last verified:** 2026-10-21 — the sidecar carries the CodeQL `network` fact
+> on x86_64-linux; the entry-overwrite analysis counts only top-level writes
+> spelled `process.env`, fails on any environment write inside a function, and
+> identifies the process object by its checker symbol.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -115,6 +116,10 @@ delivery path. The option generator keeps two hand tables: one refinement
 while the non-blank and non-empty checks do not), and one description note.
 `report.stale*` lists any refinement or note whose path the sidecar lost, and
 `checks/native-options.nix` fails on it. Reconcile detects stale exclusion rows.
+
+The sidecar's `network` fact comes from CodeQL, not `extract.mjs`, on
+x86_64-linux only (`kimchi-codeql-network.md`). `extract/rules.nix` passes it
+through as `results.network`, with no hand rows.
 
 The extractor has hand-written parts of its own, each guarded only as far as
 stated. Kimchi's structured harness additions remain a hand list in

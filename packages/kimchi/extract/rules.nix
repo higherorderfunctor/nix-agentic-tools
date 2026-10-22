@@ -7,7 +7,7 @@
   rows ? builtins.fromJSON (builtins.readFile ./annotations.json),
 }: let
   inherit (pkgs) lib;
-  inherit (extractedLib {inherit pkgs;}) children reconcile;
+  inherit (extractedLib {inherit pkgs;}) children get reconcile;
   results = reconcile {
     config = {
       facts = children aggregate "config.keys.<name>";
@@ -51,5 +51,13 @@
     };
   };
 in {
-  inherit results;
+  results =
+    results
+    // {
+      # The CodeQL network fact (../lib/network.nix) has no hand rows.
+      network = {
+        entries = get aggregate "network";
+        failures = [];
+      };
+    };
 }

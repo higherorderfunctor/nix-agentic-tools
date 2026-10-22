@@ -1,9 +1,8 @@
 ## Kimchi CodeQL database
 
 > **Last verified:** 2026-10-22 — Kimchi 1.17.2; `passthru.codeql` carries
-> `database`, `runQueries`, `mkQueryRunner`, `createDatabase` and `engine`;
-> `source` is internal; the check runs the smoke pack; `codeql:kimchi-db` builds
-> it locally; the environment fact reads it (kimchi-codeql-environment.md).
+> `database`, `databaseOf`, `runQueries`, `mkQueryRunner`, `createDatabase` and
+> `engine`; the environment and network facts read it.
 
 ### Three layers
 
@@ -16,22 +15,22 @@
 - **`database`**: one CodeQL database of `source`, under `$out/db`. It moves
   with `source`, the engine and nixpkgs, so a nixpkgs bump costs one database
   rebuild of about 85 s.
-- **`runQueries { name; queries; models ? []; }`**: every query of an
-  `ai.devTools.codeql.mkQueryPack` spec, run against a copy of `database` with
-  optional `mkModelPack` specs. `engine.customizePackage` realizes the specs, so
-  the pack compiles against the engine that built the database.
-  `$out/<query>.json` is `codeql bqrs decode --format=json` of every result set
-  of `<query>.ql`, its tuples sorted. `mkQueryRunner { queries; models; }` is
-  the same run as a script, `kimchi-codeql-run-queries <db> <out>`.
+- **`runQueries { name; queries; models ? []; on ? database; }`**: every query
+  of an `ai.devTools.codeql.mkQueryPack` spec, run against a copy of `on` with
+  optional `mkModelPack` specs. `engine.customizePackage` realizes the specs,
+  compiling against the engine that built the database. `databaseOf name tree`
+  builds a database of another tree laid out as `source`. `$out/<query>.json` is
+  `codeql bqrs decode --format=json` of every result set of `<query>.ql`, its
+  tuples sorted. `mkQueryRunner { queries; models; }` is the same run as a
+  script, `kimchi-codeql-run-queries <db> <out>`.
 
-Editing a query rebuilds its pack and its results. The database stays cached.
 Select strings, relative paths and numbers only: an entity or an absolute
-location carries the build directory into the JSON.
-
-Every derivation name contains `codeql`, so the credentialed cachix steps'
+location carries the build directory into the JSON. Every derivation name
+contains `codeql`, so the credentialed cachix steps'
 `pushFilter: kiro-cli|codeql` keeps all of them out of the public cache. The
 `Assert no CodeQL engine or database is published` tripwire in `ci.yml` also
-asserts that the database's output answers 404 there. The database is
+asserts 404 there for both databases, the release's and the network fixture's,
+and for every other CodeQL derivation the network check needs. The database is
 input-addressed and not bit-reproducible (`codeql-database.yml` records its
 creation time). The Hestia check cache serves it again for as long as the pins,
 the engine and the flake's nixpkgs stay the same.
@@ -120,10 +119,10 @@ extractor environment) without a pin bump. Result paths are relative to
 
 `packages/kimchi/ql/qlpack.yml` makes the whole directory one local pack, so a
 `.ql` file anywhere under it resolves `import javascript`. A query file outside
-any pack fails with `could not resolve module javascript`. The pack needs no
-lock file, and running a query writes none. Each subdirectory is also one
-`mkQueryPack` source, which writes its own qlpack.yml, so a query importing a
-sibling directory's `.qll` resolves locally but not through `mkQueryPack`.
+any pack fails with `could not resolve module javascript`. Each subdirectory is
+also one `mkQueryPack` source, which writes its own qlpack.yml, so a query
+importing a sibling directory's `.qll` resolves locally but not through
+`mkQueryPack`.
 
 Measured with the smoke query on a 16-core x86_64-linux workstation: a cold
 first run took 35 s, the same query again 5 to 10 s, an edited query 17 to 25 s

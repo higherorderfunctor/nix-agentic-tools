@@ -5,7 +5,7 @@
 > to the fact the TypeScript extractor produced for 1.17.2; a fixture guard
 > holds the shapes that extractor accepted and refused.
 
-`extracted.json`'s `environment` surface is the one fact the CodeQL database
+`extracted.json`'s `environment` surface is one fact the CodeQL database
 produces. `extract/environment.nix` runs the two-query pack
 `packages/kimchi/ql/environment/` through `runQueries` and
 `extract/environment.jq` over the decoded result sets; `package.nix` splices

@@ -1,0 +1,41 @@
+kimchi src/mechanisms.ts:4 fetch - env E01_URL - src/mechanisms.ts:4
+kimchi src/mechanisms.ts:4 fetch - url https://e01-env-default.test/v1 e01-env-default.test src/mechanisms.ts:4
+kimchi src/mechanisms.ts:10 fetch - url https://f04-fetch-param.test/v1 f04-fetch-param.test src/mechanisms.ts:13
+kimchi src/mechanisms.ts:25 node-http - host h03-https-options.test h03-https-options.test src/mechanisms.ts:26
+kimchi src/mechanisms.ts:34 node-http - host h06-module-const.test h06-module-const.test src/mechanisms.ts:32
+kimchi src/mechanisms.ts:39 node-http - url https://h08-base.test/ h08-base.test src/mechanisms.ts:39
+kimchi src/mechanisms.ts:68 fetch - url https://r01-api-eu.test r01-api-eu.test src/mechanisms.ts:51
+kimchi src/mechanisms.ts:68 fetch - url https://r01-api-us.test r01-api-us.test src/mechanisms.ts:47
+kimchi src/mechanisms.ts:76 sdk:@modelcontextprotocol/sdk/client/streamableHttp.js - url https://s03-mcp-http.test/mcp s03-mcp-http.test src/mechanisms.ts:76
+kimchi src/mechanisms.ts:79 sdk:@modelcontextprotocol/sdk/client/sse.js - url https://s04-mcp-sse.test/sse s04-mcp-sse.test src/mechanisms.ts:79
+kimchi src/mechanisms.ts:81 axios - url https://s05-axios.test/v1 s05-axios.test src/mechanisms.ts:81
+kimchi src/mechanisms.ts:95 sdk:openai - url https://o01-shared-sdk-options.test/v1 o01-shared-sdk-options.test src/mechanisms.ts:91
+kimchi src/mechanisms.ts:105 undici - url https://o02-shared-undici-options.test o02-shared-undici-options.test src/mechanisms.ts:100
+kimchi src/mechanisms.ts:115 sdk:openai - url https://o03-shared-logger-options.test/v1 o03-shared-logger-options.test src/mechanisms.ts:111
+kimchi src/mechanisms.ts:123 sdk:openai - url https://o04-two-sdks-one-options.test/v1 o04-two-sdks-one-options.test src/mechanisms.ts:120
+kimchi src/mechanisms.ts:124 sdk:@anthropic-ai/sdk - url https://o04-two-sdks-one-options.test/v1 o04-two-sdks-one-options.test src/mechanisms.ts:120
+kimchi src/mechanisms.ts:132 fetch - host t03-hostonly.test t03-hostonly.test src/mechanisms.ts:130
+kimchi src/mechanisms.ts:145 undici - url https://u05-pool.test u05-pool.test src/mechanisms.ts:145
+kimchi src/mechanisms.ts:151 undici - url http://u07-proxy.test:3128 u07-proxy.test src/mechanisms.ts:151
+kimchi src/mechanisms.ts:153 undici - url http://u08-envproxy.test:3128 u08-envproxy.test src/mechanisms.ts:154
+kimchi src/mechanisms.ts:158 undici - url https://u09-global-dispatcher.test u09-global-dispatcher.test src/mechanisms.ts:159
+kimchi src/mechanisms.ts:165 undici - url wss://u11-undici-ws.test/socket u11-undici-ws.test src/mechanisms.ts:165
+kimchi src/mechanisms.ts:171 fetch - url https://n01-new-url-base.test n01-new-url-base.test src/mechanisms.ts:168
+kimchi src/mechanisms.ts:177 fetch - url https://n03-url-href.test/v1 n03-url-href.test src/mechanisms.ts:175
+kimchi src/mechanisms.ts:186 websocket - url wss://w03-ws-field.test/pty w03-ws-field.test src/mechanisms.ts:189
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:1 node-http - url https://m01-minified-https.test/v1 m01-minified-https.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:1
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 fetch - url https://m03-minified-fetch-alias.test/v1 m03-minified-fetch-alias.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 node-http node_modules/undici/index.js argument x - @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 undici - url https://m02-minified-undici.test/v1 m02-minified-undici.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:3 node-http node_modules/undici/index.js argument url - @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:3
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:5 undici - url https://b01-bundled-undici-request.test/v1 b01-bundled-undici-request.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:5
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:7 node-http - url https://b03-bundled-https.test/v1 b03-bundled-https.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:7
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:9 fetch - url https://b05-bundled-sdk-default.test/v1 b05-bundled-sdk-default.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:9
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:9 fetch - url https://b06-provider-table.test/openai/v1 b06-provider-table.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:12
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:13 sdk:BaseClient - url https://b06-provider-table.test/openai/v1 b06-provider-table.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:12
+unattributed kimchi src/local-fetch.ts:7 https://f07-local-fetch.test/v1 f07-local-fetch.test
+unattributed kimchi src/mechanisms.ts:16 https://f06-docs-only.test/readme f06-docs-only.test
+unattributed kimchi src/mechanisms.ts:46 https://r01-app-us.test r01-app-us.test
+unattributed kimchi src/mechanisms.ts:50 https://r01-app-eu.test r01-app-eu.test
+unattributed pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 https://m04-local-fetch.test/v1 m04-local-fetch.test
+unattributed pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:15 https://b08-this-constructor.test/v1 b08-this-constructor.test

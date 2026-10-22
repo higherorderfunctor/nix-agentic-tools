@@ -1,0 +1,71 @@
+# undici 8: every entry point that names a destination. `request-forgery`
+# makes RequestForgery treat these as sinks; Network.qll's
+# ModeledClientRequest makes each one a ClientRequest.
+extensions:
+  - addsTo:
+      pack: codeql/javascript-all
+      extensible: typeModel
+    data:
+      - [
+          "undici.Dispatcher",
+          "undici",
+          "Member[Agent,BalancedPool,Client,EnvHttpProxyAgent,H2CClient,Pool,ProxyAgent,RetryAgent,Socks5ProxyAgent].Instance",
+        ]
+      - [
+          "undici.Dispatcher",
+          "undici",
+          "Member[getGlobalDispatcher].ReturnValue",
+        ]
+      - [
+          "undici.Dispatcher",
+          "undici.Dispatcher",
+          "Member[compose].ReturnValue",
+        ]
+  - addsTo:
+      pack: codeql/javascript-all
+      extensible: sinkModel
+    data:
+      # top-level calls: request(url | {origin}), fetch(input), stream/pipeline/connect/upgrade(url)
+      - [
+          "undici",
+          "Member[connect,fetch,pipeline,request,stream,upgrade].Argument[0]",
+          "request-forgery",
+        ]
+      - [
+          "undici",
+          "Member[connect,pipeline,request,stream,upgrade].Argument[0].Member[origin]",
+          "request-forgery",
+        ]
+      # dispatchers bound to an origin or a proxy
+      - [
+          "undici",
+          "Member[BalancedPool,Client,H2CClient,Pool].Argument[0]",
+          "request-forgery",
+        ]
+      - [
+          "undici",
+          "Member[ProxyAgent,Socks5ProxyAgent].Argument[0]",
+          "request-forgery",
+        ]
+      - [
+          "undici",
+          "Member[ProxyAgent,Socks5ProxyAgent].Argument[0].Member[uri]",
+          "request-forgery",
+        ]
+      - [
+          "undici",
+          "Member[EnvHttpProxyAgent].Argument[0].Member[httpProxy,httpsProxy]",
+          "request-forgery",
+        ]
+      # a dispatcher told where to go per call
+      - [
+          "undici.Dispatcher",
+          "Member[connect,dispatch,pipeline,request,stream,upgrade].Argument[0].Member[origin]",
+          "request-forgery",
+        ]
+      # undici's WHATWG clients
+      - [
+          "undici",
+          "Member[EventSource,WebSocket].Argument[0]",
+          "request-forgery",
+        ]

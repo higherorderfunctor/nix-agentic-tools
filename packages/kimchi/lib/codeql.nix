@@ -112,20 +112,23 @@
     '';
   };
 
-  # The database directory under $out/db, without its creation logs. A
-  # directory, not a bundle: a query writes its cache into the database, so
-  # every consumer copies it first, and copying the directory is faster than
-  # unpacking a bundle. Input-addressed, so a check cache serves it while its
-  # inputs are unchanged; it is not bit-reproducible.
-  database = pkgs.runCommand "kimchi-codeql-database-${version}" {inherit meta;} ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    export HOME="$TMPDIR"
-    ${lib.getExe createDatabase} "$TMPDIR/kimchi"
-    rm -rf "$TMPDIR/kimchi/db/log" # bare-commands: ok (runCommand builder PATH)
-    mkdir -p "$out" # bare-commands: ok (runCommand builder PATH)
-    mv "$TMPDIR/kimchi/db" "$out/db" # bare-commands: ok (runCommand builder PATH)
-  '';
+  # `databaseOf name tree`: the database of `tree`, laid out as `source` is,
+  # under $out/db, without its creation logs. A directory, not a bundle: a
+  # query writes its cache into the database, so every consumer copies it
+  # first, and copying the directory is faster than unpacking a bundle.
+  # Input-addressed, so a check cache serves it while its inputs are
+  # unchanged; it is not bit-reproducible.
+  databaseOf = name: tree:
+    pkgs.runCommand "kimchi-codeql-database-${name}" {inherit meta;} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      export HOME="$TMPDIR"
+      ${lib.getExe createDatabase} "$TMPDIR/kimchi" ${tree}
+      rm -rf "$TMPDIR/kimchi/db/log" # bare-commands: ok (runCommand builder PATH)
+      mkdir -p "$out" # bare-commands: ok (runCommand builder PATH)
+      mv "$TMPDIR/kimchi/db" "$out/db" # bare-commands: ok (runCommand builder PATH)
+    '';
+  database = databaseOf version source;
 
   # `mkQueryRunner { queries; models ? []; }`: a `kimchi-codeql-run-queries
   # <db> <out>` script that runs every query of `queries`, a mkQueryPack
@@ -169,20 +172,22 @@
         '';
       };
 
-  # `runQueries { name; queries; models ? []; }`: the runner over a copy of
-  # `database`, as a derivation named for the pack's purpose.
+  # `runQueries { name; queries; models ? []; on ? database; }`: the runner
+  # over a copy of `on`, a `databaseOf` result, as a derivation named for the
+  # pack's purpose.
   runQueries = {
     name,
     queries,
     models ? [],
+    on ? database,
   }:
     pkgs.runCommand "kimchi-codeql-${name}" {inherit meta;} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       export HOME="$TMPDIR"
-      cp -R --no-preserve=mode ${database}/db "$TMPDIR/db" # bare-commands: ok (runCommand builder PATH)
+      cp -R --no-preserve=mode ${on}/db "$TMPDIR/db" # bare-commands: ok (runCommand builder PATH)
       ${lib.getExe (mkQueryRunner {inherit models queries;})} "$TMPDIR/db" "$out"
     '';
 in {
-  inherit createDatabase database engine mkQueryRunner runQueries;
+  inherit createDatabase database databaseOf engine mkQueryRunner runQueries;
 }
