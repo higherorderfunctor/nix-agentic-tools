@@ -3,6 +3,7 @@ package gate
 import (
 	"net/url"
 	"slices"
+	"strings"
 )
 
 // The check a route class needs before the gate forwards it.
@@ -17,6 +18,7 @@ type route struct {
 	// for every entry.
 	api   string
 	class string
+	detail bool
 	// query lists the query keys the route takes besides the key carriers.
 	query []string
 }
@@ -26,6 +28,7 @@ type route struct {
 // dot segments, a trailing slash and case variants.
 var routes = map[string]route{
 	"GET /v1/models": {class: classListing, query: []string{"client_version"}},
+	"GET /v1beta/models": {api: "gemini", class: classListing},
 
 	"POST /v1/messages":              {api: "anthropic", class: classCall, query: []string{"beta"}},
 	"POST /v1/messages/count_tokens": {api: "anthropic", class: classCall, query: []string{"beta"}},
@@ -38,6 +41,20 @@ var routes = map[string]route{
 	"POST /backend-api/codex/responses/compact": {api: "responses", class: classCall},
 	"POST /v1/responses":                        {api: "responses", class: classCall},
 	"POST /v1/responses/compact":                {api: "responses", class: classCall},
+}
+
+// Detail paths have a model ID in place of a literal route-table segment.
+// Match one unescaped segment and the entry's byte-exact model set.
+func detailRoute(path string, e *entry) (route, bool) {
+	for _, prefix := range []struct{ path, api string }{
+		{"/v1/models/", ""},
+		{"/v1beta/models/", "gemini"},
+	} {
+		if id, ok := strings.CutPrefix(path, prefix.path); ok && id != "" && !strings.Contains(id, "/") && e.models[id] {
+			return route{api: prefix.api, class: classListing, detail: true}, true
+		}
+	}
+	return route{}, false
 }
 
 // knownAPI reports whether some route names api.

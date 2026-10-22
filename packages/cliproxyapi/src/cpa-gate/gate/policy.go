@@ -50,11 +50,19 @@ func loadPolicy(path string) (map[[sha256.Size]byte]*entry, error) {
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		return nil, fmt.Errorf("policy: trailing data")
 	}
+	if len(p.Entries) == 0 {
+		return nil, fmt.Errorf("policy: no entries")
+	}
 
 	keys := map[[sha256.Size]byte]*entry{}
 	internals := map[[sha256.Size]byte]string{}
+	names := map[string]bool{}
 	for _, pe := range p.Entries {
 		switch {
+		case pe.Name == "":
+			return nil, fmt.Errorf("policy: empty entry name")
+		case names[pe.Name]:
+			return nil, fmt.Errorf("policy: duplicate entry name %q", pe.Name)
 		case pe.Key == "":
 			return nil, fmt.Errorf("entry %q: empty client key", pe.Name)
 		case pe.Internal == "":
@@ -64,6 +72,7 @@ func loadPolicy(path string) (map[[sha256.Size]byte]*entry, error) {
 		case len(pe.Models) == 0:
 			return nil, fmt.Errorf("entry %q: no models", pe.Name)
 		}
+		names[pe.Name] = true
 		e := &entry{name: pe.Name, internal: pe.Internal, apis: map[string]bool{}, models: map[string]bool{}, hostedTools: map[string]bool{}}
 		for _, model := range pe.Models {
 			if model == "" {

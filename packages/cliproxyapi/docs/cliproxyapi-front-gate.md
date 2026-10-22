@@ -1,8 +1,8 @@
 # CLIProxyAPI front gate (cpa-gate)
 
-> **Last verified:** 2026-10-22 — the gate checks call bodies before forwarding,
-> retains constant-time key comparison and the Caddy pin refresh; listings and
-> websockets remain refused, and no module option enables it.
+> **Last verified:** 2026-10-22 — the gate checks call bodies, filters five CPA
+> listing shapes and detail responses, and reports listing health; websockets
+> remain refused, and no module option enables it.
 
 **cpa-gate is NOT a security boundary, and nothing wires it in yet.** A harness
 that runs under the same uid as the gate can read the policy file, which holds
@@ -19,6 +19,9 @@ module is `src/cpa-gate` (module path `cpagate`, never fetched); the binary is
 Caddy's own `main` plus one import.
 
 `lib/gate.nix` renders the Caddyfile from the shared `lib/ai/caddy.nix` pieces.
+Only listing routes have a downstream `reverse_proxy` in this PR. Calls still
+reach the end of the route after their body check, preserving the prior module
+behavior until instance wiring lands.
 
 ## Policy file
 
@@ -72,12 +75,13 @@ denies every hosted tool.
    route. Then all five carriers go and `Authorization: Bearer <internal>` is
    set.
 
-| `apis`      | Routes                                                                                                               | Query            |
-| ----------- | -------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| any         | `GET /v1/models`                                                                                                     | `client_version` |
-| `anthropic` | `POST /v1/messages`, `POST /v1/messages/count_tokens`                                                                | `beta`           |
-| `chat`      | `POST /v1/chat/completions`                                                                                          | none             |
-| `responses` | `POST` `responses` and `responses/compact`, `GET responses` (websocket), each under `/v1/` and `/backend-api/codex/` | none             |
+| `apis`      | Routes                                                                                                               | Query                        |
+| ----------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| any         | `GET /v1/models`, `GET /v1/models/{id}`                                                                              | `client_version` on the list |
+| `anthropic` | `POST /v1/messages`, `POST /v1/messages/count_tokens`                                                                | `beta`                       |
+| `chat`      | `POST /v1/chat/completions`                                                                                          | none                         |
+| `gemini`    | `GET /v1beta/models`, `GET /v1beta/models/{name}`                                                                    | none                         |
+| `responses` | `POST` `responses` and `responses/compact`, `GET responses` (websocket), each under `/v1/` and `/backend-api/codex/` | none                         |
 
 Calls forward after a strict body check. The gate caps wire and decoded bodies
 at 32 MiB, accepts JSON with absent/`identity`/`gzip`/`zstd` encoding, and
@@ -89,15 +93,36 @@ data, trailing values and nesting beyond 128 levels. Only schemas at
 `tools[].input_schema`, `tools[].parameters`, `tools[].function.parameters`,
 `text.format.schema`, `response_format.json_schema.schema`, and
 `output_format.schema`, plus client tool arguments at their structural
-positions, are exempt from model checks. Listings and websocket routes remain
-refused with `"reason": "pending"`.
+positions, are exempt from model checks. Websocket routes remain refused with
+`"reason": "pending"`.
+
+Listings are inspected by response shape, independently of the request's user
+agent or headers. OpenAI, Anthropic, and Grok use `data[].id`; Codex uses
+`models[].slug`; Gemini uses `models[].name` with a `models/` prefix. The gate
+keeps only IDs in the entry's exact model set, recomputes `first_id` and
+`last_id` when present, and replaces a nested object with `null` if one of its
+model-like fields names an out-of-set model. This includes Codex's
+`upgrade.model`. Unknown shapes, malformed JSON, non-200 responses, and
+oversized or invalid compressed listings get the same empty 404 as a refused
+route. A detail path outside the set gets that response before it reaches CPA; a
+missing detail upstream gets the same response. The gate sends
+`Accept-Encoding: identity`, bounds wire and decoded listings at 32 MiB, and
+publishes only rewritten JSON with a new `Content-Length`.
+
+The separate `cpa_gate_health` handler serves `GET /-/health` on a loopback
+port. Its policy-path registry starts in a failed state, checks each internal
+principal's OpenAI listing immediately and every 60 seconds, and is removed on
+Caddy cleanup. It reports each entry's `ok` and missing **count**, with no model
+IDs or keys; client credentials cannot call it. The checker logs only status and
+counts. The policy refuses duplicate or empty entry names so health cannot
+silently combine two principals.
 
 ## Refusals and logs
 
 - **401**, every authentication failure: `{"error":"Invalid API key"}`, CPA's
   own body for an unknown key (`sdk/access/errors.go`).
-- **404**, every route or body refusal and every pending route: no body, as
-  CPA's gin `NoRoute` answers.
+- **404**, every route, body, listing, detail or pending websocket refusal: no
+  body, as CPA's gin `NoRoute` answers.
 
 The handler writes refusals itself and returns nil. A returned error would make
 Caddy log the whole request. Its own line holds the entry name (`-` before
@@ -135,9 +160,11 @@ checks the resulting version.
 ## Checks
 
 - The Go tests run in the package's check phase: an independent route contract,
-  call forwarding, strict model parsing and compressed bodies, refusal controls,
-  complete policy loading and the directive. A test fails if any log or error
-  carries a key.
+  call forwarding, strict model parsing and compressed bodies, five CPA listing
+  envelopes, nested scrubbing, detail responses, bounded capture and
+  decompression, listing health and registry cleanup, refusal controls, complete
+  policy loading and the directive. A test fails if any log or error carries a
+  key.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
 - `cliproxyapi-gate-validate`: the real binary validates the rendered Caddyfile
   with a good policy, and refuses a shared key, a missing file and an empty

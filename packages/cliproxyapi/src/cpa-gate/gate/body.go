@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -47,32 +48,8 @@ func checkBody(r *http.Request, e *entry) bool {
 	if err != nil || int64(len(wired)) > maxBodyBytes {
 		return false
 	}
-	var decoded []byte
-	switch encoding {
-	case "gzip":
-		reader, err := gzip.NewReader(bytes.NewReader(wired))
-		if err != nil {
-			return false
-		}
-		decoded, err = io.ReadAll(io.LimitReader(reader, maxBodyBytes+1))
-		closeErr := reader.Close()
-		if err != nil || closeErr != nil {
-			return false
-		}
-	case "zstd":
-		reader, err := zstd.NewReader(bytes.NewReader(wired), zstd.WithDecoderMaxMemory(uint64(maxBodyBytes*2)))
-		if err != nil {
-			return false
-		}
-		decoded, err = io.ReadAll(io.LimitReader(reader, maxBodyBytes+1))
-		reader.Close()
-		if err != nil {
-			return false
-		}
-	default:
-		decoded = wired
-	}
-	if int64(len(decoded)) > maxBodyBytes || !validBody(decoded, e) {
+	decoded, err := decodeWire(wired, encoding)
+	if err != nil || int64(len(decoded)) > maxBodyBytes || !validBody(decoded, e) {
 		return false
 	}
 	r.Body = io.NopCloser(bytes.NewReader(decoded))
@@ -80,6 +57,42 @@ func checkBody(r *http.Request, e *entry) bool {
 	r.Header.Set("Content-Length", strconv.Itoa(len(decoded)))
 	r.Header.Del("Content-Encoding")
 	return true
+}
+
+// decodeWire has the same decoded-size ceiling for calls and listings. The
+// caller also limits bytes read off the wire before reaching this function.
+func decodeWire(wired []byte, encoding string) ([]byte, error) {
+	var decoded []byte
+	switch encoding {
+	case "gzip":
+		reader, openErr := gzip.NewReader(bytes.NewReader(wired))
+		if openErr != nil {
+			return nil, openErr
+		}
+		body, readErr := io.ReadAll(io.LimitReader(reader, maxBodyBytes+1))
+		closeErr := reader.Close()
+		if readErr != nil || closeErr != nil {
+			return nil, errors.Join(readErr, closeErr)
+		}
+		decoded = body
+	case "zstd":
+		reader, openErr := zstd.NewReader(bytes.NewReader(wired), zstd.WithDecoderMaxMemory(uint64(maxBodyBytes*2)))
+		if openErr != nil {
+			return nil, openErr
+		}
+		body, readErr := io.ReadAll(io.LimitReader(reader, maxBodyBytes+1))
+		reader.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		decoded = body
+	default:
+		decoded = wired
+	}
+	if int64(len(decoded)) > maxBodyBytes {
+		return nil, errors.New("decoded body exceeds limit")
+	}
+	return decoded, nil
 }
 
 // validBody checks the syntax and names before relying on gjson's first-name
