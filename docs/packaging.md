@@ -270,7 +270,6 @@ Fetching itself is nixpkgs' to test.
 | glab                | devTools   | GitLab tag (fetcher)                  | go (nixpkgs override)     | `glab`                | —             | --version           |
 | oxlint              | devTools   | GitHub main                           | pnpm (nixpkgs override)   | `oxlint`              | installCheck  | --type-aware        |
 | tsgolint            | devTools   | GitHub main                           | go (nixpkgs override)     | `tsgolint`            | upstream      | --help              |
-| arkenfox            | generic    | GitHub archive                        | files only                | —                     | —             | —                   |
 | bruno               | generic    | GitHub tag (fetcher)                  | npm (nixpkgs override)    | `bruno`               | —             | —                   |
 | btop                | generic    | GitHub archive                        | cmake (nixpkgs override)  | `btop`                | —             | --version           |
 | bun                 | generic    | GitHub releases                       | pre-built binary          | `bun`                 | —             | —                   |
