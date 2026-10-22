@@ -1,8 +1,8 @@
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-21 — `environment.variables` comes from the
+> **Last verified:** 2026-10-22 — `environment.variables` comes from the
 > `ql/environment` pack over the release database; its output is byte-identical
-> to the fact the TypeScript extractor produced for 1.17.0; a fixture guard
+> to the fact the TypeScript extractor produced for 1.17.2; a fixture guard
 > holds the shapes that extractor accepted and refused.
 
 `extracted.json`'s `environment` surface is the one fact the CodeQL database
@@ -45,7 +45,7 @@ naming each, and the `extracted` build fails with it.
 
 ### Two shapes kept out on purpose
 
-The extractor at 1.17.0 did not read `const { X } = process.env` or a read
+The extractor at 1.17.2 did not read `const { X } = process.env` or a read
 through `import { env } from "node:process"`. The database finds both: seven
 names, `GIT_*` from `src/extensions/work-attribution/scope.ts`, `HOMEDRIVE` and
 `HOMEPATH`, and `AWS_EXECUTION_ENV` from the bundled AWS SDK. `tsIncompatible`
@@ -53,13 +53,13 @@ in `EnvReads.qll` drops them so the committed fact is unchanged. They are real
 reads; deleting that predicate adds them, and `rules.nix` reconciles unannotated
 non-secret names without a row. That is a data decision, not a bug fix.
 
-The database also reads four shapes the extractor missed that 1.17.0 does not
+The database also reads four shapes the extractor missed that 1.17.2 does not
 use (`process["env"]`, `(process.env as T).X`, `require("process").env` and an
 alias of `process` itself), misses one it read (the namespace binding of
-`import d, * as ns from "node:process"`, a statement 1.17.0 does not contain:
+`import d, * as ns from "node:process"`, a statement 1.17.2 does not contain:
 measured when biome merged two fixture imports into one), and reads pi-ai,
 pi-tui and pi-agent-core whole where the extractor saw their `.d.ts` and
-Kimchi's patch lines. On 1.17.0 both make no difference; a later release may
+Kimchi's patch lines. On 1.17.2 both make no difference; a later release may
 gain a correct name from them.
 
 ### Annotations
@@ -72,12 +72,16 @@ input of the transform. `rules.nix` applies them downstream, against
 
 `kimchi-codeql-environment-guard` runs the pack and transform over each tree
 under `checks/fixtures/codeql-environment/`, laid out like the real source root
-and extracted by `kimchi-codeql-create-database <dir> <tree>`. `reads` holds
-every read shape in one tree, with the host name `tau` so pi's `APP_NAME`
-derivation is visible; `overwrites` the launch-order mix the extractor accepted;
-`fail-shapes`, `fail-order` and `fail-sources` the shapes it refused, each
-asserting the message. A new shape goes into one of these trees, not into a
-mutant of the real source: a real-tree mutant costs a database build each.
+and extracted by `kimchi-codeql-create-database <dir> <tree>`. `reads` holds six
+read shapes absent from the pinned tree in one Kimchi file: bracket `env`, an
+asserted environment, a process alias, bracket `globalThis.process`, literal
+`require("process")`, and `+=`; concatenation remains unevaluated. The pinned
+release's byte identity covers its actual read shapes, including pi's APP_NAME
+and bundled imports. `overwrites` holds the launch-order mix; `fail-shapes`,
+`fail-order` and `fail-sources` retain every refusal assertion, with helper
+declarations merged into their case. A new shape goes into one of these trees,
+not into a mutant of the real source: a real-tree mutant costs a database build
+each.
 
 ### Running it without Nix
 
@@ -100,7 +104,7 @@ jq -S .environment packages/kimchi/extracted/extracted.json | cmp - /tmp/environ
 The fourth column of a reads row and the third of an overwrites row is the site,
 `path:line`, for reading a result back; the transform ignores it. Measured on a
 16-core x86_64-linux workstation: the reads query takes 27 to 90 s against the
-1.17.0 database, the overwrites query about 30 s.
+1.17.2 database, the overwrites query about 30 s.
 
 ### Patches the tree does not carry
 

@@ -1,5 +1,4 @@
 import process from "node:process";
-import { helper, templated } from "./lib.js";
 
 const early = process.env.READ_FIRST;
 process.env.READ_FIRST = "1";
@@ -49,3 +48,13 @@ void process.env.IN_BLOCK;
 void process.env.IN_ARRAY;
 void process.env.ARRAY_BEFORE_AWAIT;
 void process.env.VIA_PARAM_KEY;
+export function helper(env: Record<string, string | undefined>) {
+  return env.VIA_PARAM;
+}
+export function templated(env: Record<string, string | undefined>) {
+  const suffix = "_KEY";
+  return env[`VIA_PARAM${suffix}`];
+}
+export function unrelated() {
+  return process.env.ONLY_IN_LIB;
+}

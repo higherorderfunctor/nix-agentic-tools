@@ -19,17 +19,17 @@ def tuples: .[0]["#select"].tuples;
 | {
     variables: (
       $reads
-      | map(select(.[0] == "read") | {name: .[1], runtime: .[2]})
-      | group_by(.name)
+      | map(select(.[0] == "read"))
+      | group_by(.[1])
       | map(
-          (.[0].name) as $name
+          (.[0][1]) as $name
           | ($fixed | index($name) != null) as $isFixed
           | {
               key: $name,
               value: (
                 {
                   consumerOverridable: ($isFixed | not),
-                  readBy: (map(.runtime) | unique),
+                  readBy: (map(.[2]) | unique),
                   type: "string"
                 }
                 + if $isFixed

@@ -1,11 +1,4 @@
-/**
- * Which `process.env` names Kimchi and pi read, and through what: the reads
- * half of the `environment.variables` fact. Paths are relative to the source
- * root lib/codeql.nix stages (../../docs/kimchi-codeql.md):
- *
- *   kimchi/src/**                                    readBy "kimchi"
- *   kimchi/node_modules/@earendil-works/<pkg>/dist/  readBy "pi"
- */
+/** Which `process.env` names Kimchi and pi read, and through what: the reads half of the `environment.variables` fact. */
 
 import javascript
 
@@ -66,11 +59,7 @@ VariableDeclarator declaratorOf(VarAccess v) {
   )
 }
 
-/**
- * A variable with no initialized declarator and no parameter declaration: a
- * binding element, an uninitialized declarator or an unresolved import. Only
- * such a variable may take its value from a same-named constant elsewhere.
- */
+/** A variable with no initialized declarator and no parameter declaration: a binding element, an uninitialized declarator or an unresolved import. */
 predicate constantShaped(VarAccess v) {
   not exists(declaratorOf(v).getInit()) and
   not exists(Parameter p | p.getAVariable() = v.getVariable())
@@ -78,12 +67,7 @@ predicate constantShaped(VarAccess v) {
 
 signature predicate fallbackSig(string name, string value);
 
-/**
- * The string an expression names a variable with: a literal, a template, a
- * `.toUpperCase()` call, or an identifier followed to its constant. `+` is not
- * folded. `fallback` supplies the by-name value of a constant-shaped variable
- * from one stratum below, because `unique` cannot sit inside the recursion.
- */
+/** The string an expression names a variable with: a literal, a template, a `.toUpperCase()` call, or an identifier followed to its constant. */
 module Eval<fallbackSig/2 fallback> {
   string declaratorValue(VariableDeclarator d) {
     if isAppNameDeclarator(d)
@@ -186,19 +170,10 @@ predicate ambiguousConstant(VarAccess v) {
   strictcount(string value | E1::valueByName(v.getName(), value)) > 1
 }
 
-/**
- * `process.env` on the process object, however spelled: the global under any
- * of its names, `globalThis.process`, or the `process` module's default or
- * namespace import. Local flow follows aliases, `??` and `||` fallbacks,
- * parameter defaults and `const { env } = process`.
- */
+/** `process.env` on the process object, however spelled: the global under any of its names, `globalThis.process`, or the `process` module's default or namespace import. */
 DataFlow::SourceNode envObject() { result = NodeJSLib::process().getAPropertyRead("env") }
 
-/**
- * The name the property read `r` reads: its property name, or its computed
- * key evaluated. None for a key that cannot be evaluated, and for a delete
- * operand, which CodeQL reports as a read but is a write.
- */
+/** The name the property read `r` reads: its property name, or its computed key evaluated. */
 string readName(DataFlow::PropRead r) {
   not r.asExpr() = any(DeleteExpr d).getOperand() and
   (
@@ -219,13 +194,7 @@ predicate envRead(DataFlow::Node site, string name) {
   )
 }
 
-/**
- * Shapes the TypeScript extractor that produced the committed fact did not
- * read, kept out so the two agree byte for byte:
- *   `const { X } = process.env` (a property pattern),
- *   `import { env } from "node:process"` (a named import of env).
- * Both are real reads; dropping this predicate adds their names.
- */
+/** Shapes the TypeScript extractor that produced the committed fact did not read, kept out so the two agree byte for byte: `const { X } = process.env` (a property pattern), `import { env } from "node:process"` (a named import of env). */
 predicate tsIncompatible(DataFlow::Node site) {
   exists(DataFlow::PropRead r | r = site |
     not r.asExpr() instanceof PropAccess

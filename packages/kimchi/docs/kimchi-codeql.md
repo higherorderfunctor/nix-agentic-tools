@@ -1,9 +1,9 @@
 ## Kimchi CodeQL database
 
-> **Last verified:** 2026-10-21 — `passthru.codeql` carries `database`,
-> `runQueries`, `mkQueryRunner`, `createDatabase` and `engine`; `source` is
-> internal; the check runs the smoke pack; `codeql:kimchi-db` builds it locally;
-> the environment fact reads it (kimchi-codeql-environment.md).
+> **Last verified:** 2026-10-22 — Kimchi 1.17.2; `passthru.codeql` carries
+> `database`, `runQueries`, `mkQueryRunner`, `createDatabase` and `engine`;
+> `source` is internal; the check runs the smoke pack; `codeql:kimchi-db` builds
+> it locally; the environment fact reads it (kimchi-codeql-environment.md).
 
 ### Three layers
 

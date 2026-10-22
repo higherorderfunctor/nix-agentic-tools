@@ -77,9 +77,7 @@
     },
     "VIA_PARAM_KEY": {
       "consumerOverridable": true,
-      "readBy": [
-        "kimchi"
-      ],
+      "readBy": ["kimchi"],
       "type": "string"
     }
   }

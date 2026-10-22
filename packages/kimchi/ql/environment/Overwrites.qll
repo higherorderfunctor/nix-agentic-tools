@@ -1,28 +1,10 @@
-/**
- * `consumerOverridable: false`: the variables `kimchi/src/entry.ts` assigns on
- * every launch before anything reads them, so a value the caller sets is
- * never read. entry.ts exists to set pi's environment before pi loads; its
- * top-level statements run in order once the modules it statically imports
- * have been evaluated. A variable is overwritten when a top-level statement
- * assigns it on every path and no earlier statement, nor a callee handed
- * `process.env`, reads it. Function bodies run at points this walk does not
- * follow, so their reads count from the start and any environment write in
- * one is a failure. So is anything else that makes the order unknowable: a
- * read of the same name in a statically imported module, or an assignment
- * after entry.ts first awaits, imports dynamically or calls a declared
- * function that can.
- */
+/** `consumerOverridable: false`: the variables `kimchi/src/entry.ts` assigns on every launch before anything reads them, so a value the caller sets is never read. entry.ts exists to set pi's environment before pi loads; its top-level statements run in order once the modules it statically imports have been evaluated. */
 
 import EnvReads
 
 TopLevel entry() { result.getFile().getRelativePath() = "kimchi/src/entry.ts" }
 
-/**
- * `process.env` spelled out, the only spelling that establishes an overwrite:
- * the other spellings of the process object are recognized for reads, and
- * counting their writes would let a read through a spelling not yet
- * recognized pair with a counted write.
- */
+/** `process.env` spelled out, the only spelling that establishes an overwrite: the other spellings of the process object are recognized for reads, and counting their writes would let a read through a spelling not yet recognized pair with a counted write. */
 predicate isSpelledProcessEnv(PropAccess pa) {
   pa = envObject().asExpr() and
   pa.getPropertyName() = "env" and
@@ -58,11 +40,7 @@ Stmt scanned(int i) {
   not result instanceof FunctionDeclStmt
 }
 
-/**
- * The statements the definite-write walk enters: the scanned ones, the
- * children of a block it enters, and both arms of an if it enters that has an
- * else. A one-armed if, a loop or a try is not entered.
- */
+/** The statements the definite-write walk enters: the scanned ones, the children of a block it enters, and both arms of an if it enters that has an else. */
 Stmt walked() {
   result = scanned(_)
   or
@@ -151,21 +129,12 @@ predicate importedRead(string name, string where_) {
   )
 }
 
-predicate candidate(int i, string name) {
-  name = definiteWrite(scanned(i)) and not readUpTo(i, name)
+/** A variable entry.ts fixes on every launch. */
+predicate overwritten(string name) {
+  exists(int i | name = definiteWrite(scanned(i)) and not readUpTo(i, name))
 }
 
-/** A variable entry.ts fixes on every launch. */
-predicate overwritten(string name) { candidate(_, name) }
-
-/**
- * Post-order "at or after": a children-first walk visits `b` no earlier than
- * `a`. An assignment stores, and an await suspends, only after its operands
- * are evaluated, so the order is by end position; on a tie, the ancestor
- * comes after. This is the walk order, not the control-flow graph: under the
- * graph `if (c) { await 0 } else { process.env.X = "1" }` would pass, and the
- * fact's producer rejects it.
- */
+/** Post-order by end position, not control flow: await in one if arm still precedes a write in the other. */
 bindingset[a, b]
 predicate visitedNoEarlier(AstNode a, AstNode b) {
   exists(Location la, Location lb | la = a.getLocation() and lb = b.getLocation() |
