@@ -13,20 +13,23 @@ import (
 // renders it with the keys filled in; the gate never reads them elsewhere.
 type policy struct {
 	Entries []struct {
-		Name     string   `json:"name"`
-		Key      string   `json:"key"`
-		Internal string   `json:"internal"`
-		APIs     []string `json:"apis"`
-		Models   []string `json:"models"`
+		Name        string              `json:"name"`
+		Key         string              `json:"key"`
+		Internal    string              `json:"internal"`
+		APIs        []string            `json:"apis"`
+		Models      []string            `json:"models"`
+		HostedTools map[string][]string `json:"hostedTools"`
 	} `json:"entries"`
 }
 
 // entry is what the gate keeps of a policy entry. The client key is kept
 // only as its SHA-256 digest.
 type entry struct {
-	name     string
-	internal string
-	apis     map[string]bool
+	name        string
+	internal    string
+	apis        map[string]bool
+	models      map[string]bool
+	hostedTools map[string]bool
 }
 
 // loadPolicy reads the policy at path and indexes its entries by the SHA-256
@@ -61,7 +64,24 @@ func loadPolicy(path string) (map[[sha256.Size]byte]*entry, error) {
 		case len(pe.Models) == 0:
 			return nil, fmt.Errorf("entry %q: no models", pe.Name)
 		}
-		e := &entry{name: pe.Name, internal: pe.Internal, apis: map[string]bool{}}
+		e := &entry{name: pe.Name, internal: pe.Internal, apis: map[string]bool{}, models: map[string]bool{}, hostedTools: map[string]bool{}}
+		for _, model := range pe.Models {
+			if model == "" {
+				return nil, fmt.Errorf("entry %q: empty model", pe.Name)
+			}
+			e.models[model] = true
+		}
+		for tool, implied := range pe.HostedTools {
+			if tool == "" || tool == "function" || tool == "custom" {
+				return nil, fmt.Errorf("entry %q: invalid hosted tool name", pe.Name)
+			}
+			for _, model := range implied {
+				if !e.models[model] {
+					return nil, fmt.Errorf("entry %q: hosted tool model outside set", pe.Name)
+				}
+			}
+			e.hostedTools[tool] = true
+		}
 		for i, api := range pe.APIs {
 			if !knownAPI(api) {
 				return nil, fmt.Errorf("entry %q: apis[%d] is unknown", pe.Name, i)

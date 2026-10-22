@@ -1,8 +1,8 @@
 # CLIProxyAPI front gate (cpa-gate)
 
-> **Last verified:** 2026-10-22 — the refusal-only gate loads one complete
-> policy, compares key digests in constant time, and owns its Caddy pin refresh
-> on nixpkgs updates; no module option enables it.
+> **Last verified:** 2026-10-22 — the gate checks call bodies before forwarding,
+> retains constant-time key comparison and the Caddy pin refresh; listings and
+> websockets remain refused, and no module option enables it.
 
 **cpa-gate is NOT a security boundary, and nothing wires it in yet.** A harness
 that runs under the same uid as the gate can read the policy file, which holds
@@ -36,7 +36,8 @@ clear. The file is JSON:
       "key": "<client key>",
       "internal": "<internal key>",
       "apis": ["responses"],
-      "models": ["gpt-6-sol"]
+      "models": ["gpt-6-sol"],
+      "hostedTools": {}
     }
   ]
 }
@@ -48,7 +49,9 @@ names, two entries sharing a client key, a client key equal to any internal key,
 and any field this build does not enforce. A second JSON value or trailing junk
 is refused. Errors name entries and fields, never values; entry names are public
 metadata. In memory a client key is kept only as its SHA-256 digest;
-authentication scans all digests with constant-time comparisons.
+authentication scans all digests with constant-time comparisons. Each
+`hostedTools` type declares implied models inside the entry's set; the empty map
+denies every hosted tool.
 
 ## Requests
 
@@ -76,17 +79,25 @@ authentication scans all digests with constant-time comparisons.
 | `chat`      | `POST /v1/chat/completions`                                                                                          | none             |
 | `responses` | `POST` `responses` and `responses/compact`, `GET responses` (websocket), each under `/v1/` and `/backend-api/codex/` | none             |
 
-**Every route is still refused after the rewrite.** A call needs its request
-body checked, a listing its response filtered, and a websocket its frames
-checked; none of those checks exists yet. Until one does, its routes get the
-unknown-route answer and the log line says `"reason": "pending"`.
+Calls forward after a strict body check. The gate caps wire and decoded bodies
+at 32 MiB, accepts JSON with absent/`identity`/`gzip`/`zstd` encoding, and
+forwards the exact decoded bytes with `Content-Encoding` removed. It checks the
+top-level `model` with CPA's gjson version, every model-like name at any depth,
+and hosted tools against `hostedTools`. It refuses duplicate or escaped
+directive names, invalid UTF-8, lone surrogates, non-ASCII names outside client
+data, trailing values and nesting beyond 128 levels. Only schemas at
+`tools[].input_schema`, `tools[].parameters`, `tools[].function.parameters`,
+`text.format.schema`, `response_format.json_schema.schema`, and
+`output_format.schema`, plus client tool arguments at their structural
+positions, are exempt from model checks. Listings and websocket routes remain
+refused with `"reason": "pending"`.
 
 ## Refusals and logs
 
 - **401**, every authentication failure: `{"error":"Invalid API key"}`, CPA's
   own body for an unknown key (`sdk/access/errors.go`).
-- **404**, every route refusal and every pending route: no body, as CPA's gin
-  `NoRoute` answers.
+- **404**, every route or body refusal and every pending route: no body, as
+  CPA's gin `NoRoute` answers.
 
 The handler writes refusals itself and returns nil. A returned error would make
 Caddy log the whole request. Its own line holds the entry name (`-` before
@@ -123,10 +134,10 @@ checks the resulting version.
 
 ## Checks
 
-- The Go tests run in the package's check phase: an independent route contract
-  with admitted and denied API keys, every carrier, the refusal table, the
-  upgrade strip, complete policy loading and the directive. A test fails if any
-  log line or error message carries a key.
+- The Go tests run in the package's check phase: an independent route contract,
+  call forwarding, strict model parsing and compressed bodies, refusal controls,
+  complete policy loading and the directive. A test fails if any log or error
+  carries a key.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
 - `cliproxyapi-gate-validate`: the real binary validates the rendered Caddyfile
   with a good policy, and refuses a shared key, a missing file and an empty
