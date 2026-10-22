@@ -56,8 +56,7 @@ kimchi/node_modules/@earendil-works/<pi package>/{package.json,dist/}
   difference there is a source-root difference, not an extractor bug.
 - **Kimchi's own `node_modules` (its pnpm store) is not in it.** That is every
   third-party dependency except what pi's bundle inlines (below).
-- **Source maps are dropped.** The extractor does not read them, and they are
-  13.5 MB of pi's dist.
+- **Source maps are dropped:** 13.5 MB of pi's dist the extractor never reads.
 - **The extractor skips `node_modules` by default.**
   `LGTM_INDEX_FILTERS=include:kimchi/node_modules/@earendil-works` brings pi
   back in: without it the database held none of pi's files. The value is a
@@ -65,14 +64,16 @@ kimchi/node_modules/@earendil-works/<pi package>/{package.json,dist/}
 
 ### Minified files
 
-`pi-coding-agent/dist/bundle/chunks/` holds pi's own CLI bundle, minified. It
-inlines pi's dependencies, such as the AWS SDK, Google auth, undici and ws, and
-their environment reads. 48 of the 237 variables in the current environment fact
-are named in those chunks and nowhere else in pi, in Kimchi's source or in its
-patches. The extractor skips a file it judges minified: without
-`CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true` it skipped 46 files, 42
-of them chunks and the rest vendored `*.min.js`. On 2.27.3 the database, logs
-included, is 113 MB without the flag and 216 MB with it.
+`pi-coding-agent/dist/bundle/` is pi's standalone CLI, minified, and Kimchi
+never loads it. It is carried for the environment reads of pi's bundled
+third-party dependencies (the AWS SDK, Google auth, undici, ws) at pi's
+build-time versions: 48 of the 237 variables in the current environment fact are
+named in its chunks and nowhere else in pi, Kimchi or its patches. It also holds
+unpatched copies of patched pi-ai, pi-tui and pi-coding-agent code, so a query
+scopes or labels its `dist/bundle` rows. The extractor skips a file it judges
+minified: without `CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true` it
+skipped 46 files, 42 of them chunks and the rest vendored `*.min.js`. On 2.27.3
+the database, logs included, is 113 MB without the flag and 216 MB with it.
 
 ### The patch step
 
@@ -117,9 +118,8 @@ the extractor environment) without a pin bump. Result paths are relative to
 `.ql` file anywhere under it resolves `import javascript`. A query file outside
 any pack fails with `could not resolve module javascript`. The pack needs no
 lock file, and running a query writes none. Each subdirectory is also one
-`mkQueryPack` source, and `mkQueryPack` writes that subdirectory's own
-qlpack.yml. A query that imports a `.qll` from a sibling directory resolves
-locally but not through `mkQueryPack`.
+`mkQueryPack` source, which writes its own qlpack.yml, so a query importing a
+sibling directory's `.qll` resolves locally but not through `mkQueryPack`.
 
 Measured with the smoke query on a 16-core x86_64-linux workstation at load
 average 8 to 15: a cold first run took 35 s, the same query again 5 to 10 s, and

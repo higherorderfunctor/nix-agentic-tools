@@ -68,7 +68,10 @@
   #
   # The extractor skips node_modules unless an include names it, and skips a
   # file it judges minified unless told otherwise; pi's dist/bundle chunks
-  # are, and they carry the reads of pi's bundled dependencies.
+  # are. dist/bundle is pi's standalone CLI, which Kimchi never loads. It is
+  # carried for the env reads of pi's bundled third-party dependencies at
+  # pi's build-time versions, and it holds unpatched copies of patched pi-ai,
+  # pi-tui and pi-coding-agent code, so a query scopes or labels its rows.
   createDatabase = pkgs.writeShellApplication {
     name = "kimchi-codeql-create-database";
     bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
