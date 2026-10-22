@@ -8,9 +8,9 @@
 # Every regular file is scanned except Markdown, which describes the
 # contract (generated instruction projections included), JSON, which is
 # data: decisions.json is where combine rules belong, and sidecars hold
-# measured values, and the root .gitattributes, which names the sidecar
-# path to mark it generated for GitHub. Symlinks are skipped; they point
-# into the store.
+# measured values, and the root .gitattributes (that path only, not a nested
+# one), which names the sidecar path to mark it generated for GitHub.
+# Symlinks are skipped; they point into the store.
 #
 # A match must be a real read, not a mention, so comments are stripped to
 # end of line first: `#` in every file and `//` in JavaScript and
@@ -64,7 +64,7 @@
     cd "$1"
     ${pkgs.findutils}/bin/find . \
       \( -path ./lib/extracted -o -path ./checks/extracted \) -prune -o \
-      -type f ! -name '*.md' ! -name '*.json' ! -name '.gitattributes' \
+      -type f ! -name '*.md' ! -name '*.json' ! -path ./.gitattributes \
       -print0 > "$TMPDIR/guard-files"
     mapfile -d "" -t files < "$TMPDIR/guard-files"
     if [ "''${#files[@]}" -eq 0 ]; then

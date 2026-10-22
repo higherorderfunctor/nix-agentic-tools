@@ -1,6 +1,6 @@
 # Extracted facts: the contract
 
-> **Last verified:** 2026-10-22 — owners commit forked `extracted.json`; Linux
+> **Last verified:** 2026-10-18 — owners commit forked `extracted.json`; Linux
 > carries make other systems follow; owner checks use `mkOwnerCheck`; Go owners
 > extract with `goTestExtract` over the generic `goTest`; facts and
 > reconciliation share the private redact classifier.
@@ -329,9 +329,8 @@ the object of surfaces the test writes to `$NAT_EXTRACT_OUT`.
 
 `checks.extracted-contract-guard` fails when any tracked file outside
 `lib/extracted/` and `checks/extracted/` names `extracted/extracted.json` or
-`__platforms`, reaches into `bySystem`, or defines a combine. Markdown, JSON and
-the root `.gitattributes` are not scanned: they describe, hold or label the data
-without reading it. Owners supply data and extractors only.
+`__platforms`, reaches into `bySystem`, or defines a combine. Owners supply data
+and extractors only.
 
 ## Fixtures (`checks/extracted/facts.nix`)
 
