@@ -23,13 +23,13 @@
   # `errors at spec`: why this engine cannot realize `spec`, each message led by
   # `at`, the caller's own index.
   errors = at: spec: let
-    head = "${at} (${spec.name})";
+    lead = "${at} (${spec.name})";
   in
     if engineName == "bare"
-    then ["${head}: codeql-bare carries no CodeQL libraries; realize pack specs with a language engine or codeql-full"]
+    then ["${lead}: codeql-bare carries no CodeQL libraries; realize pack specs with a language engine or codeql-full"]
     else if defaultLanguage == null && !(spec ? language)
-    then ["${head}: codeql-${engineName} needs `language` on the spec, one of ${lib.concatStringsSep ", " languages}"]
-    else lib.optional (spec ? language && !(lib.elem spec.language languages)) "${head}: `language` ${spec.language} is not one codeql-${engineName} carries (${lib.concatStringsSep ", " languages})";
+    then ["${lead}: codeql-${engineName} needs `language` on the spec, one of ${lib.concatStringsSep ", " languages}"]
+    else lib.optional (spec ? language && !(lib.elem spec.language languages)) "${lead}: `language` ${spec.language} is not one codeql-${engineName} carries (${lib.concatStringsSep ", " languages})";
 
   # The one qlpack.yml renderer. JSON is YAML, so toJSON writes it.
   qlpack = kind: {
