@@ -10,6 +10,8 @@
   ],
   "ignorePaths": [
     "**/*package-lock.json",
+    "**/go.mod",
+    "**/go.sum",
     "*.lock",
     "*.patch",
     "*.png",

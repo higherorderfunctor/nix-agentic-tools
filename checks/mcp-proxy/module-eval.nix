@@ -167,6 +167,19 @@ in {
           touch "$out"
         '';
 
+      # An empty delete list renders an unfiltered global log, which writes
+      # every request header to the journal, so the shared helper throws.
+      module-mcp-proxy-caddy-empty-log-deletes-throws = mkTest "mcp-proxy-caddy-empty-log-deletes-throws" (!(builtins.tryEval ((import ../../lib/ai/caddy.nix {inherit lib pkgs;}).globalBlock {logDeletes = [];})).success);
+
+      # The proxy renders its Caddyfile from the shared lib/ai/caddy.nix
+      # helpers. This pins the whole rendering to a copy taken before they
+      # were extracted, so a helper change made for another caller cannot
+      # alter the proxy's config unnoticed.
+      module-mcp-proxy-caddyfile-golden = mkTest "mcp-proxy-caddyfile-golden" (
+        (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" proxySampleServer)).text
+        == builtins.readFile ./example.Caddyfile
+      );
+
       # The Caddyfile lands in the WORLD-READABLE Nix store, so it may carry
       # only `{$VAR}` tokens. This also pins the escaping trap: Nix's `$${`
       # is an escape for a literal `${`, so a regression here silently emits

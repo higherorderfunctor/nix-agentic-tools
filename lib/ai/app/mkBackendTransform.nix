@@ -169,6 +169,7 @@
     then
       proxyLib.resolve {
         instances = config.ai.cliproxyapi.instances or {};
+        providers = proxyProviders.resolved;
         root = config.ai.proxy;
         runtime = poolCfg.proxy;
       }

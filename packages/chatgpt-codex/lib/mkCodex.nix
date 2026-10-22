@@ -1431,7 +1431,9 @@ in
             )
             # devenv carries the provider only as launcher flags.
             ++ lib.optional (!isHm && resolvedProxy != null && cfg.package == null)
-            "ai.codex.proxy is selected but ai.codex.package is null; devenv passes the proxy provider only through the managed launcher, so an unmanaged Codex ignores it.");
+            "ai.codex.proxy is selected but ai.codex.package is null; devenv passes the proxy provider only through the managed launcher, so an unmanaged Codex ignores it."
+            ++ lib.optional (!isHm && (resolvedProxy.providers or []) != [])
+            "ai.codex.proxy.providers: devenv writes no `codex -p <provider>` profile, because a profile lives in CODEX_HOME, which devenv does not own; the provider's models are still listed in Codex's model picker, or choose one with `codex -m <model>`.");
           assertions =
             mkAgentAssertions {inherit nativeAgents rawAgents;}
             ++ mkExecpolicyAssertions cfg.execpolicyRules
@@ -1563,6 +1565,16 @@ in
             surface = "settings";
           };
         }
+        # One profile per enabled ai.codex.proxy provider (./proxy.nix).
+        (lib.optionalAttrs isHm {
+          ai.codex._generatedFiles = lib.mapAttrs' (file: profile:
+            lib.nameValuePair "${nativeDir}/${file}" {
+              content.value = profile;
+              format = "toml";
+              surface = "settings";
+            })
+          (codexProxy.hmProfiles resolvedProxy);
+        })
 
         (lib.optionalAttrs isHm (lib.mkMerge [
           {

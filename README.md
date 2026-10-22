@@ -307,6 +307,7 @@ Temporarily unclassified supporting packages live in the split-ready
 | `bun` | JavaScript runtime, bundler, transpiler and package manager |
 | `catppuccin-btop` | Catppuccin theme files for btop |
 | `cliproxyapi` | OpenAI-compatible proxy for AI CLI subscriptions and APIs |
+| `cpa-gate` | Caddy with a client-key and route gate for CLIProxyAPI (not yet wired) |
 | `cpa-manager-plus` | CPA Manager Plus dashboard and management server |
 | `dns-root-hints` | IANA DNS root name server hints (named.root) |
 | `fblog` | Command-line JSON log viewer |
@@ -382,7 +383,7 @@ instruction building.
 | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
 | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
 | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kimchi + Kiro) | Same; takes a package. github.com Copilot is explicitly excluded |
-| Local AI proxy | Point each CLI at CLIProxyAPI | `ai.proxy` selection (`url` + a `redact.file`, `redact.command` or `redact.concat` client `key`); per-runtime `ai.<runtime>.proxy`, declared only for a runtime that consumes it, replaces it. An `instance` selection gives that `ai.cliproxyapi.instances` entry each enabled runtime's own key, allowed only `ai.<runtime>.proxy.allow` (default: the runtime's own login) and each enabled `ai.<runtime>.proxy.providers` entry, an instance `providers` upstream reached by its base URL on the API the runtime speaks. Claude reads the reference through `apiKeyHelper`; Codex uses command-backed provider auth; other runtimes warn | Same |
+| Local AI proxy | Point each CLI at CLIProxyAPI | `ai.proxy` selection (`url` + a `redact.file`, `redact.command` or `redact.concat` client `key`); per-runtime `ai.<runtime>.proxy`, declared only for a runtime that consumes it, replaces it. An `instance` selection gives that `ai.cliproxyapi.instances` entry each enabled runtime's own key, allowed only `ai.<runtime>.proxy.allow` (default: the runtime's own login) and each enabled `ai.<runtime>.proxy.providers` entry, an instance `providers` upstream reached by its base URL on the API the runtime speaks; Claude offers provider models as `/model` rows, Codex as `codex -p <provider>` profiles (Home Manager; devenv warns). Claude reads the reference through `apiKeyHelper`; Codex uses command-backed provider auth; other runtimes warn | Same |
 | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
 ### Kimchi project delivery

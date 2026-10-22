@@ -28,6 +28,24 @@
         type = redact.types.redacted;
         description = "The proxy client key the harness presents.";
       };
+      # What a runtime offers in its model choice: each enabled provider and
+      # the models its instance lists for it.
+      providers = mkOption {
+        type = types.listOf (types.submodule {
+          options = {
+            models = mkOption {
+              type = types.nonEmptyListOf types.str;
+              description = "The provider's models.";
+            };
+            name = mkOption {
+              type = types.str;
+              description = "The provider's `ai.cliproxyapi.instances.<n>.providers` name.";
+            };
+          };
+        });
+        default = [];
+        description = "The enabled providers of an instance selection, in name order.";
+      };
       # Typed, not only asserted: normalized options are a public input, and
       # a value set here directly skips the selection assertions.
       url = mkOption {
@@ -135,8 +153,8 @@
         example = lib.literalExpression ''{z-ai.enable = true;}'';
         description = ''
           Providers of the selected instance that ${name}'s key may reach.
-          Each enabled provider adds a base-URL rule on the selected API.
-          Requires an `instance` selection.
+          Each enabled provider adds a base-URL rule on the selected API and
+          offers its models to ${name}. Requires an `instance` selection.
         '';
       };
     };
@@ -179,9 +197,11 @@
   });
   assertionsFor = instances: path: selection: toAssertions (problems instances path selection);
 
-  # An instance that cannot be selected resolves to null; its assertion says why.
+  # An instance that cannot be selected resolves to null; its assertion says
+  # why. `providers` is `providersFor`'s `resolved`.
   resolve = {
     instances,
+    providers,
     root,
     runtime,
   }: let
@@ -196,9 +216,11 @@
     else {
       inherit (selection) key;
       inherit url;
+      providers = map (provider: {inherit (provider) models name;}) providers;
     };
 
   # A missing instance resolves no provider; selection validation reports it.
+  # Resolved providers carry each provider's name, models and allowlist rule.
   providersFor = {
     api,
     instances,
@@ -234,6 +256,7 @@
       else {
         resolved = {
           inherit name;
+          inherit (provider) models;
           rule = cliproxyapi.providers.rule name provider chosen;
         };
       };

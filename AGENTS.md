@@ -121,6 +121,7 @@ for it. When several entries match, their guidance composes.
     - `packages/cliproxyapi/**`
   - Read:
     - [`packages/cliproxyapi/docs/cliproxyapi-extraction.md`](packages/cliproxyapi/docs/cliproxyapi-extraction.md)
+    - [`packages/cliproxyapi/docs/cliproxyapi-front-gate.md`](packages/cliproxyapi/docs/cliproxyapi-front-gate.md)
     - [`packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md`](packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md)
     - [`packages/cliproxyapi/docs/cliproxyapi-settings.md`](packages/cliproxyapi/docs/cliproxyapi-settings.md)
 - **`codeql`**
@@ -356,6 +357,7 @@ for it. When several entries match, their guidance composes.
     - `checks/*/factory-eval.nix`
     - `checks/*/module-eval.nix`
     - `lib/ai/app/mkBackendTransform.nix`
+    - `lib/ai/caddy.nix`
     - `lib/ai/mcpProxy.nix`
     - `lib/ai/mcpServer/**`
     - `lib/ai/sharedOptions.nix`

@@ -86,7 +86,11 @@ burndown
 bwrap
 bypassable
 cachix
+caddycmd
+caddyconfig
 caddyfile
+caddyhttp
+caddyserver
 calcsize
 calen
 cancelchild
@@ -114,6 +118,7 @@ commondir
 configdir
 convco
 coreutils
+cpagate
 cpamp
 createrequire
 creds
@@ -219,6 +224,7 @@ hookscriptsdir
 hostable
 hostonly
 hotspots
+httpcaddyfile
 huggingface
 idempotently
 indexedlog
@@ -533,6 +539,7 @@ wikilink
 worktree
 worktrees
 wslpath
+xcaddy
 xhigh
 xoxp
 xyzzy

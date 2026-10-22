@@ -17,6 +17,7 @@
   beads = "sidecar";
   "beads.dolt" = "sidecar";
   cliproxyapi = "sidecar";
+  cpa-gate = "sidecar";
   cpa-manager-plus = "sidecar";
   gh = "sidecar";
   gluetun = "sidecar";
