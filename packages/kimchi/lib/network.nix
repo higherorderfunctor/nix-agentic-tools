@@ -7,7 +7,7 @@
   codeql,
   pkgs,
 }: let
-  inherit (codeql) engine;
+  engine = pkgs.ai.devTools.codeql;
   queries = engine.mkQueryPack {
     name = "nix-agentic-tools/kimchi-network";
     src = ../ql/network;
