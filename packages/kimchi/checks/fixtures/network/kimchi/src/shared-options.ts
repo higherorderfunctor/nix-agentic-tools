@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import pino from "pino";
 import { Agent } from "undici";
@@ -29,4 +30,14 @@ export function o03() {
   };
   log.info(opts);
   return new OpenAI(opts);
+}
+// O04 one options object handed to two modeled SDKs: each call keeps its own package
+export function o04() {
+  const opts = {
+    baseURL: "https://o04-two-sdks-one-options.test/v1",
+    apiKey: "x",
+  };
+  const openai = new OpenAI(opts);
+  const anthropic = new Anthropic(opts);
+  return [openai, anthropic];
 }

@@ -2,8 +2,9 @@
 
 > **Last verified:** 2026-10-21 — `network` is measured on x86_64-linux by
 > `ql/network` with the `ql/models/{sdk,undici}` packs through `runQueries`; a
-> modeled request is an invocation of its row's own callee; the fixture's
-> minified chunk is one the extractor skips without the flag.
+> modeled request is an invocation of its row's own callee and takes its library
+> from that row; the fixture's minified chunk is one the extractor skips without
+> the flag.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 bundle and
 > rejected:
@@ -78,7 +79,8 @@ only become `RequestForgery::Sink`s. `ModeledClientRequest` in
 `request-forgery` row names, whose argument or a member of it one or two levels
 deep is that row's sink, becomes a `ClientRequest`. After that, a library needs
 only rows. The sink alone is not enough: an options object handed to the SDK and
-to a logger is one sink node, and both calls would match.
+to a logger is one sink node, and both calls would match. For the same reason
+`sdk:<package>` is the matched row's package, not one read from the sink.
 
 - **`ql/models/undici`**: the `undici.Dispatcher` type (every agent, pool and
   client class, `getGlobalDispatcher`, `compose`), its per-call `origin`, the
@@ -126,12 +128,12 @@ target and covers one call per library and bundle shape. Its negative controls
 are a docs-only URL, a browser-only URL, a module-local `fetch` in `src/` and in
 the minified chunk, and `new this.constructor({baseURL})`. Each must appear only
 as an unattributed literal. Options objects also handed to `console` or an
-imported logger must yield the SDK's row and not the logger's.
-`chunk-minified.js` averages over 200 characters a line, so the extractor skips
-it without the flag (measured: files averaging 173 were kept, 231 skipped), and
-its 5 rows go. The expected lines name fixture line numbers, so reformatting a
-fixture file means regenerating them. biome leaves the chunks under
-`node_modules` as they are.
+imported logger must yield the SDK's row and not the logger's, and one handed to
+two SDKs a row per SDK, each with its own package. `chunk-minified.js` averages
+over 200 characters a line, so the extractor skips it without the flag
+(measured: files averaging 173 were kept, 231 skipped), and its 5 rows go. The
+expected lines name fixture line numbers, so reformatting a fixture file means
+regenerating them. biome leaves the chunks under `node_modules` as they are.
 
 ### Running it without Nix
 

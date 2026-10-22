@@ -67,19 +67,12 @@ class EsbuildCommonJsImport extends DataFlow::ModuleImportNode::Range, DataFlow:
   override string getPath() { result = path }
 }
 
-/** Gets an API node on a path that ends at the model sink `sink`. */
-private API::Node modelAncestor(API::Node sink) {
-  sink = ModelOutput::getASinkNode("request-forgery") and result = sink
-  or
-  result = modelAncestor(sink).getAPredecessor()
-}
-
 /**
- * Holds if `sink` is the node a `request-forgery` row names, and `callee` the
- * node its path names before its last `Argument` token.
+ * Holds if `sink` is the node a `request-forgery` row of `type` names, and
+ * `callee` the node its path names before its last `Argument` token.
  */
-private predicate modeledSink(API::Node callee, API::Node sink) {
-  exists(string type, Mad::AccessPath path, int n |
+private predicate modeledSink(string type, API::Node callee, API::Node sink) {
+  exists(Mad::AccessPath path, int n |
     MadRows::sinkModel(type, path, "request-forgery", _) and
     n = max(int i | path.getToken(i).getName() = "Argument") and
     callee = Mad::getNodeFromPath(type, path, n) and
@@ -95,10 +88,11 @@ private predicate modeledSink(API::Node callee, API::Node sink) {
  */
 class ModeledClientRequest extends ClientRequest::Range, API::InvokeNode {
   API::Node sink;
+  string type;
 
   ModeledClientRequest() {
     exists(API::Node modeled, API::Node param |
-      modeledSink(modeled, sink) and
+      modeledSink(type, modeled, sink) and
       this = modeled.getAnInvocation() and
       param = this.getParameter(_)
     |
@@ -112,11 +106,13 @@ class ModeledClientRequest extends ClientRequest::Range, API::InvokeNode {
 
   override DataFlow::Node getADataNode() { none() }
 
-  /** Gets the package (or model type) a model path to this sink starts from. */
-  string getModelPackage() { API::moduleImport(result) = modelAncestor(sink) }
+  /**
+   * Gets the package, or model type such as `undici.Dispatcher`, of a row
+   * whose callee this invokes. Not read from the sink: two calls handed one
+   * options object share it.
+   */
+  string getModelPackage() { result = type.regexpReplaceAll("^'(.*)'$", "$1") }
 }
-
-private predicate isImportedPath(string p) { p = any(DataFlow::ModuleImportNode i).getPath() }
 
 /**
  * `new C({ baseURL })` or `new C({ baseUrl })`: an SDK client built with a
@@ -140,15 +136,6 @@ class BaseUrlClientConstruction extends ClientRequest::Range, DataFlow::NewNode 
   override DataFlow::Node getADataNode() { none() }
 }
 
-/** Gets the package a model path to `r`'s sink starts from, preferring one the code imports. */
-private string modelPackage(ModeledClientRequest r) {
-  result = min(string p | p = r.getModelPackage() and isImportedPath(p) | p)
-  or
-  // a model type such as `undici.Dispatcher` when no package path exists
-  not exists(string p | p = r.getModelPackage() and isImportedPath(p)) and
-  result = min(r.getModelPackage())
-}
-
 /**
  * Gets the library a request uses, as the fact names it: `fetch`,
  * `node-http`, `websocket`, `axios`, `net`, `undici`, `sdk:<package>` for
@@ -170,7 +157,7 @@ string requestLibrary(ClientRequest r) {
   or
   result = "sdk:" + r.(BaseUrlClientConstruction).getCalleeName()
   or
-  exists(string p | p = modelPackage(r) |
+  exists(string p | p = r.(ModeledClientRequest).getModelPackage() |
     if p = "undici" or p.matches("undici.%") then result = "undici" else result = "sdk:" + p
   )
   or
@@ -182,7 +169,7 @@ string requestLibrary(ClientRequest r) {
   not r instanceof ClientRequest::AxiosInstanceRequest and
   not r instanceof ClientRequest::NetSocketRequest and
   not r instanceof BaseUrlClientConstruction and
-  not exists(r.(ModeledClientRequest).getModelPackage()) and
+  not r instanceof ModeledClientRequest and
   result = "other"
 }
 

@@ -27,9 +27,11 @@ kimchi src/sdk.ts:11 sdk:@anthropic-ai/sdk - url https://s02-anthropic-sdk.test 
 kimchi src/sdk.ts:14 sdk:@modelcontextprotocol/sdk/client/streamableHttp.js - url https://s03-mcp-http.test/mcp s03-mcp-http.test src/sdk.ts:14
 kimchi src/sdk.ts:17 sdk:@modelcontextprotocol/sdk/client/sse.js - url https://s04-mcp-sse.test/sse s04-mcp-sse.test src/sdk.ts:17
 kimchi src/sdk.ts:19 axios - url https://s05-axios.test/v1 s05-axios.test src/sdk.ts:19
-kimchi src/shared-options.ts:11 sdk:openai - url https://o01-shared-sdk-options.test/v1 o01-shared-sdk-options.test src/shared-options.ts:7
-kimchi src/shared-options.ts:21 undici - url https://o02-shared-undici-options.test o02-shared-undici-options.test src/shared-options.ts:16
-kimchi src/shared-options.ts:31 sdk:openai - url https://o03-shared-logger-options.test/v1 o03-shared-logger-options.test src/shared-options.ts:27
+kimchi src/shared-options.ts:12 sdk:openai - url https://o01-shared-sdk-options.test/v1 o01-shared-sdk-options.test src/shared-options.ts:8
+kimchi src/shared-options.ts:22 undici - url https://o02-shared-undici-options.test o02-shared-undici-options.test src/shared-options.ts:17
+kimchi src/shared-options.ts:32 sdk:openai - url https://o03-shared-logger-options.test/v1 o03-shared-logger-options.test src/shared-options.ts:28
+kimchi src/shared-options.ts:40 sdk:openai - url https://o04-two-sdks-one-options.test/v1 o04-two-sdks-one-options.test src/shared-options.ts:37
+kimchi src/shared-options.ts:41 sdk:@anthropic-ai/sdk - url https://o04-two-sdks-one-options.test/v1 o04-two-sdks-one-options.test src/shared-options.ts:37
 kimchi src/template.ts:4 fetch - url https://t01-template.test t01-template.test src/template.ts:1
 kimchi src/template.ts:8 fetch - url https://t02-concat.test/v1/ t02-concat.test src/template.ts:8
 kimchi src/template.ts:13 fetch - host t03-hostonly.test t03-hostonly.test src/template.ts:11
