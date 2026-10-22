@@ -65,17 +65,6 @@ in
       "libfreetype.so.6"
       "liblttng-ust.so.0"
     ];
-    unpackPhase = ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      runHook preUnpack
-      ${
-        if zip
-        then ''unzip -q "$src"''
-        else ''zstd -dc "$src" | tar -x''
-      }
-      runHook postUnpack
-    '';
     sourceRoot = "codeql";
     dontConfigure = true;
     dontBuild = true;
@@ -83,6 +72,8 @@ in
     # risks breaking them.
     dontStrip = true;
     installPhase = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       runHook preInstall
       mkdir -p "$out/bin" "$out/share" # bare-commands: ok (stdenv builder PATH)
       cp -R . "$out/share/codeql" # bare-commands: ok (stdenv builder PATH)
