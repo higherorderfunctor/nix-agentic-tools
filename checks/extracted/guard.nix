@@ -6,9 +6,11 @@
 # `bySystem`, or define a `combine` attribute.
 #
 # Every regular file is scanned except Markdown, which describes the
-# contract (generated instruction projections included), and JSON, which is
+# contract (generated instruction projections included), JSON, which is
 # data: decisions.json is where combine rules belong, and sidecars hold
-# measured values. Symlinks are skipped; they point into the store.
+# measured values, and the root .gitattributes, which names the sidecar
+# path to mark it generated for GitHub. Symlinks are skipped; they point
+# into the store.
 #
 # A match must be a real read, not a mention, so comments are stripped to
 # end of line first: `#` in every file and `//` in JavaScript and
@@ -62,7 +64,7 @@
     cd "$1"
     ${pkgs.findutils}/bin/find . \
       \( -path ./lib/extracted -o -path ./checks/extracted \) -prune -o \
-      -type f ! -name '*.md' ! -name '*.json' \
+      -type f ! -name '*.md' ! -name '*.json' ! -name '.gitattributes' \
       -print0 > "$TMPDIR/guard-files"
     mapfile -d "" -t files < "$TMPDIR/guard-files"
     if [ "''${#files[@]}" -eq 0 ]; then
@@ -103,6 +105,7 @@
       // {
         "checks/extracted/x.nix" = "bySystem\n";
         "lib/extracted/x.nix" = "./extracted/extracted.json\n";
+        ".gitattributes" = "/packages/*/extracted/extracted.json linguist-generated=true\n";
         "packages/fake/README.md" = "bySystem\n";
         "packages/fake/comment.nix" = "{} # reads bySystem\n";
         "packages/fake/extracted/decisions.json" = "{\"models\": {\"combine\": \"max\"}}\n";
