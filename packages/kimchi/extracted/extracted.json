@@ -2155,10 +2155,11 @@
                 "credits",
                 "budget",
                 "lsp",
-                "dap"
+                "dap",
+                "work-pr"
               ],
               "type": "enum",
-              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\" | \"lsp\" | \"dap\""
+              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\" | \"lsp\" | \"dap\" | \"work-pr\""
             },
             "type": "array",
             "typeExpression": "StatusLineElementId[]"
@@ -2179,10 +2180,11 @@
                 "credits",
                 "budget",
                 "lsp",
-                "dap"
+                "dap",
+                "work-pr"
               ],
               "type": "enum",
-              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\" | \"lsp\" | \"dap\""
+              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\" | \"lsp\" | \"dap\" | \"work-pr\""
             },
             "optional": true,
             "type": "array",
