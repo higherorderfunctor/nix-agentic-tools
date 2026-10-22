@@ -11,10 +11,7 @@
 # lists the key in `access.api-keys` and gives it its `access.key-allowlist`
 # entry, so the module, not the consumer, owns those runtime keys.
 #
-# `providers` are named upstream API-key providers (../lib/providers.nix):
-# each API a provider serves becomes an `api-keys.<family>` block beside any
-# written by hand, and a runtime that enables the provider gets a rule naming
-# that block's base URL.
+# Named providers lower through ../lib/providers.nix.
 backend: {
   config,
   lib,
@@ -40,14 +37,8 @@ backend: {
       ++ lib.optional (extra entries client)
       "${path}.key-allowlist has a hand-written entry for ${client.option}.key, whose entry ${client.option}.allow and .providers set. Remove the hand-written entry.")
     clients;
-  # A provider's rule reaches every block of its family at its base URL, so
-  # each provider block's base URL must be the only one in that family. CPA
-  # trims a block's URL with Go's strings.TrimSpace (every Unicode space:
-  # no-break space, FF, VT, ...) and compares the rule's URL the same way, then
-  # exactly. Nix cannot reproduce that trim, so a provider URL is limited to
-  # printable ASCII (../lib/providers.nix) and a hand-written URL in a
-  # provider's family must start and end with a printable ASCII character,
-  # which makes the trim a no-op and the exact comparison here equal to CPA's.
+  # Go trims every Unicode space before comparing URLs. Printable edges make
+  # that trim a no-op for hand-written blocks sharing a provider's family.
   printable = text: text != "" && builtins.match "[!-~]" text != null;
   edgesPrintable = url: url == "" || (printable (builtins.substring 0 1 url) && printable (builtins.substring (builtins.stringLength url - 1) 1 url));
   baseUrlOf = block: lib.defaultTo "" (block.base-url or null);
@@ -125,28 +116,11 @@ in {
       extraOptions.providers = lib.mkOption {
         type = lib.types.attrsOf providersLib.providerType;
         default = {};
-        example = lib.literalExpression ''
-          {
-            z-ai = {
-              key = redact.file config.sops.secrets.zai-key.path;
-              models = ["glm-5.3"];
-              apis = {
-                anthropic.base-url = "https://api.z.ai/api/anthropic";
-                responses.base-url = "https://api.z.ai/api/v1";
-              };
-            };
-          }
-        '';
         description = ''
-          Named upstream API-key providers. Each API a provider serves
-          becomes a `settings.api-keys` block with its key and models:
-          `anthropic` an `api-keys.claude` block, `responses` an
-          `api-keys.codex` block (with `disable-codex-cloaking`), and `chat`
-          an `api-keys.openai-compatibility` group named after the provider.
-          They join any blocks written by hand. A runtime reaches a provider
-          only when its `ai.<runtime>.proxy.providers.<name>.enable` is set,
-          through a key allowlist rule naming that block's base URL, so each
-          such base URL must be the only one in its family.
+          Named upstream key, models and API base URLs. Each served API adds a
+          `settings.api-keys` block. A runtime enables a provider through
+          `ai.<runtime>.proxy.providers.<name>` and gets a rule restricted to
+          its block's base URL.
         '';
       };
       owner = "cliproxyapi";

@@ -126,17 +126,13 @@ expose all models.
 An entry identifies one client key and grants a list of credential rules. The
 client key is a redact reference shared with `access.api-keys[]`. An
 instance-routed runtime derives both entries from `ai.<runtime>.proxy.allow` and
-one `base-urls` rule per enabled instance provider (see Providers in
-`ai-proxy.md`); write entries by hand only for other clients. A rule requires
-`provider` and `kind` (`oauth` or `apikey`); `ids` and `base-urls` narrow it
-further. The provider is CPA's credential provider, including
-`openai-compatible-<name>` for compatibility groups, the name lowercased;
-`openai-compatibility` and a name already carrying the prefix stay as they are
-(`internal/util/provider.go`), and generated rules follow the same
-normalization. An OAuth credential's ID is its auth-file path. A config API
-key's ID hashes its secret, so use provider and `base-urls` to address a group
-through rotation. The settings types and module refinements are in
-`cliproxyapi-settings.md`.
+enabled providers (see `ai-proxy.md`); write entries by hand only for other
+clients. A rule requires `provider` and `kind` (`oauth` or `apikey`); `ids` and
+`base-urls` narrow it further. Generated compatibility-provider rules follow
+CPA's name normalization in `internal/util/provider.go`. An OAuth credential's
+ID is its auth-file path. A config API key's ID hashes its secret, so use
+provider and `base-urls` to address a group through rotation. The settings types
+and module refinements are in `cliproxyapi-settings.md`.
 
 The `apikey` kind matches only credentials synthesized from config. A
 store-loaded login can temporarily classify as `apikey` from its file or a Meta
@@ -146,16 +142,15 @@ ID once its kind is OAuth. Whoever writes the auth directory controls
 file-sourced provider and ID, so high-value OAuth rules should use `ids`.
 
 `base-urls` compares the credential's trimmed `base_url` with each listed URL
-after trimming, with Go's `strings.TrimSpace` (every Unicode space). Nix cannot
-reproduce that trim; Providers in `ai-proxy.md` says how the instance module
-keeps it out of the comparison. Scheme, host, path, case, and trailing slash
-still matter. A group without an explicit base URL may have no attribute and
-cannot match this narrowing; set `base-url` explicitly for default-endpoint
-Claude, Gemini, and Interactions groups. A rule with `base-urls` never matches
-OAuth, even if an OAuth login carries that attribute; the instance module
-refuses that combination. A listed URL absent from the configured groups is
-accepted but selects nothing. Key-less OpenAI compatibility groups have no
-matching kind and cannot be reached while the allowlist is set.
+after trimming. Provider URL constraints are in `ai-proxy.md`. Scheme, host,
+path, case, and trailing slash still matter. A group without an explicit base
+URL may have no attribute and cannot match this narrowing; set `base-url`
+explicitly for default-endpoint Claude, Gemini, and Interactions groups. A rule
+with `base-urls` never matches OAuth, even if an OAuth login carries that
+attribute; the instance module refuses that combination. A listed URL absent
+from the configured groups is accepted but selects nothing. Key-less OpenAI
+compatibility groups have no matching kind and cannot be reached while the
+allowlist is set.
 
 ## Duplicate keys and load paths
 

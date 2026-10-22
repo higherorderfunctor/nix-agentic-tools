@@ -1,34 +1,17 @@
-# `ai.cliproxyapi.instances.<n>.providers`: named upstream API-key providers.
-# A provider holds one upstream key, its models, and the base URL of each API
-# it serves. The instance lowers each API into the `api-keys` family CPA
-# serves that API from, and a runtime that enables the provider gets one
-# allowlist rule naming that block's base URL, so two providers on one
-# protocol stay apart (docs/cliproxyapi-key-allowlist.md, base-urls).
-#
-# `apis` is the one table of API → CPA family. A runtime names the API it
-# speaks on its own record (`proxyApi`), never here.
+# One API → CPA credential-family table for named upstream providers.
 {lib}: let
   inherit (lib) mkOption types;
   redact = import ../../../lib/redact {inherit lib;};
 
-  # family: the `api-keys.<family>` block; provider: the credential provider
-  # CPA records for it (internal/watcher/synthesizer/config.go: claude 187,
-  # codex 271, openai-compatibility 345 via OpenAICompatibleProviderKey of the
-  # lower-cased group name); key: fields the provider's key entry adds.
-  #
-  # OpenAICompatibleProviderKey (internal/util/provider.go:18-26) keeps
-  # `openai-compatibility` and a name already carrying the prefix, and
-  # prefixes any other. Names are ASCII words (../modules/instances.nix), so
-  # Nix's toLower is Go's ToLower here and there is nothing to trim.
+  # CPA's OpenAICompatibleProviderKey preserves one exact name and one prefix.
+  # Provider names are ASCII (../modules/instances.nix), so toLower agrees.
   apis = {
     anthropic = {
       family = "claude";
-      key = {};
       provider = _: "claude";
     };
     chat = {
       family = "openai-compatibility";
-      key = {};
       provider = name: let
         lower = lib.toLower name;
         prefix = "openai-compatible-";
@@ -46,11 +29,8 @@
     };
   };
 
-  # CPA trims a base URL with Go's strings.TrimSpace, which strips Unicode
-  # spaces (no-break space, form feed, vertical tab, ...) that Nix's trim
-  # keeps, then compares exactly. Printable ASCII only means there is nothing
-  # to trim and no two spellings of one URL, so the block, its rule and the
-  # shared-URL check in ../modules/instances.nix all compare the same string.
+  # Printable ASCII makes CPA's Unicode TrimSpace a no-op, so the rule and
+  # shared-URL check in ../modules/instances.nix compare the same string.
   baseUrlType = types.strMatching "https?://[!-~]+";
 
   providerType = types.submodule {
@@ -62,11 +42,11 @@
               type = types.nullOr (types.submodule {
                 options.base-url = mkOption {
                   type = baseUrlType;
-                  description = "The upstream's base URL for this API, written to the block's `base-url` and to each rule that reaches it.";
+                  description = "The upstream base URL for this API.";
                 };
               });
               default = null;
-              description = "Serve the provider's models on the ${api} API, as an `api-keys.${entry.family}` block.";
+              description = "Serve ${api} through `api-keys.${entry.family}`.";
             })
           apis;
         };
@@ -75,12 +55,12 @@
       };
       key = mkOption {
         type = redact.types.redacted;
-        description = "The upstream API key, as a redact reference; it is rendered at start and never reaches the Nix store.";
+        description = "The upstream key, as a redact reference.";
       };
       models = mkOption {
         type = types.nonEmptyListOf types.str;
         example = ["glm-5.3"];
-        description = "The models the provider serves, registered on each of its APIs.";
+        description = "Models served on each API.";
       };
     };
   };
@@ -94,7 +74,7 @@
         {
           inherit name;
           inherit (value) base-url;
-          keys = [({api-key = provider.key;} // apis.${api}.key)];
+          keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
           models = map (model: {name = model;}) provider.models;
         }
       ])

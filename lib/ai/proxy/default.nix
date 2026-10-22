@@ -6,8 +6,7 @@
 #     `ai.<runtime>.proxy` (mkBackendTransform.nix);
 #   * selection validation, shared by both assertion sites;
 #   * `resolve`, the root-to-runtime fold behind `ai.<runtime>.normalized.proxy`;
-#   * `providersFor`, the runtime's enabled `providers` resolved against the
-#     instance's, each with the allowlist rule that reaches only it;
+#   * `providersFor`, enabled provider rules resolved against the instance;
 #   * `client` publishes routed runtime keys; `clientsOf` selects them for an
 #     instance's access list and allowlist.
 {lib}: let
@@ -84,11 +83,7 @@
     then runtime
     else root;
 
-  # `ai.<runtime>.proxy`: the selection, plus the credentials the runtime's
-  # key may reach through an instance. `allow` and `providers` are not part
-  # of the selection, so they hold whichever scope selects. `default` is the
-  # runtime's own login (`proxyAllow` on its record), or null when it has
-  # none; `api` is the provider API the runtime speaks (`proxyApi`).
+  # `allow` and `providers` apply to whichever selection scope wins.
   runtimeOptions = {
     api,
     default,
@@ -115,9 +110,8 @@
             if default == null
             then "${name} has no native CLIProxyAPI provider, so an instance selection needs this set."
             else "The default is ${name}'s own login."
-          } Each enabled `providers` entry adds its own rule beside these;
-          set `allow = []` to reach only those. Unused with `url`, whose
-          proxy is configured by hand.
+          } Enabled providers add rules beside these; set `allow = []` to use
+          only providers. Unused with `url`.
         '';
       };
       providers = mkOption {
@@ -140,12 +134,9 @@
         default = {};
         example = lib.literalExpression ''{z-ai.enable = true;}'';
         description = ''
-          Providers of the selected instance
-          (`ai.cliproxyapi.instances.<n>.providers`) that ${name}'s key may
-          reach. Each enabled one adds a rule to the key's
-          `access.key-allowlist` entry for that provider's block on `api`,
-          addressed by its base URL, so another provider on the same API
-          stays out of reach. An `instance` selection is required.
+          Providers of the selected instance that ${name}'s key may reach.
+          Each enabled provider adds a base-URL rule on the selected API.
+          Requires an `instance` selection.
         '';
       };
     };
@@ -207,10 +198,7 @@
       inherit url;
     };
 
-  # The enabled `providers` of a runtime, resolved against its selection's
-  # instance: `resolved`, in name order, each with the rule that reaches
-  # only its block on the chosen API, and `problems`, as assertion messages. `api` is the runtime's own API, or null. A missing
-  # instance resolves nothing; the selection's assertion says why.
+  # A missing instance resolves no provider; selection validation reports it.
   providersFor = {
     api,
     instances,

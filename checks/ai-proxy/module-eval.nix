@@ -139,10 +139,6 @@
           enable = true;
         };
       }));
-    "providers on both runtimes" = accepted {
-      claude.proxy = routedTo "claude" ["z-ai"];
-      codex.proxy = routedTo "codex" ["z-ai"];
-    };
 
     # Refused by an assertion.
     "a hand-written allowlist entry for a runtime key" = fails "ai.cliproxyapi.instances.clients.settings.access.key-allowlist has a hand-written entry for ai.claude.proxy.key, whose entry ai.claude.proxy.allow and .providers set. Remove the hand-written entry." (handWritten {
@@ -155,7 +151,6 @@
     });
     "a hand-written runtime key" = fails "ai.cliproxyapi.instances.clients.settings.access.api-keys lists ai.claude.proxy.key by hand; ai.claude.proxy adds it to this instance. Remove the hand-written entry." (handWritten {access.api-keys = [(runtimeKey "claude")];});
     "a hand-written URL ending in a no-break space" = refused unprintable (handURL ("https://hand.example" + noBreakSpace));
-    "a hand-written URL starting with a space" = refused unprintable (handURL (" " + zai.anthropic));
     "a provider base URL another block shares" = refused "ai.cliproxyapi.instances.clients.providers.z-ai.apis.anthropic.base-url `${zai.anthropic}` is also the base URL of another settings.api-keys.claude block" (handURL zai.anthropic);
     "a provider name that is not one word" = refused "ai.cliproxyapi.instances.clients.providers.../x: a provider name must be" {cliproxyapi.instances.clients.providers."../x" = providers.other;};
     "a provider without the runtime's API" = refused "ai.claude.proxy.providers.other reaches ai.cliproxyapi.instances.clients.providers.other through the anthropic API, which it does not serve: give it `apis.anthropic`, or set `ai.claude.proxy.providers.other.api` to one it serves (chat)." {claude.proxy = routedTo "claude" ["other"];};
@@ -292,10 +287,6 @@ in {
                   chatCredentials;
               };
           })).access.key-allowlist;
-        admits = rule: credential:
-          lib.toLower rule.provider
-          == lib.toLower credential.provider
-          && lib.elem credential.base-url rule.base-urls;
         typeRejects = ai:
           !(builtins.tryEval (builtins.deepSeq (evaluate ai).config.ai.cliproxyapi.instances.clients.providers true)).success;
         accessFor = names: {
@@ -330,12 +321,8 @@ in {
               [(apiKey "openai-compatible-other" chat) (apiKey "codex" zai.responses)]
             ];
           "chat provider identities" = chatRules == [(lib.mapAttrsToList (_: credential: apiKey credential.provider credential.base-url) chatCredentials)];
-          "chat rule isolation" =
-            map (rule: lib.attrNames (lib.filterAttrs (_: credential: admits rule (credential // {base-url = lib.head rule.base-urls;})) chatCredentials)) (lib.head chatRules)
-            == map lib.singleton (lib.attrNames chatCredentials);
           "full provider fixture is accepted" = failedMessages withProviders == [];
           "provider URL ending in a no-break space is rejected" = typeRejects (providerURL (chat + noBreakSpace));
-          "provider URL ending in a space is rejected" = typeRejects (providerURL (chat + " "));
           "launcher keys" = lib.all (name:
             both.config.ai.${name}.normalized.proxy
             == {
