@@ -1,0 +1,33 @@
+{
+	admin off
+	auto_https off
+	persist_config off
+	log {
+		output stderr
+		format filter {
+			wrap console
+			fields {
+				request>headers delete
+			}
+		}
+	}
+}
+
+:9501 {
+	bind 127.0.0.1
+	rewrite * {$MCP_PROXY_EXAMPLE_PATH}
+	reverse_proxy {$MCP_PROXY_EXAMPLE_ORIGIN} {
+		header_up X-Api-Key "{$MCP_PROXY_EXAMPLE_HEADER_X_API_KEY}"
+		header_up X-Route "primary"
+		header_up X-Service-Token "{$MCP_PROXY_EXAMPLE_HEADER_X_SERVICE_TOKEN}"
+		header_up -X-Drop-Me
+		header_up -Via
+		header_up -X-Forwarded-For
+		header_up -X-Forwarded-Host
+		header_up -X-Forwarded-Proto
+		flush_interval -1
+		transport http {
+			compression off
+		}
+	}
+}

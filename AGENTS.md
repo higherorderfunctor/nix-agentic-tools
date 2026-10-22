@@ -356,6 +356,7 @@ for it. When several entries match, their guidance composes.
     - `checks/*/factory-eval.nix`
     - `checks/*/module-eval.nix`
     - `lib/ai/app/mkBackendTransform.nix`
+    - `lib/ai/caddy.nix`
     - `lib/ai/mcpProxy.nix`
     - `lib/ai/mcpServer/**`
     - `lib/ai/sharedOptions.nix`
