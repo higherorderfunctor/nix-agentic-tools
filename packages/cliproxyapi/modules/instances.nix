@@ -10,12 +10,18 @@
 # publishes its key and credential rules (lib/ai/proxy `client`); the instance
 # lists the key in `access.api-keys` and gives it its `access.key-allowlist`
 # entry, so the module, not the consumer, owns those runtime keys.
+#
+# `providers` are named upstream API-key providers (../lib/providers.nix):
+# each API a provider serves becomes an `api-keys.<family>` block beside any
+# written by hand, and a runtime that enables the provider gets a rule naming
+# that block's base URL.
 backend: {
   config,
   lib,
   ...
 }: let
   inherit (import ../lib/default.nix {inherit lib;}) cliproxyapi;
+  providersLib = cliproxyapi.providers;
   proxyLib = import ../../../lib/ai/proxy {inherit lib;};
   # A runtime key also written by hand: a second owner of the key, or of its
   # allowlist entry, which would widen or contradict the runtime's rules.
@@ -32,8 +38,41 @@ backend: {
       lib.optional (extra keys client)
       "${path}.api-keys lists ${client.option}.key by hand; ${client.option} adds it to this instance. Remove the hand-written entry."
       ++ lib.optional (extra entries client)
-      "${path}.key-allowlist has a hand-written entry for ${client.option}.key, whose entry ${client.option}.allow sets. Remove the hand-written entry.")
+      "${path}.key-allowlist has a hand-written entry for ${client.option}.key, whose entry ${client.option}.allow and .providers set. Remove the hand-written entry.")
     clients;
+  # A provider's rule reaches every block of its family at its base URL, so
+  # each provider block's base URL must be the only one in that family. CPA
+  # trims a block's URL with Go's strings.TrimSpace (every Unicode space:
+  # no-break space, FF, VT, ...) and compares the rule's URL the same way, then
+  # exactly. Nix cannot reproduce that trim, so a provider URL is limited to
+  # printable ASCII (../lib/providers.nix) and a hand-written URL in a
+  # provider's family must start and end with a printable ASCII character,
+  # which makes the trim a no-op and the exact comparison here equal to CPA's.
+  printable = text: text != "" && builtins.match "[!-~]" text != null;
+  edgesPrintable = url: url == "" || (printable (builtins.substring 0 1 url) && printable (builtins.substring (builtins.stringLength url - 1) 1 url));
+  baseUrlOf = block: lib.defaultTo "" (block.base-url or null);
+  sharedBaseUrls = name: instance: let
+    served = definition: builtins.attrNames (providersLib.served definition);
+    families = lib.unique (lib.concatMap (definition: map (api: providersLib.apis.${api}.family) (served definition)) (builtins.attrValues instance.providers));
+    blocksOf = family: lib.defaultTo [] (instance.settings.api-keys.${family} or null);
+  in
+    lib.concatMap (family:
+      map (block: "ai.cliproxyapi.instances.${name}.settings.api-keys.${family}: the block with base-url ${builtins.toJSON (baseUrlOf block)} starts or ends with a character other than printable ASCII (a space, a non-ASCII character or a control character). CPA trims every Unicode space (no-break space, form feed, vertical tab, ...) before comparing base URLs, which Nix cannot reproduce, so a provider's rule could reach this block. Write the URL without them.")
+      (lib.filter (block: !(edgesPrintable (baseUrlOf block))) (blocksOf family)))
+    families
+    ++ lib.concatLists (lib.mapAttrsToList (provider: definition:
+      lib.concatMap (api: let
+        inherit (providersLib.apis.${api}) family;
+        url = definition.apis.${api}.base-url;
+      in
+        lib.optional (lib.count (block: baseUrlOf block == url) (blocksOf family) > 1)
+        "ai.cliproxyapi.instances.${name}.providers.${provider}.apis.${api}.base-url `${url}` is also the base URL of another settings.api-keys.${family} block, which the provider's allowlist rule would reach too. Give each block its own base URL.")
+      (served definition))
+    instance.providers)
+    # The name becomes a group name and a credential provider, so it stays one
+    # plain word.
+    ++ map (provider: "ai.cliproxyapi.instances.${name}.providers.${provider}: a provider name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
+    (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames instance.providers));
 in {
   imports = [
     ((import ../../ai-module/lib/instances.nix {inherit lib;}).module {
@@ -49,6 +88,7 @@ in {
         instance,
         name,
       }: {
+        api-keys = lib.mkIf (instance.providers != {}) (providersLib.lower instance.providers);
         access = let
           clients = proxyLib.clientsOf config name;
         in
@@ -57,7 +97,7 @@ in {
             key-allowlist =
               map (client: {
                 api-key = client.key;
-                credentials = lib.defaultTo [] client.allow;
+                credentials = (lib.defaultTo [] client.allow) ++ map (provider: provider.rule) client.providers;
               })
               clients;
           };
@@ -80,6 +120,33 @@ in {
           3 hours. Off, it runs with `--local-model` and serves the catalogs
           embedded in the package; a `settings.models.*` source still takes
           precedence.
+        '';
+      };
+      extraOptions.providers = lib.mkOption {
+        type = lib.types.attrsOf providersLib.providerType;
+        default = {};
+        example = lib.literalExpression ''
+          {
+            z-ai = {
+              key = redact.file config.sops.secrets.zai-key.path;
+              models = ["glm-5.3"];
+              apis = {
+                anthropic.base-url = "https://api.z.ai/api/anthropic";
+                responses.base-url = "https://api.z.ai/api/v1";
+              };
+            };
+          }
+        '';
+        description = ''
+          Named upstream API-key providers. Each API a provider serves
+          becomes a `settings.api-keys` block with its key and models:
+          `anthropic` an `api-keys.claude` block, `responses` an
+          `api-keys.codex` block (with `disable-codex-cloaking`), and `chat`
+          an `api-keys.openai-compatibility` group named after the provider.
+          They join any blocks written by hand. A runtime reaches a provider
+          only when its `ai.<runtime>.proxy.providers.<name>.enable` is set,
+          through a key allowlist rule naming that block's base URL, so each
+          such base URL must be the only one in its family.
         '';
       };
       owner = "cliproxyapi";
@@ -148,5 +215,6 @@ in {
     ++ map (message: {
       assertion = false;
       inherit message;
-    }) (lib.concatLists (lib.mapAttrsToList handWritten config.ai.cliproxyapi.instances));
+    }) (lib.concatLists (lib.mapAttrsToList handWritten config.ai.cliproxyapi.instances
+        ++ lib.mapAttrsToList sharedBaseUrls config.ai.cliproxyapi.instances));
 }

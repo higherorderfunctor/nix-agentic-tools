@@ -1064,6 +1064,8 @@ in
         provider = "codex";
       }
     ];
+    # Codex speaks the OpenAI Responses API (`wire_api`, ./proxy.nix).
+    proxyApi = "responses";
     surfaceSupport = {
       agents = {
         gaps = [
