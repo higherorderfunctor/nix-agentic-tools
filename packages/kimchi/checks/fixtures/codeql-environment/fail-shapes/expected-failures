@@ -1,0 +1,7 @@
+src/entry.ts assigns a computed environment name (kimchi/src/entry.ts:8)
+src/entry.ts assigns through proc.env, which the overwrite analysis counts only as process.env spelled out (kimchi/src/entry.ts:4)
+src/entry.ts hands process.env to a parameter it cannot name, so the names that reads cannot be listed (kimchi/src/entry.ts:9)
+src/entry.ts hands process.env to whole = process.env, and the names that reads cannot be resolved (kimchi/src/entry.ts:10)
+src/entry.ts takes process.env apart by destructuring, so the names it reads cannot be listed (kimchi/src/entry.ts:5)
+takes env from a local binding named process, which cannot be identified as the environment (kimchi/src/lib.ts:14)
+takes process.env apart by destructuring, so the names it reads cannot be listed (kimchi/src/lib.ts:8)

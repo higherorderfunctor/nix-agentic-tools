@@ -1,0 +1,170 @@
+{
+  "variables": {
+    "AGENT_CORE_PROBE": {
+      "consumerOverridable": true,
+      "readBy": ["pi"],
+      "type": "string"
+    },
+    "FIXED_IN_ENTRY": {
+      "consumerOverridable": false,
+      "readBy": ["kimchi"],
+      "reason": "src/entry.ts assigns it on every launch before anything reads it",
+      "type": "string"
+    },
+    "PATCH_ALIAS_PROBE": {
+      "consumerOverridable": true,
+      "readBy": ["pi"],
+      "type": "string"
+    },
+    "S01_DOT": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S02_BRACKET": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S03_CONST_KEY": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S04_TEMPLATE": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S05_UPPER": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S06_INLINE": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S08_ALIAS": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S09_NULLISH_ALIAS": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S10_OR_ALIAS": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S11_PARAM_DEFAULT": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S12_DESTRUCTURED_ENV": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S15_PROCESS_BRACKET_ENV": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S16_GLOBAL_THIS": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S17_GLOBAL_THIS_BRACKET": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S18_NAMESPACE_IMPORT": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S19_DEFAULT_IMPORT": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S21_AS_PAREN": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S22_OPTIONAL": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S23_OPTIONAL_CHAIN": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S26_COMPOUND": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S27_NULLISH_ASSIGN": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S28_REQUIRE": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S31_PROVIDER": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S32_PROCESS_ALIAS": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "S36_CHUNK_CONST": {
+      "consumerOverridable": true,
+      "readBy": ["pi"],
+      "type": "string"
+    },
+    "S37_BUNDLED_DEFAULT_IMPORT": {
+      "consumerOverridable": true,
+      "readBy": ["pi"],
+      "type": "string"
+    },
+    "S38_CHUNK_PROVIDER": {
+      "consumerOverridable": true,
+      "readBy": ["pi"],
+      "type": "string"
+    },
+    "SHARED_BOTH": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi", "pi"],
+      "type": "string"
+    },
+    "TAU_CODING_AGENT_DIR": {
+      "consumerOverridable": true,
+      "readBy": ["pi"],
+      "type": "string"
+    },
+    "TAU_CODING_AGENT_SESSION_DIR": {
+      "consumerOverridable": true,
+      "readBy": ["pi"],
+      "type": "string"
+    }
+  }
+}

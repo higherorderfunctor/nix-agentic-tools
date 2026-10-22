@@ -30,6 +30,9 @@
   in
     mkOwnerCheck {
       dir = ../extracted;
+      # Every row declares x86_64-linux, the one system the CodeQL engine
+      # behind the environment surface runs on; no other host extracts.
+      extracted = pkgs.lib.optionalAttrs (system == "x86_64-linux") {${system} = package.passthru.extracted;};
       name = "kimchi";
       inherit package;
       results = package.passthru.extractedRules.results;

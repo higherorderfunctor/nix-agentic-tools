@@ -69,6 +69,18 @@
     '';
   };
 
+  # The release's CodeQL database and its query runner: ../../../lib/codeql.nix.
+  codeql = import ../../../lib/codeql.nix {
+    engine = pkgs.ai.devTools.codeql.codeql-javascript;
+    inherit (extractionSources) kimchi;
+    pi = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi"]);
+    inherit pkgs;
+    inherit (sources) version;
+  };
+  # The `environment` surface comes from the database (../../../extract/environment.nix),
+  # the rest from extract.mjs over the same release source. The engine runs on
+  # x86_64-linux only, which is the one system every facts.json row declares,
+  # so the raw exists on that system alone.
   extracted =
     pkgs.runCommand "kimchi-extracted.json" {
       nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
@@ -88,7 +100,8 @@
         --pi-package ${piPackage} \
         --pi-tui-package ${piTuiPackage} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js \
-        | ${pkgs.jq}/bin/jq -S . > "$out"
+        | ${pkgs.jq}/bin/jq -S --slurpfile environment ${(import ../../../extract/environment.nix {inherit codeql pkgs;}).surface} \
+          '.environment = $environment[0]' > "$out"
     '';
 
   # `mkUpdateScript` records the version alone (`platforms = {}`), so this
@@ -309,41 +322,37 @@ in
       runHook postInstallCheck
     '';
 
-    passthru = {
-      # The release's CodeQL database and its query runner: ../../../lib/codeql.nix.
-      codeql = import ../../../lib/codeql.nix {
-        engine = pkgs.ai.devTools.codeql.codeql-javascript;
-        inherit (extractionSources) kimchi;
-        pi = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi"]);
-        inherit pkgs;
-        inherit (sources) version;
-      };
-      inherit externalizedExtensions externalizeExtensions extracted fixPnpmDepsHash goFloor goModPath proxyHelper;
-      inherit (goUpdate) fixGoFloor fixVendorHash;
-      extractedRules = import ../../../extract/rules.nix {
-        inherit extractedLib pkgs;
-        inherit ((extractedLib {inherit pkgs;}).load {dir = ../../../extracted;}) aggregate;
-      };
-      inherit extractionSources;
-      extractionSourceUrls.kimchi = extraction.kimchiSource.url;
-      goUpdateExtract = goUpdate.extract;
-      updateScript = packageLib.mkUpdateScript {
-        # The source pin lives in the extraction block, so the release
-        # version is the only thing mkUpdateScript itself records.
-        extraExtract = ''
-          ${refreshExtraction}
-          ${goUpdate.extract}
-        '';
-        inherit pkgs;
-        platforms = {};
-        pname = "kimchi";
-        inherit sourcesFile;
-        versionCheck.cmd = packageLib.ghLatestVersionCmd {
-          inherit pkgs;
-          repo = "getkimchi/kimchi";
+    passthru =
+      {
+        inherit codeql externalizedExtensions externalizeExtensions fixPnpmDepsHash goFloor goModPath proxyHelper;
+        inherit (goUpdate) fixGoFloor fixVendorHash;
+        extractedRules = import ../../../extract/rules.nix {
+          inherit extractedLib pkgs;
+          inherit ((extractedLib {inherit pkgs;}).load {dir = ../../../extracted;}) aggregate;
         };
+        inherit extractionSources;
+        extractionSourceUrls.kimchi = extraction.kimchiSource.url;
+        goUpdateExtract = goUpdate.extract;
+        updateScript = packageLib.mkUpdateScript {
+          # The source pin lives in the extraction block, so the release
+          # version is the only thing mkUpdateScript itself records.
+          extraExtract = ''
+            ${refreshExtraction}
+            ${goUpdate.extract}
+          '';
+          inherit pkgs;
+          platforms = {};
+          pname = "kimchi";
+          inherit sourcesFile;
+          versionCheck.cmd = packageLib.ghLatestVersionCmd {
+            inherit pkgs;
+            repo = "getkimchi/kimchi";
+          };
+        };
+      }
+      // lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+        inherit extracted;
       };
-    };
     meta = {
       description = "Kimchi — coding agent CLI powered by Cast AI";
       homepage = "https://github.com/getkimchi/kimchi";

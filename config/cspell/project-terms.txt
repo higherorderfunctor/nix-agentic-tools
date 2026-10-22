@@ -1,5 +1,6 @@
 AUTOUPDATER
 AWSLAMBDA
+bindingset
 Boehm
 CFFIXED
 CLOUDSDK
@@ -16,10 +17,12 @@ hardlinks
 Menlo
 NOSYSTEM
 NPROCESSORS
+nullish
 ONLN
 PATHEXT
 Patchelf
 pnpmfile
+qll
 TERMUX
 userconfig
 WEZTERM

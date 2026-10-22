@@ -1,0 +1,79 @@
+{
+  "variables": {
+    "ARRAY_BEFORE_AWAIT": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "FIXED_BRACKET": {
+      "consumerOverridable": false,
+      "readBy": ["kimchi"],
+      "reason": "src/entry.ts assigns it on every launch before anything reads it",
+      "type": "string"
+    },
+    "FIXED_DOT": {
+      "consumerOverridable": false,
+      "readBy": ["kimchi"],
+      "reason": "src/entry.ts assigns it on every launch before anything reads it",
+      "type": "string"
+    },
+    "IF_BOTH": {
+      "consumerOverridable": false,
+      "readBy": ["kimchi"],
+      "reason": "src/entry.ts assigns it on every launch before anything reads it",
+      "type": "string"
+    },
+    "IF_ONE": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "IN_ARRAY": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "IN_BLOCK": {
+      "consumerOverridable": false,
+      "readBy": ["kimchi"],
+      "reason": "src/entry.ts assigns it on every launch before anything reads it",
+      "type": "string"
+    },
+    "IN_FN_DECL": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "IN_TRY": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "LATER_ARROW": {
+      "consumerOverridable": false,
+      "readBy": ["kimchi"],
+      "reason": "src/entry.ts assigns it on every launch before anything reads it",
+      "type": "string"
+    },
+    "ONLY_IN_LIB": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "READ_FIRST": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "READ_VIA_GLOBAL_THIS": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "SAME_STMT": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    }
+  }
+}

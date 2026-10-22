@@ -8,7 +8,8 @@ applyTo: "checks/extracted/**,lib/extracted/**,lib/git-tool-settings/**,packages
 # Extraction method: eval, then AST, then regex
 
 > **Last verified:** 2026-10-21 — added the rule to identify a binding by its
-> checker symbol, and its spelling fallback where the global is undeclared.
+> checker symbol, and its spelling fallback where the global is undeclared; a
+> dataflow question goes to CodeQL, between eval and AST.
 
 Every extractor picks the least brittle method its source allows. The method
 follows the SOURCE, not the author's habit.
@@ -31,6 +32,16 @@ follows the SOURCE, not the author's habit.
    it, and a fixture a naive pattern gets wrong. A fact that measures a byte
    patcher's own matcher (Kiro's `rolloutPatchability`) is exempt: the matcher
    is the thing measured.
+
+**CodeQL sits between eval and AST, for a dataflow question.** "Which names does
+this program read from `process.env`, through whatever alias" is not a shape
+match: the answer flows through assignments, destructuring, defaults and
+imports. A hand-written AST walker re-derives that flow, one shape at a time,
+and misses the next one silently. CodeQL's standard library already has the
+flow, so the query names the question and the fixtures hold the shapes
+(`packages/kimchi/ql/`, with the database layers in
+`packages/kimchi/docs/kimchi-codeql.md`). It costs an engine and a database
+build, and runs on x86_64-linux only, so the fact's rows declare that system.
 
 Locating a JSON block inside a binary with a short anchor pattern, then decoding
 it with `json.JSONDecoder().raw_decode`, is tier 1. The anchor bounds the block,

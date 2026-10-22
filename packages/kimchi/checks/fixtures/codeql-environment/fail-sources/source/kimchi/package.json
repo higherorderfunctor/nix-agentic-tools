@@ -1,0 +1,7 @@
+{
+  "name": "kimchi",
+  "piConfig": {
+    "name": "kimchi"
+  },
+  "type": "module"
+}

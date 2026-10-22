@@ -2,8 +2,10 @@
 # evaluates a query pack against it. Three layers, so a query edit rebuilds
 # only its pack and its results, never the database: `source` and `database`
 # move with the pins, the engine and the flake's nixpkgs (stdenv, bash, jq,
-# coreutils, patch), each `runQueries` result with its pack. See
-# ../docs/kimchi-codeql.md for the source-root decision and the measurements.
+# coreutils, patch), each `runQueries` result with its pack. `createDatabase`
+# and `mkQueryRunner` are the same two steps as scripts, so a check can run
+# the same pack over a fixture tree. See ../docs/kimchi-codeql.md for the
+# source-root decision and the measurements.
 #
 # Every derivation name carries `codeql`, which the credentialed cachix steps'
 # pushFilter drops, so none of them reaches the public cache.
@@ -59,12 +61,27 @@
         [ "$carried" = "''${key##*@}" ] || { echo "kimchi-codeql-source: $key is patched, but $carried is carried" >&2; exit 1; }
         patch -d "$dest" -p1 --fuzz=0 --forward --batch --no-backup-if-mismatch --silent < ${kimchi}/"$file"
       done < patches
+      # Kimchi's other patches touch packages this tree does not carry (the
+      # MCP SDK and client, pi-mcp-adapter, playwright-core). A query reads
+      # none of their added lines, and a patch is a diff, not a program: no
+      # parser reads its added lines on their own, so a word match is the
+      # only check. Refuse an added line that names env, with the fix.
+      jq -r '.pnpm.patchedDependencies | to_entries[] | select(.key | startswith("@earendil-works/pi-") | not) | .value' \
+        ${kimchi}/package.json > other-patches
+      while IFS= read -r file; do
+        if grep -Eq '^\+.*\benv\b' ${kimchi}/"$file"; then
+          echo "kimchi-codeql-source: $file adds a line naming env to a package this tree does not carry; carry the package so the environment query reads it" >&2
+          exit 1
+        fi
+      done < other-patches
       find "$out" -name '*.map' -type f -delete
     '';
 
-  # `kimchi-codeql-create-database <dir>` copies `source` to <dir>/source and
-  # creates <dir>/db from it. The database derivation and the codeql:kimchi-db
-  # devenv task both run it, so the two hold the same database.
+  # `kimchi-codeql-create-database <dir> [<tree>]` copies <tree>, by default
+  # `source`, to <dir>/source and creates <dir>/db from it. The database
+  # derivation and the codeql:kimchi-db devenv task both run it, so the two
+  # hold the same database; a check runs it over a fixture tree laid out like
+  # `source`, so the fixture is extracted the same way.
   #
   # The extractor skips node_modules unless an include names it, and skips a
   # file it judges minified unless told otherwise; pi's dist/bundle chunks
@@ -78,13 +95,13 @@
     runtimeInputs = [pkgs.coreutils];
     text = ''
       shopt -s inherit_errexit 2>/dev/null || :
-      if [ "$#" -ne 1 ]; then
-        echo "usage: kimchi-codeql-create-database <dir>" >&2
+      if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+        echo "usage: kimchi-codeql-create-database <dir> [<tree>]" >&2
         exit 2
       fi
       mkdir -p "$1" # bare-commands: ok (runtimeInputs PATH)
       rm -rf "$1/source" "$1/db" # bare-commands: ok (runtimeInputs PATH)
-      cp -R --no-preserve=mode ${source} "$1/source" # bare-commands: ok (runtimeInputs PATH)
+      cp -R --no-preserve=mode "''${2:-${source}}" "$1/source" # bare-commands: ok (runtimeInputs PATH)
       export CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true
       export LGTM_INDEX_FILTERS="include:${scope}"
       exec ${engine}/bin/codeql database create "$1/db" \
@@ -110,10 +127,14 @@
     mv "$TMPDIR/kimchi/db" "$out/db" # bare-commands: ok (runCommand builder PATH)
   '';
 
+  # `mkQueryRunner { queries; models ? []; }`: a `kimchi-codeql-run-queries
+  # <db> <out>` script that runs every query of `queries`, a mkQueryPack
+  # result, against the writable database directory <db> with `models`
+  # (mkModelPack results) through customizePackage. `<out>/<query>.json`
+  # holds every result set of `<query>.ql`, decoded, its tuples sorted.
   # Select strings, relative paths and numbers: an entity or an absolute
   # location carries the build directory into the output.
-  runQueries = {
-    name,
+  mkQueryRunner = {
     queries,
     models ? [],
   }: let
@@ -123,29 +144,47 @@
     };
     pack = queries.name;
   in
-    assert lib.assertMsg (lib.isType "codeql-pack-spec" queries) "kimchi codeql.runQueries: `queries` must be an ai.devTools.codeql.mkQueryPack spec";
-      pkgs.runCommand "kimchi-codeql-${name}" {
-        nativeBuildInputs = [customized pkgs.jq];
-        inherit meta;
-      } ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        export HOME="$TMPDIR"
-        cp -R --no-preserve=mode ${database}/db "$TMPDIR/db" # bare-commands: ok (runCommand builder PATH)
-        # Without --ram the evaluator caps its heap near 1800 MB on a 16 GB
-        # runner, which global data flow outgrows.
-        codeql database run-queries "$TMPDIR/db" ${lib.escapeShellArg pack} \
-          --ram=8192 \
-          --threads="$NIX_BUILD_CORES"
-        results="$TMPDIR/db/results/${pack}"
-        [ -n "$(find "$results" -name '*.bqrs' -print -quit)" ] || { echo "kimchi-codeql-${name}: ${pack} produced no results" >&2; exit 1; }
-        mkdir -p "$out" # bare-commands: ok (runCommand builder PATH)
-        find "$results" -name '*.bqrs' -printf '%P\n' | while read -r bqrs; do
-          json="$out/''${bqrs%.bqrs}.json"
-          mkdir -p "$(dirname "$json")" # bare-commands: ok (runCommand builder PATH)
-          codeql bqrs decode --format=json "$results/$bqrs" | jq --sort-keys 'map_values(.tuples |= sort)' > "$json"
-        done
-      '';
+    assert lib.assertMsg (lib.isType "codeql-pack-spec" queries) "kimchi codeql.mkQueryRunner: `queries` must be a query pack";
+      pkgs.writeShellApplication {
+        name = "kimchi-codeql-run-queries";
+        bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+        runtimeInputs = [customized pkgs.coreutils pkgs.findutils pkgs.jq];
+        text = ''
+          shopt -s inherit_errexit 2>/dev/null || :
+          if [ "$#" -ne 2 ]; then
+            echo "usage: kimchi-codeql-run-queries <db> <out>" >&2
+            exit 2
+          fi
+          # Without --ram the evaluator caps its heap near 1800 MB on a 16 GB
+          # runner, which global data flow outgrows.
+          codeql database run-queries "$1" ${lib.escapeShellArg pack} \
+            --ram=8192 \
+            --threads="''${NIX_BUILD_CORES:-0}"
+          results="$1/results/${pack}"
+          [ -n "$(find "$results" -name '*.bqrs' -print -quit)" ] || { echo "kimchi-codeql-run-queries: ${pack} produced no results" >&2; exit 1; }
+          mkdir -p "$2" # bare-commands: ok (runtimeInputs PATH)
+          find "$results" -name '*.bqrs' -printf '%P\n' | while read -r bqrs; do
+            json="$2/''${bqrs%.bqrs}.json"
+            mkdir -p "$(dirname "$json")" # bare-commands: ok (runtimeInputs PATH)
+            codeql bqrs decode --format=json "$results/$bqrs" | jq --sort-keys 'map_values(.tuples |= sort)' > "$json"
+          done
+        '';
+      };
+
+  # `runQueries { name; queries; models ? []; }`: the runner over a copy of
+  # `database`, as a derivation named for the pack's purpose.
+  runQueries = {
+    name,
+    queries,
+    models ? [],
+  }:
+    pkgs.runCommand "kimchi-codeql-${name}" {inherit meta;} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      export HOME="$TMPDIR"
+      cp -R --no-preserve=mode ${database}/db "$TMPDIR/db" # bare-commands: ok (runCommand builder PATH)
+      ${lib.getExe (mkQueryRunner {inherit models queries;})} "$TMPDIR/db" "$out"
+    '';
 in {
-  inherit createDatabase database engine runQueries;
+  inherit createDatabase database engine mkQueryRunner runQueries;
 }

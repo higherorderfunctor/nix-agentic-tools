@@ -1,0 +1,3 @@
+src/entry.ts assigns AWAITED after it suspends at line 8, when dynamically imported code may already have read it (kimchi/src/entry.ts:10)
+src/entry.ts assigns IN_FUNCTION inside a function, which runs at a point the analysis does not follow (kimchi/src/entry.ts:2)
+src/entry.ts assigns LATE_WRITE after it suspends at line 8, when dynamically imported code may already have read it (kimchi/src/entry.ts:9)
