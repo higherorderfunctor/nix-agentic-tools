@@ -26,8 +26,8 @@ kimchi src/mechanisms.ts:177 fetch - url https://n03-url-href.test/v1 n03-url-hr
 kimchi src/mechanisms.ts:186 websocket - url wss://w03-ws-field.test/pty w03-ws-field.test src/mechanisms.ts:189
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:1 node-http - url https://m01-minified-https.test/v1 m01-minified-https.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:1
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 fetch - url https://m03-minified-fetch-alias.test/v1 m03-minified-fetch-alias.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
-pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 undici - url https://m02-minified-undici.test/v1 m02-minified-undici.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 node-http node_modules/undici/index.js argument x - @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
+pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 undici - url https://m02-minified-undici.test/v1 m02-minified-undici.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:3 node-http node_modules/undici/index.js argument url - @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:3
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:5 undici - url https://b01-bundled-undici-request.test/v1 b01-bundled-undici-request.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:5
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:7 node-http - url https://b03-bundled-https.test/v1 b03-bundled-https.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:7
