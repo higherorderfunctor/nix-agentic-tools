@@ -73,7 +73,7 @@ watcher then exits successfully having watched nothing, and the turn ends on a
 green-looking result — the same silent-clean shape as everything else here.
 
 Use this watcher after every push, run in the background from the worktree you
-pushed, so its exit is the one notification. It exits non-zero on the first
+pushed, so its exit is the one notification. It exits non-zero on the first real
 failure, a conflict, a timeout or a moved head, and zero only when every check
 on the pushed commit has finished and the required ones passed:
 
@@ -101,8 +101,55 @@ if [ -z "$ready" ]; then
   echo "no checks on $head after 10 minutes"
   exit 1
 fi
+rerun='{}'
 while :; do
-  gh pr checks "$pr" --repo "$repo" --watch --fail-fast --interval 30
+  state=$(gh pr view "$pr" --repo "$repo" --json headRefOid,mergeStateStatus)
+  if [ "$(jq -r .headRefOid <<<"$state")" != "$head" ] ||
+     [ "$(jq -r .mergeStateStatus <<<"$state")" = DIRTY ]; then
+    echo "head moved or DIRTY: re-arm on the new head or rebase"
+    exit 1
+  fi
+  watch_status=0
+  gh pr checks "$pr" --repo "$repo" --watch --fail-fast --interval 30 || watch_status=$?
+  checks=$(gh pr checks "$pr" --repo "$repo" --json bucket,link)
+  if jq -e 'any(.bucket == "fail" or .bucket == "cancel")' <<<"$checks" >/dev/null; then
+    runs=$(gh api --paginate --slurp "repos/$repo/actions/runs?head_sha=$head&per_page=100")
+    cancelled=$(jq -n --argjson checks "$checks" --argjson pages "$runs" --argjson rerun "$rerun" --argjson now "$SECONDS" --arg head "$head" '
+      [$pages[].workflow_runs[] | select(.head_sha == $head)] as $runs |
+      [$checks[] | select(.bucket == "fail" or .bucket == "cancel") |
+        . as $check |
+        ((.link | capture("/actions/runs/(?<id>[0-9]+)").id)? // "") as $id |
+        ($runs | map(select((.id | tostring) == $id)) | first) as $run |
+        [$runs[] | select(.id != $run.id and .workflow_id == $run.workflow_id) |
+          select(.status != "completed" or .conclusion == "success")] as $replacement |
+        ($rerun[$id].links // []) as $old |
+        {id: $id, expired: (($old | index($check.link)) != null and $now >= $rerun[$id].deadline),
+         defer: (($old | index($check.link)) != null or
+           (($old | length) == 0 and $run.conclusion == "cancelled" and ($replacement | length) > 0)),
+         ready: (($old | length) == 0 and any($replacement[]; .conclusion == "success"))}]')
+    if jq -e 'any(.expired)' <<<"$cancelled" >/dev/null; then
+      echo "cancelled rerun checks still stale after 10 minutes"
+      exit 1
+    fi
+    if jq -e 'any(.defer | not)' <<<"$cancelled" >/dev/null; then
+      echo "real failure on $head: read the failing job log"
+      exit 1
+    fi
+    while read -r id ready; do
+      if [ "$ready" = true ]; then
+        echo "replacement succeeded: rerunning cancelled run $id"
+        gh run rerun "$id" --repo "$repo"
+        rerun=$(jq --arg id "$id" --argjson checks "$checks" --argjson now "$SECONDS" '
+          .[$id] = {deadline: ($now + 600), links:
+            [$checks[] | select(.link | contains("/actions/runs/" + $id + "/")) | .link]}' <<<"$rerun")
+      else
+        echo "deferring cancelled run $id while its replacement or rerun updates checks"
+      fi
+    done < <(jq -r 'unique_by(.id)[] | "\(.id) \(.ready)"' <<<"$cancelled")
+    sleep 30
+    continue
+  fi
+  [ "$watch_status" -eq 0 ] || exit "$watch_status"
   sleep 60
   pending=$(gh pr checks "$pr" --repo "$repo" --json bucket --jq 'any(.bucket == "pending")')
   [ "$pending" = true ] || break
@@ -123,6 +170,15 @@ Each part closes a way a watcher has reported the wrong thing:
 - **`--fail-fast`.** Without it `--watch` waits for every check, so a failure
   two minutes in is reported only after the slowest job. Do not hand-roll a loop
   that waits for "nothing pending" across several PRs: it has the same delay.
+- **Cancelled duplicates.** A failed check is deferred only when its Actions run
+  is cancelled and another run of the same workflow on the same head is
+  unfinished or successful. A successful replacement triggers a rerun of the
+  cancelled run to clear its required contexts; a real failure still exits
+  immediately, even alongside a deferred cancellation. Each cancelled run is
+  rerun once; its old check links are deferred while GitHub replaces them, and
+  any new failing link is classified normally. Old links persisting for ten
+  minutes fail the watcher; head movement or a conflict also stops the deferred
+  wait.
 - **The re-watch loop.** Jobs that wait on other jobs create their checks later,
   so `--watch` can return when only the first batch is done.
 - **The final head check and `--required`.** `gh pr checks` reads whatever the
@@ -130,8 +186,9 @@ Each part closes a way a watcher has reported the wrong thing:
 - **`DIRTY`.** A conflicted PR gets no checks, so the count gate would wait out
   its whole budget.
 
-`gh pr checks` exits non-zero on a failed check, which ends the script under
-`set -e`; read the failing job's log next.
+`gh pr checks` exits non-zero on a failed check. The watcher classifies
+cancelled duplicates before propagating the failure; read a real failing job's
+log next.
 
 `UNSTABLE` on the PR is not a failure — it means "not all green yet" and covers
 pending. `DIRTY` is the one that means stop waiting and rebase.
