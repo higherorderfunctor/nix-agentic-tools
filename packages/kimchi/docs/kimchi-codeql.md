@@ -1,9 +1,8 @@
 ## Kimchi CodeQL database
 
 > **Last verified:** 2026-10-21 — `passthru.codeql` carries `database`,
-> `runQueries`, `createDatabase` and `engine`, and `source` stays internal; the
-> `kimchi-codeql-database` check runs the smoke pack; `codeql:kimchi-db` creates
-> the same database locally. No fact reads it yet.
+> `runQueries`, `createDatabase` and `engine`; `source` is internal; the check
+> runs the smoke pack; `codeql:kimchi-db` builds it locally. No fact reads it.
 
 ### Three layers
 
@@ -64,16 +63,17 @@ kimchi/node_modules/@earendil-works/<pi package>/{package.json,dist/}
 
 ### Minified files
 
-`pi-coding-agent/dist/bundle/` is pi's standalone CLI, minified, and Kimchi
-never loads it. It is carried for the environment reads of pi's bundled
-third-party dependencies (the AWS SDK, Google auth, undici, ws) at pi's
-build-time versions: 48 of the 237 variables in the current environment fact are
-named in its chunks and nowhere else in pi, Kimchi or its patches. It also holds
-unpatched copies of patched pi-ai, pi-tui and pi-coding-agent code, so a query
-scopes or labels its `dist/bundle` rows. The extractor skips a file it judges
-minified: without `CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true` it
-skipped 46 files, 42 of them chunks and the rest vendored `*.min.js`. On 2.27.3
-the database, logs included, is 113 MB without the flag and 216 MB with it.
+`pi-coding-agent/dist/bundle/` is pi's minified standalone CLI, which Kimchi
+never loads. It is carried for the environment reads of pi's bundled third-party
+dependencies (AWS SDK, Google auth, undici, ws) at pi's build-time versions: 48
+of the 237 variables in the current environment fact are named in its chunks and
+nowhere else in pi, Kimchi or its patches. It also holds unpatched copies of
+patched pi-ai, pi-tui and pi-coding-agent code, so a query scopes or labels its
+`dist/bundle` rows. The extractor skips a file it judges minified: without
+`CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true` it skipped 46 files: 42
+chunks, the three `dist/bundle` entry files (`cli.js`, `index.js`,
+`rpc-entry.js`) and the vendored `marked.min.js`. The flag grows the 2.27.3
+database, logs included, from 113 to 216 MB.
 
 ### The patch step
 
