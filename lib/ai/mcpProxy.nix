@@ -48,8 +48,9 @@
 # `ai.services` entry; no proxy-specific service writer exists.
 #
 # The upstream request is BYTE-IDENTICAL to the un-proxied one plus the
-# injected `proxy.headers` — see `strippedHopHeaders` for what that costs
-# and for the one header a header rule cannot reach.
+# injected `proxy.headers` — see `strippedHopHeaders` and `proxyTuning` in
+# lib/ai/caddy.nix for what that costs and for the one header a header
+# rule cannot reach.
 #
 # The proxy adds no identity of its own and erases none of the client's.
 # A 2026-08-12 experiment did the latter — normalizing `User-Agent` and
@@ -73,7 +74,8 @@
 # 2026-08-12 on a live pair of units: 35 journal lines carrying a gateway
 # API key, on a persistent journal, dating to the day they first started.
 #
-# The fix DROPS THE WHOLE HEADER MAP (`request>headers delete`) rather
+# The fix DROPS THE WHOLE HEADER MAP (`request>headers delete`, through
+# `globalBlock` in lib/ai/caddy.nix) rather
 # than naming the secret fields, and that distinction is the point. A
 # per-field list is a denylist: correct only for the credentials someone
 # remembered to enumerate, and it fails OPEN on anything new — a header
@@ -97,6 +99,8 @@
 
   strictShellApplication = import ../strict-shell-application.nix;
   mcp = import ../mcp.nix {inherit lib;};
+  caddy = import ./caddy.nix {inherit lib pkgs;};
+  inherit (caddy) envRef;
   redact = import ../redact {inherit lib;};
 
   # Upper-case; every non-alphanumeric becomes '_'. Same shape as the
@@ -112,63 +116,6 @@
       (lib.stringToCharacters (lib.toUpper s)));
 
   envVarFor = serverName: field: "MCP_PROXY_${sanitize serverName}_${sanitize field}";
-
-  # Caddyfile env-substitution token: `{$VAR}`, resolved by Caddy while
-  # PARSING the config. This keeps the value out of the Caddyfile, but the
-  # adapted JSON holds the literal value; `persist_config off` below keeps
-  # that JSON out of autosave.json.
-  #
-  # Built by explicit concatenation rather than string interpolation, and
-  # that is not stylistic: in Nix `$${` is an ESCAPE for a literal `${`
-  # in both quoted and indented strings, so the natural-looking
-  # `"{$${var}}"` emits `{${var}}` with no substitution at all. It looks
-  # right, evaluates without error, and silently produces a Caddyfile
-  # that forwards to a literal unexpanded token.
-  envRef = var: "{" + "$" + var + "}";
-
-  # Headers Caddy's `reverse_proxy` ADDS on its own, deleted so the
-  # upstream sees byte-identical requests to what the client sent direct
-  # (plus the injected credentials, which is the whole point).
-  #
-  # Note the scope: this list hides the PROXY, not the client. Deleting
-  # what the CLIENT sends is a different question with a different answer
-  # — it was tried on 2026-08-12 and removed, because the headers in
-  # question (`User-Agent: node`, `Accept-Language: *`,
-  # `Sec-Fetch-Mode: cors`) are undici defaults identifying Node rather
-  # than any harness, while `Mcp-Protocol-Version` gives the traffic away
-  # regardless and cannot be removed. Stripping them produced a header
-  # set no ordinary Node client sends, which is more distinctive, not
-  # less. Do not add client headers to this list.
-  #
-  # Not cosmetic. These announce a proxy hop to the far end: they can
-  # trip WAF rules, change how an upstream derives a client identity, and
-  # they leak the loopback address and port the client actually used.
-  # A request shape that differs from the pre-proxy one is also a
-  # difference you would have to rule out first when debugging a remote
-  # 4xx, which is exactly the wrong time to discover it.
-  #
-  # `Via` belongs here for the same reason as the X-Forwarded-* trio and
-  # is the one people forget: Caddy sends `Via: 1.1 Caddy`, which both
-  # announces the hop and names the proxy. Measured — dropping the
-  # X-Forwarded-* headers does NOT cover it.
-  #
-  # `header_up -<name>` deletes rather than overwrites. This list is not
-  # derived from anything, so a Caddy release adding a FIFTH header would
-  # go unnoticed here; the `module-mcp-proxy-*` checks only pin the
-  # directives we emit. The diff-the-two-requests probe recorded in
-  # dev/fragments/mcp-secrets/mcp-secrets.md is what actually catches a
-  # new one — re-run it on a Caddy bump.
-  #
-  # Note what this list CANNOT fix: `Accept-Encoding: gzip` is added by
-  # Go's HTTP transport, below the header layer, so no `header_up -`
-  # reaches it. That one needs `transport http { compression off }` in
-  # the Caddyfile below.
-  strippedHopHeaders = [
-    "Via"
-    "X-Forwarded-For"
-    "X-Forwarded-Host"
-    "X-Forwarded-Proto"
-  ];
 
   inherit (redact) isReserved;
 
@@ -340,11 +287,8 @@
   # `rewrite *` sends EVERY client path to the upstream's path. That is
   # correct for MCP streamable HTTP, which is a single endpoint, and it
   # is why the loopback url handed to clients is a bare `/`.
-  # The global log block. `request>headers delete` removes the ENTIRE
-  # header map from every log entry — see the header comment for why this
-  # is a whole-map drop rather than a list of secret field names.
-  #
-  # It is unconditional even for a proxy that injects no credential. A
+  # The global log drops the WHOLE header map — see the header comment. It
+  # is unconditional even for a proxy that injects no credential. A
   # conditional here would mean the safe posture depended on the server's
   # shape, so adding a credential to an existing server would silently
   # switch logging from safe to leaky. Constant beats clever.
@@ -352,17 +296,7 @@
   # Everything actually used for debugging survives: upstream, duration,
   # remote_ip, proto, method, host, uri, and the error itself. Only the
   # headers go. Measured against the abort path that produced the leak.
-  logBlock = concatStringsSep "\n" [
-    "\tlog {"
-    "\t\toutput stderr"
-    "\t\tformat filter {"
-    "\t\t\twrap console"
-    "\t\t\tfields {"
-    "\t\t\t\trequest>headers delete"
-    "\t\t\t}"
-    "\t\t}"
-    "\t}"
-  ];
+  globalBlock = caddy.globalBlock {logDeletes = ["request>headers"];};
 
   # Assembled as a line LIST rather than interpolated into the indented
   # string, so an empty header set cannot leave a stray blank line in the
@@ -371,23 +305,13 @@
     concatStringsSep "\n" (
       (mapAttrsToList (h: v: "\t\theader_up ${h} \"${v}\"") spec.headers)
       ++ (map (h: "\t\theader_up -${h}") spec.deletedHeaders)
-      ++ (map (h: "\t\theader_up -${h}") strippedHopHeaders)
-      ++ [
-        "\t\tflush_interval -1"
-        "\t\ttransport http {"
-        "\t\t\tcompression off"
-        "\t\t}"
-      ]
+      ++ (map (h: "\t\theader_up -${h}") caddy.strippedHopHeaders)
+      ++ (map (line: "\t\t${line}") caddy.proxyTuning)
     );
 
   caddyfileFor = spec:
     pkgs.writeText "mcp-proxy-${spec.name}-Caddyfile" ''
-      {
-      	admin off
-      	auto_https off
-      ${"\t"}persist_config off
-      ${logBlock}
-      }
+      ${globalBlock}
 
       :${toString spec.port} {
       	bind ${spec.host}
@@ -402,9 +326,10 @@
   # The launcher exports the resolved url and header secrets; this script
   # splits "<scheme>://<host>[/<path>]" into the two pieces Caddy needs
   # (`reverse_proxy` rejects a path in its upstream, so the path is applied
-  # with `rewrite`), isolates Caddy's state, then execs it. The `case` is
-  # load bearing: with no '/' after the host, "''${_rest#*/}" returns _rest
-  # unchanged and the path would silently become the hostname.
+  # with `rewrite`), then `runCaddy` isolates Caddy's state and execs it.
+  # The `case` is load bearing: with no '/' after the host,
+  # "''${_rest#*/}" returns _rest unchanged and the path would silently
+  # become the hostname.
   runScriptFor = spec:
     strictShellApplication pkgs {
       name = "mcp-proxy-${spec.name}";
@@ -424,13 +349,11 @@
         esac
         export ${spec.originVar}="$_scheme://$_host" ${spec.pathVar}="$_path"
 
-        _state="''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}/mcp-proxy-${spec.name}"
-        ${pkgs.coreutils}/bin/mkdir -p "$_state"
-        ${pkgs.coreutils}/bin/chmod 0700 "$_state"
-        export XDG_CONFIG_HOME="$_state/config" XDG_DATA_HOME="$_state/data"
-
-        exec ${lib.getExe pkgs.caddy} run --config ${caddyfileFor spec} --adapter caddyfile
-      '';
+        ${caddy.runCaddy {
+          name = "mcp-proxy-${spec.name}";
+          inherit (pkgs) caddy;
+          config = caddyfileFor spec;
+        }}'';
     };
 
   # The `ai.services` entry for one proxy declaration. Secrets stay

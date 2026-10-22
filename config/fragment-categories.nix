@@ -379,14 +379,16 @@ _: {
     # mcp-secrets: SOPS/agenix-injectable http MCP headers + url, the Kiro
     # `${env:VAR}` / activation-envsubst delivery, the read-only mcp.json,
     # and managed proxy ownership/lowering. Scoped to the ownership and
-    # transform paths, schema, shared renderer, proxy checks, Kiro secret
-    # preprocessor, the launcher wrapper that exports the decrypted values
-    # at runtime, and the remote server module that places a token header.
+    # transform paths, schema, shared renderer, shared Caddy helpers, proxy
+    # checks, Kiro secret preprocessor, the launcher wrapper that exports the
+    # decrypted values at runtime, and the remote server module that places
+    # a token header.
     mcp-secrets = {
       scopes = [
         "checks/*/factory-eval.nix"
         "checks/*/module-eval.nix"
         "lib/ai/app/mkBackendTransform.nix"
+        "lib/ai/caddy.nix"
         "lib/ai/mcpProxy.nix"
         "lib/ai/mcpServer/**"
         "lib/ai/sharedOptions.nix"
