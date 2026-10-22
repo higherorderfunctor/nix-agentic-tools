@@ -51,5 +51,11 @@
     # cspell terms are keyed on the sentinel words rather than the path, so a
     # rename deliberately does NOT touch them.
     "dev/probes/kiro-steering/fixture/**"
+    # CodeQL environment fixtures whose JavaScript SHAPE is what the query is
+    # tested on: bracket keys, assignments inside expressions, a lone block, a
+    # one-line minified chunk, `.d.ts` beside `.js`. biome rejects two of the
+    # shapes outright and rewrites the rest; the expected-failures files cite
+    # line numbers in them. The guard reads expected.json through `jq -S`.
+    "packages/kimchi/checks/fixtures/codeql-environment/**"
   ];
 }

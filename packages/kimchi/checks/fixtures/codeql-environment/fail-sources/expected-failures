@@ -1,0 +1,3 @@
+constant KEY is ambiguous: same-named constants evaluate differently (kimchi/src/entry.ts:5)
+pi APP_NAME is no longer piConfig.name || "<default>" (kimchi/node_modules/@earendil-works/pi-coding-agent/dist/config.js:1)
+src/entry.ts assigns KIMCHI_CODING_AGENT_DIR before reading it, but kimchi/src/resolver.ts, which it imports, reads it too; whether that read runs first is not decidable here (kimchi/src/resolver.ts)

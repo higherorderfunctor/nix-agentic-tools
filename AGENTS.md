@@ -262,11 +262,15 @@ for it. When several entries match, their guidance composes.
     - [`packages/kimchi/docs/kimchi-workflows.md`](packages/kimchi/docs/kimchi-workflows.md)
 - **`kimchi-codeql`**
   - Match:
+    - `packages/kimchi/checks/fixtures/codeql-environment/**`
     - `packages/kimchi/checks/kimchi-codeql.nix`
+    - `packages/kimchi/extract/environment.jq`
+    - `packages/kimchi/extract/environment.nix`
     - `packages/kimchi/lib/codeql.nix`
     - `packages/kimchi/ql/**`
   - Read:
     - [`packages/kimchi/docs/kimchi-codeql.md`](packages/kimchi/docs/kimchi-codeql.md)
+    - [`packages/kimchi/docs/kimchi-codeql-environment.md`](packages/kimchi/docs/kimchi-codeql-environment.md)
 - **`kiro-agents`**
   - Match:
     - `packages/kiro-cli/checks/module-eval.nix`

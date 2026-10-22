@@ -1,4 +1,6 @@
-# Smoke check of the Kimchi CodeQL database through `runQueries`.
+# The pinned Kimchi release's CodeQL database (lib/codeql.nix), and the
+# environment query pack over fixture trees. x86_64-linux only, as the engine
+# is. `$out` of each check holds text or JSON only.
 {
   lib,
   pkgs,
@@ -6,8 +8,14 @@
   ...
 }: let
   inherit (self.ciPackages.${pkgs.stdenv.hostPlatform.system}.kimchi.passthru) codeql;
+  environment = import ../extract/environment.nix {inherit codeql pkgs;};
 in {
   checks = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+    # `runQueries` and the one-query pack under ../ql/smoke. The query counts
+    # each file's process.env reads by name; the rows must include a read in
+    # Kimchi's own source, one in a minified pi bundle chunk, and the read of
+    # KIMCHI_WHEEL_SCROLL_LINES that only Kimchi's pi-tui patch adds. So the
+    # source root, the minified-file flag and the patch step each hold.
     kimchi-codeql-database = let
       results = codeql.runQueries {
         name = "smoke";
@@ -38,6 +46,59 @@ in {
         [ -z "$other" ] || fail "\$out holds more than JSON: $other"
         find "$out" -type f -name '*.json' -exec jq empty {} +
         jq -c '.["#select"].tuples | length' "$rows"
+      '';
+
+    # The environment pack and transform over each tree under
+    # ./fixtures/codeql-environment, laid out like the real source root and
+    # extracted by the same script. A case with `expected.json` must transform
+    # to exactly that surface; a case with `expected-failures` must fail the
+    # transform with every line of it in the message. The shapes are the ones
+    # the fact's producer accepted and refused (../docs/kimchi-codeql-environment.md).
+    kimchi-codeql-environment-guard = let
+      fixtures = ./fixtures/codeql-environment;
+      cases = builtins.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir fixtures));
+    in
+      pkgs.runCommand "kimchi-codeql-environment-guard" {
+        nativeBuildInputs = [
+          codeql.createDatabase
+          (codeql.mkQueryRunner {inherit (environment) queries;})
+          environment.transform
+          pkgs.jq
+        ];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export HOME="$TMPDIR"
+        fail() {
+          echo "kimchi-codeql-environment-guard: $*" >&2
+          exit 1
+        }
+        for case in ${lib.escapeShellArgs cases}; do
+          fixture=${fixtures}/"$case"
+          kimchi-codeql-create-database "$TMPDIR/$case" "$fixture/source" > "$TMPDIR/$case.log" 2>&1 || { cat "$TMPDIR/$case.log" >&2; fail "$case: database creation failed"; }
+          kimchi-codeql-run-queries "$TMPDIR/$case/db" "$TMPDIR/$case/results"
+          if [ -f "$fixture/expected.json" ]; then
+            kimchi-codeql-environment "$TMPDIR/$case/results" > "$TMPDIR/$case/environment.json"
+            # The repository formatter lays expected.json out its own way.
+            jq -S . "$fixture/expected.json" > "$TMPDIR/$case/expected.json"
+            if ! cmp -s "$TMPDIR/$case/environment.json" "$TMPDIR/$case/expected.json"; then
+              diff -u "$TMPDIR/$case/expected.json" "$TMPDIR/$case/environment.json" >&2 || :
+              fail "$case: the surface differs from expected.json"
+            fi
+            echo "$case: $(jq '.variables | length' "$TMPDIR/$case/environment.json") variables, as expected"
+          else
+            if output=$(kimchi-codeql-environment "$TMPDIR/$case/results" 2>&1); then
+              fail "$case: the transform accepted the tree"
+            fi
+            while IFS= read -r expected; do
+              case "$output" in
+                *"$expected"*) ;;
+                *) echo "$output" >&2; fail "$case: the failure does not say: $expected" ;;
+              esac
+            done < "$fixture/expected-failures"
+            echo "$case: refused, saying: $output"
+          fi
+        done > "$out"
       '';
   };
 }
