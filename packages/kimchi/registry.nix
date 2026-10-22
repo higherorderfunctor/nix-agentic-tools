@@ -62,6 +62,22 @@
         }
       ];
     };
+    # kimchi-egress-report: which writer owns each field of the committed
+    # egress report, and the drift gate that ties it to the network fact.
+    kimchi-egress-report = {
+      scopes = [
+        "checks/references/kimchi-egress-report.nix"
+        "dev/skills/kimchi-egress-report/**"
+        "packages/${facetOwner}/egress-report.json"
+      ];
+      sources = [
+        {
+          location = "package";
+          name = "kimchi-egress-report";
+          dir = facetOwner;
+        }
+      ];
+    };
   };
   # The package update script refreshes the pinned Kimchi and pi extraction
   # sources, then regenerates packages/kimchi/extracted/ facts after every version bump.
