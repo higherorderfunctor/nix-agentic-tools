@@ -1,6 +1,7 @@
 # gh — the GitHub CLI, re-pinned onto this repo's update cadence. A thin
 # `overrideAttrs` over nixpkgs' own `buildGoModule` derivation: only
-# `version`, `src`, `vendorHash` and `passthru` move. Everything else is
+# `version`, `src`, `vendorHash`, the test timezone environment and `passthru`
+# move. Everything else is
 # inherited as nixpkgs ships it, and so changes when nixpkgs changes it: the
 # Makefile build, manpages and shell completions, the
 # `--set-default GH_TELEMETRY false` wrapper, `__structuredAttrs`,
@@ -120,6 +121,9 @@ in
       inherit (sources.src) hash;
     };
     vendorHash = sources.vendorHash or lib.fakeHash;
+
+    # TestTokenRefresherRefresh loads America/New_York in the build sandbox.
+    env = (prev.env or {}) // {ZONEINFO = "${pkgs.tzdata}/share/zoneinfo";};
 
     # Merge, never replace: buildGoModule hangs `goModules` and
     # `overrideModAttrs` here, module.nix warns loudly when an overlay
