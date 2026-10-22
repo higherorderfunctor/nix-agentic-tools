@@ -4,7 +4,6 @@ kimchi src/mechanisms.ts:10 fetch - url https://f04-fetch-param.test/v1 f04-fetc
 kimchi src/mechanisms.ts:25 node-http - host h03-https-options.test h03-https-options.test src/mechanisms.ts:26
 kimchi src/mechanisms.ts:34 node-http - host h06-module-const.test h06-module-const.test src/mechanisms.ts:32
 kimchi src/mechanisms.ts:39 node-http - url https://h08-base.test/ h08-base.test src/mechanisms.ts:39
-kimchi src/mechanisms.ts:68 fetch - env R06_EXTRA - src/mechanisms.ts:66
 kimchi src/mechanisms.ts:68 fetch - url https://r01-api-eu.test r01-api-eu.test src/mechanisms.ts:51
 kimchi src/mechanisms.ts:68 fetch - url https://r01-api-us.test r01-api-us.test src/mechanisms.ts:47
 kimchi src/mechanisms.ts:76 sdk:@modelcontextprotocol/sdk/client/streamableHttp.js - url https://s03-mcp-http.test/mcp s03-mcp-http.test src/mechanisms.ts:76

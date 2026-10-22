@@ -63,9 +63,9 @@ function regionEndpoints(r: { castApiUrl: string }) {
 function endpointsSpread(id: RegionId) {
   const resolved = REGIONS[id];
   const e = regionEndpoints(resolved);
-  return { ...e, extra: process.env.R06_EXTRA ?? e.statsUrl };
+  return { ...e };
 }
-export const r06 = (id: RegionId) => fetch(endpointsSpread(id).extra);
+export const r06 = (id: RegionId) => fetch(endpointsSpread(id).statsUrl);
 
 // SDK model rows
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
