@@ -97,6 +97,7 @@
 
   strictShellApplication = import ../strict-shell-application.nix;
   mcp = import ../mcp.nix {inherit lib;};
+  redact = import ../redact {inherit lib;};
 
   # Upper-case; every non-alphanumeric becomes '_'. Same shape as the
   # Kiro preprocessor's `deriveEnvVar`, deliberately NOT shared with it:
@@ -169,7 +170,7 @@
     "X-Forwarded-Proto"
   ];
 
-  isCredential = v: builtins.isAttrs v && v ? _redact;
+  inherit (redact) isReserved;
 
   isProxied = srv:
     builtins.isAttrs srv
@@ -241,7 +242,7 @@
       message = "${optionPath}: ${key} set `proxy.enable` but no `url`. The proxy forwards to that url, so there is nothing to proxy to — set `url` (a plain string or a credential), or drop `proxy.enable`.";
     }
     {
-      assertion = !(builtins.any isCredential (builtins.attrValues (server.headers or {})));
+      assertion = !(builtins.any isReserved (builtins.attrValues (server.headers or {})));
       message = "${optionPath}: ${key} set `proxy.enable` and put a CREDENTIAL in the server's top-level `headers`. On a proxied server those are the CLIENT's headers and are written into its config, which would hand it the credential the proxy exists to withhold. Move them to `proxy.headers`, where the daemon injects them and no client ever sees the value. (Top-level `headers` used to be absorbed into the daemon automatically; that behavior was removed so the key means one thing.)";
     }
   ];
@@ -278,7 +279,7 @@
   # out here and emitted as `header_up -<name>` instead.
   specFor = serverName: srv: let
     url = srv.url or null;
-    urlCred = isCredential url;
+    urlCred = isReserved url;
     declared = srv.proxy.headers or {};
     headerResults =
       mapAttrs (h: renderValue serverName h)

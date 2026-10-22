@@ -3,13 +3,16 @@
 # policy data shared by refusal checks and the runtime-value classifier.
 {
   access_key = "access keys authenticate a caller";
+  admin_key = "admin keys authenticate an administrator";
   api_key = "API keys authenticate a caller";
   apikey = "API keys authenticate a caller";
   authorization = "authorization fields carry authentication material";
   clientsecret = "client secrets authenticate an application";
   credential = "credentials carry authentication material";
   credentials = "credentials carry authentication material";
+  data_key = "data keys encrypt stored data";
   git_tokens = "Git tokens authenticate repository access";
+  management_key = "management keys authenticate management API calls";
   passwd = "password fields carry authentication material";
   password = "password fields carry authentication material";
   pat = "personal access tokens authenticate a caller";

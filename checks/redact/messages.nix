@@ -34,6 +34,13 @@
     marker = sealed "evaluate (redact.types.maybeRedacted lib.types.str) { _redact.concat = [ sentinel ]; }";
     maybeRedacted = sealed "evaluate (redact.types.maybeRedacted lib.types.int) sentinel";
     redacted = sealed "evaluate redact.types.redacted sentinel";
+    secretFile = sealed "evaluate redact.types.secretFile sentinel";
+    # A secret file reaching a consumer that takes the value says where it
+    # can go instead.
+    secretFileValue = {
+      expression = "evaluate redact.types.redacted { _redact.asFile = redact.file \"/\${sentinel}\"; }";
+      message = "delivered only by an ai.services launcher";
+    };
   };
   probe = pkgs.writeText "redact-messages.nix" ''
     { sentinel, case }:
