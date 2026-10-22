@@ -60,8 +60,8 @@ backend: {
         "ai.cliproxyapi.instances.${name}.providers.${provider}.apis.${api}.base-url `${url}` is also the base URL of another settings.api-keys.${family} block, which the provider's allowlist rule would reach too. Give each block its own base URL.")
       (served definition))
     instance.providers)
-    # The name becomes a group name and a credential provider, so it stays one
-    # plain word.
+    # The name becomes a group name, a credential provider and a runtime's
+    # file name (Codex's `<name>.config.toml`), so it stays one plain word.
     ++ map (provider: "ai.cliproxyapi.instances.${name}.providers.${provider}: a provider name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
     (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames instance.providers));
 in {

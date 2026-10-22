@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiBase evalDevenv evalDevenvModules evalHm evalHmModules mkTest;
+  inherit (harness) aiBase claudeSettings evalDevenv evalDevenvModules evalHm evalHmModules mkTest;
 
   inherit (import ../../lib/extracted/render.nix {inherit lib;}) fill;
   redact = import ../../lib/redact {inherit lib;};
@@ -180,7 +180,7 @@
   };
 in {
   checks = {
-    # Rendered keys, per-key rules, launcher references, and refusals.
+    # Rendered keys, provider models, launcher references, and refusals.
     module-ai-proxy-instance-clients = mkTest "ai-proxy-instance-clients" (let
       problems = lib.concatMap (backend: let
         evaluate = routedEval backend;
@@ -223,6 +223,13 @@ in {
           };
         };
         withProviders = evaluate withProvidersAi;
+        zaiRows = map (model: {
+          description = "z-ai through CLIProxyAPI";
+          inherit model;
+        }) ["glm-5.3" "glm-5.3-flash"];
+        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-code-proxy") null (withProviders.config.home.packages or withProviders.config.packages);
+        pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
+        codexProfile = withProviders.config.ai.codex.files.".codex/z-ai.config.toml" or null;
         narrowRule = {
           base-urls = [zai.anthropic];
           kind = "apikey";
@@ -310,10 +317,45 @@ in {
           "chat provider identities" = chatRules == [(lib.mapAttrsToList (_: credential: apiKey credential.provider credential.base-url) chatCredentials)];
           "full provider fixture is accepted" = failedMessages withProviders == [];
           "provider URL ending in a no-break space is rejected" = typeRejects (providerURL (chat + noBreakSpace));
+
+          "resolved providers" =
+            withProviders.config.ai.claude.normalized.proxy.providers
+            == [
+              {
+                name = "z-ai";
+                models = ["glm-5.3" "glm-5.3-flash"];
+              }
+            ];
+          "Claude picker rows in user settings" = backend != "hm" || (claudeSettings withProviders).modelPicker or null == {options = zaiRows;};
+          "Claude picker rows join a consumer's" =
+            backend
+            != "hm"
+            || lib.length
+            (claudeSettings (evaluate {
+              claude = {
+                native.settings.modelPicker.options = [{model = "mine";}];
+                proxy = routedTo "claude" ["z-ai"];
+              };
+            })).modelPicker.options
+            == 3;
+          "Claude launcher passes no --settings on HM" = backend != "hm" || pickerFile == null;
+          "Codex z-ai profile" =
+            backend
+            != "hm"
+            || codexProfile.content.value or null
+            == {
+              model = "glm-5.3";
+              model_provider = "ai-proxy";
+            };
+          "Claude project settings carry no picker" = backend == "hm" || !((claudeSettings withProviders) ? modelPicker);
+          "Claude launcher --settings picker rows" = backend == "hm" || (pickerFile != null && builtins.fromJSON (builtins.readFile (lib.head pickerFile)) == {modelPicker.options = zaiRows;});
+          "Codex writes no devenv profile" = backend == "hm" || codexProfile == null;
+          "Codex devenv profile warning" = backend == "hm" || builtins.any (lib.hasInfix "devenv writes no `codex -p <provider>` profile") withProviders.config.warnings;
           "launcher keys" = lib.all (name:
             both.config.ai.${name}.normalized.proxy
             == {
               key = runtimeKey name;
+              providers = [];
               url = "http://127.0.0.1:8402";
             }) ["claude" "codex"];
           "url selection adds nothing" = !((rendered byUrl) ? access) && byUrl.config.ai.internal.proxyClients == {};
@@ -399,7 +441,13 @@ in {
     # with a path set on the normalized option directly is refused too.
     module-ai-proxy-runtime-override = mkTest "ai-proxy-runtime-override" (
       lib.all (backend: let
-        resolved = config: (evalApp backend config).config.ai.testapp.normalized.proxy;
+        # The endpoint alone; module-ai-proxy-instance-clients covers `providers`.
+        resolved = config: let
+          proxy = (evalApp backend config).config.ai.testapp.normalized.proxy;
+        in
+          if proxy == null
+          then null
+          else removeAttrs proxy ["providers"];
         root = {
           key = redact.file "/run/secrets/ai-proxy-key";
           url = "http://127.0.0.1:8317";

@@ -1,12 +1,14 @@
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-17 — Claude uses `redact.assign` and the shared
+> **Last verified:** 2026-10-21 — Claude uses `redact.assign` and the shared
 > reader through `apiKeyHelper` for file, command and concat references, and
 > clears inherited API keys, bearer tokens, custom headers and
 > Bedrock/Vertex/Foundry switches in settings, and suppresses the inherited
 > API-key descriptor before Claude starts. Codex uses command-backed provider
-> auth. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport` and warn
-> through the generated warning cases.
+> auth. Enabled instance providers become Claude `/model` picker rows (listed
+> and selectable for a non-Anthropic id in 2.1.306, read from the bundle) and
+> Codex `-p` profiles on Home Manager. Kimchi, Kiro and Copilot omit `proxy`
+> from `surfaceSupport` and warn through the generated warning cases.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
@@ -44,6 +46,32 @@ already writes (user on Home Manager, project on devenv). The proxy leaves are
 at ordinary priority, so a consumer's own value for one is a definition
 conflict.
 
+Each model of each enabled provider (`normalized.proxy.providers`) becomes one
+`modelPicker.options` row,
+`{model; description = "<provider> through CLIProxyAPI";}`, labelled with its
+id. `replaceBuiltInOptions` stays unset: Claude Code 2.1.306's picker builder
+returns the built-in lineup plus each new row unless that flag is `=== true`,
+and its schema says unset adds the rows after the built-ins. The same schema
+says `modelPicker` is honored only from managed, `--settings`/SDK and user
+settings, never a project checkout. So Home Manager writes the rows to user
+settings, where a consumer's own rows concatenate, and devenv's launcher adds
+`--settings <store file>` holding only `modelPicker`. Since the highest scope
+that defines `modelPicker` wins outright, that devenv session shows the provider
+rows instead of any user picker rows.
+
+A row for a non-Anthropic id such as `glm-5.3` is listed and selectable in
+2.1.306 (read from the bundle; the live TUI render was not observed). The row
+schema has no model-name pattern, and the builder keeps a row unless its check
+`H0o` fails, which is `One` (a retired Claude id) or `Xr` (the availability
+allowlist) or `MF` (a first-party-only lookup that returns null off
+`api.anthropic.com`); none rejects such an id. Gateway discovery keeps only ids
+matching `/(claude|anthropic)/i`, which is why rows use `modelPicker` and not
+discovery. Selecting a row passes validation before the server probe, so it
+works while the proxy is down. A consumer `availableModels` that omits the id,
+or a matching `deniedModels`, hides the row. Claude's handling of the unknown id
+once selected (context window, effort defaults) is not covered; `behavesAs` is
+the lever and the rows leave it unset.
+
 ### Codex (`packages/chatgpt-codex/lib/proxy.nix`)
 
 One provider table per endpoint: `base_url` is the origin plus `/v1`, `name` is
@@ -65,6 +93,16 @@ environment does not reach devenv's.
   `-c model_provider=ai-proxy-devenv`, the highest layer, baked in as
   `--add-flag`s. With `ai.codex.package = null` nothing carries them, so devenv
   warns.
+- **Providers.** Codex already lists the proxy's models: an `auth.command`
+  provider fetches `<base_url>/models?client_version=`, which CPA 8.0.36 answers
+  in Codex's catalog shape (every registered model, not filtered by the key's
+  allowlist), merged into the bundled list. Codex has no per-provider default
+  model, so Home Manager writes `<configDir>/<provider>.config.toml` with
+  `model` (the provider's first) and `model_provider = "ai-proxy"`, and
+  `codex -p <provider>` selects it. Profiles live in CODEX_HOME, which devenv
+  does not own, so devenv writes none and warns. `model_catalog_url` was not
+  set: it would replace the bundled list and empty the picker whenever the proxy
+  is down.
 - **A separate id on devenv is load-bearing.** Codex deep-merges layers per key,
   so session flags reusing `ai-proxy` could inherit incompatible user auth
   fields, such as `experimental_bearer_token`, beside the proxy's `auth`.

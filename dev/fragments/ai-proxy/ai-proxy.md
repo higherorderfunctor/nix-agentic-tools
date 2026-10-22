@@ -1,7 +1,8 @@
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
 > **Last verified:** 2026-10-22 — instance-routed runtimes publish claimed keys
-> and allowlist rules scoped to providers.
+> and provider-scoped allowlist rules; Claude and Codex offer enabled providers
+> in their model pickers.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -40,8 +41,8 @@ module (the factory harness) has none.
 A per-runtime selection that selects anything (a `url` or an `instance`)
 replaces the root selection WHOLE. Fields never mix across levels: a runtime
 `key` alone leaves the root selection in force and fails its own assertion. The
-resolved value is null or `{key; url;}`. `url` is the origin only: each runtime
-appends its own protocol path, so a path would be doubled.
+resolved value is null or `{key; providers; url;}`. `url` is the origin only:
+each runtime appends its own protocol path, so a path would be doubled.
 
 `key` requires `redact.types.redacted`: `redact.file`, `redact.command` or
 `redact.concat` with a reference. It authenticates access to the proxy's
@@ -88,7 +89,11 @@ CPA trims base URLs with Go's `strings.TrimSpace`, which Nix cannot reproduce
 for every Unicode space. Provider URLs are printable ASCII, hand-written URLs in
 their family must have printable edges, and blocks in that family cannot share
 the provider's URL. These checks make CPA's exact match agree with Nix's.
-Provider names are plain ASCII words so Go and Nix also normalize them alike.
+Provider names are plain ASCII words so Go and Nix normalize them alike and
+Codex can use them as profile file names.
+
+`normalized.proxy.providers` is `[{name; models;}]`: Claude turns it into
+`/model` picker rows and Codex into `-p` profiles (`ai-proxy-runtimes.md`).
 
 Refused at evaluation, inside the enable gate:
 
