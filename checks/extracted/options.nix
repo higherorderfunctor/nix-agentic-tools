@@ -105,6 +105,92 @@
       };
     in
       refined.report.staleRefinements == [] && !(accepts refined.options.key.type "x");
+    # A refinement returns the whole value type, so on a container it would
+    # replace a redacted descendant: refused, for list, map and object rows.
+    refinement-over-a-secret-descendant-is-refused = let
+      row.refine = {types, ...}: types.listOf types.str;
+      refined = path: nodes:
+        generate {
+          inherit nodes;
+          refinements.${path} = row // {type = nodes.${path}.type;};
+        };
+      secretLeaf = {
+        secret = "a credential";
+        type = "string";
+      };
+    in
+      throws
+      (refined "ids" {
+        ids.type = "list";
+        "ids[]" = secretLeaf;
+      }).options
+      && throws
+      (refined "ids" {
+        ids.type = "list";
+        "ids[]".type = "object";
+        "ids[].token" = secretLeaf;
+      }).options
+      && throws
+      (refined "ids" {
+        ids.type = "map";
+        "ids.<name>" = secretLeaf;
+      }).options
+      && throws
+      (refined "ids" {
+        ids.type = "object";
+        "ids.token" = secretLeaf;
+      }).options;
+    # Rows that would not apply are reported stale, not thrown: a node type
+    # that differs from the row's, and a node that is itself secret.
+    refinement-guard-ignores-rows-that-would-not-apply = let
+      secretLeaf = {
+        secret = "a credential";
+        type = "string";
+      };
+      row = type: {
+        inherit type;
+        refine = {types, ...}: types.listOf types.str;
+      };
+      typeMismatch = generate {
+        nodes = {
+          ids.type = "list";
+          "ids[]" = secretLeaf;
+        };
+        refinements.ids = row "map";
+      };
+      secretNode = generate {
+        nodes = {
+          ids = secretLeaf // {type = "list";};
+          "ids[]" = secretLeaf;
+        };
+        refinements.ids = row "list";
+      };
+    in
+      typeMismatch.report.staleRefinements
+      == ["ids"]
+      && secretNode.report.staleRefinements == ["ids"];
+    refinement-on-a-list-without-secrets-works = let
+      refined = generate {
+        nodes = {
+          ids.type = "list";
+          "ids[]".type = "string";
+          other.type = "list";
+          "other[]" = {
+            secret = "a credential";
+            type = "string";
+          };
+        };
+        refinements.ids = {
+          type = "list";
+          refine = {types, ...}: types.nonEmptyListOf types.str;
+        };
+      };
+    in
+      refined.report.staleRefinements
+      == []
+      && accepts refined.type {ids = ["x"];}
+      && !(accepts refined.type {ids = [];})
+      && !(accepts refined.type {other = ["cleartext"];});
     # A row whose path is gone, whose node type changed, or whose node is a
     # secret (no row widens a secret) is stale.
     stale-refinements-are-reported =
