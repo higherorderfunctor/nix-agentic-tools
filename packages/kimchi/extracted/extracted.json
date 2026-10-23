@@ -338,7 +338,47 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "ANTHROPIC_API_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_AUTH_TOKEN": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_BASE_URL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_CONFIG_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_CUSTOM_HEADERS": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_ENVIRONMENT_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_ENVIRONMENT_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "ANTHROPIC_FEDERATION_RULE_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_IDENTITY_TOKEN": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -348,7 +388,22 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "ANTHROPIC_LOG": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "ANTHROPIC_ORGANIZATION_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_PROFILE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_SCOPE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -358,7 +413,27 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "ANTHROPIC_SESSION_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_WEBHOOK_SIGNING_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "ANTHROPIC_WORKSPACE_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_WORK_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ANTHROPIC_WORK_SECRET": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -548,6 +623,11 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "AZURE_OPENAI_API_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "AZURE_OPENAI_API_VERSION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -595,7 +675,7 @@
       },
       "BUILDKITE": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "CASTAI_API_KEY": {
@@ -615,12 +695,12 @@
       },
       "CI": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "CIRCLECI": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "CIRRUS_CI": {
@@ -855,7 +935,7 @@
       },
       "GITHUB_ACTIONS": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "GITHUB_ENTERPRISE_TOKEN": {
@@ -875,7 +955,7 @@
       },
       "GITLAB_CI": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "GITLAB_HOST": {
@@ -931,6 +1011,11 @@
       "GL_HOST": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "GOOGLE_API_CERTIFICATE_CONFIG": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
         "type": "string"
       },
       "GOOGLE_API_KEY": {
@@ -1065,7 +1150,7 @@
       },
       "JENKINS_URL": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "JEST_WORKER_ID": {
@@ -1078,7 +1163,42 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "JITI_CACHE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_DEBUG": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_ESM_EVAL_TEMP_FILE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "JITI_EXTENSIONS": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_FS_CACHE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_INTEROP_DEFAULT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_JSX": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_MODULE_CACHE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -1088,7 +1208,22 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "JITI_REBUILD_FS_CACHE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_REQUIRE_CACHE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "JITI_RESPECT_TMPDIR_ENV": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_SOURCE_MAPS": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -1183,6 +1318,61 @@
         "consumerOverridable": false,
         "readBy": ["pi"],
         "reason": "src/entry.ts assigns it on every launch before anything reads it",
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_GUARD_BASH_TOOL": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_GUARD_EXPLORATION": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_GUARD_LOOP": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_GUARD_REVIEW_WRITE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_NUDGE_BASH_CONTROL_CHECKIN": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_NUDGE_BASH_TIMEOUT": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_NUDGE_CONTINUATION": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_NUDGE_PLANNING_STOP": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_NUDGE_STALENESS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_NUDGE_TODO_CHECKIN": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_DISABLE_NUDGE_TODO_EARLY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
         "type": "string"
       },
       "KIMCHI_E2E_COMPLETION_REMINDER_MS": {
@@ -1646,6 +1836,51 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "OPENAI_ADMIN_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "OPENAI_API_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "OPENAI_API_VERSION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "OPENAI_BASE_URL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "OPENAI_CUSTOM_HEADERS": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "OPENAI_LOG": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "OPENAI_ORG_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "OPENAI_PROJECT_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "OPENAI_WEBHOOK_SECRET": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "OPENCODE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -1994,7 +2229,7 @@
       },
       "TEAMCITY_VERSION": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "TERM": {
@@ -2030,6 +2265,11 @@
       "TEST_GRACEFUL_FS_GLOBAL_PATCH": {
         "consumerOverridable": true,
         "readBy": ["pi"],
+        "type": "string"
+      },
+      "TF_BUILD": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
         "type": "string"
       },
       "TMPDIR": {
@@ -2159,7 +2399,7 @@
       },
       "XDG_CONFIG_HOME": {
         "consumerOverridable": true,
-        "readBy": ["kimchi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "XDG_DATA_HOME": {

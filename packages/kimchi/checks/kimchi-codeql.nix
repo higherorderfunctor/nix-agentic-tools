@@ -8,7 +8,11 @@
   ...
 }: let
   inherit (self.ciPackages.${pkgs.stdenv.hostPlatform.system}.kimchi.passthru) codeql;
-  environment = import ../extract/environment.nix {inherit codeql pkgs;};
+  environment = import ../extract/environment.nix {
+    inherit codeql pkgs;
+    # The release's accepted sites must not become stale rows in a fixture.
+    annotations = pkgs.writeText "kimchi-environment-fixture-annotations.json" "{}";
+  };
 in {
   checks = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
     # `runQueries` and the one-query pack under ../ql/smoke. The query counts

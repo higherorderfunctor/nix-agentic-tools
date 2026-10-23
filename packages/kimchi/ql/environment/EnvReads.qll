@@ -59,14 +59,22 @@ VariableDeclarator declaratorOf(VarAccess v) {
   )
 }
 
-/** Initializers of a binding, including assignments in bundled module factories. */
+/** Initializers of a binding, including literal assignments in bundled module factories. */
+Expr bindingInitializer(Variable binding) {
+  exists(VariableDeclarator d |
+    d.getBindingPattern().(VarDecl).getVariable() = binding and result = d.getInit()
+  )
+  or
+  exists(AssignExpr assignment |
+    assignment.getLhs().(VarAccess).getVariable() = binding and
+    result = assignment.getRhs().(StringLiteral)
+  )
+}
+
 Expr initializerOf(VarAccess v) {
   result = declaratorOf(v).getInit()
   or
-  exists(AssignExpr assignment |
-    assignment.getLhs().(VarAccess).getVariable() = v.getVariable() and
-    result = assignment.getRhs().(StringLiteral)
-  )
+  result = bindingInitializer(v.getVariable())
 }
 
 /** A variable with no initializer or assignment and no parameter declaration: a binding element, an uninitialized declarator or an unresolved import. */
@@ -84,7 +92,7 @@ module Eval<fallbackSig/2 fallback> {
     if isAppNameDeclarator(d)
     then
       appNameShape(d) and result = hostAppName()
-    else result = constValue(d.getInit())
+    else result = constValue(bindingInitializer(d.getBindingPattern().(VarDecl).getVariable()))
   }
 
   string identValue(VarAccess v) {
@@ -93,6 +101,12 @@ module Eval<fallbackSig/2 fallback> {
     not exists(declaratorOf(v).getInit()) and result = constValue(initializerOf(v))
     or
     constantShaped(v) and fallback(v.getName(), result)
+    or
+    // Bundled CommonJS destructuring preserves the exported property name.
+    exists(PropertyPattern property |
+      property.getValuePattern().(VarDecl).getVariable() = v.getVariable() and
+      not exists(property.getDefault()) and fallback(property.getName(), result)
+    )
   }
 
   string templatePrefix(TemplateLiteral t, int i) {
@@ -118,6 +132,14 @@ module Eval<fallbackSig/2 fallback> {
     )
     or
     result = identValue(e)
+    or
+    // Exports are ordinary object properties, identified by their base binding.
+    exists(PropAccess access, AssignExpr assignment, PropAccess target |
+      access = e and target = assignment.getLhs() and
+      target.getBase().(VarAccess).getVariable() = access.getBase().(VarAccess).getVariable() and
+      target.getPropertyName() = access.getPropertyName() and
+      result = assignment.getRhs().(StringLiteral).getValue()
+    )
   }
 
   predicate valueByName(string name, string value) {
@@ -361,13 +383,48 @@ DataFlow::SourceNode envReadSource() {
 }
 
 
-/** A declared environment reader's key parameter and the corresponding call argument. */
-predicate helperKeyArgument(VarAccess key, DataFlow::InvokeNode call, Expr argument) {
-  exists(DataFlow::PropRead read, FunctionDeclStmt callee, int index, SimpleParameter parameter |
-    read = envReadSource().getAPropertyRead() and key = read.getPropertyNameExpr() and
+/** A key parameter's corresponding call argument, for every function syntax. */
+bindingset[key]
+predicate parameterArgument(VarAccess key, DataFlow::InvokeNode call, Expr argument) {
+  exists(Function callee, int index, SimpleParameter parameter |
     parameter = callee.getParameter(index) and parameter.getAVariable() = key.getVariable() and
     not parameter.isRestParameter() and callee = call.getACallee() and
     argument = call.getArgument(index).asExpr()
+  )
+}
+
+/** Environment reader arguments, following parameter forwarding through known helpers. */
+predicate helperKeyArgument(VarAccess key, DataFlow::InvokeNode call, Expr argument) {
+  exists(DataFlow::PropRead read |
+    read = envReadSource().getAPropertyRead() and key = read.getPropertyNameExpr() and
+    parameterArgument(key, call, argument)
+  )
+  or
+  exists(DataFlow::InvokeNode inner, VarAccess forwarded |
+    helperKeyArgument(key, inner, forwarded) and parameterArgument(forwarded, call, argument)
+  )
+}
+
+/** Literal callback collections: the first argument receives each array element. */
+string callbackName(VarAccess key) {
+  exists(DataFlow::MethodCallNode call, Function callback, ArrayExpr array |
+    call.getMethodName() = ["every", "filter", "find", "findIndex", "forEach", "map", "some"] and
+    callback = call.getCallback(0).getFunction() and
+    callback.getParameter(0).getAVariable() = key.getVariable() and
+    array = call.getReceiver().getALocalSource().asExpr() and fixedArray(array) and
+    forall(Expr item | item = array.getAnElement() | item instanceof StringLiteral) and
+    result = array.getAnElement().(StringLiteral).getValue()
+  )
+}
+
+/** An indexed literal table contributes every value only when all values are literal strings. */
+string tableName(IndexExpr key) {
+  exists(ObjectExpr table |
+    table = DataFlow::valueNode(key.getBase()).getALocalSource().asExpr() and
+    forall(Property property | property = table.getAProperty() |
+      property.getInit() instanceof StringLiteral
+    ) and
+    result = table.getAProperty().getInit().(StringLiteral).getValue()
   )
 }
 
@@ -382,10 +439,14 @@ string readName(DataFlow::PropRead r) {
     exists(VarAccess key, DataFlow::InvokeNode call, Expr argument |
       key = r.getPropertyNameExpr() and helperKeyArgument(key, call, argument) and
       forall(DataFlow::InvokeNode other, Expr actual | helperKeyArgument(key, other, actual) |
-        exists(constValue(actual))
+        exists(constValue(actual)) or parameterArgument(actual, _, _)
       ) and
       result = constValue(argument)
     )
+    or
+    result = callbackName(r.getPropertyNameExpr())
+    or
+    result = tableName(r.getPropertyNameExpr())
     or
     result = indexedIterationName(r.getPropertyNameExpr())
     or
@@ -410,8 +471,8 @@ predicate listedRead(DataFlow::Node site, string name) {
   exists(runtimeOf(site.getFile()))
 }
 
-/** Why the reads cannot be listed; the transform fails on any row. */
-predicate readFailure(string message, string where_) {
+/** Existing refusals take precedence over the unresolved-site review. */
+predicate resolvedReadFailure(string message, string where_) {
   // a by-name constant fallback that same-named constants disagree on
   exists(VarAccess v | ambiguousConstant(v) |
     message = "constant " + v.getName() + " is ambiguous: same-named constants evaluate differently" and
@@ -423,5 +484,39 @@ predicate readFailure(string message, string where_) {
     exists(iterationOf(key)) and not resolvedIteration(key) and
     message = "the environment iteration key " + key.getName() + " cannot be resolved to a finite set of names" and
     where_ = key.getFile().getRelativePath() + ":" + key.getLocation().getStartLine()
+  )
+}
+
+/** The closest named function, including through anonymous callbacks. */
+string readScope(AstNode node) {
+  node instanceof Function and result = min(string name | name = node.(Function).getName())
+  or
+  not exists(node.(Function).getName()) and result = readScope(node.getParent())
+  or
+  not exists(node.getParent()) and result = "<top-level>"
+}
+
+/** A review key independent of line positions and pi's generated chunk hashes. */
+string unresolvedSite(DataFlow::PropRead read) {
+  result = read.getFile().getRelativePath()
+      .regexpReplaceAll("-[A-Z0-9]{8}\\.js$", ".js")
+      .regexpReplaceAll("/dist/([^/]+)\\.js$", "/$1.ts") +
+    "#" + readScope(read.asExpr()) + "[" +
+    read.getPropertyNameExpr().getAPrimaryQlClass() + "]"
+}
+
+/** Why the reads cannot be listed; accepted unresolved sites are reviewed by the transform. */
+predicate readFailure(string message, string where_) {
+  resolvedReadFailure(message, where_)
+  or
+  exists(DataFlow::PropRead read, string site |
+    read = envReadSource().getAPropertyRead() and
+    exists(read.getPropertyNameExpr()) and not exists(read.getPropertyName()) and
+    not read.asExpr() = any(DeleteExpr d).getOperand() and
+    exists(runtimeOf(read.getFile())) and not exists(readName(read)) and
+    site = read.getFile().getRelativePath() + ":" + read.getStartLine() and
+    not resolvedReadFailure(_, site) and
+    message = "unresolved computed environment read: " + unresolvedSite(read) and
+    where_ = site + ":" + read.getLocation().getStartColumn()
   )
 }

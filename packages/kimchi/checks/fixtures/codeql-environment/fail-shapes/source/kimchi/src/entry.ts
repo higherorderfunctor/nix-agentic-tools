@@ -30,3 +30,5 @@ function unknownForward(env: Record<string, string | undefined>) {
 }
 
 for (const unknownListKey of externalNames()) void process.env[unknownListKey];
+
+void process.env["S07_" + "CONCAT"];

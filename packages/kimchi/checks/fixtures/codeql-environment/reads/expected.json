@@ -7,6 +7,27 @@
       ],
       "type": "string"
     },
+    "AWS_PROFILE": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "BUILDKITE": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "CI": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
     "CIRCLECI": {
       "consumerOverridable": true,
       "readBy": [
@@ -14,7 +35,21 @@
       ],
       "type": "string"
     },
+    "FUNCTION_EXPRESSION_KEY": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
     "GITHUB_ACTIONS": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "GITLAB_CI": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"
@@ -43,6 +78,13 @@
       "type": "string"
     },
     "GIT_WORK_TREE": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "GOOGLE_API_CERTIFICATE_CONFIG": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"
@@ -78,6 +120,34 @@
       "type": "string"
     },
     "ITERATED_TWO": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "JENKINS_URL": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "JITI_FS_CACHE": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "KIMCHI_DISABLE_GUARD_LOOP": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "KIMCHI_DISABLE_NUDGE_TODO_EARLY": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"
@@ -134,6 +204,27 @@
       "type": "string"
     },
     "S32_PROCESS_ALIAS": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "TEAMCITY_VERSION": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "TERM_PROGRAM": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "TF_BUILD": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"

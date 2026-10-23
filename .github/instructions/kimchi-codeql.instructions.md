@@ -163,10 +163,12 @@ the database reads its npm dist, which is built from that repository.
 
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-23 — environment facts include destructuring and
-> named process imports; std-env CI-provider tuple keys resolve per row with
-> their `||` fallback. Declared key helpers resolve literal call arguments, and
-> bundled bindings follow assignment initializers.
+> **Last verified:** 2026-10-23 — fixed names resolve through CommonJS property
+> assignments and destructured reexports, literal callback arrays and object
+> tables, and declared, arrow and function-expression key helpers. Unresolved
+> computed reads fail extraction unless their genuinely dynamic site is
+> reviewed; stale site rows and changed occurrence counts fail the same
+> transform.
 
 `extracted.json`'s `environment` surface is one fact the CodeQL database
 produces. `extract/environment.nix` runs the two-query pack
@@ -236,20 +238,49 @@ comma expression around the literal table contributes its final operand. Other
 literal-index uses of a tuple, including its returned metadata, do not make the
 table escape.
 
-Declared helpers whose parameter names the environment key contribute the names
-of literal or constant call arguments at that parameter index. This includes
+Helpers whose parameter names the environment key contribute the names of
+literal or constant call arguments at that parameter index. This includes
 `boolEnv` and `nonEmptyEnv` in `src/oauth-config.ts:63-70`, `parseEnvInt` in
-`src/shared/env-int.ts:7`, and pi's `getProviderEnvValue`. A helper site
-resolves completely only when all known call arguments resolve. `nonEmptyEnv`
-also receives the dynamic region-specific template at `src/oauth-config.ts:85`,
-so its literal calls contribute names while its computed read remains
-unresolved. Uninitialized bundled bindings assigned string literals also
-resolve, including `AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
+`src/shared/env-int.ts:7`, and pi's `getProviderEnvValue`. Declared functions,
+arrow bindings and function-expression bindings share this rule. Parameter
+forwarding through known helpers is followed to its call arguments, including
+jiti’s boolean-to-JSON reader. A helper site resolves completely only when all
+terminal call arguments resolve. `nonEmptyEnv` also receives the dynamic
+region-specific template at `src/oauth-config.ts:85`, so its literal calls
+contribute names while its computed read remains unresolved. Uninitialized
+bundled bindings assigned string literals also resolve, including
+`AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
 `bedrock-converse-stream.js:24`.
 
-Measured on the pinned Kimchi 1.19.1 database, 41 computed environment-read
-sites remain unresolved. This measurement counts sites, including separate reads
-of a name also resolved elsewhere. No general computed-key refusal is added.
+A computed environment read that resolves to no name and has no existing refusal
+emits a `fail` row through `readFailure`. Extraction accepts it only when its
+exact review key has a non-blank `reason` and its occurrence count matches
+`sites` under `annotations.json`'s `environmentUnresolved`. A new unresolved key
+fails with its review key and source location. A listed key that is no longer
+unresolved also fails, asking to delete the stale row. Existing refusals cannot
+be waived by these annotations.
+
+A review key combines the module path, nearest named function (including through
+anonymous callbacks), and the key expression's AST kind. Generated
+eight-character chunk hashes are removed from filenames; a root
+`dist/<module>.js` shares `<module>.ts`'s key. Function names distinguish the
+helpers even when minified parameter names change. Identical helper reads,
+including TypeScript and compiled JavaScript copies, share one annotation.
+Columns distinguish occurrences in query diagnostics, so an additional
+unresolved read in an already accepted helper changes its count and fails
+review. Moving lines or changing a chunk hash needs no edit; changing the
+function or key kind requires review. These are site reviews, not package-wide
+exceptions.
+
+Only genuinely dynamic keys belong in the review list. Fixed names resolve
+through CommonJS property assignments and the existing unique by-name constant
+fallback using a destructured property's exported name. That fallback also
+follows bundled literal assignments. Literal arrays passed through element
+callbacks contribute their names when every element is a string literal. An
+object table indexed by a runtime key contributes all its values only when every
+property value is a string literal. These cover the pinned Google
+certificate-config constant, AWS profile reexport, PR-cost CI array, steer table
+and bug-report arrow helper without naming those constants in the query.
 
 The database also recognizes bracket `env`, asserted environments,
 `require("process").env`, and process aliases. The overwrite analysis
@@ -257,8 +288,10 @@ establishes writes only through `process.env` spelled out.
 
 ### Annotations
 
-`extract/annotations.json`'s `environment` and `environmentIgnored` are not an
-input of the transform. `rules.nix` applies them downstream, against
+The transform reads `extract/annotations.json`'s `environmentUnresolved` map of
+review keys to `{reason, sites}` rows. Its stale-row comparison happens here
+because raw query sites are absent from the variable fact reconciled downstream.
+`rules.nix` applies `environment` and `environmentIgnored` downstream, against
 `environment.variables.<name>`. Ordinary new names need no annotation. The
 std-env table's `INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN` matches the shared
 secret classifier, so its required `controls` row records that std-env tests its
@@ -271,23 +304,26 @@ under `checks/fixtures/codeql-environment/`, laid out like the real source root
 and extracted by `kimchi-codeql-create-database <dir> <tree>`. `reads` holds
 seven read shapes absent from the pinned tree in one Kimchi file: bracket `env`,
 an asserted environment, a process alias, bracket `globalThis.process`, literal
-`require("process")`, a namespace process import, and `+=`; concatenation
-remains unevaluated. The release query covers its actual read shapes, including
-pi's APP_NAME and bundled imports. The reads fixture also holds the adapter's
-`KIMCHI_MANAGES_MCP_PROJECT_TRUST` read outside the @earendil-works scope,
-attributed to `pi`. `overwrites` holds the launch-order mix; `fail-shapes`,
-`fail-order` and `fail-sources` exercise the retained refusal classes, with
-helper declarations merged into their case. The reads fixture also checks a
-nested literal table with string/function alternatives and an aliased
-environment passed through two helpers, alongside unrelated objects that must
-add no names; fail-shapes refuses an unresolved iteration key and rest copies
-passed to unknown functions. The positive reads fixture uses two rows from
-std-env's provider table: `["GITHUB_ACTIONS"]` and `["CIRCLE", "CIRCLECI"]`,
-checking two environment keys. It also checks literal and constant helper
-arguments and a binding assigned a string literal before its computed read. The
-overwrites fixture checks reads through helper forwarding, aliases and rest
-copies before writes. A new shape goes into one of these trees, not into a
-mutant of the real source: a real-tree mutant costs a database build each.
+`require("process")`, a namespace process import, and `+=`. Concatenation
+remains unevaluated and is refused in `fail-shapes`. The release query covers
+its actual read shapes, including pi's APP_NAME and bundled imports. The reads
+fixture also holds the adapter's `KIMCHI_MANAGES_MCP_PROJECT_TRUST` read outside
+the @earendil-works scope, attributed to `pi`. `overwrites` holds the
+launch-order mix; `fail-shapes`, `fail-order` and `fail-sources` exercise the
+retained refusal classes, with helper declarations merged into their case. The
+reads fixture also checks a nested literal table with string/function
+alternatives and an aliased environment passed through two helpers, alongside
+unrelated objects that must add no names; fail-shapes refuses an unresolved
+iteration key and rest copies passed to unknown functions. Fixtures supply an
+empty annotation map, so the release's site reviews neither exempt fixture reads
+nor become stale rows in fixture transforms. The positive reads fixture uses two
+rows from std-env's provider table: `["GITHUB_ACTIONS"]` and
+`["CIRCLE", "CIRCLECI"]`, checking two environment keys. It also checks literal
+and constant helper arguments and a binding assigned a string literal before its
+computed read. The overwrites fixture checks reads through helper forwarding,
+aliases and rest copies before writes. A new shape goes into one of these trees,
+not into a mutant of the real source: a real-tree mutant costs a database build
+each.
 
 ### Running it without Nix
 
@@ -303,12 +339,15 @@ for q in EnvironmentReads LaunchOverwrites; do
 done
 jq -S -n -f packages/kimchi/extract/environment.jq \
   --slurpfile reads /tmp/EnvironmentReads.json \
-  --slurpfile overwrites /tmp/LaunchOverwrites.json > /tmp/environment.json
+  --slurpfile overwrites /tmp/LaunchOverwrites.json \
+  --slurpfile annotations packages/kimchi/extract/annotations.json > /tmp/environment.json
 jq -S .environment packages/kimchi/extracted/extracted.json | cmp - /tmp/environment.json
 ```
 
 The fourth column of a reads row and the third of an overwrites row is the site,
-`path:line`, for reading a result back; the transform ignores it.
+`path:line`, for reading a result back; unresolved reads also carry the column
+so separate occurrences remain separate rows. The transform uses these rows to
+check reviewed occurrence counts and includes locations in failure messages.
 
 ### Patches the tree does not carry
 
