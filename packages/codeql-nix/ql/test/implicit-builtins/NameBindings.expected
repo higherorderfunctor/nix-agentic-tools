@@ -1,0 +1,6 @@
+| builtins.nix | 2 | 27 | import | resolved | 0 | 0 |
+| builtins.nix | 3 | 30 | builtins | resolved | 0 | 0 |
+| builtins.nix | 4 | 49 | import | resolved | 4 | 8 |
+| builtins.nix | 5 | 27 | builtins | resolved | 5 | 8 |
+| builtins.nix | 6 | 12 | s | resolved | 6 | 4 |
+| builtins.nix | 6 | 15 | import | resolved | 0 | 0 |
