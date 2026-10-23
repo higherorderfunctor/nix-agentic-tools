@@ -3,7 +3,7 @@
 > **Last verified:** 2026-10-23 — opt-in instance wiring splits named client
 > keys from independent internal secrets, filters exact provider-side model
 > unions, rejects reserved metadata names and internal TLS, checks Responses
-> websocket messages, and shares restart triggers.
+> websocket messages, shares restart triggers, and preserves CPA diagnostics.
 
 **cpa-gate is NOT a security boundary.** A harness that runs under the same uid
 as the gate can read the policy file, which holds every client key and every
@@ -50,14 +50,11 @@ secret substitution would otherwise turn public health/log metadata into a key.
 CPA debug and request/file logging are forced off, and its body ceiling matches
 the gate's 32 MiB.
 
-CPA also logs model names at Info during session affinity and on upstream
-failures, with no lower log-level option. For gated instances its exec discards
-stdout and stderr; `server.commercial-mode = true` omits the error-request file
-logger, and file logging is disabled. This sacrifices CPA's startup and upstream
-diagnostics: use its exit status and the gate's health counts/refusal logs.
-Redact readers run earlier in the parent service launcher; suppression cannot
-consume or alter their secret output. The exact-mode preflight still reports its
-value-free refusal before CPA starts.
+CPA's default stdout and stderr reach the journal on Home Manager and the
+process log on devenv, preserving startup and upstream diagnostics. Model names
+in those logs are accepted; keys must stay out. Debug, request and file logging
+remain off, and `server.commercial-mode = true` omits the error-request file
+logger.
 
 The policy's model set is the exact union of the routed credentials' selected
 provider-side models. G3 refuses a union member excluded from any other routed
@@ -211,7 +208,9 @@ install check needs a version that a local path lacks.
 - `module-service-instances-runtime-providers` exercises both named client keys
   through real CPA and gate launchers: exact listings, each model over HTTP and
   incremental SSE, internal-port authentication, uniform refusals with empty
-  upstream logs, and no keys or model IDs in daemon logs.
+  upstream logs, no keys or model IDs in gate logs, and no keys in CPA logs. The
+  launcher output check preserves both CPA streams and includes a discard
+  control.
 - Go tests run in the package check phase, including a real Caddy copy of
   listings and a test that no log or error carries a key.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.

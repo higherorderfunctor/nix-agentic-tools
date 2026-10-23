@@ -132,12 +132,6 @@ in {
       preStart = instance:
         lib.optionalString instance.exactModels ''
           ${pkgs.python3}/bin/python3 ${../lib/exact-models-scan.py} ${lib.escapeShellArg "${instance.stateDir}/auth"}
-        ''
-        # CPA logs models at Info during session selection and on upstream
-        # errors. Its only level option is debug; the gate supplies health
-        # counts instead. Redact commands already ran in the parent launcher.
-        + lib.optionalString instance.gate.enable ''
-          exec > /dev/null 2>&1
         '';
       directories = instance: ["${instance.stateDir}/auth"];
       extraOptions = {

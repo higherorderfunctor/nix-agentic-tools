@@ -265,7 +265,14 @@ in {
           ${pkgs.gnugrep}/bin/grep -Fx cpa-output-marker off.log
           ${pkgs.gnugrep}/bin/grep -Fx cpa-error-marker off.log
           ${command true} > on.log 2>&1
-          test ! -s on.log
+          ${pkgs.gnugrep}/bin/grep -Fx cpa-output-marker on.log
+          ${pkgs.gnugrep}/bin/grep -Fx cpa-error-marker on.log
+          # Reintroducing the discarded-output exec must lose both markers.
+          (exec > /dev/null 2>&1; ${command true}) > discarded.log 2>&1
+          if ${pkgs.gnugrep}/bin/grep -Eq '^cpa-(output|error)-marker$' discarded.log; then
+            echo "FAIL: output-discard control preserved a marker" >&2
+            exit 1
+          fi
           touch "$out"
         '';
     };

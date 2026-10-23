@@ -95,14 +95,16 @@ for name, api, upstream, allowed, forbidden in [
     assert set(refused) == {(404, b"")}
     assert all(log.read_bytes() == b"" for log in logs)
 
-# Both template secrets stay in runtime files; logs must hold neither keys nor
-# model IDs. A synthetic log is the positive control for the leak detector.
+# Client, internal and upstream keys stay out of logs. Gate logs omit model IDs too;
+# CPA may log models. Synthetic values control each leak check.
 secrets = [entry[field].encode() for entry in entries.values() for field in ["key", "internal"]]
+secrets += [key["api-key"].encode() for blocks in config["api-keys"].values() for block in blocks for key in block["keys"]]
 models = [model.encode() for entry in entries.values() for model in entry["models"]]
-leaks = lambda raw: any(value in raw for value in secrets + models)
-assert leaks(secrets[0])
+leaks = lambda raw, values=secrets + models: any(value in raw for value in values)
+assert all(leaks(value) and leaks(value, secrets) for value in secrets)
+assert leaks(models[0]) and not leaks(models[0], secrets)
 assert not leaks(Path("gate.log").read_bytes())
-assert Path("cpa.log").read_bytes() == b""
+assert not leaks(Path("cpa.log").read_bytes(), secrets)
 for log in [Path("zai.log"), Path("other.log")]:
     log.write_text("")
 print("ok: per-key listings, HTTP, incremental SSE, split keys and uniform refusals")
