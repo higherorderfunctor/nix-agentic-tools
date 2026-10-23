@@ -109,6 +109,22 @@
           --search-path=${installed}:${packaging.library} \
           --threads=4 --ram=6000 tests/ast-ambiguous
         echo 'A0 Ast, Candidates, Ambiguous and table reconstruction with body/segment mutants passed'
+        for suite in lexical lexical-dynamic lexical-extension lexical-merged lexical-siblings; do
+          mkdir "tests/$suite"
+          cp ${owner}/ql/test/"$suite"/* "tests/$suite/"
+          chmod -R u+w "tests/$suite"
+          for template in "tests/$suite/"*.nix.in; do
+            cp "$template" "''${template%.in}"
+          done
+          flock "$TMPDIR/codeql.lock" codeql test run \
+            --search-path=${installed}:${packaging.library} \
+            --threads=4 --ram=6000 "tests/$suite"
+        done
+        python3 ${owner}/checks/run-domain-tests.py \
+          ${owner}/checks/fixtures/lexical/test_dynamic.py \
+          ${owner}/checks/fixtures/lexical/test_lexical.py \
+          ${owner}/checks/fixtures/lexical/test_merged.py
+        echo 'N1 NameBindings frozen positive, negative, duplicate and absent-model rows passed'
         mkdir "$out"
         printf 'S2 driver suite; 28 inherited raw/diagnostic preflight cases; Quality, Coordinates, Empty, Features and Ambiguous QL tests; exact archived bytes passed\n' > "$out/evidence"
       '';
