@@ -2,6 +2,7 @@
 
 > **Last verified:** 2026-10-23 — S2 authenticates archived source bytes and
 > transports the companion anchor index through the existing kit metadata table.
+> R0 moves its shared syntax writer and preflight into production `src/`.
 
 `lib/packaging.nix` exposes
 `syntaxDriver/bin/nixql-syntax MANIFEST_JSON OUTPUT_DIRECTORY`. The manifest
@@ -69,11 +70,12 @@ trusted producer evidence; fabricating a file admission record is outside the QL
 consumer's archive-authentication boundary. The driver tests establish that
 boundary from actual bytes.
 
-The raw writer reuses F0's audited token, path and diagnostic preflight before
-calling the kit; added metadata and handwritten facts receive their own
-preflight. An oversized field refuses the entire file transaction with
-`text-field-too-large`, without raw nodes or anchors from that file. Re-audit
-the raw writer when the grammar, kit or selected emission paths change.
+The raw writer calls the shared production token, path and diagnostic preflight
+in `src/syntax.rs` before calling the kit; added metadata and handwritten facts
+receive their own preflight. An oversized field refuses the entire file
+transaction with `text-field-too-large`, without raw nodes or anchors from that
+file. Re-audit the raw writer when the grammar, kit or selected emission paths
+change.
 
 `checks.x86_64-linux.codeql-nix-anchors` registers the driver suite through F3,
 inherited raw preflight cases and independent QL/archive acceptance. Keep

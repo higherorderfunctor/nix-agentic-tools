@@ -69,7 +69,7 @@ fn main() -> io::Result<()> {
         }
         stack.extend(children.into_iter().rev());
     }
-    nixql_bootstrap::syntax(
+    nixql_syntax::syntax(
         &bytes,
         Path::new(&args[2]),
         Path::new(&args[3]),

@@ -1,0 +1,30 @@
+# Keep the lockfile package identity so pinned Cargo vendoring stays byte-identical.
+[package]
+name = "nixql-bootstrap"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+codeql-extractor = { path = "upstream/shared/tree-sitter-extractor" }
+tree-sitter = "0.26"
+tree-sitter-nix = { path = "grammar" }
+
+[lib]
+name = "nixql_syntax"
+path = "syntax.rs"
+
+[[bin]]
+name = "nixql-anchors"
+path = "anchors.rs"
+
+[[bin]]
+name = "nixql-generate-raw"
+path = "generate.rs"
+
+[[bin]]
+name = "nixql-index-raw"
+path = "index.rs"
+
+[[bin]]
+name = "nixql-preflight"
+path = "preflight.rs"

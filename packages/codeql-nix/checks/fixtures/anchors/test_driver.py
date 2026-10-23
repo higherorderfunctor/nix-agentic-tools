@@ -17,7 +17,7 @@ spec = importlib.util.spec_from_file_location("s2_abi", OWNER / "schema/abi.py")
 abi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(abi)
 LIMIT = 1048576
-preflight_spec = importlib.util.spec_from_file_location("s2_preflight", OWNER / "checks/fixtures/bootstrap/test-preflight.py")
+preflight_spec = importlib.util.spec_from_file_location("s2_preflight", OWNER / "checks/fixtures/installed/test_preflight.py")
 preflight = importlib.util.module_from_spec(preflight_spec)
 preflight_spec.loader.exec_module(preflight)
 

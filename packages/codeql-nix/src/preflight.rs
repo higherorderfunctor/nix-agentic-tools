@@ -8,7 +8,7 @@ fn main() {
     let result = fs::read(&args[1]).and_then(|source| {
         let logical = fs::read_to_string(&args[2])?;
         let schema = args.get(4).map(fs::read_to_string).transpose()?;
-        nixql_bootstrap::syntax(
+        nixql_syntax::syntax(
             &source,
             Path::new(&logical),
             Path::new(&args[3]),

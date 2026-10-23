@@ -1,7 +1,8 @@
 # Which files set an option?
 
 > **Last verified:** 2026-10-23 — Q0 joins installed module metadata to
-> authenticated syntax and checks it against independent Nix evaluation.
+> authenticated syntax and checks it against independent Nix evaluation; R0
+> retires the disposable bootstrap in favor of production integration proofs.
 
 ## Terms
 
@@ -97,5 +98,6 @@ Changes to source association or metadata evidence also require the
 corresponding anchor or metadata checks. The metadata check also runs the
 independent `UnknownOrigin` expectations for selected and declaration rows
 without source files. Q0 consumes the existing installation, schema and source
-bridge; it adds no second producer or evaluator. Retiring the disposable
-bootstrap remains separate work.
+bridge; it adds no second producer or evaluator. R0 retires the disposable
+bootstrap; [integration-gate.md](integration-gate.md) records production lookup,
+text and coordinate proofs.

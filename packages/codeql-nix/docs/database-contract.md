@@ -14,9 +14,10 @@ divergence. All 25 handwritten relations are independent of generated AST entity
 types, so later syntax and evaluation producers can contribute to one database
 without manufacturing raw kit labels.
 
-F0 proves the prerequisites in [integration-gate.md](integration-gate.md). F1
-defines the shared ABI; later producers and QL consumers preserve it rather than
-infer semantics from missing rows.
+The [integration gate](integration-gate.md) records production lookup, text and
+coordinate proofs after bootstrap retirement. F1 defines the shared ABI; later
+producers and QL consumers preserve it rather than infer semantics from missing
+rows.
 
 ## Durable identity
 
@@ -81,8 +82,9 @@ A later producer must reject an oversized file/projection transaction and report
 `text-field-too-large` using representable enclosing identities. It must publish
 no clipped facts or successful observations from that transaction. F1 validates
 facts supplied to it; it does not implement atomic publication, automatically
-manufacture failure rows or preflight the generated syntax writer. F0 documents
-the pinned kit's separate preflight evidence.
+manufacture failure rows or preflight the generated syntax writer. The
+[integration gate](integration-gate.md) documents production syntax preflight
+and its owner-check evidence.
 
 ## Scope, admission and completeness
 
