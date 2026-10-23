@@ -7,9 +7,11 @@
 > API-key descriptor before Claude starts. Codex uses command-backed provider
 > auth. Named client routes supply Claude `/model` picker rows (listed and
 > selectable for a non-Anthropic id in 2.1.306, read from the bundle); Codex
-> discovers CPA models without per-credential profiles. Both use the shared
-> client-key helper. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport`
-> and warn through the generated warning cases.
+> discovers CPA models without per-credential profiles. A selected client-key
+> model list supplies Claude's exact picker and available-model set; the gate
+> filters Codex discovery by that key. Both use the shared client-key helper.
+> Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport` and warn through
+> the generated warning cases.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
@@ -60,6 +62,13 @@ settings, where a consumer's own rows concatenate, and devenv's launcher adds
 `--settings <store file>` holding only `modelPicker`. Since the highest scope
 that defines `modelPicker` wins outright, that devenv session shows the
 credential rows instead of any user picker rows.
+
+When the selected key configures `models` or `excludedModels`, the resolved
+proxy also carries the final gate model set. The same picker lowering uses that
+set for its rows, including OAuth models, sets `replaceBuiltInOptions = true`
+and writes `availableModels` with `availableModelsMatch = "exact"`. Home Manager
+uses the existing user settings delivery; devenv includes these leaves in its
+existing `--settings` file. No client list keeps the previous lowering.
 
 A row for a non-Anthropic id such as `glm-5.3` is listed and selectable in
 2.1.306 (read from the bundle; the live TUI render was not observed). The row

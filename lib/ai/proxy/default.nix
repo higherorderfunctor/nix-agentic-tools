@@ -1,6 +1,7 @@
 # A Harness selects a named Instance client key or an external CPA origin.
 {lib}: let
   inherit (lib) mkOption types;
+  exact = import ../../../packages/cliproxyapi/lib/exact-models.nix {inherit lib;};
   redact = import ../../redact {inherit lib;};
   instancesLib = import ../../../packages/ai-module/lib/instances.nix {inherit lib;};
   urlPattern = "https?://([A-Za-z0-9.-]+|\\[[0-9A-Fa-f:.]+[]])(:[0-9]+)?";
@@ -82,6 +83,10 @@
     else {
       inherit (client) key;
       inherit (selected) url;
+      models =
+        if instance.gate.enable && (client.models != null || client.excludedModels != null)
+        then exact.clientModels instance client
+        else null;
       credentials = map (route: {
         name = route.credential;
         models = instance.credentials.${route.credential}.apiKey.models or [];
@@ -115,6 +120,11 @@ in {
       key = mkOption {
         type = redact.types.redacted;
         description = "The selected client key.";
+      };
+      models = mkOption {
+        type = types.nullOr (types.listOf types.str);
+        default = null;
+        description = "Exact model set enforced by the selected instance gate, or null without a client model list.";
       };
       url = mkOption {
         type = types.strMatching urlPattern;

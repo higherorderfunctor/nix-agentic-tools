@@ -86,6 +86,12 @@
     kind = "apikey";
     provider = apis.${api}.provider name;
   };
+  modelListOption = description:
+    mkOption {
+      type = types.nullOr (types.nonEmptyListOf types.str);
+      default = null;
+      inherit description;
+    };
   credentialType = types.submodule {
     options = {
       apiKey = mkOption {
@@ -93,16 +99,8 @@
         default = null;
         description = "An API-key upstream credential declared in Nix, with its models and APIs.";
       };
-      excludedModels = mkOption {
-        type = types.nullOr (types.nonEmptyListOf types.str);
-        default = null;
-        description = "Exact model names to exclude in exactModels mode; OAuth uses models XOR excludedModels, API keys exclude from apiKey.models.";
-      };
-      models = mkOption {
-        type = types.nullOr (types.nonEmptyListOf types.str);
-        default = null;
-        description = "Exact OAuth model names in exactModels mode, XOR excludedModels. API-key catalogs use apiKey.models.";
-      };
+      excludedModels = modelListOption "Exact model names to exclude in exactModels mode; OAuth uses models XOR excludedModels, API keys exclude from apiKey.models.";
+      models = modelListOption "Exact OAuth model names in exactModels mode, XOR excludedModels. API-key catalogs use apiKey.models.";
       oauth = mkOption {
         type = types.nullOr (types.submodule {
           options = {
@@ -123,10 +121,12 @@
   };
   clientKeyType = types.submodule {
     options = {
+      excludedModels = modelListOption "Exact models to subtract from the routed credentials' selected union; XOR models, requires gate.enable.";
       key = mkOption {
         type = redact.types.redacted;
         description = "Client key the Harness presents to CPA, as a redact reference.";
       };
+      models = modelListOption "Exact models to admit from the routed credentials' selected union; XOR excludedModels, requires gate.enable. Unset lists admit the whole union.";
       routes = mkOption {
         type = types.nonEmptyListOf (types.submodule {
           options = {
