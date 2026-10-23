@@ -1,0 +1,545 @@
+// CodeQL database schema for Nix
+// Automatically generated from the tree-sitter grammar; do not edit
+// To regenerate, nixql-generate
+
+/*- Files and folders -*/
+
+/**
+ * The location of an element.
+ * The location spans column `startcolumn` of line `startline` to
+ * column `endcolumn` of line `endline` in file `file`.
+ * For more information, see
+ * [Locations](https://codeql.github.com/docs/writing-codeql-queries/providing-locations-in-codeql-queries/).
+ */
+locations_default(
+  unique int id: @location_default,
+  int file: @file ref,
+  int beginLine: int ref,
+  int beginColumn: int ref,
+  int endLine: int ref,
+  int endColumn: int ref
+);
+
+files(
+  unique int id: @file,
+  string name: string ref
+);
+
+folders(
+  unique int id: @folder,
+  string name: string ref
+);
+
+@container = @file | @folder
+
+containerparent(
+  int parent: @container ref,
+  unique int child: @container ref
+);
+
+/*- Empty location -*/
+
+empty_location(
+  int location: @location_default ref
+);
+
+/*- Source location prefix -*/
+
+/**
+ * The source location of the snapshot.
+ */
+sourceLocationPrefix(string prefix : string ref);
+
+/*- Diagnostic messages -*/
+
+diagnostics(
+  unique int id: @diagnostic,
+  int severity: int ref,
+  string error_tag: string ref,
+  string error_message: string ref,
+  string full_error_message: string ref,
+  int location: @location_default ref
+);
+
+/*- Diagnostic messages: severity -*/
+
+case @diagnostic.severity of
+  10 = @diagnostic_debug
+| 20 = @diagnostic_info
+| 30 = @diagnostic_warning
+| 40 = @diagnostic_error
+;
+
+/*- YAML -*/
+
+#keyset[parent, idx]
+yaml (unique int id: @yaml_node,
+      int kind: int ref,
+      int parent: @yaml_node_parent ref,
+      int idx: int ref,
+      string tag: string ref,
+      string tostring: string ref);
+
+case @yaml_node.kind of
+  0 = @yaml_scalar_node
+| 1 = @yaml_mapping_node
+| 2 = @yaml_sequence_node
+| 3 = @yaml_alias_node
+;
+
+@yaml_collection_node = @yaml_mapping_node | @yaml_sequence_node;
+
+@yaml_node_parent = @yaml_collection_node | @file;
+
+yaml_anchors (unique int node: @yaml_node ref,
+              string anchor: string ref);
+
+yaml_aliases (unique int alias: @yaml_alias_node ref,
+              string target: string ref);
+
+yaml_scalars (unique int scalar: @yaml_scalar_node ref,
+              int style: int ref,
+              string value: string ref);
+
+yaml_comments (unique int id: @yaml_comment,
+               string text: string ref,
+               string tostring: string ref);
+
+yaml_errors (unique int id: @yaml_error,
+             string message: string ref);
+
+yaml_locations(unique int locatable: @yaml_locatable ref,
+             int location: @location_default ref);
+
+@yaml_locatable = @yaml_node | @yaml_error | @yaml_comment;
+
+/*- Database metadata -*/
+
+/**
+ * The CLI will automatically emit applicable tuples for this table,
+ * such as `databaseMetadata("isOverlay", "true")` when building an
+ * overlay database.
+ */
+databaseMetadata(
+  string metadataKey: string ref,
+  string value: string ref
+);
+
+/*- Overlay support -*/
+
+/**
+ * The CLI will automatically emit tuples for each new/modified/deleted file
+ * when building an overlay database.
+ */
+overlayChangedFiles(
+  string path: string ref
+);
+
+/*- Nix dbscheme -*/
+@nix_underscore_expression = @nix_apply_expression | @nix_assert_expression | @nix_attrset_expression | @nix_binary_expression | @nix_function_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_if_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_let_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_unary_expression | @nix_variable_expression | @nix_with_expression
+
+@nix_apply_expression_argument_type = @nix_attrset_expression | @nix_hpath_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_variable_expression
+
+@nix_apply_expression_function_type = @nix_apply_expression | @nix_attrset_expression | @nix_hpath_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_variable_expression
+
+nix_apply_expression_def(
+  unique int id: @nix_apply_expression,
+  int argument: @nix_apply_expression_argument_type ref,
+  int function: @nix_apply_expression_function_type ref
+);
+
+@nix_assert_expression_body_type = @nix_apply_expression | @nix_assert_expression | @nix_attrset_expression | @nix_binary_expression | @nix_function_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_if_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_let_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_unary_expression | @nix_variable_expression | @nix_with_expression
+
+nix_assert_expression_def(
+  unique int id: @nix_assert_expression,
+  int body: @nix_assert_expression_body_type ref,
+  int condition: @nix_underscore_expression ref
+);
+
+@nix_attrpath_attr_type = @nix_interpolation | @nix_string_expression | @nix_token_identifier
+
+#keyset[nix_attrpath, index]
+nix_attrpath_attr(
+  int nix_attrpath: @nix_attrpath ref,
+  int index: int ref,
+  unique int attr: @nix_attrpath_attr_type ref
+);
+
+nix_attrpath_def(
+  unique int id: @nix_attrpath
+);
+
+nix_attrset_expression_child(
+  unique int nix_attrset_expression: @nix_attrset_expression ref,
+  unique int child: @nix_binding_set ref
+);
+
+nix_attrset_expression_def(
+  unique int id: @nix_attrset_expression
+);
+
+@nix_binary_expression_left_type = @nix_apply_expression | @nix_attrset_expression | @nix_binary_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_unary_expression | @nix_variable_expression
+
+case @nix_binary_expression.operator of
+  0 = @nix_binary_expression_bangequal
+| 1 = @nix_binary_expression_ampersandampersand
+| 2 = @nix_binary_expression_star
+| 3 = @nix_binary_expression_plus
+| 4 = @nix_binary_expression_plusplus
+| 5 = @nix_binary_expression_minus
+| 6 = @nix_binary_expression_minusrangle
+| 7 = @nix_binary_expression_slash
+| 8 = @nix_binary_expression_slashslash
+| 9 = @nix_binary_expression_langle
+| 10 = @nix_binary_expression_langleequal
+| 11 = @nix_binary_expression_equalequal
+| 12 = @nix_binary_expression_rangle
+| 13 = @nix_binary_expression_rangleequal
+| 14 = @nix_binary_expression_pipepipe
+;
+
+
+@nix_binary_expression_right_type = @nix_apply_expression | @nix_attrset_expression | @nix_binary_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_unary_expression | @nix_variable_expression
+
+nix_binary_expression_def(
+  unique int id: @nix_binary_expression,
+  int left: @nix_binary_expression_left_type ref,
+  int operator: int ref,
+  int right: @nix_binary_expression_right_type ref
+);
+
+nix_binding_def(
+  unique int id: @nix_binding,
+  int attrpath: @nix_attrpath ref,
+  int expression: @nix_underscore_expression ref
+);
+
+@nix_binding_set_binding_type = @nix_binding | @nix_inherit | @nix_inherit_from
+
+#keyset[nix_binding_set, index]
+nix_binding_set_binding(
+  int nix_binding_set: @nix_binding_set ref,
+  int index: int ref,
+  unique int binding: @nix_binding_set_binding_type ref
+);
+
+nix_binding_set_def(
+  unique int id: @nix_binding_set
+);
+
+nix_formal_default(
+  unique int nix_formal: @nix_formal ref,
+  unique int default: @nix_underscore_expression ref
+);
+
+nix_formal_def(
+  unique int id: @nix_formal,
+  int name: @nix_token_identifier ref
+);
+
+nix_formals_ellipses(
+  unique int nix_formals: @nix_formals ref,
+  unique int ellipses: @nix_token_ellipses ref
+);
+
+#keyset[nix_formals, index]
+nix_formals_formal(
+  int nix_formals: @nix_formals ref,
+  int index: int ref,
+  unique int formal: @nix_formal ref
+);
+
+nix_formals_def(
+  unique int id: @nix_formals
+);
+
+@nix_function_expression_body_type = @nix_apply_expression | @nix_assert_expression | @nix_attrset_expression | @nix_binary_expression | @nix_function_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_if_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_let_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_unary_expression | @nix_variable_expression | @nix_with_expression
+
+nix_function_expression_formals(
+  unique int nix_function_expression: @nix_function_expression ref,
+  unique int formals: @nix_formals ref
+);
+
+nix_function_expression_universal(
+  unique int nix_function_expression: @nix_function_expression ref,
+  unique int universal: @nix_token_identifier ref
+);
+
+nix_function_expression_def(
+  unique int id: @nix_function_expression,
+  int body: @nix_function_expression_body_type ref
+);
+
+@nix_has_attr_expression_expression_type = @nix_apply_expression | @nix_attrset_expression | @nix_binary_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_unary_expression | @nix_variable_expression
+
+case @nix_has_attr_expression.operator of
+  0 = @nix_has_attr_expression_question
+;
+
+
+nix_has_attr_expression_def(
+  unique int id: @nix_has_attr_expression,
+  int attrpath: @nix_attrpath ref,
+  int expression: @nix_has_attr_expression_expression_type ref,
+  int operator: int ref
+);
+
+@nix_hpath_expression_child_type = @nix_interpolation | @nix_token_path_fragment
+
+#keyset[nix_hpath_expression, index]
+nix_hpath_expression_child(
+  int nix_hpath_expression: @nix_hpath_expression ref,
+  int index: int ref,
+  unique int child: @nix_hpath_expression_child_type ref
+);
+
+nix_hpath_expression_def(
+  unique int id: @nix_hpath_expression
+);
+
+nix_if_expression_def(
+  unique int id: @nix_if_expression,
+  int alternative: @nix_underscore_expression ref,
+  int condition: @nix_underscore_expression ref,
+  int consequence: @nix_underscore_expression ref
+);
+
+@nix_indented_string_expression_child_type = @nix_interpolation | @nix_token_dollar_escape | @nix_token_escape_sequence | @nix_token_string_fragment
+
+#keyset[nix_indented_string_expression, index]
+nix_indented_string_expression_child(
+  int nix_indented_string_expression: @nix_indented_string_expression ref,
+  int index: int ref,
+  unique int child: @nix_indented_string_expression_child_type ref
+);
+
+nix_indented_string_expression_def(
+  unique int id: @nix_indented_string_expression
+);
+
+nix_inherit_def(
+  unique int id: @nix_inherit,
+  int attrs: @nix_inherited_attrs ref
+);
+
+nix_inherit_from_def(
+  unique int id: @nix_inherit_from,
+  int attrs: @nix_inherited_attrs ref,
+  int expression: @nix_underscore_expression ref
+);
+
+@nix_inherited_attrs_attr_type = @nix_interpolation | @nix_string_expression | @nix_token_identifier
+
+#keyset[nix_inherited_attrs, index]
+nix_inherited_attrs_attr(
+  int nix_inherited_attrs: @nix_inherited_attrs ref,
+  int index: int ref,
+  unique int attr: @nix_inherited_attrs_attr_type ref
+);
+
+nix_inherited_attrs_def(
+  unique int id: @nix_inherited_attrs
+);
+
+nix_interpolation_def(
+  unique int id: @nix_interpolation,
+  int expression: @nix_underscore_expression ref
+);
+
+nix_let_attrset_expression_child(
+  unique int nix_let_attrset_expression: @nix_let_attrset_expression ref,
+  unique int child: @nix_binding_set ref
+);
+
+nix_let_attrset_expression_def(
+  unique int id: @nix_let_attrset_expression
+);
+
+@nix_let_expression_body_type = @nix_apply_expression | @nix_assert_expression | @nix_attrset_expression | @nix_binary_expression | @nix_function_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_if_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_let_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_unary_expression | @nix_variable_expression | @nix_with_expression
+
+nix_let_expression_child(
+  unique int nix_let_expression: @nix_let_expression ref,
+  unique int child: @nix_binding_set ref
+);
+
+nix_let_expression_def(
+  unique int id: @nix_let_expression,
+  int body: @nix_let_expression_body_type ref
+);
+
+@nix_list_expression_element_type = @nix_attrset_expression | @nix_hpath_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_variable_expression
+
+#keyset[nix_list_expression, index]
+nix_list_expression_element(
+  int nix_list_expression: @nix_list_expression ref,
+  int index: int ref,
+  unique int element: @nix_list_expression_element_type ref
+);
+
+nix_list_expression_def(
+  unique int id: @nix_list_expression
+);
+
+nix_parenthesized_expression_def(
+  unique int id: @nix_parenthesized_expression,
+  int expression: @nix_underscore_expression ref
+);
+
+@nix_path_expression_child_type = @nix_interpolation | @nix_token_path_fragment
+
+#keyset[nix_path_expression, index]
+nix_path_expression_child(
+  int nix_path_expression: @nix_path_expression ref,
+  int index: int ref,
+  unique int child: @nix_path_expression_child_type ref
+);
+
+nix_path_expression_def(
+  unique int id: @nix_path_expression
+);
+
+nix_rec_attrset_expression_child(
+  unique int nix_rec_attrset_expression: @nix_rec_attrset_expression ref,
+  unique int child: @nix_binding_set ref
+);
+
+nix_rec_attrset_expression_def(
+  unique int id: @nix_rec_attrset_expression
+);
+
+@nix_select_expression_default_type = @nix_attrset_expression | @nix_hpath_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_variable_expression
+
+nix_select_expression_default(
+  unique int nix_select_expression: @nix_select_expression ref,
+  unique int default: @nix_select_expression_default_type ref
+);
+
+@nix_select_expression_expression_type = @nix_attrset_expression | @nix_hpath_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_variable_expression
+
+nix_select_expression_def(
+  unique int id: @nix_select_expression,
+  int attrpath: @nix_attrpath ref,
+  int expression: @nix_select_expression_expression_type ref
+);
+
+nix_source_code_expression(
+  unique int nix_source_code: @nix_source_code ref,
+  unique int expression: @nix_underscore_expression ref
+);
+
+nix_source_code_def(
+  unique int id: @nix_source_code
+);
+
+@nix_string_expression_child_type = @nix_interpolation | @nix_token_dollar_escape | @nix_token_escape_sequence | @nix_token_string_fragment
+
+#keyset[nix_string_expression, index]
+nix_string_expression_child(
+  int nix_string_expression: @nix_string_expression ref,
+  int index: int ref,
+  unique int child: @nix_string_expression_child_type ref
+);
+
+nix_string_expression_def(
+  unique int id: @nix_string_expression
+);
+
+@nix_unary_expression_argument_type = @nix_apply_expression | @nix_attrset_expression | @nix_binary_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_unary_expression | @nix_variable_expression
+
+case @nix_unary_expression.operator of
+  0 = @nix_unary_expression_bang
+| 1 = @nix_unary_expression_minus
+;
+
+
+nix_unary_expression_def(
+  unique int id: @nix_unary_expression,
+  int argument: @nix_unary_expression_argument_type ref,
+  int operator: int ref
+);
+
+nix_variable_expression_def(
+  unique int id: @nix_variable_expression,
+  int name: @nix_token_identifier ref
+);
+
+@nix_with_expression_body_type = @nix_apply_expression | @nix_assert_expression | @nix_attrset_expression | @nix_binary_expression | @nix_function_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_if_expression | @nix_indented_string_expression | @nix_let_attrset_expression | @nix_let_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_string_expression | @nix_token_float_expression | @nix_token_integer_expression | @nix_token_spath_expression | @nix_token_uri_expression | @nix_unary_expression | @nix_variable_expression | @nix_with_expression
+
+nix_with_expression_def(
+  unique int id: @nix_with_expression,
+  int body: @nix_with_expression_body_type ref,
+  int environment: @nix_underscore_expression ref
+);
+
+nix_tokeninfo(
+  unique int id: @nix_token,
+  int kind: int ref,
+  string value: string ref
+);
+
+case @nix_token.kind of
+  0 = @nix_reserved_word
+| 1 = @nix_token_comment
+| 2 = @nix_token_dollar_escape
+| 3 = @nix_token_ellipses
+| 4 = @nix_token_escape_sequence
+| 5 = @nix_token_float_expression
+| 6 = @nix_token_identifier
+| 7 = @nix_token_integer_expression
+| 8 = @nix_token_path_fragment
+| 9 = @nix_token_spath_expression
+| 10 = @nix_token_string_fragment
+| 11 = @nix_token_uri_expression
+;
+
+
+@nix_ast_node = @nix_apply_expression | @nix_assert_expression | @nix_attrpath | @nix_attrset_expression | @nix_binary_expression | @nix_binding | @nix_binding_set | @nix_formal | @nix_formals | @nix_function_expression | @nix_has_attr_expression | @nix_hpath_expression | @nix_if_expression | @nix_indented_string_expression | @nix_inherit | @nix_inherit_from | @nix_inherited_attrs | @nix_interpolation | @nix_let_attrset_expression | @nix_let_expression | @nix_list_expression | @nix_parenthesized_expression | @nix_path_expression | @nix_rec_attrset_expression | @nix_select_expression | @nix_source_code | @nix_string_expression | @nix_token | @nix_unary_expression | @nix_variable_expression | @nix_with_expression
+
+nix_ast_node_location(
+  unique int node: @nix_ast_node ref,
+  int loc: @location_default ref
+);
+
+#keyset[parent, parent_index]
+nix_ast_node_parent(
+  unique int node: @nix_ast_node ref,
+  int parent: @nix_ast_node ref,
+  int parent_index: int ref
+);
+
+
+nx_anchors(unique int anchor: @nx_anchor, int file: @nx_file ref, int startByte: int ref, int endByte: int ref, string nodeKind: string ref, string childPath: string ref);
+nx_capabilities(int target: @nx_target ref, string capability: string ref, string state: string ref, string reason: string ref);
+nx_context_parents(int context: @nx_context ref, int parent: @nx_context ref, int option: @nx_option ref, string memberKind: string ref, string memberKey: string ref);
+nx_contexts(unique int context: @nx_context, int target: @nx_target ref, string kind: string ref, string instancePathJson: string ref);
+nx_definition_order(int definition: @nx_definition ref, string priorityDecimal: string ref);
+nx_definitions(unique int definition: @nx_definition, int option: @nx_option ref, int ordinal: int ref, int origin: @nx_origin ref);
+nx_diagnostic_origins(int diagnostic: @nx_diagnostic ref, int origin: @nx_origin ref);
+nx_diagnostic_requests(int diagnostic: @nx_diagnostic ref, int request: @nx_request ref);
+nx_diagnostic_targets(int diagnostic: @nx_diagnostic ref, int target: @nx_target ref);
+nx_diagnostics(unique int diagnostic: @nx_diagnostic, int run: @nx_run ref, string code: string ref, string message: string ref);
+nx_files(unique int file: @nx_file, string rootKey: string ref, string relativePath: string ref, string contentHash: string ref, string sourceKind: string ref);
+nx_member_values(int member: @nx_member ref, int value: @nx_value ref);
+nx_module_imports(int parent: @nx_module ref, int ordinal: int ref, int child: @nx_module ref);
+nx_module_roots(int context: @nx_context ref, int ordinal: int ref, int module: @nx_module ref);
+nx_modules(unique int module: @nx_module, int context: @nx_context ref, string moduleKey: string ref, int origin: @nx_origin ref, int disabled: int ref);
+nx_observation_values(int observation: @nx_observation ref, int value: @nx_value ref);
+nx_observations(unique int observation: @nx_observation, int request: @nx_request ref, string subjectKind: string ref, string subjectKey: string ref, string stage: string ref, string state: string ref);
+nx_option_declarations(int option: @nx_option ref, int ordinal: int ref, int origin: @nx_origin ref);
+nx_option_metadata(int option: @nx_option ref, string field: string ref, string scalarJson: string ref);
+nx_option_priority(int option: @nx_option ref, string priorityDecimal: string ref);
+nx_options(unique int option: @nx_option, int context: @nx_context ref, string pathJson: string ref);
+nx_origin_files(int origin: @nx_origin ref, int file: @nx_file ref);
+nx_origin_positions(int origin: @nx_origin ref, int line: int ref, int column: int ref, string convention: string ref);
+nx_origins(unique int origin: @nx_origin, string label: string ref, string kind: string ref);
+nx_phases(int run: @nx_run ref, string phase: string ref, string state: string ref, string reason: string ref);
+nx_request_results(int request: @nx_request ref, string state: string ref, string reason: string ref, int observedCount: int ref);
+nx_requests(unique int request: @nx_request, int target: @nx_target ref, int context: @nx_context ref, string domain: string ref, string pathJson: string ref, string facet: string ref, int maxDepth: int ref, int maxNodes: int ref, int maxBytes: int ref, int maxSeconds: int ref, int maxMemoryMiB: int ref);
+nx_runs(unique int run: @nx_run, string schemaHash: string ref, string extractorHash: string ref, string grammarHash: string ref, string modelHash: string ref, string sourceSnapshotHash: string ref);
+nx_scalar_values(int value: @nx_value ref, string encoding: string ref, string payload: string ref);
+nx_string_context(int value: @nx_value ref, string storePath: string ref, string contextKind: string ref, string outputName: string ref);
+nx_syntax_results(int file: @nx_file ref, string state: string ref, int errorCount: int ref);
+nx_target_inputs(int target: @nx_target ref, int file: @nx_file ref, string role: string ref);
+nx_targets(unique int target: @nx_target, int run: @nx_run ref, string name: string ref, string adapter: string ref, string system: string ref, string evaluatorHash: string ref, string libHash: string ref, string inputHash: string ref, string policyHash: string ref, string state: string ref);
+nx_value_members(unique int member: @nx_member, int parent: @nx_value ref, string memberKind: string ref, string memberKey: string ref, int ordinal: int ref);
+nx_values(unique int value: @nx_value, string kind: string ref, string completeness: string ref);

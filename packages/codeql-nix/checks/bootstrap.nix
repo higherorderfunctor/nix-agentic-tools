@@ -8,41 +8,11 @@
     codeql-nix-bootstrap = let
       # Engine and pinned inputs.
       engine = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.codeql-javascript;
+      extractor = inputs.syntaxFixture;
       fixture = ./fixtures/bootstrap;
-      grammar = pkgs.fetchFromGitHub {
-        hash = "sha256-sS39i8TCtArwKoq3DFpxaaeZEuRiC1DUTZVPJ+mcPfE=";
-        owner = "nix-community";
-        repo = "tree-sitter-nix";
-        rev = "38a15330421d20f3a4d380759f9634d39ba3d8ec";
-      };
-      kit = pkgs.fetchFromGitHub {
-        hash = "sha256-o9cS+5joKXdUN8fOuUyl/yMMIzI4sKxdotljfMJ5by0=";
-        owner = "github";
-        repo = "codeql";
-        rev = "a1575b98a8cc19bcfa7bb6cb41be688cb3dae65c";
-      };
+      inputs = import ../lib/kit.nix {inherit pkgs;};
+      inherit (inputs) grammar kit;
       inherit (builtins.fromJSON (builtins.readFile ../../codeql/sources.json)) version;
-
-      # Rust fixture and reproducible Cargo inputs.
-      extractor = pkgs.rustPlatform.buildRustPackage {
-        cargoHash = "sha256-ewSoza879MQSji9vVZxP81htnxSnDURD9T+iYMEhzrw=";
-        doCheck = false;
-        pname = "nixql-bootstrap";
-        src = source;
-        version = "0.0.0";
-      };
-      source = pkgs.runCommand "nixql-bootstrap-source" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        mkdir -p "$out/upstream/shared"
-        cp ${fixture + "/Cargo.toml"} "$out/Cargo.toml"
-        cp ${fixture + "/Cargo.lock"} "$out/Cargo.lock"
-        cp -r ${fixture + "/src"} "$out/src"
-        for crate in tree-sitter-extractor yeast yeast-macros yeast-schema; do
-          cp -r ${kit}/shared/"$crate" "$out/upstream/shared/"
-        done
-        cp -r ${grammar} "$out/grammar"
-      '';
 
       # Installed entry points.
       build = strictShell {
@@ -66,8 +36,9 @@
       installed = pkgs.runCommand "nixql-bootstrap-packs" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        mkdir -p "$out/extractor/tools" "$out/library"
+        mkdir -p "$out/extractor/tools" "$out/library/codeql"
         cp -r ${fixture}/ql/. "$out/library/"
+        cp ${../ql/lib/codeql/Locations.qll} "$out/library/codeql/Locations.qll"
         chmod -R u+w "$out/library"
         ${extractor}/bin/bootstrap generate "$out/library/nix.dbscheme" "$out/library/Ast.qll"
         cp "$out/library/nix.dbscheme" "$out/extractor/nix.dbscheme"
