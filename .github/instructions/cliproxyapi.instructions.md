@@ -107,9 +107,9 @@ before publication.
 # CLIProxyAPI front gate (cpa-gate)
 
 > **Last verified:** 2026-10-22 — opt-in instance wiring splits named client
-> keys from independent internal secrets, filters exact provider-side model
-> unions, rejects reserved metadata names and internal TLS, and shares restart
-> triggers; websockets remain refused.
+> keys from independent internal secrets and filters each client key's exact
+> model set after credential and client selection; Claude pickers consume the
+> same set when a client list is configured. Restart triggers remain shared.
 
 **cpa-gate is NOT a security boundary.** A harness that runs under the same uid
 as the gate can read the policy file, which holds every client key and every
@@ -165,11 +165,22 @@ Redact readers run earlier in the parent service launcher; suppression cannot
 consume or alter their secret output. The exact-mode preflight still reports its
 value-free refusal before CPA starts.
 
-The policy's model set is the exact union of the routed credentials' selected
-provider-side models. G3 refuses a union member excluded from any other routed
-credential whose catalog registers it. Comparisons preserve exact bytes; there
-are no per-client model overrides here. Upstream `routes[].api` chooses the CPA
-credential family; the gate admits Anthropic, Chat and Responses client
+The policy starts from the union of the routed credentials' selected models.
+`clientKeys.<name>.models` intersects that union; `excludedModels` subtracts
+from it. Set at most one list, or leave both unset for the whole union. Every
+listed name must be served by a routed credential after credential exclusions,
+and the final set must be nonempty. Lists require `gate.enable = true`;
+otherwise evaluation names enabling the gate or removing the lists as the fix.
+Comparisons preserve exact bytes, including case. The same name rules as
+credential exact mode apply. G3 still refuses a final member excluded from
+another routed credential whose catalog registers it.
+
+With a client list, Claude's picker replaces its built-ins and sets
+`availableModels` with exact matching to that final set, through the existing
+Harness proxy lowering on both backends. Codex keeps discovering CPA's catalog
+through the gate, which filters it by the key's set. Without client lists,
+config and units retain their existing lowering. Upstream `routes[].api` chooses
+the CPA credential family; the gate admits Anthropic, Chat and Responses client
 protocols because CPA translates them. Hosted tools remain denied and websockets
 remain refused. This wiring does not define upstream routing order.
 
@@ -299,7 +310,9 @@ install check needs a version that a local path lacks.
 
 - `module-service-instances-gate-*` checks both backend projections and
   default-off config/units and command-body baselines, reserved-name/TLS,
-  exact-mode and G3 refusals, and shared triggers.
+  exact-mode and G3 refusals, and shared triggers. The client-model checks cover
+  allow/exclude selection, misspellings, empty sets, gate-off refusals and
+  Claude picker equality, with an unchanged second key as the control.
 - `module-service-instances-runtime-providers` exercises both named client keys
   through real CPA and gate launchers: exact listings, each model over HTTP and
   incremental SSE, internal-port authentication, uniform refusals with empty
@@ -447,7 +460,8 @@ change, then run the module assertions and Go check in CI.
 > `access.api-keys` and `access.key-allowlist` entries from named upstream
 > routes. `exactModels` applies native model exclusions and disables model
 > rewrites; opt-in `gate.enable` moves CPA to a loopback internal port and
-> replaces its client keys with private internal keys.
+> replaces its client keys with private internal keys. Optional client-key model
+> allowlists or exclusions narrow the routed credential union at the gate.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is

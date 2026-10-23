@@ -268,7 +268,11 @@ in {
       refusal = where: "${where} has a rule with kind = \"oauth\" and base-urls, which can never match: base-urls compare an API-key credential's base URL and never match an OAuth login. Use kind = \"apikey\" or drop base-urls.";
       offending = lib.filter (entry: unmatchable entry != []) entries;
     in
-      lib.optionals instance.enable (lib.optionals instance.gate.enable (map (message: {
+      lib.optionals instance.enable (map (message: {
+          assertion = false;
+          inherit message;
+        }) (gate.clientProblems name instance)
+        ++ lib.optionals instance.gate.enable (map (message: {
             assertion = false;
             inherit message;
           }) (gate.problems name instance)

@@ -11,7 +11,8 @@
 > `access.api-keys` and `access.key-allowlist` entries from named upstream
 > routes. `exactModels` applies native model exclusions and disables model
 > rewrites; opt-in `gate.enable` moves CPA to a loopback internal port and
-> replaces its client keys with private internal keys.
+> replaces its client keys with private internal keys. Optional client-key model
+> allowlists or exclusions narrow the routed credential union at the gate.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is

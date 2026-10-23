@@ -4,7 +4,8 @@
 > client keys; harnesses select `instance` + `clientKey`. Claude offers routed
 > API-key models in its picker; Codex discovers CPA models without profiles.
 > Both consume the shared redact client-key helper. Optional instance gates
-> preserve these external keys while CPA uses independent internal keys.
+> preserve these external keys while CPA uses independent internal keys;
+> optional client-key model lists narrow that key's models and picker.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -71,7 +72,11 @@ NOT a security boundary for same-uid Harnesses (see
 the same key through `normalized.proxy`; CPA fails closed for each listed key
 (see `cliproxyapi-key-allowlist.md`). Runtime `proxy.allow` and
 `proxy.providers` are removed: selecting a client key selects its declared
-routes.
+routes. Optional `clientKeys.<name>.models` XOR `excludedModels` narrows the
+union of those routes' selected upstream models and requires `gate.enable`. Both
+unset preserves the existing config and units. Every named model must be served
+by a route, and the final set must not be empty. The gate policy and Harness
+picker lowering consume that same set; see the front-gate fragment.
 
 A harness must not define the instance: that would make a misspelled name look
 valid, and checking existence from the definition would recurse. Multiple

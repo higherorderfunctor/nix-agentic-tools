@@ -217,6 +217,101 @@
         (!(accepts backend (lib.recursiveUpdate enabled {settings.observability.logs.debug = true;})))
       ]
     );
+    "module-service-instances-client-models-${backend}" = let
+      limited = changes: lib.recursiveUpdate enabled {clientKeys.one = changes;};
+      selected = input: (lib.head (builtins.fromJSON (evaluate backend input).config.ai.services.cpa-gate-main.files.policy.content).entries).models;
+      refuses = fragment: input:
+        lib.any (item: !item.assertion && lib.hasInfix fragment item.message) (evaluate backend input).config.assertions;
+      withHarness = instance:
+        (
+          if backend == "hm"
+          then harness.evalHm
+          else harness.evalDevenv
+        ) {
+          ai = {
+            claude = {
+              enable = true;
+              proxy = {
+                instance = "main";
+                clientKey = "one";
+              };
+            };
+            cliproxyapi.instances.main = instance;
+            codex = {
+              enable = true;
+              proxy = {
+                instance = "main";
+                clientKey = "one";
+              };
+            };
+          };
+        };
+      pickerFor = result: let
+        launcher = lib.findFirst (package: package.name or "" == "claude-code-proxy") null (result.config.home.packages or result.config.packages);
+        file = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (launcher.buildCommand or ""));
+      in
+        if backend == "hm"
+        then harness.claudeSettings result
+        else builtins.fromJSON (builtins.readFile (lib.head file));
+      mixed = lib.recursiveUpdate enabled {
+        clientKeys.one.routes = [{credential = "first";} {credential = "second";}];
+        credentials.second = (upstream "second" ["q"]) // {apiKey = (upstream "second" null).apiKey // {models = ["p" "q"];};};
+      };
+      oauthModel = lib.head (import ../../packages/cliproxyapi/lib/exact-models.nix {inherit lib;}).catalogs.claude;
+      oauthClient = lib.recursiveUpdate enabled {
+        credentials.login = {
+          models = [oauthModel];
+          oauth = {
+            vendor = "claude";
+            authFile = "login.json";
+          };
+        };
+        clientKeys.one = {
+          models = [oauthModel];
+          routes = [{credential = "first";} {credential = "login";}];
+        };
+      };
+      independent =
+        limited {models = ["m"];}
+        // {
+          clientKeys = (limited {models = ["m"];}).clientKeys // {two = base.clientKeys.one // {key._redact.file = "/run/secrets/two";};};
+        };
+      results = map (input: let
+        result = withHarness input;
+        picker = pickerFor result;
+      in
+        accepts backend input
+        && result.config.ai.claude.normalized.proxy.models == ["m"]
+        && result.config.ai.codex.normalized.proxy.models == ["m"]
+        && picker.availableModels == ["m"]
+        && picker.availableModelsMatch == "exact"
+        && picker.modelPicker.replaceBuiltInOptions
+        && map (row: row.model) picker.modelPicker.options == ["m"])
+      [(limited {models = ["m"];}) (limited {excludedModels = ["n"];})];
+    in
+      harness.mkTest "service-instances-client-models-${backend}" (lib.all lib.id (
+        results
+        ++ [
+          (selected enabled == ["m" "n"])
+          ((withHarness enabled).config.ai.claude.normalized.proxy.models == null)
+          (accepts backend mixed && selected mixed == ["m" "n" "p"])
+          (accepts backend oauthClient && selected oauthClient == [oauthModel])
+          ((pickerFor (withHarness oauthClient)).availableModels == [oauthModel])
+          (accepts backend independent)
+          (map (entry: entry.models) (builtins.fromJSON (evaluate backend independent).config.ai.services.cpa-gate-main.files.policy.content).entries == [["m"] ["m" "n"]])
+          (refuses "XOR" (limited {
+            models = ["m"];
+            excludedModels = ["n"];
+          }))
+          (refuses "must not be empty" (limited {excludedModels = ["m" "n"];}))
+          (lib.all (field: refuses "not served by any routed credential" (limited {${field} = ["missing"];})) ["excludedModels" "models"])
+          (refuses "not served by any routed credential" (lib.recursiveUpdate mixed {clientKeys.one.models = ["q"];}))
+          (lib.all (field: refuses "enable the gate or remove" ((limited {${field} = ["m"];}) // {gate.enable = false;})) ["excludedModels" "models"])
+          (lib.all (field: !(accepts backend (limited {${field} = [(lib.mkIf false "m")];}))) ["excludedModels" "models"])
+          (lib.all (model: refuses "exact printable model names" (limited {models = [model];})) ["auto" "m(high)" "models/m" "m*" "claude-fable-5-dd-m" "m " "{$SECRET}"])
+          (refuses "not served by any routed credential" (limited {models = ["M"];}))
+        ]
+      ));
     "module-service-instances-gate-off-command-${backend}" = pkgs.runCommand "service-instances-gate-off-command-${backend}" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

@@ -39,15 +39,20 @@ def result(port, key, method, path, body=None):
     return value
 
 
-for name, api, upstream, allowed, forbidden in [
-    ("a", "messages", "zai", {"glm-shared", "zai-model"}, "other-model"),
-    ("b", "responses", "other", {"glm-shared", "other-model"}, "zai-model"),
+for name, api, allowed, forbidden in [
+    ("a", "messages", {"glm-shared"}, "zai-model"),
+    ("b", "responses", {"glm-shared", "other-model", "zai-model"}, "outside"),
 ]:
     entry = entries[name]
     key = entry["key"]
     assert set(entry["models"]) == allowed
     status, raw = result(28426, key, "GET", "/v1/models")
     assert status == 200 and {model["id"] for model in json.loads(raw)["data"]} == allowed
+    connection = http.client.HTTPConnection("127.0.0.1", 28426, timeout=10)
+    connection.request("GET", "/v1/models?client_version=0.163.0", headers={"Authorization": "Bearer " + key})
+    response = connection.getresponse()
+    assert response.status == 200 and {row["slug"] for row in json.loads(response.read())["models"]} == allowed
+    connection.close()
     # External keys work only at the gate; its internal principal still works
     # at CPA as the positive control for the internal listener's authentication.
     assert result(28429, key, "GET", "/v1/models")[0] == 401
@@ -56,6 +61,8 @@ for name, api, upstream, allowed, forbidden in [
     for model in allowed:
         body = {"model": model, "max_tokens": 16, "messages": [{"role": "user", "content": "hi"}]} if api == "messages" else {"model": model, "input": "hi"}
         assert result(28426, key, "POST", path, body)[0] == 200
+        for name in ["zai", "other"]:
+            Path(name + ".log.done").unlink(missing_ok=True)
         connection, response = request(28426, key, "POST", path, body | {"stream": True})
         assert response.status == 200
         while True:
@@ -63,7 +70,7 @@ for name, api, upstream, allowed, forbidden in [
             assert line
             if line.startswith(b"data:"):
                 break
-        assert not Path(upstream + ".log.done").exists(), "SSE was buffered until the final event"
+        assert not any(Path(name + ".log.done").exists() for name in ["zai", "other"]), "SSE was buffered until the final event"
         assert response.read()
         connection.close()
 
