@@ -38,7 +38,10 @@ class Inventory(unittest.TestCase):
         self.validate(self.manifest)
         self.assertTrue({"AstNode", "Token"}.issubset(self.classes))
         self.assertTrue({"files", "locations_default"}.issubset(self.tables))
-        self.assertTrue(set(CONTRACT["relations"]).issubset(self.tables))
+        self.assertEqual(
+            {table for table in self.tables if table.startswith("nx_")},
+            set(CONTRACT["relations"]),
+        )
         self.assertNotIn("nx_bootstrap_targets", self.tables)
 
 

@@ -1,8 +1,9 @@
 # Raw syntax generation
 
-> **Last verified:** 2026-10-23 — S1 checks standalone location rows against
-> exact archived fixture bytes and rejects missing/corrupt archive entries;
-> production extraction remains later work.
+> **Last verified:** 2026-10-23 — S1 combines the 23 Step 0 metadata relations
+> with the full kit-generated private syntax and checks their exact inventory;
+> standalone location tests retain exact archived bytes and missing/corrupt
+> archive refusals. Production extraction remains later work.
 
 ## Purpose and fit
 
@@ -33,8 +34,11 @@ F1 `schema/evaluation.dbscheme` bytes to the generated schema. Its outputs are:
 
 The inventory reads declaration forms after removing comments; it is not a
 general QL parser. Empty class/table inventories fail. The manifest records
-generated class names and combined-schema table names, including the F1
-relations, so both AST churn and handwritten-schema drift remain visible.
+generated class names and combined-schema table names, including the 23 Step 0
+F1 relations, so both AST churn and handwritten-schema drift remain visible. The
+inventory requires the `nx_` tables to match F1 exactly; an internally
+consistent manifest cannot retain deferred metadata tables. Keep every private
+kit syntax table and class, including forms without a current public consumer.
 
 The source library's `ql/lib/nix.dbscheme` symlink selects the committed
 combined schema. The assembled `library` instead copies the fresh generation
@@ -65,7 +69,7 @@ path. The check:
    committed `generated/` tree byte for byte.
 2. Runs the independent inventory tests against the manifest, schema and F1
    relation inventory, comparing class/table lists and the schema digest with
-   the actual generated artifacts.
+   the actual generated artifacts and rejecting missing or extra `nx_` tables.
 3. Uses the bare engine, this library and a private test extractor to run
    `ql/test/raw-inventory/Locations.ql`. The reviewed rows require generated
    tokens to resolve through locations to distinct files, including a recovered
