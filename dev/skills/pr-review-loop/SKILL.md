@@ -168,11 +168,11 @@ Each part closes a way a watcher has reported the wrong thing:
   commit's checks, so a count alone can watch a run that is already over.
 - **The count gate and its timeout.** Gating on "is anything PENDING" falls
   through on an empty list; running out of attempts must fail, not carry on.
-- **Fail fast on each poll.** Classify every failure before waiting, so a real
-  failure stops within the thirty-second polling interval. A blocking
-  `--watch --fail-fast` does not stop on cancellations while any check is
-  pending, which would delay replacement reruns and bypass their stale-check
-  deadline.
+- **Fail fast on each poll.** Classify every failure before waiting, so while
+  checks are active a real failure stops within the thirty-second polling
+  interval. A blocking `--watch --fail-fast` does not stop on cancellations
+  while any check is pending, which would delay replacement reruns and bypass
+  their stale-check deadline.
 - **Cancelled duplicates.** A failed check is deferred only when its Actions run
   is cancelled and another run of the same workflow on the same head is
   unfinished or successful. A successful replacement triggers a rerun of the
@@ -183,7 +183,8 @@ Each part closes a way a watcher has reported the wrong thing:
   minutes fail the watcher; head movement or a conflict also stops the deferred
   wait.
 - **The re-watch loop.** Jobs that wait on other jobs create their checks later,
-  so `--watch` can return when only the first batch is done.
+  so a settled snapshot can cover only the first batch. Wait sixty seconds and
+  recheck for a new batch before finishing.
 - **The final head check and `--required`.** `gh pr checks` reads whatever the
   PR's head is now; a later push would otherwise report the newer commit.
 - **`DIRTY`.** A conflicted PR gets no checks, so the count gate would wait out
