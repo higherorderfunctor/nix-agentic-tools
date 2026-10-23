@@ -106,7 +106,9 @@ def nix_command(nix, binding, job, request, directory, deadline, env, invocation
     root = next((root for root in roots if expression.is_relative_to(root)), None)
     if root is None:
         raise Refusal("source-not-admitted", "expression lies outside the admitted closure", "blocked")
-    base = [str(nix), "--extra-experimental-features", "nix-command flakes",
+    policy = json.loads((Path(__file__).parents[2] / "models/builtins/policy.json").read_text())
+    options = [part for key, value in policy.items() for part in ("--option", key, value)]
+    base = [str(nix), *options,
             "--store", "local?root=" + str(directory / "store"),
             "--option", "min-free", "0", "--option", "max-jobs", "0",
             "--option", "builders", "", "--option", "substitute", "false"]
@@ -130,7 +132,7 @@ def nix_command(nix, binding, job, request, directory, deadline, env, invocation
     projection = (invocation(imported, trees[:-1]) if invocation else
                   imported + " { job = builtins.fromJSON (" + job_source + "); }")
     return base + ["eval", "--json", "--offline", "--option", "restrict-eval", "true",
-                   "--option", "pure-eval", "true", "--option", "allowed-uris", " ".join(uris),
+                   "--option", "allowed-uris", " ".join(uris),
                    "--option", "allow-import-from-derivation", "false",
                    "--expr", projection]
 

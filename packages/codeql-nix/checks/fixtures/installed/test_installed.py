@@ -142,11 +142,12 @@ class InstalledTests(unittest.TestCase):
         self.assertEqual((runs, definitions, options, complete), (1, 1, 3, 3))
         self.assertGreater(anchors, 0)
         schema_hash = hashlib.sha256((self.extractor / "nix.dbscheme").read_bytes()).hexdigest()
-        identity = self.query(database, "Identity", '''from @nx_run r, string schema, string snapshot
-          where nx_runs(r, schema, _, _, "not-requested", snapshot)
-          select schema, snapshot''')
+        identity = self.query(database, "Identity", '''from @nx_run r, string schema, string model, string snapshot
+          where nx_runs(r, schema, _, _, model, snapshot)
+          select schema, model, snapshot''')
         self.assertEqual(identity[0][0], schema_hash)
-        self.assertNotIn(identity[0][1], ("", "not-admitted"))
+        self.assertEqual(identity[0][1], json.loads((self.library / "models/builtins.json").read_text())["modelVersion"])
+        self.assertNotIn(identity[0][2], ("", "not-admitted"))
         self.assertCountEqual(self.query(database, "Phases", '''from @nx_run r, string phase, string state
           where nx_phases(r, phase, state, _) select phase, state'''), [["discovery", "complete"], ["evaluation", "complete"], ["syntax", "complete"]])
         self.assert_metadata(database, "100")

@@ -1,0 +1,5 @@
+{
+  "experimental-features": "flakes nix-command",
+  "plugin-files": "",
+  "pure-eval": "true"
+}

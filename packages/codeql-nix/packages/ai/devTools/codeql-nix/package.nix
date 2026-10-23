@@ -1,7 +1,10 @@
-{pkgs}: let
+{
+  inputs,
+  pkgs,
+}: let
   products = import ../../../../lib/packaging.nix {
     inherit (pkgs) lib;
-    inherit pkgs;
+    inherit inputs pkgs;
   };
 in
   pkgs.ai.devTools.codeql.codeql-bare.customizePackage {

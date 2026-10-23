@@ -1,4 +1,5 @@
 {
+  inputs,
   lib,
   pkgs,
   self,
@@ -43,7 +44,7 @@
         ln -s ${index}/bin/index-files.sh "$out/tools/index-files.sh"
         ln -s ${build}/bin/qltest.sh "$out/tools/qltest.sh"
       '';
-      packaging = import ../lib/packaging.nix {inherit lib pkgs;};
+      packaging = import ../lib/packaging.nix {inherit inputs lib pkgs;};
       strictShell = import ../../../lib/strict-shell-application.nix pkgs;
     in
       pkgs.runCommand "codeql-nix-metadata" {

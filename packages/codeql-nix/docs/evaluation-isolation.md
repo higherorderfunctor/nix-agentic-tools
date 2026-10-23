@@ -3,7 +3,8 @@
 # Evaluation isolation and projection publication
 
 > **Last verified:** 2026-10-23 — E1 implements the serialized projection
-> boundary; E2a adds [module metadata](module-adapter.md).
+> boundary; E2a adds [module metadata](module-adapter.md); M3 shares the fixed
+> builtin export policy with model generation.
 
 ## Purpose and fit
 
@@ -51,7 +52,10 @@ import ((builtins.fetchTree {
 Original absolute imports are not rewritten and remain blocked by pure
 evaluation. E1 does not manufacture framework input handles. Each request gets a
 disposable local Nix store and writable home/cache/temp directory. The
-environment is rebuilt, and Nix receives pure/restricted evaluation, offline
+environment is rebuilt. The supervisor and [builtin model](builtin-models.md)
+generator consume one fixed `models/builtins/policy.json`: `flakes nix-command`,
+pure evaluation and no plugins. The supervisor applies these settings within its
+existing isolated invocation. Nix also receives restricted evaluation, offline
 operation, an allowlist of the exact pinned local tree URIs, no substitution, no
 builders, `max-jobs = 0` and disabled import-from-derivation. No lock-update
 command is invoked. These controls apply to Nix expression bindings; a trusted

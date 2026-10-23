@@ -4,16 +4,20 @@
 > with the full kit-generated private syntax and checks their exact inventory;
 > standalone location tests retain exact archived bytes and missing/corrupt
 > archive refusals. S2 adds the authenticated source driver and companion raw
-> bridge.
+> bridge; M3 keeps builtin model generation and its byte comparisons separate
+> from syntax generation.
 
 ## Purpose and fit
 
 `lib/packaging.nix` owns the raw generation products: `generator`, `generated`
-and `library`. The generator invokes the pinned tree-sitter kit rather than
-maintaining a second AST schema. `generated/` commits the combined schema,
-generated QL and manifest for diff review. These are private syntax interfaces;
-later meaning modules must absorb generated class churn instead of exposing it
-as a stable public API.
+and `library`, alongside the separate [builtin model](builtin-models.md)
+product. The assembly receives the existing `inputs`, `lib` and `pkgs`
+arguments; `inputs.treefmt-nix` supplies the shared model formatting policy. The
+syntax generator invokes the pinned tree-sitter kit rather than maintaining a
+second AST schema. `generated/` commits the combined schema, generated QL and
+manifest for diff review. These are private syntax interfaces; later meaning
+modules must absorb generated class churn instead of exposing it as a stable
+public API.
 
 `lib/kit.nix` shares F0's grammar/kit pins, Cargo lock and vendoring with S1. It
 builds the small `src/generate.rs` entry point alongside the private bootstrap
@@ -45,8 +49,12 @@ kit syntax table and class, including forms without a current public consumer.
 The source library's `ql/lib/nix.dbscheme` symlink selects the committed
 combined schema. The assembled `library` instead copies the fresh generation
 outputs, pack manifest and location adapter into one pack and adds same-basename
-schema statistics. Neither product includes the proprietary engine. This slice
-does not assemble the final language distribution.
+schema statistics. Neither product includes the proprietary engine; the
+[installed extractor](installed-extractor.md) describes distribution assembly.
+Grammar and kit pins alone feed the schema manifest. Separate runtime pins add
+the model fingerprint through a build-time derivation, without reading generated
+model output during Nix evaluation. Model JSON uses the existing
+`lib/generated.nix` generated-tree pipeline, while QL is copied unchanged.
 
 ## File and location interface
 
@@ -69,7 +77,9 @@ establish a unique syntax anchor or expression-to-value provenance.
 path. The check:
 
 1. Runs generation twice and compares both trees, the derivation output and the
-   committed `generated/` tree byte for byte.
+   committed `generated/` syntax tree byte for byte, excluding only the
+   independent `models/` channel. The builtin-models check compares that channel
+   separately.
 2. Runs the independent inventory tests against the manifest, schema and F1
    relation inventory, comparing class/table lists and the schema digest with
    the actual generated artifacts and rejecting missing or extra `nx_` tables.

@@ -162,7 +162,8 @@ consumer.
 # Evaluation isolation and projection publication
 
 > **Last verified:** 2026-10-23 — E1 implements the serialized projection
-> boundary; E2a adds [module metadata](module-adapter.md).
+> boundary; E2a adds [module metadata](module-adapter.md); M3 shares the fixed
+> builtin export policy with model generation.
 
 ## Purpose and fit
 
@@ -210,7 +211,10 @@ import ((builtins.fetchTree {
 Original absolute imports are not rewritten and remain blocked by pure
 evaluation. E1 does not manufacture framework input handles. Each request gets a
 disposable local Nix store and writable home/cache/temp directory. The
-environment is rebuilt, and Nix receives pure/restricted evaluation, offline
+environment is rebuilt. The supervisor and [builtin model](builtin-models.md)
+generator consume one fixed `models/builtins/policy.json`: `flakes nix-command`,
+pure evaluation and no plugins. The supervisor applies these settings within its
+existing isolated invocation. Nix also receives restricted evaluation, offline
 operation, an allowlist of the exact pinned local tree URIs, no substitution, no
 builders, `max-jobs = 0` and disabled import-from-derivation. No lock-update
 command is invoked. These controls apply to Nix expression bindings; a trusted
@@ -328,7 +332,8 @@ value serializer.
 
 > **Last verified:** 2026-10-23 — P2a installs one coordinator for database
 > creation and query tests, preserving authenticated partial work; Q0 adds a
-> separate installed lifecycle check.
+> separate installed lifecycle check; M3 adds the generated model fingerprint to
+> the existing run identity.
 
 ## Terms
 
@@ -405,9 +410,13 @@ installed run snapshot.
 
 `RunIdentity` in `src/extract.py` owns the shared identity. It hashes the
 installed combined schema, producer implementation bytes, admitted root
-identities and selected file digests. Named dependency pins participate even
-though their syntax is not selected. Only project-root `*.nix` files are
-selected for syntax extraction.
+identities and selected file digests. The generated builtin model fingerprint
+from the packaging pins supplies `nx_runs.modelHash` and participates in the run
+key; installed packaging always supplies the actual model. Legacy fixture pins
+without a model retain `not-requested`. An explicitly requested target model
+must match the run. Named dependency pins participate even though their syntax
+is not selected. Only project-root `*.nix` files are selected for syntax
+extraction.
 
 The coordinator passes that identity to [syntax extraction](source-identity.md)
 and the [evaluation supervisor](evaluation-isolation.md). Syntax checks its
@@ -464,14 +473,12 @@ envelope. Keep that distinction when reporting mixed-snapshot coverage. General
 evaluator isolation and authenticated syntax mapping retain their separate owner
 checks.
 
-To change installation, edit the existing packaging assembly and recipes
-together; keep all hooks on the coordinator and preserve shared schema bytes. To
-change identity or admission, update `RunIdentity` and both producer boundaries
-together, retaining ABI/target-contract validation and independent refusal
-expectations. Register new fixtures through the owner check entry point. Format
-changed files, run the affected owner checks through CI and update this note
-plus its registry entry when these obligations change. Regenerate instruction
-projections from their sources rather than editing generated consumers.
+Change installation through the existing assembly and recipes, keeping hooks on
+the coordinator and schema bytes shared. Change identity or admission through
+`RunIdentity` and both producer boundaries, preserving validation and
+independent refusal expectations. Register fixtures through the owner check
+entry point, format changes and run affected checks through CI. Update this note
+and its registry entry when these obligations change.
 
 <!-- Fragment: packages/codeql-nix/docs/integration-gate.md -->
 
@@ -898,7 +905,8 @@ alone cannot establish that admitted bytes match the source snapshot.
 # Target and observation contract
 
 > **Last verified:** 2026-10-23 — F2 retains the metadata manifest and fact
-> envelope for Step 0; it implements no evaluator.
+> envelope for Step 0; M3 activates exact-text model identities without adding
+> request domains.
 
 ## Purpose and fit
 
@@ -936,9 +944,11 @@ The adapter is `evalModules`; accepting a descriptor proves no adapter
 implementation. Evaluation kinds are `arguments` and `rich-result`. References
 identify admitted runtime handles or arguments; they do not serialize functions
 or secrets wholesale. The argument-description hash records the admitted
-description. `modelVersion` must be `not-requested` until increment 1 activates
-generated model identities; the run's `modelHash` fixture uses the same
-sentinel.
+description. `modelVersion` accepts the same exact-text identity form as the
+other fingerprint fields. The installed coordinator requires a requested model
+to match its run's generated model fingerprint, otherwise returning
+`unsupported-model`. Legacy `not-requested` remains accepted. See
+[builtin-models.md](builtin-models.md) for model generation and compatibility.
 
 Input identities map exact input names to identity strings. Each source root has
 `logicalName`, `path` and `rootContentIdentity`. Logical name and content
