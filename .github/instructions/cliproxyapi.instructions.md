@@ -109,6 +109,8 @@ that runs under the same uid as the gate can read the policy file, which holds
 every client key and every internal key, and can read CLIProxyAPI's own config
 and logins. It becomes a boundary only once each harness has its own VM or uid.
 
+## What it is
+
 A Caddy HTTP handler, `http.handlers.cpa_gate`, meant to sit in front of
 CLIProxyAPI (CPA). It admits a request only when it carries exactly one known
 client key on an allowed route, and replaces that key with the entry's internal
@@ -122,10 +124,11 @@ have a downstream `reverse_proxy`; a second loopback site serves
 
 ## Policy file
 
-`CPA_GATE_POLICY` carries the policy file's **path**, never a key. Caddy splices
-environment values before parsing and keeps them in adapted config. The `*`
-matcher prevents an absolute policy path becoming a path matcher. The file is
-JSON:
+`CPA_GATE_POLICY` carries the policy file's **path**, never a key. The `*`
+matcher is required: Caddy takes a first argument that starts with `/` as a path
+matcher. A key in a Caddyfile `{$VAR}` would be spliced in before parsing, an
+unset one becomes an empty string, and the adapted config holds the value in
+clear. The file is JSON:
 
 ```json
 {
@@ -142,12 +145,15 @@ JSON:
 }
 ```
 
-`Provision` refuses empty entries, duplicate entry names or client keys, empty
-keys/APIs/models, unknown API routes or policy fields, client/internal key
-collisions and trailing JSON. Errors name fields, never values. Client keys are
-SHA-256 digests scanned with constant-time comparisons. Hosted tools declare
-implied models inside the entry's set; an empty map denies every hosted tool.
-Entry names are public metadata on the loopback health endpoint.
+`Provision` fails on an empty `entries` list (health would report OK while
+serving nothing), empty or duplicate entry names (health is keyed by name),
+empty keys, `apis` or `models`, unknown API routes or policy fields, duplicate
+client keys, a client key equal to an internal key, and trailing JSON. Errors
+name entries and fields, never values; entry names are public metadata, since
+`/-/health` returns every one to any loopback caller without a credential.
+Client keys remain in memory only as SHA-256 digests, scanned with constant-time
+comparisons. Each `hostedTools` type declares implied models inside its entry's
+set; an empty map denies every hosted tool.
 
 ## Requests
 
@@ -192,13 +198,14 @@ The two Responses websocket routes terminate both connections with
 gorilla/websocket v1.5.3 and no compression. Each client text message is
 reassembled up to 32 MiB and checked with the same strict gjson v1.18.0 reader.
 The first needs a model; later messages may inherit it. Every supplied model is
-checked, including interrupt messages. Top-level values with surrounding
+checked, including interrupt messages. Top-level model values with surrounding
 whitespace are refused even if literally in the set: CPA trims them. Accepted
 bytes, upstream text/binary messages and both directions of ping/pong/close
 controls relay unchanged. Application messages with invalid JSON/UTF-8, excess
-size, binary data or disallowed models close both connections with fixed code
-1008 and `request refused`. Gorilla closes transport protocol errors itself. A
-service restart ends hijacked sessions by exiting the process.
+size, binary data or disallowed models close the client with code 1008 and
+`request refused`, then close the upstream connection. Gorilla closes transport
+protocol errors itself. A service restart ends hijacked sessions by exiting the
+process.
 
 Listings are parsed by wire shape, never by request header or user agent. Only
 exact allowed IDs survive, `first_id`/`last_id` are recomputed, and an object
@@ -227,26 +234,36 @@ Caddy log the whole request. Its own line holds the entry name (`-` before
 authentication), the route class, the status and the reason, never a key, a
 header or the URI.
 
-Caddy copies requests before handlers run, including query strings and
-nonstandard key headers. The global log filter therefore deletes both
-`request>headers` and `request>uri`. No access log is enabled.
+Caddy's error log copies the request before any handler runs
+(`modules/caddyhttp/server.go`). That copy holds the URI with its query and
+every header but the four Caddy redacts, so `?key=`, `X-Api-Key` and
+`X-Goog-Api-Key` would reach the journal on any 5xx. The global log block
+therefore deletes the whole `request>headers` map and `request>uri`.
+
+## Package and updates
 
 `packages/ai/generic/cpa-gate` builds `cmd/cpa-gate` with `buildGoModule` and
 nixpkgs' Caddy version and build tags. `gate.json` pins `goFloor` and
 `vendorHash`; nixpkgs and direct updates regenerate it, `go.mod` and `go.sum`,
 and `cliproxyapi-gate-pins` checks the version.
 
+**Settled, do not relitigate:** the package is not `caddy.withPlugins`.
+`withPlugins` takes a plugin only as `module@version`; it vendors everything
+into one fixed-output tree whose hash would move on every gate edit; and its
+install check needs a version that a local path lacks.
+
 ## Checks
 
-- Go tests run in the package check phase, including real Caddy listing and
-  websocket paths, process-exit socket closure, frame refusal before forwarding,
-  and key-free logs.
+- Go tests run in the package check phase, including a real Caddy copy of
+  listings and a test that no log or error carries a key.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
 - `cliproxyapi-gate-validate`: the real binary validates the rendered Caddyfile
   with a good policy, and refuses a shared key, a missing file and an empty
   path.
-- `cliproxyapi-gate-log` (Linux): every key carrier stays out of error logs;
-  controls retain each deleted field and demonstrate the leak.
+- `cliproxyapi-gate-log` (Linux): a running gate, and a site beside it whose
+  upstream is down. A key in each carrier reaches neither log. Two controls each
+  keep one field and show its unredacted keys; Caddy also redacts Authorization
+  itself.
 
 <!-- Fragment: packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md -->
 
