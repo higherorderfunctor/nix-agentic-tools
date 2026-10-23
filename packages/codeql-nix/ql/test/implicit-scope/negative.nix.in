@@ -1,0 +1,6 @@
+[
+  (let inherit x; in x)
+  (with { x = x; }; x)
+  (let inherit ({ x = 1; }) x; x = 2; in x)
+  (with {}; missing)
+]

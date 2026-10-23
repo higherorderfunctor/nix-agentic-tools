@@ -86,7 +86,12 @@ declaration token or source location.
 `checks.x86_64-linux.codeql-nix-anchors` runs the new tests through the existing
 F3 owner check. Frozen `NameBindings.ql` and `Resolution.ql` rows under
 `ql/test/implicit-scope/` cover inheritance, lexical precedence, known and
-unknown environments, locations, and negative controls.
+unknown environments, locations, and negative controls. Six paired cases
+distinguish direct literal interpolation keys such as `${"other"}`, which have
+known membership, from parenthesized expressions such as `${("other")}`, which
+remain computed in this layer. Their independent expectations preserve both
+definite literal-key resolution and uncertainty from computed membership,
+including inherited names and excluded frames.
 `checks/fixtures/implicit-scope/test_implicit.py` independently evaluates the
 source expressions with real Nix, changes unknown membership to reveal capture,
 and checks a safe outer rename and an inheritance sentinel.
