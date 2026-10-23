@@ -169,7 +169,7 @@ func natGateDrift(expected, actual []string) string {
 	var changes []string
 	for row, count := range counts {
 		if count != 0 {
-			// Source literals stay in the reviewed golden, never in CI diagnostics.
+			// Keep the change summary compact; the full inventory follows it.
 			parts := strings.SplitN(row, " ", 4)
 			if len(parts) == 4 && (parts[0] == "write" || parts[0] == "prefix") {
 				row = strings.Join(parts[:3], " ") + fmt.Sprintf(" sha256:%x", sha256.Sum256([]byte(parts[3])))
@@ -182,11 +182,19 @@ func natGateDrift(expected, actual []string) string {
 }
 
 // The current pin and mutation controls use the same production failure.
-func natGateFailure(drift string) string {
+func natGateFailure(drift string, actual []string) string {
 	if drift == "" {
 		return ""
 	}
-	return "CPA bump changes gate source contracts; review CPA source and gate coverage before updating packages/cliproxyapi/checks/fixtures/gate-bump-golden.json:\n" + drift
+	var golden strings.Builder
+	encoder := json.NewEncoder(&golden)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(actual); err != nil {
+		panic(err)
+	}
+	return "CPA bump changes gate source contracts; review CPA source and gate coverage before updating packages/cliproxyapi/checks/fixtures/gate-bump-golden.json. After review, replace that file with the complete JSON between BEGIN/END lines (including its final newline); extracted-facts regeneration does not update this golden:\n" + drift +
+		"\nBEGIN CPA GATE GOLDEN JSON\n" + golden.String() + "END CPA GATE GOLDEN JSON\n"
 }
 
 func TestNatGateBump(t *testing.T) {
@@ -205,8 +213,10 @@ func TestNatGateBump(t *testing.T) {
 	if len(expected) == 0 || len(actual) == 0 {
 		t.Fatal("empty CPA gate inventory")
 	}
-	if failure := natGateFailure(natGateDrift(expected, actual)); failure != "" {
-		t.Fatal(failure)
+	if failure := natGateFailure(natGateDrift(expected, actual), actual); failure != "" {
+		// Print directly so testing.T does not indent the fixture bytes.
+		fmt.Print(failure)
+		t.FailNow()
 	}
 	t.Logf("CPA gate golden: %d source contracts verified", len(actual))
 }
@@ -243,10 +253,12 @@ func TestNatGateBumpControls(t *testing.T) {
 			}
 			// Comments are inside selectors, function declarations and prefix specs.
 			layout := strings.NewReplacer(".", " /* layout */ . ", "func ", "func /* layout */  ", " = ", " /* layout */ =  ").Replace(probe.before)
-			if failure := natGateFailure(natGateDrift(before, inventory(layout))); failure != "" {
+			layoutInventory := inventory(layout)
+			if failure := natGateFailure(natGateDrift(before, layoutInventory), layoutInventory); failure != "" {
 				t.Fatalf("comments or layout changed source contracts: %s", failure)
 			}
-			failure := natGateFailure(natGateDrift(before, inventory(probe.after)))
+			actual := inventory(probe.after)
+			failure := natGateFailure(natGateDrift(before, actual), actual)
 			for _, required := range []string{
 				"review CPA source and gate coverage before updating",
 				"packages/cliproxyapi/checks/fixtures/gate-bump-golden.json",
@@ -255,6 +267,21 @@ func TestNatGateBumpControls(t *testing.T) {
 				if !strings.Contains(failure, required) {
 					t.Fatalf("refusal lacks %q: %s", required, failure)
 				}
+			}
+			_, block, found := strings.Cut(failure, "\nBEGIN CPA GATE GOLDEN JSON\n")
+			if !found {
+				t.Fatal("refusal lacks golden JSON begin line")
+			}
+			block, suffix, found := strings.Cut(block, "END CPA GATE GOLDEN JSON\n")
+			if !found || suffix != "" || !strings.HasSuffix(block, "\n") {
+				t.Fatal("refusal lacks golden JSON end line or final newline")
+			}
+			var emitted []string
+			if err := json.Unmarshal([]byte(block), &emitted); err != nil {
+				t.Fatalf("refusal golden JSON: %v", err)
+			}
+			if len(emitted) != len(actual) || natGateDrift(actual, emitted) != "" || !sort.StringsAreSorted(emitted) {
+				t.Fatal("refusal golden JSON differs from complete canonical inventory")
 			}
 			t.Log("refused new " + probe.kind + ": " + probe.name)
 		})
