@@ -1,10 +1,11 @@
 ## CodeQL engines
 
 > **Last verified:** 2026-10-22 — eleven engines at 2.27.3 from one `mkEngine`
-> factory, the local query client and optional per-database daemon, plus the MIT
-> Nix extractor at 0.3.0; the javascript engine wraps its launcher with a Node;
-> named lifecycle tasks publish atomic checkout generations from shared warmed
-> merge-base snapshots. Packs and `customizePackage`: customize.md.
+> factory, the local query client, optional per-database daemon and opt-in QL
+> language server, plus the MIT Nix extractor at 0.3.0; the javascript engine
+> wraps its launcher with a Node; named lifecycle tasks publish atomic checkout
+> generations from shared warmed merge-base snapshots. Packs and
+> `customizePackage`: customize.md.
 
 ### What a bundle is
 
@@ -260,3 +261,43 @@ SIGTERM with accepted idle and partial clients. The transport uses the 2.27.3
 `evaluation/registerDatabases`, `evaluation/deregisterDatabases` and
 `evaluation/runQuery` with Content-Length framing. No initialization request is
 required.
+
+### QL language server for agents
+
+`ai.lspServers.codeql-lsp` runs the owner's configured engine as
+`codeql execute language-server --check-errors=ON_CHANGE` over stdio. Its
+`--search-path` contains the external Nix extractor/library and the standing
+`nix-agentic-tools/nix-queries` pack, using the same pack realization as
+database warming. It adds no database or managed daemon. CodeQL 2.27.3 supports
+neither `--threads` nor `--ram` on this command.
+
+Agents reach it through the existing `mcp-language-server` bridge. Nothing is
+enabled by default. With this flake's overlay on `pkgs` and its library bound as
+`natLib`, the same explicit entry works on Home Manager and devenv:
+
+```nix
+ai.mcpServers.codeql = natLib.ai.mcpServers.mkCodeqlLanguageServer {
+  lib = lib // natLib;
+  inherit pkgs;
+} {
+  workspace = "/absolute/path/to/checkout";
+  searchPath = [ ./my-ql-packs ]; # optional additional pack roots
+};
+```
+
+Enable the desired runtime separately; normal MCP fanout delivers this entry.
+The helper accepts ordinary MCP entry overrides, including per-tool policy. For
+an editor's direct LSP client, use `lib.getExe pkgs.ai.lspServers.codeql-lsp`;
+its package override accepts the same `searchPath` list. Supply pack roots
+through this override rather than a competing command-line search path. The
+server's working directory does not replace a query pack's manifest and
+libraries: queries still belong to a pack declaring their dependencies.
+
+`codeql-language-server` starts the actual wrapper in the Nix sandbox without a
+database, opens a fixture depending on the standing repository pack, observes
+one deliberate missing-predicate diagnostic after an edit, clears it after a
+repair and follows `AstNode` to its definition in the external Nix library.
+`codeql-language-server-module` checks explicit MCP bridge arguments, extra
+search paths, backend parity and default absence. The existing cache tripwire
+also includes the LSP wrapper's CodeQL closure, beyond its paired engine/source
+roots.
