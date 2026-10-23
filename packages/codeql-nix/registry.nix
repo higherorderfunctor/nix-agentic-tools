@@ -10,6 +10,7 @@
         "database-contract"
         "evaluation-isolation"
         "integration-gate"
+        "metadata-library"
         "owner-layout"
         "source-identity"
         "target-contract"

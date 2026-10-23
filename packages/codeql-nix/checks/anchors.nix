@@ -89,7 +89,9 @@
         NIXQL_TEST_DUPLICATE_RAW=1 flock "$TMPDIR/codeql.lock" codeql test run \
           --search-path=${installed}:${packaging.library} \
           --threads=4 --ram=6000 tests/ambiguous
-        cp -r ${owner}/ql/test/step0 tests/
+        mkdir tests/step0
+        cp ${owner}/ql/test/step0/{Ast,Candidates}.{ql,expected} \
+          ${owner}/ql/test/step0/{Ambiguous.expected,*.nix.in} tests/step0/
         chmod -R u+w tests/step0
         for template in tests/step0/*.nix.in; do
           cp "$template" "''${template%.in}"
