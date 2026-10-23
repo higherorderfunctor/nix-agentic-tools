@@ -10,18 +10,14 @@ sys.path.insert(0, str(OWNER / "checks/fixtures/abi"))
 import abi
 from golden import GRAPH
 
-# F1 inventory, spelled independently of abi.CONTRACT or generated schema.
+# Step 0 inventory, spelled independently of abi.CONTRACT or generated schema.
 RELATIONS = {
-    "nx_anchors", "nx_capabilities", "nx_context_parents", "nx_contexts",
-    "nx_definition_order", "nx_definitions", "nx_diagnostic_origins",
-    "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics",
-    "nx_files", "nx_member_values", "nx_module_imports", "nx_module_roots",
-    "nx_modules", "nx_observation_values", "nx_observations",
-    "nx_option_declarations", "nx_option_metadata", "nx_option_priority",
-    "nx_options", "nx_origin_files", "nx_origin_positions", "nx_origins",
-    "nx_phases", "nx_request_results", "nx_requests", "nx_runs",
-    "nx_scalar_values", "nx_string_context", "nx_syntax_results",
-    "nx_target_inputs", "nx_targets", "nx_value_members", "nx_values",
+    "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definitions",
+    "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files",
+    "nx_observations", "nx_option_declarations", "nx_option_metadata",
+    "nx_option_priority", "nx_options", "nx_origin_files", "nx_origin_positions",
+    "nx_origins", "nx_phases", "nx_request_results", "nx_requests", "nx_runs",
+    "nx_syntax_results", "nx_target_inputs", "nx_targets",
 }
 
 

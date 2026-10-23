@@ -1,46 +1,34 @@
 # Nix CodeQL owner and test entry points
 
-> **Last verified:** 2026-10-23 — F3 registers the owner and explicit contract
-> checks; the language packs remain a skeleton.
+> **Last verified:** 2026-10-23 — Step 0 retains 23 metadata relations and
+> explicit owner check imports; document and check inventories live in the owner
+> registry and checks entry point. The language packs remain a skeleton.
 
 ## Purpose and fit
 
 `packages/codeql-nix/` owns the Nix language contracts, fixtures and pack
-manifests. Its `registry.nix` contributes the `codeql-nix` scoped architecture
-category through the existing owner registry, including this note and the
-[database](database-contract.md), [integration](integration-gate.md) and
-[target](target-contract.md) contracts. No root owner allowlist or separate
-discovery mechanism is needed.
+manifests. Its `registry.nix` is the source of scoped architecture documents,
+including this note. It contributes through the existing owner registry; no root
+owner allowlist or separate discovery mechanism is needed.
 
-`checks.nix` explicitly imports `checks/abi.nix`, `checks/bootstrap.nix` and
-`checks/contracts.nix`. Supporting files are not recursively discovered as
-checks. This keeps ownership local and lets a new domain add a deliberate check
-import without changing the root flake.
+`checks.nix` is the source of explicit check imports. Supporting files are not
+recursively discovered as checks. Each imported check declares its selected
+fixtures, dependencies and platform guards. Add a deliberate owner-local import
+when adding a domain, without changing the root flake or copying the inventory
+into this document.
 
 ## Checks and nonempty evidence
 
-The existing F0 `codeql-nix-bootstrap` and F1 `codeql-nix-abi` checks remain
-registered on `x86_64-linux`, where the engine is available. F0 exercises its
-disposable syntax/target integration fixture. F1 runs its ABI behavioral tests,
-verifies the schema projection, compiles the handwritten schema and
-imports/checks typed golden TRAP. Neither check establishes production
-extraction.
+The bootstrap proves its disposable syntax/target integration fixture. The ABI
+check validates the handwritten schema and independent typed golden TRAP. The
+contracts check runs explicitly selected Python suites, including the
+manifest/observation boundary, runner behavior and ABI/health sentinels. These
+fixture checks do not establish production extraction. Read their imports and
+commands through `checks.nix` for the current check and suite inventory.
 
-`codeql-nix-contracts` runs these explicit Python suites with `jsonschema`
-available:
-
-- `checks/fixtures/contracts/test_domain_entrypoint.py`: black-box checks of the
-  generic runner's acceptance and refusal behavior.
-- `checks/fixtures/contracts/test_sentinels.py`: nonempty ABI and health
-  witnesses over F1's independent golden graph.
-- `checks/fixtures/protocol/test_protocol.py`: F2's manifest and observation
-  transport tests, including the F1 validation layer.
-
-The contracts check has no engine dependency or engine-specific platform guard.
-Its derivation fails if a selected suite fails and writes `$out/evidence` only
-after all suites pass. Registering F2 here puts its standalone entry point in
-the existing flake-check CI path; it is no longer dependent on someone
-remembering a manual protocol run.
+A check must fail when a selected suite fails and publish its evidence only
+after every selected suite passes. Register transport tests in an owner check so
+verification does not depend on a manual invocation.
 
 `checks/run-domain-tests.py` accepts one or more explicit unittest file paths.
 Each file runs in a separate Python process, with its parent directory available
@@ -50,10 +38,10 @@ suites and early `SystemExit` fail the aggregate. It never searches sibling
 directories for tests; a passing suite cannot hide an empty later suite.
 
 The ABI sentinel validates the golden graph and compares its relation inventory
-with an independently spelled set of all 35 F1 relations. The health sentinel
-requires runs, targets, syntax results and request results, completed discovery,
-successful target/syntax statuses and positive request work counts. These
-witnesses prevent empty or failed fixture output from looking like clean
+with an independently spelled set of all 23 Step 0 relations. The health
+sentinel requires runs, targets, syntax results and request results, completed
+discovery, successful target/syntax statuses and positive request work counts.
+These witnesses prevent empty or failed fixture output from looking like clean
 analysis. They validate the fixture contract, not live extraction health or
 future evaluator completeness.
 
