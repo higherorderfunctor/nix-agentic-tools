@@ -1,0 +1,6 @@
+| duplicates.nix | 2 | 25 | x | invalid | 0 | 0 |  |
+| negative.nix | 2 | 16 | x | unavailable | 1 | 0 | test-may |
+| negative.nix | 3 | 20 | b | resolved | 1 | 1 | test-extension-b |
+| negative.nix | 4 | 44 | x | unavailable | 2 | 0 | test-first,test-second |
+| negative.nix | 6 | 3 | builtins | resolved | 1 | 1 | test-builtin-builtins |
+| positive.nix | 14 | 26 | builtins | resolved | 1 | 1 | builtins |
