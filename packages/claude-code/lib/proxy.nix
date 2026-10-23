@@ -41,18 +41,38 @@
 
   # One row per model of each routed upstream credential, in route order. Claude
   # labels a row with its model id when it has no label.
+  gated = resolvedProxy: resolvedProxy != null && resolvedProxy.models != null;
   pickerRows = resolvedProxy:
-    lib.concatMap (credential:
+    if gated resolvedProxy
+    then
       map (model: {
-        description = "${credential.name} through CLIProxyAPI";
         inherit model;
+        description = "through CLIProxyAPI";
       })
-      credential.models)
-    (
-      if resolvedProxy == null
-      then []
-      else resolvedProxy.credentials
-    );
+      resolvedProxy.models
+    else
+      lib.concatMap (credential:
+        map (model: {
+          description = "${credential.name} through CLIProxyAPI";
+          inherit model;
+        })
+        credential.models)
+      (
+        if resolvedProxy == null
+        then []
+        else resolvedProxy.credentials
+      );
+
+  picker = resolvedProxy:
+    {
+      modelPicker =
+        {options = pickerRows resolvedProxy;}
+        // lib.optionalAttrs (gated resolvedProxy) {replaceBuiltInOptions = true;};
+    }
+    // lib.optionalAttrs (gated resolvedProxy) {
+      availableModels = resolvedProxy.models;
+      availableModelsMatch = "exact";
+    };
 
   # Without a proxy these reach api.anthropic.com and downloads.claude.ai
   # directly. Defaults, so a consumer can turn either back on.
@@ -74,13 +94,13 @@ in {
   }: let
     rows = pickerRows resolvedProxy;
     # toFile: the rows hold no store paths, and evaluation can read it back.
-    picker = builtins.toFile "claude-proxy-model-picker.json" (builtins.toJSON {modelPicker.options = rows;});
+    pickerFile = builtins.toFile "claude-proxy-model-picker.json" (builtins.toJSON (picker resolvedProxy));
   in
     lib.ai.mkLauncher pkgs {
       exe = "claude";
       flags =
         lib.optional (resolvedProxy != null) "--unset CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR"
-        ++ lib.optional (backend == "devenv" && rows != []) "--add-flags ${lib.escapeShellArg "--settings ${picker}"}";
+        ++ lib.optional (backend == "devenv" && rows != []) "--add-flags ${lib.escapeShellArg "--settings ${pickerFile}"}";
       name = "claude-code-proxy";
       inherit (cfg) package;
     };
@@ -102,7 +122,7 @@ in {
         ai.claude.native.settings = render resolvedProxy;
       })
       (lib.mkIf (backend == "hm" && pickerRows resolvedProxy != []) {
-        ai.claude.native.settings.modelPicker.options = pickerRows resolvedProxy;
+        ai.claude.native.settings = picker resolvedProxy;
       })
     ];
 }

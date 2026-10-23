@@ -8,10 +8,8 @@
   redact = import ../../../lib/redact {inherit lib;};
   render = import ../../../lib/extracted/render.nix {inherit lib;};
   strictShellApplication = import ../../../lib/strict-shell-application.nix;
-  credentials = instance: client:
-    map (route: instance.credentials.${route.credential})
-    (lib.filter (route: instance.credentials ? ${route.credential}) client.routes);
-  models = instance: client: lib.sort builtins.lessThan (lib.unique (lib.concatMap exact.selected (credentials instance client)));
+  credentials = exact.routedCredentials;
+  models = exact.clientModels;
   internalKey = instance: name:
     redact.command (lib.getExe (strictShellApplication pkgs {
       name = "cpa-internal-key";
@@ -38,6 +36,27 @@
   policyVariable = "CPA_GATE_POLICY";
 in {
   inherit internalKey models policy policyVariable;
+  clientProblems = name: instance:
+    lib.concatLists (lib.mapAttrsToList (clientName: client: let
+      path = "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}";
+      listed = lib.defaultTo [] client.models ++ lib.defaultTo [] client.excludedModels;
+      served = exact.routedModels instance client;
+    in
+      lib.optional ((client.models != null || client.excludedModels != null) && !instance.gate.enable)
+      "${path}: client model lists require gate.enable = true; enable the gate or remove models and excludedModels."
+      ++ lib.optional (client.models != null && client.excludedModels != null)
+      "${path}: set models XOR excludedModels, or leave both unset."
+      ++ lib.optional (client.models == [] || client.excludedModels == [])
+      "${path}: model lists must not merge to empty."
+      ++ lib.optionals instance.gate.enable (
+        lib.optional (!(lib.all exact.modelName listed))
+        "${path}: gate requires exact printable model names without auto, parentheses, slash, wildcard, cloak prefix or secret placeholder."
+        ++ lib.optional (!(lib.all (model: lib.elem model served) listed))
+        "${path}: a client model name is not served by any routed credential's selected models."
+        ++ lib.optional (models instance client == [])
+        "${path}: the client model set must not be empty."
+      ))
+    instance.clientKeys);
   problems = name: instance:
     lib.optional (!instance.exactModels) "ai.cliproxyapi.instances.${name}: gate.enable requires exactModels."
     ++ lib.optional (instance.clientKeys == {}) "ai.cliproxyapi.instances.${name}: gate.enable requires named clientKeys."

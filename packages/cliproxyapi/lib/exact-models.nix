@@ -1,4 +1,4 @@
-# CPA's native registration filters, without client filtering or gate wiring.
+# Exact credential registration and client-key model sets, shared by gate and Harness lowering.
 {lib}: let
   inherit (import ../../../lib/extracted/facts.nix {inherit lib;}) get load;
   inherit (import ../../../lib/extracted/render.nix {inherit lib;}) placeholderName;
@@ -26,6 +26,17 @@
       then credential.models
       else lib.subtractLists (lib.defaultTo [] credential.excludedModels) (catalog credential)
     );
+  routedCredentials = instance: client:
+    map (route: instance.credentials.${route.credential})
+    (lib.filter (route: instance.credentials ? ${route.credential}) client.routes);
+  routedModels = instance: client:
+    lib.sort builtins.lessThan (lib.unique (lib.concatMap selected (routedCredentials instance client)));
+  clientModels = instance: client: let
+    served = routedModels instance client;
+  in
+    if client.models != null
+    then lib.intersectLists client.models served
+    else lib.subtractLists (lib.defaultTo [] client.excludedModels) served;
   narrow = instance:
     instance
     // {
@@ -93,5 +104,5 @@
       lib.optional (lib.length (lib.unique (map (credential: lib.sort builtins.lessThan (selected credential)) credentials)) > 1) "${path}: CPA's OAuth exclusions are vendor-wide; named ${vendor} logins must select the same effective models.")
     vendorSets);
 in {
-  inherit catalog catalogs exclusions narrow problems selected settings;
+  inherit catalog catalogs clientModels exclusions modelName narrow problems routedCredentials routedModels selected settings;
 }

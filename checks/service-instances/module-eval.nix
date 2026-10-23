@@ -832,6 +832,7 @@ in {
               clientKeys = {
                 a = {
                   key = fileKey "a";
+                  models = ["glm-shared"];
                   routes = [
                     {
                       credential = "zai";
@@ -844,6 +845,10 @@ in {
                   routes = [
                     {
                       credential = "other";
+                      api = "responses";
+                    }
+                    {
+                      credential = "zai";
                       api = "responses";
                     }
                   ];
@@ -860,7 +865,7 @@ in {
           requests = ''
             ${pkgs.python3}/bin/python3 ${./gate-runtime.py} "$XDG_RUNTIME_DIR" ${../../packages/cliproxyapi/lib/internal-key.py}
             request 200 zai anthropic glm-shared key-a
-            request 200 other responses glm-shared key-b
+            request 200 other responses other-model key-b
 
           '';
           upstreams = ["zai:28427:/v1/messages?beta=true" "other:28428:/v1/responses"];
