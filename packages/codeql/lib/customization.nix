@@ -3,7 +3,8 @@
 # `share/codeql`, which is linked and never copied. Direct callers get a throw
 # for a bad spec. Customizing the result appends to its spec.
 #
-# A spec is `{ queries ? []; models ? []; extraPackages ? []; }`. `queries` and
+# A spec optionally adds extractors/libraries alongside queries/models and
+# extraPackages. `queries` and
 # `models` hold directories with a qlpack.yml, pack derivations, or
 # `mkQueryPack`/`mkModelPack` specs (./specs.nix), each realized against this
 # engine (./packs.nix). The wrapper hands CodeQL a config file (CODEQL_CONFIG_FILE) of
@@ -21,8 +22,7 @@
 }: let
   inherit (pkgs) lib;
   specs = import ./specs.nix {inherit lib;};
-  packs = import ./packs.nix {inherit engine engineName languages pkgs specs;};
-  fields = ["extraPackages" "models" "queries"];
+  fields = ["extraPackages" "extractors" "libraries" "models" "queries"];
   # The field each kind of pack goes in.
   fieldOf = {
     model = "models";
@@ -35,9 +35,12 @@
   # consumer's config lines with these and does not join option values, and
   # CodeQL keeps one value per option, so a consumer file that sets one too
   # would drop one side's packs.
-  options = spec: ["--additional-packs"] ++ lib.optional (spec.models != []) "--model-packs";
+  options = spec:
+    ["--additional-packs"]
+    ++ lib.optional (spec.models != []) "--model-packs"
+    ++ lib.optional (spec.extractors != []) "--search-path";
 
-  packErrors = field: kind:
+  packErrors = packs: supported: field: kind:
     lib.imap1 (index: entry: let
       at = "`${field}.${toString index}`";
       tagged = entry.codeqlPack.kind or null;
@@ -51,7 +54,7 @@
       else if lib.isDerivation entry
       then
         lib.optional (tagged != null && tagged != kind) "${at} is a ${tagged} pack; put it in `${fieldOf.${tagged}}`"
-        ++ lib.optional (language != null && !(lib.elem language languages)) "${at} is a ${language} pack, which ${engine.pname} does not carry"
+        ++ lib.optional (language != null && !(lib.elem language supported)) "${at} is a ${language} pack, which ${engine.pname} does not carry"
       else if builtins.isPath entry
       then lib.optional (!builtins.pathExists (entry + "/qlpack.yml")) "${at} (${toString entry}) holds no qlpack.yml"
       else ["${at} must be a path, a pack spec or a pack derivation"]);
@@ -60,13 +63,25 @@
     assert lib.assertMsg (problems == []) "codeql.customizePackage:\n${lib.concatStringsSep "\n" problems}"; value;
 
   # A pack spec becomes this engine's pack; every other entry is kept.
-  realized = entry:
+  realized = packs: entry:
     if specs.isSpec entry
     then packs.realize entry
     else entry;
 
-  # One spec's shape and entries, named by the caller's own indices, with each
-  # pack spec realized.
+  capabilityErrors = field: entry: let
+    required = ["language" "schema" "src"] ++ lib.optional (field == "libraries") "name";
+    strings = builtins.filter (key: key != "src") required;
+  in
+    lib.optional (!builtins.isAttrs entry) "`${field}` entries must be records"
+    ++ lib.optionals (builtins.isAttrs entry) (
+      lib.optional (builtins.attrNames entry != lib.sort builtins.lessThan required) "`${field}` entries require exactly ${lib.concatStringsSep ", " required}"
+      ++ lib.optional (!(builtins.isPath (entry.src or null) || lib.isDerivation (entry.src or null))) "`${field}.src` must be a path or derivation"
+      ++ lib.concatMap (key: lib.optional (!(builtins.isString (entry.${key} or null) && entry.${key} != "")) "`${field}.${key}` must be a nonempty string") strings
+      ++ lib.optional (builtins.isString (entry.schema or null) && builtins.match "[a-zA-Z0-9_-]+\\.dbscheme" entry.schema == null) "`${field}.schema` must be a dbscheme basename"
+    );
+
+  # Check shape before joining calls; capabilities and specs are realized only
+  # after joining, so appended queries can use previously supplied libraries.
   checked = spec: let
     unknown = builtins.attrNames (builtins.removeAttrs spec fields);
     lists = builtins.filter (field: !builtins.isList (spec.${field} or [])) fields;
@@ -75,27 +90,21 @@
       lib.optional (unknown != []) "unknown field(s) ${lib.concatStringsSep ", " unknown}; expected ${lib.concatStringsSep ", " fields}"
       ++ map (field: "`${field}` must be a list") lists
       ++ lib.optionals (lists == []) (
-        lib.concatLists (packErrors "queries" "query" (spec.queries or []))
-        ++ lib.concatLists (packErrors "models" "model" (spec.models or []))
+        lib.concatMap (field: lib.concatMap (capabilityErrors field) (spec.${field} or [])) ["extractors" "libraries"]
         ++ lib.concatLists (lib.imap1 (index: entry: lib.optional (!lib.isDerivation entry) "`extraPackages.${toString index}` must be a package") (spec.extraPackages or []))
       )
-    ) (lib.genAttrs fields (field: map realized (spec.${field} or [])));
+    ) (lib.genAttrs fields (field: spec.${field} or []));
 
-  # Each store path once, in first-given order.
+  # Plain packs and realized specs deduplicate by store path, even when one
+  # caller supplies a path and another supplies its derivation.
   uniqueEntries = lib.foldl' (kept: entry:
     if lib.elem (storePath entry) (map storePath kept)
     then kept
     else kept ++ [entry]) [];
 
-  # Checked specs joined, each store path kept once, and then one pack name per
-  # realized pack spec, over the joined spec, across appending calls too. A
-  # plain directory's pack name is not read here; CodeQL reports a pack found in
-  # two locations when the packs are used.
-  merged = given: let
-    spec = lib.mapAttrs (_: uniqueEntries) (lib.zipAttrsWith (_: lib.concatLists) given);
-    names = lib.concatMap (entry: lib.optional (entry ? codeqlPack.name) entry.codeqlPack.name) (spec.queries ++ spec.models);
-  in
-    fail (map (name: "pack ${name} is given from more than one path") (lib.unique (builtins.filter (name: lib.count (other: other == name) names > 1) names))) spec;
+  # Preserve first-given order, including identical capability records across
+  # calls. Conflicting records remain for the per-language check below.
+  merged = given: lib.mapAttrs (_: lib.unique) (lib.zipAttrsWith (_: lib.concatLists) given);
 
   # One model pack whose data extensions are every model pack's own, each
   # copied under its index without its qlpack.yml so the copy is no second
@@ -126,13 +135,43 @@
         > "$out/qlpack.yml"
     '';
 
-  build = spec: let
+  build = raw: let
+    duplicates = values: lib.unique (builtins.filter (value: lib.count (other: other == value) values > 1) values);
+    extractors = map (entry: entry.language) raw.extractors;
+    libraries = map (entry: entry.language) raw.libraries;
+    capability =
+      fail (
+        map (language: "multiple extractors claim ${language}") (duplicates extractors)
+        ++ map (language: "multiple libraries claim ${language}") (duplicates libraries)
+        ++ lib.optional (lib.sort builtins.lessThan extractors != lib.sort builtins.lessThan libraries) "custom languages require both an extractor and a library"
+        ++ lib.concatMap (extractor:
+          lib.concatMap (library: lib.optional (extractor.language == library.language && extractor.schema != library.schema) "schema mismatch for ${extractor.language}") raw.libraries)
+        raw.extractors
+      )
+      raw;
+    supported = lib.unique (languages ++ libraries);
+    packBuilder = import ./packs.nix {
+      inherit engine engineName languages pkgs specs;
+      inherit (capability) extractors libraries;
+    };
+    spec =
+      fail (
+        lib.concatLists (packErrors packBuilder supported "queries" "query" raw.queries)
+        ++ lib.concatLists (packErrors packBuilder supported "models" "model" raw.models)
+      ) (capability
+        // {
+          extraPackages = uniqueEntries raw.extraPackages;
+          models = uniqueEntries (map (realized packBuilder) raw.models);
+          queries = uniqueEntries (map (realized packBuilder) raw.queries);
+        });
+    names = lib.concatMap (entry: lib.optional (entry ? codeqlPack.name) entry.codeqlPack.name) (spec.queries ++ spec.models) ++ map (entry: entry.name) spec.libraries;
     models = lib.optional (spec.models != []) (aggregate spec.models);
-    packs = spec.queries ++ spec.models ++ models;
+    packs = spec.queries ++ spec.models ++ map (entry: entry.src) spec.libraries ++ models;
     config = pkgs.writeText "codeql-config" (lib.concatLines ([
         "--additional-packs ${lib.concatMapStringsSep ":" storePath packs}"
       ]
-      ++ lib.optional (models != []) "--model-packs ${modelsName}"));
+      ++ lib.optional (models != []) "--model-packs ${modelsName}"
+      ++ lib.optional (spec.extractors != []) "--search-path ${packBuilder.searchPath}"));
     coreutils = "${pkgs.coreutils}/bin";
     grep = "${pkgs.gnugrep}/bin/grep";
     # With packs, the wrapper points CODEQL_CONFIG_FILE at its config. A
@@ -210,26 +249,28 @@
         codeql=${engine}/bin/codeql
         ${lib.optionalString (spec.extraPackages != []) ''export PATH="${lib.makeBinPath spec.extraPackages}''${PATH:+:$PATH}"''}
         ${
-          if packs == []
+          if packs == [] && spec.extractors == []
           then ''exec "$codeql" "$@"''
           else configure
         }
       '';
     };
   in
-    pkgs.runCommand "${engine.pname}-customized-${engine.version}" {
-      passthru = {
-        customizePackage = more: build (merged [spec (checked more)]);
-        packs = {inherit (spec) models queries;};
-        unwrapped = engine;
-      };
-      meta = {inherit (engine.meta) description license mainProgram platforms;};
-    } ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      mkdir -p "$out/bin" "$out/share" # bare-commands: ok (stdenv builder PATH)
-      ln -s ${wrapper}/bin/codeql "$out/bin/codeql"
-      ln -s ${engine}/share/codeql "$out/share/codeql"
-    '';
+    fail (map (name: "pack ${name} is given from more than one path") (duplicates names)) (pkgs.runCommand "${engine.pname}-customized-${engine.version}" {
+        nativeBuildInputs = lib.optional (spec.extractors != []) pkgs.yq-go;
+        passthru = {
+          customizePackage = more: build (merged [raw (checked more)]);
+          packs = {inherit (spec) models queries;};
+          unwrapped = engine;
+        };
+        meta = {inherit (engine.meta) description license mainProgram platforms;};
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${packBuilder.validate}
+        mkdir -p "$out/bin" "$out/share" # bare-commands: ok (stdenv builder PATH)
+        ln -s ${wrapper}/bin/codeql "$out/bin/codeql"
+        ln -s ${engine}/share/codeql "$out/share/codeql"
+      '');
 in
   spec: build (merged [(checked spec)])
