@@ -141,6 +141,7 @@ for it. When several entries match, their guidance composes.
     - [`packages/codeql-nix/docs/installed-extractor.md`](packages/codeql-nix/docs/installed-extractor.md)
     - [`packages/codeql-nix/docs/integration-gate.md`](packages/codeql-nix/docs/integration-gate.md)
     - [`packages/codeql-nix/docs/lexical-scope.md`](packages/codeql-nix/docs/lexical-scope.md)
+    - [`packages/codeql-nix/docs/literal-imports.md`](packages/codeql-nix/docs/literal-imports.md)
     - [`packages/codeql-nix/docs/metadata-library.md`](packages/codeql-nix/docs/metadata-library.md)
     - [`packages/codeql-nix/docs/module-adapter.md`](packages/codeql-nix/docs/module-adapter.md)
     - [`packages/codeql-nix/docs/owner-layout.md`](packages/codeql-nix/docs/owner-layout.md)
