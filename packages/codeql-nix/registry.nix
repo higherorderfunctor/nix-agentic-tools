@@ -11,6 +11,7 @@
         "evaluation-isolation"
         "integration-gate"
         "owner-layout"
+        "source-identity"
         "target-contract"
       ];
   };

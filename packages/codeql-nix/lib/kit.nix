@@ -22,6 +22,7 @@
     cp -r ${fixture + "/src"} "$out/src" # bare-commands: ok
     chmod -R u+w "$out/src" # bare-commands: ok
     cp ${../src/generate.rs} "$out/src/bin/nixql-generate-raw.rs" # bare-commands: ok
+    cp ${../src/anchors.rs} "$out/src/bin/nixql-anchors.rs" # bare-commands: ok
     for crate in tree-sitter-extractor yeast yeast-macros yeast-schema; do
       cp -r ${kit}/shared/"$crate" "$out/upstream/shared/" # bare-commands: ok
     done

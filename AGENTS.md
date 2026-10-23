@@ -138,6 +138,7 @@ for it. When several entries match, their guidance composes.
     - [`packages/codeql-nix/docs/evaluation-isolation.md`](packages/codeql-nix/docs/evaluation-isolation.md)
     - [`packages/codeql-nix/docs/integration-gate.md`](packages/codeql-nix/docs/integration-gate.md)
     - [`packages/codeql-nix/docs/owner-layout.md`](packages/codeql-nix/docs/owner-layout.md)
+    - [`packages/codeql-nix/docs/source-identity.md`](packages/codeql-nix/docs/source-identity.md)
     - [`packages/codeql-nix/docs/target-contract.md`](packages/codeql-nix/docs/target-contract.md)
 - **`codex-daemon`**
   - Match:

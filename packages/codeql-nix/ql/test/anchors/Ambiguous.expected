@@ -1,0 +1,7 @@
+| bridge.nix | 0 | 1 | integer_expression | [0] | unmapped | 0 | none |
+| bridge.nix | 0 | 2 | identifier | [0] | unmapped | 0 | none |
+| bridge.nix | 0 | 2 | integer_expression | [0] | ambiguous | 2 | none |
+| bridge.nix | 0 | 2 | integer_expression | [0] | unmapped | 0 | none |
+| bridge.nix | 0 | 2 | integer_expression | [7] | unmapped | 0 | none |
+| bridge.nix | 0 | 2 | source_code | [] | ambiguous | 2 | none |
+| bridge.nix | 1 | 2 | integer_expression | [0] | unmapped | 0 | none |

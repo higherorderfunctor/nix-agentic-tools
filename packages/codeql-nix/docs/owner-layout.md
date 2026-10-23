@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-23 — Step 0 retains 23 metadata relations and
 > explicit owner check imports; document and check inventories live in the owner
 > registry and checks entry point. S1 adds combined-schema generation and
-> standalone raw location tests; E1 adds the isolated metadata projection check.
+> standalone raw location tests; E1 adds the isolated metadata projection check;
+> S2 registers source and anchor acceptance.
 
 ## Purpose and fit
 
@@ -68,9 +69,12 @@ product. `ql/lib/nix.dbscheme` is a symlink to `../../generated/nix.dbscheme`,
 S1's combined generated/handwritten schema. S1's private raw QL and location
 adapter supply the library's syntax interface; `codeql-nix-raw-inventory` checks
 deterministic generation, inventory drift and standalone generated-node
-file/location traversal. There is no production extractor, public meaning API or
-query suite supplied by these manifests. The bootstrap's separate fixture packs
-remain disposable evidence.
+file/location traversal. S2 adds the syntax driver and private
+[authenticated anchor bridge](source-identity.md), tested by
+`codeql-nix-anchors` through F3 driver contracts, raw preflight and QL/archive
+assertions. The final installed extractor, public meaning API and query suite
+remain later slices. The bootstrap's separate fixture packs remain disposable
+evidence.
 
 ## Adding a domain
 
