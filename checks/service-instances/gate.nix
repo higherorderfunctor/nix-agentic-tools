@@ -108,6 +108,13 @@
         (front.ports.health == 28317)
         (settings.server.host == "127.0.0.1")
         (settings.server.port == 18317)
+        (settings.server.commercial-mode
+          && settings.observability.logs
+          == {
+            debug = false;
+            logging-to-file = false;
+            request-log = false;
+          })
         (builtins.attrNames on.ai.claims.port == ["18317" "28317" "8317"])
         (cpa.restartOnChange == front.restartOnChange)
         (services.triggers cpa == services.triggers front)
@@ -127,4 +134,39 @@
       ]
     );
   };
-in {checks = checksFor "devenv" // checksFor "hm";}
+in {
+  checks =
+    checksFor "devenv"
+    // checksFor "hm"
+    // {
+      module-service-instances-gate-output = let
+        fake = (import ../../lib/strict-shell-application.nix pkgs) {
+          name = "cliproxyapi";
+          text = ''
+            printf '%s\n' cpa-output-marker
+            printf '%s\n' cpa-error-marker >&2
+          '';
+        };
+        command = enabled:
+          lib.head
+          (evaluate "hm" (base
+            // {
+              exactModels = enabled;
+              gate.enable = enabled;
+              package = fake;
+              stateDir = "/build/gate-output";
+            })).config.ai.services.cliproxyapi-main.command;
+      in
+        pkgs.runCommand "service-instances-gate-output" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          export CPA_CONFIG=unused
+          ${command false} > off.log 2>&1
+          ${pkgs.gnugrep}/bin/grep -Fx cpa-output-marker off.log
+          ${pkgs.gnugrep}/bin/grep -Fx cpa-error-marker off.log
+          ${command true} > on.log 2>&1
+          test ! -s on.log
+          touch "$out"
+        '';
+    };
+}
