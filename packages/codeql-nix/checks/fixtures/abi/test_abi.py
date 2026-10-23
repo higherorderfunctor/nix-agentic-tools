@@ -15,6 +15,14 @@ spec = importlib.util.spec_from_file_location("abi", MODULE)
 abi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(abi)
 LIMIT = 1048576
+STEP0_TABLES = {
+    "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definitions",
+    "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files",
+    "nx_observations", "nx_option_declarations", "nx_option_metadata",
+    "nx_option_priority", "nx_options", "nx_origin_files", "nx_origin_positions",
+    "nx_origins", "nx_phases", "nx_request_results", "nx_requests", "nx_runs",
+    "nx_syntax_results", "nx_target_inputs", "nx_targets",
+}
 
 
 def row(rows, name, occurrence=0):
@@ -75,23 +83,14 @@ class AbiTests(unittest.TestCase):
         self.rejects("nx_anchors", 4, "binding")
         self.rejects("nx_anchors", 5, "[0]")
 
-    def test_path_payload_preserves_text_without_copying(self):
-        # This deliberately nonexistent absolute directory must remain unevaluated text.
-        text = '/does-not-exist/é/../directory"\\name'
-        expected = '"/does-not-exist/é/../directory\\"\\\\name"'
-        self.assertEqual(abi.path_scalar(text), ("evaluated-path-json-v1", expected))
-        self.assertEqual(json.loads(expected), text)
-        for text in ("relative/path", "./path", ""):
-            with self.assertRaises(ValueError):
-                abi.path_scalar(text)
-
     def test_complete_graph_and_schema_inventory(self):
         before = deepcopy(GRAPH)
         abi.validate(GRAPH)
         abi.validate(list(reversed(GRAPH)))
         self.assertEqual(GRAPH, before)
         tables = {name for name, _ in GRAPH}
-        self.assertEqual(len(tables), 35)
+        self.assertEqual(tables, STEP0_TABLES)
+        self.assertEqual(set(abi.COLUMNS), STEP0_TABLES)
         schema = MODULE.with_name("evaluation.dbscheme").read_text()
         self.assertEqual(set(re.findall(r"(?m)^(nx_\w+)\s*\(", schema)), tables)
 
@@ -106,18 +105,26 @@ class AbiTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             abi.validate([["nx_runs", []]])
         self.rejects("nx_anchors", 1, I["q"])
-        self.rejects("nx_modules", 4, 2)
-        self.rejects("nx_modules", 4, True)
         self.rejects("nx_definitions", 2, -1)
         self.rejects("nx_request_results", 3, True)
         self.rejects("nx_anchors", 3, -1)
         self.rejects("nx_origin_positions", 1, 0)
+        rows = deepcopy(GRAPH) + [["nx_definitions", ["nixql:v1:definition:1:2", I["o"], 0, I["p"]]]]
+        with self.assertRaisesRegex(ValueError, "duplicate definition ordinal"):
+            abi.validate(rows)
+
+    def test_same_namespace_dangling_foreign_references(self):
+        for name, _ in GRAPH:
+            for column, (_, kind) in enumerate(abi.COLUMNS[name]):
+                if kind not in abi.CONTRACT["entities"] or (column == 0 and name == f"nx_{kind}s"):
+                    continue
+                with self.subTest(table=name, column=column):
+                    self.rejects(name, column, f"nixql:v1:{kind}:7:missing")
 
     def test_enum_and_subject_rules(self):
         fields = {"nx_capabilities": 2, "nx_contexts": 2, "nx_origins": 2,
                   "nx_phases": 2, "nx_request_results": 1, "nx_requests": 3,
-                  "nx_syntax_results": 1, "nx_targets": 9, "nx_value_members": 2,
-                  "nx_values": 1}
+                  "nx_syntax_results": 1, "nx_targets": 9}
         for name, column in fields.items():
             self.rejects(name, column, "bogus")
         for column in (2, 4, 5):
@@ -127,7 +134,10 @@ class AbiTests(unittest.TestCase):
         self.rejects("nx_options", 2, '[1]')
         self.rejects("nx_option_metadata", 1, "description")
         self.rejects("nx_option_priority", 1, "-0")
-        self.rejects("nx_definition_order", 1, "9223372036854775808")
+        self.rejects("nx_option_priority", 1, "9223372036854775808")
+        self.rejects("nx_contexts", 2, "concrete-submodule")
+        self.rejects("nx_contexts", 3, '["nested"]')
+        self.rejects("nx_contexts", 3, '[0]')
 
     def test_observation_target_and_context_are_not_interchangeable(self):
         self.rejects("nx_options", 1, I["j"])
@@ -159,7 +169,7 @@ class AbiTests(unittest.TestCase):
     def test_completion_does_not_survive_refusal(self):
         for reason in ("timeout", "text-field-too-large"):
             self.rejects("nx_request_results", 2, reason)
-        self.rejects("nx_request_results", 1, "unsupported")
+        self.rejects("nx_request_results", 1, "unsupported", 1)
         self.rejects("nx_observations", 5, "unforced")
         self.rejects("nx_observations", 5, "failed")
         rows = [deepcopy(item) for item in GRAPH if item[0] in {
@@ -172,7 +182,7 @@ class AbiTests(unittest.TestCase):
                       ["nx_phases", [I["r"], "target-discovery", "failed", "manifest-error"]]])
 
     def test_winning_priority_requires_its_own_defined_metadata_observation(self):
-        # The applied value observation and the metadata witness are independent.
+        # A priority witness is independent of values and other metadata requests.
         def priority_rows():
             return [deepcopy(item) for item in GRAPH if item[0] in {
                 "nx_contexts", "nx_options", "nx_option_metadata", "nx_option_priority",
@@ -193,11 +203,8 @@ class AbiTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "option priority lacks defined observation"):
                 abi.validate(rows)
         for table, column, value in (
-            ("nx_requests", 3, "option-value"),
             ("nx_requests", 4, '["a","b"]'),
             ("nx_requests", 5, "value"),
-            ("nx_observations", 4, "applied-config"),
-            ("nx_observations", 4, "selected-definition"),
             ("nx_observations", 5, "unforced"),
             ("nx_observations", 5, "failed"),
         ):
@@ -225,91 +232,18 @@ class AbiTests(unittest.TestCase):
                 abi.validate(rows)
         rows = [deepcopy(item) for item in GRAPH if not (item[0] == "nx_observations" and item[1][0] == I["i"])]
         with self.assertRaisesRegex(ValueError, "option priority lacks defined observation"):
-            abi.validate(rows)  # Existing applied-config successes prove no priority.
-
-    def test_refused_members_without_values_and_independent_projection(self):
-        keep = {"nx_contexts", "nx_requests", "nx_request_results", "nx_runs", "nx_targets",
-                "nx_observations", "nx_values", "nx_value_members"}
-        rows = [deepcopy(item) for item in GRAPH if item[0] in keep]
-        rows = [item for item in rows if not (
-            (item[0] == "nx_observations" and item[1][2] == "option") or
-            (item[0] == "nx_values" and item[1][0] != I["v"]))]
-        for state in ("blocked", "failed", "skipped", "unsupported"):
-            with self.subTest(state=state):
-                row(rows, "nx_request_results")[1:] = [state, "text-field-too-large", 0]
-                with self.assertRaisesRegex(ValueError, "observation from unsuccessful projection"):
-                    abi.validate(rows)
-        for state in ("unforced", "failed"):
-            for table, arguments in rows:
-                if table == "nx_observations":
-                    arguments[5] = state
-            abi.validate(rows)  # Known membership alone does not assert success.
-        independent = deepcopy(GRAPH)
-        row(independent, "nx_request_results", 1)[1:] = ["unsupported", "text-field-too-large", 0]
-        row(independent, "nx_observations", 1)[5] = "failed"
-        independent = [item for item in independent if item[0] != "nx_option_priority"]
-        abi.validate(independent)  # The completed value projection remains intact.
-
-    def test_complete_list_and_definition_ordinals(self):
-        self.rejects("nx_value_members", 3, "3", 2)
-        self.rejects("nx_value_members", 4, 3, 2)
-        rows = deepcopy(GRAPH)
-        row(rows, "nx_values", 2)[2] = "partial"
-        row(rows, "nx_value_members", 2)[3:5] = ["3", 3]
-        abi.validate(rows)  # Partial member enumeration cannot prove missing keys.
-        rows = deepcopy(GRAPH)
-        row(rows, "nx_requests")[3] = "definition-value"
-        rows = [item for item in rows if item[0] not in {"nx_member_values", "nx_observations", "nx_observation_values", "nx_option_priority"}]
-        rows.extend([["nx_observations", [I["k"], I["q"], "definition", I["d"], "selected-definition", "observed"]],
-                     ["nx_observation_values", [I["k"], I["v"]]]])
-        abi.validate(rows)
-        row(rows, "nx_definitions")[2] = 1
-        with self.assertRaises(ValueError):
-            abi.validate(rows)
-
-    def test_distinct_scalar_encodings_and_finite_float_examples(self):
-        self.rejects("nx_scalar_values", 1, "string-json-v1")
-        self.rejects("nx_scalar_values", 2, '"relative"')
-        self.rejects("nx_scalar_values", 2, '"\\u002fwork/é/../alias"')  # cspell:ignore fwork
-        for kind, encoding, valid, invalid in (
-            ("integer", "integer-decimal-v1", "9223372036854775807", "01"),
-            ("boolean", "boolean-json-v1", "false", "0"),
-            ("float", "float-hex-v1", "0x1.8000000000000p+0", "nan"),
-            ("float", "float-hex-v1", "-0x0.0p+0", "-0.0"),
-        ):
-            rows = deepcopy(GRAPH)
-            row(rows, "nx_values")[1] = kind
-            row(rows, "nx_scalar_values", 2)[1:3] = [encoding, valid]
-            abi.validate(rows)
-            row(rows, "nx_scalar_values", 2)[2] = invalid
-            with self.assertRaises(ValueError):
-                abi.validate(rows)
+            abi.validate(rows)  # Other metadata requests prove no priority.
 
     def test_exact_text_utf8_boundaries_and_escaping(self):
         for size in (LIMIT - 1, LIMIT, LIMIT + 1):
             texts = ["x" * size, "é" * (size // 2) + "x" * (size % 2), '"' * size]
             for text in texts:
                 self.assertEqual(len(text.encode("utf-8")), size)
-                for name, column in (("nx_origins", 1), ("nx_value_members", 3)):
-                    rows = deepcopy(GRAPH)
-                    if name == "nx_value_members":
-                        row(rows, "nx_values", 2)[1] = "attrset"
-                        for _, arguments in [item for item in rows if item[0] == name]:
-                            arguments[2] = "attribute"
-                    row(rows, name)[column] = text
-                    if size <= LIMIT:
-                        abi.validate(rows)
-                        self.assertEqual(row(rows, name)[column], text)
-                    else:
-                        with self.assertRaises(ValueError):
-                            abi.validate(rows)
-            for occurrence, payload in ((0, '"/' + "x" * (size - 3) + '"'),
-                                        (1, '"' + "é" * ((size - 2) // 2) + "x" * ((size - 2) % 2) + '"')):
-                self.assertEqual(len(payload.encode("utf-8")), size)
                 rows = deepcopy(GRAPH)
-                row(rows, "nx_scalar_values", occurrence)[2] = payload
+                row(rows, "nx_origins")[1] = text
                 if size <= LIMIT:
                     abi.validate(rows)
+                    self.assertEqual(row(rows, "nx_origins")[1], text)
                 else:
                     with self.assertRaises(ValueError):
                         abi.validate(rows)
@@ -336,7 +270,7 @@ class AbiTests(unittest.TestCase):
         for _, arguments in rows:
             arguments[:] = [huge if value == old else value for value in arguments]
         without_observations = [item for item in rows if item[0] not in {
-            "nx_observations", "nx_observation_values", "nx_member_values", "nx_option_priority"}]
+            "nx_observations", "nx_option_priority"}]
         abi.validate(without_observations)
         with self.assertRaises(ValueError):
             abi.validate(rows)
