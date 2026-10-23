@@ -35,6 +35,23 @@
         patchFlags = ["-p1" "--fuzz=0"];
       };
       vendorHash = sources.vendorHash or lib.fakeHash;
+      # subPackages builds cmd/server; its default check never reaches executors.
+      doCheck = true;
+      preCheck =
+        (prev.preCheck or "")
+        + ''
+          cp ${../../../../checks/exact_models_test.go} internal/runtime/executor/nat_exact_models_test.go
+          cp ${pkgs.writeText "nat-exact-config.json" (builtins.toJSON ((import ../../../../lib/exact-models.nix {inherit lib;}).settings // {config-version = 8;}))} internal/runtime/executor/nat_exact_config.json
+        '';
+      checkPhase = ''
+        (
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          runHook preCheck
+          go test -v -count=1 -run '^TestNatExact' ./internal/runtime/executor
+          runHook postCheck
+        )
+      '';
       passthru =
         (prev.passthru or {})
         // {
