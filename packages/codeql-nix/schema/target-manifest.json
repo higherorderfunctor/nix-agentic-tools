@@ -1,0 +1,433 @@
+{
+  "$defs": {
+    "budget": {
+      "format": "nixql-native-int",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "descriptor": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "requests": {
+                "contains": {
+                  "properties": {
+                    "domain": {
+                      "enum": ["graph"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observationModes": {
+                "contains": {
+                  "const": "graph"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "requests": {
+                "contains": {
+                  "properties": {
+                    "domain": {
+                      "enum": ["option-metadata"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observationModes": {
+                "contains": {
+                  "const": "metadata"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "requests": {
+                "contains": {
+                  "properties": {
+                    "domain": {
+                      "enum": ["schema"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observationModes": {
+                "contains": {
+                  "const": "schema"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "requests": {
+                "contains": {
+                  "properties": {
+                    "domain": {
+                      "enum": ["config", "definition-value", "option-value"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observationModes": {
+                "contains": {
+                  "const": "selected-value"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "requests": {
+                "contains": {
+                  "properties": {
+                    "facet": {
+                      "const": "string-context"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observationModes": {
+                "contains": {
+                  "const": "string-context"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "evaluation": {
+                "properties": {
+                  "kind": {
+                    "const": "config-only"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requests": {
+                "items": {
+                  "properties": {
+                    "domain": {
+                      "const": "config"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "adapter": {
+          "enum": [
+            "devenv",
+            "evalModules",
+            "flake-parts",
+            "home-manager",
+            "nixos"
+          ]
+        },
+        "adapterVersion": {
+          "$ref": "#/$defs/identity"
+        },
+        "argumentDescription": {
+          "additionalProperties": false,
+          "description": "Hash the admitted source/argument description. References identify admitted runtime arguments; do not serialize functions or secrets wholesale.",
+          "properties": {
+            "hash": {
+              "$ref": "#/$defs/identity"
+            },
+            "moduleArgumentsRef": {
+              "$ref": "#/$defs/identity"
+            },
+            "specialArgumentsRef": {
+              "$ref": "#/$defs/identity"
+            }
+          },
+          "required": ["hash", "moduleArgumentsRef", "specialArgumentsRef"],
+          "type": "object"
+        },
+        "evaluation": {
+          "additionalProperties": false,
+          "description": "An opaque admitted runtime reference to arguments or an evaluation handle. A config-only handle supports config requests only and cannot assert option declarations.",
+          "properties": {
+            "kind": {
+              "enum": ["arguments", "config-only", "rich-result"]
+            },
+            "reference": {
+              "$ref": "#/$defs/identity"
+            }
+          },
+          "required": ["kind", "reference"],
+          "type": "object"
+        },
+        "fingerprint": {
+          "additionalProperties": false,
+          "description": "Together with adapterVersion, argumentDescription.hash and system, these are the F1 evaluation fingerprint components. Input identities and source roots additionally describe the admitted closure.",
+          "properties": {
+            "evaluatorVersion": {
+              "$ref": "#/$defs/identity"
+            },
+            "libVersion": {
+              "$ref": "#/$defs/identity"
+            },
+            "modelVersion": {
+              "$ref": "#/$defs/identity"
+            },
+            "policyHash": {
+              "$ref": "#/$defs/identity"
+            },
+            "sourceSnapshotHash": {
+              "$ref": "#/$defs/identity"
+            }
+          },
+          "required": [
+            "evaluatorVersion",
+            "libVersion",
+            "modelVersion",
+            "policyHash",
+            "sourceSnapshotHash"
+          ],
+          "type": "object"
+        },
+        "inputIdentities": {
+          "additionalProperties": {
+            "$ref": "#/$defs/identity"
+          },
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/identity"
+          },
+          "type": "object"
+        },
+        "observationModes": {
+          "items": {
+            "enum": [
+              "graph",
+              "metadata",
+              "schema",
+              "selected-value",
+              "string-context"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "requests": {
+          "items": {
+            "$ref": "#/$defs/request"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "reusable": {
+          "description": "Must be false when external inputs that cannot be recorded prevent reproducible reuse. Validation cannot authenticate input identities or runtime references.",
+          "type": "boolean"
+        },
+        "sourceRoots": {
+          "items": {
+            "additionalProperties": false,
+            "description": "logicalName and rootContentIdentity form the F1 root key. The checkout path is mapping data, never a durable identity component.",
+            "properties": {
+              "logicalName": {
+                "$ref": "#/$defs/identity"
+              },
+              "path": {
+                "$ref": "#/$defs/identity"
+              },
+              "rootContentIdentity": {
+                "$ref": "#/$defs/identity"
+              }
+            },
+            "required": ["logicalName", "path", "rootContentIdentity"],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "syntaxOnlyFallback": {
+          "description": "Whether syntax-only fallback is permitted if this target is blocked; this does not turn failed evaluation into successful observation.",
+          "type": "boolean"
+        },
+        "system": {
+          "$ref": "#/$defs/identity"
+        }
+      },
+      "required": [
+        "adapter",
+        "adapterVersion",
+        "argumentDescription",
+        "evaluation",
+        "fingerprint",
+        "inputIdentities",
+        "observationModes",
+        "requests",
+        "reusable",
+        "sourceRoots",
+        "syntaxOnlyFallback",
+        "system"
+      ],
+      "type": "object"
+    },
+    "identity": {
+      "$ref": "#/$defs/text",
+      "minLength": 1
+    },
+    "request": {
+      "description": "Every request is explicit, including metadata prefixes. Paths are literal segments, never dot-split. maxNodes also bounds the explicit all-declarations enumeration; no default traversal or value request is implied.",
+      "oneOf": [
+        {
+          "properties": {
+            "domain": {
+              "enum": ["config", "definition-value", "option-value"]
+            },
+            "facet": {
+              "enum": ["members", "string-context", "value"]
+            }
+          }
+        },
+        {
+          "properties": {
+            "domain": {
+              "const": "graph"
+            },
+            "facet": {
+              "const": "modules"
+            }
+          }
+        },
+        {
+          "properties": {
+            "domain": {
+              "const": "option-metadata"
+            },
+            "facet": {
+              "enum": [
+                "all-declarations",
+                "declarations",
+                "internal",
+                "isDefined",
+                "priority",
+                "readOnly",
+                "typeName",
+                "visible"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "domain": {
+              "const": "schema"
+            },
+            "facet": {
+              "const": "declarations"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "maxBytes": {
+          "$ref": "#/$defs/budget"
+        },
+        "maxDepth": {
+          "$ref": "#/$defs/budget"
+        },
+        "maxMemoryMiB": {
+          "$ref": "#/$defs/budget"
+        },
+        "maxNodes": {
+          "$ref": "#/$defs/budget"
+        },
+        "maxSeconds": {
+          "$ref": "#/$defs/budget"
+        },
+        "path": {
+          "format": "nixql-path",
+          "items": {
+            "$ref": "#/$defs/text"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "domain",
+        "facet",
+        "maxBytes",
+        "maxDepth",
+        "maxMemoryMiB",
+        "maxNodes",
+        "maxSeconds",
+        "path"
+      ],
+      "type": "object",
+      "unevaluatedProperties": false
+    },
+    "text": {
+      "format": "nixql-exact-text",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Version-one admitted target description. Target names are exact labels, never flake attribute expressions. Consumers MUST enable nixql-exact-text (UTF-8 encodable, at most 1048576 encoded bytes), nixql-path (compact ensure_ascii=False JSON array encoding, at most 1048576 UTF-8 bytes, including escapes), and nixql-native-int (native integer values only, excluding Booleans and floating-point values such as 1.0; no coercion). JSON Schema format assertions are not enabled by default. No evaluator, reference resolution, closure authentication or budget enforcement is supplied by this schema.",
+  "properties": {
+    "manifestVersion": {
+      "const": 1,
+      "type": "integer"
+    },
+    "targets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/descriptor"
+      },
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/identity"
+      },
+      "type": "object"
+    }
+  },
+  "required": ["manifestVersion", "targets"],
+  "title": "NixQL target manifest, version one",
+  "type": "object"
+}
