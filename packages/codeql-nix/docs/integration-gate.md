@@ -1,7 +1,7 @@
 # Nix language integration gate
 
-> **Last verified:** 2026-10-23 — the bootstrap check passed 31 boundary cases
-> and both QL tests on x86_64-linux.
+> **Last verified:** 2026-10-23 — F0 shares pinned kit inputs and the canonical
+> location adapter with S1; its bootstrap proof remains test-only.
 
 ## Purpose and boundary
 
@@ -29,10 +29,10 @@ build inputs and temporary artifacts.
   `a1575b98a8cc19bcfa7bb6cb41be688cb3dae65c`; crate `codeql-extractor` `0.2.0`.
 - Parser runtime: `tree-sitter` `0.26.13` in the committed `Cargo.lock`.
 
-The fixed-output source hashes and Cargo vendor hash live in
-`checks/bootstrap.nix`; `Cargo.lock` fixes transitive dependencies. Changing the
-CLI requires a kit compatibility audit rather than silently keeping this proof
-valid.
+The fixed-output source hashes and Cargo vendor hash live in `lib/kit.nix`,
+shared by F0 and S1; the bootstrap fixture's `Cargo.lock` fixes transitive
+dependencies. Changing the CLI requires a kit compatibility audit rather than
+silently keeping this proof valid.
 
 ## Installed interfaces and join
 
@@ -47,9 +47,10 @@ archives. The test hook indexes `.nix` files in the current fixture directory,
 then separately launches the target producer into the same TRAP directory. Both
 producers publish completed files by rename before the CLI imports the database.
 
-`ql/codeql/Locations.qll` supplies an `overlay[local]` language interface:
-`File` exposes absolute and source-root-relative paths; `Location` exposes its
-file and start/end line/column. The generated syntax imports that interface.
+`ql/lib/codeql/Locations.qll` is the canonical `overlay[local]` language
+interface, copied into F0 by `checks/bootstrap.nix` and shared with S1: `File`
+exposes absolute and source-root-relative paths; `Location` exposes its file and
+start/end line/column. The generated syntax imports that interface.
 Same-basename statistics belong beside the library schema as well as beside the
 extractor schema.
 
