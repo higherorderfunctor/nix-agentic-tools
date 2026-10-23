@@ -40,6 +40,8 @@
       preCheck =
         (prev.preCheck or "")
         + ''
+          cp ${../../../../checks/gate_bump_test.go} internal/config/nat_gate_bump_test.go
+          cp ${../../../../checks/fixtures/gate-bump-golden.json} internal/config/nat_gate_golden.json
           cp ${../../../../checks/exact_models_test.go} internal/runtime/executor/nat_exact_models_test.go
           cp ${pkgs.writeText "nat-exact-config.json" (builtins.toJSON ((import ../../../../lib/exact-models.nix {inherit lib;}).settings // {config-version = 8;}))} internal/runtime/executor/nat_exact_config.json
         '';
@@ -48,6 +50,7 @@
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           runHook preCheck
+          go test -v -count=1 -run '^TestNatGateBump' ./internal/config
           go test -v -count=1 -run '^TestNatExact' ./internal/runtime/executor
           runHook postCheck
         )
