@@ -100,9 +100,10 @@ before publication.
 
 # CLIProxyAPI front gate (cpa-gate)
 
-> **Last verified:** 2026-10-22 — the gate checks call bodies, filters five CPA
-> listing shapes and detail responses, reports listing health, and checks
-> Responses websocket messages; no module option enables it.
+> **Last verified:** 2026-10-23 — the gate refuses non-canonical tool types,
+> checks call bodies, filters five CPA listing shapes and detail responses,
+> reports listing health, and checks Responses websocket messages; no module
+> option enables it.
 
 **cpa-gate is NOT a security boundary, and nothing wires it in yet.** A harness
 that runs under the same uid as the gate can read the policy file, which holds
@@ -186,13 +187,17 @@ Calls forward after a strict body check. The gate caps wire and decoded bodies
 at 32 MiB, accepts JSON with absent/`identity`/`gzip`/`zstd` encoding, and
 forwards the exact decoded bytes with `Content-Encoding` removed. It checks the
 top-level `model` with CPA's gjson version, every model-like name at any depth,
-and hosted tools against `hostedTools`. It refuses duplicate or escaped
-directive names, invalid UTF-8, lone surrogates, non-ASCII names outside client
-data, trailing values and nesting beyond 128 levels. Only schemas at
-`tools[].input_schema`, `tools[].parameters`, `tools[].function.parameters`,
-`text.format.schema`, `response_format.json_schema.schema`, and
-`output_format.schema`, plus client tool arguments at their structural
-positions, are exempt from model checks.
+and hosted tools against `hostedTools`. Tool declaration types must be lowercase
+and have no surrounding whitespace, even when the policy grants the raw
+spelling. Top-level `input[].type` values must have no surrounding whitespace
+before call suffix checks: CPA trims them when interpreting hosted history.
+Canonical dated and preview tool types still require their exact policy grants.
+The gate refuses duplicate or escaped directive names, invalid UTF-8, lone
+surrogates, non-ASCII names outside client data, trailing values and nesting
+beyond 128 levels. Only schemas at `tools[].input_schema`, `tools[].parameters`,
+`tools[].function.parameters`, `text.format.schema`,
+`response_format.json_schema.schema`, and `output_format.schema`, plus client
+tool arguments at their structural positions, are exempt from model checks.
 
 The two Responses websocket routes terminate both connections with
 gorilla/websocket v1.5.3 and no compression. Each client text message is
@@ -202,10 +207,10 @@ checked, including interrupt messages. Top-level model values with surrounding
 whitespace are refused even if literally in the set: CPA trims them. Accepted
 bytes, upstream text/binary messages and both directions of ping/pong/close
 controls relay unchanged. Application messages with invalid JSON/UTF-8, excess
-size, binary data or disallowed models close the client with code 1008 and
-`request refused`, then close the upstream connection. Gorilla closes transport
-protocol errors itself. A service restart ends hijacked sessions by exiting the
-process.
+size, binary data, non-canonical tool types or disallowed models close the
+client with code 1008 and `request refused`, then close the upstream connection.
+Gorilla closes transport protocol errors itself. A service restart ends hijacked
+sessions by exiting the process.
 
 Listings are parsed by wire shape, never by request header or user agent. Only
 exact allowed IDs survive, `first_id`/`last_id` are recomputed, and an object

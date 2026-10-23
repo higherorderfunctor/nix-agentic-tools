@@ -116,6 +116,116 @@ func TestBodyDepthBoundary(t *testing.T) {
 	}
 }
 
+// Trailing/both-end input whitespace and raw policy-granted declarations pass
+// the old guards. Leading-only input whitespace and empty-policy malformed
+// declarations are existing rejection baselines.
+var nonCanonicalHostedTypes = []struct {
+	name, field, kind string
+}{
+	{"input both ASCII", "input", " web_search_call "},
+	{"input both Unicode", "input", "\u00a0web_search_call\u00a0"},
+	{"input leading ASCII", "input", " web_search_call"},
+	{"input leading Unicode", "input", "\u00a0web_search_call"},
+	{"input trailing ASCII", "input", "web_search_call "},
+	{"input trailing Unicode", "input", "web_search_call\u00a0"},
+	{"input trailing hosted output", "input", "web_search_call_output "},
+	{"input trailing other hosted call", "input", "image_generation_call "},
+	{"tool both ASCII", "tools", " web_search "},
+	{"tool both Unicode", "tools", "\u00a0web_search\u00a0"},
+	{"tool case", "tools", "WEB_SEARCH_20250305"},
+	{"tool leading ASCII", "tools", " web_search"},
+	{"tool leading Unicode", "tools", "\u00a0web_search"},
+	{"tool trailing ASCII", "tools", "web_search "},
+	{"tool trailing Unicode", "tools", "web_search\u00a0"},
+}
+
+func hostedTypeBody(field, kind string) string {
+	encoded, _ := json.Marshal(kind) // A string cannot fail JSON encoding.
+	return `{"model":"m","` + field + `":[{"type":` + string(encoded) + `}]}`
+}
+
+func TestHostedToolTypeCanonicalSpellings(t *testing.T) {
+	for _, c := range nonCanonicalHostedTypes {
+		t.Run(c.name, func(t *testing.T) {
+			// The policy loader permits raw spellings: types must be canonical even
+			// when the exact malformed declaration has an explicit policy grant.
+			encoded, _ := json.Marshal(c.kind)
+			keys, err := loadPolicy(writePolicy(t, `{"entries":[{"name":"a","key":"secret-client","internal":"secret-internal","apis":["responses"],"models":["m"],"hostedTools":{`+string(encoded)+`:[],"web_search":[]}}]}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range keys {
+				for _, allow := range []bool{false, true} {
+					checked := *e
+					if !allow {
+						checked.hostedTools = map[string]bool{}
+					}
+					if validBody([]byte(hostedTypeBody(c.field, c.kind)), &checked) {
+						t.Errorf("non-canonical type accepted with raw policy grants %v", allow)
+					}
+				}
+			}
+		})
+	}
+}
+
+// Canonical allow/deny and client-owned data are existing behavior baselines.
+func TestCanonicalHostedToolTypes(t *testing.T) {
+	for _, c := range []struct{ field, kind, tool string }{
+		{"input", "image_generation_call", "image_generation"},
+		{"input", "web_search_call", "web_search"},
+		{"input", "web_search_call_output", "web_search"},
+		{"tools", "web_search", "web_search"},
+		{"tools", "web_search_20250305", "web_search_20250305"},
+		{"tools", "web_search_preview", "web_search_preview"},
+		{"tools", "web_search_preview_2025_03_11", "web_search_preview_2025_03_11"},
+	} {
+		t.Run(c.field+"/"+c.kind, func(t *testing.T) {
+			for _, allow := range []bool{false, true} {
+				e := bodyEntry(t)
+				e.hostedTools = map[string]bool{}
+				if allow {
+					e.hostedTools[c.tool] = true
+				}
+				if got := validBody([]byte(hostedTypeBody(c.field, c.kind)), e); got != allow {
+					t.Errorf("canonical type accepted %v with grant %v", got, allow)
+				}
+			}
+		})
+	}
+	for _, body := range []string{
+		`{"model":"m","tools":[{"type":"function"},{"type":"custom"}]}`,
+		`{"model":"m","input":[{"type":"function_call"},{"type":"function_call_output"},{"type":"custom_tool_call"},{"type":"custom_tool_call_output"}]}`,
+		`{"model":"m","tools":[{"type":"function","parameters":{"type":" WEB_SEARCH "}}],"input":[{"type":"function_call","arguments":{"type":" web_search_call "}}]}`,
+	} {
+		if !validBody([]byte(body), bodyEntry(t)) {
+			t.Error("canonical client tools or client-owned type data refused")
+		}
+	}
+}
+
+func TestNonCanonicalHostedTypesRefusedBeforeHTTPForwarding(t *testing.T) {
+	for _, c := range nonCanonicalHostedTypes {
+		t.Run(c.name, func(t *testing.T) {
+			g, log := newGate(t)
+			for _, e := range g.keys {
+				e.hostedTools[c.kind] = true
+				e.hostedTools["web_search"] = true
+			}
+			r := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(hostedTypeBody(c.field, c.kind)))
+			r.Header.Set("Authorization", "Bearer "+responsesKey)
+			r.Header.Set("Content-Type", "application/json")
+			w := serve(t, g, r)
+			if w.Code != http.StatusNotFound || w.Body.Len() != 0 || !strings.Contains(lastLine(log), `"reason":"body"`) {
+				t.Errorf("nonuniform refusal: %d %q %s", w.Code, w.Body, lastLine(log))
+			}
+			if strings.Contains(log.String(), `"m"`) || strings.Contains(log.String(), c.kind) {
+				t.Error("refusal log carries model or tool data")
+			}
+		})
+	}
+}
+
 func TestWideObject(t *testing.T) {
 	var body strings.Builder
 	body.WriteString(`{"model":"m"`)
