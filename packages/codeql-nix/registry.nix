@@ -9,6 +9,7 @@
       }) [
         "database-contract"
         "evaluation-isolation"
+        "installed-extractor"
         "integration-gate"
         "metadata-library"
         "module-adapter"
