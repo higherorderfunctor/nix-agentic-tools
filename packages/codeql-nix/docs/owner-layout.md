@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-23 — Step 0 retains 23 metadata relations and
 > explicit owner check imports; document and check inventories live in the owner
-> registry and checks entry point. The language packs remain a skeleton.
+> registry and checks entry point. S1 adds combined-schema generation and
+> standalone raw location tests.
 
 ## Purpose and fit
 
@@ -49,19 +50,20 @@ future evaluator completeness.
 
 Each pack has its own `qlpack.yml` at the reserved interface:
 
-- `ql/lib/`: `nix-agentic-tools/nix-all`, a library selecting
-  `evaluation.dbscheme` and extractor `nix`.
+- `ql/lib/`: `nix-agentic-tools/nix-all`, a library selecting `nix.dbscheme` and
+  extractor `nix`.
 - `ql/queries/`: `nix-agentic-tools/nix-queries`, depending on `nix-all`.
 - `ql/test/`: `nix-agentic-tools/nix-tests`, depending on `nix-all` and
   selecting extractor `nix`.
 
 All versions are `0.0.0`; these manifests establish identities, not an installed
-product. `ql/lib/evaluation.dbscheme` is a symlink to
-`../../schema/evaluation.dbscheme`, the handwritten-only F1 schema. It is
-neither S1's combined generated/handwritten schema nor an installed extractor
-schema. There is no production extractor, public QL API or query suite supplied
-by these manifests. The bootstrap's separate fixture packs remain disposable
-evidence.
+product. `ql/lib/nix.dbscheme` is a symlink to `../../generated/nix.dbscheme`,
+S1's combined generated/handwritten schema. S1's private raw QL and location
+adapter supply the library's syntax interface; `codeql-nix-raw-inventory` checks
+deterministic generation, inventory drift and standalone generated-node
+file/location traversal. There is no production extractor, public meaning API or
+query suite supplied by these manifests. The bootstrap's separate fixture packs
+remain disposable evidence.
 
 ## Adding a domain
 
@@ -81,8 +83,8 @@ output from the implementation.
 
 Keep shared pack manifests and the ABI coordinated instead of letting domains
 rewrite them independently. Change F1 first when relation semantics change;
-update F2's independent transport fixtures when that boundary changes. Future
-combined schema generation and extractor installation need their own checks
-before this note can claim those capabilities. Format changed files with
-`treefmt`, run the affected checks through CI and update this note when
-ownership or entry-point obligations change.
+update F2's independent transport fixtures when that boundary changes.
+Production extractor installation needs its own checks before this note can
+claim that capability. Format changed files with `treefmt`, run the affected
+checks through CI and update this note when ownership or entry-point obligations
+change.
