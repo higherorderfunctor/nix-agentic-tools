@@ -1,10 +1,11 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-21 — an owner overlay returns only the leaves it
+> **Last verified:** 2026-10-22 — an owner overlay returns only the leaves it
 > claims and the composer deep-merges each one into `prev`, stopping at
 > derivations; nat-overlay-parity compares package leaves and checks owner
 > overlay leaves for presence; Go check names come from one declared table; the
-> flake has no `apps` output.
+> flake has no `apps` output; Bruno normalizes incompatible workspace lock
+> entries by manifest requirements rather than a release whitelist.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -460,13 +461,18 @@ proof that the base adaptation works. The threshold also keeps 4.0.0's builder
 inputs unchanged; the update script, not this compatibility shim, continues to
 derive both hashes.
 
-The same builder input also carries a lock repair for Bruno 4.2.0 and 4.2.1.
-Both releases' three Bruno workspaces require `qs ^6.15.2`, but their nested
-lock entries still pin 6.14.1. Offline `npm ci` then asks for registry metadata
-despite the required 6.15.3 tarball being cached. `postPatch` checks the exact
-lock and manifest shape, then removes those stale nested entries so npm can use
-the root 6.15.3 copy. `fetchNpmDeps` and the package build both consume this
-`postPatch`; changing the lock repair requires recalculating `npmDepsHash`.
+The same builder input repairs stale workspace lock entries. Bruno 4.2.x and
+4.3.0 require `qs ^6.15.2` in three workspace manifests but retain nested 6.14.1
+entries, so offline `npm ci` requests uncached registry metadata. The owner
+helper reads workspace manifests and removes an incompatible nested lock entry
+only when its nearest locked ancestor satisfies the requirement. Valid nested
+versions and incompatible nearest ancestors remain untouched. This is
+data-driven: no package names or release whitelist need extending on the next
+bump. `fetchNpmDeps` and the package build both consume this `postPatch`; the
+existing hash fixer regenerates their shared dependency cache after invalidating
+`npmDepsHash` (a release bump already drops both old hashes). Owner fixtures
+cover compatibility, nearest-ancestor resolution, scoped names and idempotence.
+Full package builds verify npm's offline install.
 
 `packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix` is a
 plain `overrideAttrs` and is CORRECT as one: it sets `cargoDeps` — an

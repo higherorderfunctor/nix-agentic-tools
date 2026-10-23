@@ -91,15 +91,13 @@
 # 4.0.0 builder inputs byte-identical, so the normal sidecar fixer remains solely
 # responsible for hashes on the 4.1.0 bump.
 #
-# BRUNO 4.2.0 AND 4.2.1 HAVE THREE STALE QS COPIES. Each Bruno workspace requires
-# qs ^6.15.2, but package-lock.json still places 6.14.1 under that workspace.
-# npm ci tries to resolve the inconsistent entries through a registry metadata
-# request, which the fixed npm cache cannot serve offline. The root lock entry
-# already contains qs 6.15.3 and its tarball is cached; removing the three
-# stale nested entries lets npm use that root copy. Both fetchNpmDeps and the
-# package build run postPatch, so they must see the same repaired lock.
-# Keep the repair limited to the affected releases and assert its exact input shape: a later
-# release or an upstream lock fix should be handled on its own terms.
+# NORMALIZE STALE WORKSPACE LOCK ENTRIES BY THEIR REQUIREMENTS. Upstream 4.2.x
+# and 4.3.0 ship nested dependencies that violate their workspace manifests.
+# Offline npm ci then requests uncached registry metadata. The owner helper
+# removes only an incompatible workspace entry whose nearest locked ancestor
+# satisfies the manifest, leaving valid entries and unrelated lock data intact.
+# Both fetchNpmDeps and npmConfigHook run this same postPatch, so the dependency
+# cache and package build consume the identical repaired lock.
 #
 # No platform gating: the source build supports darwin. A `--replace-fail`
 # whose anchor moved is a HARD failure and this host cannot build darwin, so
@@ -162,29 +160,9 @@ in
             [upstream.version]
             [version]
             upstream.postPatch
-            + lib.optionalString (lib.elem version ["4.2.0" "4.2.1"]) ''
-              if ! ${pkgs.jq}/bin/jq -e '
-                . as $lock
-                | .packages["node_modules/qs"].version == "6.15.3"
-                  and (["bruno-app", "bruno-cli", "bruno-electron"]
-                    | all(.[];
-                        $lock.packages["packages/\(.)"].dependencies.qs == "^6.15.2"
-                        and $lock.packages["packages/\(.)/node_modules/qs"].version == "6.14.1"))
-              ' package-lock.json >/dev/null; then
-                echo "bruno ${version}: unexpected qs lock entries" >&2
-                exit 1
-              fi
-              for workspace in bruno-app bruno-cli bruno-electron; do
-                if ! ${pkgs.jq}/bin/jq -e '.dependencies.qs == "^6.15.2"' "packages/$workspace/package.json" >/dev/null; then
-                  echo "bruno ${version}: unexpected qs requirement in $workspace" >&2
-                  exit 1
-                fi
-              done
-              ${pkgs.jq}/bin/jq 'del(
-                .packages["packages/bruno-app/node_modules/qs"],
-                .packages["packages/bruno-cli/node_modules/qs"],
-                .packages["packages/bruno-electron/node_modules/qs"]
-              )' package-lock.json | ${pkgs.moreutils}/bin/sponge package-lock.json
+            + ''
+              ${finalAttrs.nodejs}/bin/node ${../../../../src/normalize-workspace-lock.cjs} \
+                ${finalAttrs.nodejs}/lib/node_modules/npm/node_modules/semver
             ''
             + lib.optionalString needsBrunoSqliteLifecycleShim ''
               substituteInPlace packages/bruno-sqlite/package.json \
