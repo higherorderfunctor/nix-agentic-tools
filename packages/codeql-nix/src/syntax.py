@@ -74,6 +74,7 @@ def extract(binary, schema, combined_schema, pins_path, manifest, output_path, i
     facts = []
     status_facts = []
     seen = set()
+    parsed = {}
     failed = False
     coordinated = identity is not None
     identity = identity or RunIdentity.syntax(abi, binary, combined_schema, pins_path, manifest)
@@ -102,11 +103,17 @@ def extract(binary, schema, combined_schema, pins_path, manifest, output_path, i
                 abi.require(hashlib.sha256(source).hexdigest() == entry["contentHash"], "source-snapshot-race")
                 with tempfile.TemporaryDirectory(prefix=".syntax-", dir=output) as temporary:
                     private = Path(temporary)
-                    snapshot = private / "snapshot"
-                    snapshot.write_bytes(source)
-                    result = subprocess.run([binary, str(snapshot), str(source_path), str(private / "raw.trap"), str(private / "index")], capture_output=True)
-                    abi.require(result.returncode == 0, "text-field-too-large" if b"text-field-too-large" in result.stderr else "syntax-extraction-failed")
-                    rows = (private / "index").read_text().splitlines()
+                    parse_key = (source_path, entry["contentHash"])
+                    if parse_key in parsed:
+                        rows = parsed[parse_key]
+                        raw = ""
+                    else:
+                        snapshot = private / "snapshot"
+                        snapshot.write_bytes(source)
+                        result = subprocess.run([binary, str(snapshot), str(source_path), str(private / "raw.trap"), str(private / "index")], capture_output=True)
+                        abi.require(result.returncode == 0, "text-field-too-large" if b"text-field-too-large" in result.stderr else "syntax-extraction-failed")
+                        rows = (private / "index").read_text().splitlines()
+                        raw = (private / "raw.trap").read_bytes().decode("utf-8")
                     state, errors = rows[0].split("\t")
                     transaction = [file_row, ["nx_syntax_results", [file, state, int(errors)]]]
                     index_rows = [metadata("file", identity, part(str(source_path)) + "|" + str(len(source)), abi)]
@@ -124,11 +131,11 @@ def extract(binary, schema, combined_schema, pins_path, manifest, output_path, i
                     # Compare again after parsing. The archive and raw writer both used
                     # snapshot bytes; a changing checkout must not silently be admitted.
                     abi.require((root_path / relative).resolve(strict=True) == source_path and source_path.read_bytes() == source, "source-snapshot-race")
-                    raw = (private / "raw.trap").read_bytes().decode("utf-8")
                     completed = raw + "".join(index_rows) + trap_facts(abi, transaction, next_label(raw))
                     atomic(archive / str(source_path).lstrip("/"), source)
                     transaction_name = hashlib.sha256(file.encode()).hexdigest()
                     atomic(trap / f"syntax-{transaction_name}.trap", completed.encode())
+                    parsed.setdefault(parse_key, rows)
                     facts.extend(transaction)
                     seen.add(file)
             except (OSError, ValueError, UnicodeError) as error:

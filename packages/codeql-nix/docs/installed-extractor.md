@@ -1,8 +1,8 @@
 # Installed Nix extractor
 
 > **Last verified:** 2026-10-23 — P2a installs one coordinator for database
-> creation and query tests, preserving authenticated partial work; Q0 remains
-> deferred.
+> creation and query tests, preserving authenticated partial work; Q0 adds a
+> separate installed lifecycle check.
 
 ## Terms
 
@@ -16,7 +16,7 @@
 - Oracle: an expected answer obtained independently of extraction.
 - Pack: a named CodeQL library, query or test directory.
 - Producer: a component that emits syntax or evaluation facts.
-- Q0: the deferred Step 0 query about which file sets an option.
+- Q0: the Step 0 query about which file retains an option definition.
 - QL: CodeQL's query language.
 - Request: an explicit option path, metadata facet and work limits.
 - Run: one extraction identity joining schema, implementation and source
@@ -94,7 +94,12 @@ callers' module search paths when imported as a standalone driver.
 
 Syntax and evaluation write into temporary staging directories. Authenticated
 file rows and copied-path mappings connect evaluation origins through the
-existing [module adapter](module-adapter.md). Before copying staged archives and
+existing [module adapter](module-adapter.md). The supervisor admits
+authenticated selected files by exact target root name and content identity
+before evaluation, preserving candidates after failed work. Copied-path mappings
+retain all file identities; links require exactly one in the target admission
+plus trusted provenance and matching original/copied bytes. Explicit labels and
+ambiguous aliases leave origins unlinked. Before copying staged archives and
 TRAP into CodeQL's destinations, the coordinator validates the combined facts,
 recopies the original project with the same exclusions and checks its NAR hash
 against the initial private copy. It also rehashes admitted dependencies. A
@@ -118,7 +123,9 @@ before writing `$out/evidence`. The installed tests cover offline language/pack
 lookup, identical schema bytes, database creation with syntax and real module
 metadata under one run, an explicit target file, query-test extraction,
 discovery refusals and stale input pins. Direct Nix evaluation independently
-checks priority changing from `100` to `50`; this does not implement Q0.
+checks priority changing from `100` to `50`. Q0 adds the query-level comparison
+and failure cases in its separate [Step 0 check](step0-query.md); that check
+must pass before claiming the installed Q0 acceptance contract.
 
 The regression suite uses deterministic pin controls for a transient dependency
 change during discovery, preservation of completed requests beside failed

@@ -1,5 +1,6 @@
 """E2a contract-first metadata oracles; no selected value is evaluated."""
 
+import copy
 import hashlib
 import importlib.util
 import json
@@ -141,6 +142,7 @@ class ModulesTests(previous.ProjectionCase):
                     packet = self.project(setup, facet)
                     origins = {row[0]: row[1] for row in previous.rows(packet, "nx_origins")}
                     self.assertEqual([origins[row[index]] for row in previous.rows(packet, relation)], expected)
+                    self.assertEqual([row[2] for row in previous.rows(packet, "nx_origins")], ["source"])
                     self.assertEqual(previous.rows(packet, "nx_request_results")[0][1], "complete")
                 packet = self.project(setup, "priority")
                 self.assertEqual([row[1] for row in previous.rows(packet, "nx_option_priority")], [priority])
@@ -181,6 +183,56 @@ class ModulesTests(previous.ProjectionCase):
         definitions = previous.rows(packet, "nx_definitions")
         self.assertEqual([origins[row[3]][1] for row in definitions], ["synthetic-module"])
         self.assertFalse(previous.rows(packet, "nx_origin_files"))
+
+    def test_plain_absolute_string_module_paths_do_not_gain_source_provenance(self):
+        setup = self.fixture()
+        for path in self.root.glob("*.nix"):
+            setup = setup.replace(str(path), json.dumps(str(path)))
+        packet = self.project(setup, "definitions")
+        self.assertEqual([row[1:] for row in previous.rows(packet, "nx_origins")],
+                         [[str(self.root / "ordinary.nix"), "synthetic"]])
+
+    def test_source_admission_uses_exact_root_identity_without_observed_origins(self):
+        source = self.root / "candidate.nix"
+        source.write_text("{ demo.answer = 1; }")
+        root = previous.abi.key("root", ["project", "snapshot"])
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        file = previous.abi.key("file", [root, source.name, digest])
+        files = [["nx_files", [file, root, source.name, digest, "project"]]]
+        for failed in (False, True):
+            with self.subTest(failed=failed):
+                request = previous.request("ok", facet="definitions", maxDepth=1 if failed else 0)
+                manifest = previous.manifest(self.root, [request])
+                target = next(iter(manifest["targets"].values()))
+                for name, field, value in (("different-content", "rootContentIdentity", "other"),
+                                            ("different-name", "logicalName", "other")):
+                    other = copy.deepcopy(target)
+                    other["sourceRoots"][0][field] = value
+                    manifest["targets"][name] = other
+                self.trap = Path(tempfile.mkdtemp(dir=self.temp.name))
+                packet = previous.supervise(manifest, self.bindings, self.trap, source_files=files)
+                targets = {row[2]: row[0] for row in previous.rows(packet, "nx_targets")}
+                self.assertEqual(previous.rows(packet, "nx_target_inputs"),
+                                 [[targets["literal.[name].with.dots"], file, "root"]])
+                self.assertFalse(previous.rows(packet, "nx_origin_files"))
+                self.assertEqual([row[1] for row in previous.rows(packet, "nx_request_results")],
+                                 ["blocked" if failed else "complete"] * 3)
+                if failed:
+                    self.assertFalse(previous.rows(packet, "nx_definitions"))
+
+    def test_bad_source_digest_refuses_admission_and_metadata(self):
+        source = self.root / "candidate.nix"
+        source.write_text("{ demo.answer = 1; }")
+        root = previous.abi.key("root", ["project", "snapshot"])
+        file = previous.abi.key("file", [root, source.name, "incorrect-digest"])
+        self.trap = Path(tempfile.mkdtemp(dir=self.temp.name))
+        packet = previous.supervise(previous.manifest(self.root, [previous.request("ok", facet="definitions")]),
+            self.bindings, self.trap, source_files=[["nx_files", [file, root, source.name, "incorrect-digest", "project"]]])
+        self.assert_failed_request(packet)
+        self.assertFalse(previous.rows(packet, "nx_target_inputs"))
+        self.assertFalse(previous.rows(packet, "nx_definitions"))
+        self.assertEqual(previous.rows(packet, "nx_request_results")[0][2], "projection-invalid")
+        self.assertIn("source-snapshot-mismatch", previous.rows(packet, "nx_diagnostics")[0][3])
 
     def test_module_throw_and_missing_input_refuse_without_value_serialization(self):
         setup = self.fixture()
@@ -234,11 +286,21 @@ class ModulesTests(previous.ProjectionCase):
 
     def test_producer_cannot_forge_file_admission_or_source_links(self):
         root = previous.abi.key("root", ["project", "snapshot"])
-        file = [previous.abi.key("file", [root, "forged.nix", "digest"]), root, "forged.nix", "digest", "project"]
+        source = self.root / "forged.nix"
+        source.write_text("{ demo.answer = 1; }")
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        file = [previous.abi.key("file", [root, source.name, digest]), root, source.name, digest, "project"]
         for relation in ("nx_files", "nx_origin_files", "nx_target_inputs"):
-            self.bindings["module:1"] = {"file": file, "forged": relation}
-            self.trap = Path(tempfile.mkdtemp(dir=self.temp.name))
-            packet = previous.supervise(previous.manifest(self.root, [previous.request("forged-source", facet="definitions")]), self.bindings, self.trap, source_files=[] if relation == "nx_files" else [["nx_files", file]])
-            self.assert_failed_request(packet)
-            self.assertFalse(previous.rows(packet, "nx_definitions"))
-            self.assertFalse(previous.rows(packet, relation) if relation != "nx_files" else [row for row in previous.rows(packet, relation) if row[0] == file[0]])
+            with self.subTest(relation=relation):
+                self.bindings["module:1"] = {"file": file, "forged": relation}
+                self.trap = Path(tempfile.mkdtemp(dir=self.temp.name))
+                packet = previous.supervise(previous.manifest(self.root, [previous.request("forged-source", facet="definitions")]), self.bindings, self.trap, source_files=[] if relation == "nx_files" else [["nx_files", file]])
+                self.assert_failed_request(packet)
+                self.assertIn("producer attempted to overwrite supervisor-owned facts",
+                              previous.rows(packet, "nx_diagnostics")[0][3])
+                self.assertFalse(previous.rows(packet, "nx_definitions"))
+                self.assertFalse(previous.rows(packet, "nx_origin_files"))
+                target = previous.rows(packet, "nx_targets")[0][0]
+                self.assertEqual(previous.rows(packet, "nx_target_inputs"),
+                                 [] if relation == "nx_files" else [[target, file[0], "root"]])
+                self.assertEqual(previous.rows(packet, "nx_files"), [] if relation == "nx_files" else [file])
