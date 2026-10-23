@@ -250,7 +250,11 @@ func TestWebsocketRefusalsCloseBeforeForwarding(t *testing.T) {
 					}
 				}
 				// The close can race a large write; its result is checked by reading.
-				_ = conn.WriteMessage(test.kind, []byte(test.body))
+				_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				writeStarted := time.Now()
+				writeErr := conn.WriteMessage(test.kind, []byte(test.body))
+				t.Logf("refusal write: elapsed=%s err=%v", time.Since(writeStarted), writeErr)
+				_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 				_, _, err := conn.ReadMessage()
 				closeError, ok := err.(*websocket.CloseError)
 				if !ok || closeError.Code != websocket.ClosePolicyViolation || closeError.Text != "request refused" {
