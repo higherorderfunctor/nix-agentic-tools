@@ -13,6 +13,21 @@
     }
   },
   "environment": {
+    "ANTHROPIC_API_KEY": {
+      "controls": "Anthropic SDK API key for authenticating requests"
+    },
+    "ANTHROPIC_AUTH_TOKEN": {
+      "controls": "Anthropic SDK bearer authentication token"
+    },
+    "ANTHROPIC_IDENTITY_TOKEN": {
+      "controls": "Anthropic SDK identity token for workload authentication"
+    },
+    "ANTHROPIC_WORK_SECRET": {
+      "controls": "Anthropic SDK work authentication secret"
+    },
+    "AZURE_OPENAI_API_KEY": {
+      "controls": "Azure OpenAI SDK API key for authenticating requests"
+    },
     "CASTAI_API_KEY": {
       "controls": "Cast AI API key fallback for the stats command when config.json and KIMCHI_API_KEY provide none"
     },
@@ -150,6 +165,15 @@
     },
     "OLLAMA_HOST": {
       "controls": "Ollama endpoint; takes precedence over KIMCHI_OLLAMA_HOST"
+    },
+    "OPENAI_ADMIN_KEY": {
+      "controls": "OpenAI SDK administrator API key"
+    },
+    "OPENAI_API_KEY": {
+      "controls": "OpenAI SDK API key for authenticating requests"
+    },
+    "OPENAI_WEBHOOK_SECRET": {
+      "controls": "OpenAI SDK secret for verifying webhook signatures"
     },
     "OPENROUTER_API_KEY": {
       "controls": "pi OpenRouter provider authentication"
@@ -377,6 +401,92 @@
         "VISUAL"
       ],
       "reason": "another tool's own variable (POSIX editor, HuggingFace, opencode) that Kimchi or pi honors for interoperability; owned and documented by that tool"
+    }
+  },
+  "environmentUnresolved": {
+    "kimchi/node_modules/@earendil-works/pi-ai/dist/utils/provider-env.js#getProviderEnvValue[VarRef]": {
+      "reason": "provider environment lookup accepts names forwarded by provider configuration and proxy helpers",
+      "sites": 1
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js#fromEnvSigningName[VarRef]": {
+      "reason": "evaluator limitation: the key is a template over the factory argument's signingName; the pinned caller passes \"bedrock\", so the name is AWS_BEARER_TOKEN_BEDROCK, which another site already lists",
+      "sites": 2
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js#getProviderEnvValue[VarRef]": {
+      "reason": "provider environment lookup accepts names forwarded by provider configuration and proxy helpers",
+      "sites": 1
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js#node_modules/debug/src/node.js[VarRef]": {
+      "reason": "debug enumerates host environment keys matching its debug_ prefix",
+      "sites": 1
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk.js#getProviderEnvValue[VarRef]": {
+      "reason": "provider environment lookup accepts names forwarded by provider configuration and proxy helpers",
+      "sites": 1
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk.js#getShellEnv[VarRef]": {
+      "reason": "the PATH key uses the casing found in the actual host environment",
+      "sites": 1
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk.js#resolveCommandAttempt[CallExpr]": {
+      "reason": "cross-spawn selects the PATH key using the host environment and platform casing rules",
+      "sites": 1
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk.js#resolveEnvConfigValue[VarRef]": {
+      "reason": "name comes from a user configuration value template",
+      "sites": 1
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/https-proxy-agent.js#node_modules/debug/src/node.js[VarRef]": {
+      "reason": "debug enumerates host environment keys matching its debug_ prefix",
+      "sites": 1
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/core/resolve-config-value.js#resolveEnvConfigValue[VarRef]": {
+      "reason": "name comes from a user configuration value template",
+      "sites": 1
+    },
+    "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/utils/shell.js#getShellEnv[VarRef]": {
+      "reason": "the PATH key uses the casing found in the actual host environment",
+      "sites": 1
+    },
+    "kimchi/node_modules/pi-mcp-adapter/agent-dir.ts#getAgentDir[TemplateLiteral]": {
+      "reason": "the adapter derives the key from the host manifest selected at runtime through PI_PACKAGE_DIR",
+      "sites": 2
+    },
+    "kimchi/node_modules/pi-mcp-adapter/cli.js#getAgentDir[TemplateLiteral]": {
+      "reason": "the adapter derives the key from the host manifest selected at runtime through PI_PACKAGE_DIR",
+      "sites": 1
+    },
+    "kimchi/node_modules/pi-mcp-adapter/cli.js#redactDoctorMessage[DotExpr]": {
+      "reason": "the bearer-token environment name comes from user MCP server configuration",
+      "sites": 1
+    },
+    "kimchi/node_modules/pi-mcp-adapter/mcp-auth-fetch.ts#resolveOAuthHeaders[VarRef]": {
+      "reason": "name comes from environment placeholders in user MCP OAuth HTTP headers",
+      "sites": 2
+    },
+    "kimchi/node_modules/pi-mcp-adapter/utils.ts#getMissingEnvVars[VarRef]": {
+      "reason": "name comes from environment placeholders in user MCP server configuration",
+      "sites": 2
+    },
+    "kimchi/node_modules/pi-mcp-adapter/utils.ts#interpolateEnvVars[VarRef]": {
+      "reason": "name comes from one of the three environment placeholder syntaxes in user MCP server configuration",
+      "sites": 6
+    },
+    "kimchi/node_modules/pi-mcp-adapter/utils.ts#resolveBearerToken[DotExpr]": {
+      "reason": "the bearer-token environment name comes from user MCP server configuration",
+      "sites": 2
+    },
+    "kimchi/src/extensions/permissions/mode-controller.ts#getPermissionMode[VarRef]": {
+      "reason": "the permission-mode key includes the runtime session identifier",
+      "sites": 1
+    },
+    "kimchi/src/extensions/permissions/mode-controller.ts#resolveInitialPermissionModeDetailed[CallExpr]": {
+      "reason": "the inherited permission-mode key includes the runtime parent session identifier",
+      "sites": 1
+    },
+    "kimchi/src/oauth-config.ts#nonEmptyEnv[VarRef]": {
+      "reason": "evaluator limitation: the key is a template over the region id, upper-cased; REGION_OAUTH_DEFAULTS limits it to us and eu, so the names KIMCHI_OAUTH_CLIENT_ID_US and KIMCHI_OAUTH_CLIENT_ID_EU are fixed in source but missing from the fact",
+      "sites": 1
     }
   },
   "harness": {

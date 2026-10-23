@@ -4,6 +4,7 @@
 # step as a script, so a check can apply it to a fixture's results. See
 # ../docs/kimchi-codeql-environment.md.
 {
+  annotations ? ./annotations.json,
   # The release's `passthru.codeql` (../lib/codeql.nix).
   codeql,
   pkgs,
@@ -25,7 +26,8 @@
       fi
       jq -S -n -f ${./environment.jq} \
         --slurpfile reads "$1/EnvironmentReads.json" \
-        --slurpfile overwrites "$1/LaunchOverwrites.json"
+        --slurpfile overwrites "$1/LaunchOverwrites.json" \
+        --slurpfile annotations ${annotations}
     '';
   };
   results = codeql.runQueries {
@@ -34,7 +36,7 @@
   };
 in {
   inherit queries results transform;
-  # The pinned release reads 237 variables. A surface far below that is a
+  # The pinned release reads 428 variables. A surface far below that is a
   # source root the extractor skipped, not a release that stopped reading.
   surface = pkgs.runCommand "kimchi-codeql-environment.json" {nativeBuildInputs = [pkgs.jq];} ''
     set -euETo pipefail

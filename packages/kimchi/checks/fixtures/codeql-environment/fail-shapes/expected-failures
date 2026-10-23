@@ -6,3 +6,4 @@ src/entry.ts hands process.env to whole = process.env, and the names that reads 
 the environment iteration key unknownListKey cannot be resolved to a finite set of names (kimchi/src/entry.ts:32)
 the environment parameter env is indexed by a name that cannot be evaluated, so the names it reads cannot be listed (kimchi/src/entry.ts:23)
 the environment parameter env is used as a whole, so the names it reads cannot be listed (kimchi/src/entry.ts:29)
+unresolved computed environment read: kimchi/src/entry.ts#<top-level>[BinaryExpr] (kimchi/src/entry.ts:34:6)
