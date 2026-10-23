@@ -1,0 +1,12 @@
+diff --git a/test/agent-settled-retry.test.ts b/test/agent-settled-retry.test.ts
+--- a/test/agent-settled-retry.test.ts
++++ b/test/agent-settled-retry.test.ts
+@@ -85,7 +85,7 @@
+ 				type: "agent_end",
+ 				messages: messages as AgentEndEvent["messages"],
+ 			} satisfies AgentEndEvent),
+-		fireAgentSettled: () => fire("agent_settled", { type: "agent_settled" } satisfies AgentSettledEvent),
++		fireAgentSettled: () => fire("agent_settled", { type: "agent_settled", aborted: false } satisfies AgentSettledEvent),
+ 	}
+ }
+ 

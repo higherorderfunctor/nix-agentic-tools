@@ -1,5 +1,33 @@
 {
   "variables": {
+    "ITERATED_ONE": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "ITERATED_THREE": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "ITERATED_TWO": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "KIMCHI_MANAGES_MCP_PROJECT_TRUST": {
+      "consumerOverridable": true,
+      "readBy": [
+        "pi"
+      ],
+      "type": "string"
+    },
     "S15_PROCESS_BRACKET_ENV": {
       "consumerOverridable": true,
       "readBy": [
@@ -43,6 +71,13 @@
       "type": "string"
     },
     "S32_PROCESS_ALIAS": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "VIA_KNOWN_HELPER": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"

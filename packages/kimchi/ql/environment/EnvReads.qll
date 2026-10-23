@@ -2,11 +2,11 @@
 
 import javascript
 
-/** The runtime that reads from `f`: Kimchi's own source, or a pi package. */
+/** The runtime that reads from `f`: Kimchi's own source, or pi and its extensions. */
 string runtimeOf(File f) {
   f.getRelativePath().matches("kimchi/src/%") and result = "kimchi"
   or
-  f.getRelativePath().matches("kimchi/node_modules/@earendil-works/%") and result = "pi"
+  f.getRelativePath().matches("kimchi/node_modules/%") and result = "pi"
 }
 
 /** pi-coding-agent's dist, the pi tree Kimchi's imports resolve to first. */
@@ -62,7 +62,8 @@ VariableDeclarator declaratorOf(VarAccess v) {
 /** A variable with no initialized declarator and no parameter declaration: a binding element, an uninitialized declarator or an unresolved import. */
 predicate constantShaped(VarAccess v) {
   not exists(declaratorOf(v).getInit()) and
-  not exists(Parameter p | p.getAVariable() = v.getVariable())
+  not exists(Parameter p | p.getAVariable() = v.getVariable()) and
+  not exists(EnhancedForLoop loop | loop.getAnIterationVariable() = v.getVariable())
 }
 
 signature predicate fallbackSig(string name, string value);
@@ -139,9 +140,118 @@ module E = Eval<fallback2/2>;
 
 string constValue(Expr e) { result = E::constValue(e) }
 
+/** A for-of loop binding the value read by `v`. */
+ForOfStmt iterationOf(VarAccess v) { result.getAnIterationVariable() = v.getVariable() }
+
+/** Values of literal arrays, aliases, and their for-of bindings, including tuple columns. */
+Expr iterationValue(Expr e) {
+  not e instanceof VarAccess and result = e
+  or
+  result = iterationValue(declaratorOf(e).getInit())
+  or
+  e instanceof VarAccess and
+  not exists(declaratorOf(e).getInit()) and not exists(iterationOf(e)) and result = e
+  or
+  exists(ForOfStmt loop, ArrayExpr array, Expr item |
+    loop = iterationOf(e) and array = iterationValue(loop.getIterationDomain()) and
+    item = array.getAnElement() and
+    (
+      loop.getLValue().(VarDecl).getVariable() = e.(VarAccess).getVariable() and
+      result = iterationValue(item)
+      or
+      exists(ArrayPattern pattern, int column, ArrayExpr tuple |
+        pattern = loop.getLValue() and
+        pattern.getElement(column).(VarDecl).getVariable() = e.(VarAccess).getVariable() and
+        tuple = iterationValue(item) and result = iterationValue(tuple.getElement(column))
+      )
+    )
+  )
+}
+
+/** Expressions whose definitions determine a literal iteration's values. */
+Expr iterationDependency(Expr e) {
+  result = declaratorOf(e).getInit()
+  or
+  result = iterationOf(e).getIterationDomain()
+  or
+  result = e.(ArrayExpr).getAnElement()
+}
+
+/** Dense literal arrays with no spread have statically fixed element positions. */
+predicate fixedArray(ArrayExpr array) {
+  not array.hasOmittedElement() and not exists(array.getAnElement().(SpreadElement))
+}
+
+/** An iteration source is closed only when every traversed loop has literal array values. */
+predicate closedIteration(VarAccess key) {
+  exists(iterationOf(key)) and
+  exists(iterationValue(key)) and
+  forall(VarAccess v | v = iterationDependency*(key) and exists(iterationOf(v)) |
+    exists(iterationValue(iterationOf(v).getIterationDomain())) and
+    forall(Expr domain | domain = iterationValue(iterationOf(v).getIterationDomain()) |
+      fixedArray(domain)
+    ) and
+    (
+      iterationOf(v).getLValue() instanceof VarDecl
+      or
+      exists(ArrayPattern pattern, int column |
+        pattern = iterationOf(v).getLValue() and
+        pattern.getElement(column).(VarDecl).getVariable() = v.getVariable() and
+        not pattern.hasDefault(column) and
+        forall(Expr item |
+          item = iterationValue(iterationValue(iterationOf(v).getIterationDomain()).(ArrayExpr).getAnElement()) |
+          fixedArray(item) and exists(item.(ArrayExpr).getElement(column))
+        )
+      )
+    )
+  ) and
+  // Every use of an array binding must be one of the definitions or loop
+  // domains followed above. Other uses could mutate it or let it escape.
+  forall(VarAccess v, VarAccess use |
+    v = iterationDependency*(key) and exists(iterationValue(v).(ArrayExpr)) and
+    use.getVariable() = v.getVariable() |
+    use = iterationDependency*(key)
+  ) and
+  // Scalar binding reassignment also makes the set of values open.
+  not exists(VarAccess v, VarAccess use |
+    v = iterationDependency*(key) and use.getVariable() = v.getVariable() and
+    (use = any(Assignment a).getLhs() or use = any(UpdateExpr update).getOperand() or use = any(PropAccess p | p = any(Assignment a).getLhs()).getBase())
+  )
+}
+
+/** A function literal, or a known helper returning only function literals. */
+predicate functionValue(Expr e) {
+  e instanceof Function
+  or
+  exists(DataFlow::InvokeNode call, Function callee |
+    call.asExpr() = e and callee = call.getACallee() and
+    call.asExpr().(CallExpr).getCallee().(VarAccess).getVariable() = callee.(FunctionDeclStmt).getVariable() and
+    exists(callee.getAReturnedExpr()) and
+    forall(Expr returned | returned = callee.getAReturnedExpr() | returned instanceof Function)
+  )
+}
+
+/** A conditional string-type guard keeps function alternatives out of the indexed read. */
+predicate stringGuarded(VarAccess key) {
+  exists(ConditionalExpr conditional, EqualityTest test, TypeofExpr type |
+    key.getParent+() = conditional.getConsequent() and test = conditional.getCondition() and
+    test.getOperator() = ["==", "==="] and
+    type = test.getLeftOperand() and type.getOperand().(VarAccess).getVariable() = key.getVariable() and
+    test.getRightOperand().(StringLiteral).getValue() = "string"
+  )
+}
+
+/** A finite iteration whose alternatives all resolve, including guarded function alternatives. */
+predicate resolvedIteration(VarAccess key) {
+  closedIteration(key) and
+  forall(Expr value | value = iterationValue(key) |
+    exists(constValue(value)) or stringGuarded(key) and functionValue(value)
+  )
+}
+
 /** Expressions evaluated to name a read, top-down from the read sites. */
 predicate evaluated(Expr e) {
-  e = any(DataFlow::PropRead r | r = envObject().getAPropertyRead()).getPropertyNameExpr()
+  e = any(DataFlow::PropRead r | r = envReadSource().getAPropertyRead()).getPropertyNameExpr()
   or
   exists(CallExpr c |
     c.getCallee().(Identifier).getName() = "getProviderEnvValue" and e = c.getArgument(0)
@@ -173,6 +283,20 @@ predicate ambiguousConstant(VarAccess v) {
 /** `process.env` on the process object, however spelled: the global under any of its names, `globalThis.process`, or the `process` module's default or namespace import. */
 DataFlow::SourceNode envObject() { result = NodeJSLib::process().getAPropertyRead("env") }
 
+/** The environment and known helpers' parameters receiving it, following local aliases at each call. */
+DataFlow::SourceNode envReadSource() {
+  result = envObject()
+  or
+  exists(DataFlow::InvokeNode call, Function callee, int index, SimpleParameter parameter |
+    envReadSource().flowsTo(call.getArgument(index)) and
+    callee = call.getACallee() and
+    parameter = callee.getParameter(index) and
+    not parameter.isRestParameter() and
+    result = DataFlow::parameterNode(parameter)
+  )
+}
+
+
 /** The name the property read `r` reads: its property name, or its computed key evaluated. */
 string readName(DataFlow::PropRead r) {
   not r.asExpr() = any(DeleteExpr d).getOperand() and
@@ -180,12 +304,15 @@ string readName(DataFlow::PropRead r) {
     result = r.getPropertyName()
     or
     not exists(r.getPropertyName()) and result = constValue(r.getPropertyNameExpr())
+    or
+    resolvedIteration(r.getPropertyNameExpr()) and
+    result = constValue(iterationValue(r.getPropertyNameExpr()))
   )
 }
 
 /** A named read of the environment at `site`, and the name it reads. */
 predicate envRead(DataFlow::Node site, string name) {
-  exists(DataFlow::PropRead r | r = envObject().getAPropertyRead() | site = r and name = readName(r))
+  exists(DataFlow::PropRead r | r = envReadSource().getAPropertyRead() | site = r and name = readName(r))
   or
   // pi's provider helper reads the variable its first argument names.
   exists(CallExpr c | c = site.asExpr() |
@@ -216,6 +343,13 @@ predicate readFailure(string message, string where_) {
   exists(VarAccess v | ambiguousConstant(v) |
     message = "constant " + v.getName() + " is ambiguous: same-named constants evaluate differently" and
     where_ = v.getFile().getRelativePath() + ":" + v.getLocation().getStartLine()
+  )
+  or
+  exists(DataFlow::PropRead read, VarAccess key |
+    read = envReadSource().getAPropertyRead() and key = read.getPropertyNameExpr() and
+    exists(iterationOf(key)) and not resolvedIteration(key) and
+    message = "the environment iteration key " + key.getName() + " cannot be resolved to a finite set of names" and
+    where_ = key.getFile().getRelativePath() + ":" + key.getLocation().getStartLine()
   )
   or
   // pi's APP_NAME no longer takes the host's piConfig.name (a `.d.ts`

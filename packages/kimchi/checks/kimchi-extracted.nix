@@ -25,6 +25,7 @@
         --pi-ai-package ${extractionSources.piAi} \
         --pi-package ${pi} \
         --pi-tui-package ${extractionSources.piTui} \
+        --typebox-package ${extractionSources.typebox} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
     '';
   in
@@ -133,10 +134,10 @@
             substituteInPlace "$bundled" \
               --replace-fail 'getGlobalSettings().httpProxy' 'getGlobalSettings().httpProxyProbe'
           done
-          mutant "$pi" pi-definition-collision dist/core/settings-manager.d.ts \
-            '    compaction?: CompactionSettings;' $'    compaction?: CompactionSettings;\n    compactionProbe?: import("./compaction/compaction.js").CompactionSettings;'
-          mutant "$pi" pi-definition-reference dist/core/settings-manager.d.ts \
-            '    compaction?: CompactionSettings;' '    compaction?: import("./compaction/compaction.js").CompactionSettings;'
+          mutant "$pi" pi-definition-collision dist/core/settings-schema.d.ts \
+            '    retry?: RetrySettings;' $'    retry?: RetrySettings;\n    compaction?: CompactionSettings;\n    compactionProbe?: import("./compaction/compaction.js").CompactionSettings;'
+          mutant "$pi" pi-definition-reference dist/core/settings-schema.d.ts \
+            '    retry?: RetrySettings;' $'    retry?: RetrySettings;\n    compaction?: import("./compaction/compaction.js").CompactionSettings;'
 
           expect_rejection() {
             label="$1"
@@ -249,22 +250,27 @@
           ${pkgs.jq}/bin/jq -e '.harness.keys.fermentV2.type == "object"' \
             "$TMPDIR/helper-known-unresolved.json" > /dev/null
           echo 'helper-known-unresolved (exit 0): warned and retained parser shape' >> "$TMPDIR/proof"
-          # Settings definitions follow the interface Settings references, not
-          # the first interface of that name: pi's compaction.d.ts declares an
-          # all-required CompactionSettings next to settings-manager's.
+          # Settings is re-exported by settings-manager, and compaction is
+          # inherited from its TypeBox schema rather than declared on Settings.
+          # Resolve both the inherited properties and a replacement interface
+          # from the compaction module, whose enabled member is required.
+          ${pkgs.jq}/bin/jq -e '
+            (.harness.keys.compaction.properties.enabled | .type == "boolean" and .optional == true) and
+            (.harness.keys.retry.properties | has("maxRetries") and (has("maxDelayMs") | not)) and
+            (.harness.keys | has("queueMode") or has("websockets") | not) and
+            (.harness.keys | has("$schema") and ."$schema".project == null and .codemode.project == true)
+          ' "$TMPDIR/real.json" > /dev/null
+          echo 'real (exit 0): resolved re-exported Settings and inherited TypeBox fields with Omit exclusions' >> "$TMPDIR/proof"
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/pi-definition-reference.json"'' ''"$TMPDIR/pi-definition-reference-source"''}
-          for fixture in real:true pi-definition-reference:null; do
-            IFS=: read -r label optional <<< "$fixture"
-            if ${pkgs.jq}/bin/jq -e --argjson optional "$optional" \
-              '.harness.definitions.CompactionSettings.enabled.optional == $optional' \
-              "$TMPDIR/$label.json" > /dev/null; then
-              echo "$label (exit 0): CompactionSettings.enabled optional=$optional" >> "$TMPDIR/proof"
-            else
-              echo "FAIL: $label did not resolve CompactionSettings through Settings" >&2
-              ${pkgs.jq}/bin/jq '.harness.definitions.CompactionSettings' "$TMPDIR/$label.json" >&2
-              exit 1
-            fi
-          done
+          if ${pkgs.jq}/bin/jq -e \
+            '.harness.definitions.CompactionSettings.enabled | .type == "boolean" and .optional == null' \
+            "$TMPDIR/pi-definition-reference.json" > /dev/null; then
+            echo 'pi-definition-reference (exit 0): CompactionSettings.enabled is required' >> "$TMPDIR/proof"
+          else
+            echo "FAIL: pi-definition-reference did not resolve CompactionSettings through Settings" >&2
+            ${pkgs.jq}/bin/jq '.harness.definitions.CompactionSettings' "$TMPDIR/pi-definition-reference.json" >&2
+            exit 1
+          fi
           # A pi key's project scope follows how pi reads it.
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/pi-scope-merged.json"'' ''"$TMPDIR/pi-scope-merged-source"''}
           for fixture in real:false pi-scope-merged:true; do

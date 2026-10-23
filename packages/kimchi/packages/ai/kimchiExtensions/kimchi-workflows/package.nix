@@ -11,7 +11,7 @@
   kimchi = pkgs.ai.kimchi;
   toolchainConfiguration = pkgs.writeText "kimchi-workflow-toolchain.json" (builtins.toJSON {
     packages = ["@earendil-works/pi-coding-agent" "@earendil-works/pi-tui" "typebox"];
-    patchCommand = lib.getExe pkgs.patch;
+    gitCommand = lib.getExe pkgs.gitMinimal;
     patchedSource = kimchi.src;
     tarCommand = lib.getExe pkgs.gnutar;
   });
@@ -29,7 +29,7 @@
     nativeBuildInputs =
       [pkgs.nodejs kimchi.pnpmDeps.pnpm pkgs.pnpmConfigHook]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.autoPatchelfHook];
-    buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.stdenv.cc.cc.lib];
+    buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.libxcb pkgs.stdenv.cc.cc.lib];
     dontBuild = true;
     installPhase = ''
       set -euETo pipefail
@@ -80,7 +80,7 @@ in
     pname = "kimchi-workflows";
     inherit (sources) version;
     inherit src;
-    patches = [./native-preflight.patch ./pnpm-runtime.patch ./step-thinking.patch];
+    patches = [./native-preflight.patch ./pi-agent-settled.patch ./pnpm-runtime.patch ./step-thinking.patch];
     patchFlags = ["-p1" "--fuzz=0"];
     postPatch = ''
       set -euETo pipefail
@@ -136,7 +136,7 @@ in
       runHook preCheck
       pnpm run docs:check
       pnpm run typecheck
-      pnpm exec vitest run test/thinking.test.ts
+      pnpm exec vitest run test/agent-settled-retry.test.ts test/thinking.test.ts
       runHook postCheck
     '';
     doInstallCheck = true;

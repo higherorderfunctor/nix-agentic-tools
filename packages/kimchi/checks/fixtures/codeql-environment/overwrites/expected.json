@@ -65,12 +65,27 @@
       "readBy": ["kimchi"],
       "type": "string"
     },
+    "REMOVED_KEY": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
     "SAME_STMT": {
       "consumerOverridable": true,
       "readBy": ["kimchi"],
       "type": "string"
     },
+    "VIA_FORWARD": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
     "VIA_PARAM_KEY": {
+      "consumerOverridable": true,
+      "readBy": ["kimchi"],
+      "type": "string"
+    },
+    "VIA_REST": {
       "consumerOverridable": true,
       "readBy": ["kimchi"],
       "type": "string"

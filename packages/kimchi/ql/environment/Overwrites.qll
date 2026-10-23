@@ -68,11 +68,42 @@ string definiteWrite(Stmt s) {
   result = definiteWrite(s.(BlockStmt).getAStmt())
 }
 
-/** A declared function entry.ts hands `process.env` to, and the parameter it lands in. */
+/** A plain object pattern with statically named properties and an optional rest binding. */
+predicate namedPattern(ObjectPattern pattern) {
+  forall(PropertyPattern property | property = pattern.getAPropertyPattern() |
+    exists(property.getName()) and property.getValuePattern() instanceof VarDecl
+  ) and
+  (not exists(pattern.getRest()) or pattern.getRest() instanceof VarDecl)
+}
+
+/** Bindings holding a parameter's environment or a rest copy of it. */
+Variable parameterVariable(Function callee, int index) {
+  result = callee.getParameter(index).(SimpleParameter).getVariable()
+  or
+  exists(VariableDeclarator d, VarAccess init |
+    init = d.getInit() and init.getVariable() = parameterVariable(callee, index) and
+    (
+      result = d.getBindingPattern().(VarDecl).getVariable()
+      or
+      exists(ObjectPattern pattern |
+        pattern = d.getBindingPattern() and namedPattern(pattern) and
+        result = pattern.getRest().(VarDecl).getVariable()
+      )
+    )
+  )
+}
+
+/** A declared function receiving the environment, directly from entry or through a known helper. */
 predicate handedTo(Expr arg, Function callee, int index) {
   exists(DataFlow::InvokeNode call |
-    arg = envObject().asExpr() and
-    arg.getFile() = entry().getFile() and
+    (
+      arg = envObject().asExpr() and arg.getFile() = entry().getFile()
+      or
+      exists(Function parent, int parameter |
+        handedTo(_, parent, parameter) and
+        arg.(VarAccess).getVariable() = parameterVariable(parent, parameter)
+      )
+    ) and
     arg = call.getArgument(index).asExpr() and
     callee = call.getACallee() and
     callee instanceof FunctionDeclStmt and
@@ -80,10 +111,32 @@ predicate handedTo(Expr arg, Function callee, int index) {
   )
 }
 
-/** Names a callee reads through the parameter it receives `process.env` as. */
+/** Names read through the parameter, its rest copies, and known helpers receiving either. */
 string parameterRead(Function callee, int index) {
-  exists(SimpleParameter p | p = callee.getParameter(index) |
-    result = readName(DataFlow::parameterNode(p).getAPropertyRead())
+  exists(VarAccess use, PropAccess read |
+    use.getVariable() = parameterVariable(callee, index) and
+    read.getBase() = use and result = memberName(read)
+  )
+  or
+  exists(VariableDeclarator d, ObjectPattern pattern |
+    d.getInit().(VarAccess).getVariable() = parameterVariable(callee, index) and
+    pattern = d.getBindingPattern() and namedPattern(pattern) and
+    result = pattern.getAPropertyPattern().getName()
+  )
+  or
+  exists(Expr arg, Function next, int parameter |
+    arg.(VarAccess).getVariable() = parameterVariable(callee, index) and
+    handedTo(arg, next, parameter) and result = parameterRead(next, parameter)
+  )
+}
+
+/** A parameter use whose destination is fully followed by the parameter analysis. */
+predicate followedParameterUse(VarAccess use) {
+  handedTo(use, _, _)
+  or
+  exists(VariableDeclarator d |
+    use = d.getInit() and
+    (d.getBindingPattern() instanceof VarDecl or namedPattern(d.getBindingPattern()))
   )
 }
 
@@ -234,8 +287,9 @@ predicate overwriteFailure(string message, string where_) {
   exists(Function callee, int index, SimpleParameter p, VarAccess use |
     handedTo(_, callee, index) and
     p = callee.getParameter(index) and
-    use.getVariable() = p.getVariable() and
+    use.getVariable() = parameterVariable(callee, index) and
     not use = any(PropAccess pa).getBase() and
+    not followedParameterUse(use) and
     message =
       "the environment parameter " + p.getName() + " is used as a whole, so the names it reads cannot be listed" and
     where_ = use.getFile().getRelativePath() + ":" + use.getLocation().getStartLine()
@@ -245,7 +299,7 @@ predicate overwriteFailure(string message, string where_) {
   exists(Function callee, int index, SimpleParameter p, PropAccess pa |
     handedTo(_, callee, index) and
     p = callee.getParameter(index) and
-    pa.getBase().(VarAccess).getVariable() = p.getVariable() and
+    pa.getBase().(VarAccess).getVariable() = parameterVariable(callee, index) and
     not exists(memberName(pa)) and
     message =
       "the environment parameter " + p.getName() + " is indexed by a name that cannot be evaluated, so the names it reads cannot be listed" and

@@ -7,9 +7,9 @@ applyTo: "packages/kimchi/checks/fixtures/codeql-environment/**,packages/kimchi/
 
 ## Kimchi CodeQL database
 
-> **Last verified:** 2026-10-22 — Kimchi 1.17.2; `passthru.codeql` carries
-> `database`, `databaseOf`, `runQueries`, `mkQueryRunner`, `createDatabase` and
-> `engine`; the environment and network facts read it.
+> **Last verified:** 2026-10-22 — dependency patches use
+> `git apply --ignore-space-change`; the database carries pi-mcp-adapter's root
+> TypeScript and dist, including its patched project-trust environment read.
 
 ### Three layers
 
@@ -18,7 +18,7 @@ applyTo: "packages/kimchi/checks/fixtures/codeql-environment/**,packages/kimchi/
 
 - **`source`**, internal to the file: the tree `database` is created from, not a
   passthru attribute. It moves with the Kimchi or pi pins and with the flake's
-  nixpkgs (stdenv, bash, jq, coreutils, patch).
+  nixpkgs (stdenv, bash, jq, coreutils, git).
 - **`database`**: one CodeQL database of `source`, under `$out/db`. It moves
   with `source`, the engine and nixpkgs, so a nixpkgs bump costs one database
   rebuild of about 85 s.
@@ -48,6 +48,7 @@ the engine and the flake's nixpkgs stay the same.
 kimchi/src/                              Kimchi's TypeScript, no *.test.ts, no __mocks__
 kimchi/{package.json,tsconfig.json}
 kimchi/node_modules/@earendil-works/<pi package>/{package.json,dist/}
+kimchi/node_modules/pi-mcp-adapter/{package.json,dist/,<root JS/TS modules>}
 ```
 
 - **Kimchi's GitHub release source, not the build's patched tree.** This is the
@@ -55,27 +56,31 @@ kimchi/node_modules/@earendil-works/<pi package>/{package.json,dist/}
   the same code. This repository's packaging patches (`command-shell.patch`,
   `package-identity.patch`, ...) are not in it, and neither is Kimchi's upstream
   postinstall rewrite: `scripts/patch-pi-ai-oauth.js` replaces pi-ai's
-  `dist/auth/oauth/oauth-page.js`, and `extract.mjs` does not apply it.
+  `dist/utils/oauth-page.js`, and `extract.mjs` does not apply it.
 - **pi's four packages sit under `kimchi/node_modules`**, where Kimchi's imports
-  resolve them. Measured: 506 of Kimchi's 508 `@earendil-works/*` import
-  declarations resolve to a pi module in the database. The TypeScript extractor
-  scanned only pi-coding-agent's dist, saw the other three as `index.d.ts` types
-  and read patch `+` lines; the database holds all four `dist/` trees, patched.
-  On 1.17.0 the environment fact is the same either way.
+  resolve them. Measured on 1.17.2: 506 of Kimchi's 508 `@earendil-works/*`
+  import declarations resolve to a pi module in the database. The TypeScript
+  extractor scanned only pi-coding-agent's dist, saw the other three as
+  `index.d.ts` types and read patch `+` lines; the database holds all four
+  `dist/` trees, patched. On 1.17.0 the environment fact is the same either way.
 - **Kimchi's own `node_modules` (its pnpm store) is not in it.** That is every
-  third-party dependency except what pi's bundle inlines (below).
-- **Source maps are dropped:** 13.5 MB of pi's dist the extractor never reads.
+  third-party dependency except pi-mcp-adapter and what pi's bundle inlines
+  (below). The adapter exports root TypeScript modules, so its root JS/TS files
+  are carried with its dist. Its docs, examples and skills are not code the
+  runtime loads and are not copied.
+- **Source maps are dropped:** 13.5 MB on pi 0.85.1 that the extractor never
+  reads.
 - **The extractor skips `node_modules` by default.**
-  `LGTM_INDEX_FILTERS=include:kimchi/node_modules/@earendil-works` brings pi
-  back in: without it the database held none of pi's files. The value is a
-  directory: an include ending in `/**` fails with `Illegal use of '**'`.
+  `LGTM_INDEX_FILTERS=include:kimchi/node_modules` brings pi back in: without it
+  the database held none of pi's files. The value is a directory: an include
+  ending in `/**` fails with `Illegal use of '**'`.
 
 ### Minified files
 
 `pi-coding-agent/dist/bundle/` is pi's minified standalone CLI, which Kimchi
 never loads. It is carried for the environment reads of pi's bundled third-party
 dependencies (AWS SDK, Google auth, undici, ws) at pi's build-time versions: 48
-of the 237 variables in the current environment fact are named in its chunks and
+of the 237 variables in the 1.17.2 environment fact are named in its chunks and
 nowhere else in pi, Kimchi or its patches. It also holds unpatched copies of
 patched pi-ai, pi-tui and pi-coding-agent code, so a query scopes or labels its
 `dist/bundle` rows. The extractor skips a file it judges minified: without
@@ -86,11 +91,16 @@ database, logs included, from 113 to 216 MB.
 
 ### The patch step
 
-Kimchi's `package.json` `pnpm.patchedDependencies` names its pi patches
-(pi-coding-agent, pi-ai and pi-tui at 0.85.1). Each one is applied to the
-carried tree with `patch -p1 --fuzz=0`, as pnpm applies them in the build. A
-patch for a pi package that is not carried, or for another version, fails the
-build. Only these patches are in the database; `source` refuses another whose
+Kimchi's `package.json` `pnpm.patchedDependencies` names its dependency patches.
+Each patch whose package is carried is applied to the carried tree with
+`git apply --ignore-space-change`. Every context line must match, allowing
+whitespace changes; pnpm compares lines after trimming trailing whitespace only.
+GNU patch with zero fuzz rejects two shapes pnpm accepts in the pi 1.3.0
+patches: pi-ai's missing final-newline marker and pi-coding-agent's unequal
+leading/trailing context counts in a hunk that does not end at EOF. Git accepts
+both and produces byte-identical files to pnpm for Kimchi 1.19.1. A patch for a
+pi package that is not carried, or for another version, fails the build. Only
+carried packages' patches are in the database; `source` refuses another whose
 added lines name `env` (kimchi-codeql-environment.md).
 
 ### The database is a directory
@@ -159,10 +169,11 @@ the database reads its npm dist, which is built from that repository.
 
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-22 — `environment.variables` comes from the
-> `ql/environment` pack over the release database; its output is byte-identical
-> to the fact the TypeScript extractor produced for 1.17.2; a fixture guard
-> holds the shapes that extractor accepted and refused.
+> **Last verified:** 2026-10-22 — `environment.variables` includes the carried
+> pi-mcp-adapter; the reads fixture verifies its patched project-trust variable
+> is attributed to the pi runtime; literal iteration tables resolve environment
+> names, named reads follow known helper parameters, and launch analysis follows
+> known helpers and rest copies.
 
 `extracted.json`'s `environment` surface is one fact the CodeQL database
 produces. `extract/environment.nix` runs the two-query pack
@@ -176,26 +187,39 @@ declares, so `passthru.extracted` exists on that system alone and
 ### What the queries answer
 
 `EnvironmentReads.ql` lists every named read of `process.env` with the runtime
-that reads it: `kimchi/src/**` is `kimchi`, every pi package under
-`kimchi/node_modules/@earendil-works/` is `pi`. The process object is
-`NodeJSLib::process()`, so the global under any name, `globalThis.process`, and
-a default or namespace import of `process` all count, and local flow follows
-aliases, `??` and `||` fallbacks, parameter defaults and
-`const { env } = process`. A computed name is evaluated by a QL copy of the
-extractor's `stringConstant`: literals, templates, `.toUpperCase()`, identifiers
-followed through their declarators and ES imports (minified `export{a as K}`
-included), and a by-name fallback for a constant with no reachable initializer,
-two strata deep, that fails when same-named constants disagree. pi's `APP_NAME`
-takes `kimchi/package.json`'s `piConfig.name`, as at runtime. `+` is not folded,
-a `delete` operand is not a read, `+=` and `??=` are.
+that reads it: `kimchi/src/**` is `kimchi`, carried dependencies under
+`kimchi/node_modules/` are `pi`. Here `pi` names the harness runtime and its
+extensions, including pi-mcp-adapter, rather than only the @earendil-works
+packages. The process object is `NodeJSLib::process()`, so the global under any
+name, `globalThis.process`, and a default or namespace import of `process` all
+count, and local flow follows aliases, `??` and `||` fallbacks, parameter
+defaults and `const { env } = process`. Named reads also follow the environment
+through known callees at the corresponding argument index, including aliases and
+multiple helper calls; unrelated object arguments are not environment sources. A
+computed name is evaluated by a QL copy of the extractor's `stringConstant`:
+literals, templates, `.toUpperCase()`, identifiers followed through their
+declarators and ES imports (minified `export{a as K}` included), and a by-name
+fallback for a constant with no reachable initializer, two strata deep, that
+fails when same-named constants disagree. pi's `APP_NAME` takes
+`kimchi/package.json`'s `piConfig.name`, as at runtime. `+` is not folded, a
+`delete` operand is not a read, `+=` and `??=` are. For-of bindings never use
+the global by-name fallback: their names come from dense literal arrays,
+including a destructured tuple column and nested iteration. All table uses must
+belong to the traced definitions and loop domains; escaping or mutated tables,
+sparse arrays, spreads and unresolved elements fail. A `typeof key === "string"`
+conditional permits function alternatives only when they are function literals
+or direct declared helpers returning function literals.
 
 `LaunchOverwrites.ql` names the variables `entry.ts` fixes on every launch, by
 the rules `launchOverwrites` applied: top-level statements in order, entering
 blocks and both arms of an if with an else, for writes and their refusals alike;
 writes through `process.env` spelled out only; reads in function declarations
 and in functions handed `process.env` counted first, a parameter's computed key
-evaluated like any other and refused when it cannot be; and a failure for every
-shape that makes the order unknowable. "After it suspends" follows the
+evaluated like any other and refused when it cannot be. Known declared helpers
+may forward the environment through more helpers, local aliases and named object
+patterns with rest bindings. Those names count as reads before a later write;
+forwarding a rest copy to an unknown consumer still fails. There is a failure
+for every shape that makes the order unknowable. "After it suspends" follows the
 extractor's children-first walk by end position, not the control-flow graph,
 which would accept `if (c) { await 0 } else { process.env.X = "1" }`.
 
@@ -236,11 +260,19 @@ seven read shapes absent from the pinned tree in one Kimchi file: bracket `env`,
 an asserted environment, a process alias, bracket `globalThis.process`, literal
 `require("process")`, a namespace process import, and `+=`; concatenation
 remains unevaluated. The pinned release's byte identity covers its actual read
-shapes, including pi's APP_NAME and bundled imports. `overwrites` holds the
-launch-order mix; `fail-shapes`, `fail-order` and `fail-sources` retain every
-refusal assertion, with helper declarations merged into their case. A new shape
-goes into one of these trees, not into a mutant of the real source: a real-tree
-mutant costs a database build each.
+shapes, including pi's APP_NAME and bundled imports. The reads fixture also
+holds the adapter's `KIMCHI_MANAGES_MCP_PROJECT_TRUST` read outside the
+@earendil-works scope, attributed to `pi`. `overwrites` holds the launch-order
+mix; `fail-shapes`, `fail-order` and `fail-sources` retain every refusal
+assertion, with helper declarations merged into their case. The reads fixture
+also checks a nested literal table with string/function alternatives and an
+aliased environment passed through two helpers, alongside unrelated objects that
+must add no names; fail-shapes refuses unknown and mixed elements, missing tuple
+columns, mutation, spreads, sparse arrays and rest copies passed to unknown
+functions. The overwrites fixture checks reads through helper forwarding,
+aliases and rest copies before writes. A new shape goes into one of these trees,
+not into a mutant of the real source: a real-tree mutant costs a database build
+each.
 
 ### Running it without Nix
 
@@ -267,23 +299,23 @@ The fourth column of a reads row and the third of an overwrites row is the site,
 
 ### Patches the tree does not carry
 
-Kimchi patches the MCP SDK and client, pi-mcp-adapter and playwright-core too,
-packages the source root does not carry, so the queries never see their added
-lines. The extractor read them as text. `source` refuses an added line in one of
-them that names `env`, with the fix: carry the package. Joining a patch's `+`
-lines into a file does not work here: CodeQL drops a file with any syntax error,
-and five of the seven joined patches had none of their code extracted.
+Kimchi patches the MCP SDK and client and playwright-core too, packages the
+source root does not carry, so the queries never see their added lines. The
+extractor read them as text. `source` refuses an added line in one of them that
+names `env`, with the fix: carry the package. Joining a patch's `+` lines into a
+file does not work here: CodeQL drops a file with any syntax error, and five of
+the seven joined patches had none of their code extracted.
 
 <!-- Fragment: packages/kimchi/docs/kimchi-codeql-network.md -->
 
 ## Kimchi network fact
 
-> **Last verified:** 2026-10-22 — Kimchi 1.17.2; `network` is measured on
-> x86_64-linux by `ql/network` with the `ql/models/{sdk,undici}` packs through
-> `runQueries`; a modeled request is an invocation of its row's own callee and
-> takes its library from that row; a host constant reaches a `hostname` by value
-> flow; the fixture's minified chunk is one the extractor skips without the
-> flag.
+> **Last verified:** 2026-10-22 — Kimchi 1.19.1 with pi-mcp-adapter carried;
+> `network` is measured on x86_64-linux by `ql/network` with the
+> `ql/models/{sdk,undici}` packs through `runQueries`; a modeled request is an
+> invocation of its row's own callee and takes its library from that row; a host
+> constant reaches a `hostname` by value flow; the fixture's minified chunk is
+> one the extractor skips without the flag.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 bundle and
 > rejected:
@@ -313,10 +345,11 @@ with `--ram=8192` (53.8 s).
  unattributed: [{readBy, file, line, value, host}]}
 ```
 
-- **`readBy`** is `kimchi` or `pi`. **`file`** and **`origin`** are relative to
-  Kimchi's tree (`src/...`) or to its `node_modules` (`@earendil-works/...`).
-  **`line`** only: a minified chunk puts many call sites on one line, and they
-  share a row per library.
+- **`readBy`** is `kimchi` or `pi` (the harness runtime and its carried
+  extensions, including pi-mcp-adapter). **`file`** and **`origin`** are
+  relative to Kimchi's tree (`src/...`) or to its `node_modules`
+  (`@earendil-works/...`). **`line`** only: a minified chunk puts many call
+  sites on one line, and they share a row per library.
 - **`library`**: `fetch`, `node-http`, `websocket`, `axios`, `undici`,
   `sdk:<package>` for another modeled package, or `sdk:<class>` for a
   `new C({baseURL})` matched by option name, because a bundle inlines the SDK

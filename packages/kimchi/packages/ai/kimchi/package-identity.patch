@@ -5,7 +5,7 @@ the manifest name; unreadable or unnamed sources retain their path identity.
 diff --git a/dist/core/package-manager.js b/dist/core/package-manager.js
 --- a/dist/core/package-manager.js
 +++ b/dist/core/package-manager.js
-@@ -1376,11 +1376,19 @@
+@@ -1398,11 +1398,19 @@
              // Use host/path for identity to normalize SSH and HTTPS
              return `git:${parsed.host}/${parsed.path}`;
          }

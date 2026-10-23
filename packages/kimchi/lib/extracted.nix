@@ -137,6 +137,13 @@
     then leaf (types.enum node.enum)
     else if scalarTypes ? ${toString t}
     then leaf scalarTypes.${t}
+    else if t == "union" && node ? alternatives
+    then let
+      alternatives = map (walkType definitions path) node.alternatives;
+    in {
+      type = types.oneOf (map (alternative: alternative.type) alternatives);
+      untyped = lib.unique (lib.concatMap (alternative: alternative.untyped) alternatives);
+    }
     else if t == "array"
     then
       # Elements stay untyped unless they are scalars: aiCommon.filterNulls
