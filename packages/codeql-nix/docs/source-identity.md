@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-23 — S2 authenticates archived source bytes and
 > transports the companion anchor index through the existing kit metadata table.
-> R0 moves its shared syntax writer and preflight into production `src/`.
+> R0 moves its shared syntax writer and preflight into production `src/`; I2a
+> adds admitted lexical target paths to the same source map.
 
 `lib/packaging.nix` exposes
 `syntaxDriver/bin/nixql-syntax MANIFEST_JSON OUTPUT_DIRECTORY`. The manifest
@@ -55,8 +56,12 @@ are never manufactured, shared with F1 entity types or exposed as durable
 identity.
 
 The private metadata keys frame root key, relative path and digest after a
-namespaced prefix. `nixql.s2.file|` maps that identity to archived absolute path
-and source byte length; `nixql.s2.line|` supplies one-based line numbers and
+namespaced prefix. `nixql.s2.file|` maps that identity to canonical archived
+absolute path, source byte length and admitted absolute lexical path, in that
+order. The optional third field retains contained symlink spellings for literal
+target lookup; legacy two-field entries still authenticate anchors. Relative
+imports use the canonical source directory, while targets may match either
+authenticated spelling. `nixql.s2.line|` supplies one-based line numbers and
 line-start byte offsets. `nixql.s2.path|` additionally keys the concrete child
 path and supplies the kit structural path. Fields escape `%` as `%25` and `|` as
 `%7C`, then join with `|`. RawBridge derives normalized coordinates from anchor

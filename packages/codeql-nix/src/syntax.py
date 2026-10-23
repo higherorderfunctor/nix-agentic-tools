@@ -116,7 +116,7 @@ def extract(binary, schema, combined_schema, pins_path, manifest, output_path, i
                         raw = (private / "raw.trap").read_bytes().decode("utf-8")
                     state, errors = rows[0].split("\t")
                     transaction = [file_row, ["nx_syntax_results", [file, state, int(errors)]]]
-                    index_rows = [metadata("file", identity, part(str(source_path)) + "|" + str(len(source)), abi)]
+                    index_rows = [metadata("file", identity, part(str(source_path)) + "|" + str(len(source)) + "|" + part(str(root_path / relative)), abi)]
                     line_starts = [0] + [i + 1 for i, byte in enumerate(source) if byte == 10]
                     index_rows.extend(metadata("line", identity, f"{line}|{offset}", abi)
                                       for line, offset in enumerate(line_starts, 1))

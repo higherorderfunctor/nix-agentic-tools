@@ -16,7 +16,25 @@ module RawBridge {
 
   bindingset[value, number]
   private string sourcePart(string value, int number) {
-    result = decodePart(value.regexpCapture("([^|]*)\\|([0-9]+)", number))
+    result = decodePart(value.regexpCapture("([^|]*)\\|([0-9]+)(\\|([^|]*))?", number))
+  }
+
+  private string fileKey(@nx_file file) {
+    exists(string root, string path, string hash |
+      nx_files(file, root, path, hash, _) and
+      result = part(root) + "|" + part(path) + "|" + part(hash))
+  }
+
+  private string sourceEntry(@nx_file file) {
+    databaseMetadata("nixql.s2.file|" + fileKey(file), result)
+  }
+
+  /** Canonical archive path from the authenticated source map, never the process cwd. */
+  string sourcePath(@nx_file file) { result = sourcePart(sourceEntry(file), 1) }
+
+  /** Canonical or admitted lexical target path, retaining the authenticated identity. */
+  string targetPath(@nx_file file) {
+    result = sourcePath(file) or result = sourcePart(sourceEntry(file), 4)
   }
 
   private string rawPath(Generated::Nix::AstNode node) {
@@ -49,10 +67,7 @@ module RawBridge {
     string getChildPath() { nx_anchors(this, _, _, _, _, result) }
 
     private string getFileKey() {
-      exists(string root, string path, string hash |
-        nx_files(this.getSourceFile(), root, path, hash, _) and
-        result = part(root) + "|" + part(path) + "|" + part(hash)
-      )
+      result = fileKey(this.getSourceFile())
     }
 
     private int getLineStart(int line) {
@@ -126,6 +141,10 @@ module RawBridge {
     }
     string getRelativePath() {
       exists(Anchor anchor | this = anchor.getUniqueNode() | result = anchor.getRelativePath())
+    }
+    @nx_file getSourceFile() {
+      exists(Anchor anchor | this = anchor.getUniqueNode() |
+        nx_anchors(anchor, result, _, _, _, _))
     }
   }
 
@@ -223,5 +242,29 @@ module RawBridge {
   predicate functionBinder(Node frame, Node binder) {
     binder = frame.(Generated::Nix::FunctionExpression).getUniversal()
     or binder = frame.(Generated::Nix::FunctionExpression).getFormals().getAFormal().getName()
+  }
+
+  /** Import-domain syntax access stays behind the authenticated bridge. */
+  Node callee(Node call) {
+    result = expression(unparenthesized(call.(Generated::Nix::ApplyExpression).getFunction()))
+  }
+  Node argument(Node call) {
+    result = unparenthesized(call.(Generated::Nix::ApplyExpression).getArgument())
+  }
+  Node selectionBase(Node selection) {
+    result = expression(unparenthesized(selection.(Generated::Nix::SelectExpression).getExpression()))
+  }
+  string selectedName(Node selection) {
+    exists(Generated::Nix::Attrpath path |
+      path = selection.(Generated::Nix::SelectExpression).getAttrpath() and
+      not exists(path.getAttr(1)) and result = literal(path.getAttr(0)))
+  }
+  string literalPath(Node node) {
+    exists(Generated::Nix::PathExpression path |
+      path = node and
+      forall(Generated::Nix::AstNode child | child = path.getAChild() |
+        child instanceof Generated::Nix::PathFragment) and
+      result = concat(int i, Generated::Nix::PathFragment fragment |
+        fragment = path.getChild(i) | fragment.getValue(), "" order by i))
   }
 }
