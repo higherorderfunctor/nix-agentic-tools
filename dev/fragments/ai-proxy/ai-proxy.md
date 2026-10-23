@@ -1,9 +1,9 @@
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-22 — instances own named upstream credentials and
-> client keys; harnesses select `instance` + `clientKey`. Claude offers routed
-> API-key models in its picker; Codex discovers CPA models without profiles.
-> Both consume the shared redact client-key helper. Named API-key credentials
+> **Last verified:** 2026-10-23 — OAuth upstream credentials require vendor and
+> a secret account email; native CPA account rules match logins, including ones
+> added while the service runs. The existing rendered-file launcher lifts
+> accounts into secret placeholders on both backends. Named API-key credentials
 > can select the built-in z.ai vendor defaults.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
@@ -77,12 +77,31 @@ access; separate local harness state requires `CLAUDE_CONFIG_DIR` or
 ### Providers
 
 `ai.cliproxyapi.instances.<n>.credentials.<name>` declares exactly one of
-`oauth` or `apiKey`. OAuth declares `vendor` (CPA's provider name, such as
-`claude` or `codex`) and `authFile`, an exact JSON filename in
-`<stateDir>/auth`. Find it with `ls <stateDir>/auth` after CPA login; replace
-the illustrative filenames below with the actual names. Re-login can change the
-filename, so update `authFile` when it does. The generated OAuth rule uses
-`provider = vendor`, `kind = "oauth"`, and `ids = [authFile]`.
+`oauth` or `apiKey`. OAuth requires `vendor` (CPA's provider name, such as
+`claude` or `codex`) and `account`, a redact reference holding the account
+email:
+
+```nix
+credentials.personal.oauth = {
+  account = secret "claude-personal-email";
+  vendor = "claude";
+};
+```
+
+Each route becomes `provider = vendor`, `kind = "oauth"`, and
+`accounts = [<account reference>]`. The shared settings renderer lifts that
+reference into a secret placeholder; the existing service file launcher fills it
+at start. CPA compares the login's native `AccountInfo()` email and the rule's
+account after trimming whitespace, case-sensitively. Empty emails never match.
+Multiple logins with the same vendor and account are all eligible; a missing
+account selects nothing. New logins become eligible when CPA registers them,
+without restarting the service. Nix never names, renames or creates CPA login
+files. Account references receive the same provider ordering and restart
+triggers as other service secrets.
+
+The pinned CPA 8.0.40's `sdk/cliproxy/auth/types.go:788` implements
+`AccountInfo()`: OAuth reads trimmed `Metadata.email`, falling back to
+`Metadata.service_account.client_email`. API keys never match `accounts` rules.
 
 An `apiKey` declares `key`, `models` and `apis.<api>.base-url` for the
 `anthropic`, `chat` or `responses` API. The API table in
@@ -129,11 +148,11 @@ in {
   ai.cliproxyapi.instances.main = {
     credentials = {
       chatgpt-oauth-personal.oauth = {
-        authFile = "codex-personal.json";
+        account = secret "chatgpt-personal-email";
         vendor = "codex";
       };
       chatgpt-oauth-work.oauth = {
-        authFile = "codex-work.json";
+        account = secret "chatgpt-work-email";
         vendor = "codex";
       };
       claude-api-personal.apiKey = {
@@ -142,11 +161,11 @@ in {
         models = ["claude-sonnet-4-6"];
       };
       claude-oauth-personal.oauth = {
-        authFile = "claude-personal.json";
+        account = secret "claude-personal-email";
         vendor = "claude";
       };
       claude-oauth-work.oauth = {
-        authFile = "claude-work.json";
+        account = secret "claude-work-email";
         vendor = "claude";
       };
       zai-api-personal.apiKey = {
@@ -189,7 +208,8 @@ asks. Values remain outside generated store files and evaluation output.
 ### Checks
 
 `module-ai-proxy-instance-clients` checks generated blocks, named routes, exact
-OAuth IDs, rules and refusals on both backends.
+OAuth account placeholders, rules and refusals on both backends. The native
+allowlist check covers account matching and hot-added logins.
 `module-ai-proxy-z-ai-credential` checks vendor defaults and overrides on both
 backends, including client routing and the preserved model list.
 `module-service-instances-runtime-providers` sends Anthropic and Responses

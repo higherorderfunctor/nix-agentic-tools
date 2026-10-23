@@ -7,7 +7,7 @@ applyTo: "packages/cliproxyapi/**"
 
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-22 — CPA 8.0.38 custom YAML decoders are probed
+> **Last verified:** 2026-10-23 — CPA 8.0.40 custom YAML decoders are probed
 > through yaml.v3; the shared `goTestExtract` runs the extractor over the
 > patched `src`; z.ai vendor defaults are extracted from pinned official docs
 > into the same owner facts and checked by the owner regenerator.
@@ -15,13 +15,14 @@ applyTo: "packages/cliproxyapi/**"
 ## Why reflection also needs the v8 tables
 
 `extract/z-ai-sources.json` pins official Markdown documents by content hash
-(accessed 2026-10-22). `extract/z-ai.py` parses the overview's chat API table,
+(accessed 2026-10-23). `extract/z-ai.py` parses the overview's chat API table,
 Claude Code's JSON environment example, and the quick start's Python AST for the
 two base URLs. Featured/Text Models tables require a known chat reference on
-every model row; image, tool and agent sections are explicitly excluded. Unknown
-sections or references, missing tables, ambiguous URLs, malformed tier bullets,
-or a tier pointing outside the catalog fail extraction. The fixtures exclude
-prose-only model mentions and image models.
+every model row, accepting relative paths or absolute links on
+`https://docs.z.ai` only; image, tool and agent sections are explicitly
+excluded. Unknown sections or references, missing tables, ambiguous URLs,
+malformed tier bullets, or a tier pointing outside the catalog fail extraction.
+The fixtures exclude prose-only model mentions and image models.
 
 The Claude Code page's explicitly labeled default tier bullets are parsed as
 prose (the regex tier: no executable mapping or structured source exists). Later
@@ -298,12 +299,12 @@ install check needs a version that a local path lacks.
 
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-10-22 — the patch applies to CPA 8.0.38 with no fuzz;
+> **Last verified:** 2026-10-23 — the patch applies to CPA 8.0.40 with no fuzz;
 > loading rejects duplicate client keys and startup exits 1 on refusal. Hot
 > reload can briefly serve a retired config credential under newly widened
 > rules, so rotation that also widens access requires a restart or an `ids`
-> rule. Named instance client routes derive exact OAuth IDs or API base-URL
-> rules.
+> rule. Named instance client routes derive secret OAuth account rules or API
+> base-URL rules.
 
 ## Why selection lives in CPA
 
@@ -323,29 +324,37 @@ eligible credentials are unavailable gets `auth_not_found`. Model listings still
 expose all models. With no upstream credential serving a requested model, CPA
 returns `400 unknown provider for model <name>`. Log in with
 `cliproxyapi -config <file with auth-dir> -claude-login -no-browser` (or
-`-codex-login`), or through Manager Plus; login files are picked up without a
-restart.
+`-codex-login`), or through Manager Plus; CPA watches login files and new
+matching accounts become eligible when registered, without restarting the
+instance.
 
 An entry identifies one client key and grants a list of credential rules. The
 client key is a redact reference shared with `access.api-keys[]`. An Instance
 owns named client keys and upstream credentials (`ai-proxy.md`); each named
 route generates one rule, and Harness selection adds no rules. Write settings
 entries by hand only for other clients. A rule requires `provider` and `kind`
-(`oauth` or `apikey`); `ids` and `base-urls` narrow it further. Generated
-compatibility-provider rules follow CPA's name normalization in
-`internal/util/provider.go`. An OAuth credential's ID is its auth-file path
-relative to `<stateDir>/auth`, found by listing that directory after CPA login.
-A re-login can change the filename; update `credentials.<name>.oauth.authFile`
-when it does. A config API key's ID hashes its secret, so use provider and
-`base-urls` to address a group through rotation. The settings types and module
-refinements are in `cliproxyapi-settings.md`.
+(`oauth` or `apikey`); `accounts`, `ids` and `base-urls` narrow it further.
+Generated compatibility-provider rules follow CPA's name normalization in
+`internal/util/provider.go`. An OAuth credential's ID is its login path relative
+to `<stateDir>/auth`. Named upstream credentials require `oauth.vendor` and
+`oauth.account` (a redact reference), lowering to an `accounts` rule through the
+existing secret renderer. An account rule matches only OAuth with a nonempty
+native `AccountInfo()` email, compared case-sensitively after trimming both
+values. `AccountInfo()` reads `Metadata.email`, with a service-account
+`client_email` fallback (`sdk/cliproxy/auth/types.go:788`). An account with no
+matching login selects nothing; several matching logins remain eligible.
+`accounts` combined with `kind = "apikey"` matches nothing. A config API key's
+ID hashes its secret, so use provider and `base-urls` to address a group through
+rotation. The settings types and module refinements are in
+`cliproxyapi-settings.md`.
 
 The `apikey` kind matches only credentials synthesized from config. A
 store-loaded login can temporarily classify as `apikey` from its file or a Meta
 refresh before the watcher marks it `oauth`; allowing it through an `apikey`
 rule would cross the intended boundary. An OAuth rule can match such a login by
 ID once its kind is OAuth. Whoever writes the auth directory controls
-file-sourced provider and ID, so high-value OAuth rules should use `ids`.
+file-sourced provider and ID, so high-value OAuth rules should use `accounts` or
+`ids`.
 
 `base-urls` compares the credential's trimmed `base_url` with each listed URL
 after trimming. Provider URL constraints are in `ai-proxy.md`. Scheme, host,
@@ -375,7 +384,7 @@ allowlist granting no key any credential. Empty client keys bind no request.
 The eligibility predicate covers the legacy candidate loop, scheduler fast path,
 retry, and cooldown waits. `SelectAuth` always uses the legacy loop; mixed
 `Execute` with a built-in selector exercises the scheduler fast path. Plugin
-schedulers receive only surviving candidates. Two 8.0.38 paths bypass that
+schedulers receive only surviving candidates. Two 8.0.40 paths bypass that
 predicate: Home dispatch, which is refused, and the Antigravity credits
 fallback, which checks the allowlist itself. The fallback matters when selection
 fails because a client key has no Antigravity rule. Plugin executors and
@@ -415,17 +424,17 @@ change, then run the module assertions and Go check in CI.
 
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-22 — 926 config nodes, including the patched
+> **Last verified:** 2026-10-23 — 928 config nodes, including the patched
 > `access.key-allowlist`, give the settings type through
-> `lib/extracted/options.nix`, with eight refinements and one module assertion
-> on the allowlist; the clean render passes native v8 validation and loads
-> through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
-> `ai.cliproxyapi.instances` renders it at start, defaults its listener to
-> loopback, turns off the unprompted fetches the pinned CPA has a switch for,
-> types `server.tls.key` as a secret file, and derives named client keys'
-> `access.api-keys` and `access.key-allowlist` entries from named upstream
-> routes. Built-in `vendor = "z-ai"` defaults upstream API-key models and APIs
-> from pinned official documentation.
+> `lib/extracted/options.nix`, with refinements and module assertions on the
+> allowlist; the clean render passes native v8 validation and loads through CPA
+> 8.0.40's `LoadConfig` in `cliproxyapi-settings`; `ai.cliproxyapi.instances`
+> renders it at start, defaults its listener to loopback, turns off the
+> unprompted fetches the pinned CPA has a switch for, types `server.tls.key` as
+> a secret file, and derives named client keys' `access.api-keys` and
+> `access.key-allowlist` entries from named upstream routes. Built-in
+> `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
+> official documentation.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -451,8 +460,8 @@ harnesses at an instance by name.
 `credentials` and `clientKeys` declare upstream credentials and client access
 once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
-four-client example, OAuth filename selection and devenv secret references are
-in `dev/fragments/ai-proxy/ai-proxy.md`.
+four-client example, required OAuth vendor/account selection and devenv secret
+references are in `dev/fragments/ai-proxy/ai-proxy.md`.
 
 For the built-in z.ai vendor, the upstream credential needs only its secret:
 
@@ -516,11 +525,12 @@ takes a patch to CPA, not a setting; that is an open decision.
 
 Every path an `extract/annotations.json` row marks takes a redact reference
 only: `access.api-keys[]`, `access.key-allowlist[].api-key`,
-`management.secret-key`, `server.github-token`, `requests.proxy-url`, the ICE
-server `credential`, and per upstream family the group and key `proxy-url`,
-`headers.<name>` and `api-key`. A proxy URL or a header that holds no credential
-still takes a reference (`redact.file` or `redact.command`), since the type
-cannot tell which values carry one.
+`access.key-allowlist[].credentials[].accounts[]`, `management.secret-key`,
+`server.github-token`, `requests.proxy-url`, the ICE server `credential`, and
+per upstream family the group and key `proxy-url`, `headers.<name>` and
+`api-key`. A proxy URL or a header that holds no credential still takes a
+reference (`redact.file` or `redact.command`), since the type cannot tell which
+values carry one.
 
 `server.tls.key`, the TLS private key file, is a `secretFile` node: it takes a
 reference, which the service launcher writes to a 0600 file that the rendered
@@ -539,6 +549,10 @@ be a writable copy, never the store path.
 Each narrows a measured type using a native constraint in `internal/config/`, or
 in the allowlist patch:
 
+- `access.key-allowlist[].credentials[].accounts`: account elements are secret
+  references. A module assertion refuses empty lists and null elements because
+  dropping them could lift the account restriction. Named OAuth credentials
+  require an account reference and use the same rendered service file as keys.
 - `access.key-allowlist[].credentials[].{base-urls,ids}`:
   `nonEmptyListOf elementType`, the generated string type. The patch reads an
   empty or absent list as no restriction on that dimension, and the renderer

@@ -51,10 +51,11 @@ def extract(claude, overview, quick_start):
         elif table and token.type == "inline":
             row.append(token.content)
             references.extend(
-                child.attrGet("href")
+                href.removeprefix("https://docs.z.ai")
                 for child in token.children
                 if child.type == "link_open"
-                and child.attrGet("href").startswith("/api-reference/")
+                for href in [child.attrGet("href")]
+                if href.startswith(("/api-reference/", "https://docs.z.ai/api-reference/"))
             )
     if not models or len(models) != len(set(models)) or any(
         not re.fullmatch(r"glm-[a-z0-9.-]+", model) for model in models

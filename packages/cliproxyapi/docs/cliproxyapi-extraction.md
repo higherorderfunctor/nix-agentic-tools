@@ -1,6 +1,6 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-22 — CPA 8.0.38 custom YAML decoders are probed
+> **Last verified:** 2026-10-23 — CPA 8.0.40 custom YAML decoders are probed
 > through yaml.v3; the shared `goTestExtract` runs the extractor over the
 > patched `src`; z.ai vendor defaults are extracted from pinned official docs
 > into the same owner facts and checked by the owner regenerator.
@@ -8,13 +8,14 @@
 ## Why reflection also needs the v8 tables
 
 `extract/z-ai-sources.json` pins official Markdown documents by content hash
-(accessed 2026-10-22). `extract/z-ai.py` parses the overview's chat API table,
+(accessed 2026-10-23). `extract/z-ai.py` parses the overview's chat API table,
 Claude Code's JSON environment example, and the quick start's Python AST for the
 two base URLs. Featured/Text Models tables require a known chat reference on
-every model row; image, tool and agent sections are explicitly excluded. Unknown
-sections or references, missing tables, ambiguous URLs, malformed tier bullets,
-or a tier pointing outside the catalog fail extraction. The fixtures exclude
-prose-only model mentions and image models.
+every model row, accepting relative paths or absolute links on
+`https://docs.z.ai` only; image, tool and agent sections are explicitly
+excluded. Unknown sections or references, missing tables, ambiguous URLs,
+malformed tier bullets, or a tier pointing outside the catalog fail extraction.
+The fixtures exclude prose-only model mentions and image models.
 
 The Claude Code page's explicitly labeled default tier bullets are parsed as
 prose (the regex tier: no executable mapping or structured source exists). Later

@@ -1,16 +1,16 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-22 — 926 config nodes, including the patched
+> **Last verified:** 2026-10-23 — 928 config nodes, including the patched
 > `access.key-allowlist`, give the settings type through
-> `lib/extracted/options.nix`, with eight refinements and one module assertion
-> on the allowlist; the clean render passes native v8 validation and loads
-> through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
-> `ai.cliproxyapi.instances` renders it at start, defaults its listener to
-> loopback, turns off the unprompted fetches the pinned CPA has a switch for,
-> types `server.tls.key` as a secret file, and derives named client keys'
-> `access.api-keys` and `access.key-allowlist` entries from named upstream
-> routes. Built-in `vendor = "z-ai"` defaults upstream API-key models and APIs
-> from pinned official documentation.
+> `lib/extracted/options.nix`, with refinements and module assertions on the
+> allowlist; the clean render passes native v8 validation and loads through CPA
+> 8.0.40's `LoadConfig` in `cliproxyapi-settings`; `ai.cliproxyapi.instances`
+> renders it at start, defaults its listener to loopback, turns off the
+> unprompted fetches the pinned CPA has a switch for, types `server.tls.key` as
+> a secret file, and derives named client keys' `access.api-keys` and
+> `access.key-allowlist` entries from named upstream routes. Built-in
+> `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
+> official documentation.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -36,8 +36,8 @@ harnesses at an instance by name.
 `credentials` and `clientKeys` declare upstream credentials and client access
 once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
-four-client example, OAuth filename selection and devenv secret references are
-in `dev/fragments/ai-proxy/ai-proxy.md`.
+four-client example, required OAuth vendor/account selection and devenv secret
+references are in `dev/fragments/ai-proxy/ai-proxy.md`.
 
 For the built-in z.ai vendor, the upstream credential needs only its secret:
 
@@ -101,11 +101,12 @@ takes a patch to CPA, not a setting; that is an open decision.
 
 Every path an `extract/annotations.json` row marks takes a redact reference
 only: `access.api-keys[]`, `access.key-allowlist[].api-key`,
-`management.secret-key`, `server.github-token`, `requests.proxy-url`, the ICE
-server `credential`, and per upstream family the group and key `proxy-url`,
-`headers.<name>` and `api-key`. A proxy URL or a header that holds no credential
-still takes a reference (`redact.file` or `redact.command`), since the type
-cannot tell which values carry one.
+`access.key-allowlist[].credentials[].accounts[]`, `management.secret-key`,
+`server.github-token`, `requests.proxy-url`, the ICE server `credential`, and
+per upstream family the group and key `proxy-url`, `headers.<name>` and
+`api-key`. A proxy URL or a header that holds no credential still takes a
+reference (`redact.file` or `redact.command`), since the type cannot tell which
+values carry one.
 
 `server.tls.key`, the TLS private key file, is a `secretFile` node: it takes a
 reference, which the service launcher writes to a 0600 file that the rendered
@@ -124,6 +125,10 @@ be a writable copy, never the store path.
 Each narrows a measured type using a native constraint in `internal/config/`, or
 in the allowlist patch:
 
+- `access.key-allowlist[].credentials[].accounts`: account elements are secret
+  references. A module assertion refuses empty lists and null elements because
+  dropping them could lift the account restriction. Named OAuth credentials
+  require an account reference and use the same rendered service file as keys.
 - `access.key-allowlist[].credentials[].{base-urls,ids}`:
   `nonEmptyListOf elementType`, the generated string type. The patch reads an
   empty or absent list as no restriction on that dimension, and the renderer

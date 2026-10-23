@@ -98,9 +98,9 @@
       oauth = mkOption {
         type = types.nullOr (types.submodule {
           options = {
-            authFile = mkOption {
-              type = types.strMatching "[^/[:space:]][^/]*\\.json";
-              description = "Exact filename CPA wrote in `<stateDir>/auth`; list that directory after login. Re-login may change it.";
+            account = mkOption {
+              type = redact.types.redacted;
+              description = "Exact account email as a redact reference. CPA matches OAuth logins by their trimmed account email.";
             };
             vendor = mkOption {
               type = types.strMatching "[a-z][a-z0-9-]*";
@@ -172,7 +172,7 @@
         rule = {
           provider = credential.oauth.vendor;
           kind = "oauth";
-          ids = [credential.oauth.authFile];
+          accounts = [credential.oauth.account];
         };
       }
     else if api == null

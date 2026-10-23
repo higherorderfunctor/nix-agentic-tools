@@ -21,8 +21,8 @@
         routes = [{credential = "login";}];
       };
       credentials.login.oauth = {
+        account = redact.file "/run/secrets/cpa-login-email";
         vendor = "claude";
-        authFile = "login.json";
       };
     };
     off = {
@@ -61,16 +61,16 @@
     key = redact.file "/run/secrets/zai-key";
     models = ["glm-5.3" "glm-5.3-flash"];
   };
-  oauth = file: {
+  oauth = name: {
     oauth = {
       vendor = "claude";
-      authFile = file;
+      account = redact.file "/run/secrets/cpa-${name}-account";
     };
   };
   credentials = {
     chat.apiKey = apiKey // {apis = {chat.base-url = "https://chat.example/v1";};};
-    personal = oauth "claude-personal.json";
-    work = oauth "claude-work.json";
+    personal = oauth "personal";
+    work = oauth "work";
     zai = {inherit apiKey;};
   };
   client = name: routes: {
@@ -113,10 +113,10 @@
     inherit (result.config.ai.services.cliproxyapi-clients.files.config) content secrets;
   in
     builtins.fromJSON (fill secrets content);
-  oauthRule = file: {
+  oauthRule = name: {
     provider = "claude";
     kind = "oauth";
-    ids = [file];
+    accounts = [credentials.${name}.oauth.account];
   };
   refused = backend: fragment: ai: lib.any (lib.hasInfix fragment) (failedMessages (evaluate backend ai));
   instanceChange = change: {cliproxyapi.instances.clients = change;};
@@ -229,20 +229,20 @@ in {
         checks = {
           "fixture accepted" = failedMessages result == [];
           "named keys" = settings.access.api-keys == map clientKey ["personal" "work"];
-          "OAuth exact ids, API exact URL, route order" =
+          "OAuth exact accounts, API exact URL, route order" =
             rules
             == [
               [
-                (oauthRule "claude-personal.json")
+                (oauthRule "personal")
                 {
                   base-urls = [apiKey.apis.anthropic.base-url];
                   kind = "apikey";
                   provider = "claude";
                 }
               ]
-              [(oauthRule "claude-work.json")]
+              [(oauthRule "work")]
             ];
-          "same vendor OAuth remains separate" = (lib.head (lib.head rules)).ids != (lib.head (lib.last rules)).ids;
+          "same vendor OAuth remains separate" = (lib.head (lib.head rules)).accounts != (lib.head (lib.last rules)).accounts;
           "API-key blocks" =
             settings.api-keys.claude
             == [
@@ -282,7 +282,7 @@ in {
             settings.access.key-allowlist = [
               {
                 api-key = clientKey "personal";
-                credentials = [(oauthRule "claude-work.json")];
+                credentials = [(oauthRule "work")];
               }
             ];
           });
@@ -338,9 +338,44 @@ in {
               }
             ];
           });
-          "empty OAuth filename" = rejectsType (instanceChange {credentials.personal.oauth.authFile = "";});
-          "absolute OAuth filename" = rejectsType (instanceChange {credentials.personal.oauth.authFile = "/auth/login.json";});
-          "parent OAuth filename" = rejectsType (instanceChange {credentials.personal.oauth.authFile = "../login.json";});
+          "empty account restriction" = refused backend "accounts merged to an empty list" (instanceChange {
+            settings.access.key-allowlist = [
+              {
+                api-key = clientKey "raw";
+                credentials = [
+                  {
+                    accounts = [];
+                    kind = "oauth";
+                    provider = "claude";
+                  }
+                ];
+              }
+            ];
+          });
+          "null account restriction" = refused backend "accounts contains null" (instanceChange {
+            settings.access.key-allowlist = [
+              {
+                api-key = clientKey "raw";
+                credentials = [
+                  {
+                    accounts = [null];
+                    kind = "oauth";
+                    provider = "claude";
+                  }
+                ];
+              }
+            ];
+          });
+          "literal OAuth account" = rejectsType (instanceChange {credentials.personal.oauth.account = lib.mkForce "secret";});
+          "required OAuth account" = rejectsType (instanceChange {credentials.personal = lib.mkForce {oauth.vendor = "claude";};});
+          "OAuth account placeholder" = let
+            file = result.config.ai.services.cliproxyapi-clients.files.config;
+            variable = "CLIPROXYAPI_ACCESS_KEY_ALLOWLIST_0_CREDENTIALS_0_ACCOUNTS_0";
+          in
+            file.secrets.${variable}
+            == credentials.personal.oauth.account
+            && lib.hasInfix ("{$" + variable + "}") file.content
+            && !(lib.hasInfix "/run/secrets/cpa-personal-account" file.content);
           "literal client key" = rejectsType (instanceChange {clientKeys.personal.key = lib.mkForce "secret";});
           "literal upstream credential" = rejectsType (instanceChange {credentials.zai.apiKey.key = lib.mkForce "secret";});
         };

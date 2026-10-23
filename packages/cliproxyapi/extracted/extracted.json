@@ -24,6 +24,11 @@
       "type": "list"
     },
     "access.key-allowlist[].credentials[]": { "type": "object" },
+    "access.key-allowlist[].credentials[].accounts": {
+      "description": "Accounts, when set, narrows the rule to OAuth account emails returned by\nAccountInfo, trimmed and compared case-sensitively. Empty emails never match.",
+      "type": "list"
+    },
+    "access.key-allowlist[].credentials[].accounts[]": { "type": "string" },
     "access.key-allowlist[].credentials[].base-urls": {
       "description": "BaseURLs, when set, narrows the rule to API-key credentials whose\nbase-url is one of these, compared as CPA stores it (trimmed, otherwise\nexact). It never matches an OAuth login or a credential without a base-url.",
       "type": "list"
