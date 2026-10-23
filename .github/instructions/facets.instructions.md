@@ -7,7 +7,7 @@ applyTo: "checks/**,flake.nix,lib/facets.nix,lib/facets/**,lib/testing/**,packag
 
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-21 — package trees and ordinary owner overlays
+> **Last verified:** 2026-10-22 — package trees and ordinary owner overlays
 > deep-merge through one `mergeContribution` helper; a `checks/` concern without
 > `default.nix` (a fixture flake) is not discovered; check-name laziness is
 > gated by the `check-laziness` assertion in facet-mock.
@@ -77,10 +77,12 @@ policy and genuine cross-owner contracts.
 `repository.checkWorldFor` realizes the checks once and returns `checks` plus
 `claims`, each check's `{owner, source}` (`owner = "<root>"` for a root
 concern). The claims are `deepSeq`'d so they never retain the evaluated world.
-`checksFor` is its `.checks`. The flake builds one `checkWorlds.<system>` and
-derives both `checks` and the CI-only `ciChecks` from it; `ciChecks` merges
-`meta.hestia.group` (`owner-<owner>` or `workspace-<concern dir>`) into each
-check's own `meta` so Hestia's matrix schedules one row per ownership group.
+`checksFor` is its `.checks`. Its lazy `evaluated` field exposes the original
+module-system result to CodeQL evaluation tables without forcing check values.
+The flake builds one `checkWorlds.<system>` and derives both `checks` and the
+CI-only `ciChecks` from it; `ciChecks` merges `meta.hestia.group`
+(`owner-<owner>` or `workspace-<concern dir>`) into each check's own `meta` so
+Hestia's matrix schedules one row per ownership group.
 
 The shared harness in `lib/testing/module-harness.nix` discovers backend imports
 from the same owner index as production. Package check modules may contribute

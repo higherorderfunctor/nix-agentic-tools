@@ -72,6 +72,11 @@ def resolve_database(path):
     raise RuntimeError(f"no executable engine/bin/codeql beside {logical} or {db}")
 
 
+def eval_extension(db):
+    directory = Path(db).parent / "eval"
+    return directory.resolve() if (directory / "qlpack.yml").is_file() else None
+
+
 def decode(engine, result, sort_key):
     return json.loads(command([engine, "bqrs", "decode", "--format=json", f"--sort-key={sort_key}", str(result)]))
 
@@ -121,8 +126,10 @@ class QueryServer:
 
     def run(self, query, output):
         offset = os.fstat(self.log.fileno()).st_size
+        extension = eval_extension(self.db)
         result = self.request("evaluation/runQuery", {
-            "additionalPacks": [str(query.parent)], "db": self.db,
+            "additionalPacks": [str(query.parent)] + ([str(extension)] if extension else []),
+            "extensionPacks": ["nix-agentic-tools/eval-data@0.0.0"] if extension else [], "db": self.db,
             "externalInputs": {}, "outputPath": str(output), "queryPath": str(query),
             "singletonExternalInputs": {}, "target": {"query": {}},
         })
@@ -313,7 +320,7 @@ def run(args):
     private_directory(cache_root)
     with contextlib.ExitStack() as stack:
         if args.expression is not None:
-            digest = hashlib.sha256((engine + "\0" + str(logical) + "\0" + args.expression).encode()).hexdigest()
+            digest = hashlib.sha256((engine + "\0" + str(logical) + "\0" + str(bool(eval_extension(db))) + "\0" + args.expression).encode()).hexdigest()
             # Stable query names let the compiler reuse plans across invocations.
             directory = private_directory(cache_root / "expressions" / digest)
             query = directory / "Query.ql"
@@ -324,7 +331,10 @@ def run(args):
                 libraries = sorted(name for name in packs if any(name.endswith(f"/{language}-all") for language in languages))
                 if len(libraries) != len(languages):
                     raise RuntimeError("cannot identify one *-all library per database language; use a query file in a QL pack")
-                publish(manifest, json.dumps({"name": "local/inline-query", "version": "0.0.0", "dependencies": {name: "*" for name in libraries}}))
+                dependencies = {name: "*" for name in libraries}
+                if eval_extension(db):
+                    dependencies["nix-agentic-tools/eval-tables"] = "*"
+                publish(manifest, json.dumps({"name": "local/inline-query", "version": "0.0.0", "dependencies": dependencies}))
             if not query.exists():
                 publish(query, args.expression)
         else:
@@ -350,7 +360,9 @@ def run(args):
         if response is None:
             temporary = stack.enter_context(tempfile.TemporaryDirectory(prefix="query-", dir=cache_root))
             output = Path(temporary) / "result.bqrs"
-            command([engine, "query", "run", str(query), f"--database={db}", f"--output={output}",
+            extension = eval_extension(db)
+            extension_args = [f"--additional-packs={extension}", "--model-packs=nix-agentic-tools/eval-data"] if extension else []
+            command([engine, "query", "run", str(query), f"--database={db}", f"--output={output}", *extension_args,
                      "--max-disk-cache=512", f"--common-caches={cache_root / 'common-caches'}", f"--threads={args.threads}", f"--ram={args.ram}"])
             response = {"result": decode(engine, output, args.sort_key)}
         print(json.dumps(response["result"], separators=(",", ":")))

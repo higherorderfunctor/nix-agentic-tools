@@ -214,7 +214,8 @@
     ownership = lib.mapAttrs (_: claim: {inherit (claim) owner source;}) world.claims;
   in
     builtins.deepSeq ownership {
-      inherit (world) checks;
+      # The eval-table consumer inspects module provenance without forcing checks.
+      inherit (world) checks evaluated;
       claims = ownership;
     };
 in {

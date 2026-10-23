@@ -6,7 +6,9 @@
   pkgs,
 }: let
   inherit (pkgs) lib;
-  configured = engine.customizePackage {searchPath = [extractor];};
+  configured = engine.customizePackage {
+    searchPath = [extractor ../ql/eval];
+  };
   queries = (import ./specs.nix {inherit lib;}).mkQueryPack {
     language = "nix";
     name = "nix-agentic-tools/nix-queries";

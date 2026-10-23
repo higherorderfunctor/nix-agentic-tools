@@ -7,6 +7,20 @@
   "nix": {
     "codeql": "codeql-extractor-nix.codeql",
     "create": "nix-codeql-create-database",
+    "evalSources": [
+      {
+        "expression": "import ./dev/codeql-eval-sources.nix { root = ./.; source = \"devenv\"; }",
+        "name": "devenv"
+      },
+      {
+        "expression": "import ./dev/codeql-eval-sources.nix { root = ./.; source = \"facets\"; }",
+        "name": "facets"
+      },
+      {
+        "expression": "import ./dev/codeql-eval-sources.nix { root = ./.; source = \"home-manager\"; }",
+        "name": "home-manager"
+      }
+    ],
     "extensions": [".nix"],
     "language": "nix",
     "source": "git"

@@ -94,3 +94,52 @@ ParenthesizedExpression nodes.
   model `with`), `predicate isUnusedBinding(Scope, string, Identifier)`.
 - `codeql.nix.Strings`, `codeql.nix.Builtins`, `codeql.nix.Derivation`,
   `codeql.nix.Fetchers`, `codeql.nix.Taint` (light intra-file taint).
+
+## Module-system evaluation tables
+
+`import EvalTables` from the tiny library pack `nix-agentic-tools/eval-tables`.
+Add that dependency alongside `jamiemagee/nix-all` in an ad hoc pack. Every
+predicate carries a source name. `devenv` evaluates this repository's real
+`dev/ai.nix` with the shared backend stubs; `home-manager` evaluates the same
+owner imports with Home Manager stubs and default configuration; `facets`
+evaluates the actual check module set without forcing check derivations. These
+are module sets, not complete upstream devenv/Home Manager hosts.
+
+| Predicate        | Columns in order                                                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `evalSource`     | source, status, error, wallSeconds, peakMb, rowCounts                                                                               |
+| `evalOption`     | source, path, type, typeDescription, highestPrio, isDefined, internal, readOnly, visible, hasDefault, hasApply, generated, instance |
+| `evalOptionDecl` | source, path, file, line, column                                                                                                    |
+| `evalDefinition` | source, path, file, line, column, moduleFile, priority, active, conditionCount, wins, aliasForward, kind                            |
+| `evalModule`     | source, file, key, importedBy, disabled                                                                                             |
+| `evalValue`      | source, path, kind, value                                                                                                           |
+
+Paths use `lib.showOption`; files under the evaluated root are relative to it.
+Positions are 1-based byte columns, compatible with the Nix AST. A definition's
+literal position can differ from its module's `_file`; inherited/generated
+positions are approximate, so inspect the AST before claiming an exact join.
+Missing positions and priorities use `-1`; missing instance/importer strings are
+empty. `visible` and `rowCounts` are JSON strings. Scalars are boolean, integer
+or strings of at most 256 characters, with booleans/integers encoded as JSON
+text. Store-path strings and structured values are omitted; derivation `outPath`
+is never read.
+
+Options include schemas from `getSubOptions` and actual configurations through
+`valueMeta`, including instance definitions recollected with their original
+module arguments. Repeated recursive declaration schemas stop at their cycle;
+finite actual instances still recurse. Inactive `mkIf` rows describe the branch
+root: its content is never inspected, even to enumerate children. Losing active
+definitions remain visible. Their `kind` is weak head normal form `typeOf`,
+including `set` for tagged sets; a catchable failure is `unknown` and an
+inactive branch is `inactive`. `wins` means active and equal to the option's
+highest priority, rather than a separate value comparison. `aliasForward` marks
+priority 1500 as a forwarding heuristic; an explicit `mkOverride 1500` also
+receives the flag. `_module.*` rows are retained.
+
+Generation-local data lives in `db/../eval/rows.model.yml`; the query client
+adds its extension pack automatically. `evalSource.status` is `ok` or `failed`;
+check it before interpreting missing rows. A failing source records a capped
+error and does not block database publication. Both AST and evaluation describe
+the generation snapshot; changing an ad hoc source expression in the database
+descriptor invalidates the lifecycle stamp. Source times and RSS describe each
+whole dump process, not option-level cost.

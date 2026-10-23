@@ -612,6 +612,7 @@ in rec {
   in {
     # Testing inputs stay lazy and independently accessible: the harness uses
     # them while the check modules construct their derivations.
+    inherit evaluated;
     inherit (evaluated.config) testing;
     claims = deepSeq (attrNames exclusive) byName;
     checks = deepSeq (attrNames exclusive) evaluated.config.checks;

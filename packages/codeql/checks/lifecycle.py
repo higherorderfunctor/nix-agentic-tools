@@ -136,6 +136,36 @@ if args[:2] == ["database", "create"]:
         self.execute(existing=True)
         self.assertFalse((self.state / "db").exists())
 
+    def test_eval_sources_publish_failures_and_invalidate_stamp(self):
+        self.db_spec["evalSources"] = [{"name": "fixture", "expression": "throw test"}]
+        driver = self.root / "packages/codeql/src/eval_tables.py"
+        driver.parent.mkdir(parents=True)
+        driver.write_text("driver input")
+        calls = []
+        def evaluate(root, spec, generation, commit):
+            calls.append(commit)
+            self.assertTrue((generation / "db").is_dir())
+            directory = generation / "eval"
+            directory.mkdir()
+            (directory / "status.json").write_text('[{"source":"fixture","status":"failed"}]')
+        with patch.object(lifecycle, "eval_generation", side_effect=evaluate):
+            self.execute()
+            first = (self.state / "db").resolve()
+            self.assertEqual(calls, [self.git("rev-parse", "HEAD")])
+            self.assertEqual(json.loads((first.parent / "eval/status.json").read_text())[0]["status"], "failed")
+            self.execute()
+            self.assertEqual(len(calls), 1)
+            driver.write_text("changed driver input")
+            self.execute()
+            self.assertEqual(len(calls), 2)
+            self.assertFalse(first.exists())
+            self.db_spec["evalSources"][0]["expression"] = "changed source"
+            self.execute()
+            self.assertEqual(len(calls), 3)
+            stamp = json.loads((self.state / "stamp").read_text())
+            self.assertEqual(stamp["eval"]["sources"], self.db_spec["evalSources"])
+            self.assertEqual(len(list(self.state.glob("generation.*"))), 1)
+
     def test_engine_roots_survive_until_generation_retirement(self):
         self.db_spec["source"] = "pinned"
         actual_create = lifecycle.create

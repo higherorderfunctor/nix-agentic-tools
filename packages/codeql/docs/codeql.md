@@ -5,7 +5,8 @@
 > Nix extractor at 0.3.0; the javascript engine wraps its launcher with a Node;
 > named lifecycle tasks publish atomic checkout generations from shared warmed
 > merge-base snapshots, with locked space management and exact stamped worktree
-> references. Packs and `customizePackage`: customize.md.
+> references. Module evaluation facts share each database generation. Packs and
+> `customizePackage`: customize.md.
 
 ### What a bundle is
 
@@ -296,3 +297,64 @@ SIGTERM with accepted idle and partial clients. The transport uses the 2.27.3
 `evaluation/registerDatabases`, `evaluation/deregisterDatabases` and
 `evaluation/runQuery` with Content-Length framing. No initialization request is
 required.
+
+### Module evaluation facts
+
+`lib.ai.devTools.codeql.dumpEvalTables { result; modules; source; root ? null; }`
+accepts any `lib.evalModules` result and its original modules. It emits option,
+declaration, raw definition, module-import and scalar-value tables. It follows
+`getSubOptions` for schemas and recursively follows `valueMeta.attrs` and
+`valueMeta.list` to actual submodule configurations. Recollection uses each
+configuration's exact modules, special arguments and module search path, so
+losing instance definitions survive and relatively disabled modules stay
+excluded. A repeated declaration signature ends a recursive schema expansion. No
+structured value or derivation output is forced; scalar strings are capped at
+256 characters. Catchable weak head normal form failures retain definition
+metadata with kind `unknown`; other values use `typeOf`, including tagged sets.
+Inactive `mkIf` contents are never inspected: the branch root gets an inactive
+definition row. Priority 1500 is flagged as an alias-forward heuristic, and
+`_module.*` rows remain visible.
+
+A database descriptor may declare `evalSources`, a list of `{name, expression}`.
+Each Nix expression yields `{lib, result, modules}`. The lifecycle evaluates
+them inside the unpublished generation against its frozen extraction snapshot;
+ordinary databases use the archived commit and overlays reuse their snapshot.
+The source expressions, commit, descriptor and dump driver participate in the
+stamp. An evaluation error records `evalSource` with status `failed` and capped
+diagnostic text, while other sources continue and the generation still
+publishes. `codeql:status` prints per-source success, time, peak RSS and row
+counts; `db/../eval/status.json` retains the same report.
+
+The Nix database declares devenv with `dev/ai.nix`, Home Manager with defaults,
+and the actual facets check module set. The first two use the existing shared
+module harness and its backend stubs, not complete upstream hosts. Facets
+exposes its existing lazy evaluated result to this consumer; no check derivation
+is forced by the dump.
+
+`ql/eval` is only six extensible predicate declarations, in the library pack
+`nix-agentic-tools/eval-tables`. Each generation renders its rows into a data
+extension pack at `eval/`. The query daemon sends that pack through
+`evaluation/runQuery.extensionPacks` and the fallback uses `--model-packs`, with
+the generation pack also on `additionalPacks`. No extractor, parser, TRAP data,
+join library or entity class is added. Both query paths select the extension
+only when it exists. Inline queries acquire the library dependency
+automatically.
+
+The dev `nix-codeql` skill documents all columns and ships two ad hoc examples:
+losing defaults and Home Manager/devenv declaration parity. The
+`codeql-eval-tables` sandbox check evaluates generic modules with a losing
+default whose content throws, an inactive branch that throws if touched, direct
+and nested attrs/list submodule instances, relatively disabled modules, tagged
+sets and an alias forward. It extracts a tiny Nix database and requires exact
+losing-default rows through both the standalone fallback and daemon.
+
+On the local 2.27.3 fixture trial, the three repository dumps rendered about 14
+MB of YAML. In one query-server2 session, warm `select 1` and AST-count queries
+took 0.64–0.69 s with the extension versus 0.015–0.019 s without it; server RSS
+reached about 1.2 GB. The YAML file was reopened on every extension request, and
+changing a row appeared immediately in a repeat query. CSV through
+`externalInputs` worked and returned the same 501 losing-default rows in 0.085 s
+warm, but required replacing the six extensible declarations with external
+predicates in a scratch library. The shipped surface retains extensible
+predicates and data extensions; these figures are single-session observations,
+not a performance gate.

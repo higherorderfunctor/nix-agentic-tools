@@ -1,0 +1,5 @@
+name: test/eval-query
+version: 0.0.0
+dependencies:
+  jamiemagee/nix-all: "*"
+  nix-agentic-tools/eval-tables: "*"

@@ -1,15 +1,17 @@
 ---
 name: nix-codeql
 description:
-  Query this repo's committed Nix syntax, lexical scope and structural shapes
-  with CodeQL. Use for relationships over .nix files; use direct reads for known
-  paths and identifiers.
+  Query this repo's committed Nix syntax, lexical scope, module options and
+  definition priorities with CodeQL. Use for relationships over .nix files; use
+  direct reads for known paths and identifiers.
 ---
 
 Use the existing codeql-nix AST and lexical scope library for structural
-questions across this repo's `.nix` files. It does not evaluate Nix, resolve
-imports or `with`, or parse embedded Bash. An unresolved expression is unknown;
-read the source before calling it a defect.
+questions across this repo's `.nix` files. The AST does not evaluate Nix,
+resolve imports or `with`, or parse embedded Bash. Generation-local evaluation
+tables add module import graphs, option declarations, priorities and scalar
+values. An unresolved expression is unknown; read the source before calling it a
+defect.
 
 Run `devenv tasks run codeql:nix:up` from the checkout to create or refresh a
 stale database. `codeql:nix:refresh` forces replacement; `codeql:nix:down`
@@ -88,3 +90,20 @@ needs a finite binding, and a recursion error needs a positive recursive
 relation before negation. Fix that query and rerun; do not treat a compile
 failure or zero rows as evidence of absence. Prefer small AST and scope
 predicates over introducing a new data-flow configuration.
+
+For module-system questions, first check `evalSource` in [SCHEMA.md](SCHEMA.md).
+The data extension is selected automatically by both the daemon and standalone
+fallback. Use the two ad hoc examples in [examples](examples):
+
+```bash
+nix run .#codeql-query -- run nix dev/skills/nix-codeql/examples/LosingDefaults.ql
+nix run .#codeql-query -- run nix dev/skills/nix-codeql/examples/Parity.ql
+```
+
+`LosingDefaults.ql` selects active `mkDefault` definitions (priority 1000) that
+lose arbitration, excluding priority-1500 forwards. This repository includes
+`ai.kiro.cli.v3`: the default in `packages/delegate-routing/modules/common.nix`
+loses to `dev/ai.nix`. `Parity.ql` compares top-level `ai.*` option declarations
+across Home Manager and devenv. It reports a difference in the evaluated
+surfaces, not automatically a bug: backend-specific implementation options and
+the configured devenv instance set need source inspection.

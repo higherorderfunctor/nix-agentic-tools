@@ -5,6 +5,7 @@ import argparse
 import contextlib
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -173,6 +174,24 @@ def git_generation(root, name, spec, resolved, generation, head, base, overlay, 
         create(root, spec, resolved, generation, head)
 
 
+def eval_generation(root, spec, generation, commit):
+    if not spec.get("evalSources"):
+        return
+    driver_path = root / "packages/codeql/src/eval_tables.py"
+    module = importlib.util.spec_from_file_location("codeql_eval_tables", driver_path)
+    driver = importlib.util.module_from_spec(module)
+    module.loader.exec_module(driver)
+    # Overlay generations retain the exact extraction snapshot, including the
+    # working edits. Ordinary generations evaluate the same archived commit.
+    if spec["source"] == "git" and (generation / "source").is_dir():
+        driver.generate(generation / "source", spec["evalSources"], generation / "eval")
+        return
+    with tempfile.TemporaryDirectory(prefix="eval-input.", dir=generation) as temporary:
+        snapshot = Path(temporary) / "source"
+        archive(root, commit, snapshot)
+        driver.generate(snapshot, spec["evalSources"], generation / "eval")
+
+
 def read_inputs(path):
     try:
         inputs = json.loads(path.read_text())
@@ -259,6 +278,11 @@ def status(root, specs):
             size = disk_bytes(state)
             checkout_total += size
             print(f"database {name} generation={generation} stamp-age={age} size={size}B")
+            eval_status = database.resolve().parent / "eval/status.json"
+            if database.is_symlink() and eval_status.is_file():
+                for source in json.loads(eval_status.read_text()):
+                    print(f'eval {name} source={source["source"]} status={source["status"]} '
+                          f'wall={source["wallSeconds"]:.3f}s peak={source["peakMb"]:.1f}MB rows={source["rowCounts"]}')
             shared = shared_directory(root, name)
             if not shared.is_dir():
                 continue
@@ -313,6 +337,12 @@ def lifecycle(root, name, spec, action, existing=False):
             inputs.update(head=head, base=base, overlay=overlay)
             if overlay:
                 inputs["working"] = content_stamp(root, changes(root, base, spec["extensions"]))
+        if spec.get("evalSources"):
+            inputs["eval"] = {
+                "commit": head or run("git", "rev-parse", "HEAD", cwd=root),
+                "driver": hashlib.sha256((root / "packages/codeql/src/eval_tables.py").read_bytes()).hexdigest(),
+                "sources": spec["evalSources"],
+            }
         stamp = json.dumps(inputs, sort_keys=True, separators=(",", ":")) + "\n"
         if action == "up" and old and (state / "stamp").exists() and (state / "stamp").read_text() == stamp:
             prune(root, name, base_key(inputs) if spec["source"] == "git" else None)
@@ -331,6 +361,8 @@ def lifecycle(root, name, spec, action, existing=False):
             if not (generation / "db").is_dir():
                 raise RuntimeError("creator did not produce a database")
             cleanup(resolved, generation / "db")
+            if spec.get("evalSources"):
+                eval_generation(root, spec, generation, inputs["eval"]["commit"])
             (generation / "stamp").write_text(stamp)
             # Publish only complete generations; the adjacent stamp is a link
             # through db, so it changes in the same atomic operation.
