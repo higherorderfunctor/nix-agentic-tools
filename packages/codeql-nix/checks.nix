@@ -1,1 +1,1 @@
-{imports = [./checks/bootstrap.nix];}
+{imports = [./checks/abi.nix ./checks/bootstrap.nix];}
