@@ -50,7 +50,7 @@ in
       name = "nixql-extract";
       text = ''
         exec ${python}/bin/python3 ${../.}/src/extract.py \
-          ${kit.syntaxFixture}/bin/nixql-anchors ${../schema} \
+          ${kit.syntax}/bin/nixql-anchors ${../schema} \
           ${generated}/nix.dbscheme ${pins} ${pkgs.nix}/bin/nix
       '';
     };
@@ -94,7 +94,7 @@ in
           exit 2
         fi
         exec ${pkgs.python3}/bin/python3 ${../src/generate.py} \
-          ${kit.syntaxFixture}/bin/nixql-generate-raw \
+          ${kit.syntax}/bin/nixql-generate-raw \
           ${../schema/evaluation.dbscheme} ${syntaxPins} "$1"
       '';
     };
@@ -117,7 +117,7 @@ in
       mkdir -p "$out" # bare-commands: ok
       cp -r ${../ql/queries}/. "$out/" # bare-commands: ok
     '';
-    inherit (kit) syntaxFixture;
+    inherit (kit) syntax;
     syntaxDriver = strictShell {
       name = "nixql-syntax";
       text = ''
@@ -126,7 +126,7 @@ in
           exit 2
         fi
         exec ${pkgs.python3}/bin/python3 ${../.}/src/syntax.py \
-          ${kit.syntaxFixture}/bin/nixql-anchors ${../schema} \
+          ${kit.syntax}/bin/nixql-anchors ${../schema} \
           ${generated}/nix.dbscheme ${pins} "$@"
       '';
     };

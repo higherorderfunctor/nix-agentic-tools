@@ -5,7 +5,8 @@
 > registry and checks entry point. S1 adds combined-schema generation and
 > standalone raw location tests; E1 adds the isolated metadata projection check;
 > S2 registers source and anchor acceptance; Q0 adds the installed query check;
-> M3 adds generated builtin model acceptance.
+> M3 adds generated builtin model acceptance; R0 replaces disposable bootstrap
+> evidence with production lookup, coordinate and preflight checks.
 
 ## Purpose and fit
 
@@ -22,12 +23,14 @@ into this document.
 
 ## Checks and nonempty evidence
 
-The bootstrap proves its disposable syntax/target integration fixture. The ABI
-check validates the handwritten schema and independent typed golden TRAP. The
-contracts check runs explicitly selected Python suites, including the
-manifest/observation boundary, runner behavior and ABI/health sentinels. These
-fixture checks do not establish production extraction. Read their imports and
-commands through `checks.nix` for the current check and suite inventory.
+The installed check proves production lookup and raw coordinates alongside the
+installed lifecycle; the anchor check exercises shared production text
+preflight. The ABI check validates the handwritten schema and independent typed
+golden TRAP. The contracts check runs explicitly selected Python suites,
+including the manifest/observation boundary, runner behavior and ABI/health
+sentinels. The ABI and contracts fixtures alone do not establish production
+extraction. Read their imports and commands through `checks.nix` for the current
+check and suite inventory.
 
 A check must fail when a selected suite fails and publish its evidence only
 after every selected suite passes. Register transport tests in an owner check so
@@ -82,15 +85,16 @@ file/location traversal. S2 adds the syntax driver and private
 `codeql-nix-anchors` through F3 driver contracts, raw preflight and QL/archive
 assertions. The installed extractor, public metadata API and
 [Step 0 queries](step0-query.md) now have separate owner checks; Q0 acceptance
-requires its installed lifecycle check to pass. The bootstrap's separate fixture
-packs remain disposable evidence.
+requires its installed lifecycle check to pass. R0 removes the disposable
+bootstrap packs and check; [integration-gate.md](integration-gate.md) records
+their production replacement.
 
 ## Adding a domain
 
 Reserve a distinct `ql/test/<domain>/` for each domain's source, `.ql` and
 reviewed `.expected` fixtures, and a distinct `checks/fixtures/<domain>/` when
 Python or other contract fixtures are needed. Keep those paths disjoint from the
-existing `abi`, `bootstrap`, `contracts`, `eval-isolation` and `protocol`
+existing `abi`, `contracts`, `eval-isolation`, `installed` and `protocol`
 fixtures. A directory reservation does not implement a later capability or make
 it a passing test.
 
@@ -104,8 +108,7 @@ output from the implementation.
 
 Keep shared pack manifests and the ABI coordinated instead of letting domains
 rewrite them independently. Change F1 first when relation semantics change;
-update F2's independent transport fixtures when that boundary changes.
-Production extractor installation needs its own checks before this note can
-claim that capability. Format changed files with `treefmt`, run the affected
-checks through CI and update this note when ownership or entry-point obligations
-change.
+update F2's independent transport fixtures when that boundary changes. Keep
+production extraction acceptance in its installed and Step 0 checks. Format
+changed files with `treefmt`, run the affected checks through CI and update this
+note when ownership or entry-point obligations change.

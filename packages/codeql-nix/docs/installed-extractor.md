@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-23 — P2a installs one coordinator for database
 > creation and query tests, preserving authenticated partial work; Q0 adds a
 > separate installed lifecycle check; M3 adds the generated model fingerprint to
-> the existing run identity.
+> the existing run identity. R0 adds production raw-coordinate and
+> missing-product lookup controls.
 
 ## Terms
 
@@ -123,14 +124,17 @@ phase and bounded diagnostic. Absent metadata never establishes success.
 
 `checks.nix` imports `checks/installed.nix`, exposing the Linux-only
 `checks.x86_64-linux.codeql-nix-installed`. Its explicit nonempty runner
-executes six installed-path tests and four separate review-regression tests
-before writing `$out/evidence`. The installed tests cover offline language/pack
-lookup, identical schema bytes, database creation with syntax and real module
-metadata under one run, an explicit target file, query-test extraction,
-discovery refusals and stale input pins. Direct Nix evaluation independently
-checks priority changing from `100` to `50`. Q0 adds the query-level comparison
-and failure cases in its separate [Step 0 check](step0-query.md); that check
-must pass before claiming the installed Q0 acceptance contract.
+executes six installed-path tests, two R0 integration tests and four separate
+review-regression tests before writing `$out/evidence`. The installed tests
+cover offline language/pack lookup, identical schema bytes, database creation
+with syntax and real module metadata under one run, an explicit target file,
+query-test extraction, discovery refusals and stale input pins. Direct Nix
+evaluation independently checks priority changing from `100` to `50`. Q0 adds
+the query-level comparison and failure cases in its separate
+[Step 0 check](step0-query.md); that check must pass before claiming the
+installed Q0 acceptance contract. The [integration gate](integration-gate.md)
+describes R0's independent raw-coordinate rows and missing extractor/library
+controls.
 
 The regression suite uses deterministic pin controls for a transient dependency
 change during discovery, preservation of completed requests beside failed

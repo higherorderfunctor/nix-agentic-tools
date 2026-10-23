@@ -11,8 +11,8 @@ requests. `schema/observation-protocol.json` carries the resulting F1 facts.
 Both use JSON Schema Draft 2020-12. These contracts let future producers and QL
 consumers share fixtures before evaluation exists. The
 [database contract](database-contract.md) remains authoritative for relation
-semantics; the [integration gate](integration-gate.md) establishes only the
-earlier bootstrap prerequisites.
+semantics; the [integration gate](integration-gate.md) records the production
+replacement for the retired bootstrap proof.
 
 ## Explicit targets
 
