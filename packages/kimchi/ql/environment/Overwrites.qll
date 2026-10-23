@@ -250,18 +250,6 @@ predicate overwriteFailure(string message, string where_) {
     where_ = n.getFile().getRelativePath() + ":" + n.getLocation().getStartLine()
   )
   or
-  // an assignment through a spelling other than process.env
-  exists(AssignExpr a, PropAccess target |
-    a = walked().(ExprStmt).getExpr() and
-    target = a.getLhs() and
-    target.getBase() = envObject().asExpr() and
-    not isSpelledProcessEnv(target.getBase()) and
-    message =
-      "src/entry.ts assigns through " + target.getBase().toString() +
-        ", which the overwrite analysis counts only as process.env spelled out" and
-    where_ = a.getFile().getRelativePath() + ":" + a.getLocation().getStartLine()
-  )
-  or
   // process.env used whole, other than handed to a declared function
   exists(Expr e |
     e = envObject().asExpr() and
@@ -272,15 +260,6 @@ predicate overwriteFailure(string message, string where_) {
       "src/entry.ts hands process.env to " + e.getParent().toString() +
         ", and the names that reads cannot be resolved" and
     where_ = e.getFile().getRelativePath() + ":" + e.getLocation().getStartLine()
-  )
-  or
-  // `const { env } = process` in entry.ts
-  exists(DataFlow::PropRead r |
-    r = envObject() and
-    r.getFile() = entry().getFile() and
-    not r.asExpr() instanceof PropAccess and
-    message = "src/entry.ts takes process.env apart by destructuring, so the names it reads cannot be listed" and
-    where_ = r.getFile().getRelativePath() + ":" + r.getStartLine()
   )
   or
   // a handed-to parameter used whole

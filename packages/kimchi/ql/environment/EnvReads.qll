@@ -31,11 +31,11 @@ string hostAppName() {
  * `APP_NAME = piConfigName || "<default>"` with `piConfigName` declared as
  * `<x>.piConfig?.name`: pi names two variables after the host application.
  */
-predicate appNameShape(VariableDeclarator d, string defaultName) {
+predicate appNameShape(VariableDeclarator d) {
   exists(LogicalOrExpr choice, VarAccess left, VariableDeclarator src, PropAccess name |
     choice = d.getInit() and
     left = choice.getLeftOperand() and
-    defaultName = choice.getRightOperand().(StringLiteral).getValue() and
+    exists(choice.getRightOperand().(StringLiteral)) and
     src.getBindingPattern().(VarDecl).getVariable() = left.getVariable() and
     name = src.getInit() and
     name.getPropertyName() = "name" and
@@ -59,9 +59,19 @@ VariableDeclarator declaratorOf(VarAccess v) {
   )
 }
 
-/** A variable with no initialized declarator and no parameter declaration: a binding element, an uninitialized declarator or an unresolved import. */
+/** Initializers of a binding, including assignments in bundled module factories. */
+Expr initializerOf(VarAccess v) {
+  result = declaratorOf(v).getInit()
+  or
+  exists(AssignExpr assignment |
+    assignment.getLhs().(VarAccess).getVariable() = v.getVariable() and
+    result = assignment.getRhs().(StringLiteral)
+  )
+}
+
+/** A variable with no initializer or assignment and no parameter declaration: a binding element, an uninitialized declarator or an unresolved import. */
 predicate constantShaped(VarAccess v) {
-  not exists(declaratorOf(v).getInit()) and
+  not exists(initializerOf(v)) and
   not exists(Parameter p | p.getAVariable() = v.getVariable()) and
   not exists(EnhancedForLoop loop | loop.getAnIterationVariable() = v.getVariable())
 }
@@ -73,16 +83,14 @@ module Eval<fallbackSig/2 fallback> {
   string declaratorValue(VariableDeclarator d) {
     if isAppNameDeclarator(d)
     then
-      exists(string defaultName | appNameShape(d, defaultName) |
-        result = hostAppName()
-        or
-        not exists(hostAppName()) and result = defaultName
-      )
+      appNameShape(d) and result = hostAppName()
     else result = constValue(d.getInit())
   }
 
   string identValue(VarAccess v) {
     result = declaratorValue(declaratorOf(v))
+    or
+    not exists(declaratorOf(v).getInit()) and result = constValue(initializerOf(v))
     or
     constantShaped(v) and fallback(v.getName(), result)
   }
@@ -145,7 +153,7 @@ ForOfStmt iterationOf(VarAccess v) { result.getAnIterationVariable() = v.getVari
 
 /** Values of literal arrays, aliases, and their for-of bindings, including tuple columns. */
 Expr iterationValue(Expr e) {
-  not e instanceof VarAccess and result = e
+  not e instanceof VarAccess and not e instanceof SeqExpr and not e instanceof ParExpr and result = e
   or
   result = iterationValue(declaratorOf(e).getInit())
   or
@@ -166,6 +174,10 @@ Expr iterationValue(Expr e) {
       )
     )
   )
+  or
+  result = iterationValue(e.(SeqExpr).getLastOperand())
+  or
+  result = iterationValue(e.(ParExpr).getExpression())
 }
 
 /** Expressions whose definitions determine a literal iteration's values. */
@@ -175,6 +187,14 @@ Expr iterationDependency(Expr e) {
   result = iterationOf(e).getIterationDomain()
   or
   result = e.(ArrayExpr).getAnElement()
+  or
+  result = e.(SeqExpr).getLastOperand()
+  or
+  result = e.(ParExpr).getExpression()
+  or
+  result = e.(IndexExpr).getBase()
+  or
+  result = e.(LogicalOrExpr).getAnOperand()
 }
 
 /** Dense literal arrays with no spread have statically fixed element positions. */
@@ -183,8 +203,8 @@ predicate fixedArray(ArrayExpr array) {
 }
 
 /** An iteration source is closed only when every traversed loop has literal array values. */
-predicate closedIteration(VarAccess key) {
-  exists(iterationOf(key)) and
+predicate closedIteration(Expr key) {
+  exists(VarAccess v | v = iterationDependency*(key) | exists(iterationOf(v))) and
   exists(iterationValue(key)) and
   forall(VarAccess v | v = iterationDependency*(key) and exists(iterationOf(v)) |
     exists(iterationValue(iterationOf(v).getIterationDomain())) and
@@ -205,12 +225,17 @@ predicate closedIteration(VarAccess key) {
       )
     )
   ) and
-  // Every use of an array binding must be one of the definitions or loop
-  // domains followed above. Other uses could mutate it or let it escape.
+  // Array uses are traced definitions, loop domains or literal column reads,
+  // including std-env's returned tuple metadata. Other uses can let it escape.
   forall(VarAccess v, VarAccess use |
     v = iterationDependency*(key) and exists(iterationValue(v).(ArrayExpr)) and
     use.getVariable() = v.getVariable() |
     use = iterationDependency*(key)
+    or
+    exists(IndexExpr access |
+      access.getBase() = use and exists(access.getIndex().(NumberLiteral).getIntValue()) and
+      not access = any(Assignment assignment).getLhs()
+    )
   ) and
   // Scalar binding reassignment also makes the set of values open.
   not exists(VarAccess v, VarAccess use |
@@ -249,20 +274,59 @@ predicate resolvedIteration(VarAccess key) {
   )
 }
 
+/** A tuple column or fallback, evaluated for one row of the literal table. */
+string tupleKey(Expr key, Variable binding, ArrayExpr tuple) {
+  // Restrict the recursive relation to actual read keys and their table rows.
+  exists(DataFlow::PropRead read, Expr root, VarAccess use |
+    read = envReadSource().getAPropertyRead() and root = read.getPropertyNameExpr() and
+    key.getParent*() = root and use = iterationDependency*(root) and
+    exists(iterationOf(use)) and use.getVariable() = binding and tuple = iterationValue(use)
+  ) and
+  (
+    result = constValue(key)
+    or
+    exists(IndexExpr access |
+      access = key and access.getBase().(VarAccess).getVariable() = binding and
+      exists(int column | column = access.getIndex().(NumberLiteral).getIntValue() |
+        result = constValue(tuple.getElement(column))
+        or
+        not exists(tuple.getElement(column)) and result = ""
+      )
+    )
+    or
+    exists(LogicalOrExpr choice | choice = key |
+      result = tupleKey(choice.getLeftOperand(), binding, tuple) and result != ""
+      or
+      tupleKey(choice.getLeftOperand(), binding, tuple) = "" and
+      result = tupleKey(choice.getRightOperand(), binding, tuple)
+    )
+  )
+}
+
+/** std-env indexes a for-of tuple with `row[1] || row[0]`. */
+string indexedIterationName(Expr key) {
+  exists(VarAccess binding |
+    binding = iterationDependency*(key) and exists(iterationOf(binding)) and
+    closedIteration(key) and
+    forall(Expr row | row = iterationValue(binding) |
+      exists(tupleKey(key, binding.getVariable(), row.(ArrayExpr)))
+    ) and
+    result = tupleKey(key, binding.getVariable(), iterationValue(binding))
+  )
+}
+
 /** Expressions evaluated to name a read, top-down from the read sites. */
 predicate evaluated(Expr e) {
   e = any(DataFlow::PropRead r | r = envReadSource().getAPropertyRead()).getPropertyNameExpr()
   or
-  exists(CallExpr c |
-    c.getCallee().(Identifier).getName() = "getProviderEnvValue" and e = c.getArgument(0)
-  )
+  exists(VarAccess key, DataFlow::InvokeNode call | helperKeyArgument(key, call, e))
   or
   exists(Expr p | evaluated(p) |
     e = p.(TemplateLiteral).getAnElement()
     or
     e = p.(MethodCallExpr).getReceiver()
     or
-    e = declaratorOf(p).getInit()
+    e = initializerOf(p)
     or
     constantShaped(p) and
     exists(VariableDeclarator d |
@@ -297,6 +361,16 @@ DataFlow::SourceNode envReadSource() {
 }
 
 
+/** A declared environment reader's key parameter and the corresponding call argument. */
+predicate helperKeyArgument(VarAccess key, DataFlow::InvokeNode call, Expr argument) {
+  exists(DataFlow::PropRead read, FunctionDeclStmt callee, int index, SimpleParameter parameter |
+    read = envReadSource().getAPropertyRead() and key = read.getPropertyNameExpr() and
+    parameter = callee.getParameter(index) and parameter.getAVariable() = key.getVariable() and
+    not parameter.isRestParameter() and callee = call.getACallee() and
+    argument = call.getArgument(index).asExpr()
+  )
+}
+
 /** The name the property read `r` reads: its property name, or its computed key evaluated. */
 string readName(DataFlow::PropRead r) {
   not r.asExpr() = any(DeleteExpr d).getOperand() and
@@ -304,6 +378,16 @@ string readName(DataFlow::PropRead r) {
     result = r.getPropertyName()
     or
     not exists(r.getPropertyName()) and result = constValue(r.getPropertyNameExpr())
+    or
+    exists(VarAccess key, DataFlow::InvokeNode call, Expr argument |
+      key = r.getPropertyNameExpr() and helperKeyArgument(key, call, argument) and
+      forall(DataFlow::InvokeNode other, Expr actual | helperKeyArgument(key, other, actual) |
+        exists(constValue(actual))
+      ) and
+      result = constValue(argument)
+    )
+    or
+    result = indexedIterationName(r.getPropertyNameExpr())
     or
     resolvedIteration(r.getPropertyNameExpr()) and
     result = constValue(iterationValue(r.getPropertyNameExpr()))
@@ -314,26 +398,15 @@ string readName(DataFlow::PropRead r) {
 predicate envRead(DataFlow::Node site, string name) {
   exists(DataFlow::PropRead r | r = envReadSource().getAPropertyRead() | site = r and name = readName(r))
   or
-  // pi's provider helper reads the variable its first argument names.
-  exists(CallExpr c | c = site.asExpr() |
-    c.getCallee().(Identifier).getName() = "getProviderEnvValue" and
-    name = constValue(c.getArgument(0))
+  // Literal calls remain named even when other calls leave the helper open.
+  exists(VarAccess key, DataFlow::InvokeNode call, Expr argument |
+    helperKeyArgument(key, call, argument) and site = call and name = constValue(argument)
   )
 }
 
-/** Shapes the TypeScript extractor that produced the committed fact did not read, kept out so the two agree byte for byte: `const { X } = process.env` (a property pattern), `import { env } from "node:process"` (a named import of env). */
-predicate tsIncompatible(DataFlow::Node site) {
-  exists(DataFlow::PropRead r | r = site |
-    not r.asExpr() instanceof PropAccess
-    or
-    r.getBase().getALocalSource().getAstNode() instanceof ImportSpecifier
-  )
-}
-
-/** A read the fact lists: a named read, in a shape the fact's producer reads. */
+/** A named environment read in a carried runtime. */
 predicate listedRead(DataFlow::Node site, string name) {
   envRead(site, name) and
-  not tsIncompatible(site) and
   exists(runtimeOf(site.getFile()))
 }
 
@@ -350,39 +423,5 @@ predicate readFailure(string message, string where_) {
     exists(iterationOf(key)) and not resolvedIteration(key) and
     message = "the environment iteration key " + key.getName() + " cannot be resolved to a finite set of names" and
     where_ = key.getFile().getRelativePath() + ":" + key.getLocation().getStartLine()
-  )
-  or
-  // pi's APP_NAME no longer takes the host's piConfig.name (a `.d.ts`
-  // declares it without an initializer, which says nothing)
-  exists(VariableDeclarator d |
-    isAppNameDeclarator(d) and
-    exists(d.getInit()) and
-    inPiAgent(d.getFile()) and
-    not appNameShape(d, _) and
-    message = "pi APP_NAME is no longer piConfig.name || \"<default>\"" and
-    where_ = d.getFile().getRelativePath() + ":" + d.getLocation().getStartLine()
-  )
-  or
-  // `const { env: { X } } = process` anywhere: the environment taken apart by
-  // a nested pattern, whose names the fact's producer could not list
-  exists(DataFlow::PropRead r, PropertyPattern pp |
-    r = envObject() and
-    pp = r.getAstNode() and
-    not pp.getValuePattern() instanceof VarDecl and
-    exists(runtimeOf(pp.getFile())) and
-    message = "takes process.env apart by destructuring, so the names it reads cannot be listed" and
-    where_ = pp.getFile().getRelativePath() + ":" + pp.getLocation().getStartLine()
-  )
-  or
-  // `.env` on a local binding named process: CodeQL would correctly ignore
-  // it, but the fact's producer cannot tell what it holds and fails
-  exists(PropAccess pa, VarAccess v |
-    pa.getPropertyName() = "env" and
-    v = pa.getBase() and
-    v.getName() = "process" and
-    not pa = envObject().asExpr() and
-    exists(runtimeOf(pa.getFile())) and
-    message = "takes env from a local binding named process, which cannot be identified as the environment" and
-    where_ = pa.getFile().getRelativePath() + ":" + pa.getLocation().getStartLine()
   )
 }

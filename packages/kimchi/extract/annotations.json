@@ -19,6 +19,9 @@
     "DIFF_THEME": {
       "controls": "syntax-highlighting theme for rendered diffs (default github-dark)"
     },
+    "GEMINI_API_KEY": {
+      "controls": "pi's Google Gemini provider API key"
+    },
     "GH_ENTERPRISE_TOKEN": {
       "controls": "GitHub Enterprise token for pull-request status lookups on the GH_HOST host; preferred over GITHUB_ENTERPRISE_TOKEN, and over config.json gitTokens and gh auth"
     },
@@ -39,6 +42,12 @@
     },
     "GLAB_TOKEN": {
       "controls": "GitLab token for pull-request status lookups on the GITLAB_HOST/GL_HOST/GITLAB_URI host (default gitlab.com) when GITLAB_TOKEN is unset; preferred over GITLAB_ACCESS_TOKEN, config.json gitTokens and glab credentials"
+    },
+    "GOOGLE_API_KEY": {
+      "controls": "Google GenAI SDK API key for pi's Gemini provider; the SDK prefers it over GEMINI_API_KEY when both are set"
+    },
+    "INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN": {
+      "controls": "std-env checks whether the Azure Static Web Apps API token is present to identify its CI provider; this detection does not use the value as a credential"
     },
     "JS_DEBUG_PATH": {
       "controls": "js-debug DAP server script used by the debugger extension"
@@ -101,6 +110,9 @@
     "KIMCHI_NO_UPDATE_CHECK": { "controls": "background Kimchi update check" },
     "KIMCHI_OAUTH_TEMPLATE_DIR": {
       "controls": "OAuth result-page template directory"
+    },
+    "KIMCHI_OAUTH_USE_ID_TOKEN": {
+      "controls": "whether Kimchi login sends the OAuth ID token instead of the access token; a boolean flag, not a credential"
     },
     "KIMCHI_OLLAMA_HOST": { "controls": "Ollama host URL" },
     "KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR": {

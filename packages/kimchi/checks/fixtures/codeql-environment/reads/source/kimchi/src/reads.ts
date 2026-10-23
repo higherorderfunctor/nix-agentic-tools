@@ -32,3 +32,26 @@ function readUnrelated(local: Record<string, string>) {
   return local.NOT_ENVIRONMENT_HELPER;
 }
 readUnrelated({ NOT_ENVIRONMENT_HELPER: "local" });
+
+// std-env in pi 1.3.0 bundle/chunks/jiti-loader: optional process and tuple fallback.
+const zt = globalThis.process?.env || Object.create(null);
+const Zt = { name: "std-env" };
+const Xt=(Zt.name,Zt.name,[["GITHUB_ACTIONS"],["CIRCLE","CIRCLECI"]]);
+function ciProvider() {
+  for (let e3 of Xt) if (zt[e3[1] || e3[0]]) return { name: e3[0].toLowerCase(), ...e3[2] };
+}
+
+const { GIT_DIR, GIT_COMMON_DIR, GIT_WORK_TREE, GIT_INDEX_FILE } = process.env;
+
+// Declared key helpers: oauth-config and shared/env-int.
+function readKey(name: string) {
+  return process.env[name];
+}
+const helperKey = "HELPER_CONSTANT";
+void readKey("HELPER_LITERAL");
+void readKey(helperKey);
+
+// Bundled module initialization assigns a previously declared binding.
+let assignedKey: string;
+assignedKey = "ASSIGNED_KEY";
+void process.env[assignedKey];
