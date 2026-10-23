@@ -6,6 +6,8 @@ Boehm
 CFFIXED
 chatcmpl
 cliproxy
+cliproxyauth
+cliproxyexecutor
 CLOUDSDK
 COLORFGBG
 COLORTERM
@@ -419,6 +421,7 @@ revwalk
 rodata
 rollouts
 rootfs
+roundtripper
 rsbuild
 rspack
 rsyncs
@@ -432,6 +435,7 @@ sarif
 scriptable
 scrutinee
 sdiehl
+sdktranslator
 segs
 semble
 sequentialthinking
