@@ -279,7 +279,7 @@ func TestWebsocketProcessExit(t *testing.T) {
 		}
 		addr := listener.Addr().String()
 		_ = listener.Close()
-		site := fmt.Sprintf("{\n admin off\n}\nhttp://%s {\n cpa_gate * %s %s\n}\n", addr, writePolicy(t, validPolicy), upstream)
+		site := fmt.Sprintf("{\n admin off\n}\nhttp://%s {\n route {\n  cpa_gate * %s %s\n }\n}\n", addr, writePolicy(t, validPolicy), upstream)
 		config, _, err := caddyconfig.GetAdapter("caddyfile").Adapt([]byte(site), nil)
 		if err != nil {
 			t.Fatal(err)
@@ -332,8 +332,9 @@ func TestWebsocketProcessExit(t *testing.T) {
 	}
 	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
 	ready := make(chan string, 1)
+	var childOutput bytes.Buffer
 	go func() {
-		scanner := bufio.NewScanner(stdout)
+		scanner := bufio.NewScanner(io.TeeReader(stdout, &childOutput))
 		for scanner.Scan() {
 			if strings.HasPrefix(scanner.Text(), "READY ") {
 				ready <- strings.TrimPrefix(scanner.Text(), "READY ")
@@ -349,7 +350,8 @@ func TestWebsocketProcessExit(t *testing.T) {
 		t.Fatal("child Caddy did not start")
 	}
 	if target == "" {
-		t.Fatalf("child failed: %s", &stderr)
+		_ = cmd.Wait()
+		t.Fatalf("child failed:\nstdout: %s\nstderr: %s", &childOutput, &stderr)
 	}
 	conn := dialWebsocket(t, target+"/v1/responses?key="+responsesKey)
 	if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"model":"m"}`)); err != nil {
