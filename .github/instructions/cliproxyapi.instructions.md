@@ -177,7 +177,9 @@ another routed credential whose catalog registers it.
 
 With a client list, Claude's picker replaces its built-ins and sets
 `availableModels` with exact matching to that final set, through the existing
-Harness proxy lowering on both backends. Codex keeps discovering CPA's catalog
+Harness proxy lowering on both backends. Home Manager overrides competing native
+picker and available-model lists for that selected client list; with no client
+list, those native lists still merge. Codex keeps discovering CPA's catalog
 through the gate, which filters it by the key's set. Without client lists,
 config and units retain their existing lowering. Upstream `routes[].api` chooses
 the CPA credential family; the gate admits Anthropic, Chat and Responses client
