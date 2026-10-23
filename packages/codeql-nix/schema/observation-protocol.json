@@ -1,10 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Validate this wire envelope with Draft 2020-12 JSON Schema, then pass the complete facts collection unchanged to schema/abi.py validate(). Both steps are mandatory. Each [relation, arguments] maps identically to that F1 relation and its positional columns: no renaming, coercion, defaults or inferred rows. contract.json is the sole authority for column order and semantic types. F1 validates arity, exact text, canonical keys/paths/scalars/priorities, statuses, references, scopes and completeness consistency. This schema deliberately does not duplicate those rules. Empty facts are transportable but cannot establish a successful extraction or passing oracle. Validation does not prove budget enforcement, atomic publication or non-copying runtime path conversion.",
+  "description": "Validate this wire envelope with Draft 2020-12 JSON Schema, then pass the complete facts collection unchanged to schema/abi.py validate(). Both steps are mandatory. Each [relation, arguments] maps identically to that F1 relation and its positional columns: no renaming, coercion, defaults or inferred rows. contract.json is the sole authority for column order and semantic types. F1 validates arity, exact text, canonical keys/paths/priorities, statuses, references, scopes and completeness consistency. This schema deliberately does not duplicate those rules. Empty facts are transportable but cannot establish a successful extraction or passing oracle. Validation does not prove budget enforcement, atomic publication or source admission.",
   "properties": {
     "facts": {
-      "description": "Unordered F1 tuples. Capability, phase, target, request-result, observation and diagnostic records use their existing nx_* relations, including failures before targets exist. Omitted facts never manufacture successful null, false, absent-member or complete states.",
+      "description": "Unordered Step 0 F1 tuples. Capability, phase, target, request-result, observation and diagnostic records use their existing nx_* relations, including failures before targets exist. Omitted facts never manufacture successful observations or completion.",
       "items": {
         "items": false,
         "minItems": 2,

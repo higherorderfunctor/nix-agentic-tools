@@ -19,11 +19,10 @@ MANIFEST = {
             "adapterVersion": "1",
             "argumentDescription": {"hash": "args-a", "moduleArgumentsRef": "module-args:a", "specialArgumentsRef": "special-args:a"},
             "evaluation": {"kind": "arguments", "reference": "arguments:a"},
-            "fingerprint": {"evaluatorVersion": "eval-a", "libVersion": "lib-a", "modelVersion": "model-a", "policyHash": "policy-a", "sourceSnapshotHash": "snapshot-a"},
+            "fingerprint": {"evaluatorVersion": "eval-a", "libVersion": "lib-a", "modelVersion": "not-requested", "policyHash": "policy-a", "sourceSnapshotHash": "snapshot-a"},
             "inputIdentities": {"nixpkgs": "locked:nixpkgs-a"},
             "observationModes": ["metadata"],
             "requests": [REQUEST],
-            "reusable": True,
             "sourceRoots": [{"logicalName": "project", "path": "/work/project", "rootContentIdentity": "snapshot-a"}],
             "syntaxOnlyFallback": True,
             "system": "x86_64-linux",
@@ -31,12 +30,12 @@ MANIFEST = {
     },
 }
 
-I = {name: f"nixql:v1:{name}:1:x" for name in ("context", "diagnostic", "member", "observation", "request", "run", "target", "value")}
+I = {name: f"nixql:v1:{name}:1:x" for name in ("context", "diagnostic", "observation", "option", "request", "run", "target")}
 BASE = [
-    ["nx_runs", [I["run"], "schema", "extractor", "grammar", "model", "snapshot-a"]],
+    ["nx_runs", [I["run"], "schema", "extractor", "grammar", "not-requested", "snapshot-a"]],
     ["nx_targets", [I["target"], I["run"], "host.workstation", "evalModules", "x86_64-linux", "eval-a", "lib-a", "inputs-a", "policy-a", "complete"]],
     ["nx_contexts", [I["context"], I["target"], "root", "[]"]],
-    ["nx_requests", [I["request"], I["target"], I["context"], "config", '["a.b"]', "value", 3, 20, 4096, 5, 64]],
+    ["nx_requests", [I["request"], I["target"], I["context"], "option-metadata", '["a.b"]', "isDefined", 0, 20, 4096, 5, 64]],
 ]
 
 
@@ -44,29 +43,15 @@ def result(state="complete", reason="", observation=None):
     facts = deepcopy(BASE)
     facts.append(["nx_request_results", [I["request"], state, reason, 0]])
     if observation is not None:
-        facts.append(["nx_observations", [I["observation"], I["request"], "config-path", '["a.b"]', "applied-config", observation]])
+        facts.extend([
+            ["nx_options", [I["option"], I["context"], '["a.b"]']],
+            ["nx_observations", [I["observation"], I["request"], "option", I["option"], "pre-apply-metadata", observation]],
+        ])
     return {"protocolVersion": 1, "facts": facts}
 
 
-def scalar(kind, encoding, payload):
-    packet = result(observation="observed")
-    packet["facts"][-2][1][-1] = 1
-    packet["facts"].extend([
-        ["nx_observation_values", [I["observation"], I["value"]]],
-        ["nx_values", [I["value"], kind, "complete"]],
-        ["nx_scalar_values", [I["value"], encoding, payload]],
-    ])
-    return packet
-
-
-# The key is known, but a failed leaf has no successful value link.
-PARTIAL = result("partial", "selected-leaf-failed", "observed")
-PARTIAL["facts"].extend([
-    ["nx_observation_values", [I["observation"], I["value"]]],
-    ["nx_values", [I["value"], "attrset", "partial"]],
-    ["nx_value_members", [I["member"], I["value"], "attribute", "bad", 0]],
-    ["nx_observations", ["nixql:v1:observation:1:y", I["request"], "member", I["member"], "applied-config", "failed"]],
-])
+# Failed metadata work records no successful observation.
+PARTIAL = result("partial", "metadata-projection-failed", "failed")
 
 REFUSAL = result("unsupported", "text-field-too-large")
 REFUSAL["facts"].extend([

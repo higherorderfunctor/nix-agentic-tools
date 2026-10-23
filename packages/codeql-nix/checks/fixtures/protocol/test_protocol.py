@@ -12,7 +12,7 @@ import unittest
 
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
-from examples import I, MANIFEST, PARTIAL, PRE_TARGET, REFUSAL, golden, result, scalar
+from examples import I, MANIFEST, PARTIAL, PRE_TARGET, REFUSAL, golden, result
 
 SCHEMA_DIR = Path(__file__).resolve().parents[3] / "schema"
 LIMIT = 1048576
@@ -76,17 +76,16 @@ class ProtocolTests(unittest.TestCase):
         with self.assertRaises((ValidationError, ValueError)):
             self.observations(packet)
 
-    def test_explicit_metadata_default_and_all_adapter_descriptors(self):
+    def test_explicit_metadata_and_module_descriptors(self):
         self.manifest(MANIFEST)
         self.assertEqual(descriptor(MANIFEST)["observationModes"], ["metadata"])
         self.assertEqual(descriptor(MANIFEST)["requests"][0]["path"], ["services"])
-        for adapter in ("devenv", "evalModules", "flake-parts", "home-manager", "nixos"):
-            for kind in ("arguments", "rich-result"):
-                packet = deepcopy(MANIFEST)
-                descriptor(packet)["adapter"] = adapter
-                descriptor(packet)["evaluation"]["kind"] = kind
-                descriptor(packet)["reusable"] = False
-                self.manifest(packet)
+        for kind in ("arguments", "rich-result"):
+            packet = deepcopy(MANIFEST)
+            descriptor(packet)["evaluation"]["kind"] = kind
+            self.manifest(packet)
+        self.assertEqual(descriptor(MANIFEST)["fingerprint"]["modelVersion"], "not-requested")
+        self.assertEqual(row(result(), "nx_runs")[4], "not-requested")
         # An arbitrary target label is not interpreted as a flake attribute path.
         packet = deepcopy(MANIFEST)
         packet["targets"]["literal.[name].with.dots"] = packet["targets"].pop("host.workstation")
@@ -102,66 +101,63 @@ class ProtocolTests(unittest.TestCase):
                 packet = deepcopy(MANIFEST)
                 del descriptor(packet)[field][nested]
                 self.rejected_manifest(packet)
-        for path in ((), ("targets", "host.workstation"), ("targets", "host.workstation", "evaluation")):
+        for path in ((), ("targets", "host.workstation"), ("targets", "host.workstation", "evaluation"), ("targets", "host.workstation", "argumentDescription"), ("targets", "host.workstation", "fingerprint"), ("targets", "host.workstation", "sourceRoots", 0)):
             packet = deepcopy(MANIFEST)
             value = packet
             for segment in path:
                 value = value[segment]
             value["invented"] = True
             self.rejected_manifest(packet)
-        for field, value in (("adapter", "guessed-flake"), ("system", ""), ("inputIdentities", {}), ("observationModes", []), ("sourceRoots", []), ("requests", []), ("reusable", "true")):
+        for field, value in (("adapter", "guessed-flake"), ("system", ""), ("inputIdentities", {}), ("observationModes", []), ("sourceRoots", []), ("requests", [])):
             packet = deepcopy(MANIFEST)
             descriptor(packet)[field] = value
             self.rejected_manifest(packet)
 
-    def test_request_authorization_and_facets(self):
-        domains = {
-            "config": ("selected-value", "value"),
-            "definition-value": ("selected-value", "value"),
-            "graph": ("graph", "modules"),
-            "option-metadata": ("metadata", "priority"),
-            "option-value": ("selected-value", "value"),
-            "schema": ("schema", "declarations"),
-        }
-        for domain, (mode, facet) in domains.items():
+    def test_explicit_source_roots_and_input_identities(self):
+        for field in ("logicalName", "path", "rootContentIdentity"):
             packet = deepcopy(MANIFEST)
-            target = descriptor(packet)
-            target["requests"][0].update(domain=domain, facet=facet)
-            target["observationModes"] = [mode]
+            del descriptor(packet)["sourceRoots"][0][field]
+            self.rejected_manifest(packet)
+            for value in ("", True):
+                packet = deepcopy(MANIFEST)
+                descriptor(packet)["sourceRoots"][0][field] = value
+                self.rejected_manifest(packet)
+        for inputs in ({"": "pin"}, {"nixpkgs": ""}, {"nixpkgs": False}):
+            packet = deepcopy(MANIFEST)
+            descriptor(packet)["inputIdentities"] = inputs
+            self.rejected_manifest(packet)
+
+    def test_metadata_requests_and_deferred_surfaces(self):
+        for facet in ("declarations", "isDefined", "priority"):
+            packet = deepcopy(MANIFEST)
+            descriptor(packet)["requests"][0]["facet"] = facet
             self.manifest(packet)
-            wrong_mode = "metadata" if mode == "graph" else "graph"
-            target["observationModes"] = [wrong_mode]
+        for field, value in (
+            ("adapter", "nixos"),
+            ("observationModes", ["graph"]),
+            ("observationModes", ["metadata", "selected-value"]),
+            ("reusable", True),
+        ):
+            packet = deepcopy(MANIFEST)
+            descriptor(packet)[field] = value
             self.rejected_manifest(packet)
-            request = target["requests"][0]
-            allowed = deepcopy(request)
-            allowed.update(domain="option-metadata" if wrong_mode == "metadata" else "graph",
-                           facet="priority" if wrong_mode == "metadata" else "modules")
-            target["requests"] = [allowed, request]
-            self.rejected_manifest(packet)
-            target["requests"].reverse()
-            self.rejected_manifest(packet)
-            target["observationModes"] = sorted([mode, wrong_mode])
-            self.manifest(packet)
-            target["requests"] = [request]
-            target["observationModes"] = [mode]
-            target["requests"][0]["facet"] = "invented"
+        for field, value in (
+            ("domain", "graph"),
+            ("domain", "config"),
+            ("domain", "schema"),
+            ("facet", "value"),
+            ("facet", "all-declarations"),
+            ("facet", "internal"),
+        ):
+            packet = deepcopy(MANIFEST)
+            descriptor(packet)["requests"][0][field] = value
             self.rejected_manifest(packet)
         packet = deepcopy(MANIFEST)
-        target = descriptor(packet)
-        target["requests"][0]["facet"] = "value"
-        self.rejected_manifest(packet)
-        target["requests"][0].update(domain="config", facet="string-context")
-        target["observationModes"] = ["selected-value"]
-        self.rejected_manifest(packet)
-        target["observationModes"].append("string-context")
-        self.manifest(packet)
-        target["evaluation"]["kind"] = "config-only"
-        self.manifest(packet)
-        target["requests"][0].update(domain="option-value", facet="value")
+        descriptor(packet)["evaluation"]["kind"] = "config-only"
         self.rejected_manifest(packet)
         packet = deepcopy(MANIFEST)
-        descriptor(packet)["requests"][0]["facet"] = "all-declarations"
-        self.manifest(packet)  # Explicit opt-in; maxNodes is its count budget.
+        descriptor(packet)["fingerprint"]["modelVersion"] = "model-a"
+        self.rejected_manifest(packet)
 
     def test_literal_paths_and_every_explicit_budget(self):
         for segments in (["a.b"], ["a", "b"], ["", "é", 'quote"', "a\\b"]):
@@ -187,8 +183,15 @@ class ProtocolTests(unittest.TestCase):
         before = deepcopy(packet)
         self.observations(packet)
         self.assertEqual(packet, before)
-        self.assertEqual(len({name for name, _ in packet["facts"]}), 35)
-        for candidate in ({}, {"protocolVersion": 2, "facts": []}, {"protocolVersion": 1, "facts": {}, "extra": True}, {"protocolVersion": 1, "facts": [["nx_invented", []]]}):
+        self.assertEqual(len({name for name, _ in packet["facts"]}), 23)
+        for candidate in (
+            {}, {"protocolVersion": 1}, {"facts": []},
+            {"protocolVersion": 2, "facts": []},
+            {"protocolVersion": 1, "facts": {}},
+            {"protocolVersion": 1, "facts": [], "extra": True},
+            {"protocolVersion": 1, "facts": [["nx_runs", [], "extra"]]},
+            {"protocolVersion": 1, "facts": [["nx_invented", []]]},
+        ):
             self.rejected_observations(candidate)
         packet["facts"].append(deepcopy(packet["facts"][0]))
         self.rejected_observations(packet)  # F1 primary-key validation is mandatory.
@@ -200,7 +203,7 @@ class ProtocolTests(unittest.TestCase):
             self.observations(result("partial", "fixture-reason", state))
         for state in ("not-requested", "supported", "unavailable", "unsupported"):
             packet = result()
-            packet["facts"].append(["nx_capabilities", [I["target"], "options", state, "fixture-reason"]])
+            packet["facts"].append(["nx_capabilities", [I["target"], "metadata", state, "fixture-reason"]])
             self.observations(packet)
         for state in ("blocked", "complete", "failed", "not-requested", "partial", "unsupported"):
             packet = result()
@@ -223,52 +226,17 @@ class ProtocolTests(unittest.TestCase):
         for reason in ("timeout", "text-field-too-large"):
             self.rejected_observations(result("complete", reason))
         self.rejected_observations(result("failed", "threw", "observed"))
-        packet = deepcopy(PARTIAL)
-        packet["facts"].append(["nx_member_values", [I["member"], I["value"]]])
-        self.rejected_observations(packet)  # A failed member is never a successful value.
 
     def test_priorities_remain_canonical_decimal_strings(self):
         for text in ("-9223372036854775808", "-1", "0", "1", "9223372036854775807"):
             packet = {"protocolVersion": 1, "facts": deepcopy(golden.GRAPH)}
             row(packet, "nx_option_priority")[1] = text
-            row(packet, "nx_definition_order")[1] = text
             self.observations(packet)
         for text in ("-9223372036854775809", "9223372036854775808", "-0", "+1", "01", "1e3", "1.0", 1, True):
-            for relation in ("nx_option_priority", "nx_definition_order"):
-                packet = {"protocolVersion": 1, "facts": deepcopy(golden.GRAPH)}
-                row(packet, relation)[1] = text
-                self.rejected_observations(packet)
-        self.observations(result("unsupported", "priority-domain-unsupported"))
-
-    def test_typed_scalars_preserve_path_string_null_and_false(self):
-        path_text = '/does-not-exist/é/../directory"\\name'
-        path_payload = '"/does-not-exist/é/../directory\\"\\\\name"'
-        for kind, encoding, payload in (
-            ("path", "evaluated-path-json-v1", path_payload),
-            ("string", "string-json-v1", path_payload),
-            ("null", "null-json-v1", "null"),
-            ("boolean", "boolean-json-v1", "false"),
-            ("integer", "integer-decimal-v1", "9007199254740993"),
-            ("float", "float-hex-v1", "0x1.8000000000000p+0"),
-        ):
-            packet = scalar(kind, encoding, payload)
-            self.observations(packet)
-            self.assertEqual(row(packet, "nx_scalar_values")[2], payload)
-        for kind in ("derivation", "function"):
-            packet = result(observation="observed")
-            packet["facts"].extend([
-                ["nx_observation_values", [I["observation"], I["value"]]],
-                ["nx_values", [I["value"], kind, "opaque"]],
-            ])
-            self.observations(packet)
-            packet["facts"].append(["nx_scalar_values", [I["value"], "string-json-v1", '\"coerced\"']])
+            packet = {"protocolVersion": 1, "facts": deepcopy(golden.GRAPH)}
+            row(packet, "nx_option_priority")[1] = text
             self.rejected_observations(packet)
-        self.assertEqual(json.loads(path_payload), path_text)
-        self.rejected_observations(scalar("path", "string-json-v1", path_payload))
-        self.rejected_observations(scalar("path", "evaluated-path-json-v1", '"relative/path"'))
-        packet = scalar("null", "null-json-v1", "null")
-        row(packet, "nx_observations")[-1] = "failed"
-        self.rejected_observations(packet)
+        self.observations(result("unsupported", "priority-domain-unsupported"))
 
     def test_exact_text_utf8_and_json_escaping_boundaries(self):
         for size in (LIMIT - 1, LIMIT, LIMIT + 1):
@@ -287,15 +255,6 @@ class ProtocolTests(unittest.TestCase):
                     self.manifest(manifest)
                 else:
                     self.rejected_manifest(manifest)
-            # Account independently for the two JSON quotes and backslash expansion.
-            text = '"' * ((size - 2) // 2) + "a" * ((size - 2) % 2)
-            payload = json.dumps(text, ensure_ascii=False, separators=(",", ":"))
-            self.assertEqual(len(payload.encode()), size)
-            packet = scalar("string", "string-json-v1", payload)
-            if size <= LIMIT:
-                self.observations(packet)
-            else:
-                self.rejected_observations(packet)
             # Path arrays additionally contain the brackets around their JSON string.
             manifest = deepcopy(MANIFEST)
             segment = '"' * ((size - 4) // 2) + "a" * ((size - 4) % 2)
