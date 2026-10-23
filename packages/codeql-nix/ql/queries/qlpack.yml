@@ -1,0 +1,4 @@
+dependencies:
+  nix-agentic-tools/nix-all: "*"
+name: nix-agentic-tools/nix-queries
+version: 0.0.0
