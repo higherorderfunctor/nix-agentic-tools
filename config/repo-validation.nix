@@ -39,6 +39,19 @@
   # External CI backends name an existing independently shaped gate; derived
   # backends below are generated directly from this table.
   definitions = {
+    codeql-refresh = {
+      role = "commit-helper";
+      hook = {
+        enable = true;
+        name = "codeql-refresh";
+        entry = lib.getExe (import ../dev/codeql-lifecycle.nix {inherit pkgs;});
+        args = ["hook"];
+        always_run = true;
+        pass_filenames = false;
+        stages = ["post-checkout" "post-merge"];
+      };
+      ci = null;
+    };
     convco = {
       role = "commit-message";
       hook.enable = true;

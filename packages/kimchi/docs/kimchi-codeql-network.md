@@ -138,7 +138,7 @@ under `node_modules` as they are.
 
 ### Running it without Nix
 
-`codeql:kimchi-db` creates the database, and the query loop in
+`codeql:kimchi:up` creates the database, and the query loop in
 `kimchi-codeql.md` can then run `ql/network/NetworkCallSites.ql` on it, without
 the model packs. The pack directories have no qlpack.yml, as `mkModelPack`
 writes it. For the full rows, give CodeQL one model pack holding both

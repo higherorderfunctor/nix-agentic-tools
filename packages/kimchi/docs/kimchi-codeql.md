@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-22 — Kimchi 1.17.2; `passthru.codeql` carries
 > `database`, `databaseOf`, `runQueries`, `mkQueryRunner`, `createDatabase` and
-> `engine`; the environment and network facts read it.
+> `engine`; the environment and network facts read it; explicit named lifecycle
+> tasks publish checkout generations from the pinned derivation source.
 
 ### Three layers
 
@@ -102,7 +103,7 @@ task and the environment guard all run it.
 ### Running a query without Nix
 
 ```bash
-devenv tasks run codeql:kimchi-db        # once per pin
+devenv tasks run codeql:kimchi:up        # once per pin
 state=.devenv/state/codeql/kimchi
 "$state/engine/bin/codeql" query run --database="$state/db" \
   --additional-packs=packages/kimchi/ql --output=/tmp/out.bqrs \
@@ -110,12 +111,16 @@ state=.devenv/state/codeql/kimchi
 "$state/engine/bin/codeql" bqrs decode --format=json /tmp/out.bqrs
 ```
 
-The task is explicit: nothing runs it before or after another task. It rebuilds
-only when `packages/kimchi/sources.json` or `packages/codeql/sources.json`
-changes version. Delete `$state/stamp` after changing
-`packages/kimchi/lib/codeql.nix` (the source tree, the patch step or the
-extractor environment) without a pin bump. Result paths are relative to
-`$state/source`.
+The generic lifecycle uses the engine and creator store paths as its input
+stamp, so changes to the pinned source, patch step or extractor environment
+invalidate the database even without a version bump. `codeql:kimchi:refresh`
+forces a new generation; `codeql:kimchi:down` removes this checkout's database.
+`db` links to a complete generation, with `stamp` and `engine` beside it;
+publication is atomic and failed extraction leaves the previous generation.
+Resolve `db` for every query request. Result paths are relative to that
+generation's `source/` tree. Existing databases refresh in the background after
+a merge or branch checkout, with diagnostics in `refresh.log`. See
+[the shared lifecycle](../../codeql/docs/codeql.md#local-database-lifecycle).
 
 `packages/kimchi/ql/qlpack.yml` makes the whole directory one local pack, so a
 `.ql` file anywhere under it resolves `import javascript`. A query file outside

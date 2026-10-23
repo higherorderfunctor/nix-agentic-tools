@@ -2,8 +2,8 @@
 
 > **Last verified:** 2026-10-22 — eleven engines at 2.27.3 from one `mkEngine`
 > factory, plus the MIT Nix extractor at 0.3.0; the javascript engine wraps its
-> launcher with a Node; CI builds javascript and evaluates the rest; the update
-> input lanes build none. Packs and `customizePackage`: customize.md.
+> launcher with a Node; local databases use named lifecycle tasks, shared warmed
+> merge-base snapshots and atomic checkout generations. Packs: customize.md.
 
 ### What a bundle is
 
@@ -114,16 +114,73 @@ conservatively cover this package too. It carries no CLI.
 
 `codeql-extractor-nix.codeql` exposes one javascript engine customized with this
 extractor (`engine`), a `mkQueryPack` spec (`queries`), and `createDatabase`,
-the script used by `codeql:nix-db`. A javascript bundle supplies CodeQL's util
+the script used by `codeql:nix:up`. A javascript bundle supplies CodeQL's util
 and yaml packs, which the Nix library imports. `searchPath` discovers the
 extractor; `additional-packs` cannot do that.
 
-The explicit devenv task `codeql:nix-db` snapshots `git archive HEAD` under
-`.devenv/state/codeql/nix/source` and creates `db` beside it. The stamp holds
-HEAD and the engine and creator store paths, so dirty edits are excluded and
-changes to the tools or snapshot mechanism rebuild it. An `engine` link supports
-ad hoc queries through the dev-only `nix-codeql` skill. No task runs at shell
-entry.
+### Local database lifecycle
+
+`dev/codeql-databases.json` declares each database's name, source kind, CodeQL
+passthru, and creator program. `dev/tasks/codeql.nix` generates three explicit
+tasks per name, using one lifecycle implementation:
+
+```bash
+devenv tasks run codeql:nix:up       # create only when source/tool inputs changed
+devenv tasks run codeql:nix:refresh  # force a new generation
+devenv tasks run codeql:nix:down     # remove this checkout's publication/generation
+```
+
+`<checkout>/.devenv/state/codeql/<name>/db` links to a complete generation.
+Creation finishes before an atomic link rename publishes it; the previous
+generation is deleted afterwards. `stamp` and `engine` resolve through the same
+link to that generation's one-line input record and query engine. Each
+generation's engine link is an indirect Nix GC root, registered before
+extraction and removed with that generation on failure, retirement or `down`.
+Treat source and extracted relations as immutable; CodeQL may write its query
+result cache. Resolve the link for each request, and serialize queries on one
+generation: CodeQL's cache has an exclusive lock. A reader already holding the
+previous generation can be interrupted by its retirement, so finish it before
+refreshing. Legacy real-directory databases must be moved aside before `up`; the
+lifecycle refuses to replace them or delete a foreign symlink target.
+
+The Nix source is committed repository content. For each checkout, the shared
+base is `git archive $(git merge-base HEAD origin/main)`, under
+`$(git rev-parse --path-format=absolute --git-common-dir)/codeql/nix/`. Its key
+includes that commit, engine, creator, standing query pack, descriptor and
+lifecycle implementation. A lock builds and warms it once, then `cp -a` copies
+it to checkout generations. Hardlinks would let query and overlay writes corrupt
+the base. The standing pack is `nix-agentic-tools/nix-queries`. Overlay-capable
+extractors warm it with
+`database run-queries --cache-at-frontier --no-use-precompiled` and retain
+overlay caches with `database cleanup --cache-cleanup=overlay`. Ordinary
+fallback databases use `database run-queries --no-cache-at-frontier` and
+`database cleanup --cache-cleanup=trim` (CLI 2.27.3).
+
+The actual extractor's `codeql-extractor.yml` selects the source behavior. If it
+declares `overlay_support_version`, every refresh copies the pristine warmed
+base and overlays the entire working diff against its commit, including deleted
+and untracked `.nix` files. The stamp hashes those files' contents; overlays are
+never chained. The current v0.3.0 extractor has no such declaration: changes to
+HEAD rebuild from `git archive HEAD`, while HEAD equal to the base reuses its
+warm copy. Dirty edits are excluded in this fallback and do not invalidate its
+stamp. A moved merge-base or tool path does invalidate it. Shared bases survive
+`down` for other worktrees to reuse.
+
+The local-only `codeql-refresh` entry in `config/repo-validation.nix` uses the
+existing prek installer and `hooks:isolate-config` mechanism. After a merge or
+branch checkout it detaches a refresh of databases already up in the checkout,
+logging to each database's `refresh.log`; a file checkout does nothing. It reads
+the checkout's current lifecycle code and descriptor, including after a pull.
+The launcher keeps hook failures advisory even on a branch without the lifecycle
+script; explicit tasks still report failures. It never creates an inactive
+database, waits for extraction in Git, or changes `core.hooksPath`. No database
+task runs on shell entry. A fetch, commit or dirty edit needs an explicit `up`
+to check freshness.
+
+`codeql-lifecycle` fixture-tests stamps, committed snapshots, shared base reuse,
+independent copy inodes, cumulative overlays, publication and failure retention,
+forced refresh, registered engine root lifetime, down, detached hook selection
+and launcher failure handling without real CodeQL.
 
 `codeql-nix-strict-header` compiles the shipped Nix query pack, resolves the
 external language through merged and nested config files, checks conflicting

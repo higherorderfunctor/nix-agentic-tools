@@ -1085,7 +1085,8 @@ runs an aggregate without its dependency leaves.
 
 > **Last verified:** 2026-10-22 — generation includes devenv.yaml; lock
 > resolution remains an explicit network operation; the Nix CodeQL database task
-> reads committed HEAD and runs only when requested.
+> reads committed HEAD; named tasks are explicit and active databases also
+> refresh asynchronously after a merge or branch checkout.
 
 ```bash
 nix flake show                # List all outputs
@@ -1098,7 +1099,7 @@ treefmt                       # Format all files (formats only — lints nothing
 devenv tasks run devenv:git-hooks:run # Manual-stage local all-files diagnostic
 
 # Query committed Nix structure (dev/skills/nix-codeql/SKILL.md).
-devenv tasks run codeql:nix-db # Snapshot HEAD; skip a matching source/tool stamp
+devenv tasks run codeql:nix:up # Publish committed Nix source when its stamp is stale
 
 # Regenerate instructions, repo documents and devenv.yaml. `--mode before` is
 # load-bearing: without it devenv runs the aggregate and skips the leaves.
@@ -1134,12 +1135,14 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-20 — `service-secret-ordering` is the tenth
-> required context, from #2765's merge; CI watching exits on the first failure
-> through the `pr-review-loop` watcher; `test` evaluates only. The worker and
-> three review roles run inside a loop of at most 3 rounds; unsettled findings
-> go back to the orchestrator to validate. Merge teardown deletes the PR's
-> `archive/*` backups.
+> **Last verified:** 2026-10-22 — named CodeQL databases refresh asynchronously
+> through local prek post-merge and branch post-checkout hooks; missing launch
+> config skips refresh while preserving migration-mode legacy hooks;
+> `service-secret-ordering` is the tenth required context, from #2765's merge;
+> CI watching exits on the first failure through the `pr-review-loop` watcher;
+> `test` evaluates only. The worker and three review roles run inside a loop of
+> at most 3 rounds; unsettled findings go back to the orchestrator to validate.
+> Merge teardown deletes the PR's `archive/*` backups.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -1566,6 +1569,16 @@ installed hooks so that at hook-run time they resolve:
   under the agent sandbox the primary checkout is a read-only bind while the
   worktree is the writable one, so primary-anchored state would fail there. No
   `mkdir` is needed — prek creates `PREK_HOME` itself.
+
+The local-only `codeql-refresh` declaration uses the same installer and shared
+config rewrite for `post-merge` and `post-checkout`. Its worker detaches and
+refreshes only databases already up in that checkout; file checkouts do nothing.
+It reads the current checkout's lifecycle code/config and logs under that
+checkout's database state. Refresh cannot fail Git. If the launch config is
+missing, these two advisory hooks still run a migration-mode `.legacy` hook
+(such as branchless) before returning success; commit hooks keep their existing
+missing-config failure. No hook redirects `core.hooksPath` or edits a branchless
+marker block.
 
 The rewrite task takes a lock in the shared hooks directory and publishes each
 complete hook with a same-filesystem rename after preserving its mode. Two shell

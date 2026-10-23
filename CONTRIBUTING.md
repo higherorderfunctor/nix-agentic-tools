@@ -14,7 +14,8 @@ devenv shell          # enter dev shell with all tools
 
 > **Last verified:** 2026-10-22 — generation includes devenv.yaml; lock
 > resolution remains an explicit network operation; the Nix CodeQL database task
-> reads committed HEAD and runs only when requested.
+> reads committed HEAD; named tasks are explicit and active databases also
+> refresh asynchronously after a merge or branch checkout.
 
 ```bash
 nix flake show                # List all outputs
@@ -27,7 +28,7 @@ treefmt                       # Format all files (formats only — lints nothing
 devenv tasks run devenv:git-hooks:run # Manual-stage local all-files diagnostic
 
 # Query committed Nix structure (dev/skills/nix-codeql/SKILL.md).
-devenv tasks run codeql:nix-db # Snapshot HEAD; skip a matching source/tool stamp
+devenv tasks run codeql:nix:up # Publish committed Nix source when its stamp is stale
 
 # Regenerate instructions, repo documents and devenv.yaml. `--mode before` is
 # load-bearing: without it devenv runs the aggregate and skips the leaves.
