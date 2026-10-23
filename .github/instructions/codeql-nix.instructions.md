@@ -157,8 +157,8 @@ migration path. Revisit this note whenever those obligations change.
 
 # Nix language integration gate
 
-> **Last verified:** 2026-10-23 — the bootstrap check passed 31 boundary cases
-> and both QL tests on x86_64-linux.
+> **Last verified:** 2026-10-23 — F0 shares pinned kit inputs and the canonical
+> location adapter with S1; its bootstrap proof remains test-only.
 
 ## Purpose and boundary
 
@@ -186,10 +186,10 @@ build inputs and temporary artifacts.
   `a1575b98a8cc19bcfa7bb6cb41be688cb3dae65c`; crate `codeql-extractor` `0.2.0`.
 - Parser runtime: `tree-sitter` `0.26.13` in the committed `Cargo.lock`.
 
-The fixed-output source hashes and Cargo vendor hash live in
-`checks/bootstrap.nix`; `Cargo.lock` fixes transitive dependencies. Changing the
-CLI requires a kit compatibility audit rather than silently keeping this proof
-valid.
+The fixed-output source hashes and Cargo vendor hash live in `lib/kit.nix`,
+shared by F0 and S1; the bootstrap fixture's `Cargo.lock` fixes transitive
+dependencies. Changing the CLI requires a kit compatibility audit rather than
+silently keeping this proof valid.
 
 ## Installed interfaces and join
 
@@ -204,9 +204,10 @@ archives. The test hook indexes `.nix` files in the current fixture directory,
 then separately launches the target producer into the same TRAP directory. Both
 producers publish completed files by rename before the CLI imports the database.
 
-`ql/codeql/Locations.qll` supplies an `overlay[local]` language interface:
-`File` exposes absolute and source-root-relative paths; `Location` exposes its
-file and start/end line/column. The generated syntax imports that interface.
+`ql/lib/codeql/Locations.qll` is the canonical `overlay[local]` language
+interface, copied into F0 by `checks/bootstrap.nix` and shared with S1: `File`
+exposes absolute and source-root-relative paths; `Location` exposes its file and
+start/end line/column. The generated syntax imports that interface.
 Same-basename statistics belong beside the library schema as well as beside the
 extractor schema.
 
@@ -300,7 +301,7 @@ prerequisites.
 # Nix CodeQL owner and test entry points
 
 > **Last verified:** 2026-10-23 — F3 registers the owner and explicit contract
-> checks; the language packs remain a skeleton.
+> checks; S1 adds combined-schema generation and standalone raw location tests.
 
 ## Purpose and fit
 
@@ -311,10 +312,10 @@ category through the existing owner registry, including this note and the
 [target](target-contract.md) contracts. No root owner allowlist or separate
 discovery mechanism is needed.
 
-`checks.nix` explicitly imports `checks/abi.nix`, `checks/bootstrap.nix` and
-`checks/contracts.nix`. Supporting files are not recursively discovered as
-checks. This keeps ownership local and lets a new domain add a deliberate check
-import without changing the root flake.
+`checks.nix` explicitly imports `checks/abi.nix`, `checks/bootstrap.nix`,
+`checks/contracts.nix` and `checks/raw-inventory.nix`. Supporting files are not
+recursively discovered as checks. This keeps ownership local and lets a new
+domain add a deliberate check import without changing the root flake.
 
 ## Checks and nonempty evidence
 
@@ -360,19 +361,20 @@ future evaluator completeness.
 
 Each pack has its own `qlpack.yml` at the reserved interface:
 
-- `ql/lib/`: `nix-agentic-tools/nix-all`, a library selecting
-  `evaluation.dbscheme` and extractor `nix`.
+- `ql/lib/`: `nix-agentic-tools/nix-all`, a library selecting `nix.dbscheme` and
+  extractor `nix`.
 - `ql/queries/`: `nix-agentic-tools/nix-queries`, depending on `nix-all`.
 - `ql/test/`: `nix-agentic-tools/nix-tests`, depending on `nix-all` and
   selecting extractor `nix`.
 
 All versions are `0.0.0`; these manifests establish identities, not an installed
-product. `ql/lib/evaluation.dbscheme` is a symlink to
-`../../schema/evaluation.dbscheme`, the handwritten-only F1 schema. It is
-neither S1's combined generated/handwritten schema nor an installed extractor
-schema. There is no production extractor, public QL API or query suite supplied
-by these manifests. The bootstrap's separate fixture packs remain disposable
-evidence.
+product. `ql/lib/nix.dbscheme` is a symlink to `../../generated/nix.dbscheme`,
+S1's combined generated/handwritten schema. S1's private raw QL and location
+adapter supply the library's syntax interface; `codeql-nix-raw-inventory` checks
+deterministic generation, inventory drift and standalone generated-node
+file/location traversal. There is no production extractor, public meaning API or
+query suite supplied by these manifests. The bootstrap's separate fixture packs
+remain disposable evidence.
 
 ## Adding a domain
 
@@ -392,11 +394,11 @@ output from the implementation.
 
 Keep shared pack manifests and the ABI coordinated instead of letting domains
 rewrite them independently. Change F1 first when relation semantics change;
-update F2's independent transport fixtures when that boundary changes. Future
-combined schema generation and extractor installation need their own checks
-before this note can claim those capabilities. Format changed files with
-`treefmt`, run the affected checks through CI and update this note when
-ownership or entry-point obligations change.
+update F2's independent transport fixtures when that boundary changes.
+Production extractor installation needs its own checks before this note can
+claim that capability. Format changed files with `treefmt`, run the affected
+checks through CI and update this note when ownership or entry-point obligations
+change.
 
 <!-- Fragment: packages/codeql-nix/docs/target-contract.md -->
 
