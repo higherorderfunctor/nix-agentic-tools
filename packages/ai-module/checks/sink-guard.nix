@@ -12,6 +12,8 @@
     "lib/testing/factory-harness.nix" = ["files = lib.mkOption {" "home = {"];
     "lib/testing/module-harness.nix" = ["enterTest = lib.mkOption {" "files = config.ai.files;" "files = lib.mkOption {" "home = {" "processes = lib.mkOption {" "systemd.user = {" "tasks = lib.mkOption {"];
     "packages/beads/modules/devenv/default.nix" = ["tasks ="];
+    # mkTree's input set of generated model files, not a native sink.
+    "packages/codeql-nix/lib/packaging.nix" = ["files = {"];
     # glab's keyring sync is a oneshot behind a path unit, outside ai.services
     # by decision (daemons only); it keeps its native units.
     "packages/glab/modules/homeManager/default.nix" = ["systemd.user.paths.glab-keyring-sync = {" "systemd.user.services.glab-keyring-sync = {"];

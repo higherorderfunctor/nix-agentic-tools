@@ -1,4 +1,5 @@
 {
+  inputs,
   lib,
   pkgs,
   self,
@@ -7,7 +8,7 @@
   checks = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
     codeql-nix-installed = let
       owner = ../.;
-      packaging = import ../lib/packaging.nix {inherit lib pkgs;};
+      packaging = import ../lib/packaging.nix {inherit inputs lib pkgs;};
     in
       pkgs.runCommand "codeql-nix-installed" {
         CODEQL_NIX_TEST_COMMAND = "${self.ciPackages.${pkgs.stdenv.hostPlatform.system}.codeql-nix}/bin/codeql";

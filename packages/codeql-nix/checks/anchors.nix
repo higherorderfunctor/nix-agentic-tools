@@ -1,4 +1,5 @@
 {
+  inputs,
   lib,
   pkgs,
   self,
@@ -44,7 +45,7 @@
         ln -s ${build}/bin/qltest.sh "$out/tools/autobuild.sh"
       '';
       owner = ../.;
-      packaging = import ../lib/packaging.nix {inherit lib pkgs;};
+      packaging = import ../lib/packaging.nix {inherit inputs lib pkgs;};
       strictShell = import ../../../lib/strict-shell-application.nix pkgs;
     in
       pkgs.runCommand "codeql-nix-anchors" {

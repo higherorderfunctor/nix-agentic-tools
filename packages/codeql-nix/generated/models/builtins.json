@@ -1,0 +1,2555 @@
+{
+  "builtins": [
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Abort Nix expression evaluation and print the error message *s*.\n    ",
+      "evidence": {
+        "endLine": 996,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 982
+      },
+      "exports": [
+        {
+          "name": "abort",
+          "namespace": ""
+        },
+        {
+          "name": "abort",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:8b899911e2544ec69bcab36e736c6722f539759213087383806294224ca17c59",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the sum of the numbers *e1* and *e2*.\n    ",
+      "evidence": {
+        "endLine": 4298,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4291
+      },
+      "exports": [
+        {
+          "name": "__add",
+          "namespace": ""
+        },
+        {
+          "name": "add",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:ade113337b637e587021850bce19bddda2e1641e702587a203304e13747c7198",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Create a copy of the given string where a single\n      [constant](@docroot@/language/string-context.md#string-context-constant)\n      string context element is turned into a\n      [derivation deep](@docroot@/language/string-context.md#string-context-element-derivation-deep)\n      string context element.\n\n      The store path that is the constant string context element should point to a valid derivation, and end in `.drv`.\n\n      The original string context element must not be empty or have multiple elements, and it must not have any other type of element other than a constant or derivation deep element.\n      The latter is supported so this function is idempotent.\n\n      This is the opposite of [`builtins.unsafeDiscardOutputDependency`](#builtins-unsafeDiscardOutputDependency).\n    ",
+      "evidence": {
+        "endLine": 160,
+        "path": "src/libexpr/primops/context.cc",
+        "startLine": 143
+      },
+      "exports": [
+        {
+          "name": "__addDrvOutputDependencies",
+          "namespace": ""
+        },
+        {
+          "name": "addDrvOutputDependencies",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:cfbbc1e3294b4ef22442cb24bd88a7c43d4a65139b6d88b47d7e447465df7d29",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": null,
+      "evidence": {
+        "endLine": 1044,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1037
+      },
+      "exports": [
+        {
+          "name": "__addErrorContext",
+          "namespace": ""
+        },
+        {
+          "name": "addErrorContext",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:71f9baa74e63ebe0ec0869c95e4de79984b423836f2fc29639ee906dc4ff2ed2",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if the function *pred* returns `true` for all elements\n      of *list*, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 3960,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3952
+      },
+      "exports": [
+        {
+          "name": "__all",
+          "namespace": ""
+        },
+        {
+          "name": "all",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:2bea4f452cd7e64881da61bebed80e81be14faebe5c392b4ea8e12c91c37c6d9",
+      "parameters": ["pred", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if the function *pred* returns `true` for at least one\n      element of *list*, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 3945,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3937
+      },
+      "exports": [
+        {
+          "name": "__any",
+          "namespace": ""
+        },
+        {
+          "name": "any",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:fb47ffcde4117b363143189ee19be059c77dde5f8be8c1b1e46f607246de5d32",
+      "parameters": ["pred", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": null,
+      "evidence": {
+        "endLine": 327,
+        "path": "src/libexpr/primops/context.cc",
+        "startLine": 327
+      },
+      "exports": [
+        {
+          "name": "__appendContext",
+          "namespace": ""
+        },
+        {
+          "name": "appendContext",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:f7beb31d5a9ebf924c6a61f458220e3915779c8692e66bbcb32f90d2cbed7eaa",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the names of the attributes in the set *set* in an\n      alphabetically sorted list. For instance, `builtins.attrNames { y\n      = 1; x = \"foo\"; }` evaluates to `[ \"x\" \"y\" ]`.\n    ",
+      "evidence": {
+        "endLine": 3055,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3046
+      },
+      "exports": [
+        {
+          "name": "__attrNames",
+          "namespace": ""
+        },
+        {
+          "name": "attrNames",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:13cc28a807629d80b7cfb1aad9cf9782ed931d619b8397433d2059a5ee8645f9",
+      "parameters": ["set"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the values of the attributes in the set *set* in the order\n      corresponding to the sorted attribute names.\n    ",
+      "evidence": {
+        "endLine": 3087,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3079
+      },
+      "exports": [
+        {
+          "name": "__attrValues",
+          "namespace": ""
+        },
+        {
+          "name": "attrValues",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:4bf3536a597cbc62290437169f11d1b44cffe347ddb0400efe9d00f5f918ac62",
+      "parameters": ["set"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the *base name* of either a [path value](@docroot@/language/types.md#type-path) *x* or a string *x*, depending on which type is passed, and according to the following rules.\n\n      For a path value, the *base name* is considered to be the part of the path after the last directory separator, including any file extensions.\n      This is the simple case, as path values don't have trailing slashes.\n\n      When the argument is a string, a more involved logic applies. If the string ends with a `/`, only this one final slash is removed.\n\n      After this, the *base name* is returned as previously described, assuming `/` as the directory separator. (Note that evaluation must be platform independent.)\n\n      This is somewhat similar to the [GNU `basename`](https://www.gnu.org/software/coreutils/manual/html_node/basename-invocation.html) command, but GNU `basename` strips any number of trailing slashes.\n    ",
+      "evidence": {
+        "endLine": 2046,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2030
+      },
+      "exports": [
+        {
+          "name": "baseNameOf",
+          "namespace": ""
+        },
+        {
+          "name": "baseNameOf",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:fcd299495b3db720a251e1db6e089a65dc6595eb6bfac8e7c84f9b0bb44139db",
+      "parameters": ["x"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the bitwise AND of the integers *e1* and *e2*.\n    ",
+      "evidence": {
+        "endLine": 4409,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4402
+      },
+      "exports": [
+        {
+          "name": "__bitAnd",
+          "namespace": ""
+        },
+        {
+          "name": "bitAnd",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:f5de3fa99401cd2e8f9a7bd0e92eba657e15698562cb98f1b15af548f1baa944",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the bitwise OR of the integers *e1* and *e2*.\n    ",
+      "evidence": {
+        "endLine": 4426,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4419
+      },
+      "exports": [
+        {
+          "name": "__bitOr",
+          "namespace": ""
+        },
+        {
+          "name": "bitOr",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:cf97fa3896698cbd922e8943591948e091d3a4c84ad74f8c61f82b66658a5373",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the bitwise XOR of the integers *e1* and *e2*.\n    ",
+      "evidence": {
+        "endLine": 4443,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4436
+      },
+      "exports": [
+        {
+          "name": "__bitXor",
+          "namespace": ""
+        },
+        {
+          "name": "bitXor",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:18d4199777f112a849f35bc71c04c99071df7a88fa1fc37759063d6ba5ac1f6b",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      In debug mode (enabled using `--debugger`), pause Nix expression evaluation and enter the REPL.\n      Otherwise, return the argument `v`.\n    ",
+      "evidence": {
+        "endLine": 980,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 959
+      },
+      "exports": [
+        {
+          "name": "break",
+          "namespace": ""
+        },
+        {
+          "name": "break",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:30996f7f5bbb8a0de9b660846bf6ec75cfb3177445b1ea9ae9119386ecdea6d9",
+      "parameters": ["v"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n          Contains all the built-in functions and values.\n\n          Since built-in functions were added over time, [testing for attributes](./operators.md#has-attribute) in `builtins` can be used for graceful fallback on older Nix installations:\n\n          ```nix\n          # if hasContext is not available, we assume `s` has a context\n          if builtins ? hasContext then builtins.hasContext s else true\n          ```\n        ",
+      "evidence": {
+        "endLine": 5167,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5152
+      },
+      "exports": [
+        {
+          "name": "builtins",
+          "namespace": ""
+        },
+        {
+          "name": "builtins",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:7b961cdeffe2f53da38c775ec7e88565bbc3f0aeee8968930ebdb3427f2bdf53",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Collect each attribute named *attr* from a list of attribute\n      sets.  Attrsets that don't contain the named attribute are\n      ignored. For example,\n\n      ```nix\n      builtins.catAttrs \"a\" [{a = 1;} {b = 0;} {a = 2;}]\n      ```\n\n      evaluates to `[1 2]`.\n    ",
+      "evidence": {
+        "endLine": 3462,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3447
+      },
+      "exports": [
+        {
+          "name": "__catAttrs",
+          "namespace": ""
+        },
+        {
+          "name": "catAttrs",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:ee9e35d1eef1e950b25dfcabf91ac9bdd4886e9ef294f67b94e865173c4c5007",
+      "parameters": ["attr", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n        Rounds and converts *number* to the next higher NixInt value if possible, i.e. `ceil *number* >= *number*` and\n        `ceil *number* - *number* < 1`.\n\n        An evaluation error is thrown, if there exists no such NixInt value `ceil *number*`.\n        Due to bugs in previous Nix versions an evaluation error might be thrown, if the datatype of *number* is\n        a NixInt and if `*number* < -9007199254740992` or `*number* > 9007199254740992`.\n\n        If the datatype of *number* is neither a NixInt (signed 64-bit integer) nor a NixFloat\n        (IEEE-754 double-precision floating-point number), an evaluation error is thrown.\n    ",
+      "evidence": {
+        "endLine": 1099,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1084
+      },
+      "exports": [
+        {
+          "name": "__ceil",
+          "namespace": ""
+        },
+        {
+          "name": "ceil",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:b077e4f77335fdcc97b3e8f8939932dc2de19577e2a97afea32f0d11723f162a",
+      "parameters": ["number"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Compare two strings representing versions and return `-1` if\n      version *s1* is older than version *s2*, `0` if they are the same,\n      and `1` if *s1* is newer than *s2*. The version comparison\n      algorithm is the same as the one used by [`nix-env\n      -u`](../command-ref/nix-env/upgrade.md).\n    ",
+      "evidence": {
+        "endLine": 5103,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5092
+      },
+      "exports": [
+        {
+          "name": "__compareVersions",
+          "namespace": ""
+        },
+        {
+          "name": "compareVersions",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:96be67426e56230b1709b4717226e0a9b39b7d0ce32d432642d3520808ce58ec",
+      "parameters": ["s1", "s2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Concatenate a list of lists into a single list.\n    ",
+      "evidence": {
+        "endLine": 3848,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3841
+      },
+      "exports": [
+        {
+          "name": "__concatLists",
+          "namespace": ""
+        },
+        {
+          "name": "concatLists",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:757f8126883ec39ea2240d10fa78d881046d11b829041f157ddf39b97ebe6cd2",
+      "parameters": ["lists"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      This function is equivalent to `builtins.concatLists (map f list)`\n      but is more efficient.\n    ",
+      "evidence": {
+        "endLine": 4264,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4256
+      },
+      "exports": [
+        {
+          "name": "__concatMap",
+          "namespace": ""
+        },
+        {
+          "name": "concatMap",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:b953af7ec470b70ca36aecb4a6a7ad44513d4b7a18a2a2616cc747a7f4b3b58e",
+      "parameters": ["f", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Concatenate a list of strings with a separator between each\n      element, e.g. `concatStringsSep \"/\" [\"usr\" \"local\" \"bin\"] ==\n      \"usr/local/bin\"`.\n    ",
+      "evidence": {
+        "endLine": 4967,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4958
+      },
+      "exports": [
+        {
+          "name": "__concatStringsSep",
+          "namespace": ""
+        },
+        {
+          "name": "concatStringsSep",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:f0e79d0dc7956f0956d89e8d9558238dd2ee3fd989d65c438b265bed13f66252",
+      "parameters": ["separator", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the specified representation of a hash string, based on the attributes presented in *args*:\n\n      - `hash`\n\n        The hash to be converted.\n        The hash format is detected automatically.\n\n      - `hashAlgo`\n\n        The algorithm used to create the hash. Must be one of\n        - `\"md5\"`\n        - `\"sha1\"`\n        - `\"sha256\"`\n        - `\"sha512\"`\n\n        The attribute may be omitted when `hash` is an [SRI hash](https://www.w3.org/TR/SRI/#the-integrity-attribute) or when the hash is prefixed with the hash algorithm name followed by a colon.\n        That `<hashAlgo>:<hashBody>` syntax is supported for backwards compatibility with existing tooling.\n\n      - `toHashFormat`\n\n        The format of the resulting hash. Must be one of\n        - `\"base16\"`\n        - `\"nix32\"`\n        - `\"base32\"` (deprecated alias for `\"nix32\"`)\n        - `\"base64\"`\n        - `\"sri\"`\n\n      The result hash is the *toHashFormat* representation of the hash *hash*.\n\n      > **Example**\n      >\n      >   Convert a SHA256 hash in Base16 to SRI:\n      >\n      > ```nix\n      > builtins.convertHash {\n      >   hash = \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\";\n      >   toHashFormat = \"sri\";\n      >   hashAlgo = \"sha256\";\n      > }\n      > ```\n      >\n      >     \"sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\"\n\n      > **Example**\n      >\n      >   Convert a SHA256 hash in SRI to Base16:\n      >\n      > ```nix\n      > builtins.convertHash {\n      >   hash = \"sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\";\n      >   toHashFormat = \"base16\";\n      > }\n      > ```\n      >\n      >     \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n\n      > **Example**\n      >\n      >   Convert a hash in the form `<hashAlgo>:<hashBody>` in Base16 to SRI:\n      >\n      > ```nix\n      > builtins.convertHash {\n      >   hash = \"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\";\n      >   toHashFormat = \"sri\";\n      > }\n      > ```\n      >\n      >     \"sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\"\n    ",
+      "evidence": {
+        "endLine": 4715,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4641
+      },
+      "exports": [
+        {
+          "name": "__convertHash",
+          "namespace": ""
+        },
+        {
+          "name": "convertHash",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:4945efb4b73e71a97dd174ed6113d3a518924654ed2468aab2967b13a74a5bbc",
+      "parameters": ["args"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      This is like `seq e1 e2`, except that *e1* is evaluated *deeply*:\n      if it’s a list or set, its elements or attributes are also\n      evaluated recursively.\n    ",
+      "evidence": {
+        "endLine": 1274,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1265
+      },
+      "exports": [
+        {
+          "name": "__deepSeq",
+          "namespace": ""
+        },
+        {
+          "name": "deepSeq",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:552da0a6e876d3ae44d0d78dbc908e75ed94d77fccfea15e8a6a068cbfda25bd",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": null,
+      "evidence": {
+        "endLine": 5447,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5442
+      },
+      "exports": [
+        {
+          "name": "derivation",
+          "namespace": ""
+        },
+        {
+          "name": "derivation",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:d8655ae78f47cefbaf9fbaec5edb53c5615aaff3b4ecbd6eb3c400d561e3d3e4",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": null,
+      "evidence": {
+        "endLine": 1858,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1853
+      },
+      "exports": [
+        {
+          "name": "derivationStrict",
+          "namespace": ""
+        },
+        {
+          "name": "derivationStrict",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:3a6a6e416322915fc7d32e879ffeb8bef1f3346df8a087300fc70fde83e0b6ce",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the directory part of the string *s*, that is, everything\n      before the final slash in the string. This is similar to the GNU\n      `dirname` command.\n    ",
+      "evidence": {
+        "endLine": 2080,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2071
+      },
+      "exports": [
+        {
+          "name": "dirOf",
+          "namespace": ""
+        },
+        {
+          "name": "dirOf",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:267d1d69dd2b8dcfe52e5548a0fb6646d4b52d82b0192b23fc0fdd6d7b0015c4",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the quotient of the numbers *e1* and *e2*.\n    ",
+      "evidence": {
+        "endLine": 4393,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4386
+      },
+      "exports": [
+        {
+          "name": "__div",
+          "namespace": ""
+        },
+        {
+          "name": "div",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:fed018cfc98e46791a033ad9d8442849ba75a3377e4caf9896edd8780748baf5",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if a value equal to *x* occurs in the list *xs*, and\n      `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 3826,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3818
+      },
+      "exports": [
+        {
+          "name": "__elem",
+          "namespace": ""
+        },
+        {
+          "name": "elem",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:7b7fd43ff57d5b2a11d5a906b267096242d306754ab29e11e134d91ebd8f04f8",
+      "parameters": ["x", "xs"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return element *n* from the list *xs*. Elements are counted starting\n      from 0. A fatal error occurs if the index is out of bounds.\n    ",
+      "evidence": {
+        "endLine": 3668,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3660
+      },
+      "exports": [
+        {
+          "name": "__elemAt",
+          "namespace": ""
+        },
+        {
+          "name": "elemAt",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:32520591e764f54b0eb96c2a71510b02d49f1431c279323673f12b3d0a77df66",
+      "parameters": ["xs", "n"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n          Primitive value.\n\n          It can be returned by\n          [comparison operators](@docroot@/language/operators.md#comparison)\n          and used in\n          [conditional expressions](@docroot@/language/syntax.md#conditionals).\n\n          The name `false` is not special, and can be shadowed:\n\n          ```nix-repl\n          nix-repl> let false = 1; in false\n          1\n          ```\n        ",
+      "evidence": {
+        "endLine": 5213,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5193
+      },
+      "exports": [
+        {
+          "name": "false",
+          "namespace": ""
+        },
+        {
+          "name": "false",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:5bb22aed7307e44819cfd5d93eaa3b486b5b5ed93a09816b6f9ea291864593bf",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Fetch a path from git. *args* can be a URL, in which case the HEAD\n      of the repo at that URL is fetched. Otherwise, it can be an\n      attribute with the following attributes (all except `url` optional):\n\n      - `url`\n\n        The URL of the repo.\n\n      - `name` (default: `source`)\n\n        The name of the directory the repo should be exported to in the store.\n\n      - `rev` (default: *the tip of `ref`*)\n\n        The [Git revision] to fetch.\n        This is typically a commit hash.\n\n        [Git revision]: https://git-scm.com/docs/git-rev-parse#_specifying_revisions\n\n      - `ref` (default: `HEAD`)\n\n        The [Git reference] under which to look for the requested revision.\n        This is often a branch or tag name.\n\n        [Git reference]: https://git-scm.com/book/en/v2/Git-Internals-Git-References\n\n        This option has no effect once `shallow` cloning is enabled.\n\n        By default, the `ref` value is prefixed with `refs/heads/`.\n        As of 2.3.0, Nix doesn't prefix `refs/heads/` if `ref` starts with `refs/`.\n\n      - `submodules` (default: `false`)\n\n        A Boolean parameter that specifies whether submodules should be checked out.\n\n      - `exportIgnore` (default: `true`)\n\n        A Boolean parameter that specifies whether `export-ignore` from `.gitattributes` should be applied.\n        This approximates part of the `git archive` behavior.\n\n        Enabling this option is not recommended because it is unknown whether the Git developers commit to the reproducibility of `export-ignore` in newer Git versions.\n\n      - `shallow` (default: `false`)\n\n        Make a shallow clone when fetching the Git tree.\n        When this is enabled, the options `ref` and `allRefs` have no effect anymore.\n\n      - `lfs` (default: `false`)\n\n        A boolean that when `true` specifies that [Git LFS] files should be fetched.\n\n        [Git LFS]: https://git-lfs.com/\n\n      - `allRefs`\n\n        Whether to fetch all references (eg. branches and tags) of the repository.\n        With this argument being true, it's possible to load a `rev` from *any* `ref`.\n        (by default only `rev`s from the specified `ref` are supported).\n\n        This option has no effect once `shallow` cloning is enabled.\n\n      - `verifyCommit` (default: `true` if `publicKey` or `publicKeys` are provided, otherwise `false`)\n\n        Whether to check `rev` for a signature matching `publicKey` or `publicKeys`.\n        If `verifyCommit` is enabled, then `fetchGit` cannot use a local repository with uncommitted changes.\n        Requires the [`verified-fetches` experimental feature](@docroot@/development/experimental-features.md#xp-feature-verified-fetches).\n\n      - `publicKey`\n\n        The public key against which `rev` is verified if `verifyCommit` is enabled.\n        Requires the [`verified-fetches` experimental feature](@docroot@/development/experimental-features.md#xp-feature-verified-fetches).\n\n      - `keytype` (default: `\"ssh-ed25519\"`)\n\n        The key type of `publicKey`.\n        Possible values:\n        - `\"ssh-dsa\"`\n        - `\"ssh-ecdsa\"`\n        - `\"ssh-ecdsa-sk\"`\n        - `\"ssh-ed25519\"`\n        - `\"ssh-ed25519-sk\"`\n        - `\"ssh-rsa\"`\n        Requires the [`verified-fetches` experimental feature](@docroot@/development/experimental-features.md#xp-feature-verified-fetches).\n\n      - `publicKeys`\n\n        The public keys against which `rev` is verified if `verifyCommit` is enabled.\n        Must be given as a list of attribute sets with the following form:\n\n        ```nix\n        {\n          key = \"<public key>\";\n          type = \"<key type>\"; # optional, default: \"ssh-ed25519\"\n        }\n        ```\n\n        Requires the [`verified-fetches` experimental feature](@docroot@/development/experimental-features.md#xp-feature-verified-fetches).\n\n\n      Here are some examples of how to use `fetchGit`.\n\n        - To fetch a private repository over SSH:\n\n          ```nix\n          builtins.fetchGit {\n            url = \"git@github.com:my-secret/repository.git\";\n            ref = \"master\";\n            rev = \"adab8b916a45068c044658c4158d81878f9ed1c3\";\n          }\n          ```\n\n        - To fetch an arbitrary reference:\n\n          ```nix\n          builtins.fetchGit {\n            url = \"https://github.com/NixOS/nix.git\";\n            ref = \"refs/heads/0.5-release\";\n          }\n          ```\n\n        - If the revision you're looking for is in the default branch of\n          the git repository you don't strictly need to specify the branch\n          name in the `ref` attribute.\n\n          However, if the revision you're looking for is in a future\n          branch for the non-default branch you will need to specify the\n          the `ref` attribute as well.\n\n          ```nix\n          builtins.fetchGit {\n            url = \"https://github.com/nixos/nix.git\";\n            rev = \"841fcbd04755c7a2865c51c1e2d3b045976b7452\";\n            ref = \"1.11-maintenance\";\n          }\n          ```\n\n          > **Note**\n          >\n          > It is nice to always specify the branch which a revision\n          > belongs to. Without the branch being specified, the fetcher\n          > might fail if the default branch changes. Additionally, it can\n          > be confusing to try a commit from a non-default branch and see\n          > the fetch fail. If the branch is specified the fault is much\n          > more obvious.\n\n        - If the revision you're looking for is in the default branch of\n          the git repository you may omit the `ref` attribute.\n\n          ```nix\n          builtins.fetchGit {\n            url = \"https://github.com/nixos/nix.git\";\n            rev = \"841fcbd04755c7a2865c51c1e2d3b045976b7452\";\n          }\n          ```\n\n        - To fetch a specific tag:\n\n          ```nix\n          builtins.fetchGit {\n            url = \"https://github.com/nixos/nix.git\";\n            ref = \"refs/tags/1.9\";\n          }\n          ```\n\n        - To fetch the latest version of a remote branch:\n\n          ```nix\n          builtins.fetchGit {\n            url = \"ssh://git@github.com/nixos/nix.git\";\n            ref = \"master\";\n          }\n          ```\n\n        - To verify the commit signature:\n\n          ```nix\n          builtins.fetchGit {\n            url = \"ssh://git@github.com/nixos/nix.git\";\n            verifyCommit = true;\n            publicKeys = [\n                {\n                  type = \"ssh-ed25519\";\n                  key = \"AAAAC3NzaC1lZDI1NTE5AAAAIArPKULJOid8eS6XETwUjO48/HKBWl7FTCK0Z//fplDi\";\n                }\n            ];\n          }\n          ```\n\n          Nix refetches the branch according to the [`tarball-ttl`](@docroot@/command-ref/conf-file.md#conf-tarball-ttl) setting.\n\n          This behavior is disabled in [pure evaluation mode](@docroot@/command-ref/conf-file.md#conf-pure-eval).\n\n        - To fetch the content of a checked-out work directory:\n\n          ```nix\n          builtins.fetchGit ./work-dir\n          ```\n\n      If the URL points to a local directory, and no `ref` or `rev` is\n      given, `fetchGit` uses the current content of the checked-out\n      files, even if they are not committed or added to Git's index. It\n      only considers files added to the Git repository, as listed by `git ls-files`.\n    ",
+      "evidence": {
+        "endLine": 801,
+        "path": "src/libexpr/primops/fetchTree.cc",
+        "startLine": 593
+      },
+      "exports": [
+        {
+          "name": "fetchGit",
+          "namespace": ""
+        },
+        {
+          "name": "fetchGit",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:37e5666ef3849a37639f3f88a536e72c0da9c61fbba1fdd03ae650ff0b0d7952",
+      "parameters": ["args"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": null,
+      "evidence": {
+        "endLine": 102,
+        "path": "src/libexpr/primops/fetchMercurial.cc",
+        "startLine": 102
+      },
+      "exports": [
+        {
+          "name": "fetchMercurial",
+          "namespace": ""
+        },
+        {
+          "name": "fetchMercurial",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:e12d3cb36d358ee2d94f525c967e5d2e338f53a4f3edd3c71101a7a5ce796d5d",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Download the specified URL, unpack it and return the path of the\n      unpacked tree. The file must be a tape archive (`.tar`) compressed\n      with `gzip`, `bzip2` or `xz`. If the tarball consists of a\n      single directory, then the top-level path component of the files\n      in the tarball is removed. The typical use of the function is to\n      obtain external Nix expression dependencies, such as a\n      particular version of Nixpkgs, e.g.\n\n      ```nix\n      with import (fetchTarball https://github.com/NixOS/nixpkgs/archive/nixos-14.12.tar.gz) {};\n\n      stdenv.mkDerivation { … }\n      ```\n\n      The fetched tarball is cached for a certain amount of time (1\n      hour by default) in `~/.cache/nix/tarballs/`. You can change the\n      cache timeout either on the command line with `--tarball-ttl`\n      *number-of-seconds* or in the Nix configuration file by adding\n      the line `tarball-ttl = ` *number-of-seconds*.\n\n      Note that when obtaining the hash with `nix-prefetch-url` the\n      option `--unpack` is required.\n\n      This function can also verify the contents against a hash. In that\n      case, the function takes a set instead of a URL. The set requires\n      the attribute `url` and the attribute `sha256`, e.g.\n\n      ```nix\n      with import (fetchTarball {\n        url = \"https://github.com/NixOS/nixpkgs/archive/nixos-14.12.tar.gz\";\n        sha256 = \"1jppksrfvbk5ypiqdz4cddxdl8z6zyzdb2srq8fcffr327ld5jj2\";\n      }) {};\n\n      stdenv.mkDerivation { … }\n      ```\n\n      Not available in [restricted evaluation mode](@docroot@/command-ref/conf-file.md#conf-restrict-eval).\n    ",
+      "evidence": {
+        "endLine": 585,
+        "path": "src/libexpr/primops/fetchTree.cc",
+        "startLine": 542
+      },
+      "exports": [
+        {
+          "name": "fetchTarball",
+          "namespace": ""
+        },
+        {
+          "name": "fetchTarball",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:6cbed90311f6f5194de309b43ecebdb1e7ad309f94d6de0346be45c68ffc4211",
+      "parameters": ["args"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": null,
+      "evidence": {
+        "endLine": 362,
+        "path": "src/libexpr/primops/fetchTree.cc",
+        "startLine": 236
+      },
+      "exports": [
+        {
+          "name": "fetchTree",
+          "namespace": ""
+        },
+        {
+          "name": "fetchTree",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:51fe8743595e41284da3953f659738a732d89a34c7c30b2920994ecfc9ca2147",
+      "parameters": ["input"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Download the specified URL and return the path of the downloaded file.\n      `arg` can be either a string denoting the URL, or an attribute set with the following attributes:\n\n      - `url`\n\n        The URL of the file to download.\n\n      - `name` (default: the last path component of the URL)\n\n        A name for the file in the store. This can be useful if the URL has any\n        characters that are invalid for the store.\n\n      Not available in [restricted evaluation mode](@docroot@/command-ref/conf-file.md#conf-restrict-eval).\n    ",
+      "evidence": {
+        "endLine": 535,
+        "path": "src/libexpr/primops/fetchTree.cc",
+        "startLine": 516
+      },
+      "exports": [
+        {
+          "name": "__fetchurl",
+          "namespace": ""
+        },
+        {
+          "name": "fetchurl",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:75568689de110c2021bfaf4efcdb092e9f339bb95df9b103331754876a66f904",
+      "parameters": ["arg"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return a list consisting of the elements of *list* for which the\n      function *f* returns `true`.\n    ",
+      "evidence": {
+        "endLine": 3803,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3795
+      },
+      "exports": [
+        {
+          "name": "__filter",
+          "namespace": ""
+        },
+        {
+          "name": "filter",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:2b58f609464dc3d4583861f1790c8c51873d119aeebedb9238b1ad2a0c88522b",
+      "parameters": ["f", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      > **Warning**\n      >\n      > `filterSource` should not be used to filter store paths. Since\n      > `filterSource` uses the name of the input directory while naming\n      > the output directory, doing so produces a directory name in\n      > the form of `<hash2>-<hash>-<name>`, where `<hash>-<name>` is\n      > the name of the input directory. Since `<hash>` depends on the\n      > unfiltered directory, the name of the output directory\n      > indirectly depends on files that are filtered out by the\n      > function. This triggers a rebuild even when a filtered out\n      > file is changed. Use `builtins.path` instead, which allows\n      > specifying the name of the output directory.\n\n      This function allows you to copy sources into the Nix store while\n      filtering certain files. For instance, suppose that you want to use\n      the directory `source-dir` as an input to a Nix expression, e.g.\n\n      ```nix\n      stdenv.mkDerivation {\n        ...\n        src = ./source-dir;\n      }\n      ```\n\n      However, if `source-dir` is a Subversion working copy, then all of\n      those annoying `.svn` subdirectories are also copied to the\n      store. Worse, the contents of those directories may change a lot,\n      causing lots of spurious rebuilds. With `filterSource` you can\n      filter out the `.svn` directories:\n\n      ```nix\n      src = builtins.filterSource\n        (path: type: type != \"directory\" || baseNameOf path != \".svn\")\n        ./source-dir;\n      ```\n\n      Thus, the first argument *e1* must be a predicate function that is\n      called for each regular file, directory or symlink in the source\n      tree *e2*. If the function returns `true`, the file is copied to the\n      Nix store, otherwise it is omitted. The function is called with two\n      arguments. The first is the full path of the file. The second is a\n      string that identifies the type of the file, which is either\n      `\"regular\"`, `\"directory\"`, `\"symlink\"` or `\"unknown\"` (for other\n      kinds of files such as device nodes or fifos — but note that those\n      cannot be copied to the Nix store, so if the predicate returns\n      `true` for them, the copy fails). If you exclude a directory,\n      the entire corresponding subtree of *e2* is excluded.\n    ",
+      "evidence": {
+        "endLine": 2939,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2886
+      },
+      "exports": [
+        {
+          "name": "__filterSource",
+          "namespace": ""
+        },
+        {
+          "name": "filterSource",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:f16831f3227e6d9ad1716e0ed60b4360dad474dd46bedbf85260968fe568da7e",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Find *lookup-path* in *search-path*.\n\n      [Lookup path](@docroot@/language/constructs/lookup-path.md) expressions are [desugared](https://en.wikipedia.org/wiki/Syntactic_sugar) using this and [`builtins.nixPath`](#builtins-nixPath):\n\n      ```nix\n      <nixpkgs>\n      ```\n\n      is equivalent to:\n\n      ```nix\n      builtins.findFile builtins.nixPath \"nixpkgs\"\n      ```\n\n      A search path is represented as a list of [attribute sets](./types.md#type-attrs) with two attributes:\n      - `prefix` is a relative path.\n      - `path` denotes a file system location\n\n      Examples of search path attribute sets:\n\n      - ```\n        {\n          prefix = \"\";\n          path = \"/nix/var/nix/profiles/per-user/root/channels\";\n        }\n        ```\n      - ```\n        {\n          prefix = \"nixos-config\";\n          path = \"/etc/nixos/configuration.nix\";\n        }\n        ```\n      - ```\n        {\n          prefix = \"nixpkgs\";\n          path = \"https://github.com/NixOS/nixpkgs/tarballs/master\";\n        }\n        ```\n      - ```\n        {\n          prefix = \"nixpkgs\";\n          path = \"channel:nixpkgs-unstable\";\n        }\n        ```\n      - ```\n        {\n          prefix = \"flake-compat\";\n          path = \"flake:github:edolstra/flake-compat\";\n        }\n        ```\n\n      The lookup algorithm checks each entry until a match is found, returning a [path value](@docroot@/language/types.md#type-path) of the match:\n\n      - If a prefix of `lookup-path` matches `prefix`, then the remainder of *lookup-path* (the \"suffix\") is searched for within the directory denoted by `path`.\n        The contents of `path` may need to be downloaded at this point to look inside.\n\n      - If the suffix is found inside that directory, then the entry is a match.\n        The combined absolute path of the directory (now downloaded if need be) and the suffix is returned.\n\n      > **Example**\n      >\n      > A *search-path* value\n      >\n      > ```\n      > [\n      >   {\n      >     prefix = \"\";\n      >     path = \"/home/eelco/Dev\";\n      >   }\n      >   {\n      >     prefix = \"nixos-config\";\n      >     path = \"/etc/nixos\";\n      >   }\n      > ]\n      > ```\n      >\n      > and a *lookup-path* value `\"nixos-config\"` causes Nix to try `/home/eelco/Dev/nixos-config` and `/etc/nixos` in that order and return the first path that exists.\n\n      If `path` starts with `http://` or `https://`, it is interpreted as the URL of a tarball to be downloaded and unpacked to a temporary location.\n      The tarball must consist of a single top-level directory.\n\n      The URLs of the tarballs from the official `nixos.org` channels can be abbreviated as `channel:<channel-name>`.\n      See [documentation on `nix-channel`](@docroot@/command-ref/nix-channel.md) for details about channels.\n\n      > **Example**\n      >\n      > These two search path entries are equivalent:\n      >\n      > - ```\n      >   {\n      >     prefix = \"nixpkgs\";\n      >     path = \"channel:nixpkgs-unstable\";\n      >   }\n      >   ```\n      > - ```\n      >   {\n      >     prefix = \"nixpkgs\";\n      >     path = \"https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz\";\n      >   }\n      >   ```\n\n      Search paths can also point to source trees using [flake URLs](@docroot@/command-ref/new-cli/nix3-flake.md#url-like-syntax).\n\n\n      > **Example**\n      >\n      > The search path entry\n      >\n      > ```\n      > {\n      >   prefix = \"nixpkgs\";\n      >   path = \"flake:nixpkgs\";\n      > }\n      > ```\n      > specifies that the prefix `nixpkgs` shall refer to the source tree downloaded from the `nixpkgs` entry in the flake registry.\n      >\n      > Similarly\n      >\n      > ```\n      > {\n      >   prefix = \"nixpkgs\";\n      >   path = \"flake:github:nixos/nixpkgs/nixos-22.05\";\n      > }\n      > ```\n      >\n      > makes `<nixpkgs>` refer to a particular branch of the `NixOS/nixpkgs` repository on GitHub.\n    ",
+      "evidence": {
+        "endLine": 2309,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2176
+      },
+      "exports": [
+        {
+          "name": "__findFile",
+          "namespace": ""
+        },
+        {
+          "name": "findFile",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:6e54946656bbca7cb1c90bfe29c154a9c6fd0b77ca49d872529e917818dadd2f",
+      "parameters": ["search-path", "lookup-path"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "unknown",
+      "documentation": null,
+      "evidence": null,
+      "exports": [
+        {
+          "name": "__flakeRefToString",
+          "namespace": ""
+        },
+        {
+          "name": "flakeRefToString",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:fec5d0cb39d74694336ead52bfd4204092532b98358fa000e334bc559983624d",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n        Rounds and converts *number* to the next lower NixInt value if possible, i.e. `floor *number* <= *number*` and\n        `*number* - floor *number* < 1`.\n\n        An evaluation error is thrown, if there exists no such NixInt value `floor *number*`.\n        Due to bugs in previous Nix versions an evaluation error might be thrown, if the datatype of *number* is\n        a NixInt and if `*number* < -9007199254740992` or `*number* > 9007199254740992`.\n\n        If the datatype of *number* is neither a NixInt (signed 64-bit integer) nor a NixFloat\n        (IEEE-754 double-precision floating-point number), an evaluation error will be thrown.\n    ",
+      "evidence": {
+        "endLine": 1154,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1139
+      },
+      "exports": [
+        {
+          "name": "__floor",
+          "namespace": ""
+        },
+        {
+          "name": "floor",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:ce4fc05aa2cab72958eed79cc00e3cdce12b8391f43547f7d9ee389392289b78",
+      "parameters": ["number"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Reduce a list by applying a binary operator, from left to right,\n      e.g. `foldl' op nul [x0 x1 x2 ...] = op (op (op nul x0) x1) x2)\n      ...`.\n\n      For example, `foldl' (acc: elem: acc + elem) 0 [1 2 3]` evaluates\n      to `6` and `foldl' (acc: elem: { \"${elem}\" = elem; } // acc) {}\n      [\"a\" \"b\"]` evaluates to `{ a = \"a\"; b = \"b\"; }`.\n\n      The first argument of `op` is the accumulator whereas the second\n      argument is the current element being processed. The return value\n      of each application of `op` is evaluated immediately, even for\n      intermediate values.\n    ",
+      "evidence": {
+        "endLine": 3907,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3889
+      },
+      "exports": [
+        {
+          "name": "__foldl'",
+          "namespace": ""
+        },
+        {
+          "name": "foldl'",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:5e3261a0b6d0bc2fecf37180555355e2a85920b7fc707147886e4d19b098c8ba",
+      "parameters": ["op", "nul", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Convert a JSON string to a Nix value. For example,\n\n      ```nix\n      builtins.fromJSON ''{\"x\": [1, 2, 3], \"y\": null}''\n      ```\n\n      returns the value `{ x = [ 1 2 3 ]; y = null; }`.\n    ",
+      "evidence": {
+        "endLine": 2655,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2642
+      },
+      "exports": [
+        {
+          "name": "__fromJSON",
+          "namespace": ""
+        },
+        {
+          "name": "fromJSON",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:3cd4df2b876fff6da3d85b93b1900861331b3abcfa7b9d1d0b066ad8c5e8242f",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Convert a TOML string to a Nix value. For example,\n\n      ```nix\n      builtins.fromTOML ''\n        x=1\n        s=\"a\"\n        [table]\n        y=2\n      ''\n      ```\n\n      returns the value `{ s = \"a\"; table = { y = 2; }; x = 1; }`.\n    ",
+      "evidence": {
+        "endLine": 190,
+        "path": "src/libexpr/primops/fromTOML.cc",
+        "startLine": 173
+      },
+      "exports": [
+        {
+          "name": "fromTOML",
+          "namespace": ""
+        },
+        {
+          "name": "fromTOML",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:aa25bc829bf7755b0f1ae2f6d3c61bdc09ecdc99fe0cb8ba62c7aef319e09f1c",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return a set containing the names of the formal arguments expected\n      by the function *f*. The value of each attribute is a Boolean\n      denoting whether the corresponding argument has a default value. For\n      instance, `functionArgs ({ x, y ? 123}: ...) = { x = false; y =\n      true; }`.\n\n      \"Formal argument\" here refers to the attributes pattern-matched by\n      the function. Plain lambdas are not included, e.g. `functionArgs (x:\n      ...) = { }`.\n    ",
+      "evidence": {
+        "endLine": 3505,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3490
+      },
+      "exports": [
+        {
+          "name": "__functionArgs",
+          "namespace": ""
+        },
+        {
+          "name": "functionArgs",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:63776b07ff4ee22378bf86a1965baaeaa32db1b4f4a076ea48d6c8380b80db69",
+      "parameters": ["f"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Generate list of size *length*, with each element *i* equal to the\n      value returned by *generator* `i`. For example,\n\n      ```nix\n      builtins.genList (x: x * x) 5\n      ```\n\n      returns the list `[ 0 1 4 9 16 ]`.\n    ",
+      "evidence": {
+        "endLine": 3998,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3984
+      },
+      "exports": [
+        {
+          "name": "__genList",
+          "namespace": ""
+        },
+        {
+          "name": "genList",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:9560937a44263ba7131ad3b5d5a547a71bce94bf478890bff87be0f50f178410",
+      "parameters": ["generator", "length"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      `builtins.genericClosure` iteratively computes the transitive closure over an arbitrary relation defined by a function.\n\n      It takes *attrset* with two attributes named `startSet` and `operator`, and returns a list of attribute sets:\n\n      - `startSet`:\n        The initial list of attribute sets.\n\n      - `operator`:\n        A function that takes an attribute set and returns a list of attribute sets.\n        It defines how each item in the current set is processed and expanded into more items.\n\n      Each attribute set in the list `startSet` and the list returned by `operator` must have an attribute `key`, which must support equality comparison.\n      The value of `key` can be one of the following types:\n\n      - [Int](@docroot@/language/types.md#type-int)\n      - [Float](@docroot@/language/types.md#type-float)\n      - [Boolean](@docroot@/language/types.md#type-bool)\n      - [String](@docroot@/language/types.md#type-string)\n      - [Path](@docroot@/language/types.md#type-path)\n      - [List](@docroot@/language/types.md#type-list)\n\n      The result is produced by calling the `operator` on each `item` that has not been called yet, including newly added items, until no new items are added.\n      Items are compared by their `key` attribute.\n\n      Common usages are:\n\n      - Generating unique collections of items, such as dependency graphs.\n      - Traversing through structures that may contain cycles or loops.\n      - Processing data structures with complex internal relationships.\n\n      > **Example**\n      >\n      > ```nix\n      > builtins.genericClosure {\n      >   startSet = [ {key = 5;} ];\n      >   operator = item: [{\n      >     key = if (item.key / 2 ) * 2 == item.key\n      >          then item.key / 2\n      >          else 3 * item.key + 1;\n      >   }];\n      > }\n      > ```\n      >\n      > evaluates to\n      >\n      > ```nix\n      > [ { key = 5; } { key = 16; } { key = 8; } { key = 4; } { key = 2; } { key = 1; } ]\n      > ```\n      ",
+      "evidence": {
+        "endLine": 957,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 901
+      },
+      "exports": [
+        {
+          "name": "__genericClosure",
+          "namespace": ""
+        },
+        {
+          "name": "genericClosure",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:5d113180490261c7db47f9fdaf4008c98337481a732b8d6f3b7f020a84743f17",
+      "parameters": ["attrset"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      `getAttr` returns the attribute named *s* from *set*. Evaluation\n      aborts if the attribute doesn’t exist. This is a dynamic version of\n      the `.` operator, since *s* is an expression rather than an\n      identifier.\n    ",
+      "evidence": {
+        "endLine": 3112,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3102
+      },
+      "exports": [
+        {
+          "name": "__getAttr",
+          "namespace": ""
+        },
+        {
+          "name": "getAttr",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:17c715875c3f1fbf813b671fe2cba8bed03e4ee8639c7be75b41e12a81b78981",
+      "parameters": ["s", "set"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the string context of *s*.\n\n      The string context tracks references to derivations within a string.\n      It is represented as an attribute set of [store derivation](@docroot@/glossary.md#gloss-store-derivation) paths mapping to output names.\n\n      Using [string interpolation](@docroot@/language/string-interpolation.md) on a derivation adds that derivation to the string context.\n      For example,\n\n      ```nix\n      builtins.getContext \"${derivation { name = \"a\"; builder = \"b\"; system = \"c\"; }}\"\n      ```\n\n      evaluates to\n\n      ```\n      { \"/nix/store/arhvjaf6zmlyn8vh8fgn55rpwnxq0n7l-a.drv\" = { outputs = [ \"out\" ]; }; }\n      ```\n    ",
+      "evidence": {
+        "endLine": 252,
+        "path": "src/libexpr/primops/context.cc",
+        "startLine": 230
+      },
+      "exports": [
+        {
+          "name": "__getContext",
+          "namespace": ""
+        },
+        {
+          "name": "getContext",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:41b36d176bda3469c9d1790262627fd3238efc09b36f3cb25d326a39b0117fc9",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      `getEnv` returns the value of the environment variable *s*, or an\n      empty string if the variable doesn’t exist. This function should be\n      used with care, as it can introduce all sorts of nasty environment\n      dependencies in your Nix expression.\n\n      `getEnv` is used in Nix Packages to locate the file\n      `~/.nixpkgs/config.nix`, which contains user-local settings for Nix\n      Packages. (That is, it does a `getEnv \"HOME\"` to locate the user’s\n      home directory.)\n    ",
+      "evidence": {
+        "endLine": 1236,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1221
+      },
+      "exports": [
+        {
+          "name": "__getEnv",
+          "namespace": ""
+        },
+        {
+          "name": "getEnv",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:4799b02b6b11dd931a199e102202c143da6a35d046589c9b2be410ec46c4b53e",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "unknown",
+      "documentation": null,
+      "evidence": null,
+      "exports": [
+        {
+          "name": "__getFlake",
+          "namespace": ""
+        },
+        {
+          "name": "getFlake",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:15f5192a80ef6a834fa584dc1ba63a409a9856febfc85437db26524bcbd17c06",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Groups elements of *list* together by the string returned from the\n      function *f* called on each element. It returns an attribute set\n      where each attribute value contains the elements of *list* that are\n      mapped to the same corresponding attribute name returned by *f*.\n\n      For example,\n\n      ```nix\n      builtins.groupBy (builtins.substring 0 1) [\"foo\" \"bar\" \"baz\"]\n      ```\n\n      evaluates to\n\n      ```nix\n      { b = [ \"bar\" \"baz\" ]; f = [ \"foo\" ]; }\n      ```\n    ",
+      "evidence": {
+        "endLine": 4222,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4200
+      },
+      "exports": [
+        {
+          "name": "__groupBy",
+          "namespace": ""
+        },
+        {
+          "name": "groupBy",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:308cfa61d7bbab9b42be0063debac7043a8c2a50920f3e4600bafa0b350c60c2",
+      "parameters": ["f", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      `hasAttr` returns `true` if *set* has an attribute named *s*, and\n      `false` otherwise. This is a dynamic version of the `?` operator,\n      since *s* is an expression rather than an identifier.\n    ",
+      "evidence": {
+        "endLine": 3200,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3191
+      },
+      "exports": [
+        {
+          "name": "__hasAttr",
+          "namespace": ""
+        },
+        {
+          "name": "hasAttr",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:e657f791962680cc3832347fbb24c4cc96ac0e33e30232dc6afea93c84c38977",
+      "parameters": ["s", "set"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if string *s* has a non-empty context.\n      The context can be obtained with\n      [`getContext`](#builtins-getContext).\n\n      > **Example**\n      >\n      > Many operations require a string context to be empty because they are intended only to work with \"regular\" strings, and also to help users avoid unintentionally loosing track of string context elements.\n      > `builtins.hasContext` can help create better domain-specific errors in those case.\n      >\n      > ```nix\n      > name: meta:\n      >\n      > if builtins.hasContext name\n      > then throw \"package name cannot contain string context\"\n      > else { ${name} = meta; }\n      > ```\n    ",
+      "evidence": {
+        "endLine": 54,
+        "path": "src/libexpr/primops/context.cc",
+        "startLine": 33
+      },
+      "exports": [
+        {
+          "name": "__hasContext",
+          "namespace": ""
+        },
+        {
+          "name": "hasContext",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:7646ad3bfef898fe53c3b05824d3549fb51012b19ad23014a1e36d0388d2fb78",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return a base-16 representation of the cryptographic hash of the\n      file at path *p*. The hash algorithm specified by *type* must be one\n      of `\"md5\"`, `\"sha1\"`, `\"sha256\"` or `\"sha512\"`.\n    ",
+      "evidence": {
+        "endLine": 2334,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2325
+      },
+      "exports": [
+        {
+          "name": "__hashFile",
+          "namespace": ""
+        },
+        {
+          "name": "hashFile",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:b6b97931833a4b4fa5aa509aa8ba43304d1c464e569ff66c5631d1614407a31b",
+      "parameters": ["type", "p"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return a base-16 representation of the cryptographic hash of string\n      *s*. The hash algorithm specified by *type* must be one of `\"md5\"`,\n      `\"sha1\"`, `\"sha256\"` or `\"sha512\"`.\n    ",
+      "evidence": {
+        "endLine": 4617,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4608
+      },
+      "exports": [
+        {
+          "name": "__hashString",
+          "namespace": ""
+        },
+        {
+          "name": "hashString",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:216c67c21eb5b13a41ebcaf0e7c52b9b888fdb01699b0fcee0af4059c33f97ea",
+      "parameters": ["type", "s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the first element of a list; abort evaluation if the argument\n      isn’t a list or is an empty list. You can test whether a list is\n      empty by comparing it with `[]`.\n    ",
+      "evidence": {
+        "endLine": 3689,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3680
+      },
+      "exports": [
+        {
+          "name": "__head",
+          "namespace": ""
+        },
+        {
+          "name": "head",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:5163910f9e9591c07765278ab71660ffc065cfcfbc1aff682f1de276fc02a00e",
+      "parameters": ["list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Load, parse, and return the Nix expression in the file *path*.\n\n      > **Note**\n      >\n      > Unlike some languages, `import` is a regular function in Nix.\n\n      The *path* argument must meet the same criteria as an [interpolated expression](@docroot@/language/string-interpolation.md#interpolated-expression).\n\n      If *path* is a directory, the file `default.nix` in that directory is used if it exists.\n\n      > **Example**\n      >\n      > ```console\n      > $ echo 123 > default.nix\n      > ```\n      >\n      > Import `default.nix` from the current directory.\n      >\n      > ```nix\n      > import ./.\n      > ```\n      >\n      >     123\n\n      Evaluation aborts if the file doesn’t exist or contains an invalid Nix expression.\n\n      A Nix expression loaded by `import` must not contain any *free variables*, that is, identifiers that are not defined in the Nix expression itself and are not built-in.\n      Therefore, it cannot refer to variables that are in scope at the call site.\n\n      > **Example**\n      >\n      > If you have a calling expression\n      >\n      > ```nix\n      > rec {\n      >   x = 123;\n      >   y = import ./foo.nix;\n      > }\n      > ```\n      >\n      >  then the following `foo.nix` throws an error:\n      >\n      >  ```nix\n      >  # foo.nix\n      >  x + 456\n      >  ```\n      >\n      >  since `x` is not in scope in `foo.nix`.\n      > If you want `x` to be available in `foo.nix`, pass it as a function argument:\n      >\n      >  ```nix\n      >  rec {\n      >    x = 123;\n      >    y = import ./foo.nix x;\n      >  }\n      >  ```\n      >\n      >  and\n      >\n      >  ```nix\n      >  # foo.nix\n      >  x: x + 456\n      >  ```\n      >\n      >  The function argument doesn’t have to be called `x` in `foo.nix`; any name would work.\n    ",
+      "evidence": {
+        "endLine": 436,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 363
+      },
+      "exports": [
+        {
+          "name": "import",
+          "namespace": ""
+        },
+        {
+          "name": "import",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:5810b75c54f81a62e8b1d79838f502f67c7d9812b383857f65d680059d7b2dcb",
+      "parameters": ["path"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return a set consisting of the attributes in the set *e2* which have the\n      same name as some attribute in *e1*.\n\n      Performs in O(*n* log *m*) where *n* is the size of the smaller set and *m* the larger set's size.\n    ",
+      "evidence": {
+        "endLine": 3423,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3413
+      },
+      "exports": [
+        {
+          "name": "__intersectAttrs",
+          "namespace": ""
+        },
+        {
+          "name": "intersectAttrs",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:46e4e4a36b6ea9ef606ea26241c62aa3e5d862832b215b4b61f2f73b1018c713",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if *e* evaluates to a set, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 3216,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3209
+      },
+      "exports": [
+        {
+          "name": "__isAttrs",
+          "namespace": ""
+        },
+        {
+          "name": "isAttrs",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:0944a8b921825032c072f34fc298bda3f5af1a875c1dabe3985ff7eff62fd71a",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if *e* evaluates to a bool, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 678,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 671
+      },
+      "exports": [
+        {
+          "name": "__isBool",
+          "namespace": ""
+        },
+        {
+          "name": "isBool",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:8fd845ec43838a0a9933f73cbc0091dd7ef87ad716fef6aae04565111e952921",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if *e* evaluates to a float, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 646,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 639
+      },
+      "exports": [
+        {
+          "name": "__isFloat",
+          "namespace": ""
+        },
+        {
+          "name": "isFloat",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:bb71152531bfc6d8f922dea94ad7db6b34046066e09ed4a04816f2a134dc49e1",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if *e* evaluates to a function, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 614,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 607
+      },
+      "exports": [
+        {
+          "name": "__isFunction",
+          "namespace": ""
+        },
+        {
+          "name": "isFunction",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:b88db0561962ed9e68c486aa247273c3ef6816c43c8ba0eb943267136ddf3936",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if *e* evaluates to an integer, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 630,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 623
+      },
+      "exports": [
+        {
+          "name": "__isInt",
+          "namespace": ""
+        },
+        {
+          "name": "isInt",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:1c0527030ec9e50a8b93091623675f4a07e46e74338bfc5d2f9c38d72d57c4ae",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if *e* evaluates to a list, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 3644,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3637
+      },
+      "exports": [
+        {
+          "name": "__isList",
+          "namespace": ""
+        },
+        {
+          "name": "isList",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:b525dbdef7630662ccf01440c8182f4b8759cce4ea42cf5db15009e1d32c3001",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if *e* evaluates to `null`, and `false` otherwise.\n\n      This is equivalent to `e == null`.\n    ",
+      "evidence": {
+        "endLine": 598,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 589
+      },
+      "exports": [
+        {
+          "name": "isNull",
+          "namespace": ""
+        },
+        {
+          "name": "isNull",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:5ed3d10e8580e3b803ef7f64776e0fd75eb1705b816881b037c313fd298f9d55",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if *e* evaluates to a path, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 694,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 687
+      },
+      "exports": [
+        {
+          "name": "__isPath",
+          "namespace": ""
+        },
+        {
+          "name": "isPath",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:b76dda4ae78ff42bc69829c6d5d59cdac72017ae089aea1cba014ab2e56f45bf",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if *e* evaluates to a string, and `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 662,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 655
+      },
+      "exports": [
+        {
+          "name": "__isString",
+          "namespace": ""
+        },
+        {
+          "name": "isString",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:3c5e5f890a5ed522502680b1209aedea89df9156356cc14a6580126c23d2e9ab",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n          The current version of the Nix language.\n        ",
+      "evidence": {
+        "endLine": 5351,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5343
+      },
+      "exports": [
+        {
+          "name": "__langVersion",
+          "namespace": ""
+        },
+        {
+          "name": "langVersion",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:f2605951b1d2c5fee61067290eaef7a564b831b023f8b73ff98375820fa9f166",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the length of the list *e*.\n    ",
+      "evidence": {
+        "endLine": 3864,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3857
+      },
+      "exports": [
+        {
+          "name": "__length",
+          "namespace": ""
+        },
+        {
+          "name": "length",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:9326473b54e071ac93125429b4cdd11ea2a18969640fe59795b8869a387f7f7a",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if the value *e1* is less than the value *e2*, and `false` otherwise.\n      Evaluation aborts if either *e1* or *e2* does not evaluate to a number, string or path.\n      Furthermore, it aborts if *e2* does not match *e1*'s type according to the aforementioned classification of number, string or path.\n    ",
+      "evidence": {
+        "endLine": 4463,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4454
+      },
+      "exports": [
+        {
+          "name": "__lessThan",
+          "namespace": ""
+        },
+        {
+          "name": "lessThan",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:8dc16646c593e4e3de1118938746918f71ef41c5b8dbcfdc37ec6347ef5230fa",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Construct a set from a list specifying the names and values of each\n      attribute. Each element of the list should be a set consisting of a\n      string-valued attribute `name` specifying the name of the attribute,\n      and an attribute `value` specifying its value.\n\n      In case of duplicate occurrences of the same name, the first\n      takes precedence.\n\n      Example:\n\n      ```nix\n      builtins.listToAttrs\n        [ { name = \"foo\"; value = 123; }\n          { name = \"bar\"; value = 456; }\n          { name = \"bar\"; value = 420; }\n        ]\n      ```\n\n      evaluates to\n\n      ```nix\n      { foo = 123; bar = 456; }\n      ```\n    ",
+      "evidence": {
+        "endLine": 3346,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3317
+      },
+      "exports": [
+        {
+          "name": "__listToAttrs",
+          "namespace": ""
+        },
+        {
+          "name": "listToAttrs",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:18a38bf8ad2e4d791985900f2830ec019d45513e0bc85f9ce2729c58652a797a",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Apply the function *f* to each element in the list *list*. For\n      example,\n\n      ```nix\n      map (x: \"foo\" + x) [ \"bar\" \"bla\" \"abc\" ]\n      ```\n\n      evaluates to `[ \"foobar\" \"foobla\" \"fooabc\" ]`.\n    ",
+      "evidence": {
+        "endLine": 3754,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3740
+      },
+      "exports": [
+        {
+          "name": "map",
+          "namespace": ""
+        },
+        {
+          "name": "map",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:1fc60c3e4bd9dd8a9f1577a91bc7d027287a70c7147caf4e953955b02eeadf20",
+      "parameters": ["f", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Apply function *f* to every element of *attrset*. For example,\n\n      ```nix\n      builtins.mapAttrs (name: value: value * 10) { a = 1; b = 2; }\n      ```\n\n      evaluates to `{ a = 10; b = 20; }`.\n    ",
+      "evidence": {
+        "endLine": 3537,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3524
+      },
+      "exports": [
+        {
+          "name": "__mapAttrs",
+          "namespace": ""
+        },
+        {
+          "name": "mapAttrs",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:3f74c26cdc31d315fa0cee4818d94df93ec175ca0a1535aecc4c534a423b96b1",
+      "parameters": ["f", "attrset"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Returns a list if the [extended POSIX regular\n      expression](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html#tag_09_04)\n      *regex* matches *str* precisely, otherwise returns `null`. Each item\n      in the list is a regex group.\n\n      ```nix\n      builtins.match \"ab\" \"abc\"\n      ```\n\n      Evaluates to `null`.\n\n      ```nix\n      builtins.match \"abc\" \"abc\"\n      ```\n\n      Evaluates to `[ ]`.\n\n      ```nix\n      builtins.match \"a(b)(c)\" \"abc\"\n      ```\n\n      Evaluates to `[ \"b\" \"c\" ]`.\n\n      ```nix\n      builtins.match \"[[:space:]]+([[:upper:]]+)[[:space:]]+\" \"  FOO   \"\n      ```\n\n      Evaluates to `[ \"FOO\" ]`.\n    ",
+      "evidence": {
+        "endLine": 4819,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4785
+      },
+      "exports": [
+        {
+          "name": "__match",
+          "namespace": ""
+        },
+        {
+          "name": "match",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:d4f4a6500379c37e0cfa5be193fcabd56bdb0bbaf4d56916119164e230d3a593",
+      "parameters": ["regex", "str"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the product of the numbers *e1* and *e2*.\n    ",
+      "evidence": {
+        "endLine": 4360,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4353
+      },
+      "exports": [
+        {
+          "name": "__mul",
+          "namespace": ""
+        },
+        {
+          "name": "mul",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:d8177ab6f7909e4c8ba9090426a222fbeece1e80e6b43ac80572fb95e041907e",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n          A list of search path entries used to resolve [lookup paths](@docroot@/language/constructs/lookup-path.md).\n          Its value is primarily determined by the [`nix-path` configuration setting](@docroot@/command-ref/conf-file.md#conf-nix-path), which are\n          - Overridden by the [`NIX_PATH`](@docroot@/command-ref/env-common.md#env-NIX_PATH) environment variable or the `--nix-path` option\n          - Extended by the [`-I` option](@docroot@/command-ref/opt-common.md#opt-I) or `--extra-nix-path`\n\n          > **Example**\n          >\n          > ```bash\n          > $ NIX_PATH= nix-instantiate --eval --expr \"builtins.nixPath\" -I foo=bar --no-pure-eval\n          > [ { path = \"bar\"; prefix = \"foo\"; } ]\n          > ```\n\n          Lookup path expressions are [desugared](https://en.wikipedia.org/wiki/Syntactic_sugar) using this and\n          [`builtins.findFile`](./builtins.html#builtins-findFile):\n\n          ```nix\n          <nixpkgs>\n          ```\n\n          is equivalent to:\n\n          ```nix\n          builtins.findFile builtins.nixPath \"nixpkgs\"\n          ```\n        ",
+      "evidence": {
+        "endLine": 5421,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5390
+      },
+      "exports": [
+        {
+          "name": "__nixPath",
+          "namespace": ""
+        },
+        {
+          "name": "nixPath",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:c6a1decc229c801aa0f8465698ebd298c6051a08c6a720d87e7791ce931bfded",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n          The version of Nix.\n\n          For example, where the command line returns the current Nix version,\n\n          ```shell-session\n          $ nix --version\n          nix (Nix) 2.16.0\n          ```\n\n          the Nix language evaluator returns the same value:\n\n          ```nix-repl\n          nix-repl> builtins.nixVersion\n          \"2.16.0\"\n          ```\n        ",
+      "evidence": {
+        "endLine": 5318,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5296
+      },
+      "exports": [
+        {
+          "name": "__nixVersion",
+          "namespace": ""
+        },
+        {
+          "name": "nixVersion",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:2282881b29978820ee3762e75b72a627160cc05cf848e9e41c4bb0e139059b39",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n          Primitive value.\n\n          The name `null` is not special, and can be shadowed:\n\n          ```nix-repl\n          nix-repl> let null = 1; in null\n          1\n          ```\n        ",
+      "evidence": {
+        "endLine": 5230,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5215
+      },
+      "exports": [
+        {
+          "name": "null",
+          "namespace": ""
+        },
+        {
+          "name": "null",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:e9ea93c514bc0ec01353cb14ec94562028da4b6cb20451ae74a90f9e2e92bd91",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Split the string *s* into a package name and version. The package\n      name is everything up to but not including the first dash not followed\n      by a letter, and the version is everything following that dash. The\n      result is returned in a set `{ name, version }`. Thus,\n      `builtins.parseDrvName \"nix-0.12pre12876\"` returns `{ name =\n      \"nix\"; version = \"0.12pre12876\"; }`.\n    ",
+      "evidence": {
+        "endLine": 5080,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5068
+      },
+      "exports": [
+        {
+          "name": "__parseDrvName",
+          "namespace": ""
+        },
+        {
+          "name": "parseDrvName",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:c901926744c6898fdad1f8bc0cc3c042db4def482ee93fd9a866c00b41502978",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "unknown",
+      "documentation": null,
+      "evidence": null,
+      "exports": [
+        {
+          "name": "__parseFlakeRef",
+          "namespace": ""
+        },
+        {
+          "name": "parseFlakeRef",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:7afc4448c5bd7acec15c8fa5104066fbd296db134c52cdb3be75fe92e8f370d3",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Given a predicate function *pred*, this function returns an\n      attrset containing a list named `right`, containing the elements\n      in *list* for which *pred* returned `true`, and a list named\n      `wrong`, containing the elements for which it returned\n      `false`. For example,\n\n      ```nix\n      builtins.partition (x: x > 10) [1 23 9 3 42]\n      ```\n\n      evaluates to\n\n      ```nix\n      { right = [ 23 42 ]; wrong = [ 1 9 3 ]; }\n      ```\n    ",
+      "evidence": {
+        "endLine": 4169,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4148
+      },
+      "exports": [
+        {
+          "name": "__partition",
+          "namespace": ""
+        },
+        {
+          "name": "partition",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:a826a27055565cd642481fb7453516a633e3b3cd9b016be6ffb4e2715b08025d",
+      "parameters": ["pred", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      An enrichment of the built-in path type, based on the attributes\n      present in *args*. All are optional except `path`:\n\n        - path\\\n          The underlying path.\n\n        - name\\\n          The name of the path when added to the store. This can used to\n          reference paths that have nix-illegal characters in their names,\n          like `@`.\n\n        - filter\\\n          A function of the type expected by [`builtins.filterSource`](#builtins-filterSource),\n          with the same semantics.\n\n        - recursive\\\n          When `false`, when `path` is added to the store it is with a\n          [flat hash](@docroot@/store/file-system-object/content-address.md#serial-flat),\n          rather than a hash of the\n          [NAR serialization](@docroot@/store/file-system-object/content-address.md#serial-nix-archive)\n          of the file. Thus, `path` must refer to a regular file, not a\n          directory. This allows similar behavior to `fetchurl`. Defaults\n          to `true`.\n\n        - sha256\\\n          When provided, this is the expected\n          [content hash](@docroot@/store/file-system-object/content-address.md)\n          of the path. Evaluation fails if the hash is incorrect,\n          and providing a hash allows `builtins.path` to be used even\n          when the `pure-eval` nix config option is on.\n    ",
+      "evidence": {
+        "endLine": 3024,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2988
+      },
+      "exports": [
+        {
+          "name": "__path",
+          "namespace": ""
+        },
+        {
+          "name": "path",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:f08a29872d05d45173930bce8e2e59f635fb02d3481c0e9db4a2a786d52ba212",
+      "parameters": ["args"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return `true` if the path *path* exists at evaluation time, and\n      `false` otherwise.\n    ",
+      "evidence": {
+        "endLine": 1996,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1988
+      },
+      "exports": [
+        {
+          "name": "__pathExists",
+          "namespace": ""
+        },
+        {
+          "name": "pathExists",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:38f318a50f63afd58f6fc41022f01c9d1252755c8c3015a1d9efc05975ff8513",
+      "parameters": ["path"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return an\n      [output placeholder string](@docroot@/store/derivation/index.md#output-placeholder)\n      for the specified *output* that will be substituted by the corresponding\n      [output path](@docroot@/glossary.md#gloss-output-path)\n      at build time.\n\n      Typical outputs would be `\"out\"`, `\"bin\"` or `\"dev\"`.\n    ",
+      "evidence": {
+        "endLine": 1888,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1875
+      },
+      "exports": [
+        {
+          "name": "placeholder",
+          "namespace": ""
+        },
+        {
+          "name": "placeholder",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:175d621e2d60c41518d5084832d8719a6ba7864e3d2f569aa84deea5a6738770",
+      "parameters": ["output"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the contents of the directory *path* as a set mapping\n      directory entries to the corresponding file type. For instance, if\n      directory `A` contains a regular file `B` and another directory\n      `C`, then `builtins.readDir ./A` returns the set\n\n      ```nix\n      { B = \"regular\"; C = \"directory\"; }\n      ```\n\n      The possible values for the file type are `\"regular\"`,\n      `\"directory\"`, `\"symlink\"` and `\"unknown\"`.\n    ",
+      "evidence": {
+        "endLine": 2444,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2427
+      },
+      "exports": [
+        {
+          "name": "__readDir",
+          "namespace": ""
+        },
+        {
+          "name": "readDir",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:010ce0ce79bae53c5716b4cf1d1521dcb2924dfebdb05b594ad6655197eb6785",
+      "parameters": ["path"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the contents of the file *path* as a string.\n    ",
+      "evidence": {
+        "endLine": 2119,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2112
+      },
+      "exports": [
+        {
+          "name": "__readFile",
+          "namespace": ""
+        },
+        {
+          "name": "readFile",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:bb523286fd18ccd8a554bc1b24166b8ca71c305261225bf465129a420be15ddc",
+      "parameters": ["path"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Determine the directory entry type of a filesystem node, being\n      one of `\"directory\"`, `\"regular\"`, `\"symlink\"`, or `\"unknown\"`.\n    ",
+      "evidence": {
+        "endLine": 2385,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2377
+      },
+      "exports": [
+        {
+          "name": "__readFileType",
+          "namespace": ""
+        },
+        {
+          "name": "readFileType",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:3ec3d89437dfc0cbf349b3a7c38201b69177d7fbbbff8ea8593da28f4d0e0fcb",
+      "parameters": ["p"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Remove the attributes listed in *list* from *set*. The attributes\n      don’t have to exist in *set*. For instance,\n\n      ```nix\n      removeAttrs { x = 1; y = 2; z = 3; } [ \"a\" \"x\" \"z\" ]\n      ```\n\n      evaluates to `{ y = 2; }`.\n    ",
+      "evidence": {
+        "endLine": 3259,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3245
+      },
+      "exports": [
+        {
+          "name": "removeAttrs",
+          "namespace": ""
+        },
+        {
+          "name": "removeAttrs",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:ed8c15cbae626d1286f693ae127ae2f6d56d363e5d6918aebc4e7ce6fbad1ba6",
+      "parameters": ["set", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Given string *s*, replace every occurrence of the strings in *from*\n      with the corresponding string in *to*.\n\n      The argument *to* is lazy, that is, it is only evaluated when its corresponding pattern in *from* is matched in the string *s*\n\n      Example:\n\n      ```nix\n      builtins.replaceStrings [\"oo\" \"a\"] [\"a\" \"i\"] \"foobar\"\n      ```\n\n      evaluates to `\"fabir\"`.\n    ",
+      "evidence": {
+        "endLine": 5051,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5033
+      },
+      "exports": [
+        {
+          "name": "__replaceStrings",
+          "namespace": ""
+        },
+        {
+          "name": "replaceStrings",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:9f5d0010d1bd0c52e9b59662ade4d2d02751ea7e81ba71cf535a471b6686350b",
+      "parameters": ["from", "to", "s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Load, parse, and return the Nix expression in the file *path*, with the attributes from *scope* available as variables in the lexical scope of the imported file.\n\n      This function is similar to [`import`](#builtins-import), but allows you to provide additional variables that will be available in the scope of the imported expression.\n      The *scope* argument must be an attribute set; each attribute becomes a variable available in the imported file.\n      Built-in functions and values remain accessible unless shadowed by *scope* attributes.\n\n      > **Note**\n      >\n      > Variables from *scope* shadow built-ins with the same name, allowing you to override built-ins for the imported expression.\n\n      > **Note**\n      >\n      > Unlike [`import`](#builtins-import), `scopedImport` does not memoize evaluation results.\n      > While the parsing result may be reused, each call produces a distinct value.\n      > This is observable through performance and side effects such as [`builtins.trace`](#builtins-trace).\n\n      The *path* argument must meet the same criteria as an [interpolated expression](@docroot@/language/string-interpolation.md#interpolated-expression).\n\n      If *path* is a directory, the file `default.nix` in that directory is used if it exists.\n\n      > **Example**\n      >\n      > Create a file `greet.nix`:\n      >\n      > ```nix\n      > # greet.nix\n      > \"${greeting}, ${name}!\"\n      > ```\n      >\n      > Import it with additional variables in scope:\n      >\n      > ```nix\n      > scopedImport { greeting = \"Hello\"; name = \"World\"; } ./greet.nix\n      > ```\n      >\n      >     \"Hello, World!\"\n\n      Evaluation aborts if the file doesn't exist or contains an invalid Nix expression.\n    ",
+      "evidence": {
+        "endLine": 361,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 316
+      },
+      "exports": [
+        {
+          "name": "scopedImport",
+          "namespace": ""
+        },
+        {
+          "name": "scopedImport",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:fc39a331c8383f046cd40659b61c5fd669169d75fee3e8762c5821900889cf0e",
+      "parameters": ["scope", "path"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Evaluate *e1*, then evaluate and return *e2*. This ensures that a\n      computation is strict in the value of *e1*.\n    ",
+      "evidence": {
+        "endLine": 1254,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1246
+      },
+      "exports": [
+        {
+          "name": "__seq",
+          "namespace": ""
+        },
+        {
+          "name": "seq",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:161afdfc5385531aa41d586ebb3c745b2a821b2209272b718198f07b8ef711a9",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return *list* in sorted order. It repeatedly calls the function\n      *comparator* with two elements. The comparator should return `true`\n      if the first element is less than the second, and `false` otherwise.\n      For example,\n\n      ```nix\n      builtins.sort builtins.lessThan [ 483 249 526 147 42 77 ]\n      ```\n\n      produces the list `[ 42 77 147 249 483 526 ]`.\n\n      This is a stable sort: it preserves the relative order of elements\n      deemed equal by the comparator.\n\n      *comparator* must impose a strict weak ordering on the set of values\n      in the *list*. This means that for any elements *a*, *b* and *c* from the\n      *list*, *comparator* must satisfy the following relations:\n\n        1. Transitivity\n\n        If a is less than b and b is less than c, then it follows that a is less than c.\n\n        ```nix\n        comparator a b && comparator b c -> comparator a c\n        ```\n\n        1. Irreflexivity\n\n        ```nix\n        comparator a a == false\n        ```\n\n        1. Transitivity of equivalence\n\n        First, two values a and b are considered equivalent with respect to the comparator if:\n\n        ```\n        !comparator a b && !comparator b a\n        ```\n\n        In other words, neither is considered \"less than\" the other.\n\n        Transitivity of equivalence means:\n\n        If a is equivalent to b, and b is equivalent to c, then a must also be equivalent to c.\n\n        ```nix\n        let\n          equiv = x: y: (!comparator x y && !comparator y x);\n        in\n          equiv a b && equiv b c -> equiv a c\n        ```\n\n      If the *comparator* violates any of these properties, then `builtins.sort`\n      reorders elements in an unspecified manner.\n    ",
+      "evidence": {
+        "endLine": 4108,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4047
+      },
+      "exports": [
+        {
+          "name": "__sort",
+          "namespace": ""
+        },
+        {
+          "name": "sort",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:d0f723831fec0ba58bb4e03ec740ee03b1921dbf110e43bcb90f5bbe396d1bcc",
+      "parameters": ["comparator", "list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Returns a list composed of non matched strings interleaved with the\n      lists of the [extended POSIX regular\n      expression](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html#tag_09_04)\n      *regex* matches of *str*. Each item in the lists of matched\n      sequences is a regex group.\n\n      ```nix\n      builtins.split \"(a)b\" \"abc\"\n      ```\n\n      Evaluates to `[ \"\" [ \"a\" ] \"c\" ]`.\n\n      ```nix\n      builtins.split \"([ac])\" \"abc\"\n      ```\n\n      Evaluates to `[ \"\" [ \"a\" ] \"b\" [ \"c\" ] \"\" ]`.\n\n      ```nix\n      builtins.split \"(a)|(c)\" \"abc\"\n      ```\n\n      Evaluates to `[ \"\" [ \"a\" null ] \"b\" [ null \"c\" ] \"\" ]`.\n\n      ```nix\n      builtins.split \"([[:upper:]]+)\" \" FOO \"\n      ```\n\n      Evaluates to `[ \" \" [ \"FOO\" ] \" \" ]`.\n    ",
+      "evidence": {
+        "endLine": 4923,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4888
+      },
+      "exports": [
+        {
+          "name": "__split",
+          "namespace": ""
+        },
+        {
+          "name": "split",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:b52e2052802fb433950e50b5db0db6d0e5073769abb6f991e00989cd816717dc",
+      "parameters": ["regex", "str"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Split a string representing a version into its components, by the\n      same version splitting logic underlying the version comparison in\n      [`nix-env -u`](../command-ref/nix-env/upgrade.md).\n    ",
+      "evidence": {
+        "endLine": 5132,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5123
+      },
+      "exports": [
+        {
+          "name": "__splitVersion",
+          "namespace": ""
+        },
+        {
+          "name": "splitVersion",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:2d27006e6f195140ca53171ca0f3a292c9d349b025b2428dfe52ae7641c5d8e4",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n          Logical file system location of the [Nix store](@docroot@/glossary.md#gloss-store) currently in use.\n\n          This value is determined by the `store` parameter in [Store URLs](@docroot@/store/types/index.md#store-url-format):\n\n          ```shell-session\n          $ nix-instantiate --store 'dummy://?store=/blah' --eval --expr builtins.storeDir\n          \"/blah\"\n          ```\n        ",
+      "evidence": {
+        "endLine": 5336,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5321
+      },
+      "exports": [
+        {
+          "name": "__storeDir",
+          "namespace": ""
+        },
+        {
+          "name": "storeDir",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:b8c54a4128f1cdb9b44dc8f097d068f2beb85264ff8b67f8c518f0fc9ae43582",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      This function allows you to define a dependency on an already\n      existing store path. For example, the derivation attribute `src\n      = builtins.storePath /nix/store/f1d18v1y…-source` causes the\n      derivation to depend on the specified path, which must exist or\n      be substitutable. Note that this differs from a plain path\n      (e.g. `src = /nix/store/f1d18v1y…-source`) in that the latter\n      causes the path to be *copied* again to the Nix store, resulting\n      in a new path (e.g. `/nix/store/ld01dnzc…-source-source`).\n\n      Not available in [pure evaluation mode](@docroot@/command-ref/conf-file.md#conf-pure-eval).\n\n      See also [`builtins.fetchClosure`](#builtins-fetchClosure).\n    ",
+      "evidence": {
+        "endLine": 1965,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1947
+      },
+      "exports": [
+        {
+          "name": "__storePath",
+          "namespace": ""
+        },
+        {
+          "name": "storePath",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:607ab152762fc798bba377e0d402eca8fd8c5cd394b1570a78f5b0df7ce8a5cc",
+      "parameters": ["path"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the number of bytes of the string *e*. If *e* is not a string,\n      evaluation is aborted.\n    ",
+      "evidence": {
+        "endLine": 4590,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4582
+      },
+      "exports": [
+        {
+          "name": "__stringLength",
+          "namespace": ""
+        },
+        {
+          "name": "stringLength",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:e75c3fc5b702b60daf27ad206da27264c1fb7334f3a5603f4d31a01607141887",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the difference between the numbers *e1* and *e2*.\n    ",
+      "evidence": {
+        "endLine": 4329,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4322
+      },
+      "exports": [
+        {
+          "name": "__sub",
+          "namespace": ""
+        },
+        {
+          "name": "sub",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:6492744810d0832f0b289afabe440104e7d958aa0cb02b32460119633ebe5c3c",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the substring of *s* from byte position *start*\n      (zero-based) up to but not including *start + len*. If *start* is\n      greater than the length of the string, an empty string is returned.\n      If *start + len* lies beyond the end of the string or *len* is `-1`,\n      only the substring up to the end of the string is returned.\n      *start* must be non-negative.\n      For example,\n\n      ```nix\n      builtins.substring 0 3 \"nixos\"\n      ```\n\n      evaluates to `\"nix\"`.\n    ",
+      "evidence": {
+        "endLine": 4572,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4553
+      },
+      "exports": [
+        {
+          "name": "__substring",
+          "namespace": ""
+        },
+        {
+          "name": "substring",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:e2c5e00724609024f2344063240e2419652a3e9dd3643a745ce5764d77cee281",
+      "parameters": ["start", "len", "s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return the list without its first item; abort evaluation if\n      the argument isn’t a list or is an empty list.\n\n      > **Warning**\n      >\n      > This function should generally be avoided since it's inefficient:\n      > unlike Haskell's `tail`, it takes O(n) time, so recursing over a\n      > list by repeatedly calling `tail` takes O(n^2) time.\n    ",
+      "evidence": {
+        "endLine": 3720,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3706
+      },
+      "exports": [
+        {
+          "name": "__tail",
+          "namespace": ""
+        },
+        {
+          "name": "tail",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:9b820bd38c158f3f67459902e0ead340cf82dfb9e2bad95a47e28b3e0bc0bf74",
+      "parameters": ["list"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Throw an error message *s*. This usually aborts Nix expression\n      evaluation, but in `nix-env -qa` and other commands that try to\n      evaluate a set of derivations to get information about those\n      derivations, a derivation that throws an error is silently skipped\n      (which is not the case for `abort`).\n    ",
+      "evidence": {
+        "endLine": 1014,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 998
+      },
+      "exports": [
+        {
+          "name": "throw",
+          "namespace": ""
+        },
+        {
+          "name": "throw",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:18db029612f1a46b930d89478249207032428aeda1717bc869c033b491c59794",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Store the string *s* in a file in the Nix store and return its\n      path.  The file has suffix *name*. This file can be used as an\n      input to derivations. One application is to write builders\n      “inline”. For instance, the following Nix expression combines the\n      Nix expression for GNU Hello and its build script into one file:\n\n      ```nix\n      { stdenv, fetchurl, perl }:\n\n      stdenv.mkDerivation {\n        name = \"hello-2.1.1\";\n\n        builder = builtins.toFile \"builder.sh\" \"\n          source $stdenv/setup\n\n          PATH=$perl/bin:$PATH\n\n          tar xvfz $src\n          cd hello-*\n          ./configure --prefix=$out\n          make\n          make install\n        \";\n\n        src = fetchurl {\n          url = \"http://ftp.nluug.nl/pub/gnu/hello/hello-2.1.1.tar.gz\";\n          sha256 = \"1md7jsfd8pa45z73bz1kszpp01yw6x5ljkjk2hx7wl800any6465\";\n        };\n        inherit perl;\n      }\n      ```\n\n      It is even possible for one file to refer to another, e.g.,\n\n      ```nix\n      builder = let\n        configFile = builtins.toFile \"foo.conf\" \"\n          # This is some dummy configuration file.\n          ...\n        \";\n      in builtins.toFile \"builder.sh\" \"\n        source $stdenv/setup\n        ...\n        cp ${configFile} $out/etc/foo.conf\n      \";\n      ```\n\n      Note that `${configFile}` is a\n      [string interpolation](@docroot@/language/types.md#type-string), so the result of the\n      expression `configFile`\n      (i.e., a path like `/nix/store/m7p7jfny445k...-foo.conf`) will be\n      spliced into the resulting string.\n\n      It is however *not* allowed to have files mutually referring to each\n      other, like so:\n\n      ```nix\n      let\n        foo = builtins.toFile \"foo\" \"...${bar}...\";\n        bar = builtins.toFile \"bar\" \"...${foo}...\";\n      in foo\n      ```\n\n      This is not allowed because it would cause a cyclic dependency in\n      the computation of the cryptographic hashes for `foo` and `bar`.\n\n      It is also not possible to reference the result of a derivation. If\n      you are using Nixpkgs, the `writeTextFile` function is able to do\n      that.\n    ",
+      "evidence": {
+        "endLine": 2783,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2708
+      },
+      "exports": [
+        {
+          "name": "__toFile",
+          "namespace": ""
+        },
+        {
+          "name": "toFile",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:f0b6efae7d03013c31ba549d20680264381c095923abd2e904360f9b7494cba5",
+      "parameters": ["name", "s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return a string containing a JSON representation of *e*. Strings,\n      integers, floats, booleans, nulls and lists are mapped to their JSON\n      equivalents. Sets (except derivations) are represented as objects.\n      Derivations are translated to a JSON string containing the\n      derivation’s output path. Paths are copied to the store and\n      represented as a JSON string of the resulting store path.\n    ",
+      "evidence": {
+        "endLine": 2628,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2616
+      },
+      "exports": [
+        {
+          "name": "__toJSON",
+          "namespace": ""
+        },
+        {
+          "name": "toJSON",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:d9462204147281d2d00f16f97e8fb034059a634a8dda40028160d6eaa69560a5",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      **DEPRECATED.** Use `/. + \"/path\"` to convert a string into an absolute\n      path. For relative paths, use `./. + \"/path\"`.\n    ",
+      "evidence": {
+        "endLine": 1912,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1904
+      },
+      "exports": [
+        {
+          "name": "__toPath",
+          "namespace": ""
+        },
+        {
+          "name": "toPath",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:1ce28b7f5a1702990d9843df4d0597618f35126389e2eecee149c6d16dbe0db3",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Convert the expression *e* to a string. *e* can be:\n\n        - A string (in which case the string is returned unmodified).\n\n        - A path (e.g., `toString /foo/bar` yields `\"/foo/bar\"`.\n\n        - A set containing `{ __toString = self: ...; }` or `{ outPath = ...; }`.\n\n        - An integer.\n\n        - A list, in which case the string representations of its elements\n          are joined with spaces.\n\n        - A Boolean (`false` yields `\"\"`, `true` yields `\"1\"`).\n\n        - `null`, which yields the empty string.\n    ",
+      "evidence": {
+        "endLine": 4502,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 4480
+      },
+      "exports": [
+        {
+          "name": "toString",
+          "namespace": ""
+        },
+        {
+          "name": "toString",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:938184a7525a5a403e6ca394245f789635b58bc2aba080137e38b85b2d86e0ad",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return a string containing an XML representation of *e*. The main\n      application for `toXML` is to communicate information with the\n      builder in a more structured format than plain environment\n      variables.\n\n      Here is an example where this is the case:\n\n      ```nix\n      { stdenv, fetchurl, libxslt, jira, uberwiki }:\n\n      stdenv.mkDerivation (rec {\n        name = \"web-server\";\n\n        buildInputs = [ libxslt ];\n\n        builder = builtins.toFile \"builder.sh\" \"\n          source $stdenv/setup\n          mkdir $out\n          echo \"$servlets\" | xsltproc ${stylesheet} - > $out/server-conf.xml ①\n        \";\n\n        stylesheet = builtins.toFile \"stylesheet.xsl\" ②\n         \"<?xml version='1.0' encoding='UTF-8'?>\n          <xsl:stylesheet xmlns:xsl='http://www.w3.org/1999/XSL/Transform' version='1.0'>\n            <xsl:template match='/'>\n              <Configure>\n                <xsl:for-each select='/expr/list/attrs'>\n                  <Call name='addWebApplication'>\n                    <Arg><xsl:value-of select=\\\"attr[@name = 'path']/string/@value\\\" /></Arg>\n                    <Arg><xsl:value-of select=\\\"attr[@name = 'war']/path/@value\\\" /></Arg>\n                  </Call>\n                </xsl:for-each>\n              </Configure>\n            </xsl:template>\n          </xsl:stylesheet>\n        \";\n\n        servlets = builtins.toXML [ ③\n          { path = \"/bugtracker\"; war = jira + \"/lib/atlassian-jira.war\"; }\n          { path = \"/wiki\"; war = uberwiki + \"/uberwiki.war\"; }\n        ];\n      })\n      ```\n\n      The builder is supposed to generate the configuration file for a\n      [Jetty servlet container](http://jetty.mortbay.org/). A servlet\n      container contains a number of servlets (`*.war` files) each\n      exported under a specific URI prefix. So the servlet configuration\n      is a list of sets containing the `path` and `war` of the servlet\n      (①). This kind of information is difficult to communicate with the\n      normal method of passing information through an environment\n      variable, which just concatenates everything together into a\n      string (which might just work in this case, but wouldn’t work if\n      fields are optional or contain lists themselves). Instead the Nix\n      expression is converted to an XML representation with `toXML`,\n      which is unambiguous and can easily be processed with the\n      appropriate tools. For instance, in the example an XSLT stylesheet\n      (at point ②) is applied to it (at point ①) to generate the XML\n      configuration file for the Jetty server. The XML representation\n      produced at point ③ by `toXML` is as follows:\n\n      ```xml\n      <?xml version='1.0' encoding='utf-8'?>\n      <expr>\n        <list>\n          <attrs>\n            <attr name=\"path\">\n              <string value=\"/bugtracker\" />\n            </attr>\n            <attr name=\"war\">\n              <path value=\"/nix/store/d1jh9pasa7k2...-jira/lib/atlassian-jira.war\" />\n            </attr>\n          </attrs>\n          <attrs>\n            <attr name=\"path\">\n              <string value=\"/wiki\" />\n            </attr>\n            <attr name=\"war\">\n              <path value=\"/nix/store/y6423b1yi4sx...-uberwiki/uberwiki.war\" />\n            </attr>\n          </attrs>\n        </list>\n      </expr>\n      ```\n\n      Note that we used the `toFile` built-in to write the builder and\n      the stylesheet “inline” in the Nix expression. The path of the\n      stylesheet is spliced into the builder using the syntax `xsltproc\n      ${stylesheet}`.\n    ",
+      "evidence": {
+        "endLine": 2603,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 2508
+      },
+      "exports": [
+        {
+          "name": "__toXML",
+          "namespace": ""
+        },
+        {
+          "name": "toXML",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:97055bf9a908111f1adc1624bd04ae8f85203be9bd5f344d537ab55136c7772f",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Evaluate *e1* and print its abstract syntax representation on\n      standard error. Then return *e2*. This function is useful for\n      debugging.\n\n      If the\n      [`debugger-on-trace`](@docroot@/command-ref/conf-file.md#conf-debugger-on-trace)\n      option is set to `true` and the `--debugger` flag is given, the\n      interactive debugger is started when `trace` is called (like\n      [`break`](@docroot@/language/builtins.md#builtins-break)).\n    ",
+      "evidence": {
+        "endLine": 1307,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1292
+      },
+      "exports": [
+        {
+          "name": "__trace",
+          "namespace": ""
+        },
+        {
+          "name": "trace",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:d5c1543a4567ae22d4975a98bd3784213b55075d962c42b7f90867fc74969aed",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n          Evaluate *e1* and print its abstract syntax representation on standard\n          error if `--trace-verbose` is enabled. Then return *e2*. This function\n          is useful for debugging.\n        ",
+      "evidence": {
+        "endLine": 5379,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5369
+      },
+      "exports": [
+        {
+          "name": "__traceVerbose",
+          "namespace": ""
+        },
+        {
+          "name": "traceVerbose",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:15bbf6866c21da01d677f7f542c3c30c32eb1fb1204f302ad9698798920d9776",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n          Primitive value.\n\n          It can be returned by\n          [comparison operators](@docroot@/language/operators.md#comparison)\n          and used in\n          [conditional expressions](@docroot@/language/syntax.md#conditionals).\n\n          The name `true` is not special, and can be shadowed:\n\n          ```nix-repl\n          nix-repl> let true = 1; in true\n          1\n          ```\n        ",
+      "evidence": {
+        "endLine": 5190,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 5170
+      },
+      "exports": [
+        {
+          "name": "true",
+          "namespace": ""
+        },
+        {
+          "name": "true",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:41c8e35bd43d0df0740a435dd551fa8f23e8aa93705a2a5dfa4175f367fb294d",
+      "parameters": null
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Try to shallowly evaluate *e*. Return a set containing the\n      attributes `success` (`true` if *e* evaluated successfully,\n      `false` if an error was thrown) and `value`, equalling *e* if\n      successful and `false` otherwise. `tryEval` only prevents\n      errors created by `throw` or `assert` from being thrown.\n      Errors `tryEval` doesn't catch are, for example, those created\n      by `abort` and type errors generated by builtins. Also note that\n      this doesn't evaluate *e* deeply, so `let e = { x = throw \"\"; };\n      in (builtins.tryEval e).success` is `true`. Using\n      `builtins.deepSeq` one can get the expected result:\n      `let e = { x = throw \"\"; }; in\n      (builtins.tryEval (builtins.deepSeq e e)).success` is\n      `false`.\n\n      `tryEval` intentionally does not return the error message, because that risks bringing non-determinism into the evaluation result, and it would become very difficult to improve error reporting without breaking existing expressions.\n      Instead, use [`builtins.addErrorContext`](@docroot@/language/builtins.md#builtins-addErrorContext) to add context to the error message, and use a Nix unit testing tool for testing.\n    ",
+      "evidence": {
+        "endLine": 1211,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1189
+      },
+      "exports": [
+        {
+          "name": "__tryEval",
+          "namespace": ""
+        },
+        {
+          "name": "tryEval",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:137d866313ede7436e5a19106e1eaae22b944c81ac705c359803fe67836181ca",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Return a string representing the type of the value *e*, namely\n      `\"int\"`, `\"bool\"`, `\"string\"`, `\"path\"`, `\"null\"`, `\"set\"`,\n      `\"list\"`, `\"lambda\"` or `\"float\"`.\n    ",
+      "evidence": {
+        "endLine": 580,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 571
+      },
+      "exports": [
+        {
+          "name": "__typeOf",
+          "namespace": ""
+        },
+        {
+          "name": "typeOf",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:c89d2210e95de716b09a7cd74c8f01827bf1d3550e05d7d445225a05c621795c",
+      "parameters": ["e"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Create a copy of the given string where every\n      [derivation deep](@docroot@/language/string-context.md#string-context-element-derivation-deep)\n      string context element is turned into a\n      [constant](@docroot@/language/string-context.md#string-context-constant)\n      string context element.\n\n      This is the opposite of [`builtins.addDrvOutputDependencies`](#builtins-addDrvOutputDependencies).\n\n      This is unsafe because it allows us to \"forget\" store objects we would have otherwise referred to with the string context,\n      whereas Nix normally tracks all dependencies consistently.\n      Safe operations \"grow\" but never \"shrink\" string contexts.\n      [`builtins.addDrvOutputDependencies`] in contrast is safe because \"derivation deep\" string context element always refers to the underlying derivation (among many more things).\n      Replacing a constant string context element with a \"derivation deep\" element is a safe operation that just enlargens the string context without forgetting anything.\n\n      [`builtins.addDrvOutputDependencies`]: #builtins-addDrvOutputDependencies\n    ",
+      "evidence": {
+        "endLine": 95,
+        "path": "src/libexpr/primops/context.cc",
+        "startLine": 75
+      },
+      "exports": [
+        {
+          "name": "__unsafeDiscardOutputDependency",
+          "namespace": ""
+        },
+        {
+          "name": "unsafeDiscardOutputDependency",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:f261ad6e87de5d14d67edd72da8106b4dbcdc4c682863198f1a928032a5f2a0a",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n        Discard the [string context](@docroot@/language/string-context.md) from a value that can be coerced to a string.\n    ",
+      "evidence": {
+        "endLine": 24,
+        "path": "src/libexpr/primops/context.cc",
+        "startLine": 17
+      },
+      "exports": [
+        {
+          "name": "__unsafeDiscardStringContext",
+          "namespace": ""
+        },
+        {
+          "name": "unsafeDiscardStringContext",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:599f249032d4da8af84524341e341b21f6b27d57a80412d43c033071efbba0d8",
+      "parameters": ["s"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      `unsafeGetAttrPos` returns the position of the attribute named *s*\n      from *set*. This is used by Nixpkgs to provide location information\n      in error messages.\n    ",
+      "evidence": {
+        "endLine": 3138,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3127
+      },
+      "exports": [
+        {
+          "name": "__unsafeGetAttrPos",
+          "namespace": ""
+        },
+        {
+          "name": "unsafeGetAttrPos",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:562f6241554778fe1d31dcf87bdbdf696375b823d2896598f03dfa214b71d5ee",
+      "parameters": ["s", "set"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Evaluate *e1*, which must be a string, and print it on standard error as a warning.\n      Then return *e2*.\n      This function is useful for non-critical situations where attention is advisable.\n\n      If the\n      [`debugger-on-trace`](@docroot@/command-ref/conf-file.md#conf-debugger-on-trace)\n      or [`debugger-on-warn`](@docroot@/command-ref/conf-file.md#conf-debugger-on-warn)\n      option is set to `true` and the `--debugger` flag is given, the\n      interactive debugger will be started when `warn` is called (like\n      [`break`](@docroot@/language/builtins.md#builtins-break)).\n\n      If the\n      [`abort-on-warn`](@docroot@/command-ref/conf-file.md#conf-abort-on-warn)\n      option is set, the evaluation is aborted after the warning is printed.\n      This is useful to reveal the stack trace of the warning, when the context is non-interactive and a debugger can not be launched.\n    ",
+      "evidence": {
+        "endLine": 1360,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 1339
+      },
+      "exports": [
+        {
+          "name": "__warn",
+          "namespace": ""
+        },
+        {
+          "name": "warn",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:91353c754e8b2ae644d0ea6b41305bf7e15956402fb4b495ac029f051aa377aa",
+      "parameters": ["e1", "e2"]
+    },
+    {
+      "behavior": "opaque",
+      "confidence": "source",
+      "documentation": "\n      Transpose a list of attribute sets into an attribute set of lists,\n      then apply `mapAttrs`.\n\n      `f` receives two arguments: the attribute name and a non-empty\n      list of all values encountered for that attribute name.\n\n      The result is an attribute set where the attribute names are the\n      union of the attribute names in each element of `list`. The attribute\n      values are the return values of `f`.\n\n      ```nix\n      builtins.zipAttrsWith\n        (name: values: { inherit name values; })\n        [ { a = \"x\"; } { a = \"y\"; b = \"z\"; } ]\n      ```\n\n      evaluates to\n\n      ```\n      {\n        a = { name = \"a\"; values = [ \"x\" \"y\" ]; };\n        b = { name = \"b\"; values = [ \"z\" ]; };\n      }\n      ```\n    ",
+      "evidence": {
+        "endLine": 3624,
+        "path": "src/libexpr/primops.cc",
+        "startLine": 3594
+      },
+      "exports": [
+        {
+          "name": "__zipAttrsWith",
+          "namespace": ""
+        },
+        {
+          "name": "zipAttrsWith",
+          "namespace": "builtins"
+        }
+      ],
+      "identity": "builtin:6ac86226b0047f9284fd71432fbca5cbe707ff61b0d04dc681b4a2c63cb92ff1",
+      "parameters": ["f", "list"]
+    }
+  ],
+  "generatorVersion": "1",
+  "modelVersion": "sha256:7d63194ef2974a41721381c1b010dd4f990f18a12b91e26c3c19d92699a4c2bf",
+  "policy": {
+    "experimental-features": "flakes nix-command",
+    "plugin-files": "",
+    "pure-eval": "true"
+  },
+  "runtime": {
+    "identity": "nix (Nix) 2.34.9",
+    "sourceHash": "sha256-ZJwg/qG4M1Impy774HKMZ3Hsq7vlBJy7sXl1fI9QDXI="
+  }
+}

@@ -4,7 +4,8 @@
 > explicit owner check imports; document and check inventories live in the owner
 > registry and checks entry point. S1 adds combined-schema generation and
 > standalone raw location tests; E1 adds the isolated metadata projection check;
-> S2 registers source and anchor acceptance; Q0 adds the installed query check.
+> S2 registers source and anchor acceptance; Q0 adds the installed query check;
+> M3 adds generated builtin model acceptance.
 
 ## Purpose and fit
 
@@ -53,6 +54,12 @@ check serialized metadata requests, budgets, refusal paths and validated TRAP
 handoff. See [evaluation-isolation.md](evaluation-isolation.md) for admission
 rules, runtime limits and the exact cases. This check supplies no module adapter
 or CodeQL database import.
+
+`codeql-nix-builtin-models` adds the Linux-only
+[builtin model acceptance](builtin-models.md) through the same explicit imports
+and nonempty Python runner. Its suite also invokes its named QL fixtures against
+the installed extractor and checks a separate real Nix oracle. Model facts
+remain separate from syntax generation and evaluation tables.
 
 ## Pack boundaries
 

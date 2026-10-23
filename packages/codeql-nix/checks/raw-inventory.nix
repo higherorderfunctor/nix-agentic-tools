@@ -1,4 +1,5 @@
 {
+  inputs,
   lib,
   pkgs,
   self,
@@ -43,7 +44,7 @@
         ln -s ${build}/bin/qltest.sh "$out/tools/autobuild.sh"
       '';
       owner = ../.;
-      packaging = import ../lib/packaging.nix {inherit lib pkgs;};
+      packaging = import ../lib/packaging.nix {inherit inputs lib pkgs;};
       strictShell = import ../../../lib/strict-shell-application.nix pkgs;
     in
       pkgs.runCommand "codeql-nix-raw-inventory" {
@@ -57,7 +58,7 @@
         ${packaging.generator}/bin/nixql-generate second
         diff -r first second
         diff -r first ${packaging.generated}
-        diff -r first ${owner}/generated
+        diff -r --exclude=models first ${owner}/generated
         python3 ${./fixtures/raw-inventory/test_inventory.py} \
           ${packaging.generated} ${owner}/schema/contract.json
         cp ${owner}/ql/test/qlpack.yml tests/

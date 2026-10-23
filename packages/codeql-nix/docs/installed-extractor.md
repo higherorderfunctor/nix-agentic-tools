@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-23 — P2a installs one coordinator for database
 > creation and query tests, preserving authenticated partial work; Q0 adds a
-> separate installed lifecycle check.
+> separate installed lifecycle check; M3 adds the generated model fingerprint to
+> the existing run identity.
 
 ## Terms
 
@@ -79,9 +80,13 @@ installed run snapshot.
 
 `RunIdentity` in `src/extract.py` owns the shared identity. It hashes the
 installed combined schema, producer implementation bytes, admitted root
-identities and selected file digests. Named dependency pins participate even
-though their syntax is not selected. Only project-root `*.nix` files are
-selected for syntax extraction.
+identities and selected file digests. The generated builtin model fingerprint
+from the packaging pins supplies `nx_runs.modelHash` and participates in the run
+key; installed packaging always supplies the actual model. Legacy fixture pins
+without a model retain `not-requested`. An explicitly requested target model
+must match the run. Named dependency pins participate even though their syntax
+is not selected. Only project-root `*.nix` files are selected for syntax
+extraction.
 
 The coordinator passes that identity to [syntax extraction](source-identity.md)
 and the [evaluation supervisor](evaluation-isolation.md). Syntax checks its
@@ -138,11 +143,9 @@ envelope. Keep that distinction when reporting mixed-snapshot coverage. General
 evaluator isolation and authenticated syntax mapping retain their separate owner
 checks.
 
-To change installation, edit the existing packaging assembly and recipes
-together; keep all hooks on the coordinator and preserve shared schema bytes. To
-change identity or admission, update `RunIdentity` and both producer boundaries
-together, retaining ABI/target-contract validation and independent refusal
-expectations. Register new fixtures through the owner check entry point. Format
-changed files, run the affected owner checks through CI and update this note
-plus its registry entry when these obligations change. Regenerate instruction
-projections from their sources rather than editing generated consumers.
+Change installation through the existing assembly and recipes, keeping hooks on
+the coordinator and schema bytes shared. Change identity or admission through
+`RunIdentity` and both producer boundaries, preserving validation and
+independent refusal expectations. Register fixtures through the owner check
+entry point, format changes and run affected checks through CI. Update this note
+and its registry entry when these obligations change.

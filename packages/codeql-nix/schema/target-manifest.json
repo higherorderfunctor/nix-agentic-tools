@@ -57,7 +57,7 @@
               "$ref": "#/$defs/identity"
             },
             "modelVersion": {
-              "const": "not-requested"
+              "$ref": "#/$defs/identity"
             },
             "policyHash": {
               "$ref": "#/$defs/identity"
