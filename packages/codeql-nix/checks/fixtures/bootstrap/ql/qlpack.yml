@@ -1,5 +1,0 @@
-dbscheme: nix.dbscheme
-extractor: nix
-library: true
-name: nix-agentic-tools/nix-bootstrap
-version: 0.0.0

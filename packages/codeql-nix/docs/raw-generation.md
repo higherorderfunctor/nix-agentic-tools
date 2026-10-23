@@ -5,7 +5,7 @@
 > standalone location tests retain exact archived bytes and missing/corrupt
 > archive refusals. S2 adds the authenticated source driver and companion raw
 > bridge; M3 keeps builtin model generation and its byte comparisons separate
-> from syntax generation.
+> from syntax generation. R0 promotes shared Rust into production `src/`.
 
 ## Purpose and fit
 
@@ -19,17 +19,17 @@ manifest for diff review. These are private syntax interfaces; later meaning
 modules must absorb generated class churn instead of exposing it as a stable
 public API.
 
-`lib/kit.nix` shares F0's grammar/kit pins, Cargo lock and vendoring with S1. It
-builds the small `src/generate.rs` entry point alongside the private bootstrap
-fixture. That reuse supplies generation and the test-only syntax producer; it
-supplies the raw binary reused by S2's source driver, without installing the
-final extractor distribution or an evaluation producer. `lib/packaging.nix`
-requires the existing CodeQL owner's engine version to remain `2.27.3`, so an
-engine update requires a kit compatibility audit.
+`lib/kit.nix` owns the shared grammar/kit pins and builds production
+`src/Cargo.toml`, `src/Cargo.lock` and Rust sources. The generator, raw writer
+and anchor bridge share that audited syntax implementation; no bootstrap fixture
+owns production dependencies. The kit build supplies binaries, while
+installation and evaluation remain separate assembly responsibilities.
+`lib/packaging.nix` requires the existing CodeQL owner's engine version to
+remain `2.27.3`, so an engine update requires a kit compatibility audit.
 
 ## Generated artifacts and manifest
 
-`src/generate.rs` passes the pinned grammar's node types to the kit without F0's
+`src/generate.rs` passes the pinned grammar's node types to the kit without a
 disposable target relation. `src/generate.py` appends one newline and the exact
 F1 `schema/evaluation.dbscheme` bytes to the generated schema. Its outputs are:
 
@@ -64,11 +64,11 @@ source-root-relative paths using `sourceLocationPrefix`. `Location` reads its
 file and start/end line/column from `locations_default`. This adapter depends on
 the combined schema directly and declares no other language-library dependency.
 
-The adapter preserves F0's file/location interface; it does not authenticate
-source snapshots or associate handwritten anchors with raw nodes. S2's
-[source driver and RawBridge](source-identity.md) supply those joins through a
-namespaced companion metadata index. A path/location row alone does not
-establish a unique syntax anchor or expression-to-value provenance.
+The adapter preserves the established file/location interface; it does not
+authenticate source snapshots or associate handwritten anchors with raw nodes.
+S2's [source driver and RawBridge](source-identity.md) supply those joins
+through a namespaced companion metadata index. A path/location row alone does
+not establish a unique syntax anchor or expression-to-value provenance.
 
 ## Check and change procedure
 

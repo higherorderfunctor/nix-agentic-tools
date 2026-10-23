@@ -1,9 +1,8 @@
-"""Exercise the actual fixture extractor before kit tuple-string clipping occurs."""
+"""Exercise the shared production syntax writer before kit text clipping occurs."""
 
 import argparse
 from itertools import chain
 import json
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -97,7 +96,7 @@ def diagnostic_cases():
         yield name + "/near-limit-path", source, logical, "", False, node_types
 
 
-def check_result(result, trap_file, exact, accepted, name, refusal_code=2):
+def check_result(result, trap_file, exact, accepted, name):
     if accepted:
         assert result.returncode == 0, (name, result.returncode, result.stderr[:4096])
         assert trap_file.is_file(), (name, "no completed TRAP")
@@ -106,8 +105,7 @@ def check_result(result, trap_file, exact, accepted, name, refusal_code=2):
         assert all(len(text.encode("utf-8")) <= LIMIT for text in strings), name
     else:
         assert result.returncode != 0, (name, "expected refusal")
-        if refusal_code is not None:
-            assert result.returncode == refusal_code, (name, result.returncode)
+        assert result.returncode == 2, (name, result.returncode)
         assert b"text-field-too-large" in result.stderr, (name, result.stderr[:4096])
         assert len(result.stderr) < 8192, (name, "diagnostic embeds oversized field")
         assert not trap_file.exists(), (name, "rejected transaction published TRAP")
@@ -135,40 +133,13 @@ def syntax_cases(probe, scratch):
     print(f"PASS {count} raw exact-text and diagnostic cases")
 
 
-def evaluation_cases(evaluation, scratch):
-    for size in (LIMIT - 1, LIMIT, LIMIT + 1):
-        name = f"evaluation-derived-path/{size}"
-        with tempfile.TemporaryDirectory(prefix="evaluation-", dir=scratch) as temp:
-            root = Path(temp).resolve()
-            relative = "x" * (size - len(os.fsencode(root)) - 1)
-            absolute = str(root / relative)
-            assert len(relative.encode("utf-8")) <= LIMIT
-            assert len(absolute.encode("utf-8")) == size
-            (root / "targets.tsv").write_text(
-                "control\tcontrol.nix\t41\n" + f"target\t{relative}\t41\n", encoding="utf-8"
-            )
-            result = subprocess.run(
-                [str(evaluation.resolve()), "evaluation"],
-                cwd=root,
-                env={**os.environ, "CODEQL_EXTRACTOR_NIX_TRAP_DIR": str(root)},
-                capture_output=True,
-                check=False,
-                timeout=90,
-            )
-            check_result(result, root / "evaluation.trap", absolute, size <= LIMIT, name, refusal_code=None)
-        print(f"PASS {name}")
-    print("PASS 3 second-producer derived-path cases")
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--probe", type=Path, required=True)
-    parser.add_argument("--evaluation", type=Path, required=True)
     parser.add_argument("--scratch", type=Path, required=True)
     args = parser.parse_args()
     args.scratch.mkdir(parents=True, exist_ok=True)
     syntax_cases(args.probe, args.scratch)
-    evaluation_cases(args.evaluation, args.scratch)
 
 
 if __name__ == "__main__":

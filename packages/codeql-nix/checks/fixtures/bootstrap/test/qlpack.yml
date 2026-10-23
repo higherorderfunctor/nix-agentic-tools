@@ -1,5 +1,0 @@
-dependencies:
-  nix-agentic-tools/nix-bootstrap: "*"
-extractor: nix
-name: nix-agentic-tools/nix-bootstrap-tests
-version: 0.0.0
