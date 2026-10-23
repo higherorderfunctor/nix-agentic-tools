@@ -48,10 +48,16 @@ repeated_endpoint = '\n```json\n{"env":{"ANTHROPIC_BASE_URL":"https://api.z.ai/a
 assert extractor.extract(claude + repeated_endpoint, overview, quick_start) == result
 manual_endpoint = repeated_endpoint.replace("```json", "```bash\n# Manual configuration")
 assert extractor.extract(claude + manual_endpoint, overview, quick_start) == result
+assert extractor.extract(claude, overview.replace(
+    "](/api-reference/", "](https://docs.z.ai/api-reference/"
+), quick_start) == result
 misses = []
 for name, bad_claude, bad_overview in [
     ("missing tier", claude.replace("ANTHROPIC_DEFAULT_HAIKU_MODEL", "REMOVED"), overview),
     ("tier outside catalog", claude, overview.replace("GLM-42", "GLM-43")),
+    ("foreign reference host", claude, overview.replace(
+        "](/api-reference/", "](https://docs.z.ai.example.com/api-reference/"
+    )),
     ("all references changed", claude, overview.replace("chat-completion", "removed")),
     ("partial row reference drift", claude, overview.replace("| GLM-43 | [API Reference](/api-reference/llm/chat-completion.md)", "| GLM-43 | [API Reference](/api-reference/llm/new-chat-completion.md)")),
     ("conflicting Anthropic URLs", claude + repeated_endpoint.replace("/api/anthropic", "/api/changed"), overview),
