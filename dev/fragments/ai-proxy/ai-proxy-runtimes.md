@@ -1,8 +1,15 @@
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-22 — both Harnesses share the redact client-key
-> helper; named client routes supply Claude picker rows; Codex writes no
-> per-credential profiles.
+> **Last verified:** 2026-10-22 — Claude uses `redact.assign` and the shared
+> reader through `apiKeyHelper` for file, command and concat references, and
+> clears inherited API keys, bearer tokens, custom headers and
+> Bedrock/Vertex/Foundry switches in settings, and suppresses the inherited
+> API-key descriptor before Claude starts. Codex uses command-backed provider
+> auth. Named client routes supply Claude `/model` picker rows (listed and
+> selectable for a non-Anthropic id in 2.1.306, read from the bundle); Codex
+> discovers CPA models without per-credential profiles. Both use the shared
+> client-key helper. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport`
+> and warn through the generated warning cases.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 

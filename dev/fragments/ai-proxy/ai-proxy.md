@@ -1,26 +1,122 @@
-## Named CPA routing for Harnesses
+## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-22 — Instances own named upstream credentials and
-> client keys; Harnesses select `instance` + `clientKey` on Home Manager and
-> devenv.
+> **Last verified:** 2026-10-22 — instances own named upstream credentials and
+> client keys; harnesses select `instance` + `clientKey`. Claude offers routed
+> API-key models in its picker; Codex discovers CPA models without profiles.
+> Both consume the shared redact client-key helper.
 
-CPA means the local CLIProxyAPI proxy. An Instance is
-`ai.cliproxyapi.instances.<name>`. A Harness is Claude Code or Codex CLI. A
-Vendor is Anthropic, OpenAI or z.ai; `oauth.vendor` uses CPA's provider field
-(`claude`, `codex`). A client key is the secret a Harness presents to CPA. An
-upstream credential is either an OAuth login CPA writes to its auth directory or
-an API key declared in Nix. An allowlist rule is an `access.key-allowlist`
-entry's credential rule.
+`ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
+only the proxy's client key, never an upstream credential. The proxy holds the
+logins. `ai.mcpServers.<name>.proxy` (lib/ai/mcpProxy.nix) is an unrelated MCP
+credential proxy.
 
-### Declare once, route by name
+### Shape
 
-An Instance's `credentials.<name>` declares exactly one of `oauth` or `apiKey`.
-`clientKeys.<name>` holds a redact `key` and an ordered `routes` list. Each
-route names `credential` and, for an API-key credential serving several APIs,
-`api`. Omit `api` for OAuth; a single-API credential selects its sole API
-automatically. CPA translates Harness protocols, so a Codex client key can
-select a chat-only credential. An unserved API or unknown credential is an
-evaluation error naming the input.
+- Library: `lib/ai/proxy/default.nix`. Options, validation and `resolve` live
+  there.
+- `sharedOptions.nix` registers the root option and asserts the root selection.
+- `proxy` is a key of `sharedSurfaceOptions`, so it is a delivery-policy surface
+  and every enabled runtime whose `surfaceSupport` omits `proxy` gets the
+  standard decomposition warning. Claude and Codex declare support; the other
+  runtimes warn rather than dropping a selection silently.
+- `mkBackendTransform.nix`, for a record whose `surfaceSupport` declares
+  `proxy`, declares `ai.<runtime>.proxy` with the root's selection options and
+  `ai.<runtime>.normalized.proxy`. The callbacks get it as `normalized.proxy`
+  and `resolvedProxy`. Harness selection publishes no keys, rules or claims;
+  these belong to the selected instance's named entries.
+
+### Selection and the resolved endpoint
+
+A selection is `url` + `key` for a proxy configured by hand, or `instance` +
+`clientKey` for one this flake runs. `instance` names an
+`ai.cliproxyapi.instances` entry (`packages/cliproxyapi/modules/instances.nix`)
+and resolves through `packages/ai-module/lib/instances.nix`'s `select` to
+`http://127.0.0.1:<port>`; `url` and `instance` are mutually exclusive.
+`clientKey` names that instance's `clientKeys` entry. Missing or disabled
+instances, unknown client keys, and incomplete selections fail as assertions at
+either scope, outside the runtime enable gate. An external selection without a
+key is rejected because the harness would send its own login token, if any, to
+the proxy. The instances are read as `config.ai.cliproxyapi.instances or {}`,
+since an evaluation without the owner module (the factory harness) has none.
+
+A per-runtime selection that selects anything (a `url` or an `instance`)
+replaces the root selection WHOLE. Fields never mix across levels: a runtime
+`key` or `clientKey` alone leaves the root selection in force and fails its own
+assertion. The resolved value is null or `{key; credentials; url;}`. `url` is
+the origin only: each runtime appends its own protocol path, so a path would be
+doubled.
+
+An external `key` or an instance client entry's `key` requires
+`redact.types.redacted`: `redact.file`, `redact.command` or `redact.concat` with
+a reference. It authenticates access to the proxy's upstream subscriptions, so
+cleartext has no harmless use here. Root and per-runtime options use the same
+type as the normalized endpoint.
+
+References remain unresolved during evaluation. A consuming runtime must use
+`redact.assign` when its launcher or credential helper starts and escape the
+resolved value for its destination format. A key's contents cannot be
+charset-checked at evaluation; never substitute the runtime value unescaped into
+JSON, TOML or shell source. The `url` pattern validates only the proxy origin.
+
+### Runtime keys and the allowlist
+
+An instance declares `clientKeys.<name> = {key; routes;}`. Each route names an
+upstream `credential`; the instance adds the key to `access.api-keys` and maps
+its routes to its `access.key-allowlist` entry. The launcher presents the same
+key through `normalized.proxy`; CPA fails closed for each listed key (see
+`cliproxyapi-key-allowlist.md`). Runtime `proxy.allow` and `proxy.providers` are
+removed: selecting a client key selects its declared routes.
+
+A harness must not define the instance: that would make a misspelled name look
+valid, and checking existence from the definition would recurse. Multiple
+harnesses can select the same named client key. A client key decides upstream
+access; separate local harness state requires `CLAUDE_CONFIG_DIR` or
+`CODEX_HOME`.
+
+### Providers
+
+`ai.cliproxyapi.instances.<n>.credentials.<name>` declares exactly one of
+`oauth` or `apiKey`. OAuth declares `vendor` (CPA's provider name, such as
+`claude` or `codex`) and `authFile`, an exact JSON filename in
+`<stateDir>/auth`. Find it with `ls <stateDir>/auth` after CPA login; replace
+the illustrative filenames below with the actual names. Re-login can change the
+filename, so update `authFile` when it does. The generated OAuth rule uses
+`provider = vendor`, `kind = "oauth"`, and `ids = [authFile]`.
+
+An `apiKey` declares `key`, `models` and `apis.<api>.base-url` for the
+`anthropic`, `chat` or `responses` API. The API table in
+`packages/cliproxyapi/lib/providers.nix` lowers each into CPA's credential
+family; the settings list joins these blocks with hand-written blocks. A route
+can select `api`; omitting it selects a credential's sole API, and a multi-API
+credential requires it. OAuth routes omit `api`. Unknown credentials and
+unserved APIs fail evaluation. Generated API-key rules use the selected API's
+provider, `kind = "apikey"`, and exact `base-urls`.
+
+CPA trims base URLs with Go's `strings.TrimSpace`, which Nix cannot reproduce
+for every Unicode space. Provider URLs are printable ASCII, hand-written URLs in
+their family must have printable edges, and blocks in that family cannot share
+the provider's URL. These checks make CPA's exact match agree with Nix's.
+API-key credential names use letters, digits, `.`, `_` and `-`, starting with a
+letter or digit, so Go and Nix normalize their compatibility-provider identities
+alike.
+
+`normalized.proxy.credentials` is `[{name; models;}]` in client route order.
+Claude turns declared API-key models into `/model` picker rows; Codex discovers
+CPA's catalog without per-credential `-p` profiles (`ai-proxy-runtimes.md`).
+Route list order is preserved in generated rules and picker rows; it does not
+define CPA priority or fallback. Overlapping models can be spread across a
+client's credentials by CPA. Model overlap enforcement, per-client routing
+order/fallback and account prefixes are deferred.
+
+A named client key also listed by hand in `access.api-keys`, or given a
+hand-written `access.key-allowlist` entry, is refused: a second owner could
+widen or contradict its routes. Evaluation compares references, not secret
+values; distinct references resolving to the same key are rejected by CPA at
+startup or leave the old config on reload.
+
+An external `url` selection adds no instance keys or rules. A hand-written key
+of another client stays allowed, but once named client keys set the allowlist,
+that key needs its own hand-written entry.
 
 ```nix
 {inputs, ...}: let
@@ -83,55 +179,16 @@ in {
 }
 ```
 
-Replace the illustrative OAuth filenames with filenames from
-`ls <stateDir>/auth` after CPA login. CPA 8.0.38's
-`internal/watcher/synthesizer/file.go` assigns the file's path relative to the
-auth directory as its ID; `internal/auth/claude/filename.go` includes
-organization/account identity in Claude filenames. Re-login can produce a new
-name: update `authFile`, then restart the Instance. `authFile` accepts one
-nonempty JSON filename without path separators or leading ASCII whitespace. CPA
-compares allowlist IDs exactly; filenames must match byte for byte.
-
-For devenv, `redact.file "/run/user/<uid>/secrets/<name>"` can read the file
+For devenv, `redact.file "/run/user/<uid>/secrets/<name>"` can read a secret
 sops-nix already decrypted through Home Manager. Substitute your UID and secret
-name. The declarations retain references; the shared service launcher resolves
-upstream credentials at start, and `lib/ai/proxy/key-helper.nix` resolves client
-keys when either Harness asks. Secret values stay out of generated store files
-and evaluation output.
+name. The service launcher resolves upstream keys at start; the shared
+`lib/ai/proxy/key-helper.nix` resolves the selected client key when a harness
+asks. Values remain outside generated store files and evaluation output.
 
-OAuth lowers to `provider = vendor`, `kind = "oauth"`, `ids = [authFile]`; API
-keys lower through `packages/cliproxyapi/lib/providers.nix` into
-`settings.api-keys` plus `kind = "apikey"` and exact `base-urls`. Shared base
-URLs in the same CPA credential family fail evaluation because they would widen
-a rule. Printable ASCII URL constraints keep CPA's Unicode trimming from
-changing that comparison. Named client keys also cannot have a second
-hand-written access entry.
+### Checks
 
-The Vendor sees CPA's OAuth login. The selected client key decides personal/work
-access; separate local Harness state requires `CLAUDE_CONFIG_DIR` or
-`CODEX_HOME`. Overlapping models across a client's credentials are spread by CPA
-today. Route list order is preserved in generated rules and Claude picker rows;
-it does not define CPA priority or fallback. Model overlap enforcement,
-per-client routing order/fallback and account prefixes are deferred.
-
-### Selection and delivery
-
-`lib/ai/proxy/default.nix` owns selection types, validation and resolution.
-`sharedOptions.nix` declares `ai.proxy`; `mkBackendTransform.nix` declares the
-same selection for consuming Harnesses and `normalized.proxy`. A per-Harness
-selection replaces the root selection whole. Instance selection reads the named
-client key and resolves `http://127.0.0.1:<port>`; it publishes nothing.
-Missing/disabled Instances and unknown client keys fail evaluation. `url` +
-redact `key` selects an external CPA and adds no Instance keys or rules. Origins
-cannot contain a path.
-
-Resolved `{key; url; credentials;}` carries names and declared API-key models in
-route order. Claude gets picker rows through its user settings or devenv
-launcher; Codex discovers CPA's catalog and writes no per-credential profiles.
-Other runtimes warn through their declared surface support.
-`ai.mcpServers.<name>.proxy` is an unrelated MCP credential proxy.
-
-`module-ai-proxy-instance-clients` checks exact OAuth IDs (two logins of one
-Vendor), API rules, model rows, external selection and refused inputs on both
-backends. `module-service-instances-runtime-providers` sends requests through
-packaged CPA to stand-in upstreams; CI runs it.
+`module-ai-proxy-instance-clients` checks generated blocks, named routes, exact
+OAuth IDs, rules and refusals on both backends.
+`module-service-instances-runtime-providers` sends Anthropic and Responses
+requests through the packaged CPA. The other proxy checks cover selection, key
+references and runtime delivery.

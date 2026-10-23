@@ -256,9 +256,12 @@ install check needs a version that a local path lacks.
 
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-10-22 — named Instance client keys derive exact OAuth
-> IDs or API base-URL rules; the CPA 8.0.38 patch still rejects duplicate client
-> keys and fails closed. Reload widening requires restart as described below.
+> **Last verified:** 2026-10-22 — the patch applies to CPA 8.0.38 with no fuzz;
+> loading rejects duplicate client keys and startup exits 1 on refusal. Hot
+> reload can briefly serve a retired config credential under newly widened
+> rules, so rotation that also widens access requires a restart or an `ids`
+> rule. Named instance client routes derive exact OAuth IDs or API base-URL
+> rules.
 
 ## Why selection lives in CPA
 
@@ -366,9 +369,16 @@ change, then run the module assertions and Go check in CI.
 
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-22 — named upstream credentials and client keys
-> derive Instance API-key blocks and exact allowlist rules; typed settings still
-> come from extracted CPA 8.0.38 facts.
+> **Last verified:** 2026-10-22 — 926 config nodes, including the patched
+> `access.key-allowlist`, give the settings type through
+> `lib/extracted/options.nix`, with eight refinements and one module assertion
+> on the allowlist; the clean render passes native v8 validation and loads
+> through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
+> `ai.cliproxyapi.instances` renders it at start, defaults its listener to
+> loopback, turns off the unprompted fetches the pinned CPA has a switch for,
+> types `server.tls.key` as a secret file, and derives named client keys'
+> `access.api-keys` and `access.key-allowlist` entries from named upstream
+> routes.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is

@@ -1,149 +1,431 @@
-## ai.* layered fanout
+## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-22 — Instance-owned named CPA routing replaces
-> runtime-published keys and rules; the proxy selection is an ordinary
-> normalized scalar surface.
+> **Last verified:** 2026-10-22 — non-AI owners use the same layer-1 helper;
+> delivery facts derive delivered and absent cells, keyed withdrawal and
+> normalized gaps from option and runtime declarations; `poolOptions` covers
+> `agentsDir` and `environmentVariables` only; `optionNamespaces` places
+> launcher and pool options; the devenv file observer lives in ai-module and
+> reads the files plan; the shared AGENTS.md composer reaches the files plan as
+> the owner `internal`; Claude stages every surface, including HM `.claude.json`
+> as `rw`; the files engine writes its rules copies on devenv; staged Markdown
+> and raw entries are whole-content defaults; Kiro stages every surface, with
+> hooks, settings and steering legacy ledgers declared outside its enable gate;
+> Kimchi stages every surface, with every legacy ledger ungated; Codex stages
+> every surface and declares both copy ledgers while disabled; hand rows are
+> confined to the policy-only permissions surface; named CPA routing replaces
+> runtime proxy defaults; Claude's `native.unpinLaunchEffort` is declared for
+> Home Manager only, so delivery facts carry no supplement rows; backend
+> lowering and validation live only in ai-module.
+>
+> Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
-Full earlier detail:
-`git show 16168044:dev/fragments/ai-module/layered-fanout.md`. The files
-contract and backend rules live in `packages/ai-module/docs/contract.md`; fanout
-stages below are separate from its files layers.
+**Settled — do not relitigate.** User-local settings are asserted at switch.
+Choose a store symlink when an in-app write fails cleanly (Codex `config.toml`),
+a read-only copy when the CLI renames over its file (Kiro, Kimchi's
+`mcp.json`/`permissions.json`/`trust.json` and Codex daemon settings), and a
+switch-time overlay only for a mixed state file (Claude `~/.claude.json`,
+Kimchi's user `config.json` and `harness/settings.json`, which carry `/login`
+and `/model` state). The overlay repairs Nix-owned leaves while preserving
+harness state. Kimchi's two were read-only copies from 2026-09-29 to 2026-09-30,
+which locked `/login` out; do not move them back.
 
-### Five fanout stages
+| Mechanism                     | Portability and effect                                                                              | Decision               |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
+| Switch-time overlay           | Linux and macOS; repairs on switch                                                                  | Chosen for mixed state |
+| File watcher                  | systemd path or launchd WatchPaths; races on macOS                                                  | Declined               |
+| FUSE overlay                  | setuid helper or macFUSE/FUSE-T, unavailable in nixpkgs; whole-file renames defeat per-key blocking | Rejected               |
+| Root managed-settings layers  | Require system ownership outside user scope                                                         | Rejected               |
+| Environment or flag shadowing | Wrapper-launched sessions only, where the CLI exposes an input                                      | Used where available   |
 
-| Stage | Shape                                             | Owner                                    |
-| ----- | ------------------------------------------------- | ---------------------------------------- |
-| L1    | Optional `ai.<pool>Dir`                           | `sharedOptions.nix`, pure Dir helper     |
-| L2    | Root `ai.<pool>` entries                          | `sharedSurfaceOptions`                   |
-| L2b   | Optional per-runtime Dir input                    | `mkBackendTransform.nix`                 |
-| L3    | Per-runtime entries, then `normalized.<pool>`     | Transform root-to-runtime fold           |
-| L4    | `_generatedFiles` → `ai.<runtime>.files`          | Runtime factory and `generatedFiles.nix` |
-| L5    | `ai.files`, `ai.activation`, native backend sinks | ai-module alone                          |
+### Canonical layered shape
 
-L1/L2/L2b only reshape data. They never write runtime artifacts or backend
-sinks. A Dir option contributes individual files rather than taking a
-destination directory wholesale. Dir helpers live in `lib.ai.*`, work without
-modules, and retain each entry's key through suffix stripping and final
-rendering.
+```
+┌────────────────────────────────────────────────────────────┐
+│ L1: Top-level Dir option (optional)                        │
+│   ai.<X>Dir = path | { path, filter? }                     │
+└────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  fanout via lib.ai.<X>FromDir
+┌────────────────────────────────────────────────────────────┐
+│ L2: Top-level singles                                      │
+│   ai.<X> = attrsOf (<itemModule>)                          │
+│   - cross-ecosystem pool                                   │
+│   - nullable pools wrap itemModule in nullOr               │
+│   - rules use itemModule.enable                            │
+└────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  fanout to each enabled CLI
+┌────────────────────────────────────────────────────────────┐
+│ L2b: Per-CLI Dir option (optional)                         │
+│   ai.<cli>.<X>Dir = path | { path, filter? }               │
+└────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  fanout via lib.ai.<X>FromDir
+┌────────────────────────────────────────────────────────────┐
+│ L3: Per-CLI singles                                        │
+│   ai.<cli>.<X> = attrsOf (<itemModule>)                    │
+│   - exists only when the app record supports pool X        │
+│   - same-key value atomically replaces L2                  │
+│   - null or itemModule.enable suppresses by pool contract   │
+└────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  root-to-runtime fold
+                  ai.<cli>.normalized.<pool>
+                  ordinary option; per-key fold defaults
+                             │
+                             ▼  routing + native rendering
+┌────────────────────────────────────────────────────────────┐
+│ L4: Staged runtime output map                              │
+│   ai.<cli>._generatedFiles → ai.<cli>.files (files layer 1)│
+│   - text/source default; structured leaves compose         │
+│   - sibling fields compose; enable suppresses entries      │
+└────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  ai-module forwarding and lowering
+┌────────────────────────────────────────────────────────────┐
+│ L5: Delivery (files layers 2 and 3)                        │
+│   ai.files → native links: HM home.file.* / devenv files.* │
+│            → files engine copies (ro, rw)                  │
+│   ai.activation → HM home.activation / devenv tasks        │
+└────────────────────────────────────────────────────────────┘
+```
 
-### Placement and record validation
+L1–L5 are fanout stages, not the files layers 1–3 of
+`packages/ai-module/docs/contract.md`: L4 ends at files layer 1, and L5 is
+layers 2 and 3.
 
-A runtime record's `optionNamespaces` maps only `launcher` and `pools` to
-relative paths; omitted groups stay at its root. Kiro moves launcher options
-beneath `cli`; Copilot moves pools beneath `github`.
-`lib/ai/app/optionNamespaces.nix` controls declarations, defaults, callback
-reads, diagnostics and contributors together. Native agents and file/ledger
-options remain at the runtime root. Callbacks receive shared `cfg` and one
-normalized view.
+The runtime record has one data-only placement field, `optionNamespaces`,
+default `{}`: it maps the builder's two option groups to relative paths, and an
+omitted group stays at the runtime root. `launcher` holds package, environment,
+shell and their normalized inputs, plus the switch when nested; `pools` holds
+every other pool option and its normalized form. Kiro sets `launcher = ["cli"]`,
+so the root `ai.kiro.enable` is read-only and derived from `ai.kiro.cli.enable`.
+Copilot sets `pools = ["github"]` and reserves `launcher = ["cli"]`; a record
+without `defaults.package` has no launcher, so nothing is declared there and its
+root `enable` stays the switch. Declarations, per-key fold defaults, callback
+reads, diagnostics, policy input paths and package contributors all go through
+`lib/ai/app/optionNamespaces.nix`. Callbacks still receive the shared `cfg` and
+one complete `normalized` view. Native agents and every file/ledger remain at
+the runtime root. Each value must be a list of nonempty strings and only the two
+groups are accepted; constructor and transform both validate it. One attrset
+rather than a second path field: a runtime names exactly the groups it moves.
 
-`checkRecord.nix` validates at construction and transformation. Every placement
-value is a list of nonempty strings. `poolOptions` can override `agentsDir` and
-`environmentVariables`, only with the corresponding supported pool; it cannot
-override `agents`. `agentsDescriptionSuffix` supplies only a runtime-specific
-suffix. `agentNativeType` and `agentTransformer` must appear together and
-require the agents pool, as do agent suffixes. `agentsDirSuffixes` must be a
-nonempty string list. Explicit null counts as presence for the native pair.
+### Rules
 
-CPA selects through the proxy pool without runtime record defaults:
-`lib/ai/proxy/default.nix` resolves `instance` + `clientKey` or external `url` +
-redact `key`. The Instance owns named upstream credentials and routes; no
-runtime publishes client keys or allowlist rules. See
-`dev/fragments/ai-proxy/ai-proxy.md`.
+- **Artifact routing/rendering lives at L4; physical emission lives at L5.**
+  L1/L2/L2b are pure fanout — they never touch `ai.<runtime>.files`,
+  `home.file.*`, or devenv `files.*`. Managed MCP proxy declarations use the
+  ordinary `ai.internal.services` owner: `sharedOptions.nix` aggregates
+  declaration scopes while ai-module lowers the daemons. Only lowered client
+  entries traverse this five-stage pipeline.
+- **One owner per physical path.** Enabled runtime file maps supply layer-1
+  claims on both backends. Disabled entries still claim their path; disabled
+  owners forward nothing. Shared repository context forwards unclaimed through
+  the helper's `shared` list, leaving its composer the single owner. Agreeing
+  content merges; divergent content conflicts. The shared default method is
+  `ro`, with consumer method overrides governed by ordinary priorities.
+- **Compiled content stays lazy.** Staged Markdown and raw entries receive a
+  whole-content default at layer 1. A stronger replacement discards generated
+  sources unread, judged by `_contentPrio`. Codex's empty user context is
+  suppressed only when generated content wins. The shared repository composer
+  follows the same priority rule.
+- **Structured settings contribute per-leaf defaults.** Codex settings use
+  `content.value`. Adding one consumer leaf keeps generated siblings; defaulting
+  the whole document would drop them.
+- **Claude delivers its own files.** Agents, commands, output styles, hook
+  scripts, skills, plugins, rules, context, `.claude/settings.json` and the MCP
+  files are staged entries (`ai.claude._generatedFiles`) that reach the backends
+  through the files layers. All reach both backends except `.claude.json`,
+  consumer plugins and the MCP personal plugin (its manifest and `.mcp.json`),
+  which are Home Manager only because a plugin is user-scope; devenv writes MCP
+  servers to the project `.mcp.json` instead. Nothing is handed to an upstream
+  Home Manager or devenv Claude module. Settings and MCP servers are
+  configuration, so `.claude/settings.json` and the devenv `.mcp.json` are
+  Nix-owned read-only links rather than reconciled documents, and an in-app
+  change such as `/tui` does not persist. Every settings contribution goes
+  through `ai.claude.native.settings`, so one entry carries the whole document.
+  Claude's user-global `.claude.json` is the exception: it holds OAuth tokens
+  and runtime state, so it uses `rw` on Home Manager only. Empty unpin
+  declarations stage no document; the engine still retires previous keys. The
+  legacy JSON ledger is declared while disabled too.
+  `activation.claude-config-mode` runs after `materialized`, even with no flags,
+  stripping group and other access from regular files while Claude is enabled.
+- **The CLI's write primitive picks the method.** Codex's `config.toml` is a
+  store symlink on both backends: every Codex config writer writes a temporary
+  beside the link's target, so an in-app save fails and the link survives
+  (`chatgpt-codex-readonly-config`). Its daemon `settings.json` is the opposite
+  case: Codex renames a temporary over it, which would swap a link for a real
+  file and fail the next switch's link check, so it stages one `ro` JSON copy in
+  the `app-server-daemon` directory. Kiro and Kimchi rename too, so their
+  settings are copies as well.
+- **Commands use layer 3.** Codex's skill-link migrator owns no ledger and uses
+  `activation.codex-migrate-skill-links`, with `after = []` and
+  `before = ["linkCheck"]` on both backends. Home Manager's outer `run` makes
+  dry runs inert. Its daemon selector uses `activation.codex-daemon-select` on
+  Home Manager, with `runWhenDisabled = true`. Directory skill sources keep
+  `recursive = false` because Codex discovers directory symlinks.
+- **devenv guards native links after pruning.** The base emits one
+  `ai:files-guard` from the final native file map. It follows cleanup, prune and
+  commands positioned before `linkCheck`, then precedes native file creation. It
+  removes stale store-backed links and refuses foreign links or real files at
+  desired link paths. The engine retires copies before this check, so a
+  copy-to-link transition completes in one generation. With no native files the
+  graph uses its internal linked point instead of requiring a missing
+  `devenv:files` task. A failed guard prevents dependent file creation and shell
+  tasks from succeeding.
+- **Shared documents reconcile harness state.** Claude's `.claude.json` is a
+  writable state file with Nix-owned leaves. The files engine restores declared
+  keys on activation and retains native keys. Its legacy ledger name remains a
+  literal upgrade contract. Kimchi stages user `config.json` and harness
+  `settings.json` as `rw` too; native keys survive while declared keys return.
+  Its git-token branch retains `ro` mode 0400 with an activation-time renderer,
+  as does trust with the read-only default mode. Engine apply follows secret
+  providers; all old Kimchi ledgers are ungated legacy declarations.
+- **Kiro stages settings and hooks as read-only copies.** `cli.json` carries a
+  JSON value and `mcp.json` a `run` renderer through S → R → F. Kiro's own
+  writers rename a temporary over either file, which replaces a symlink and a
+  0444 copy alike. A copy is still the right method: the next activation or
+  shell entry backs the in-app file up and restores the declaration, while a
+  symlink would block Home Manager's link check or be skipped by devenv. Home
+  Manager always claims both user-global files (`{}` and an empty server map);
+  devenv claims a project file only when something is declared. `mcp.json` is
+  0400 with a URL secret, otherwise 0444. Engine apply waits for the secrets
+  point whenever the plan contains a renderer: HM includes `sops-nix`, and
+  devenv uses registered `secretNodes`. The renderer exports its backend root
+  and keeps devenv's project-root anchor for relative secret readers. Hooks
+  state `method = "ro"` because the v3 scan keeps only `isFile()` entries; the
+  engine retires them at N→0. Hooks, settings and steering ledgers are ungated
+  upgrade declarations. Permissions remain HM-only because Kiro never reads them
+  from project `.kiro/`.
+- **Claude project rules are read-only copies on devenv.** Claude's scoped-rule
+  (`paths:`) loader passes `includeExternal: false` at Project scope, with no
+  setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into
+  the store is never read. User scope passes true. Each staged rule therefore
+  states `method = {devenv = "ro"; hm = "symlink";}`: the files engine copies it
+  on devenv, while Home Manager keeps its link. The old writer's
+  `materialize/claude-rules.manifest` is declared as a legacy ledger from the
+  devenv `migrationConfig`, so the copies it wrote drain on N→0 and on a disable
+  alike.
+- **Codex execpolicy rules are read-only copies on both backends.** Codex keeps
+  a `rules/*.rules` entry only when `DirEntry::file_type().is_file()`, which
+  does not follow symlinks, so a linked rule is skipped silently. Each staged
+  rule states `method = "ro"` and `format = "raw"`; the engine owns individual
+  paths, preserving Codex's native `rules/default.rules` beside them.
+- **Retirement survives disable.** Every runtime's `migrationConfig` declares
+  its deleted writers' `legacyLedgers` outside the enable gate. The engine
+  imports them before native link checks and retires paths absent from the
+  desired plan, including during a disabled owner's first upgrade. Codex
+  declares execpolicy on both backends and daemon settings on Home Manager.
+- **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
+  entries replace same-key root entries wholesale. Nullable pools use null to
+  suppress an inherited entry after the shallow merge; rules use
+  `enable = false` on the replacement entry. Unsupported root requests warn and
+  lower to the neutral value before this boundary; there is no L3 option. L1→L2
+  and L2b→L3 use `mkDefault` so explicit entries within the same layer still win
+  before cross-level composition.
+- **One package owner per key and scope.** Definition-provenance checks reject
+  two packages claiming one root key or one per-runtime key. A root key and its
+  runtime replacement are different scopes and do not collide.
+- **List-valued lifecycle hooks append.** `ai.hooks.<Event>` matcher groups run
+  before `ai.<cli>.hooks.<Event>` groups. This is intentional composition, not
+  an attrset-entry collision; only the exact portable Claude/Codex event
+  vocabulary is accepted at L2.
+- **Context content concatenates.** `ai.context` and `ai.<cli>.context` are
+  typed `text`/`source` records, not pool entries. The strictly higher-priority
+  definition supplies the effective content whichever field it targets; one
+  priority setting both fields fails. Their content composes root-first into the
+  runtime's `context.filename`; `enable = false` omits either record. A
+  structural `hasMergedContext` bit gates the generated default without reading
+  composed sources; rendered bytes remain lazy until that default survives B7.
+  Repository-local Codex, Kimchi, and Kiro targets contribute to the shared L4
+  owner instead of creating competing runtime writers.
+- **Rule triggers resolve before L4.** Each runtime selects the first supported
+  entry from the portable `inclusion` list through `aiCommon.resolveInclusion`.
+  `fileMatch` consumes `matcher` and becomes native routing metadata where one
+  exists or explicit prose for flat AGENTS.md consumers. Codex and Kimchi can
+  route `auto` and `manual` only through a non-empty `references` index. In the
+  shared devenv AGENTS.md, Codex and Kimchi contribute every resolved inline or
+  indexed rule; Kiro contributes only rules resolved to `always`. The keyed
+  writer deduplicates byte-identical same-key contributions.
+- **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
+  for each supported pool and is public, writable with `mkForce`. Keyed pools
+  have neutral `{}` option defaults and receive the root-to-runtime fold as
+  per-key defaults: ordinary additions retain unrelated inherited keys, while
+  whole-pool `mkForce` replaces all entries. Other pools default to the complete
+  fold. Every transformer argument reads this option; the older argument names
+  are aliases of it. MCP entries are already lowered client records. Hooks carry
+  the portable root input; native event lists still append inside the runtime.
+  Default context presence uses the structural input inventory until final-file
+  arbitration keeps its content; an explicit normalized context override
+  determines its own presence. A text-source record (context, a rule, agent
+  instructions) crosses into its pool with only its WINNING arm, `text` or
+  `source`, chosen from the original record's `_sourceWins`. Carrying both lands
+  them at one priority, which the record rejects, and computing that priority
+  reads the source — a build during evaluation for a derivation.
+- **Normalized settings are a uniform scalar-field surface.** Every runtime
+  whose `surfaceSupport.settings` declares a non-empty backend list receives the
+  same closed `settings` submodule; Kiro does not, because it persists effort
+  only per model. Each field resolves root versus per-runtime with
+  `resolveOverride`; native lowering remains per-runtime and may support only a
+  subset of fields. Runtime-shaped passthrough is separate under
+  `native.settings` and is not a normalized pool.
+- **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
+  (`path → attrset`) and usable outside HM/devenv.
+- **Per-file emission only.** A Dir option never takes a destination dir over
+  wholesale — other derivations (or consumer's own direct `home.file.*` calls)
+  can always contribute alongside.
+- **Key identity is preserved.** If a file is named `foo.md` in the source dir,
+  the L2 key is `foo` (the helper strips known suffixes before emitting the key,
+  and the per-CLI L4 emission re-appends). This is why the `.md.md` doubled-
+  extension bug from 2026-04-21 is structurally impossible now.
 
-Keyed runtime entries atomically replace same-key root entries. Nullable pools
-use null as withdrawal; rules use `enable = false`. Dir expansions use
-`mkDefault` within their layer. Unsupported root requests warn and lower to the
-pool's neutral value; unsupported per-runtime options do not exist. Runtime
-`surfaceSupport` is the sole capability declaration.
+### Delivery facts
 
-Normalized keyed pools are ordinary options: neutral `{}` option defaults plus
-per-key fold defaults preserve unrelated inherited entries. Whole-pool `mkForce`
-replaces the pool. Scalar surfaces use their complete fold as the default. Every
-renderer reads normalized values; older callback argument names alias them. MCP
-entries are already lowered client records. Hooks carry portable root input and
-append root matcher groups before runtime groups per event.
+`config/ai-delivery.nix` is a pure `{lib}` import of the facts the warning
+readers keep: `lib/ai/delivery-warnings.nix`, `checks/ai-warnings` and the
+Kimchi and peer-communication module evaluations. It needs no module evaluation
+or package set. `config/ai-delivery-schema.nix` reads `sharedSurfaceOptions`
+through its internal `sharedSurfaces` option default; keyed withdrawal is
+metadata on those same root declarations. Permissions is the sole policy-only
+surface because it inventories native policy vocabularies, with no normalized
+root translation.
 
-Context concatenates root-first. Text/source records carry only their winning
-arm: carrying both fails equal-priority validation and can force discarded
-sources. Structural presence gates generated defaults lazily; normalized
-overrides supply their own presence.
+Each surface, runtime and backend cell is one row, `delivered` or
+`notApplicable` with a reason. Runtime `surfaceSupport` derives whole-surface
+absences and their reasons. A native writer can exist alongside an unavailable
+normalized pool (Kiro hooks and settings, `nativeWriters` in
+`config/ai-delivery-facts.nix`); that cell stays delivered and gains the absence
+as a diagnostic child. Static record gaps project into diagnostic children too.
+Gaps requiring keyed entries, effective scalar selection, predicates or dynamic
+reasons remain record-only diagnostics. Hand rows state native-only absences on
+the policy-only permissions surface; a hand row on a shared surface fails naming
+the cell, because it would replace the row derived from the runtime record.
+Input associations are consumer facts. An option only Home Manager can write is
+declared under the record's `hm.options` instead of warning through a row:
+Claude's `native.unpinLaunchEffort` does not exist on devenv, so setting it
+there is an unknown-option error.
 
-### Files and state
+Where a delivered file lands, and how, is the files plan's business, not these
+facts'. Adding a shared surface or dropping runtime support creates absence
+cells without policy edits.
 
-Every owner declares files at layer 1; ai-module forwards and lowers them.
-Enabled owners claim paths even for disabled file entries; disabled owners
-forward nothing. Shared repository context forwards unclaimed so the shared
-composer remains its sole owner. Same-priority agreeing content merges and
-divergent content conflicts.
+### Layer location map
 
-Staged Markdown and raw content receive whole-content defaults, keeping
-discarded sources lazy. Structured settings contribute defaults per leaf,
-preserving generated siblings when a consumer adds a leaf. Consumers arbitrate
-content using ordinary priorities.
+- L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
+- L2b options (CLI-generic) and L2b→L3 expansion →
+  `lib/ai/app/mkBackendTransform.nix` (`lib/ai/app/default.nix` selects it once
+  per backend). That includes `agentsDir`, declared for every runtime with the
+  agents pool, whose suffixes come from the record's `agentsDirSuffixes`
+  (default `.md`). It also includes `native.agents`, declared for a record that
+  supplies `agentNativeType` and `agentTransformer` and joined to the record's
+  own `native.*` options. `poolOptions.<pool>` is merged over the builder's
+  declaration of `agentsDir` or `environmentVariables`, so a runtime states only
+  its own description. The `agents` description takes no override: the record's
+  `agentsDescriptionSuffix` is the only per-runtime hook for it, appended to the
+  builder's text so the shared sentences stay in one place. The builder reads
+  `poolOptions` by pool name, so `lib/ai/app/checkRecord.nix` rejects any other
+  key, in `mkRuntime` and again in the transform: `agents`, a pool other than
+  `environmentVariables`, one the record's `surfaceSupport` omits, or
+  `agentsDir` without `agents`. It also rejects `agentNativeType` without
+  `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
+  `agentsDescriptionSuffix` without the agents pool, an empty or non-string
+  `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
+  null counts as set. Proxy selection uses `instance` + `clientKey` or external
+  `url` + `key`; runtime records no longer supply `proxyAllow` or `proxyApi`
+  defaults (see `dev/fragments/ai-proxy/ai-proxy.md`).
+- L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
+  `packages/<pkg>/lib/mk<Cli>.nix`
+- L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
+  the rule enable filter)
+- managed MCP proxy ownership, validation, and systemd unit aggregation →
+  `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
+- per-scope package ownership guard → `checks/module-provenance/helpers.nix`
+- L4 per-runtime routing/rendering into `ai.<runtime>.files` →
+  `packages/<pkg>/lib/mk<Cli>.nix`
+- L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
+  which returns the key, the rules under that runtime's own policy (Codex and
+  Kimchi every rule; Kiro only unscoped always-on rules), optional `index`
+  entries, an optional build-time `maxBytes`, and nothing else: the builder
+  reads those by name, so `checkRecord.nix` rejects a missing `key` or any other
+  field. The optional `hasOnDemandIndex` bit selects the general rule-index
+  heading from routed trigger data rather than rendered Markdown. Codex and
+  Kimchi list a scoped rule that names `references` as an index entry (its globs
+  plus links to those documents) and inline every other rule, a scoped one
+  behind a prose scope note. `agentsmd.renderKeyed` writes the general
+  `## Rule index` when that bit is set and `## Path-scoped rules` otherwise,
+  then the inlined rules and context. A file with many scoped rules stays under
+  Codex's document limit, and a long context that does not (read at the 32 KiB
+  default because the raised limit is absent or untrusted) loses only its own
+  tail. The builder adds the merged context and publishes it on devenv. A limit
+  is published even without content, because the runtime reads the file whoever
+  wrote it. Codex's launcher checks actual truncation independently, on either
+  backend and in any repo; there is no shell-entry window notice. The Markdown
+  formatter handles the generated layout (one blank line between units and after
+  each rule comment, one glob or link per index line) before the tree is
+  installed.
+- L4 unit paths → the record's optional `contentTargets` callback,
+  `{context?; rules?}`: the path each context and rule unit lands in, built from
+  the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit
+  whose final file is switched off or replaced (selected content and priority);
+  `checkRecord.nix` rejects a stray field.
+- L4 shared AGENTS.md rendering and public-entry arbitration into the
+  single-owner plan → `lib/ai/app/sharedAgentsMd.nix`, which stages the winner
+  and forwards it through the ai-module layer-1 helper as the owner `internal`
+  (a read-only copy by default, written by the files engine)
+- B7 public file-option declaration and runtime enable gate →
+  `packages/ai-module/lib/runtime.nix`
+- L5 generic backend lowering and entry validation →
+  `packages/ai-module/lib/files/default.nix`, `lib/files/backend.nix` and
+  `lib/lower-{hm,devenv}.nix` under that owner; the runtime factory renders and
+  stages entries without writing native sinks.
 
-**Settled — do not relitigate.** Choose delivery by the CLI's write primitive:
+### Adding a new concern X
 
-- Store symlink: Codex `config.toml`, whose writer follows the link and cannot
-  replace the immutable target.
-- Read-only copy: Codex daemon settings, Kiro settings and hooks, Kimchi
-  MCP/permissions/trust; their writers rename over files. The engine backs up
-  edits and restores declarations at activation.
-- Writable overlay: Claude `.claude.json`, Kimchi user `config.json` and harness
-  settings, because they also hold login/model state. Kimchi's latter two were
-  read-only copies on 2026-09-29–30 and broke `/login`; never restore that
-  method.
+1. Add L2 option `ai.<X>` to `sharedSurfaceOptions` in
+   `lib/ai/sharedOptions.nix`. This is also the shared fanout registration:
+   decomposition automatically warns for every enabled runtime whose
+   `surfaceSupport` does not consume `X`; no per-gap policy row is needed.
+   Declare backend-specific gaps and partially delivered fields on the runtime
+   record.
+2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline, gated on the
+   pool, with a `poolOptions` override slot for per-runtime descriptions or
+   types. Declare it in each per-CLI factory only when the shape itself differs.
+3. Declare `surfaceSupport.X` only on app records whose delivery `config`
+   consumes it. The normalized `settings` pool follows the same rule: a runtime
+   with no lossless target for any field (Kiro) leaves it out, and one that
+   lowers only some fields keeps it and warns for the rest.
+4. Add L4 routing/rendering into `ai.<runtime>._generatedFiles` in each
+   supporting per-CLI factory's `config`. State content, format, method and
+   surface; commands use `ai.<runtime>.activation`.
+5. Let ai-module lower the entries; change its backend only when the delivery
+   contract changes. Never write native sinks from an owner module or factory;
+   see the contract's Owner rule.
+6. Wire L2↔L3 through `mergePool`, add the pool to the package-provenance guard,
+   or document and test the concern's intentional non-pool composition rule
+   (hooks append per-event lists).
+7. (Optional) Add L1 option `ai.<X>Dir` + L1→L2 expansion.
+8. (Optional) Add per-CLI L2b option `ai.<cli>.<X>Dir` + L2b→L3 expansion.
+9. Add tests beside the owning package, or under the relevant root check concern
+   for shared behavior, with an unsupported-runtime unknown-option control.
+   Register package tests through the owner's `checks.nix` module.
 
-Claude stages every surface itself. Home Manager alone writes `.claude.json`,
-consumer plugins and the MCP personal plugin; devenv writes project `.mcp.json`.
-Both settings and MCP configuration use read-only links. `claude-config-mode`
-activation follows `materialized` and strips group/other access from regular
-files while enabled.
+### Pitfall
 
-Claude's project rule loader refuses external symlinks
-(`includeExternal: false`), so rules use
-`method = {devenv = "ro"; hm = "symlink";}`. Codex's execpolicy scan requires
-`DirEntry::file_type().is_file()`, so rules are raw read-only copies on both
-backends; native `default.rules` remains alongside them. Kiro's hook scan also
-requires real files.
+**Never emit runtime artifacts from L1/L2/L2b.** Those layers exist solely to
+reshape data; they read no final file map or backend sink and write none either.
+If you find yourself reaching for `home.file.*` in `sharedOptions.nix` or in a
+transform's `config` block, something is off — route and render into the
+per-runtime file map at L4, then let the generic L5 sink lower it. Managed MCP
+proxies use `ai.internal.services` with explicit scoped claims because their
+lifetime and ownership span runtime views. Native daemon sinks remain owned by
+ai-module.
 
-Retirement survives disable. Every runtime declares old writers' `legacyLedgers`
-through ungated `migrationConfig`; the engine imports and retires absent paths
-before native link checks. Codex declares execpolicy ledgers on both backends
-and daemon settings on Home Manager. Commands use owner activation, including
-the Codex skill-link migrator before `linkCheck` and its Home Manager daemon
-selector with `runWhenDisabled`.
+### Why five stages instead of inline
 
-### Shared repository context
-
-`sharedAgentsMd` returns `key`, rules and optional `index`, `hasOnDemandIndex`,
-`maxBytes`; unknown fields or missing key fail. A limit is published even
-without content.
-
-`sharedAgentsMd.nix` arbitrates the public entry, stages its winner and forwards
-through owner `internal`, as a read-only copy by default. Same-key identical
-contributions deduplicate. Scoped referenced rules become index entries; other
-scoped rules inline with a scope note. The renderer writes the index before
-context, preserving routing within Codex's default 32 KiB budget. Codex's
-launcher independently checks actual truncation on either backend in any
-repository.
-
-Rule inclusion resolves before L4: each runtime chooses its first supported
-portable trigger. `fileMatch` requires matcher metadata or explicit flat-file
-scope prose. Codex/Kimchi support `auto` and `manual` through nonempty
-references. Formatter layout is one blank line between units and after rule
-comments, one glob/link per index line.
-
-### Delivery facts and new concerns
-
-`config/ai-delivery.nix` derives pure facts from shared declarations and runtime
-records. Static gaps become children; dynamic predicates stay record
-diagnostics. Hand rows cover only policy-only permissions. Home Manager-only
-native options belong in `hm.options` (Claude unpin flags), rather than adding
-unavailable devenv options. Native-only writers may coexist with an unsupported
-normalized pool (Kiro hooks/settings).
-
-A new concern adds root declaration, per-runtime normalization, capability
-declaration and L4 staged output together, with provenance, withdrawal and
-unsupported-runtime controls. Backend delivery stays in ai-module; managed MCP
-proxies use `ai.internal.services`, and only their lowered client entries enter
-fanout.
+Earlier iterations wrote emission logic inline in each branch of per-CLI config
+— directly setting `home.file.".claude/rules/${name}.md".text` from the
+`ai.rules` attrset. That coupled the source shape (list vs attrset, with or
+without Dir-backed ingestion) to each CLI's emission. When the rules attrs grew
+a `sourcePath` field and then dropped it, every CLI had to change in lockstep.
+With the layered shape, new input modes (Dir helpers, filter signatures) only
+touch L1/L2b; final rendering and emission stay stable.

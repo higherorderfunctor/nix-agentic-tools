@@ -1,8 +1,15 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-22 — named upstream credentials and client keys
-> derive Instance API-key blocks and exact allowlist rules; typed settings still
-> come from extracted CPA 8.0.38 facts.
+> **Last verified:** 2026-10-22 — 926 config nodes, including the patched
+> `access.key-allowlist`, give the settings type through
+> `lib/extracted/options.nix`, with eight refinements and one module assertion
+> on the allowlist; the clean render passes native v8 validation and loads
+> through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
+> `ai.cliproxyapi.instances` renders it at start, defaults its listener to
+> loopback, turns off the unprompted fetches the pinned CPA has a switch for,
+> types `server.tls.key` as a secret file, and derives named client keys'
+> `access.api-keys` and `access.key-allowlist` entries from named upstream
+> routes.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is

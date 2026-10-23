@@ -65,14 +65,14 @@ hoc machinery beside an existing abstraction.
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
-- **CPA Instances own named routing.** Each `ai.cliproxyapi.instances.<name>`
-  declares upstream `credentials` and `clientKeys` once. Each client key routes
-  only to named upstream credentials; OAuth rules carry exact auth-file IDs,
-  API-key rules carry exact base URLs, and one API table lowers those
-  credentials. A Harness selects `proxy = {instance; clientKey;}` without
-  publishing keys or rules. External `url` + `key` selections add nothing to
-  Instances. See `lib/ai/proxy/default.nix`,
-  `packages/cliproxyapi/lib/providers.nix` and
+- **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
+  `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
+  `clientKeys` once. Each client key routes only to named upstream credentials;
+  OAuth rules carry exact auth-file IDs, API-key rules carry exact base URLs,
+  and one API table lowers those credentials. A Harness selects
+  `proxy = {instance; clientKey;}` without publishing keys or rules. External
+  `url` + `key` selections add nothing to Instances. See
+  `lib/ai/proxy/default.nix`, `packages/cliproxyapi/lib/providers.nix` and
   `packages/cliproxyapi/modules/instances.nix`.
 - **PROPOSAL (not yet vetted): harness sandboxing is ours.** The host sandbox
   (the microvm) is the real protection. `ai.jail` / `ai.<runtime>.jail`

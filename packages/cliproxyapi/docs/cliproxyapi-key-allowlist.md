@@ -1,8 +1,11 @@
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-10-22 — named Instance client keys derive exact OAuth
-> IDs or API base-URL rules; the CPA 8.0.38 patch still rejects duplicate client
-> keys and fails closed. Reload widening requires restart as described below.
+> **Last verified:** 2026-10-22 — the patch applies to CPA 8.0.38 with no fuzz;
+> loading rejects duplicate client keys and startup exits 1 on refusal. Hot
+> reload can briefly serve a retired config credential under newly widened
+> rules, so rotation that also widens access requires a restart or an `ids`
+> rule. Named instance client routes derive exact OAuth IDs or API base-URL
+> rules.
 
 ## Why selection lives in CPA
 

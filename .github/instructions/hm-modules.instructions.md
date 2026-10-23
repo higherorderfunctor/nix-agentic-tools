@@ -522,17 +522,17 @@ noted above.
 
 ## ai-module Files, Activation and Services Contract
 
-> **Last verified:** 2026-10-22 — generic claims cover owner resources; secret
-> providers supply activation nodes and Home Manager service unit ordering;
-> repository modules reach Home Manager and devenv file and activation sinks
-> only through ai-module's three layers, apart from the exact exemptions in
-> `packages/ai-module/checks/sink-guard.nix`; a service's `files` and secret
-> files render at start in checked private runtime directories, chosen after the
-> declared environment applies, with user-qualified fallbacks; private secret
-> slots are cleared before reads and exec, public variables reserve `_ai_`, tool
-> instances use `lib/instances.nix`, a restart trigger alone makes a unit a
-> secret reader, and every service has a start limit so a crash loop ends
-> failed.
+> **Last verified:** 2026-10-22 — secret providers supply activation nodes and
+> Home Manager service unit ordering; repository modules reach Home Manager and
+> devenv file and activation sinks only through ai-module's three layers, apart
+> from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
+> service's `files` and secret files render at start in checked private runtime
+> directories, chosen after the declared environment applies, with
+> user-qualified fallbacks; private secret slots are cleared before reads and
+> exec, public variables reserve `_ai_`, tool instances use `lib/instances.nix`,
+> a restart trigger alone makes a unit a secret reader, and every service has a
+> start limit so a crash loop ends failed. CPA client keys are instance-owned
+> rather than runtime resource claims.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -607,11 +607,12 @@ registry. Two claims fail, even with identical values, with
 `ai.claims.<group>.<key>: claimed by <a> and <b>`; owners are sorted and a
 disabled entry still claims. Port owners name `<owner>:<service>.ports.<name>`.
 Owners register resources; one registry validates every group. Other resources
-use `ai.<owner>.claims.<group> = [keys]` while that owner is enabled.
-Ancestor/descendant paths fail as overlapping destinations. A key in the
-helper's `shared` list (root `AGENTS.md`) forwards unclaimed, so its composer
-stays the single owner; divergent equal-priority definitions there fail with
-conflict text naming `lib/runtime.nix`, not the owners.
+use `ai.<owner>.claims.<group> = [keys]` while that owner is enabled; CPA client
+keys instead belong to named instance entries. Ancestor/descendant paths fail as
+overlapping destinations. A key in the helper's `shared` list (root `AGENTS.md`)
+forwards unclaimed, so its composer stays the single owner; divergent
+equal-priority definitions there fail with conflict text naming
+`lib/runtime.nix`, not the owners.
 
 ### Services
 
