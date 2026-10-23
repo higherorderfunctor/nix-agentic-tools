@@ -1,4 +1,4 @@
-dbscheme: evaluation.dbscheme
+dbscheme: nix.dbscheme
 extractor: nix
 library: true
 name: nix-agentic-tools/nix-all
