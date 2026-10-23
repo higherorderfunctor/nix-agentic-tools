@@ -18,7 +18,11 @@ and `src/anchors.rs` both read those snapshot bytes. A second checkout read
 after extraction must match before publication. Byte edits change file and
 anchor identity. `rootContentIdentity` is caller-supplied; the driver verifies
 selected file digests rather than recomputing a digest of the whole root. Equal
-text in different files or roots remains distinct.
+text in different physical files remains distinct. Logical aliases of one
+resolved path and digest reuse one raw parse and companion index while retaining
+each file identity, anchor, metadata index and status. Every alias rechecks
+containment and source bytes before cache reuse and publication; raw ambiguity
+checks remain unchanged.
 
 Completed raw TRAP is published by rename only after source authentication,
 exact-text preflight and F1 transaction validation succeed. Source bytes are

@@ -9,5 +9,6 @@
     ./checks/metadata.nix
     ./checks/modules.nix
     ./checks/raw-inventory.nix
+    ./checks/step0.nix
   ];
 }

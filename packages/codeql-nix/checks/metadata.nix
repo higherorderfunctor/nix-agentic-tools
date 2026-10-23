@@ -56,11 +56,13 @@
         cp ${../ql/test/qlpack.yml} tests/qlpack.yml
         cp ${../ql/test/step0/Metadata.ql} tests/metadata/Metadata.ql
         cp ${../ql/test/step0/Metadata.expected} tests/metadata/Metadata.expected
+        cp ${../ql/test/step0/UnknownOrigin.ql} tests/metadata/UnknownOrigin.ql
+        cp ${../ql/test/step0/UnknownOrigin.expected} tests/metadata/UnknownOrigin.expected
         printf 'null\n' > tests/metadata/marker.nix
         flock "$TMPDIR/codeql.lock" codeql test run \
           --search-path=${installed}:${packaging.library} \
           --threads=4 --ram=6000 tests/metadata
-        echo 'L0 Metadata: handwritten success/failure, exact paths, target separation, signed endpoints, origins, unknown selection, typed subject paths and sparse definition observations passed'
+        echo 'L0 Metadata and Q0 UnknownOrigin: missing-file selected/declaration rows; handwritten success/failure, exact paths, target separation, signed endpoints, origins, unknown selection, typed subject paths and sparse definition observations passed'
         mkdir "$out"
         printf 'L0 Metadata QL contract oracle passed\n' > "$out/evidence"
       '';

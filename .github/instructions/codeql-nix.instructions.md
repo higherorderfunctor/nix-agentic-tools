@@ -327,8 +327,8 @@ value serializer.
 # Installed Nix extractor
 
 > **Last verified:** 2026-10-23 — P2a installs one coordinator for database
-> creation and query tests, preserving authenticated partial work; Q0 remains
-> deferred.
+> creation and query tests, preserving authenticated partial work; Q0 adds a
+> separate installed lifecycle check.
 
 ## Terms
 
@@ -342,7 +342,7 @@ value serializer.
 - Oracle: an expected answer obtained independently of extraction.
 - Pack: a named CodeQL library, query or test directory.
 - Producer: a component that emits syntax or evaluation facts.
-- Q0: the deferred Step 0 query about which file sets an option.
+- Q0: the Step 0 query about which file retains an option definition.
 - QL: CodeQL's query language.
 - Request: an explicit option path, metadata facet and work limits.
 - Run: one extraction identity joining schema, implementation and source
@@ -420,7 +420,12 @@ callers' module search paths when imported as a standalone driver.
 
 Syntax and evaluation write into temporary staging directories. Authenticated
 file rows and copied-path mappings connect evaluation origins through the
-existing [module adapter](module-adapter.md). Before copying staged archives and
+existing [module adapter](module-adapter.md). The supervisor admits
+authenticated selected files by exact target root name and content identity
+before evaluation, preserving candidates after failed work. Copied-path mappings
+retain all file identities; links require exactly one in the target admission
+plus trusted provenance and matching original/copied bytes. Explicit labels and
+ambiguous aliases leave origins unlinked. Before copying staged archives and
 TRAP into CodeQL's destinations, the coordinator validates the combined facts,
 recopies the original project with the same exclusions and checks its NAR hash
 against the initial private copy. It also rehashes admitted dependencies. A
@@ -444,7 +449,9 @@ before writing `$out/evidence`. The installed tests cover offline language/pack
 lookup, identical schema bytes, database creation with syntax and real module
 metadata under one run, an explicit target file, query-test extraction,
 discovery refusals and stale input pins. Direct Nix evaluation independently
-checks priority changing from `100` to `50`; this does not implement Q0.
+checks priority changing from `100` to `50`. Q0 adds the query-level comparison
+and failure cases in its separate [Step 0 check](step0-query.md); that check
+must pass before claiming the installed Q0 acceptance contract.
 
 The regression suite uses deterministic pin controls for a transient dependency
 change during discovery, preservation of completed requests beside failed
@@ -657,7 +664,8 @@ together; format changes and run `codeql-nix-metadata` through CI.
 # Module metadata adapter
 
 > **Last verified:** 2026-10-23 — E2a emits root option metadata with X1 typed
-> observation subjects.
+> observation subjects; native paths retain provenance and selected syntax
+> admission is independent of retained origins.
 
 An adapter obtains configuration plus option metadata: a rich result.
 `src/eval/nix/adapters/evalModules.nix` takes pinned `lib`, module paths and
@@ -672,9 +680,14 @@ sibling ordinal through the definition entity, never through request text.
 `priority`; priority includes `isDefined`. The
 [supervisor](evaluation-isolation.md) keeps limits and publication. Callers
 supply [S2](source-identity.md) file rows and copy mappings; original and copied
-bytes must match before linking. Synthetic labels, explicit `_file` and explicit
-definition labels prove no source identity. Missing rows mean unknown. Re-audit
-lazy label normalization before value consumers. Change these producers
+bytes must match before linking. Implicit native module paths retain Nix string
+context without changing their label spelling. Plain absolute strings, synthetic
+labels, explicit `_file` and explicit definition labels prove no source
+identity. The supervisor admits selected authenticated syntax files by exact
+target root name and content identity before requests run; unselected files and
+failed requests retain this admission. Origin-file links still require trusted
+labels plus matching original and copied bytes. Missing rows mean unknown.
+Re-audit lazy label normalization before value consumers. Change these producers
 together, preserving F1 validation and F2 authorization. Run
 `checks.x86_64-linux.codeql-nix-modules` for direct Nix comparisons and
 refusals; format edits and regenerate through `generate:all`.
@@ -687,7 +700,7 @@ refusals; format edits and regenerate through `generate:all`.
 > explicit owner check imports; document and check inventories live in the owner
 > registry and checks entry point. S1 adds combined-schema generation and
 > standalone raw location tests; E1 adds the isolated metadata projection check;
-> S2 registers source and anchor acceptance.
+> S2 registers source and anchor acceptance; Q0 adds the installed query check.
 
 ## Purpose and fit
 
@@ -747,17 +760,19 @@ Each pack has its own `qlpack.yml` at the reserved interface:
 - `ql/test/`: `nix-agentic-tools/nix-tests`, depending on `nix-all` and
   selecting extractor `nix`.
 
-All versions are `0.0.0`; these manifests establish identities, not an installed
-product. `ql/lib/nix.dbscheme` is a symlink to `../../generated/nix.dbscheme`,
-S1's combined generated/handwritten schema. S1's private raw QL and location
-adapter supply the library's syntax interface; `codeql-nix-raw-inventory` checks
+All versions are `0.0.0`; these manifests establish identities. The
+[installed extractor](installed-extractor.md) assembles the installed products.
+`ql/lib/nix.dbscheme` is a symlink to `../../generated/nix.dbscheme`, S1's
+combined generated/handwritten schema. S1's private raw QL and location adapter
+supply the library's syntax interface; `codeql-nix-raw-inventory` checks
 deterministic generation, inventory drift and standalone generated-node
 file/location traversal. S2 adds the syntax driver and private
 [authenticated anchor bridge](source-identity.md), tested by
 `codeql-nix-anchors` through F3 driver contracts, raw preflight and QL/archive
-assertions. The final installed extractor, public meaning API and query suite
-remain later slices. The bootstrap's separate fixture packs remain disposable
-evidence.
+assertions. The installed extractor, public metadata API and
+[Step 0 queries](step0-query.md) now have separate owner checks; Q0 acceptance
+requires its installed lifecycle check to pass. The bootstrap's separate fixture
+packs remain disposable evidence.
 
 ## Adding a domain
 
@@ -806,7 +821,11 @@ and `src/anchors.rs` both read those snapshot bytes. A second checkout read
 after extraction must match before publication. Byte edits change file and
 anchor identity. `rootContentIdentity` is caller-supplied; the driver verifies
 selected file digests rather than recomputing a digest of the whole root. Equal
-text in different files or roots remains distinct.
+text in different physical files remains distinct. Logical aliases of one
+resolved path and digest reuse one raw parse and companion index while retaining
+each file identity, anchor, metadata index and status. Every alias rechecks
+containment and source bytes before cache reuse and publication; raw ambiguity
+checks remain unchanged.
 
 Completed raw TRAP is published by rename only after source authentication,
 exact-text preflight and F1 transaction validation succeed. Source bytes are

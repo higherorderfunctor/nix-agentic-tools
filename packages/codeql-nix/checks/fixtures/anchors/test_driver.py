@@ -102,6 +102,52 @@ class DriverTests(unittest.TestCase):
             self.assertEqual((output / "archive" / str(root / name).lstrip("/")).read_bytes(), data)
         self.assertEqual({row[1] for row in self.table(rows, "nx_syntax_results")}, {"complete"})
 
+    def test_physical_aliases_reuse_raw_syntax_but_recheck_bytes(self):
+        original_driver = Path(self.driver).read_text()
+        binaries = re.findall(r"/[^\s]+/bin/nixql-anchors", original_driver)
+        self.assertEqual(len(binaries), 1)
+        for changed in (False, True):
+            with self.subTest(changed=changed):
+                log = self.base / ("calls-" + str(changed))
+                wrapper = self.base / ("alias-extractor-" + str(changed))
+                wrapper.write_text(f"#!{sys.executable}\n" +
+                    "import pathlib, subprocess, sys\n" +
+                    f"result = subprocess.run([{binaries[0]!r}, *sys.argv[1:]])\n" +
+                    "source = pathlib.Path(sys.argv[2])\n" +
+                    f"with pathlib.Path({str(log)!r}).open('a') as calls: calls.write(source.name + '\\n')\n" +
+                    ("if source.name == 'trigger.nix': source.with_name('one.nix').write_bytes(b'99')\n" if changed else "") +
+                    "sys.exit(result.returncode)\n")
+                wrapper.chmod(0o755)
+                launcher = self.base / ("alias-driver-" + str(changed))
+                launcher.write_text(original_driver.replace(binaries[0], shlex.quote(str(wrapper))))
+                launcher.chmod(0o755)
+                self.driver = str(launcher)
+                def aliases(root, manifest):
+                    primary = manifest["roots"][0]
+                    one, trigger = primary["files"]
+                    if changed:
+                        primary["files"] = [one]
+                    manifest["roots"].append(primary | {"logicalName": "alternate",
+                        "files": [trigger, one] if changed else [one, trigger]})
+                result, rows, output, root = self.run_files(
+                    {"one.nix": b"41", "trigger.nix": b"41"}, mutate=aliases, folder="aliases-" + str(changed))
+                self.assertEqual(log.read_text().splitlines(), ["one.nix", "trigger.nix"])
+                files = self.table(rows, "nx_files")
+                self.assertEqual(len(files), 3 if changed else 4)
+                self.assertEqual(len({row[1] for row in files}), 2)
+                statuses = self.table(rows, "nx_syntax_results")
+                self.assertCountEqual([row[1] for row in statuses],
+                                     ["complete", "complete", "failed"] if changed else ["complete"] * 4)
+                if changed:
+                    self.assertNotEqual(result.returncode, 0)
+                    failed = next(row[0] for row in statuses if row[1] == "failed")
+                    self.assertFalse([row for row in self.table(rows, "nx_anchors") if row[1] == failed])
+                    self.assertIn("source-snapshot-race", str(self.table(rows, "nx_diagnostics")))
+                else:
+                    self.accepted(result, rows)
+                    self.assertEqual({row[1] for row in self.table(rows, "nx_anchors")}, {row[0] for row in files})
+                print(f"S2 physical aliases changed={changed}: two parses, logical identities retained", flush=True)
+
     def test_content_path_and_root_changes_have_distinct_ids(self):
         runs = [self.run_files({name: data}, logical=logical, content=content, folder=folder)
             for folder, name, data, logical, content in [
