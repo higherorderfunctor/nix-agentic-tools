@@ -64,6 +64,11 @@ def emit(destination, abi_path):
                 observe("definition", definition, request, "observed", label)
             if label in ("first", "second", "only", "dot", "retained", "unobserved"):
                 add("origin_files", origin, files["unique" if label == "only" else "shared"])
+        if suffix == "dot":
+            # Source identity is optional even when the option was observed.
+            origin = key("origin", "unknown-declaration")
+            add("origins", origin, "synthetic-declaration", "synthetic")
+            add("option_declarations", option, 0, origin)
         if suffix == "answer":
             origin = key("origin", "declaration-" + name)
             add("origins", origin, "declaration-" + name, "source")

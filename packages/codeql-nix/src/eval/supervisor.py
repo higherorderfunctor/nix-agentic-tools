@@ -191,30 +191,49 @@ def projection_rows(packet, job, outer):
     return facts, results[0][1]
 
 
-def source_links(produced, source_files, mappings, target, identity, copy_root=None):
-    """Caller authenticates S2; we verify mapped copies before linking labels."""
-    files = {args[0]: args for _, args in source_files}
+def check_source(path, expected):
+    abi.require(path.is_file(), "source-not-admitted")
+    with path.open("rb") as stream:
+        abi.require(hashlib.file_digest(stream, "sha256").hexdigest() == expected, "source-snapshot-mismatch")
+
+
+def admitted_sources(source_files, target):
+    """S2 files belong to a target snapshot independently of retained origins."""
     roots = {abi.key("root", [root["logicalName"], root["rootContentIdentity"]]): Path(root["path"]).resolve(strict=True)
              for root in target["sourceRoots"]}
-    links, admissions = [], []
+    sources = {}
+    for _, (file, root, relative, expected, _) in source_files:
+        if root not in roots:
+            continue
+        original = (roots[root] / relative).resolve(strict=True)
+        abi.require(original.is_relative_to(roots[root]), "source-not-admitted")
+        check_source(original, expected)
+        sources[file] = (original, expected)
+    return sources
+
+
+def source_links(produced, sources, mappings, copy_root=None):
+    """Caller authenticates S2; we verify mapped copies before linking labels."""
+    links = []
     for relation, args in produced:
         if relation != "nx_origins" or args[2] != "source" or args[1] not in mappings:
             continue
-        file = mappings[args[1]]
-        _, root, relative, expected, _ = files[file]
-        original = (roots[root] / relative).resolve(strict=True)
+        mapped = mappings[args[1]]
+        mapped = [mapped] if isinstance(mapped, str) else mapped
+        matches = set(mapped).intersection(sources)
+        if len(matches) != 1:
+            continue
+        file = matches.pop()
+        original, expected = sources[file]
         copy = Path(args[1])
         if copy_root is not None:
             abi.require(copy.is_relative_to("/nix/store"), "source-not-admitted")
             copy = copy_root / copy.relative_to("/")
-        abi.require(original.is_relative_to(roots[root]) and copy.is_absolute(), "source-not-admitted")
+        abi.require(copy.is_absolute(), "source-not-admitted")
         for path in (original, copy):
-            abi.require(path.is_file(), "source-not-admitted")
-            with path.open("rb") as stream:
-                abi.require(hashlib.file_digest(stream, "sha256").hexdigest() == expected, "source-snapshot-mismatch")
+            check_source(path, expected)
         links.append(["nx_origin_files", [args[0], file]])
-        admissions.append(["nx_target_inputs", [identity, file, "root"]])
-    return links, admissions
+    return links
 
 
 def publish(directory, name, facts):
@@ -286,12 +305,22 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
             facts.extend([["nx_targets", target_row], ["nx_contexts", [context, identity, "root", "[]"]],
                           ["nx_capabilities", [identity, "projection-transport", "supported", "bounded F2 producer"]],
                           ["nx_capabilities", [identity, "module-adapter", "supported", "evalModules metadata"]]])
+            source_error = None
+            try:
+                sources = admitted_sources(source_files, target)
+                admissions = [["nx_target_inputs", [identity, file, "root"]] for file in sources]
+                envelope(facts + admissions)
+                facts.extend(admissions)
+            except Exception as error:
+                source_error = error
             states = []
             for ordinal, request in enumerate(target["requests"]):
                 req = abi.key("request", [identity, context, abi.canonical(request), str(ordinal)])
                 facts.append(["nx_requests", [req, identity, context, request["domain"], abi.path(request["path"]), request["facet"],
                               *[request[key] for key in ("maxDepth", "maxNodes", "maxBytes", "maxSeconds", "maxMemoryMiB")]]])
                 try:
+                    if source_error is not None:
+                        raise source_error
                     if request["maxDepth"] != 0:
                         raise Refusal("request-unsupported", "only root metadata projections are supported", "blocked")
                     args = target["argumentDescription"]
@@ -316,15 +345,14 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                             raise Refusal("binding-unsupported", "binding must explicitly select a producer", "blocked")
                         result = json.loads(execute(argv, job, request, scratch, deadline, env))
                         produced, state = projection_rows(result, job, facts)
-                        links, admissions = source_links(produced, source_files, source_mappings, target, identity,
-                                                         scratch / "store" if "expression" in binding else None)
+                        links = source_links(produced, sources, source_mappings,
+                                             scratch / "store" if "expression" in binding else None)
                         if time.monotonic() >= deadline:
                             raise Refusal("timeout", "source authentication time-limit exceeded")
                     produced.extend(links)
-                    admissions = [row for i, row in enumerate(admissions) if row not in facts and row not in admissions[:i]]
-                    envelope(facts + admissions + produced)
+                    envelope(facts + produced)
                     publish(directory, digest([run, req]), produced)
-                    facts.extend(admissions + produced)
+                    facts.extend(produced)
                     published.update(map(id, produced))
                     if state != "complete":
                         diagnostic("projection-incomplete", "producer returned " + state, identity, req)
