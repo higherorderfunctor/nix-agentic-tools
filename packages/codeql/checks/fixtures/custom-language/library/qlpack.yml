@@ -1,0 +1,4 @@
+name: nix-agentic-tools/fixture-all
+version: 0.0.0
+library: true
+dbscheme: fixture.dbscheme

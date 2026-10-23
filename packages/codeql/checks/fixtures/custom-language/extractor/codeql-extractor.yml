@@ -1,0 +1,8 @@
+build_modes: [none]
+column_kind: utf8
+display_name: Customization fixture
+file_types:
+  - extensions: [.fixture]
+    name: fixture
+name: fixture
+version: 0.0.0
