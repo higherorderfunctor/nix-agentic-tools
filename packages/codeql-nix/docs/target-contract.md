@@ -60,7 +60,7 @@ implicit traversal or value request. The metadata baseline explicitly selects a
 prefix.
 
 Every request uses the `option-metadata` domain and `metadata` observation mode.
-Permitted facets are `declarations`, `isDefined` and `priority`. Objects are
+Facets: `declarations`, `definitions`, `isDefined`, `priority`. Objects are
 closed to unknown fields; target and input maps permit explicit names.
 
 Deferred surfaces return with their consuming queries: increment 3 restores

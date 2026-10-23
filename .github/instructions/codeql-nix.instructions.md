@@ -110,8 +110,8 @@ relation is retained. File-level links do not establish expression-to-value
 edges or unique syntax associations.
 
 Every `observed` observation requires its own `complete` or `partial` request
-result. Missing rows alone prove neither failure nor absence. Definition
-completion checks return with E2a's metadata producer.
+result. Missing rows mean unknown. Completed definitions require positive work
+and contiguous ordinals for the request's same-path/context observed options.
 
 A complete request cannot carry a timeout/text refusal reason or a linked
 diagnostic with either code. Failed discovery can be represented before any
@@ -154,8 +154,7 @@ consumer.
 # Evaluation isolation and projection publication
 
 > **Last verified:** 2026-10-23 — E1 implements the serialized projection
-> boundary for Step 0 metadata; module adapters and value semantics remain later
-> slices.
+> boundary; E2a adds [module metadata](module-adapter.md).
 
 ## Purpose and fit
 
@@ -163,11 +162,9 @@ consumer.
 bindings and a TRAP destination through `supervise`. It launches one subprocess
 at a time for each selected request. Failure in one request leaves completed
 projections available. It does not discover flake outputs, enter a devenv shell
-or implement the adapter named by a descriptor. The capability rows distinguish
-supported projection transport from unavailable module adapters. E1 admits the
-F2 `option-metadata` domain, `metadata` observation mode and `declarations`,
-`isDefined` or `priority` facets at root depth (`maxDepth = 0`). It supplies no
-module adapter or production metadata projection.
+or select an adapter from its label. E2a reports module-adapter support. The F2
+`option-metadata` domain supports `declarations`, `definitions`, `isDefined` and
+`priority` facets at root depth (`maxDepth = 0`) in `metadata` mode.
 
 `src/eval/protocol.py` enables all three F2 custom formats and delegates exact
 text, identity and fact validation to F1's `schema/abi.py`. Its TRAP renderer
@@ -227,15 +224,12 @@ dumps. Both output pipes are drained, with their combined bytes bounded by
 exceed that size in aggregate. Timeout or excess output kills and reaps the
 process group. Run diagnostics retain at most 4096 UTF-8 bytes of a message.
 
-Accepted output must be one F2 envelope with exactly the supplied request
-result. Producers can emit option, requested metadata, declaration, origin,
-origin-position and observation rows; they cannot overwrite supervisor facts.
-Every option must belong to the selected context and exact literal path. Every
-observation must name that request and option at `pre-apply-metadata`. Metadata
-rows must name an emitted option and the requested facet; priority additionally
-permits its `isDefined` witness. Origins must be used by emitted declarations,
-and positions must name those origins. Source-file authentication and source
-origin links need E2a's admitted syntax inputs.
+Accepted output must be one F2 envelope with exactly its request result. Options
+and observations must match the selected context, path and request; metadata
+must match the requested facet. Origins belong to emitted definitions or
+declarations, and positions belong to those origins. Producers cannot emit
+supervisor facts. [E2a](module-adapter.md) authenticates caller-admitted source
+links.
 
 A complete request requires a positive observed count and an `observed` option
 witness for the selected facet. `isDefined` and `priority` also require their
@@ -243,12 +237,9 @@ respective metadata rows; declarations may be empty with an observed option. F1
 independently requires each priority's same-option `isDefined = true` and
 priority-request observation. A result-only envelope, unforced observation or
 missing metadata cannot establish success. The complete graph passes F1
-validation before publication. Option and declaration records count against
-`maxNodes`, independently of the reported count; observation and reported counts
-are also bounded. These checks bound the supplied records, not arbitrary
-internal work in a trusted producer. The deadline and address-space limit apply
-to child execution; JSON/F1 validation and publication are outside that
-deadline, and the supervisor has no aggregate memory ceiling.
+validation before publication. `maxNodes` bounds option, definition,
+declaration, observation and reported counts. Child limits exclude JSON/F1
+validation and publication; the supervisor has no aggregate memory ceiling.
 
 Each validated projection is written to a temporary file, flushed and renamed to
 a completed `.trap` file. An invalid transaction publishes no metadata.
@@ -462,6 +453,28 @@ templates and UTF-8 conversion before claiming the changed kit preserves exact
 text. Keep production schema/identity, adapters, anchors and evaluation status
 machinery in their later slices; this fixture proves only their integration
 prerequisites.
+
+<!-- Fragment: packages/codeql-nix/docs/module-adapter.md -->
+
+# Module metadata adapter
+
+> **Last verified:** 2026-10-23 — E2a adds root option metadata.
+
+An adapter obtains configuration plus option metadata: a rich result.
+`src/eval/nix/adapters/evalModules.nix` takes pinned `lib`, module paths and
+JSON arguments; `src/eval/nix/modules.nix` selects one option's metadata without
+values. Definitions are retained assignments; declarations introduce options;
+origins are file labels; priority is the override number, lower wins. Tied
+definitions survive. `definitions` adds contiguous ordinals beside
+`declarations`, `isDefined` and `priority`; priority includes `isDefined`. The
+[supervisor](evaluation-isolation.md) keeps limits and publication. Callers
+supply [S2](source-identity.md) file rows and copy mappings; original and copied
+bytes must match before linking. Synthetic labels, explicit `_file` and explicit
+definition labels prove no source identity. Missing rows mean unknown. Re-audit
+lazy label normalization before value consumers. Change these producers
+together, preserving F1 validation and F2 authorization. Run
+`checks.x86_64-linux.codeql-nix-modules` for direct Nix comparisons and
+refusals; format edits and regenerate through `generate:all`.
 
 <!-- Fragment: packages/codeql-nix/docs/owner-layout.md -->
 
@@ -722,7 +735,7 @@ implicit traversal or value request. The metadata baseline explicitly selects a
 prefix.
 
 Every request uses the `option-metadata` domain and `metadata` observation mode.
-Permitted facets are `declarations`, `isDefined` and `priority`. Objects are
+Facets: `declarations`, `definitions`, `isDefined`, `priority`. Objects are
 closed to unknown fields; target and input maps permit explicit names.
 
 Deferred surfaces return with their consuming queries: increment 3 restores

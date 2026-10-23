@@ -131,7 +131,7 @@ def nix_command(nix, binding, job, request, directory, deadline, env):
 def projection_rows(packet, job, outer):
     validate(packet, "observation-protocol.json")
     facts = packet["facts"]
-    permitted = {"nx_observations", "nx_option_declarations", "nx_option_metadata",
+    permitted = {"nx_definitions", "nx_observations", "nx_option_declarations", "nx_option_metadata",
                  "nx_option_priority", "nx_options", "nx_origin_positions",
                  "nx_origins", "nx_request_results"}
     if any(relation not in permitted for relation, _ in facts):
@@ -140,13 +140,13 @@ def projection_rows(packet, job, outer):
     results = [args for relation, args in facts if relation == "nx_request_results"]
     if len(results) != 1 or results[0][0] != identity:
         raise ValueError("projection must return exactly its supplied request result")
-    allowed = {"nx_option_declarations": ("declarations",), "nx_option_metadata": ("isDefined", "priority"),
+    allowed = {"nx_definitions": ("definitions",), "nx_option_declarations": ("declarations",), "nx_option_metadata": ("isDefined", "priority"),
                "nx_option_priority": ("priority",)}
     options = {args[0] for relation, args in facts if relation == "nx_options"}
     for relation, args in facts:
         if relation == "nx_options" and args[1:] != [job["identities"]["context"], abi.path(request["path"])]:
             raise ValueError("projection selected an unauthorized option")
-        if relation in ("nx_option_declarations", "nx_option_metadata", "nx_option_priority") and args[0] not in options:
+        if relation in allowed and args[1 if relation == "nx_definitions" else 0] not in options:
             raise ValueError("projection metadata escapes the selected option")
         if relation in allowed and request["facet"] not in allowed[relation]:
             raise ValueError("projection emitted unrequested metadata")
@@ -155,7 +155,7 @@ def projection_rows(packet, job, outer):
         if req != identity or kind != "option" or subject not in options or stage != "pre-apply-metadata":
             raise ValueError("projection observation escapes the selected request")
     origins = {args[0] for relation, args in facts if relation == "nx_origins"}
-    referenced = {args[2] for relation, args in facts if relation == "nx_option_declarations"}
+    referenced = {args[-1] for relation, args in facts if relation in ("nx_definitions", "nx_option_declarations")}
     if origins != referenced or any(args[0] not in origins for relation, args in facts if relation == "nx_origin_positions"):
         raise ValueError("projection contains detached or foreign origins")
     envelope(outer + facts)
@@ -168,10 +168,36 @@ def projection_rows(packet, job, outer):
         witnesses = {args[0] for name, args in facts if name == relation}
     if results[0][1] == "complete" and (not observed.intersection(witnesses) or results[0][3] == 0):
         raise Refusal("projection-incomplete", "complete metadata projection lacks an observed selected-option witness")
-    records = sum(relation in ("nx_options", "nx_option_declarations") for relation, _ in facts)
+    records = sum(relation in ("nx_options", "nx_definitions", "nx_option_declarations") for relation, _ in facts)
     if max(records, len(observations), results[0][3]) > request["maxNodes"]:
         raise Refusal("node-limit", "projection node limit exceeded")
     return facts, results[0][1]
+
+
+def source_links(produced, source_files, mappings, target, identity, copy_root=None):
+    """Caller authenticates S2; we verify mapped copies before linking labels."""
+    files = {args[0]: args for _, args in source_files}
+    roots = {abi.key("root", [root["logicalName"], root["rootContentIdentity"]]): Path(root["path"]).resolve(strict=True)
+             for root in target["sourceRoots"]}
+    links, admissions = [], []
+    for relation, args in produced:
+        if relation != "nx_origins" or args[2] != "source" or args[1] not in mappings:
+            continue
+        file = mappings[args[1]]
+        _, root, relative, expected, _ = files[file]
+        original = (roots[root] / relative).resolve(strict=True)
+        copy = Path(args[1])
+        if copy_root is not None:
+            abi.require(copy.is_relative_to("/nix/store"), "source-not-admitted")
+            copy = copy_root / copy.relative_to("/")
+        abi.require(original.is_relative_to(roots[root]) and copy.is_absolute(), "source-not-admitted")
+        for path in (original, copy):
+            abi.require(path.is_file(), "source-not-admitted")
+            with path.open("rb") as stream:
+                abi.require(hashlib.file_digest(stream, "sha256").hexdigest() == expected, "source-snapshot-mismatch")
+        links.append(["nx_origin_files", [args[0], file]])
+        admissions.append(["nx_target_inputs", [identity, file, "root"]])
+    return links, admissions
 
 
 def publish(directory, name, facts):
@@ -188,7 +214,7 @@ def publish(directory, name, facts):
             os.unlink(temporary)
 
 
-def supervise(manifest, bindings, trap_dir, *, strict=False, nix="nix"):
+def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=None, strict=False, nix="nix"):
     directory = Path(trap_dir)
     directory.mkdir(parents=True, exist_ok=True)
     # An invocation's run is unique; request fingerprints below remain source/policy based.
@@ -197,6 +223,11 @@ def supervise(manifest, bindings, trap_dir, *, strict=False, nix="nix"):
     extractor_hash = hashlib.sha256(Path(__file__).read_bytes() + Path(__file__).with_name("protocol.py").read_bytes()).hexdigest()
     facts = [["nx_runs", [run, schema_hash, extractor_hash, "not-requested", "not-requested", "not-admitted"]],
              ["nx_phases", [run, "syntax", "not-requested", "evaluation supervisor only"]]]
+    source_files = list(source_files)
+    abi.require(all(row[0] == "nx_files" for row in source_files), "source admission requires S2 file rows")
+    abi.validate(source_files)
+    facts.extend(source_files)
+    source_mappings = source_mappings or {}
     incomplete = False
     published = set()
 
@@ -234,7 +265,7 @@ def supervise(manifest, bindings, trap_dir, *, strict=False, nix="nix"):
                           digest(target["inputIdentities"]), fingerprint["policyHash"], "complete"]
             facts.extend([["nx_targets", target_row], ["nx_contexts", [context, identity, "root", "[]"]],
                           ["nx_capabilities", [identity, "projection-transport", "supported", "bounded F2 producer"]],
-                          ["nx_capabilities", [identity, "module-adapter", "unavailable", "E2 not implemented"]]])
+                          ["nx_capabilities", [identity, "module-adapter", "supported", "evalModules metadata"]]])
             states = []
             for ordinal, request in enumerate(target["requests"]):
                 req = abi.key("request", [identity, context, abi.canonical(request), str(ordinal)])
@@ -242,7 +273,7 @@ def supervise(manifest, bindings, trap_dir, *, strict=False, nix="nix"):
                               *[request[key] for key in ("maxDepth", "maxNodes", "maxBytes", "maxSeconds", "maxMemoryMiB")]]])
                 try:
                     if request["maxDepth"] != 0:
-                        raise Refusal("request-unsupported", "E1 supports only root metadata projections", "blocked")
+                        raise Refusal("request-unsupported", "only root metadata projections are supported", "blocked")
                     args = target["argumentDescription"]
                     binding = bindings[target["evaluation"]["reference"]]
                     job = {"identities": {"context": context, "request": req, "run": run, "target": identity},
@@ -262,9 +293,16 @@ def supervise(manifest, bindings, trap_dir, *, strict=False, nix="nix"):
                         else:
                             raise Refusal("binding-unsupported", "binding must explicitly select a producer", "blocked")
                         result = json.loads(execute(argv, job, request, scratch, deadline, env))
-                    produced, state = projection_rows(result, job, facts)
+                        produced, state = projection_rows(result, job, facts)
+                        links, admissions = source_links(produced, source_files, source_mappings, target, identity,
+                                                         scratch / "store" if "expression" in binding else None)
+                        if time.monotonic() >= deadline:
+                            raise Refusal("timeout", "source authentication time-limit exceeded")
+                    produced.extend(links)
+                    admissions = [row for i, row in enumerate(admissions) if row not in facts and row not in admissions[:i]]
+                    envelope(facts + admissions + produced)
                     publish(directory, digest([run, req]), produced)
-                    facts.extend(produced)
+                    facts.extend(admissions + produced)
                     published.update(map(id, produced))
                     if state != "complete":
                         diagnostic("projection-incomplete", "producer returned " + state, identity, req)

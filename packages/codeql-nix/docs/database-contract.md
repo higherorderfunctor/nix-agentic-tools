@@ -103,8 +103,8 @@ relation is retained. File-level links do not establish expression-to-value
 edges or unique syntax associations.
 
 Every `observed` observation requires its own `complete` or `partial` request
-result. Missing rows alone prove neither failure nor absence. Definition
-completion checks return with E2a's metadata producer.
+result. Missing rows mean unknown. Completed definitions require positive work
+and contiguous ordinals for the request's same-path/context observed options.
 
 A complete request cannot carry a timeout/text refusal reason or a linked
 diagnostic with either code. Failed discovery can be represented before any
