@@ -124,6 +124,11 @@ nix() {
       printf '%s' /nix/store/f-kimchi-codeql-database-1.drv
       return
       ;;
+    *ciPackages.x86_64-linux.codeql-lsp.drvPath*)
+      [ "$MODE" != no-lsp-eval ] || return 1
+      printf '%s' /nix/store/j-codeql-lsp.drv
+      return
+      ;;
     *kimchi-codeql-network.drvPath*)
       [ "$MODE" != no-check ] || return 1
       printf '%s' /nix/store/g-kimchi-codeql-network-check.drv
@@ -138,6 +143,7 @@ nix-store() {
       printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/f-kimchi-codeql-database-1.drv \
         /nix/store/g-kimchi-codeql-network-check.drv /nix/store/e-glibc-1.drv
       [ "$MODE" = no-fixture ] || printf '%s\n' /nix/store/h-kimchi-codeql-database-network-fixture.drv
+      [ "$MODE" = no-lsp ] || printf '%s\n' /nix/store/j-codeql-lsp.drv
       [ "$MODE" = no-customized ] || printf '%s\n' /nix/store/i-codeql-javascript-customized-1.drv
       ;;
     --requisites:*)
@@ -165,6 +171,8 @@ export -f curl nix nix-store
                 ("missing", "404", "", False, False),
                 ("nodb", "404", "", False, False),
                 ("no-check", "404", "", False, False),
+                ("no-lsp-eval", "404", "", False, False),
+                ("no-lsp", "404", "", False, False),
                 ("no-fixture", "404", "", False, False),
                 ("no-customized", "404", "", False, False),
                 ("complete", "404", "", True, True),
@@ -172,6 +180,7 @@ export -f curl nix nix-store
                 # The fixture database or the customized engine alone published.
                 ("complete", "404", "h", False, True),
                 ("complete", "404", "i", False, True),
+                ("complete", "404", "j", False, True),
             ):
                 with self.subTest(mode=mode, http_code=http_code, published=published):
                     queries.unlink(missing_ok=True)
@@ -184,9 +193,9 @@ export -f curl nix nix-store
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
                     if success:
                         # Four engine derivations, the release and fixture
-                        # databases, the check and the customized engine; the
+                        # databases, the check, customized engine and LSP role; the
                         # engine the check needs again is asked once.
-                        self.assertEqual(len(queries.read_text().splitlines()), 8)
+                        self.assertEqual(len(queries.read_text().splitlines()), 9)
 
 class CoverageTest(unittest.TestCase):
     def setUp(self):

@@ -3,4 +3,5 @@
 # same functions as `pkgs.ai.devTools.codeql.mkQueryPack` and `mkModelPack`.
 {lib, ...}: {
   ai.devTools.codeql = {inherit (import ./specs.nix {inherit lib;}) mkModelPack mkQueryPack;};
+  ai.mcpServers.mkCodeqlLanguageServer = import ./mkLanguageServer.nix;
 }

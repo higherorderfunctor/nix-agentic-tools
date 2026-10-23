@@ -650,7 +650,7 @@ jobs:
           shopt -s inherit_errexit 2>/dev/null || :
           nix eval --raw .#.ciPackages.x86_64-linux --apply 'packages:
             builtins.concatStringsSep "" (map (name: packages.${name}.drvPath + "\n")
-              (builtins.filter (name: name != "codeql-query" && builtins.substring 0 7 name == "codeql-") (builtins.attrNames packages)))' \
+              (builtins.filter (name: !(builtins.elem name ["codeql-lsp" "codeql-query"]) && builtins.substring 0 7 name == "codeql-") (builtins.attrNames packages)))' \
             > "$RUNNER_TEMP/codeql-engines"
           engines=()
           while read -r drv; do engines+=("$drv"); done < "$RUNNER_TEMP/codeql-engines"
@@ -670,10 +670,10 @@ jobs:
             echo "::error::expected $((2 * ${#engines[@]})) CodeQL derivations for ${#engines[@]} engines, found ${#drvs[@]}" >&2
             exit 1
           fi
-          # The Kimchi databases and the engine customized with the network
-          # packs: every CodeQL derivation the release database and the
-          # network fixture check need, an engine's again among them.
-          for attr in ciPackages.x86_64-linux.kimchi.passthru.codeql.database checks.x86_64-linux.kimchi-codeql-network; do
+          # Customized closures (including the LSP role) are outside the
+          # paired engine/source count above; assert every CodeQL derivation
+          # they need, an engine's again among them.
+          for attr in ciPackages.x86_64-linux.kimchi.passthru.codeql.database checks.x86_64-linux.kimchi-codeql-network ciPackages.x86_64-linux.codeql-lsp; do
             nix eval --raw ".#.$attr.drvPath"
             echo
           done > "$RUNNER_TEMP/codeql-kimchi"
@@ -682,7 +682,7 @@ jobs:
           nix-store --query --requisites "${kimchi[@]}" > "$RUNNER_TEMP/codeql-kimchi-requisites"
           # Fail closed: without each of these the listing no longer reaches
           # the derivations that hold a database or an engine.
-          for want in 'kimchi-codeql-database-[0-9]' 'kimchi-codeql-database-network-fixture' 'codeql-javascript-customized-'; do
+          for want in 'kimchi-codeql-database-[0-9]' 'kimchi-codeql-database-network-fixture' 'codeql-javascript-customized-' 'codeql-lsp'; do
             if ! grep -qE -- "-${want}[^/]*\.drv\$" "$RUNNER_TEMP/codeql-kimchi-requisites"; then
               echo "::error::no $want derivation among the Kimchi CodeQL requisites" >&2
               exit 1
