@@ -47,6 +47,7 @@ in
     vendorHash = pins.vendorHash or lib.fakeHash;
     # `gate` as well, so the check phase runs its tests.
     subPackages = ["cmd/cpa-gate" "gate"];
+    checkFlags = ["-v"];
 
     passthru = {
       inherit (goUpdate) fixGoFloor fixVendorHash;

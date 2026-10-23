@@ -449,7 +449,12 @@
       done
       ${proxy.systemd.user.services.cliproxyapi-main.Service.ExecStart} > cpa.log 2>&1 &
       processes+=("$!")
-      ready "$!" http://127.0.0.1:${toString port}/healthz cpa.log
+      ready "$!" http://127.0.0.1:${toString proxy.ai.cliproxyapi.instances.main.settings.server.port}/healthz cpa.log
+      ${lib.optionalString proxy.ai.cliproxyapi.instances.main.gate.enable ''
+        ${proxy.systemd.user.services.cpa-gate-main.Service.ExecStart} > gate.log 2>&1 &
+        processes+=("$!")
+        ready "$!" http://127.0.0.1:${toString proxy.ai.cliproxyapi.instances.main.gate.healthPort}/-/health gate.log
+      ''}
       request() {
         local status=$1 answer=$2 api=$3 model=$4 key=$5 code path data
         case "$api" in
@@ -461,11 +466,10 @@
           --header 'Content-Type: application/json' --header "Authorization: Bearer $key" \
           --data "$data" "http://127.0.0.1:${toString port}$path")
         if [ "$code" != "$status" ] || ! ${pkgs.jq}/bin/jq -e --arg answer "$answer" '(.choices[0].message.content? // .content[0].text? // .output[0].content[0].text? // .error.message? // .error? // "") | contains($answer)' response.json > /dev/null 2>&1; then
-          echo "FAIL: $key, $api $model: $code, want $status $answer" >&2
-          cat response.json cpa.log >&2
+          echo "FAIL: $api: $code, want $status" >&2
           return 1
         fi
-        echo "ok: $key, $api $model: $code $answer"
+        echo "ok: $api: $code"
       }
       ${requests}
       for upstream in "''${upstreams[@]}"; do
@@ -815,6 +819,12 @@ in {
               proxy = runtime "a";
             };
             cliproxyapi.instances.main = {
+              exactModels = true;
+              gate = {
+                enable = true;
+                healthPort = 28430;
+                internalPort = 28429;
+              };
               credentials = {
                 other.apiKey = provider "other" 28428;
                 zai.apiKey = provider "zai" 28427;
@@ -848,16 +858,16 @@ in {
           name = "runtime-providers";
           port = 28426;
           requests = ''
+            ${pkgs.python3}/bin/python3 ${./gate-runtime.py} "$XDG_RUNTIME_DIR" ${../../packages/cliproxyapi/lib/internal-key.py}
             request 200 zai anthropic glm-shared key-a
             request 200 other responses glm-shared key-b
-            request 503 auth_not_found anthropic other-model key-a
-            request 503 auth_not_found responses zai-model key-b
+
           '';
           upstreams = ["zai:28427:/v1/messages?beta=true" "other:28428:/v1/responses"];
           verify = config: ''
             test "$(${pkgs.bash}/bin/bash -c ${lib.escapeShellArg (claudeSettings {inherit config;}).apiKeyHelper})" = key-a
             test "$(${config.ai.codex.files.".codex/config.toml".content.value.model_providers.ai-proxy.auth.command})" = key-b
-            echo "ok: Claude's key helper resolves key-a, Codex's key-b"
+            echo "ok: Harness helpers resolve their external client keys"
           '';
         };
       # Linux Home Manager emits the units, and the launcher renders the

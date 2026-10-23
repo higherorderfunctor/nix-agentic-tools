@@ -10,7 +10,8 @@
 > types `server.tls.key` as a secret file, and derives named client keys'
 > `access.api-keys` and `access.key-allowlist` entries from named upstream
 > routes. `exactModels` applies native model exclusions and disables model
-> rewrites.
+> rewrites; opt-in `gate.enable` moves CPA to a loopback internal port and
+> replaces its client keys with private internal keys.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -22,22 +23,27 @@ shared rules are in `dev/fragments/extracted/typed-settings.md`.
 
 `ai.cliproxyapi.instances.<name>` (`modules/instances.nix`, through
 `packages/ai-module/lib/instances.nix`) runs CLIProxyAPI as the service
-`cliproxyapi-<name>` on both backends. `port` (8317) fixes `server.port`;
-`settings.server.host` defaults to `127.0.0.1` through `mkDefault`, so a
-consumer can explicitly override the bind address. `stateDir`
-(`<state root>/cliproxyapi/<name>`) fixes `oauth.auth-dir` to `<stateDir>/auth`,
-where CLIProxyAPI writes its OAuth logins. The launcher renders the settings to
-`config.json` at each start and the run script, inside `stateDir` so the `.env`
-and `logs/` CLIProxyAPI resolves against its working directory are its own,
-execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
-reach only that copy and are lost at restart. `ai.proxy.instance` points the
-harnesses at an instance by name.
+`cliproxyapi-<name>` on both backends. With `gate.enable = false` (the default),
+`port` (8317) fixes `server.port`; `settings.server.host` defaults to
+`127.0.0.1` through `mkDefault`, so a consumer can explicitly override the bind
+address. `stateDir` (`<state root>/cliproxyapi/<name>`) fixes `oauth.auth-dir`
+to `<stateDir>/auth`, where CLIProxyAPI writes its OAuth logins. The launcher
+renders the settings to `config.json` at each start and the run script, inside
+`stateDir` so the `.env` and `logs/` CLIProxyAPI resolves against its working
+directory are its own, execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's
+rewrites of its config reach only that copy and are lost at restart.
+`ai.proxy.instance` points the harnesses at an instance by name.
 
 `credentials` and `clientKeys` declare upstream credentials and client access
 once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
 four-client example, OAuth filename selection and devenv secret references are
 in `dev/fragments/ai-proxy/ai-proxy.md`.
+
+`gate.enable = true` requires `exactModels` and puts `cpa-gate-<name>` on
+`port`, moving CPA to `gate.internalPort` with its host fixed to loopback. The
+gate is NOT a security boundary while Harnesses share its uid. Split keys,
+model-set unions and restart behavior are in `cliproxyapi-front-gate.md`.
 
 ## Exact upstream models
 

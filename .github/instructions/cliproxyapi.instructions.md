@@ -106,14 +106,16 @@ before publication.
 
 # CLIProxyAPI front gate (cpa-gate)
 
-> **Last verified:** 2026-10-22 — the gate checks call bodies, filters five CPA
-> listing shapes and detail responses, and reports listing health; websockets
-> remain refused, and no module option enables it.
+> **Last verified:** 2026-10-22 — opt-in instance wiring splits named client
+> keys from independent internal secrets, filters exact provider-side model
+> unions, and shares restart triggers; websockets remain refused.
 
-**cpa-gate is NOT a security boundary, and nothing wires it in yet.** A harness
-that runs under the same uid as the gate can read the policy file, which holds
-every client key and every internal key, and can read CLIProxyAPI's own config
-and logins. It becomes a boundary only once each harness has its own VM or uid.
+**cpa-gate is NOT a security boundary.** A harness that runs under the same uid
+as the gate can read the policy file, which holds every client key and every
+internal key, and can read CLIProxyAPI's own config and logins. It becomes a
+boundary only once each harness has its own VM or uid. CPA already refuses
+upstream credentials outside each client's named routes through its credential
+allowlist.
 
 ## What it is
 
@@ -124,9 +126,43 @@ key, so CPA applies its key allowlist to the principal the gate chose. The Go
 module is `src/cpa-gate` (module path `cpagate`, never fetched); the binary is
 Caddy's own `main` plus one import.
 
-`lib/gate.nix` renders the Caddyfile from shared pieces. Only the listing paths
-have a downstream `reverse_proxy`; a second loopback site serves
-`cpa_gate_health`.
+`lib/gate.nix` renders the Caddyfile from shared pieces. Admitted calls and
+filtered listings reach CPA through `reverse_proxy`; a second loopback site
+serves `cpa_gate_health`.
+
+## Instance wiring
+
+Set `ai.cliproxyapi.instances.<name>.gate.enable = true` together with
+`exactModels = true`. The default is false and preserves the original config and
+service units. The gate takes `instance.port`; CPA moves to `gate.internalPort`
+(18317), fixed to `127.0.0.1`, and `gate.healthPort` (28317) serves loopback
+health. All ports are claimed. `gate.host` defaults to loopback. Multiple
+instances need distinct ports.
+
+Each named `clientKeys` entry keeps its external key for Harness selection. Only
+the gate's `serviceEntry.files.policy` reads that key. CPA's `api-keys` and
+`key-allowlist` instead read an independent 256-bit random internal key per
+named client, with exactly the existing route rules. Either service's first
+start generates it in `<stateDir>/gate-keys`; a process lock serializes
+creation, and an atomic rename publishes the complete 0600 file inside a 0700
+directory. Keys persist across restarts, are never derived from client keys, and
+never enter evaluation or the store. Both launchers use `redact.command` to read
+them. No internal key reaches a Harness. Remove raw access entries: the gate
+owns the complete access key lists. CPA debug and request/file logging are
+forced off, and its body ceiling matches the gate's 32 MiB.
+
+The policy's model set is the exact union of the routed credentials' selected
+provider-side models. G3 refuses a union member excluded from any other routed
+credential whose catalog registers it. Comparisons preserve exact bytes; there
+are no per-client model overrides here. Upstream `routes[].api` chooses the CPA
+credential family; the gate admits Anthropic, Chat and Responses client
+protocols because CPA translates them. Hosted tools remain denied and websockets
+remain refused. This wiring does not define upstream routing order.
+
+Both services share `restartOnChange`: the config/policy revision and all
+file-backed client and upstream credentials. Changing either set restarts both;
+command references require an explicit restart. Runtime keys remain solely in
+private rendered files; the Caddyfile receives only the policy path.
 
 ## Policy file
 
@@ -247,6 +283,12 @@ install check needs a version that a local path lacks.
 
 ## Checks
 
+- `module-service-instances-gate-*` checks both backend projections and
+  default-off config/units, exact-mode and G3 refusals, and shared triggers.
+- `module-service-instances-runtime-providers` exercises both named client keys
+  through real CPA and gate launchers: exact listings, each model over HTTP and
+  incremental SSE, internal-port authentication, uniform refusals with empty
+  upstream logs, and no keys or model IDs in daemon logs.
 - Go tests run in the package check phase, including a real Caddy copy of
   listings and a test that no log or error carries a key.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
@@ -385,7 +427,8 @@ change, then run the module assertions and Go check in CI.
 > types `server.tls.key` as a secret file, and derives named client keys'
 > `access.api-keys` and `access.key-allowlist` entries from named upstream
 > routes. `exactModels` applies native model exclusions and disables model
-> rewrites.
+> rewrites; opt-in `gate.enable` moves CPA to a loopback internal port and
+> replaces its client keys with private internal keys.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -397,22 +440,27 @@ shared rules are in `dev/fragments/extracted/typed-settings.md`.
 
 `ai.cliproxyapi.instances.<name>` (`modules/instances.nix`, through
 `packages/ai-module/lib/instances.nix`) runs CLIProxyAPI as the service
-`cliproxyapi-<name>` on both backends. `port` (8317) fixes `server.port`;
-`settings.server.host` defaults to `127.0.0.1` through `mkDefault`, so a
-consumer can explicitly override the bind address. `stateDir`
-(`<state root>/cliproxyapi/<name>`) fixes `oauth.auth-dir` to `<stateDir>/auth`,
-where CLIProxyAPI writes its OAuth logins. The launcher renders the settings to
-`config.json` at each start and the run script, inside `stateDir` so the `.env`
-and `logs/` CLIProxyAPI resolves against its working directory are its own,
-execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
-reach only that copy and are lost at restart. `ai.proxy.instance` points the
-harnesses at an instance by name.
+`cliproxyapi-<name>` on both backends. With `gate.enable = false` (the default),
+`port` (8317) fixes `server.port`; `settings.server.host` defaults to
+`127.0.0.1` through `mkDefault`, so a consumer can explicitly override the bind
+address. `stateDir` (`<state root>/cliproxyapi/<name>`) fixes `oauth.auth-dir`
+to `<stateDir>/auth`, where CLIProxyAPI writes its OAuth logins. The launcher
+renders the settings to `config.json` at each start and the run script, inside
+`stateDir` so the `.env` and `logs/` CLIProxyAPI resolves against its working
+directory are its own, execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's
+rewrites of its config reach only that copy and are lost at restart.
+`ai.proxy.instance` points the harnesses at an instance by name.
 
 `credentials` and `clientKeys` declare upstream credentials and client access
 once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
 four-client example, OAuth filename selection and devenv secret references are
 in `dev/fragments/ai-proxy/ai-proxy.md`.
+
+`gate.enable = true` requires `exactModels` and puts `cpa-gate-<name>` on
+`port`, moving CPA to `gate.internalPort` with its host fixed to loopback. The
+gate is NOT a security boundary while Harnesses share its uid. Split keys,
+model-set unions and restart behavior are in `cliproxyapi-front-gate.md`.
 
 ## Exact upstream models
 

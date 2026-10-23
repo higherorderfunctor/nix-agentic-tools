@@ -307,7 +307,7 @@ Temporarily unclassified supporting packages live in the split-ready
 | `bun` | JavaScript runtime, bundler, transpiler and package manager |
 | `catppuccin-btop` | Catppuccin theme files for btop |
 | `cliproxyapi` | OpenAI-compatible proxy for AI CLI subscriptions and APIs |
-| `cpa-gate` | Caddy with a client-key and route gate for CLIProxyAPI (not yet wired) |
+| `cpa-gate` | Caddy with an optional client-key and exact-model gate for CLIProxyAPI |
 | `cpa-manager-plus` | CPA Manager Plus dashboard and management server |
 | `dns-root-hints` | IANA DNS root name server hints (named.root) |
 | `fblog` | Command-line JSON log viewer |

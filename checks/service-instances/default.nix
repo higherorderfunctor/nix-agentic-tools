@@ -1,1 +1,1 @@
-{imports = [./module-eval.nix];}
+{imports = [./gate.nix ./module-eval.nix];}

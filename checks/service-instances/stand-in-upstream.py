@@ -8,6 +8,8 @@
 import http.server
 import json
 import sys
+import time
+from pathlib import Path
 
 NAME, PORT, LOG = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 
@@ -75,7 +77,9 @@ class Upstream(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+        done = Path(LOG + ".done")
+        done.unlink(missing_ok=True)
         with open(LOG, "a") as handle:
             handle.write(f"{self.path} {self.headers.get('Authorization')}\n")
         if self.path.split("?")[0].endswith("/responses"):
@@ -84,11 +88,30 @@ class Upstream(http.server.BaseHTTPRequestHandler):
             body, kind = json.dumps(message()).encode(), "application/json"
         else:
             body, kind = json.dumps(chat_completion()).encode(), "application/json"
+        if request.get("stream") and self.path.startswith("/v1/messages"):
+            events = [
+                {"type": "message_start", "message": message() | {"content": [], "stop_reason": None}},
+                {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+                {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": NAME}},
+                {"type": "content_block_stop", "index": 0},
+                {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}},
+                {"type": "message_stop"},
+            ]
+            body = "".join(f"event: {event['type']}\ndata: {json.dumps(event)}\n\n" for event in events).encode()
+            kind = "text/event-stream"
         self.send_response(200)
         self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if request.get("stream"):
+            for event in body.split(b"\n\n"):
+                if event:
+                    self.wfile.write(event + b"\n\n")
+                    self.wfile.flush()
+                    time.sleep(0.2)
+        else:
+            self.wfile.write(body)
+        done.touch()
 
     def log_message(self, *_):
         pass

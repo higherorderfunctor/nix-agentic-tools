@@ -217,6 +217,7 @@ gradeable
 groq
 grokbuild
 headlessly
+healthz
 heredocs
 herestring
 higherorderfunctor

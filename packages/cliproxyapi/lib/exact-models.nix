@@ -16,16 +16,15 @@
     && !(lib.hasPrefix "claude-fable-5-dd-" name)
     # The service would substitute a whole placeholder with a secret value.
     && placeholderName name == null;
-  selected = credential: let
-    catalog =
-      if credential.apiKey != null
-      then credential.apiKey.models
-      else catalogs.${credential.oauth.vendor} or [];
-  in
+  catalog = credential:
+    if credential.apiKey != null
+    then credential.apiKey.models
+    else catalogs.${credential.oauth.vendor} or [];
+  selected = credential:
     lib.unique (
       if credential.models != null
       then credential.models
-      else lib.subtractLists (lib.defaultTo [] credential.excludedModels) catalog
+      else lib.subtractLists (lib.defaultTo [] credential.excludedModels) (catalog credential)
     );
   narrow = instance:
     instance
@@ -94,5 +93,5 @@
       lib.optional (lib.length (lib.unique (map (credential: lib.sort builtins.lessThan (selected credential)) credentials)) > 1) "${path}: CPA's OAuth exclusions are vendor-wide; named ${vendor} logins must select the same effective models.")
     vendorSets);
 in {
-  inherit catalogs exclusions narrow problems settings;
+  inherit catalog catalogs exclusions narrow problems selected settings;
 }
