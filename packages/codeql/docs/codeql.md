@@ -1,10 +1,11 @@
 ## CodeQL engines
 
 > **Last verified:** 2026-10-22 — eleven engines at 2.27.3 from one `mkEngine`
-> factory, plus the MIT Nix extractor at 0.3.0; the javascript engine wraps its
-> launcher with a Node; local databases use named lifecycle tasks, shared warmed
-> merge-base snapshots, atomic checkout generations and locked space management
-> with exact stamped worktree references. Packs: customize.md.
+> factory, the local query client and optional per-database daemon, plus the MIT
+> Nix extractor at 0.3.0; the javascript engine wraps its launcher with a Node;
+> named lifecycle tasks publish atomic checkout generations from shared warmed
+> merge-base snapshots, with locked space management and exact stamped worktree
+> references. Packs and `customizePackage`: customize.md.
 
 ### What a bundle is
 
@@ -227,3 +228,66 @@ full strict header, including the application's `bashOptions` and the shopt in
 bindings, concatenation and interpolation are followed, while an opaque helper
 call remains unknown. This is a textual AST query, not Nix or Bash execution.
 The whole repository is deliberately not a gate.
+
+### Query client and optional daemon
+
+`ai.devTools.codeql.codeql-query` ships
+`codeql-query run <name-or-db-path> <query.ql>` and
+`codeql-query run <name-or-db-path> -e '<QL text>'`. A name resolves from the
+current checkout upward to `.devenv/state/codeql/<name>/db`; a path may name
+that database or its containing state directory. Resolve `db` once, then use
+that generation's sibling `engine/bin/codeql` to select its exact engine. Files
+keep their sibling imports and manifest. Inline queries use a persistent
+content-addressed pack whose dependencies are the database languages' visible
+`*-all` libraries; ambiguous libraries require a query file in an explicit pack.
+Both the manifest and query are published atomically so concurrent first-use
+clients see complete files. Output is `bqrs decode --format=json --sort-key=0`
+JSON; `--sort-key` accepts other comma-separated column indexes. Compilation
+failures print CodeQL's diagnostic, including the query's path and line.
+
+`ai.codeql.queryDaemon.enable = true` is the only daemon switch, off by default
+and available on Home Manager and devenv. It declares
+`ai.codeql.services.codeql-query`, lowered by `ai.services` to a user unit or
+devenv process; normal service controls start and stop it. The socket is
+`query.sock` under the service runtime directory,
+`$XDG_RUNTIME_DIR/ai-service-codeql-query` or
+`${TMPDIR:-/tmp}/ai-service-<uid>-codeql-query`, and is claimed through the
+owner's path group. The daemon makes that directory private and locks it before
+removing a stale socket. Clients use this socket automatically; an absent or
+refused socket runs `codeql query run` and the same JSON decoder. Other socket
+or query errors fail visibly. `--no-daemon` explicitly selects the fallback and
+requires the database to be unlocked. Shutdown interrupts incomplete socket
+reads before joining handlers, then releases evaluator sessions and removes the
+socket; complete queries finish normally.
+
+The daemon starts one `execute query-server2` lazily per resolved database and
+engine, with a separate request lock per database. Different databases can run
+concurrently. Aliases of the same target reuse one process.
+`resolve ram --ram=6000 --format=json` supplies the server's heap and off-heap
+flags; `--threads=4` bounds evaluation. A server releases its registration and
+exits after 300 idle seconds. The daemon's `common-caches` persists under
+`$XDG_STATE_HOME/codeql-query` (Home Manager) or `$DEVENV_STATE/codeql-query`
+(devenv); the fallback's is under `$XDG_CACHE_HOME/codeql-query`. Each database
+also keeps CodeQL's own writable evaluator cache.
+
+Every request resolves the live `db` symlink again. A changed generation
+detaches the previous registration and reuses or registers the new target; a
+once-per-second idle sweep also releases generations whose links changed without
+another request. An in-flight query uses the generation it resolved and can be
+interrupted by lifecycle retirement; finish queries before refreshing. Plain
+database directories remain supported, but must not be mutated while registered.
+Database creation, frontier warming, copying, refresh and generation retirement
+belong to `codeql:<name>:up|refresh|down`; `codeql-query run` only queries. The
+query daemon never changes source snapshots or rebuilds a database.
+
+`codeql-query` is the tiny-fixture integration check: fallback and socket JSON
+agree; A/B/A requests preserve results and affinity; concurrent requests, inline
+and edited queries, compile-error recovery, generation replacement, unlocked old
+generations, idle exit and shutdown with incomplete clients are exercised
+against the pinned engine. A lightweight transport regression pauses first-use
+writes to each inline file while a second fallback caller compiles, and checks
+SIGTERM with accepted idle and partial clients. The transport uses the 2.27.3
+`vscode-codeql` `messages.ts` and `run-queries.ts` protocol:
+`evaluation/registerDatabases`, `evaluation/deregisterDatabases` and
+`evaluation/runQuery` with Content-Length framing. No initialization request is
+required.
