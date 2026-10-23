@@ -25,7 +25,7 @@ in
       shopt -s inherit_errexit 2>/dev/null || :
       mkdir -p "$out/tools" # bare-commands: ok
       cp ${library}/nix.dbscheme ${library}/nix.dbscheme.stats "$out/" # bare-commands: ok
-      cat > "$out/codeql-extractor.yml" <<'MANIFEST'
+      cat > "$out/codeql-extractor.yml" <<'MANIFEST' # bare-commands: ok
       build_modes: [none]
       column_kind: utf8
       display_name: Nix
