@@ -44,7 +44,11 @@ in {
     ++ lib.concatLists (lib.mapAttrsToList (clientName: client: let
       allowed = models instance client;
     in
-      lib.optional (lib.any (credential: lib.any (model: lib.elem model (exact.catalog credential) && !(lib.elem model (exact.selected credential))) allowed) (credentials instance client))
+      # Metadata is rendered with the secrets too. A whole placeholder name
+      # would become a secret in unauthenticated health and refusal logs.
+      lib.optional (render.placeholderName clientName != null)
+      "ai.cliproxyapi.instances.${name}.clientKeys: gate refuses whole-placeholder names, which would substitute secrets into public metadata."
+      ++ lib.optional (lib.any (credential: lib.any (model: lib.elem model (exact.catalog credential) && !(lib.elem model (exact.selected credential))) allowed) (credentials instance client))
       "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}: gate model union includes a model excluded by another routed credential's catalog (G3).")
     instance.clientKeys);
 

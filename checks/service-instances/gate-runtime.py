@@ -39,9 +39,9 @@ def result(port, key, method, path, body=None):
     return value
 
 
-for name, api, upstream, allowed in [
-    ("a", "messages", "zai", {"glm-shared", "zai-model"}),
-    ("b", "responses", "other", {"glm-shared", "other-model"}),
+for name, api, upstream, allowed, forbidden in [
+    ("a", "messages", "zai", {"glm-shared", "zai-model"}, "other-model"),
+    ("b", "responses", "other", {"glm-shared", "other-model"}, "zai-model"),
 ]:
     entry = entries[name]
     key = entry["key"]
@@ -74,15 +74,22 @@ for name, api, upstream, allowed in [
     for log in logs:
         log.write_text("")
     refused = [result(28426, key, "GET", route) for route in ["/healthz", "/v0/management/config", "/v1/models/"]]
+    # The other client's globally real model must be indistinguishable from
+    # a nonexistent model in each checked position, with no upstream call.
+    for denied in ["outside", forbidden]:
+        refused.append(result(28426, key, "GET", "/v1/models/" + denied))
+        for bad in [
+            {"model": denied},
+            {"model": "glm-shared", "metadata": {"model": denied}},
+            {"model": "glm-shared", "messages": [{"role": "assistant", "content": [{"type": "server_tool_use", "name": "x", "model": denied}]}]},
+            {"model": "glm-shared", "fallbacks": [{"model": denied}]},
+            {"model": "glm-shared", "tools": [{"type": "function", "function": {"name": "x", "model": denied}}]},
+        ]:
+            refused.append(result(28426, key, "POST", path, bad))
     for bad in [
-        {"model": "outside"},
         {"model": "GLM-shared"},
-        {"model": "glm-shared", "metadata": {"model": "outside"}},
         {"model": "glm-shared", "input": [{"type": "web_search_call", "id": "x", "status": "completed"}]},
-        {"model": "glm-shared", "messages": [{"role": "assistant", "content": [{"type": "server_tool_use", "name": "x", "model": "outside"}]}]},
-        {"model": "glm-shared", "fallbacks": [{"model": "outside"}]},
         {"model": "glm-shared", "tools": [{"type": "web_search"}]},
-        {"model": "glm-shared", "tools": [{"type": "function", "function": {"name": "x", "model": "outside"}}]},
     ]:
         refused.append(result(28426, key, "POST", path, bad))
     assert set(refused) == {(404, b"")}

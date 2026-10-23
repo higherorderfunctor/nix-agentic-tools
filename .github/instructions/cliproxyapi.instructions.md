@@ -108,7 +108,8 @@ before publication.
 
 > **Last verified:** 2026-10-23 — opt-in instance wiring splits named client
 > keys from independent internal secrets, filters exact provider-side model
-> unions, checks Responses websocket messages, and shares restart triggers.
+> unions, rejects reserved metadata names and internal TLS, checks Responses
+> websocket messages, and shares restart triggers.
 
 **cpa-gate is NOT a security boundary.** A harness that runs under the same uid
 as the gate can read the policy file, which holds every client key and every
@@ -137,7 +138,9 @@ Set `ai.cliproxyapi.instances.<name>.gate.enable = true` together with
 service units. The gate takes `instance.port`; CPA moves to `gate.internalPort`
 (18317), fixed to `127.0.0.1`, and `gate.healthPort` (28317) serves loopback
 health. All ports are claimed. `gate.host` defaults to loopback. Multiple
-instances need distinct ports.
+instances need distinct ports. The internal hop is HTTP, so the gate owns
+`server.tls.enable = false`; conflicting TLS is refused. Gate-off TLS still
+works.
 
 Each named `clientKeys` entry keeps its external key for Harness selection. Only
 the gate's `serviceEntry.files.policy` reads that key. CPA's `api-keys` and
@@ -148,8 +151,10 @@ creation, and an atomic rename publishes the complete 0600 file inside a 0700
 directory. Keys persist across restarts, are never derived from client keys, and
 never enter evaluation or the store. Both launchers use `redact.command` to read
 them. No internal key reaches a Harness. Remove raw access entries: the gate
-owns the complete access key lists. CPA debug and request/file logging are
-forced off, and its body ceiling matches the gate's 32 MiB.
+owns the complete access key lists. Whole-placeholder client names are refused:
+secret substitution would otherwise turn public health/log metadata into a key.
+CPA debug and request/file logging are forced off, and its body ceiling matches
+the gate's 32 MiB.
 
 CPA also logs model names at Info during session affinity and on upstream
 failures, with no lower log-level option. For gated instances its exec discards
@@ -307,7 +312,8 @@ install check needs a version that a local path lacks.
 ## Checks
 
 - `module-service-instances-gate-*` checks both backend projections and
-  default-off config/units, exact-mode and G3 refusals, and shared triggers.
+  default-off config/units and command-body baselines, reserved-name/TLS,
+  exact-mode and G3 refusals, and shared triggers.
 - `module-service-instances-runtime-providers` exercises both named client keys
   through real CPA and gate launchers: exact listings, each model over HTTP and
   incremental SSE, internal-port authentication, uniform refusals with empty
