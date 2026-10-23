@@ -3,8 +3,11 @@
   repoPath,
   ...
 }: {
-  documentation.devToolDescriptions."codeql.codeql-extractor-nix" = "MIT Nix extractor and QL library for CodeQL (x86_64-linux)";
-  documentation.devToolDescriptions."codeql.codeql-<engine>" = "GitHub CodeQL CLI: `bare`, `full`, or one language's bundle (unfree, x86_64-linux, never published)";
+  documentation.devToolDescriptions = {
+    "codeql.codeql-<engine>" = "GitHub CodeQL CLI: `bare`, `full`, or one language's bundle (unfree, x86_64-linux, never published)";
+    "codeql.codeql-extractor-nix" = "MIT Nix extractor and QL library for CodeQL (x86_64-linux)";
+    "codeql.codeql-query" = "Local CodeQL query client with an optional per-database daemon";
+  };
   fragments.categories.codeql = {
     scopes = ["packages/${facetOwner}/**"];
     sources = [

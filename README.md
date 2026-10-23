@@ -279,6 +279,7 @@ Agent-adjacent development utilities exposed as `pkgs.ai.devTools.*`.
 | `beads` | Graph-based issue tracker for AI coding agents |
 | `codeql.codeql-<engine>` | GitHub CodeQL CLI: `bare`, `full`, or one language's bundle (unfree, x86_64-linux, never published) |
 | `codeql.codeql-extractor-nix` | MIT Nix extractor and QL library for CodeQL (x86_64-linux) |
+| `codeql.codeql-query` | Local CodeQL query client with an optional per-database daemon |
 | `gh` | GitHub CLI |
 | `glab` | GitLab CLI |
 | `markdownlint-cli2` | Configuration-based markdown linter (markdownlint) |
