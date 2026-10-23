@@ -109,8 +109,6 @@ while :; do
     echo "head moved or DIRTY: re-arm on the new head or rebase"
     exit 1
   fi
-  watch_status=0
-  gh pr checks "$pr" --repo "$repo" --watch --fail-fast --interval 30 || watch_status=$?
   checks=$(gh pr checks "$pr" --repo "$repo" --json bucket,link)
   if jq -e 'any(.bucket == "fail" or .bucket == "cancel")' <<<"$checks" >/dev/null; then
     runs=$(gh api --paginate --slurp "repos/$repo/actions/runs?head_sha=$head&per_page=100")
@@ -149,10 +147,13 @@ while :; do
     sleep 30
     continue
   fi
-  [ "$watch_status" -eq 0 ] || exit "$watch_status"
+  if jq -e 'any(.bucket == "pending")' <<<"$checks" >/dev/null; then
+    sleep 30
+    continue
+  fi
   sleep 60
-  pending=$(gh pr checks "$pr" --repo "$repo" --json bucket --jq 'any(.bucket == "pending")')
-  [ "$pending" = true ] || break
+  again=$(gh pr checks "$pr" --repo "$repo" --json bucket --jq 'any(.bucket == "pending" or .bucket == "fail" or .bucket == "cancel")')
+  [ "$again" = true ] || break
 done
 if [ "$(gh pr view "$pr" --repo "$repo" --json headRefOid --jq .headRefOid)" != "$head" ]; then
   echo "head moved past $head: re-arm on the new commit"
@@ -167,9 +168,11 @@ Each part closes a way a watcher has reported the wrong thing:
   commit's checks, so a count alone can watch a run that is already over.
 - **The count gate and its timeout.** Gating on "is anything PENDING" falls
   through on an empty list; running out of attempts must fail, not carry on.
-- **`--fail-fast`.** Without it `--watch` waits for every check, so a failure
-  two minutes in is reported only after the slowest job. Do not hand-roll a loop
-  that waits for "nothing pending" across several PRs: it has the same delay.
+- **Fail fast on each poll.** Classify every failure before waiting, so a real
+  failure stops within the thirty-second polling interval. A blocking
+  `--watch --fail-fast` does not stop on cancellations while any check is
+  pending, which would delay replacement reruns and bypass their stale-check
+  deadline.
 - **Cancelled duplicates.** A failed check is deferred only when its Actions run
   is cancelled and another run of the same workflow on the same head is
   unfinished or successful. A successful replacement triggers a rerun of the
@@ -186,9 +189,9 @@ Each part closes a way a watcher has reported the wrong thing:
 - **`DIRTY`.** A conflicted PR gets no checks, so the count gate would wait out
   its whole budget.
 
-`gh pr checks` exits non-zero on a failed check. The watcher classifies
-cancelled duplicates before propagating the failure; read a real failing job's
-log next.
+`gh pr checks --json` reports failures in `bucket` without a failing exit
+status. The watcher classifies every failure and cancelled duplicate explicitly;
+read a real failing job's log next.
 
 `UNSTABLE` on the PR is not a failure — it means "not all green yet" and covers
 pending. `DIRTY` is the one that means stop waiting and rebase.
