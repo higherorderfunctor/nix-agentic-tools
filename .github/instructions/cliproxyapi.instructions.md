@@ -151,6 +151,15 @@ them. No internal key reaches a Harness. Remove raw access entries: the gate
 owns the complete access key lists. CPA debug and request/file logging are
 forced off, and its body ceiling matches the gate's 32 MiB.
 
+CPA also logs model names at Info during session affinity and on upstream
+failures, with no lower log-level option. For gated instances its exec discards
+stdout and stderr; `server.commercial-mode = true` omits the error-request file
+logger, and file logging is disabled. This sacrifices CPA's startup and upstream
+diagnostics: use its exit status and the gate's health counts/refusal logs.
+Redact readers run earlier in the parent service launcher; suppression cannot
+consume or alter their secret output. The exact-mode preflight still reports its
+value-free refusal before CPA starts.
+
 The policy's model set is the exact union of the routed credentials' selected
 provider-side models. G3 refuses a union member excluded from any other routed
 credential whose catalog registers it. Comparisons preserve exact bytes; there
