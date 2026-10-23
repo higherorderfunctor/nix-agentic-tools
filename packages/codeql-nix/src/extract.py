@@ -33,8 +33,10 @@ class RunIdentity:
         implementation += sorted((sources / "eval").rglob("*.nix")) + sorted((sources / "eval").glob("*.py"))
         extractor = digest(b"".join(path.read_bytes() for path in implementation))
         snapshot = cls.snapshot(abi, manifest)
-        return cls(["nx_runs", [abi.key("run", [schema_hash, extractor, snapshot]), schema_hash,
-                    extractor, json.loads(Path(pins).read_text())["grammar"], "not-requested", snapshot]])
+        versions = json.loads(Path(pins).read_text())
+        model = versions.get("model", "not-requested")
+        return cls(["nx_runs", [abi.key("run", [schema_hash, extractor, model, snapshot]), schema_hash,
+                    extractor, versions["grammar"], model, snapshot]])
 
     @classmethod
     def evaluation(cls, abi, supervisor):
@@ -50,6 +52,8 @@ class RunIdentity:
     def check_targets(self, abi, manifest):
         abi.require(all(target["fingerprint"]["sourceSnapshotHash"] == self.row[1][-1]
                         for target in manifest["targets"].values()), "mixed-source-snapshot")
+        abi.require(all(target["fingerprint"]["modelVersion"] in ("not-requested", self.row[1][4])
+                        for target in manifest["targets"].values()), "unsupported-model")
 
     def accept(self, abi, packet):
         """Reject an otherwise valid child envelope carrying any other run/snapshot."""

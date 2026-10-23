@@ -156,8 +156,12 @@ class ProtocolTests(unittest.TestCase):
         descriptor(packet)["evaluation"]["kind"] = "config-only"
         self.rejected_manifest(packet)
         packet = deepcopy(MANIFEST)
-        descriptor(packet)["fingerprint"]["modelVersion"] = "model-a"
-        self.rejected_manifest(packet)
+        descriptor(packet)["fingerprint"]["modelVersion"] = "sha256:" + "a" * 64
+        self.manifest(packet)
+        for value in ("", 7, True, "\ud800", "é" * (LIMIT // 2 + 1)):
+            packet = deepcopy(MANIFEST)
+            descriptor(packet)["fingerprint"]["modelVersion"] = value
+            self.rejected_manifest(packet)
 
     def test_literal_paths_and_every_explicit_budget(self):
         for segments in (["a.b"], ["a", "b"], ["", "é", 'quote"', "a\\b"]):

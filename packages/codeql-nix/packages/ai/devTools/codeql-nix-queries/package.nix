@@ -1,5 +1,8 @@
-{pkgs}:
+{
+  inputs,
+  pkgs,
+}:
 (import ../../../../lib/packaging.nix {
   inherit (pkgs) lib;
-  inherit pkgs;
+  inherit inputs pkgs;
 }).queries

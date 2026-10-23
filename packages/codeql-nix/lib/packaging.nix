@@ -1,12 +1,46 @@
 {
+  inputs,
   lib,
   pkgs,
 }: let
-  inputs = import ./kit.nix {inherit pkgs;};
-  pins = pkgs.writeText "nixql-generation-pins.json" (builtins.toJSON {
-    grammar = inputs.grammar.rev;
-    kit = inputs.kit.rev;
+  # Syntax generation stays independent of models.
+  kit = import ./kit.nix {inherit pkgs;};
+  syntaxPins = pkgs.writeText "nixql-generation-pins.json" (builtins.toJSON {
+    grammar = kit.grammar.rev;
+    kit = kit.kit.rev;
   });
+  # Model generation uses the shared generated-file formatter.
+  modelPython = pkgs.python3.withPackages (ps: [ps.tree-sitter ps.tree-sitter-grammars.tree-sitter-cpp]);
+  models = (import ../../../lib/generated.nix {inherit lib;} pkgs).mkTree {
+    inherit treefmt;
+    files = {
+      "builtins.json" = {
+        source = "${rawModels}/builtins.json";
+        type = "json";
+      };
+      "builtins.qll" = {
+        source = "${rawModels}/builtins.qll";
+        type = "raw";
+      };
+    };
+    guards.parseCompare = true;
+    name = "nixql-models";
+    runtime = "codeql-nix";
+  };
+  rawModels = pkgs.runCommand "nixql-raw-models" {} ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    ${modelPython}/bin/python3 ${../models/builtins}/generate.py \
+      --nix ${pkgs.nix}/bin/nix --source ${pkgs.nix.src} --output "$out"
+  '';
+  treefmt = (inputs.treefmt-nix.lib.evalModule pkgs ../../../lib/treefmt-module.nix).config;
+  # Runtime coordination reads the generated model fingerprint at build time.
+  pins = pkgs.runCommand "nixql-generation-pins.json" {} ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    ${pkgs.python3}/bin/python3 -c 'import json, sys; print(json.dumps(json.load(open(sys.argv[1])) | {"model": json.load(open(sys.argv[2]))["modelVersion"]}))' \
+      ${syntaxPins} ${models}/builtins.json > "$out"
+  '';
   python = pkgs.python3.withPackages (ps: [ps.jsonschema]);
   strictShell = import ../../../lib/strict-shell-application.nix pkgs;
   inherit (builtins.fromJSON (builtins.readFile ../../codeql/sources.json)) version;
@@ -16,7 +50,7 @@ in
       name = "nixql-extract";
       text = ''
         exec ${python}/bin/python3 ${../.}/src/extract.py \
-          ${inputs.syntaxFixture}/bin/nixql-anchors ${../schema} \
+          ${kit.syntaxFixture}/bin/nixql-anchors ${../schema} \
           ${generated}/nix.dbscheme ${pins} ${pkgs.nix}/bin/nix
       '';
     };
@@ -60,8 +94,8 @@ in
           exit 2
         fi
         exec ${pkgs.python3}/bin/python3 ${../src/generate.py} \
-          ${inputs.syntaxFixture}/bin/nixql-generate-raw \
-          ${../schema/evaluation.dbscheme} ${pins} "$1"
+          ${kit.syntaxFixture}/bin/nixql-generate-raw \
+          ${../schema/evaluation.dbscheme} ${syntaxPins} "$1"
       '';
     };
     library = pkgs.runCommand "nixql-library" {} ''
@@ -71,15 +105,19 @@ in
       cp -r ${generated}/. "$out/" # bare-commands: ok
       chmod -R u+w "$out" # bare-commands: ok
       cp -rL ${../.}/ql/lib/. "$out/" # bare-commands: ok
+      mkdir -p "$out/models" "$out/nix/internal/generated" # bare-commands: ok
+      cp ${models}/builtins.json "$out/models/" # bare-commands: ok
+      cp ${models}/builtins.qll "$out/nix/internal/generated/Builtins.qll" # bare-commands: ok
       printf '<dbstats><typesizes/><stats/></dbstats>\n' > "$out/nix.dbscheme.stats"
     '';
+    inherit models;
     queries = pkgs.runCommand "nixql-queries" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       mkdir -p "$out" # bare-commands: ok
       cp -r ${../ql/queries}/. "$out/" # bare-commands: ok
     '';
-    inherit (inputs) syntaxFixture;
+    inherit (kit) syntaxFixture;
     syntaxDriver = strictShell {
       name = "nixql-syntax";
       text = ''
@@ -88,7 +126,7 @@ in
           exit 2
         fi
         exec ${pkgs.python3}/bin/python3 ${../.}/src/syntax.py \
-          ${inputs.syntaxFixture}/bin/nixql-anchors ${../schema} \
+          ${kit.syntaxFixture}/bin/nixql-anchors ${../schema} \
           ${generated}/nix.dbscheme ${pins} "$@"
       '';
     };

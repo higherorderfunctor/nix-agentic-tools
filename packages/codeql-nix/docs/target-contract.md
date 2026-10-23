@@ -1,7 +1,8 @@
 # Target and observation contract
 
 > **Last verified:** 2026-10-23 — F2 retains the metadata manifest and fact
-> envelope for Step 0; it implements no evaluator.
+> envelope for Step 0; M3 activates exact-text model identities without adding
+> request domains.
 
 ## Purpose and fit
 
@@ -39,9 +40,11 @@ The adapter is `evalModules`; accepting a descriptor proves no adapter
 implementation. Evaluation kinds are `arguments` and `rich-result`. References
 identify admitted runtime handles or arguments; they do not serialize functions
 or secrets wholesale. The argument-description hash records the admitted
-description. `modelVersion` must be `not-requested` until increment 1 activates
-generated model identities; the run's `modelHash` fixture uses the same
-sentinel.
+description. `modelVersion` accepts the same exact-text identity form as the
+other fingerprint fields. The installed coordinator requires a requested model
+to match its run's generated model fingerprint, otherwise returning
+`unsupported-model`. Legacy `not-requested` remains accepted. See
+[builtin-models.md](builtin-models.md) for model generation and compatibility.
 
 Input identities map exact input names to identity strings. Each source root has
 `logicalName`, `path` and `rootContentIdentity`. Logical name and content

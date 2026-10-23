@@ -262,6 +262,7 @@ libasound
 libc
 libdl
 libexec
+libexpr
 libfreetype
 libgcc
 libgit
