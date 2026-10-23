@@ -2,20 +2,21 @@
 
 > **Last verified:** 2026-10-23 — F3 registers the owner and explicit contract
 > checks; S1 adds combined-schema generation and standalone raw location tests;
-> E1 adds the isolated projection check.
+> E1 adds the isolated projection check; S2 registers source and anchor
+> acceptance.
 
 ## Purpose and fit
 
 `packages/codeql-nix/` owns the Nix language contracts, fixtures and pack
 manifests. Its `registry.nix` contributes the `codeql-nix` scoped architecture
 category through the existing owner registry, including this note and the
-[database](database-contract.md), [integration](integration-gate.md) and
-[target](target-contract.md) contracts and the
-[evaluation isolation](evaluation-isolation.md) boundary. No root owner
+[database](database-contract.md), [integration](integration-gate.md),
+[source identity](source-identity.md) and [target](target-contract.md) contracts
+and the [evaluation isolation](evaluation-isolation.md) boundary. No root owner
 allowlist or separate discovery mechanism is needed.
 
-`checks.nix` explicitly imports `checks/abi.nix`, `checks/bootstrap.nix`,
-`checks/contracts.nix`, `checks/eval-isolation.nix` and
+`checks.nix` explicitly imports `checks/abi.nix`, `checks/anchors.nix`,
+`checks/bootstrap.nix`, `checks/contracts.nix`, `checks/eval-isolation.nix` and
 `checks/raw-inventory.nix`. Supporting files are not recursively discovered as
 checks. This keeps ownership local and lets a new domain add a deliberate check
 import without changing the root flake.
@@ -82,9 +83,12 @@ product. `ql/lib/nix.dbscheme` is a symlink to `../../generated/nix.dbscheme`,
 S1's combined generated/handwritten schema. S1's private raw QL and location
 adapter supply the library's syntax interface; `codeql-nix-raw-inventory` checks
 deterministic generation, inventory drift and standalone generated-node
-file/location traversal. There is no production extractor, public meaning API or
-query suite supplied by these manifests. The bootstrap's separate fixture packs
-remain disposable evidence.
+file/location traversal. S2 adds the syntax driver and private
+[authenticated anchor bridge](source-identity.md), tested by
+`codeql-nix-anchors` through F3 driver contracts, raw preflight and QL/archive
+assertions. The final installed extractor, public meaning API and query suite
+remain later slices. The bootstrap's separate fixture packs remain disposable
+evidence.
 
 ## Adding a domain
 

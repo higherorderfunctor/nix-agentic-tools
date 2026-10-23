@@ -5,8 +5,9 @@ import sys
 
 
 archive, fixture = Path(sys.argv[1]), Path(sys.argv[2]).resolve()
+expectations = [Path(path) for path in sys.argv[3:]] or [fixture / "Locations.expected"]
 files = sorted({line.split("|")[1].strip()
-                for line in (fixture / "Locations.expected").read_text().splitlines()})
+                for golden in expectations for line in golden.read_text().splitlines()})
 for name in files:
     entry = archive / (fixture / name).as_posix().lstrip("/")
     if not entry.is_file():
