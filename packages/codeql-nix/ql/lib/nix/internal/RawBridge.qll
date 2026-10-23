@@ -212,6 +212,14 @@ module RawBridge {
   Node bindingValue(Node node) {
     result = unparenthesized(node.(Generated::Nix::Binding).getExpression())
   }
+  Node inheritedToken(Node clause) {
+    result = clause.(Generated::Nix::Inherit).getAttrs().getAnAttr()
+    or result = clause.(Generated::Nix::InheritFrom).getAttrs().getAnAttr()
+  }
+  Node withEnvironment(Node frame) {
+    result = unparenthesized(frame.(Generated::Nix::WithExpression).getEnvironment())
+  }
+  Node withBody(Node frame) { result = frame.(Generated::Nix::WithExpression).getBody() }
   predicate functionBinder(Node frame, Node binder) {
     binder = frame.(Generated::Nix::FunctionExpression).getUniversal()
     or binder = frame.(Generated::Nix::FunctionExpression).getFormals().getAFormal().getName()
