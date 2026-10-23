@@ -89,8 +89,8 @@ Replace the illustrative OAuth filenames with filenames from
 auth directory as its ID; `internal/auth/claude/filename.go` includes
 organization/account identity in Claude filenames. Re-login can produce a new
 name: update `authFile`, then restart the Instance. `authFile` accepts one
-nonempty JSON filename, with no path separators or edge whitespace, so an ID
-cannot become an unrestricted rule.
+nonempty JSON filename without path separators or leading ASCII whitespace. CPA
+compares allowlist IDs exactly; filenames must match byte for byte.
 
 For devenv, `redact.file "/run/user/<uid>/secrets/<name>"` can read the file
 sops-nix already decrypted through Home Manager. Substitute your UID and secret
