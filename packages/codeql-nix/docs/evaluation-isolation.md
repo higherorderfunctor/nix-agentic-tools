@@ -3,8 +3,7 @@
 # Evaluation isolation and projection publication
 
 > **Last verified:** 2026-10-23 — E1 implements the serialized projection
-> boundary for Step 0 metadata; module adapters and value semantics remain later
-> slices.
+> boundary; E2a adds [module metadata](module-adapter.md).
 
 ## Purpose and fit
 
@@ -12,11 +11,9 @@
 bindings and a TRAP destination through `supervise`. It launches one subprocess
 at a time for each selected request. Failure in one request leaves completed
 projections available. It does not discover flake outputs, enter a devenv shell
-or implement the adapter named by a descriptor. The capability rows distinguish
-supported projection transport from unavailable module adapters. E1 admits the
-F2 `option-metadata` domain, `metadata` observation mode and `declarations`,
-`isDefined` or `priority` facets at root depth (`maxDepth = 0`). It supplies no
-module adapter or production metadata projection.
+or select an adapter from its label. E2a reports module-adapter support. The F2
+`option-metadata` domain supports `declarations`, `definitions`, `isDefined` and
+`priority` facets at root depth (`maxDepth = 0`) in `metadata` mode.
 
 `src/eval/protocol.py` enables all three F2 custom formats and delegates exact
 text, identity and fact validation to F1's `schema/abi.py`. Its TRAP renderer
@@ -76,18 +73,15 @@ dumps. Both output pipes are drained, with their combined bytes bounded by
 exceed that size in aggregate. Timeout or excess output kills and reaps the
 process group. Run diagnostics retain at most 4096 UTF-8 bytes of a message.
 
-Accepted output must be one F2 envelope with exactly the supplied request
-result. Producers can emit option, requested metadata, declaration, origin,
-origin-position, observation and typed observation-option link rows; they cannot
-overwrite supervisor facts. Every option must belong to the selected context and
-exact literal path. Every observation must name that request at
-`pre-apply-metadata` and have its typed `nx_observation_options` link to an
-emitted option. This option-only projection policy rejects definition links; F1
-independently validates the complete graph and exactly one subject link per
-observation. Metadata rows must name an emitted option and the requested facet;
-priority additionally permits its `isDefined` witness. Origins must be used by
-emitted declarations, and positions must name those origins. Source-file
-authentication and source origin links need E2a's admitted syntax inputs.
+Accepted output must be one F2 envelope with exactly its request result. Options
+and observations must match the selected context, path and request; metadata
+must match the requested facet. Every observation has exactly one typed subject
+link, validated by F1; the supervisor accepts option subjects for emitted
+options and definition subjects for emitted definitions. A complete projection
+observes each emitted option and definition exactly once. Origins belong to
+emitted definitions or declarations, and positions belong to those origins.
+Producers cannot emit supervisor facts. [E2a](module-adapter.md) authenticates
+caller-admitted source links.
 
 A complete request requires a positive observed count and an `observed` option
 witness for the selected facet. `isDefined` and `priority` also require their
@@ -95,12 +89,9 @@ respective metadata rows; declarations may be empty with an observed option. F1
 independently requires each priority's same-option `isDefined = true` and
 priority-request observation. A result-only envelope, unforced observation or
 missing metadata cannot establish success. The complete graph passes F1
-validation before publication. Option and declaration records count against
-`maxNodes`, independently of the reported count; observation and reported counts
-are also bounded. These checks bound the supplied records, not arbitrary
-internal work in a trusted producer. The deadline and address-space limit apply
-to child execution; JSON/F1 validation and publication are outside that
-deadline, and the supervisor has no aggregate memory ceiling.
+validation before publication. `maxNodes` bounds option, definition,
+declaration, observation and reported counts. Child limits exclude JSON/F1
+validation and publication; the supervisor has no aggregate memory ceiling.
 
 Each validated projection is written to a temporary file, flushed and renamed to
 a completed `.trap` file. An invalid transaction publishes no metadata.

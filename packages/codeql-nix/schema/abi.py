@@ -187,6 +187,17 @@ def validate(rows):
     for _, opt, ordinal, _ in tables["nx_definitions"]:
         require(ordinal not in definition_ordinals[opt], "duplicate definition ordinal")
         definition_ordinals[opt].add(ordinal)
+    for req, _, ctx, _, segments, facet, *_ in tables["nx_requests"]:
+        if facet == "definitions" and result.get(req, [None])[0] == "complete":
+            selected = {opt for opt, context_key, path_json in tables["nx_options"] if (context_key, path_json) == (ctx, segments)}
+            witnessed = {subject for observation, request_key, _, state in tables["nx_observations"]
+                         if request_key == req and state == "observed"
+                         for kind, subject in subjects[observation] if kind == "option"}
+            selected &= witnessed
+            require(selected and result[req][2] > 0, "definitions lack observed completion")
+            for opt in selected:
+                ordinals = definition_ordinals[opt]
+                require(ordinals == set(range(len(ordinals))), "noncontiguous definition ordinals")
     for opt, _, origin in [row[1:] for row in tables["nx_definitions"]] + tables["nx_option_declarations"]:
         origin_targets[origin].add(owners["target"][context[option[opt][1]][1]][1])
     admitted = defaultdict(set)
