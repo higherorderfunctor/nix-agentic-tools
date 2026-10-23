@@ -19,6 +19,31 @@ def quote(text):
     return '"' + text.replace('"', '""') + '"'
 
 
+def absent_builtin_model(trap_dir, facts):
+    runs = [args for relation, args in facts if relation == "nx_runs"]
+    transformed = 0
+    identities = 0
+    for run, schema, extractor, grammar, model, snapshot in runs:
+        replacement = key("run", schema, extractor, "not-requested", snapshot)
+        columns = ", ".join(map(quote, [schema, extractor, grammar, model, snapshot]))
+        absent = ", ".join(map(quote, [schema, extractor, grammar, "not-requested", snapshot]))
+        row = re.compile(r"^(nx_runs\(#[0-9]+, )" + re.escape(columns) + r"(\))$", re.MULTILINE)
+        for path in sorted(trap_dir.rglob("*.trap")):
+            text, count = row.subn(lambda match: match[1] + absent + match[2], path.read_bytes().decode("utf-8"))
+            transformed += count
+            def replace_identity(match):
+                nonlocal identities
+                if match.group() == quote(run):
+                    identities += 1
+                    return quote(replacement)
+                return match.group()
+            text = re.sub(r'"(?:""|[^"])*"', replace_identity, text)
+            path.write_bytes(text.encode("utf-8"))
+    if not transformed or not identities:
+        raise AssertionError("absent-model control has no completed run facts to transform")
+    print(f"N2 absent builtin model: transformed {transformed} runs and {identities} run identities to not-requested", flush=True)
+
+
 def duplicate_raw(trap_dir):
     count = 0
     for index, path in enumerate(sorted(trap_dir.rglob("*.trap"))):
@@ -97,7 +122,8 @@ def main():
         manifest_file = temp / "manifest.json"
         manifest_file.write_text(json.dumps(manifest))
         subprocess.run([driver, str(manifest_file), str(temp / "output")], check=True)
-    trap_dir = Path(os.environ["CODEQL_EXTRACTOR_NIX_TRAP_DIR"])
+        trap_dir = Path(os.environ["CODEQL_EXTRACTOR_NIX_TRAP_DIR"])
+        absent_builtin_model(trap_dir, json.loads((temp / "output/facts.json").read_text())["facts"])
     if os.environ.get("NIXQL_TEST_DUPLICATE_RAW") == "1":
         duplicate_raw(trap_dir)
     adversarial_anchors(trap_dir)

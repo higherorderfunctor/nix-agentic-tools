@@ -1,6 +1,9 @@
 // cspell:ignore newtype
 /** Lexical name resolution; absent semantic evidence remains unavailable. */
 import codeql.Locations
+private import nix.internal.BuiltinModels as BuiltinModels
+private import nix.internal.ImplicitScopes
+private import nix.internal.Inheritance
 private import nix.internal.RawBridge
 private import nix.internal.StaticScopes
 
@@ -26,17 +29,22 @@ module Bindings {
       exists(RawBridge::Node declaration | this = LexicalBinding(declaration) |
         result = RawBridge::binderName(declaration))
       or this = BuiltinBinding(_, result)
-      or this = ExtendedBinding(_, result)
+      or exists(ImplicitScopeProvider provider, string symbol |
+        this = ExtendedBinding(provider, symbol) and
+        (result = RawBridge::binderName(provider.getDeclaration(symbol))
+         or not exists(provider.getDeclaration(symbol)) and result = symbol))
     }
     Location getLocation() {
       exists(RawBridge::Node declaration | this = LexicalBinding(declaration) |
         result = declaration.getLocation())
+      or exists(ImplicitScopeProvider provider, string symbol |
+        this = ExtendedBinding(provider, symbol) and result = provider.getDeclaration(symbol).getLocation())
     }
   }
 
   /** M3 implements this outer explicit frame; matching nonempty identities are mandatory. */
   abstract class OutermostBuiltinFrameProvider extends string {
-    OutermostBuiltinFrameProvider() { this = "outermost-builtin-frame" }
+    OutermostBuiltinFrameProvider() { this in ["outermost-builtin-frame", "runtime-globals"] }
     abstract string getRuntimeIdentity(Variable use);
     abstract string getModelIdentity();
     abstract string getBindingIdentity(string name);
@@ -54,6 +62,33 @@ module Bindings {
   abstract class ImplicitScopeProvider extends string {
     ImplicitScopeProvider() { this = "implicit-scope" }
     abstract predicate resolve(Variable use, string symbolIdentity, string certainty);
+    /** Providers with source declarations retain their authenticated locations. */
+    RawBridge::Node getDeclaration(string symbolIdentity) { none() }
+  }
+
+  private class InheritedNames extends LexicalScopeProvider {
+    InheritedNames() { this = "lexical-scope" }
+    override predicate declaration(RawBridge::Node frame, RawBridge::Node binder) {
+      Inheritance::declaration(frame, binder)
+    }
+    override predicate occurrence(RawBridge::Node node) { Inheritance::occurrence(node) }
+    override predicate excludesFrame(RawBridge::Node use, RawBridge::Node frame) {
+      Inheritance::excludesFrame(use, frame)
+    }
+  }
+  private class WithNames extends ImplicitScopeProvider {
+    WithNames() { this = "implicit-scope" }
+    override predicate resolve(Variable use, string symbol, string certainty) {
+      exists(RawBridge::Node token |
+        ImplicitScopes::resolve(use, use.getName(), token, certainty) and symbol = ImplicitScopes::identity(token))
+    }
+    override RawBridge::Node getDeclaration(string symbol) { symbol = ImplicitScopes::identity(result) }
+  }
+  private class RuntimeGlobals extends OutermostBuiltinFrameProvider {
+    RuntimeGlobals() { this = "runtime-globals" }
+    override string getRuntimeIdentity(Variable use) { nx_runs(_, _, _, _, result, _) }
+    override string getModelIdentity() { BuiltinModels::modelFingerprint(result) }
+    override string getBindingIdentity(string name) { BuiltinModels::globalBindingIdentity(name, result) }
   }
 
   private predicate extended(RawBridge::Node frame, RawBridge::Node binder) {
@@ -114,7 +149,11 @@ module Bindings {
     )
   }
   private predicate uncertain(Variable use) {
-    exists(int boundary | boundary = StaticScopes::uncertaintyDepth(use) |
+    exists(int boundary, RawBridge::Node origin, boolean knownNamesWin |
+      boundary = StaticScopes::uncertaintyDepth(use, origin, knownNamesWin) and
+      not exists(LexicalScopeProvider provider | provider.excludesFrame(use, origin)) and
+      not (knownNamesWin = true and exists(RawBridge::Node binder |
+        extended(origin, binder) and RawBridge::binderName(binder) = use.getName())) |
       not exists(RawBridge::Node frame | frame = localFrame(use) and depth(frame) > boundary))
   }
   private predicate candidate(Variable use, Binding target, string certainty) {

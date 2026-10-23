@@ -17,3 +17,8 @@ predicate modelFingerprint(string version) { Model::modelFingerprint(version) }
 predicate supportsRuntime(string identity, string sourceHash) {
   runtimeIdentity(identity) and runtimeSourceHash(sourceHash)
 }
+
+/** Recognized globals remain reserved when the run cannot authenticate their model. */
+predicate globalBindingIdentity(string name, string identity) {
+  Model::identity("", name, identity)
+}
