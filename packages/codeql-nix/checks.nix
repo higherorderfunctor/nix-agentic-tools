@@ -5,6 +5,7 @@
     ./checks/bootstrap.nix
     ./checks/contracts.nix
     ./checks/eval-isolation.nix
+    ./checks/modules.nix
     ./checks/raw-inventory.nix
   ];
 }
