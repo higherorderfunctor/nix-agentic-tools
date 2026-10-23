@@ -7,10 +7,10 @@ applyTo: "packages/codeql/**"
 
 ## CodeQL engines
 
-> **Last verified:** 2026-10-21 (commit 044e6939) — eleven engines at 2.27.3
-> from one `mkEngine` factory; the javascript engine wraps its launcher with a
-> Node; CI builds javascript and evaluates the rest; the update input lanes
-> build none. Packs and `customizePackage`: customize.md.
+> **Last verified:** 2026-10-22 — eleven engines at 2.27.3 from one `mkEngine`
+> factory, plus the MIT Nix extractor at 0.3.0; the javascript engine wraps its
+> launcher with a Node; CI builds javascript and evaluates the rest; the update
+> input lanes build none. Packs and `customizePackage`: customize.md.
 
 ### What a bundle is
 
@@ -109,16 +109,48 @@ The update pipeline's input lanes skip the engines for the same reason:
 expected set and the `--select`. An update PR still runs the smoke check in
 `ci.yml`.
 
+### External Nix extractor
+
+`ai.devTools.codeql.codeql-extractor-nix` installs the prebuilt MIT v0.3.0
+extractor through fetchurl and autoPatchelf, alongside the same tag's
+`jamiemagee/nix-all` QL library. `extractor-sources.json` pins both assets; its
+separate update target moves them together. No Rust build is involved. The
+package's `codeqlLibraries.nix` names its library for `customizePackage`. All
+existing public-cache guards stay in place; their `codeql` name filters
+conservatively cover this package too. It carries no CLI.
+
+`codeql-extractor-nix.codeql` exposes one javascript engine customized with this
+extractor (`engine`), a `mkQueryPack` spec (`queries`), and `createDatabase`,
+the script used by `codeql:nix-db`. A javascript bundle supplies CodeQL's util
+and yaml packs, which the Nix library imports. `searchPath` discovers the
+extractor; `additional-packs` cannot do that.
+
+The explicit devenv task `codeql:nix-db` snapshots `git archive HEAD` under
+`.devenv/state/codeql/nix/source` and creates `db` beside it. The stamp holds
+HEAD and the engine and creator store paths, so dirty edits are excluded and
+changes to the tools or snapshot mechanism rebuild it. An `engine` link supports
+ad hoc queries through the dev-only `nix-codeql` skill. No task runs at shell
+entry.
+
+`codeql-nix-strict-header` compiles the shipped Nix query pack, resolves the
+external language through merged and nested config files, checks conflicting
+search paths are refused, and runs `StrictHeader.ql` over fixtures. It checks
+`writeShellScript`, `writeShellScriptBin` and `writeShellApplication` for the
+full strict header, including the application's `bashOptions` and the shopt in
+`text`. Rows classify text as `ok`, `missing` or `unknown`; local lexical
+bindings, concatenation and interpolation are followed, while an opaque helper
+call remains unknown. This is a textual AST query, not Nix or Bash execution.
+The whole repository is deliberately not a gate.
+
 <!-- Fragment: packages/codeql/docs/customize.md -->
 
 ## CodeQL packs and customizePackage
 
-> **Last verified:** 2026-10-21 (commit 019ba0f0) — `ai.devTools.codeql` carries
-> `mkQueryPack` and `mkModelPack`, which return pack specs; every engine's
-> `customizePackage` realizes them; packs reach CodeQL through a generated
-> `CODEQL_CONFIG_FILE`; query packs are precompiled; the wrapper execs codeql
-> over a merged config named by its content, reused only when no other line sets
-> its options.
+> **Last verified:** 2026-10-22 — `ai.devTools.codeql` carries `mkQueryPack` and
+> `mkModelPack`, which return pack specs; every engine's `customizePackage`
+> realizes them; packs reach CodeQL through a generated `CODEQL_CONFIG_FILE`;
+> query packs are precompiled; the wrapper execs codeql over a merged config
+> named by its content, reused only when no other line sets its options.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 javascript
 > bundle and rejected:
@@ -147,6 +179,7 @@ codeql.codeql-javascript.customizePackage {
   queries = [ (codeql.mkQueryPack { name = "me/my-queries"; src = ./ql; }) ./plain-dir ];
   models = [ (codeql.mkModelPack { name = "me/my-models"; src = ./models; }) ];
   extraPackages = [ pkgs.gnumake ];
+  searchPath = [ codeql.codeql-extractor-nix ];
 }
 codeql.codeql-javascript.override { nodejs = pkgs.nodejs-slim; }
 ```
@@ -164,15 +197,16 @@ it beside the eleven engines. `customizePackage` realizes each spec against the
 engine it is called on (`lib/packs.nix`). A model pack's content is only its
 language's, so two engines that carry it realize one derivation.
 
-A language bundle supplies the language, and a spec's `language`, when given,
-must be the bundle's. `codeql-full` needs `language` on the spec and throws
-naming the field without it; `codeql-bare` has no libraries and throws. Every
-field is optional, and a bad argument throws. `queries` and `models` take a
-directory holding a qlpack.yml, a pack derivation or a spec of that field's
-kind. `customizePackage` on a customized package appends. A store path given
-twice, in one call or across calls, is used once, and two realized specs with
-one pack name throw. A plain directory's pack name is not checked at eval time;
-CodeQL reports a pack found in two locations when the packs are used.
+A language bundle supplies the default language, and a spec's `language`, when
+given, must name a bundled or external library. `codeql-full` needs `language`
+on the spec and throws naming the field without it; `codeql-bare` has no bundled
+libraries and throws unless an external library is supplied through
+`searchPath`. Every field is optional, and a bad argument throws. `queries` and
+`models` take a directory holding a qlpack.yml, a pack derivation or a spec of
+that field's kind. `customizePackage` on a customized package appends. A store
+path given twice, in one call or across calls, is used once, and two realized
+specs with one pack name throw. A plain directory's pack name is not checked at
+eval time; CodeQL reports a pack found in two locations when the packs are used.
 
 The result has `bin/codeql`, a wrapper of the engine's, and `share/codeql`, a
 link to the engine's. Nothing of the distribution is copied. Its `unwrapped` is
@@ -185,7 +219,17 @@ The wrapper sets `CODEQL_CONFIG_FILE` to a store file:
 ```text
 --additional-packs <every pack>:<the aggregate model pack>
 --model-packs nix-agentic-tools/customized-models
+--search-path <external extractor/library paths>
 ```
+
+Only options with entries are emitted. `searchPath` takes package derivations or
+directory paths; package `codeqlLibraries` maps external language names to
+library pack names. For example, a query spec with `language = "nix"` depends on
+`jamiemagee/nix-all` when `codeql-extractor-nix` is in `searchPath`. The same
+search path reaches precompilation; raw external libraries are staged with
+writable modes because CodeQL rewrites their copied manifests. Customizing the
+result appends search paths too, and a subsequent query sees earlier external
+libraries.
 
 CodeQL reads that file in every subcommand, including the ones it starts itself.
 Measured:
@@ -214,22 +258,24 @@ the content, so the file outlives the wrapper and a `codeql` that codeql starts
 reads it too. Each run writes it again and renames it into place over any file
 of that name.
 
-A consumer file that sets `--additional-packs` or `--model-packs` exits 2 with a
-message. The wrapper adds lines and does not join option values, and CodeQL
-keeps one value per option, so the added lines would silently drop one side's
-packs. The one file used as it is holds every line of the wrapper's config and
-sets those options with no other line: the merged file that a `codeql` this
-wrapper started reads, such as a build command's. Any other line setting either
-option, beside those lines too, is refused.
+A consumer file that sets an option this wrapper owns (`--additional-packs`,
+`--model-packs`, or `--search-path`, when configured) exits 2 with a message.
+The wrapper adds lines and does not join option values, and CodeQL keeps one
+value per option, so the added lines would silently drop one side's packs. The
+one file used as it is holds every line of the wrapper's config and sets those
+options with no other line: the merged file that a `codeql` this wrapper started
+reads, such as a build command's. Any other line setting an owned option, beside
+those lines too, is refused.
 
 ### Precompilation
 
-A query spec's realization writes its qlpack.yml, with
-`codeql/<language>-all: "*"`, over `src`, then runs `codeql pack create`. That
-needs no network: dependencies resolve from the engine's bundled packs. The
-output is the pack with `.qlx` plans, a lock file and the libraries it uses
-under `.codeql/libraries`, about 11 MB for javascript. In CI the two-query
-fixture compiled in 66 s and the RequestForgery query in 98 s.
+A query spec's realization writes its qlpack.yml, with the language's library
+dependency (`codeql/<language>-all: "*"` for bundled languages), over `src`,
+then runs `codeql pack create`. That needs no network: dependencies resolve from
+the engine's bundled packs. The output is the pack with `.qlx` plans, a lock
+file and the libraries it uses under `.codeql/libraries`, about 11 MB for
+javascript. In CI the two-query fixture compiled in 66 s and the RequestForgery
+query in 98 s.
 
 A model spec's realization only writes its qlpack.yml (`extensionTargets`,
 `dataExtensions: ["*.model.yml"]`). A directory given as it is stays uncompiled

@@ -1,3 +1,3 @@
 {
-  imports = [./checks/codeql-customize.nix ./checks/codeql-engines.nix];
+  imports = [./checks/codeql-customize.nix ./checks/codeql-engines.nix ./checks/codeql-nix.nix];
 }

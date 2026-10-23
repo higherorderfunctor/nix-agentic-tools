@@ -1,0 +1,11 @@
+{
+  "version": "0.3.0",
+  "source": {
+    "hash": "sha256-ER7aKixLKsjiYhhtJZPSWz5d3V1HrY6wbisV396/WCc=",
+    "url": "https://api.github.com/repos/JamieMagee/codeql-nix/tarball/v0.3.0"
+  },
+  "x86_64-linux": {
+    "hash": "sha256-kVFCRs+KrI4pSPCotl5CPNTJK70WN+h4tJKaAqcA7v8=",
+    "url": "https://github.com/JamieMagee/codeql-nix/releases/download/v0.3.0/codeql-extractor-nix-v0.3.0-linux64.tar.gz"
+  }
+}

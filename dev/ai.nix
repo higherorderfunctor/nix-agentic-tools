@@ -265,6 +265,7 @@ in {
         index-repo-docs = ./skills/index-repo-docs;
         kimchi-egress-report = ./skills/kimchi-egress-report;
         kimchi-surface-scan = ./skills/kimchi-surface-scan;
+        nix-codeql = ./skills/nix-codeql;
         pr-review-loop = ./skills/pr-review-loop;
         repo-review = ./skills/repo-review;
       };

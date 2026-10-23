@@ -9,7 +9,9 @@
   engine,
   engineName,
   languages,
+  libraries,
   pkgs,
+  searchPath,
   specs,
 }: let
   inherit (pkgs) lib;
@@ -25,18 +27,18 @@
   errors = at: spec: let
     lead = "${at} (${spec.name})";
   in
-    if engineName == "bare"
+    if libraries == {}
     then ["${lead}: codeql-bare carries no CodeQL libraries; realize pack specs with a language engine or codeql-full"]
     else if defaultLanguage == null && !(spec ? language)
-    then ["${lead}: codeql-${engineName} needs `language` on the spec, one of ${lib.concatStringsSep ", " languages}"]
-    else lib.optional (spec ? language && !(lib.elem spec.language languages)) "${lead}: `language` ${spec.language} is not one codeql-${engineName} carries (${lib.concatStringsSep ", " languages})";
+    then ["${lead}: codeql-${engineName} needs `language` on the spec, one of ${lib.concatStringsSep ", " (builtins.attrNames libraries)}"]
+    else lib.optional (spec ? language && !(builtins.hasAttr spec.language libraries)) "${lead}: `language` ${spec.language} is not one codeql-${engineName} carries (${lib.concatStringsSep ", " (builtins.attrNames libraries)})";
 
   # The one qlpack.yml renderer. JSON is YAML, so toJSON writes it.
   qlpack = kind: {
     language,
     name,
   }: let
-    library = "codeql/${language}-all";
+    library = libraries.${language};
   in
     pkgs.writeText "qlpack.yml" (builtins.toJSON ({
         inherit name;
@@ -79,12 +81,15 @@
         if kind == "query"
         then ''
           export HOME="$TMPDIR"
-          codeql pack create pack --output="$TMPDIR/created"
+          # pack create rewrites dependency manifests after copying them;
+          # a raw external library in the store would copy read-only modes.
+          ${lib.concatStringsSep "\n" (lib.imap1 (index: entry: ''cp -R --no-preserve=mode ${entry} "$TMPDIR/search-path-${toString index}" # bare-commands: ok (stdenv builder PATH)'') searchPath)}
+          codeql pack create pack --output="$TMPDIR/created" ${lib.optionalString (searchPath != []) "--search-path=\"${lib.concatStringsSep ":" (lib.imap1 (index: _: "$TMPDIR/search-path-${toString index}") searchPath)}\""}
           mv "$TMPDIR/created/${pack.name}/0.0.0" "$out" # bare-commands: ok (stdenv builder PATH)
         ''
         else ''mv pack "$out" # bare-commands: ok (stdenv builder PATH)''
       }
     '';
 in {
-  inherit errors realize;
+  inherit errors libraries realize;
 }

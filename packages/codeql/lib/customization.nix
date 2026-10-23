@@ -3,7 +3,7 @@
 # `share/codeql`, which is linked and never copied. Direct callers get a throw
 # for a bad spec. Customizing the result appends to its spec.
 #
-# A spec is `{ queries ? []; models ? []; extraPackages ? []; }`. `queries` and
+# A spec is `{ queries ? []; models ? []; extraPackages ? []; searchPath ? []; }`. `queries` and
 # `models` hold directories with a qlpack.yml, pack derivations, or
 # `mkQueryPack`/`mkModelPack` specs (./specs.nix), each realized against this
 # engine (./packs.nix). The wrapper hands CodeQL a config file (CODEQL_CONFIG_FILE) of
@@ -21,8 +21,16 @@
 }: let
   inherit (pkgs) lib;
   specs = import ./specs.nix {inherit lib;};
-  packs = import ./packs.nix {inherit engine engineName languages pkgs specs;};
-  fields = ["extraPackages" "models" "queries"];
+  packsFor = paths:
+    import ./packs.nix {
+      inherit engine engineName languages pkgs specs;
+      searchPath = paths;
+      libraries =
+        lib.foldl' (known: entry: known // (entry.codeqlLibraries or {}))
+        (lib.genAttrs languages (language: "codeql/${language}-all"))
+        paths;
+    };
+  fields = ["extraPackages" "models" "queries" "searchPath"];
   # The field each kind of pack goes in.
   fieldOf = {
     model = "models";
@@ -35,9 +43,12 @@
   # consumer's config lines with these and does not join option values, and
   # CodeQL keeps one value per option, so a consumer file that sets one too
   # would drop one side's packs.
-  options = spec: ["--additional-packs"] ++ lib.optional (spec.models != []) "--model-packs";
+  options = spec:
+    lib.optional (spec.queries != [] || spec.models != []) "--additional-packs"
+    ++ lib.optional (spec.models != []) "--model-packs"
+    ++ lib.optional (spec.searchPath != []) "--search-path";
 
-  packErrors = field: kind:
+  packErrors = paths: field: kind:
     lib.imap1 (index: entry: let
       at = "`${field}.${toString index}`";
       tagged = entry.codeqlPack.kind or null;
@@ -47,11 +58,11 @@
       then
         if entry.kind != kind
         then ["${at} (${entry.name}) is a ${entry.kind} pack spec; put it in `${fieldOf.${entry.kind}}`"]
-        else packs.errors at entry
+        else (packsFor paths).errors at entry
       else if lib.isDerivation entry
       then
         lib.optional (tagged != null && tagged != kind) "${at} is a ${tagged} pack; put it in `${fieldOf.${tagged}}`"
-        ++ lib.optional (language != null && !(lib.elem language languages)) "${at} is a ${language} pack, which ${engine.pname} does not carry"
+        ++ lib.optional (language != null && !(lib.elem language (builtins.attrNames (packsFor paths).libraries))) "${at} is a ${language} pack, which ${engine.pname} does not carry"
       else if builtins.isPath entry
       then lib.optional (!builtins.pathExists (entry + "/qlpack.yml")) "${at} (${toString entry}) holds no qlpack.yml"
       else ["${at} must be a path, a pack spec or a pack derivation"]);
@@ -60,14 +71,15 @@
     assert lib.assertMsg (problems == []) "codeql.customizePackage:\n${lib.concatStringsSep "\n" problems}"; value;
 
   # A pack spec becomes this engine's pack; every other entry is kept.
-  realized = entry:
+  realized = paths: entry:
     if specs.isSpec entry
-    then packs.realize entry
+    then (packsFor paths).realize entry
     else entry;
 
   # One spec's shape and entries, named by the caller's own indices, with each
   # pack spec realized.
-  checked = spec: let
+  checked = previousPaths: spec: let
+    paths = previousPaths ++ (spec.searchPath or []);
     unknown = builtins.attrNames (builtins.removeAttrs spec fields);
     lists = builtins.filter (field: !builtins.isList (spec.${field} or [])) fields;
   in
@@ -75,11 +87,12 @@
       lib.optional (unknown != []) "unknown field(s) ${lib.concatStringsSep ", " unknown}; expected ${lib.concatStringsSep ", " fields}"
       ++ map (field: "`${field}` must be a list") lists
       ++ lib.optionals (lists == []) (
-        lib.concatLists (packErrors "queries" "query" (spec.queries or []))
-        ++ lib.concatLists (packErrors "models" "model" (spec.models or []))
+        lib.concatLists (packErrors paths "queries" "query" (spec.queries or []))
+        ++ lib.concatLists (packErrors paths "models" "model" (spec.models or []))
         ++ lib.concatLists (lib.imap1 (index: entry: lib.optional (!lib.isDerivation entry) "`extraPackages.${toString index}` must be a package") (spec.extraPackages or []))
+        ++ lib.concatLists (lib.imap1 (index: entry: lib.optional (!(builtins.isPath entry || lib.isDerivation entry)) "`searchPath.${toString index}` must be a path or package") (spec.searchPath or []))
       )
-    ) (lib.genAttrs fields (field: map realized (spec.${field} or [])));
+    ) (lib.genAttrs fields (field: map (realized paths) (spec.${field} or [])));
 
   # Each store path once, in first-given order.
   uniqueEntries = lib.foldl' (kept: entry:
@@ -129,10 +142,11 @@
   build = spec: let
     models = lib.optional (spec.models != []) (aggregate spec.models);
     packs = spec.queries ++ spec.models ++ models;
-    config = pkgs.writeText "codeql-config" (lib.concatLines ([
-        "--additional-packs ${lib.concatMapStringsSep ":" storePath packs}"
-      ]
-      ++ lib.optional (models != []) "--model-packs ${modelsName}"));
+    config = pkgs.writeText "codeql-config" (lib.concatLines (
+      lib.optional (packs != []) "--additional-packs ${lib.concatMapStringsSep ":" storePath packs}"
+      ++ lib.optional (models != []) "--model-packs ${modelsName}"
+      ++ lib.optional (spec.searchPath != []) "--search-path ${lib.concatMapStringsSep ":" storePath spec.searchPath}"
+    ));
     coreutils = "${pkgs.coreutils}/bin";
     grep = "${pkgs.gnugrep}/bin/grep";
     # With packs, the wrapper points CODEQL_CONFIG_FILE at its config. A
@@ -210,7 +224,7 @@
         codeql=${engine}/bin/codeql
         ${lib.optionalString (spec.extraPackages != []) ''export PATH="${lib.makeBinPath spec.extraPackages}''${PATH:+:$PATH}"''}
         ${
-          if packs == []
+          if options spec == []
           then ''exec "$codeql" "$@"''
           else configure
         }
@@ -219,7 +233,7 @@
   in
     pkgs.runCommand "${engine.pname}-customized-${engine.version}" {
       passthru = {
-        customizePackage = more: build (merged [spec (checked more)]);
+        customizePackage = more: build (merged [spec (checked spec.searchPath more)]);
         packs = {inherit (spec) models queries;};
         unwrapped = engine;
       };
@@ -232,4 +246,4 @@
       ln -s ${engine}/share/codeql "$out/share/codeql"
     '';
 in
-  spec: build (merged [(checked spec)])
+  spec: build (merged [(checked [] spec)])

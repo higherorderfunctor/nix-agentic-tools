@@ -33,5 +33,29 @@ in {
         printf '%s\n' "$pins" > "$state/stamp"
       '';
     };
+    "codeql:nix-db" = {
+      description = "Create a CodeQL database of this repo's committed Nix source";
+      exec = ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        cd "$DEVENV_ROOT"
+        state="''${DEVENV_STATE:?run this task from the devenv shell}/codeql/nix"
+        system="$(nix eval --impure --raw --expr builtins.currentSystem)"
+        codeql=".#ciPackages.$system.codeql-extractor-nix.passthru.codeql"
+        engine="$(nix eval --raw "$codeql.engine.outPath")"
+        create="$(nix eval --raw "$codeql.createDatabase.outPath")"
+        stamp="$(git rev-parse HEAD) $engine $create"
+        if [ -d "$state/db" ] && [ -f "$state/stamp" ] && [ "$(< "$state/stamp")" = "$stamp" ]; then
+          echo "==> $state/db is current ($stamp)" >&2
+          exit 0
+        fi
+        mkdir -p "$state"
+        if [ -e "$state/stamp" ]; then rm "$state/stamp"; fi
+        nix build --out-link "$state/engine" "$codeql.engine"
+        nix build --no-link "$codeql.createDatabase"
+        "$create/bin/nix-codeql-create-database" "$state"
+        printf '%s\n' "$stamp" > "$state/stamp"
+      '';
+    };
   };
 }

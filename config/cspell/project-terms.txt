@@ -1,4 +1,5 @@
 apikey
+attrpath
 AUTOUPDATER
 AWSLAMBDA
 bindingset
@@ -11,14 +12,20 @@ COLORFGBG
 COLORTERM
 Consolas
 cooldown
+dbscheme
 DONT
+forall
 GHOSTTY
 globalconfig
 GOARCH
 GOTOOLCHAIN
 GOWORK
 hardlinks
+hpath
+jamiemagee
+Magee
 Menlo
+nixql
 NOSYSTEM
 NPROCESSORS
 nullish
@@ -29,6 +36,7 @@ Patchelf
 pluginhost
 pnpmfile
 qll
+spath
 TERMUX
 userconfig
 WEZTERM

@@ -1,9 +1,9 @@
 ## CodeQL engines
 
-> **Last verified:** 2026-10-21 (commit 044e6939) — eleven engines at 2.27.3
-> from one `mkEngine` factory; the javascript engine wraps its launcher with a
-> Node; CI builds javascript and evaluates the rest; the update input lanes
-> build none. Packs and `customizePackage`: customize.md.
+> **Last verified:** 2026-10-22 — eleven engines at 2.27.3 from one `mkEngine`
+> factory, plus the MIT Nix extractor at 0.3.0; the javascript engine wraps its
+> launcher with a Node; CI builds javascript and evaluates the rest; the update
+> input lanes build none. Packs and `customizePackage`: customize.md.
 
 ### What a bundle is
 
@@ -101,3 +101,36 @@ The update pipeline's input lanes skip the engines for the same reason:
 `ci-packages.py update-plan`, which drops the `codeql-` prefix from both the
 expected set and the `--select`. An update PR still runs the smoke check in
 `ci.yml`.
+
+### External Nix extractor
+
+`ai.devTools.codeql.codeql-extractor-nix` installs the prebuilt MIT v0.3.0
+extractor through fetchurl and autoPatchelf, alongside the same tag's
+`jamiemagee/nix-all` QL library. `extractor-sources.json` pins both assets; its
+separate update target moves them together. No Rust build is involved. The
+package's `codeqlLibraries.nix` names its library for `customizePackage`. All
+existing public-cache guards stay in place; their `codeql` name filters
+conservatively cover this package too. It carries no CLI.
+
+`codeql-extractor-nix.codeql` exposes one javascript engine customized with this
+extractor (`engine`), a `mkQueryPack` spec (`queries`), and `createDatabase`,
+the script used by `codeql:nix-db`. A javascript bundle supplies CodeQL's util
+and yaml packs, which the Nix library imports. `searchPath` discovers the
+extractor; `additional-packs` cannot do that.
+
+The explicit devenv task `codeql:nix-db` snapshots `git archive HEAD` under
+`.devenv/state/codeql/nix/source` and creates `db` beside it. The stamp holds
+HEAD and the engine and creator store paths, so dirty edits are excluded and
+changes to the tools or snapshot mechanism rebuild it. An `engine` link supports
+ad hoc queries through the dev-only `nix-codeql` skill. No task runs at shell
+entry.
+
+`codeql-nix-strict-header` compiles the shipped Nix query pack, resolves the
+external language through merged and nested config files, checks conflicting
+search paths are refused, and runs `StrictHeader.ql` over fixtures. It checks
+`writeShellScript`, `writeShellScriptBin` and `writeShellApplication` for the
+full strict header, including the application's `bashOptions` and the shopt in
+`text`. Rows classify text as `ok`, `missing` or `unknown`; local lexical
+bindings, concatenation and interpolation are followed, while an opaque helper
+call remains unknown. This is a textual AST query, not Nix or Bash execution.
+The whole repository is deliberately not a gate.

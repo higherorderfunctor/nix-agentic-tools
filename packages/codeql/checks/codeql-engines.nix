@@ -19,7 +19,7 @@ in {
     # The flat `codeql-*` names must be exactly the sources.json entries: a
     # recipe directory without an asset, or an asset without a recipe, fails.
     codeql-engines-eval = let
-      found = builtins.filter (lib.hasPrefix "codeql-") (builtins.attrNames packages);
+      found = builtins.filter (name: lib.hasPrefix "codeql-" name && name != "codeql-extractor-nix") (builtins.attrNames packages);
       drvPaths = map (name: "${name} ${builtins.unsafeDiscardStringContext packages.${name}.drvPath}") engines;
     in
       assert lib.assertMsg (found == engines) "codeql-engines-eval: flat engines ${toString found} differ from sources.json's ${toString engines}";

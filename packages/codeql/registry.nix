@@ -3,6 +3,7 @@
   repoPath,
   ...
 }: {
+  documentation.devToolDescriptions."codeql.codeql-extractor-nix" = "MIT Nix extractor and QL library for CodeQL (x86_64-linux)";
   documentation.devToolDescriptions."codeql.codeql-<engine>" = "GitHub CodeQL CLI: `bare`, `full`, or one language's bundle (unfree, x86_64-linux, never published)";
   fragments.categories.codeql = {
     scopes = ["packages/${facetOwner}/**"];
@@ -19,6 +20,7 @@
       }
     ];
   };
-  # One target: every engine's script bumps every asset from the same tag.
+  # The engine target bumps all engines; the extractor has its own release target.
+  update.targets.codeql-extractor-nix = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/devTools/codeql/codeql-extractor-nix/package.nix)];};
   update.targets.codeql-full = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/devTools/codeql/codeql-full/package.nix)];};
 }

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+if [ "$#" -ne 1 ]; then
+  echo "usage: nixql <query.ql>" >&2
+  exit 2
+fi
+state="${DEVENV_STATE:?run from the repo devenv shell}/codeql/nix"
+if [ ! -d "$state/db" ] || [ ! -x "$state/engine/bin/codeql" ]; then
+  echo "nixql: run devenv tasks run codeql:nix-db first" >&2
+  exit 2
+fi
+query="$(realpath "$1")"
+run="$(mktemp -d "$state/query.XXXXXXXX")"
+# Preserve sibling .qll imports and the caller's qlpack.yml.
+"$state/engine/bin/codeql" query run "$query" --database="$state/db" \
+  --common-caches="$state/cache" --threads=2 --ram=4096 --output="$run/result.bqrs" \
+  >"$run/log" 2>&1 || {
+  cat "$run/log" >&2
+  exit 1
+}
+"$state/engine/bin/codeql" bqrs decode --format=csv "$run/result.bqrs"
