@@ -93,6 +93,16 @@
         default = null;
         description = "An API-key upstream credential declared in Nix, with its models and APIs.";
       };
+      excludedModels = mkOption {
+        type = types.nullOr (types.nonEmptyListOf types.str);
+        default = null;
+        description = "Exact model names to exclude in exactModels mode; OAuth uses models XOR excludedModels, API keys exclude from apiKey.models.";
+      };
+      models = mkOption {
+        type = types.nullOr (types.nonEmptyListOf types.str);
+        default = null;
+        description = "Exact OAuth model names in exactModels mode, XOR excludedModels. API-key catalogs use apiKey.models.";
+      };
       oauth = mkOption {
         type = types.nullOr (types.submodule {
           options = {

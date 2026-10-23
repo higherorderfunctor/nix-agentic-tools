@@ -16,6 +16,7 @@
 package config
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -396,5 +397,13 @@ func TestNatExtract(t *testing.T) {
 	}
 	x.ancestors()
 	x.template(&document, "")
-	natWrite(t, map[string]any{"config": x.nodes})
+	catalog, err := os.ReadFile(filepath.Join("..", "registry", "models", "models.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var models map[string]any
+	if err := json.Unmarshal(catalog, &models); err != nil {
+		t.Fatal(err)
+	}
+	natWrite(t, map[string]any{"config": x.nodes, "models": models})
 }

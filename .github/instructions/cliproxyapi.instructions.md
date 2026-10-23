@@ -7,9 +7,9 @@ applyTo: "packages/cliproxyapi/**"
 
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-21 — CPA 8.0.38 custom YAML decoders are probed
-> through yaml.v3; the shared `goTestExtract` runs the extractor over the
-> patched `src`.
+> **Last verified:** 2026-10-22 — the extractor copies the pinned embedded model
+> catalog alongside the v8 configuration; the shared `goTestExtract` runs over
+> the patched `src`.
 
 ## Why reflection also needs the v8 tables
 
@@ -63,11 +63,17 @@ keeps any YAML subtree, so both are `any`. An `any` struct still retains its
 known child fields: the mapping form of `plugins.configs.<name>` has the
 measured `enabled` and `priority` fields.
 
-The raw has one `config` tree. `extracted/facts.json` declares it as an opaque
-`object` because its keys contain dots, with one Linux measurement because the
-configuration shape is host-independent. Shared `lib/extracted` owns loading,
-platform carrying and regeneration. The reconciliation reader consumes the
-declared object directly.
+The raw has a `config` tree and the complete `models` value copied from
+`internal/registry/models/models.json`. `lib/exact-models.nix` reads its Claude
+and Codex tier rows through the facts loader and private `oauth-catalog.nix`
+reader, refuses a changed consumed shape, and supplies the OAuth vendor catalog
+for exact-model mode. The existing drift check regenerates both facts on every
+CPA bump.
+
+`extracted/facts.json` declares both as opaque `object` facts, with one Linux
+measurement because their values are host-independent. The `config` keys contain
+dots. Shared `lib/extracted` owns loading, platform carrying and regeneration.
+The reconciliation reader consumes the declared object directly.
 
 ## Hand annotations
 
@@ -395,7 +401,8 @@ change, then run the module assertions and Go check in CI.
 > loopback, turns off the unprompted fetches the pinned CPA has a switch for,
 > types `server.tls.key` as a secret file, and derives named client keys'
 > `access.api-keys` and `access.key-allowlist` entries from named upstream
-> routes.
+> routes. `exactModels` applies native model exclusions and disables model
+> rewrites.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -423,6 +430,60 @@ once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
 four-client example, OAuth filename selection and devenv secret references are
 in `dev/fragments/ai-proxy/ai-proxy.md`.
+
+## Exact upstream models
+
+`instances.<name>.exactModels = true` opts into exact upstream model names. It
+defaults to false; unset and explicit false preserve the rendered config byte
+for byte. This mode does not enable cpa-gate and is not a security boundary: a
+harness sharing CPA's uid can read or change its credentials.
+
+For each named OAuth upstream credential, set `credentials.<name>.models` XOR
+`credentials.<name>.excludedModels`. Names must exist in the pinned embedded
+vendor catalog: Claude's catalog or the union of Codex's four tiers. A Codex
+tier may still lack a union member; this is a registration filter, not a promise
+of account entitlement. For API-key upstream credentials, `apiKey.models`
+remains the catalog; optional `credentials.<name>.excludedModels` must be a
+subset. Every selected set and every supplied list must be nonempty. Names are
+compared byte for byte; `auto`, parentheses, `/`, `*`, the `claude-fable-5-dd-`
+prefix, spaces, non-ASCII names and whole secret placeholders are refused. A
+model equal to a service placeholder would otherwise be replaced by the secret
+during startup.
+
+OAuth exclusions lower to CPA's vendor-wide `oauth.excluded-models`; generated
+API-key model lists lower after subtraction. Exact mode owns the final OAuth
+exclusion map and API-key blocks; conflicting raw exclusions and hand-written
+API-key blocks are refused. Claude and Codex API-key families collapse
+case-distinct IDs, so their final selected lists must have no case-fold
+collision. Excluding one of two colliding catalog names is valid; accepted
+spelling and order are preserved. The vendor-wide exclusion map requires two
+named OAuth logins of one vendor to select the same effective set, even when one
+uses `models` and another its complement in `excludedModels`. OAuth vendors
+other than `claude` and `codex`, and API-key families other than Claude, Codex
+and generated OpenAI compatibility, are refused.
+
+The mode requires embedded catalogs (`--local-model`) and refuses
+`fetchModelCatalogs`, explicit `models.{catalog,codex-catalog,devin-catalog}`,
+management secrets, payload rules, OAuth aliases, and API-key `prefix`, `alias`
+or `cloak` settings. Home settings are already outside the typed settings
+surface. The launcher owns argv and supplies no `-password`. Normal-priority
+definitions turn off model prefixing, Claude cloaking and cloaked listings,
+image injection, plugins, multi-agent optimization and Antigravity credit
+fallback; conflicting settings fail evaluation.
+
+Before every start the launcher scans auth JSON (case-insensitive `.json`
+suffix, as CPA does) and refuses model aliases, prefixes, exclusions, cloak
+metadata, malformed or duplicate JSON names, and unaudited vendors. It refuses
+`MANAGEMENT_PASSWORD` in the environment and any state-directory `.env` file,
+because CPA loads dotenv after the scan and it could enable management. Refusals
+print no filenames, keys or model names. This scan does not police writes while
+CPA runs: restart after changing login files; same-uid isolation still requires
+a VM or separate uid.
+
+The module checks cover both backends and each forced switch. CPA's package
+check phase runs two capture-transport Go tests against the lowered config:
+Claude OAuth adds no fallback model and Codex Responses adds no image tool. Each
+turns its switch back on as a control that must observe the injection.
 
 ## Unprompted network calls
 

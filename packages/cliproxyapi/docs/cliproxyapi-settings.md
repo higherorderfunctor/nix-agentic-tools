@@ -9,7 +9,8 @@
 > loopback, turns off the unprompted fetches the pinned CPA has a switch for,
 > types `server.tls.key` as a secret file, and derives named client keys'
 > `access.api-keys` and `access.key-allowlist` entries from named upstream
-> routes.
+> routes. `exactModels` applies native model exclusions and disables model
+> rewrites.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -37,6 +38,60 @@ once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
 four-client example, OAuth filename selection and devenv secret references are
 in `dev/fragments/ai-proxy/ai-proxy.md`.
+
+## Exact upstream models
+
+`instances.<name>.exactModels = true` opts into exact upstream model names. It
+defaults to false; unset and explicit false preserve the rendered config byte
+for byte. This mode does not enable cpa-gate and is not a security boundary: a
+harness sharing CPA's uid can read or change its credentials.
+
+For each named OAuth upstream credential, set `credentials.<name>.models` XOR
+`credentials.<name>.excludedModels`. Names must exist in the pinned embedded
+vendor catalog: Claude's catalog or the union of Codex's four tiers. A Codex
+tier may still lack a union member; this is a registration filter, not a promise
+of account entitlement. For API-key upstream credentials, `apiKey.models`
+remains the catalog; optional `credentials.<name>.excludedModels` must be a
+subset. Every selected set and every supplied list must be nonempty. Names are
+compared byte for byte; `auto`, parentheses, `/`, `*`, the `claude-fable-5-dd-`
+prefix, spaces, non-ASCII names and whole secret placeholders are refused. A
+model equal to a service placeholder would otherwise be replaced by the secret
+during startup.
+
+OAuth exclusions lower to CPA's vendor-wide `oauth.excluded-models`; generated
+API-key model lists lower after subtraction. Exact mode owns the final OAuth
+exclusion map and API-key blocks; conflicting raw exclusions and hand-written
+API-key blocks are refused. Claude and Codex API-key families collapse
+case-distinct IDs, so their final selected lists must have no case-fold
+collision. Excluding one of two colliding catalog names is valid; accepted
+spelling and order are preserved. The vendor-wide exclusion map requires two
+named OAuth logins of one vendor to select the same effective set, even when one
+uses `models` and another its complement in `excludedModels`. OAuth vendors
+other than `claude` and `codex`, and API-key families other than Claude, Codex
+and generated OpenAI compatibility, are refused.
+
+The mode requires embedded catalogs (`--local-model`) and refuses
+`fetchModelCatalogs`, explicit `models.{catalog,codex-catalog,devin-catalog}`,
+management secrets, payload rules, OAuth aliases, and API-key `prefix`, `alias`
+or `cloak` settings. Home settings are already outside the typed settings
+surface. The launcher owns argv and supplies no `-password`. Normal-priority
+definitions turn off model prefixing, Claude cloaking and cloaked listings,
+image injection, plugins, multi-agent optimization and Antigravity credit
+fallback; conflicting settings fail evaluation.
+
+Before every start the launcher scans auth JSON (case-insensitive `.json`
+suffix, as CPA does) and refuses model aliases, prefixes, exclusions, cloak
+metadata, malformed or duplicate JSON names, and unaudited vendors. It refuses
+`MANAGEMENT_PASSWORD` in the environment and any state-directory `.env` file,
+because CPA loads dotenv after the scan and it could enable management. Refusals
+print no filenames, keys or model names. This scan does not police writes while
+CPA runs: restart after changing login files; same-uid isolation still requires
+a VM or separate uid.
+
+The module checks cover both backends and each forced switch. CPA's package
+check phase runs two capture-transport Go tests against the lowered config:
+Claude OAuth adds no fallback model and Codex Responses adds no image tool. Each
+turns its switch back on as a control that must observe the injection.
 
 ## Unprompted network calls
 
