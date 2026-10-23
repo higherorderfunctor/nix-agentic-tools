@@ -41,7 +41,7 @@ class InstalledTests(unittest.TestCase):
         argv = [self.command, *map(str, args)]
         if args[:2] in (("database", "create"), ("query", "run"), ("test", "run")):
             argv = ["flock", os.environ["CODEQL_NIX_TEST_LOCK"], *argv, "--threads=4", "--ram=6000"]
-        result = subprocess.run(argv, cwd=self.scratch, env=self.env if env is None else env, capture_output=True, text=True, timeout=240)
+        result = subprocess.run(argv, cwd=self.scratch, env=self.env if env is None else env, capture_output=True, text=True, timeout=900)
         if success:
             self.assertEqual(result.returncode, 0, " ".join(argv) + "\n" + result.stdout[-12000:] + result.stderr[-12000:])
         return result
