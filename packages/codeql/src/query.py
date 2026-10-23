@@ -84,7 +84,7 @@ class QueryServer:
         self.log = tempfile.TemporaryFile()
         ram_args = json.loads(command([engine, "resolve", "ram", f"--ram={ram}", "--format=json"]))
         self.process = subprocess.Popen(
-            [engine, "execute", "query-server2", f"--threads={threads}", f"--common-caches={cache}", *ram_args],
+            [engine, "execute", "query-server2", "--max-disk-cache=512", f"--threads={threads}", f"--common-caches={cache}", *ram_args],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.log, start_new_session=True,
         )
         self.sequence = 0
@@ -351,7 +351,7 @@ def run(args):
             temporary = stack.enter_context(tempfile.TemporaryDirectory(prefix="query-", dir=cache_root))
             output = Path(temporary) / "result.bqrs"
             command([engine, "query", "run", str(query), f"--database={db}", f"--output={output}",
-                     f"--common-caches={cache_root / 'common-caches'}", f"--threads={args.threads}", f"--ram={args.ram}"])
+                     "--max-disk-cache=512", f"--common-caches={cache_root / 'common-caches'}", f"--threads={args.threads}", f"--ram={args.ram}"])
             response = {"result": decode(engine, output, args.sort_key)}
         print(json.dumps(response["result"], separators=(",", ":")))
 
