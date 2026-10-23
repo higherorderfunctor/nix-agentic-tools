@@ -102,8 +102,8 @@ func lastLine(log *bytes.Buffer) string {
 }
 
 // This contract is independent of the production routes table. Each route
-// accepts its own API credential; calls and listings forward, while websockets
-// remain refused.
+// accepts its own API credential; calls and listings forward. A websocket
+// route without an upgrade handshake remains refused.
 func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 	g, log := newGate(t)
 	cases := []struct {
@@ -157,8 +157,8 @@ func TestAllowedRoutesRewriteTheCredential(t *testing.T) {
 				if w.Code != http.StatusNotFound || w.Body.Len() != 0 {
 					t.Errorf("%s via %s: got %d %q, want the empty 404", c.target, name, w.Code, w.Body)
 				}
-				if line := lastLine(log); !strings.Contains(line, `"reason":"pending"`) || !strings.Contains(line, `"route":"`+c.class+`"`) {
-					t.Errorf("%s via %s: log %s, want pending %s", c.target, name, line, c.class)
+				if line := lastLine(log); !strings.Contains(line, `"reason":"websocket"`) || !strings.Contains(line, `"route":"`+c.class+`"`) {
+					t.Errorf("%s via %s: log %s, want websocket %s", c.target, name, line, c.class)
 				}
 			}
 			if got := r.Header.Values("Authorization"); !slices.Equal(got, []string{"Bearer " + c.internal}) {
@@ -384,8 +384,8 @@ func TestCaddyfileDirective(t *testing.T) {
 		t.Errorf("got %s, %v", out, err)
 	}
 	for _, directive := range []string{
-		"cpa_gate /run/policy.json", // the path is taken as a matcher
-		"cpa_gate *",                // an empty `{$VAR}`
+		"cpa_gate /run/policy.json",   // the path is taken as a matcher
+		"cpa_gate *",                  // an empty `{$VAR}`
 		"cpa_gate * /run/policy.json", // no checker origin
 		"cpa_gate * /a /b /c",
 		"cpa_gate * /a {\n\t\t\tx\n\t\t}",

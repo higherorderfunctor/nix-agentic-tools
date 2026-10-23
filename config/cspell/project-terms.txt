@@ -530,6 +530,7 @@ unstarted
 unstash
 untarring
 unwire
+upgrader
 uppercased
 usebruno
 userns
