@@ -16,7 +16,14 @@
   instances.cliproxyapi.instances = {
     main = {
       port = 8400;
-      settings.access.api-keys = [instanceKey];
+      clientKeys.main = {
+        key = instanceKey;
+        routes = [{credential = "login";}];
+      };
+      credentials.login.oauth = {
+        vendor = "claude";
+        authFile = "login.json";
+      };
     };
     off = {
       enable = false;
@@ -45,325 +52,221 @@
       {inherit config;}
     ];
 
-  # Both runtimes route through one instance without manually listed keys.
-  # z-ai serves Anthropic and Responses; other serves Chat.
-  proxyLib = import ../../lib/ai/proxy {inherit lib;};
-  runtimeKey = name: redact.file "/run/secrets/cpa-${name}-key";
-  routed = name: {
-    instance = "clients";
-    key = runtimeKey name;
-  };
-  routedTo = name: enabled: routed name // {providers = lib.genAttrs enabled (_: {enable = true;});};
-  zai = {
-    anthropic = "https://api.z.ai/api/anthropic";
-    responses = "https://api.z.ai/api/v1";
-  };
-  chat = "https://other.example/v1";
-  providers = {
-    other = {
-      apis.chat.base-url = chat;
-      key = redact.file "/run/secrets/other-key";
-      models = ["other-1"];
+  clientKey = name: redact.file "/run/secrets/cpa-${name}-key";
+  apiKey = {
+    apis = {
+      anthropic.base-url = "https://api.z.ai/api/anthropic";
+      responses.base-url = "https://api.z.ai/api/v1";
     };
-    z-ai = {
-      apis = lib.mapAttrs (_: base-url: {inherit base-url;}) zai;
-      key = redact.file "/run/secrets/zai-key";
-      models = ["glm-5.3" "glm-5.3-flash"];
+    key = redact.file "/run/secrets/zai-key";
+    models = ["glm-5.3" "glm-5.3-flash"];
+  };
+  oauth = file: {
+    oauth = {
+      vendor = "claude";
+      authFile = file;
     };
   };
-  routedEval = backend: ai:
-    evalApp backend (lib.recursiveUpdate {
-      ai = {
-        claude.enable = true;
-        cliproxyapi.instances.clients = {
-          port = 8402;
-          inherit providers;
-        };
-        codex.enable = true;
+  credentials = {
+    chat.apiKey = apiKey // {apis = {chat.base-url = "https://chat.example/v1";};};
+    personal = oauth "claude-personal.json";
+    work = oauth "claude-work.json";
+    zai = {inherit apiKey;};
+  };
+  client = name: routes: {
+    key = clientKey name;
+    inherit routes;
+  };
+  route = credential: {inherit credential;};
+  fixture = {
+    claude = {
+      enable = true;
+      proxy = {
+        instance = "clients";
+        clientKey = "personal";
       };
-    } {inherit ai;});
-  oauth = provider: {
+    };
+    cliproxyapi.instances.clients = {
+      port = 8402;
+      inherit credentials;
+      clientKeys = {
+        personal = client "personal" [
+          (route "personal")
+          {
+            credential = "zai";
+            api = "anthropic";
+          }
+        ];
+        work = client "work" [(route "work")];
+      };
+    };
+    codex = {
+      enable = true;
+      proxy = {
+        instance = "clients";
+        clientKey = "work";
+      };
+    };
+  };
+  evaluate = backend: ai: evalApp backend {ai = lib.recursiveUpdate fixture ai;};
+  rendered = result: let
+    inherit (result.config.ai.services.cliproxyapi-clients.files.config) content secrets;
+  in
+    builtins.fromJSON (fill secrets content);
+  oauthRule = file: {
+    provider = "claude";
     kind = "oauth";
-    inherit provider;
+    ids = [file];
   };
-  apiKey = provider: base-url: {
-    base-urls = [base-url];
-    kind = "apikey";
-    inherit provider;
-  };
-  handBlock = {
-    base-url = "https://hand.example";
-    keys = [{api-key = redact.file "/run/secrets/hand-key";}];
-  };
-  noBreakSpace = builtins.fromJSON ''"\u00a0"'';
-  providerURL = url: {cliproxyapi.instances.clients.providers.other.apis.chat.base-url = url;};
-  # One refusal per distinct route into a key or rule.
-  routingCases = let
-    accepted = ai: {
-      inherit ai;
-      expect = outcome: outcome == [];
-    };
-    fails = message: ai: {
-      inherit ai;
-      expect = outcome: outcome == [message];
-    };
-    refused = fragment: ai: {
-      inherit ai;
-      expect = outcome: lib.any (lib.hasInfix fragment) outcome;
-    };
-    claimed = "ai.claims.proxy-client-key.${proxyLib.keyClaim (runtimeKey "claude")}: claimed by claude and codex";
-    handWritten = settings: {
-      claude.proxy = routed "claude";
-      cliproxyapi.instances.clients.settings = settings;
-    };
-    handURL = url: {cliproxyapi.instances.clients.settings.api-keys.claude = [(handBlock // {base-url = url;})];};
-    testapp = proxy: {
-      testapp = {
-        enable = true;
-        inherit proxy;
-      };
-    };
-    unprintable = "ai.cliproxyapi.instances.clients.settings.api-keys.claude: the block with base-url";
-  in {
-    # Accepted.
-    "a disabled runtime without allow" = accepted {testapp.proxy = routed "testapp";};
-    "a hand-written block without a base URL" = accepted {
-      claude.proxy = routedTo "claude" ["z-ai"];
-      cliproxyapi.instances.clients.settings.api-keys.claude = [handBlock (handBlock // {base-url = null;})];
-    };
-    "a hand-written key of another client" = accepted (handWritten {access.api-keys = [instanceKey];});
-    "a provider without allow, given an api" = accepted (testapp (routed "testapp"
-      // {
-        providers.z-ai = {
-          api = "anthropic";
-          enable = true;
-        };
-      }));
-
-    # Refused by an assertion.
-    "a hand-written allowlist entry for a runtime key" = fails "ai.cliproxyapi.instances.clients.settings.access.key-allowlist has a hand-written entry for ai.claude.proxy.key, whose entry ai.claude.proxy.allow and .providers set. Remove the hand-written entry." (handWritten {
-      access.key-allowlist = [
-        {
-          api-key = runtimeKey "claude";
-          credentials = [(oauth "claude")];
-        }
-      ];
-    });
-    "a hand-written runtime key" = fails "ai.cliproxyapi.instances.clients.settings.access.api-keys lists ai.claude.proxy.key by hand; ai.claude.proxy adds it to this instance. Remove the hand-written entry." (handWritten {access.api-keys = [(runtimeKey "claude")];});
-    "a hand-written URL ending in a no-break space" = refused unprintable (handURL ("https://hand.example" + noBreakSpace));
-    "a hand-written URL starting with a space" = refused unprintable (handURL (" " + zai.anthropic));
-    "a provider base URL another block shares" = refused "ai.cliproxyapi.instances.clients.providers.z-ai.apis.anthropic.base-url `${zai.anthropic}` is also the base URL of another settings.api-keys.claude block" (handURL zai.anthropic);
-    "a provider name that is not one word" = refused "ai.cliproxyapi.instances.clients.providers.../x: a provider name must be" {cliproxyapi.instances.clients.providers."../x" = providers.other;};
-    "a provider without the runtime's API" = refused "ai.claude.proxy.providers.other reaches ai.cliproxyapi.instances.clients.providers.other through the anthropic API, which it does not serve: give it `apis.anthropic`, or set `ai.claude.proxy.providers.other.api` to one it serves (chat)." {claude.proxy = routedTo "claude" ["other"];};
-    "a runtime with no default and no allow" = refused "ai.testapp.proxy.allow is unset" {
-      testapp = {
-        enable = true;
-        proxy = routed "testapp";
-      };
-    };
-    "a runtime with no API and no api" = refused "ai.testapp.proxy.providers.z-ai.api is unset, and nothing sets a default API: set it to one ai.cliproxyapi.instances.clients.providers.z-ai serves (anthropic, responses)." (testapp (routedTo "testapp" ["z-ai"]));
-    "an instance selection without a key" = refused "ai.codex.proxy.instance needs `key`" {codex.proxy.instance = "clients";};
-    # The refusal names the runtime option a bad rule came from.
-    "an oauth rule with base-urls from a runtime" = refused "ai.claude.proxy.allow has a rule with kind = \"oauth\" and base-urls" {claude.proxy = routed "claude" // {allow = [(oauth "claude" // {base-urls = [zai.anthropic];})];};};
-    "an unknown provider" = refused "ai.claude.proxy.providers.missing names `missing`, which is not a `ai.cliproxyapi.instances.clients.providers` entry." {claude.proxy = routedTo "claude" ["missing"];};
-    "one key on both runtimes" = refused claimed {
-      claude.proxy = routed "claude";
-      codex.proxy = routed "claude";
-    };
-    "providers without an instance selection" = refused "ai.claude.proxy.providers.z-ai needs an `instance` selection" {
-      claude.proxy = {
-        key = runtimeKey "claude";
-        providers.z-ai.enable = true;
-        url = "http://127.0.0.1:8317";
-      };
-    };
-  };
+  refused = backend: fragment: ai: lib.any (lib.hasInfix fragment) (failedMessages (evaluate backend ai));
+  instanceChange = change: {cliproxyapi.instances.clients = change;};
 in {
   checks = {
-    # Rendered keys, provider models, launcher references, and refusals.
     module-ai-proxy-instance-clients = mkTest "ai-proxy-instance-clients" (let
       problems = lib.concatMap (backend: let
-        evaluate = routedEval backend;
-        label = name: "${backend}: ${name}";
-        file = result: result.config.ai.services.cliproxyapi-clients.files.config;
-        # The rendered config with each secret placeholder replaced by its
-        # reference; null when a reference was written into it as is.
-        rendered = result: let
-          inherit (file result) content secrets;
-        in
-          if lib.hasInfix "_redact" content
-          then null
-          else builtins.fromJSON (fill secrets content);
-        lowered = name: base-url: key: {
-          inherit base-url name;
-          keys = [({api-key = providers.${name}.key;} // key)];
-          models = map (model: {name = model;}) providers.${name}.models;
-        };
-        claim = name: {${proxyLib.keyClaim (runtimeKey name)} = [name];};
-        outcome = ai: let
-          result = evaluate ai;
-          messages = failedMessages result;
-        in
-          if messages != []
-          then messages
-          else builtins.deepSeq (file result).content messages;
-        both = evaluate {
-          codex.proxy = routed "codex";
-          proxy = routed "claude";
-        };
-        withProvidersAi = {
-          claude.proxy = routedTo "claude" ["z-ai"];
-          cliproxyapi.instances.clients.settings.api-keys.claude = [handBlock];
-          codex.proxy = lib.recursiveUpdate (routedTo "codex" ["z-ai"]) {
-            allow = [];
-            providers.other = {
-              api = "chat";
-              enable = true;
-            };
-          };
-        };
-        withProviders = evaluate withProvidersAi;
-        zaiRows = map (model: {
-          description = "z-ai through CLIProxyAPI";
-          inherit model;
-        }) ["glm-5.3" "glm-5.3-flash"];
-        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-code-proxy") null (withProviders.config.home.packages or withProviders.config.packages);
-        pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
-        codexProfile = withProviders.config.ai.codex.files.".codex/z-ai.config.toml" or null;
-        narrowRule = {
-          base-urls = [zai.anthropic];
-          kind = "apikey";
-          provider = "claude";
-        };
-        narrowed = evaluate {claude.proxy = routed "claude" // {allow = [narrowRule];};};
-        codexOff = evaluate {
-          claude.proxy = routed "claude";
-          codex = {
-            enable = false;
-            proxy = routed "codex";
-          };
-        };
-        byUrl = evaluate {
+        result = evaluate backend {};
+        settings = rendered result;
+        rules = map (entry: entry.credentials) settings.access.key-allowlist;
+        rows =
+          map (model: {
+            inherit model;
+            description = "zai through CLIProxyAPI";
+          })
+          apiKey.models;
+        byUrl = evaluate backend {
           claude.proxy = {
-            key = runtimeKey "claude";
+            instance = null;
+            clientKey = null;
+            key = clientKey "external";
             url = "http://127.0.0.1:8317";
           };
+          codex.enable = false;
+          cliproxyapi.instances.clients.clientKeys = lib.mkForce {};
         };
-        chatCredentials = {
-          Acme = {
-            base-url = "https://acme.example/v1";
-            provider = "openai-compatible-acme";
-          };
-          openai-compatibility = {
-            base-url = "https://compat.example/v1";
-            provider = "openai-compatibility";
-          };
-          openai-compatible-pre = {
-            base-url = "https://pre.example/v1";
-            provider = "openai-compatible-pre";
-          };
-        };
-        chatRules =
-          map (entry: entry.credentials)
-          (rendered (evaluate {
-            cliproxyapi.instances.clients.providers = lib.mapAttrs (_: credential:
-              providers.other // {apis.chat.base-url = credential.base-url;})
-            chatCredentials;
-            codex.proxy =
-              routed "codex"
-              // {
-                allow = [];
-                providers =
-                  lib.mapAttrs (_: _: {
-                    api = "chat";
-                    enable = true;
-                  })
-                  chatCredentials;
-              };
-          })).access.key-allowlist;
-        typeRejects = ai:
-          !(builtins.tryEval (builtins.deepSeq (evaluate ai).config.ai.cliproxyapi.instances.clients.providers true)).success;
-        accessFor = names: {
-          api-keys = map runtimeKey names;
-          key-allowlist =
-            map (name: {
-              api-key = runtimeKey name;
-              credentials = [(oauth name)];
-            })
-            names;
-        };
-        observations = {
-          "allow replaces the default" = map (entry: entry.credentials) (rendered narrowed).access.key-allowlist == [[narrowRule]];
-          "claims" = both.config.ai.claims.proxy-client-key == claim "claude" // claim "codex";
-          "disabled runtime adds nothing" =
-            (rendered codexOff).access
-            == accessFor ["claude"]
-            && codexOff.config.ai.claims.proxy-client-key == claim "claude";
-          "distinct clients are accepted" = failedMessages both == [];
-          "generated api-keys and allowlist" = (rendered both).access == accessFor ["claude" "codex"];
-          "provider lowering" =
-            (rendered withProviders).api-keys
-            == {
-              claude = [(lowered "z-ai" zai.anthropic {}) handBlock];
-              codex = [(lowered "z-ai" zai.responses {disable-codex-cloaking = true;})];
-              openai-compatibility = [(lowered "other" chat {})];
-            };
-          "provider rules" =
-            map (entry: entry.credentials) (rendered withProviders).access.key-allowlist
+        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-code-proxy") null (result.config.home.packages or result.config.packages);
+        pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
+        chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
+        rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
+        checks = {
+          "fixture accepted" = failedMessages result == [];
+          "named keys" = settings.access.api-keys == map clientKey ["personal" "work"];
+          "OAuth exact ids, API exact URL, route order" =
+            rules
             == [
-              [(oauth "claude") (apiKey "claude" zai.anthropic)]
-              [(apiKey "openai-compatible-other" chat) (apiKey "codex" zai.responses)]
+              [
+                (oauthRule "claude-personal.json")
+                {
+                  base-urls = [apiKey.apis.anthropic.base-url];
+                  kind = "apikey";
+                  provider = "claude";
+                }
+              ]
+              [(oauthRule "claude-work.json")]
             ];
-          "chat provider identities" = chatRules == [(lib.mapAttrsToList (_: credential: apiKey credential.provider credential.base-url) chatCredentials)];
-          "full provider fixture is accepted" = failedMessages withProviders == [];
-          "provider URL ending in a no-break space is rejected" = typeRejects (providerURL (chat + noBreakSpace));
-
-          "resolved providers" =
-            withProviders.config.ai.claude.normalized.proxy.providers
+          "same vendor OAuth remains separate" = (lib.head (lib.head rules)).ids != (lib.head (lib.last rules)).ids;
+          "API-key blocks" =
+            settings.api-keys.claude
             == [
               {
-                name = "z-ai";
-                models = ["glm-5.3" "glm-5.3-flash"];
+                name = "zai";
+                base-url = apiKey.apis.anthropic.base-url;
+                keys = [{api-key = apiKey.key;}];
+                models = map (name: {inherit name;}) apiKey.models;
               }
             ];
-          "Claude picker rows in user settings" = backend != "hm" || (claudeSettings withProviders).modelPicker or null == {options = zaiRows;};
-          "Claude picker rows join a consumer's" =
-            backend
-            != "hm"
-            || lib.length
-            (claudeSettings (evaluate {
-              claude = {
-                native.settings.modelPicker.options = [{model = "mine";}];
-                proxy = routedTo "claude" ["z-ai"];
-              };
-            })).modelPicker.options
-            == 3;
-          "Claude launcher passes no --settings on HM" = backend != "hm" || pickerFile == null;
-          "Codex z-ai profile" =
-            backend
-            != "hm"
-            || codexProfile.content.value or null
-            == {
-              model = "glm-5.3";
-              model_provider = "ai-proxy";
-            };
-          "Claude project settings carry no picker" = backend == "hm" || !((claudeSettings withProviders) ? modelPicker);
-          "Claude launcher --settings picker rows" = backend == "hm" || (pickerFile != null && builtins.fromJSON (builtins.readFile (lib.head pickerFile)) == {modelPicker.options = zaiRows;});
-          "Codex writes no devenv profile" = backend == "hm" || codexProfile == null;
-          "Codex devenv profile warning" = backend == "hm" || builtins.any (lib.hasInfix "devenv writes no `codex -p <provider>` profile") withProviders.config.warnings;
-          "launcher keys" = lib.all (name:
-            both.config.ai.${name}.normalized.proxy
-            == {
-              key = runtimeKey name;
-              providers = [];
-              url = "http://127.0.0.1:8402";
-            }) ["claude" "codex"];
-          "url selection adds nothing" = !((rendered byUrl) ? access) && byUrl.config.ai.internal.proxyClients == {};
+          "Responses cloaking disabled" =
+            (lib.head settings.api-keys.codex).keys
+            == [
+              {
+                api-key = apiKey.key;
+                disable-codex-cloaking = true;
+              }
+            ];
+          "key derived from client" = result.config.ai.claude.normalized.proxy.key == clientKey "personal" && result.config.ai.codex.normalized.proxy.key == clientKey "work";
+          "models derive from client routes" =
+            result.config.ai.claude.normalized.proxy.credentials
+            == [
+              {
+                name = "personal";
+                models = [];
+              }
+              {
+                name = "zai";
+                inherit (apiKey) models;
+              }
+            ];
+          "Claude user picker" = backend != "hm" || (claudeSettings result).modelPicker.options == rows;
+          "Claude project has no picker" = backend == "hm" || !((claudeSettings result) ? modelPicker);
+          "Claude devenv picker follows routes" = backend == "hm" || (pickerFile != null && builtins.fromJSON (builtins.readFile (lib.head pickerFile)) == {modelPicker.options = rows;});
+          "client key hand-written access refused" = refused backend "lists ai.cliproxyapi.instances.clients.clientKeys.personal.key by hand" (instanceChange {settings.access.api-keys = [(clientKey "personal")];});
+          "client key hand-written rule refused" = refused backend "hand-written entry for ai.cliproxyapi.instances.clients.clientKeys.personal.key" (instanceChange {
+            settings.access.key-allowlist = [
+              {
+                api-key = clientKey "personal";
+                credentials = [(oauthRule "claude-work.json")];
+              }
+            ];
+          });
+          "Codex has no credential profiles" = !(result.config.ai.codex.files ? ".codex/zai.config.toml");
+          "chat-only choice for Codex" =
+            (lib.last (rendered chatOnly).access.key-allowlist).credentials
+            == [
+              {
+                kind = "apikey";
+                provider = "openai-compatible-chat";
+                base-urls = ["https://chat.example/v1"];
+              }
+            ];
+          "external adds no keys or rules" = !((rendered byUrl) ? access) && byUrl.config.ai.claude.normalized.proxy.key == clientKey "external";
+          "secret references stay out of config" = !(lib.hasInfix "_redact" result.config.ai.services.cliproxyapi-clients.files.config.content);
+          "unknown credential" = refused backend "unknown upstream credential `missing`" (instanceChange {clientKeys.work.routes = lib.mkForce [(route "missing")];});
+          "unknown client key" = refused backend "clientKey names `missing`" {claude.proxy.clientKey = "missing";};
+          "instance needs client key" = refused backend "instance needs `clientKey`" {claude.proxy.clientKey = null;};
+          "instance refuses direct key" = refused backend "Instance selections use `clientKey`" {claude.proxy.key = clientKey "direct";};
+          "ambiguous API needs choice" = refused backend "needs api because it does not serve exactly one API" (instanceChange {clientKeys.work.routes = lib.mkForce [(route "zai")];});
+          "unserved API" = refused backend "does not serve API `chat`" (instanceChange {
+            clientKeys.work.routes = lib.mkForce [
+              {
+                credential = "zai";
+                api = "chat";
+              }
+            ];
+          });
+          "OAuth rejects API" = refused backend "OAuth credential `work` does not select an API" (instanceChange {
+            clientKeys.work.routes = lib.mkForce [
+              {
+                credential = "work";
+                api = "anthropic";
+              }
+            ];
+          });
+          "neither credential kind" = refused backend "credentials.empty: declare exactly one" (instanceChange {credentials.empty = {};});
+          "both credential kinds" = refused backend "credentials.personal: declare exactly one" (instanceChange {credentials.personal = {inherit apiKey;};});
+          "shared URL" = refused backend "also the base URL of another" (instanceChange {credentials.duplicate.apiKey = apiKey;});
+          "shared raw URL" = refused backend "also the base URL of another" (instanceChange {
+            settings.api-keys.claude = [
+              {
+                base-url = apiKey.apis.anthropic.base-url;
+                keys = [{api-key = clientKey "raw";}];
+              }
+            ];
+          });
+          "raw URL whitespace" = refused backend "starts or ends with a character other than printable ASCII" (instanceChange {
+            settings.api-keys.claude = [
+              {
+                base-url = " https://raw.example";
+                keys = [{api-key = clientKey "raw";}];
+              }
+            ];
+          });
+          "empty OAuth filename" = rejectsType (instanceChange {credentials.personal.oauth.authFile = "";});
+          "absolute OAuth filename" = rejectsType (instanceChange {credentials.personal.oauth.authFile = "/auth/login.json";});
+          "parent OAuth filename" = rejectsType (instanceChange {credentials.personal.oauth.authFile = "../login.json";});
+          "literal client key" = rejectsType (instanceChange {clientKeys.personal.key = lib.mkForce "secret";});
+          "literal upstream credential" = rejectsType (instanceChange {credentials.zai.apiKey.key = lib.mkForce "secret";});
         };
       in
-        lib.concatLists (lib.mapAttrsToList (name: case: lib.optional (!case.expect (outcome case.ai)) (label "case `${name}`")) routingCases)
-        ++ lib.concatLists (lib.mapAttrsToList (name: holds: lib.optional (!holds) (label name)) observations))
-      ["devenv" "hm"];
+        lib.mapAttrsToList (name: _: "${backend}: ${name}") (lib.filterAttrs (_: holds: !holds) checks)) ["devenv" "hm"];
     in
       lib.assertMsg (problems == []) (lib.concatStringsSep "; " problems));
 
@@ -409,28 +312,28 @@ in {
         };
       })
       == []
-      # An instance selection: valid with a key, refused beside a url or when
-      # naming a missing or disabled instance. The runtime case checks no key.
+      # An Instance selection requires a named client key and refuses a URL
+      # alongside it, a missing Instance or a disabled Instance.
       && lib.all (evaluate: let
         select = proxy: evaluate {ai = instances // {inherit proxy;};};
       in
         failedMessages (select {
           instance = "main";
-          key = instanceKey;
+          clientKey = "main";
         })
         == []
         && failsWith ["ai.proxy.url and ai.proxy.instance both select a proxy"] (select {
           instance = "main";
-          key = instanceKey;
+          clientKey = "main";
           url = "http://127.0.0.1:8317";
         })
         && failsWith ["ai.proxy.instance names `missing`, which is not an `ai.cliproxyapi.instances` entry."] (select {
           instance = "missing";
-          key = instanceKey;
+          clientKey = "main";
         })
         && failsWith ["ai.proxy.instance names `ai.cliproxyapi.instances.off`, which is disabled."] (select {
           instance = "off";
-          key = instanceKey;
+          clientKey = "main";
         })) [evalDevenv evalHm]
     );
 
@@ -441,13 +344,13 @@ in {
     # with a path set on the normalized option directly is refused too.
     module-ai-proxy-runtime-override = mkTest "ai-proxy-runtime-override" (
       lib.all (backend: let
-        # The endpoint alone; module-ai-proxy-instance-clients covers `providers`.
+        # The endpoint alone; module-ai-proxy-instance-clients covers named credentials.
         resolved = config: let
           proxy = (evalApp backend config).config.ai.testapp.normalized.proxy;
         in
           if proxy == null
           then null
-          else removeAttrs proxy ["providers"];
+          else removeAttrs proxy ["credentials"];
         root = {
           key = redact.file "/run/secrets/ai-proxy-key";
           url = "http://127.0.0.1:8317";
@@ -482,7 +385,7 @@ in {
             // {
               proxy = {
                 instance = "main";
-                key = instanceKey;
+                clientKey = "main";
               };
             };
         }
@@ -497,12 +400,12 @@ in {
               proxy = root;
               testapp.proxy = {
                 instance = "main";
-                inherit (work) key;
+                clientKey = "main";
               };
             };
         }
         == {
-          inherit (work) key;
+          key = instanceKey;
           url = "http://127.0.0.1:8400";
         }
         && resolved keyOnly == root

@@ -72,16 +72,6 @@
 #                                    #   launcher package. The transform owns the
 #                                    #   `home.packages` / `packages` lowering, so a
 #                                    #   factory never writes either.
-#     proxyAllow ? null;             # `ai.<name>.proxy.allow`'s default: the
-#                                    #   CLIProxyAPI credential rules the
-#                                    #   runtime's own login matches. Needs the
-#                                    #   `proxy` pool; null makes it required
-#                                    #   for an instance selection.
-#     proxyApi ? null;               # the provider API the runtime speaks, one
-#                                    #   of `lib/ai/proxy`'s `apiNames`: the
-#                                    #   default of each
-#                                    #   `ai.<name>.proxy.providers.<p>.api`.
-#                                    #   Needs the `proxy` pool.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
 #     sharedAgentsMd ? <absent>;     # callback (same args) → {key; hasOnDemandIndex?;
 #                                    #   index?; rules?; maxBytes?}:
@@ -137,8 +127,6 @@
   config ? null,
   installPackage ? null,
   migrationConfig ? null,
-  proxyAllow ? null,
-  proxyApi ? null,
   sharedAgentsMd ? null,
   contentTargets ? null,
   hm ? {},
@@ -172,8 +160,6 @@ in
       agentTransformer = null;
       agentsDirSuffixes = null;
       agentsDescriptionSuffix = null;
-      proxyAllow = null;
-      proxyApi = null;
     }
     args);
     {
@@ -183,8 +169,6 @@ in
     // lib.optionalAttrs (config != null) {inherit config;}
     // lib.optionalAttrs (installPackage != null) {inherit installPackage;}
     // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
-    // lib.optionalAttrs (proxyAllow != null) {inherit proxyAllow;}
-    // lib.optionalAttrs (proxyApi != null) {inherit proxyApi;}
     // lib.optionalAttrs (sharedAgentsMd != null) {inherit sharedAgentsMd;}
     // lib.optionalAttrs (contentTargets != null) {inherit contentTargets;}
     // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}

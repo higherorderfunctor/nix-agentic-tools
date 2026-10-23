@@ -1,14 +1,8 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-21 — 926 config nodes, including the patched
-> `access.key-allowlist`, give the settings type through
-> `lib/extracted/options.nix`, with eight refinements and one module assertion
-> on the allowlist; the clean render passes native v8 validation and loads
-> through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
-> `ai.cliproxyapi.instances` renders it at start, defaults its listener to
-> loopback, turns off the unprompted fetches the pinned CPA has a switch for,
-> types `server.tls.key` as a secret file, and derives each routed runtime's
-> `access.api-keys` and `access.key-allowlist` entries.
+> **Last verified:** 2026-10-22 — named upstream credentials and client keys
+> derive Instance API-key blocks and exact allowlist rules; typed settings still
+> come from extracted CPA 8.0.38 facts.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -31,9 +25,11 @@ execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
 reach only that copy and are lost at restart. `ai.proxy.instance` points the
 harnesses at an instance by name.
 
-An enabled instance-routed runtime adds its key and allowlist entry. The `allow`
-option uses `keyAllowlistCredentialsType`, generated from CPA's credential-rule
-settings.
+`credentials` and `clientKeys` declare upstream credentials and client access
+once on the Instance. Harnesses select
+`proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
+four-client example, OAuth filename selection and devenv secret references are
+in `dev/fragments/ai-proxy/ai-proxy.md`.
 
 ## Unprompted network calls
 

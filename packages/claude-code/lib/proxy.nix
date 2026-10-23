@@ -6,13 +6,13 @@
 # `native.settings`, so the settings.json each backend already writes (user on
 # Home Manager, project on devenv).
 #
-# Each enabled provider's models become `/model` picker rows; where each
+# Each routed upstream credential's models become `/model` picker rows; where each
 # backend delivers them, and why, is in dev/fragments/ai-proxy/ai-proxy-runtimes.md.
 {
   lib,
   pkgs,
 }: let
-  redact = import ../../../lib/redact {inherit lib;};
+  keyHelper = import ../../../lib/ai/proxy/key-helper.nix {inherit lib pkgs;};
   # Settings env overrides inherited API keys, bearer tokens and custom
   # headers, so a lower-scope credential cannot accompany the reference
   # resolved by apiKeyHelper, and inherited Bedrock, Vertex or Foundry
@@ -22,19 +22,9 @@
     url,
     ...
   }: let
-    helper = import ../../../lib/strict-shell-application.nix pkgs {
-      name = "claude-proxy-key";
-      text = ''
-        # Reference paths and concat literals are already shell-escaped.
-        # shellcheck disable=SC2016
-        ${redact.assign {
-          inherit pkgs;
-          option = "ai.claude.proxy.key";
-          value = key;
-          variable = "key";
-        }}
-        printf '%s' "$key"
-      '';
+    helper = keyHelper {
+      inherit key;
+      option = "ai.claude.proxy.key";
     };
   in {
     apiKeyHelper = lib.escapeShellArg (lib.getExe helper);
@@ -49,19 +39,19 @@
     };
   };
 
-  # One row per model of each enabled provider, in provider order. Claude
+  # One row per model of each routed upstream credential, in route order. Claude
   # labels a row with its model id when it has no label.
   pickerRows = resolvedProxy:
-    lib.concatMap (provider:
+    lib.concatMap (credential:
       map (model: {
-        description = "${provider.name} through CLIProxyAPI";
+        description = "${credential.name} through CLIProxyAPI";
         inherit model;
       })
-      provider.models)
+      credential.models)
     (
       if resolvedProxy == null
       then []
-      else resolvedProxy.providers
+      else resolvedProxy.credentials
     );
 
   # Without a proxy these reach api.anthropic.com and downloads.claude.ai

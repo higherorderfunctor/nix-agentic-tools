@@ -803,25 +803,46 @@ in {
           key = upstreamKey name;
           models = ["glm-shared" "${name}-model"];
         };
-        runtime = name: provider: {
+        runtime = name: {
           instance = "main";
-          key = fileKey name;
-          providers.${provider}.enable = true;
+          clientKey = name;
         };
       in
         keyAllowlistCheck {
           ai = {
             claude = {
               enable = true;
-              proxy = runtime "a" "zai";
+              proxy = runtime "a";
             };
-            cliproxyapi.instances.main.providers = {
-              other = provider "other" 28428;
-              zai = provider "zai" 28427;
+            cliproxyapi.instances.main = {
+              credentials = {
+                other.apiKey = provider "other" 28428;
+                zai.apiKey = provider "zai" 28427;
+              };
+              clientKeys = {
+                a = {
+                  key = fileKey "a";
+                  routes = [
+                    {
+                      credential = "zai";
+                      api = "anthropic";
+                    }
+                  ];
+                };
+                b = {
+                  key = fileKey "b";
+                  routes = [
+                    {
+                      credential = "other";
+                      api = "responses";
+                    }
+                  ];
+                };
+              };
             };
             codex = {
               enable = true;
-              proxy = runtime "b" "other";
+              proxy = runtime "b";
             };
           };
           name = "runtime-providers";

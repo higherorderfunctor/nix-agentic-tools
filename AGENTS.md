@@ -560,17 +560,15 @@ hoc machinery beside an existing abstraction.
   for paths, ports and services; one registry validates all groups. Owners never
   assert uniqueness, and adding a group needs no validation code. See
   `packages/ai-module/modules/common.nix`.
-- **PROPOSAL (not yet vetted): runtime proxy keys are pulled by the instance.**
-  A runtime routed through `ai.cliproxyapi.instances.<n>` publishes its key and
-  its rules (`ai.<runtime>.proxy.allow` plus one base-URL rule per enabled
-  instance provider) at `ai.internal.proxyClients`, and the instance's derived
-  settings list the key and its allowlist entry; the key is an
-  `ai.claims.proxy-client-key` claim. Instance `providers` lower into
-  `settings.api-keys` blocks through one API table
-  (`packages/cliproxyapi/lib/providers.nix`); each runtime names the API it
-  speaks on its record (`proxyApi`). Pushing into the instance would create one
-  a typo names, and a hand-written copy would be a second owner. See
-  `lib/ai/proxy/default.nix` and `packages/cliproxyapi/modules/instances.nix`.
+- **CPA Instances own named routing.** Each `ai.cliproxyapi.instances.<name>`
+  declares upstream `credentials` and `clientKeys` once. Each client key routes
+  only to named upstream credentials; OAuth rules carry exact auth-file IDs,
+  API-key rules carry exact base URLs, and one API table lowers those
+  credentials. A Harness selects `proxy = {instance; clientKey;}` without
+  publishing keys or rules. External `url` + `key` selections add nothing to
+  Instances. See `lib/ai/proxy/default.nix`,
+  `packages/cliproxyapi/lib/providers.nix` and
+  `packages/cliproxyapi/modules/instances.nix`.
 - **PROPOSAL (not yet vetted): harness sandboxing is ours.** The host sandbox
   (the microvm) is the real protection. `ai.jail` / `ai.<runtime>.jail`
   (jail.nix, bubblewrap) is an extra layer that keeps a harness from damaging

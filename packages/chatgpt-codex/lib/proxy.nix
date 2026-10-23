@@ -26,17 +26,14 @@
 # ── Providers ─────────────────────────────────────────────────────────
 # Codex lists the proxy's models with no setting: `auth.command` makes it
 # fetch `<base_url>/models?client_version=`, which CLIProxyAPI answers in
-# Codex's own catalog shape, merged into the bundled list. Codex has no
-# per-provider default model, so Home Manager writes one profile per enabled
-# provider, `<configDir>/<name>.config.toml`, selecting its first model:
-# `codex -p <name>`. A profile lives in CODEX_HOME, which devenv does not
-# own, so devenv writes none and warns.
+# Codex's own catalog shape, merged into the bundled list. Client routes
+# determine which upstream credentials requests reach.
 {
   inlineToml,
   lib,
   pkgs,
 }: let
-  redact = import ../../../lib/redact {inherit lib;};
+  keyHelper = import ../../../lib/ai/proxy/key-helper.nix {inherit lib pkgs;};
   ids = {
     devenv = "ai-proxy-devenv";
     hm = "ai-proxy";
@@ -44,19 +41,9 @@
 
   # `name` is required: Codex refuses to load a provider without one.
   providerFor = id: endpoint: let
-    helper = import ../../../lib/strict-shell-application.nix pkgs {
-      name = "codex-proxy-key";
-      text = ''
-        # Reference paths and concat literals are already shell-escaped.
-        # shellcheck disable=SC2016
-        ${redact.assign {
-          inherit pkgs;
-          option = "ai.codex.proxy.key";
-          value = endpoint.key;
-          variable = "key";
-        }}
-        printf '%s' "$key"
-      '';
+    helper = keyHelper {
+      inherit (endpoint) key;
+      option = "ai.codex.proxy.key";
     };
   in {
     auth.command = lib.getExe helper;
@@ -84,19 +71,6 @@
     model_provider = ids.hm;
     model_providers.${ids.hm} = providerFor ids.hm endpoint;
   };
-
-  # Home Manager's profile documents: file name under configDir → settings.
-  hmProfiles = resolvedProxy:
-    lib.listToAttrs (map (provider:
-        lib.nameValuePair "${provider.name}.config.toml" {
-          model = lib.head provider.models;
-          model_provider = ids.hm;
-        })
-      (
-        if resolvedProxy == null
-        then []
-        else resolvedProxy.providers
-      ));
 in {
-  inherit hmProfiles hmSettings launcherFlags;
+  inherit hmSettings launcherFlags;
 }

@@ -117,7 +117,7 @@ in {
           && lib.all (key: let
             auth = (hmSettings (hmEndpoint key)).model_providers.ai-proxy.auth;
           in
-            builtins.attrNames auth == ["command"] && lib.hasSuffix "/bin/codex-proxy-key" auth.command) (builtins.attrValues keys)
+            builtins.attrNames auth == ["command"] && lib.hasSuffix "/bin/cpa-client-key" auth.command) (builtins.attrValues keys)
           && (hmSettings overridden).model_providers.ai-proxy.base_url == "${devenvOrigin}/v1"
           && (hmSettings overridden).model_providers.ai-proxy.auth == (hmSettings (hmEndpoint keys.command)).model_providers.ai-proxy.auth
           && !(builtins.any (unsupportedWarning "hm") file.config.warnings)

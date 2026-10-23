@@ -1,10 +1,8 @@
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-10-22 — the patch applies to CPA 8.0.38 with no fuzz;
-> loading rejects duplicate client keys and startup exits 1 on refusal. Hot
-> reload can briefly serve a retired config credential under newly widened
-> rules, so rotation that also widens access requires a restart or an `ids`
-> rule.
+> **Last verified:** 2026-10-22 — named Instance client keys derive exact OAuth
+> IDs or API base-URL rules; the CPA 8.0.38 patch still rejects duplicate client
+> keys and fails closed. Reload widening requires restart as described below.
 
 ## Why selection lives in CPA
 
@@ -24,15 +22,18 @@ eligible credentials are unavailable gets `auth_not_found`. Model listings still
 expose all models.
 
 An entry identifies one client key and grants a list of credential rules. The
-client key is a redact reference shared with `access.api-keys[]`. An
-instance-routed runtime derives both entries from `ai.<runtime>.proxy.allow` and
-enabled providers (see `ai-proxy.md`); write entries by hand only for other
-clients. A rule requires `provider` and `kind` (`oauth` or `apikey`); `ids` and
-`base-urls` narrow it further. Generated compatibility-provider rules follow
-CPA's name normalization in `internal/util/provider.go`. An OAuth credential's
-ID is its auth-file path. A config API key's ID hashes its secret, so use
-provider and `base-urls` to address a group through rotation. The settings types
-and module refinements are in `cliproxyapi-settings.md`.
+client key is a redact reference shared with `access.api-keys[]`. An Instance
+owns named client keys and upstream credentials (`ai-proxy.md`); each named
+route generates one rule, and Harness selection adds no rules. Write settings
+entries by hand only for other clients. A rule requires `provider` and `kind`
+(`oauth` or `apikey`); `ids` and `base-urls` narrow it further. Generated
+compatibility-provider rules follow CPA's name normalization in
+`internal/util/provider.go`. An OAuth credential's ID is its auth-file path
+relative to `<stateDir>/auth`, found by listing that directory after CPA login.
+A re-login can change the filename; update `credentials.<name>.oauth.authFile`
+when it does. A config API key's ID hashes its secret, so use provider and
+`base-urls` to address a group through rotation. The settings types and module
+refinements are in `cliproxyapi-settings.md`.
 
 The `apikey` kind matches only credentials synthesized from config. A
 store-loaded login can temporarily classify as `apikey` from its file or a Meta
