@@ -124,6 +124,7 @@ in {
             server = {
               commercial-mode = true;
               max-request-body-bytes = 33554432;
+              tls.enable = false;
             };
           })
           (lib.mkIf instance.exactModels (exact.settings // {oauth = exact.settings.oauth // {excluded-models = exact.exclusions instance;};}))
