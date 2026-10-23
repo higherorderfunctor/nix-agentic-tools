@@ -7,7 +7,7 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 
 ## ai-module Files, Activation and Services Contract
 
-> **Last verified:** 2026-10-21 — secret providers supply activation nodes and
+> **Last verified:** 2026-10-22 — secret providers supply activation nodes and
 > Home Manager service unit ordering; repository modules reach Home Manager and
 > devenv file and activation sinks only through ai-module's three layers, apart
 > from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
@@ -16,7 +16,8 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,config/ai-deliver
 > user-qualified fallbacks; private secret slots are cleared before reads and
 > exec, public variables reserve `_ai_`, tool instances use `lib/instances.nix`,
 > a restart trigger alone makes a unit a secret reader, and every service has a
-> start limit so a crash loop ends failed.
+> start limit so a crash loop ends failed. CPA client keys are instance-owned
+> rather than runtime resource claims.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -90,12 +91,13 @@ Exclusive paths, services and ports use the hidden `ai.claims.<group>.<key>`
 registry. Two claims fail, even with identical values, with
 `ai.claims.<group>.<key>: claimed by <a> and <b>`; owners are sorted and a
 disabled entry still claims. Port owners name `<owner>:<service>.ports.<name>`.
-Owners register resources; one registry validates every group. Other resources,
-such as a proxy client key, use `ai.<owner>.claims.<group> = [keys]` while that
-owner is enabled. Ancestor/descendant paths fail as overlapping destinations. A
-key in the helper's `shared` list (root `AGENTS.md`) forwards unclaimed, so its
-composer stays the single owner; divergent equal-priority definitions there fail
-with conflict text naming `lib/runtime.nix`, not the owners.
+Owners register resources; one registry validates every group. Other resources
+use `ai.<owner>.claims.<group> = [keys]` while that owner is enabled; CPA client
+keys instead belong to named instance entries. Ancestor/descendant paths fail as
+overlapping destinations. A key in the helper's `shared` list (root `AGENTS.md`)
+forwards unclaimed, so its composer stays the single owner; divergent
+equal-priority definitions there fail with conflict text naming
+`lib/runtime.nix`, not the owners.
 
 ### Services
 
@@ -1521,7 +1523,7 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-21 — non-AI owners use the same layer-1 helper;
+> **Last verified:** 2026-10-22 — non-AI owners use the same layer-1 helper;
 > delivery facts derive delivered and absent cells, keyed withdrawal and
 > normalized gaps from option and runtime declarations; `poolOptions` covers
 > `agentsDir` and `environmentVariables` only; `optionNamespaces` places
@@ -1533,10 +1535,10 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 > hooks, settings and steering legacy ledgers declared outside its enable gate;
 > Kimchi stages every surface, with every legacy ledger ungated; Codex stages
 > every surface and declares both copy ledgers while disabled; hand rows are
-> confined to the policy-only permissions surface; `proxyApi` needs the proxy
-> pool; Claude's `native.unpinLaunchEffort` is declared for Home Manager only,
-> so delivery facts carry no supplement rows; backend lowering and validation
-> live only in ai-module.
+> confined to the policy-only permissions surface; named CPA routing replaces
+> runtime proxy defaults; Claude's `native.unpinLaunchEffort` is declared for
+> Home Manager only, so delivery facts carry no supplement rows; backend
+> lowering and validation live only in ai-module.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1850,11 +1852,10 @@ cells without policy edits.
   `agentsDir` without `agents`. It also rejects `agentNativeType` without
   `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
   `agentsDescriptionSuffix` without the agents pool, an empty or non-string
-  `agentsDirSuffixes`, `proxyAllow` (the default of `ai.<name>.proxy.allow`)
-  without the proxy pool, and `proxyApi` (the default of each
-  `ai.<name>.proxy.providers.<p>.api`) without the proxy pool or naming no
-  provider API. The native pair is tested for presence, so an explicit null
-  counts as set.
+  `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
+  null counts as set. Proxy selection uses `instance` + `clientKey` or external
+  `url` + `key`; runtime records no longer supply `proxyAllow` or `proxyApi`
+  defaults (see `dev/fragments/ai-proxy/ai-proxy.md`).
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus

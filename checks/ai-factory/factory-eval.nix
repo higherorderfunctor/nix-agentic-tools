@@ -345,10 +345,6 @@ in {
           .config;
         transformed = backend: record: builtins.tryEval (evaluate backend record).ai.testapp.enable;
         withPoolOptions = poolOptions: base // {poolOptions = base.poolOptions // poolOptions;};
-        # proxyAllow and proxyApi default `ai.<name>.proxy.allow` and each
-        # `ai.<name>.proxy.providers.<p>.api`, which only the proxy pool
-        # declares; proxyApi must also name a provider API.
-        withProxy = record: base // {surfaceSupport = base.surfaceSupport // {proxy.backends = ["devenv" "hm"];};} // record;
         agentsMdTarget = sharedAgentsMd:
           builtins.tryEval
           (evaluate "devenv" (ai.app.mkRuntime (base // {inherit sharedAgentsMd;})))
@@ -369,11 +365,6 @@ in {
         && rejected (base // {surfaceSupport = removeAttrs base.surfaceSupport ["environmentVariables"];})
         && rejected (base // {agentsDirSuffixes = [];})
         && rejected (base // {agentsDirSuffixes = [1];})
-        && rejected (base // {proxyAllow = [];})
-        && !rejected (withProxy {proxyAllow = [];})
-        && rejected (base // {proxyApi = "anthropic";})
-        && rejected (withProxy {proxyApi = "messages";})
-        && !rejected (withProxy {proxyApi = "anthropic";})
         && rejected ((removeAttrs base ["poolOptions"])
           // {
             surfaceSupport = lib.genAttrs ["rules"] (_: {backends = ["devenv" "hm"];});

@@ -7,9 +7,10 @@ applyTo: "checks/ai-proxy/**,lib/ai/proxy/**,packages/chatgpt-codex/lib/proxy.ni
 
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-22 — instance-routed runtimes publish claimed keys
-> and provider-scoped allowlist rules; Claude and Codex offer enabled providers
-> in their model pickers.
+> **Last verified:** 2026-10-22 — instances own named upstream credentials and
+> client keys; harnesses select `instance` + `clientKey`. Claude offers routed
+> API-key models in its picker; Codex discovers CPA models without profiles.
+> Both consume the shared redact client-key helper.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -26,35 +27,37 @@ credential proxy.
   standard decomposition warning. Claude and Codex declare support; the other
   runtimes warn rather than dropping a selection silently.
 - `mkBackendTransform.nix`, for a record whose `surfaceSupport` declares
-  `proxy`, declares `ai.<runtime>.proxy` (the root's selection options plus
-  `allow` and `providers`) and `ai.<runtime>.normalized.proxy`. The callbacks
-  get it as `normalized.proxy` and `resolvedProxy`. Inside the runtime's enable
-  gate it publishes the runtime's client and key claim.
+  `proxy`, declares `ai.<runtime>.proxy` with the root's selection options and
+  `ai.<runtime>.normalized.proxy`. The callbacks get it as `normalized.proxy`
+  and `resolvedProxy`. Harness selection publishes no keys, rules or claims;
+  these belong to the selected instance's named entries.
 
 ### Selection and the resolved endpoint
 
 A selection is `url` + `key` for a proxy configured by hand, or `instance` +
-`key` for one this flake runs. `instance` names an `ai.cliproxyapi.instances`
-entry (`packages/cliproxyapi/modules/instances.nix`) and resolves through
-`packages/ai-module/lib/instances.nix`'s `select` to `http://127.0.0.1:<port>`;
-`url` and `instance` are mutually exclusive. A selection without a key, a key
-without a selection, or an instance that is missing or disabled fails as an
-assertion at either scope, outside the runtime enable gate; such an instance
-resolves to null. A selection without a key is rejected because the harness
-would send its own login token, if any, to the proxy. The instances are read as
-`config.ai.cliproxyapi.instances or {}`, since an evaluation without the owner
-module (the factory harness) has none.
+`clientKey` for one this flake runs. `instance` names an
+`ai.cliproxyapi.instances` entry (`packages/cliproxyapi/modules/instances.nix`)
+and resolves through `packages/ai-module/lib/instances.nix`'s `select` to
+`http://127.0.0.1:<port>`; `url` and `instance` are mutually exclusive.
+`clientKey` names that instance's `clientKeys` entry. Missing or disabled
+instances, unknown client keys, and incomplete selections fail as assertions at
+either scope, outside the runtime enable gate. An external selection without a
+key is rejected because the harness would send its own login token, if any, to
+the proxy. The instances are read as `config.ai.cliproxyapi.instances or {}`,
+since an evaluation without the owner module (the factory harness) has none.
 
 A per-runtime selection that selects anything (a `url` or an `instance`)
 replaces the root selection WHOLE. Fields never mix across levels: a runtime
-`key` alone leaves the root selection in force and fails its own assertion. The
-resolved value is null or `{key; providers; url;}`. `url` is the origin only:
-each runtime appends its own protocol path, so a path would be doubled.
+`key` or `clientKey` alone leaves the root selection in force and fails its own
+assertion. The resolved value is null or `{key; credentials; url;}`. `url` is
+the origin only: each runtime appends its own protocol path, so a path would be
+doubled.
 
-`key` requires `redact.types.redacted`: `redact.file`, `redact.command` or
-`redact.concat` with a reference. It authenticates access to the proxy's
-upstream subscriptions, so cleartext has no harmless use here. Root and
-per-runtime options use the same type as the normalized endpoint.
+An external `key` or an instance client entry's `key` requires
+`redact.types.redacted`: `redact.file`, `redact.command` or `redact.concat` with
+a reference. It authenticates access to the proxy's upstream subscriptions, so
+cleartext has no harmless use here. Root and per-runtime options use the same
+type as the normalized endpoint.
 
 References remain unresolved during evaluation. A consuming runtime must use
 `redact.assign` when its launcher or credential helper starts and escape the
@@ -64,62 +67,135 @@ JSON, TOML or shell source. The `url` pattern validates only the proxy origin.
 
 ### Runtime keys and the allowlist
 
-A runtime routed through an instance publishes its key and `allow` rules at
-`ai.internal.proxyClients.<runtime>`. The instance adds that key to
-`access.api-keys` and maps `allow` plus one rule per enabled provider to its
-`access.key-allowlist` entry. The launcher presents the same key through
-`normalized.proxy`; CPA fails closed for each listed key (see
-`cliproxyapi-key-allowlist.md`).
+An instance declares `clientKeys.<name> = {key; routes;}`. Each route names an
+upstream `credential`; the instance adds the key to `access.api-keys` and maps
+its routes to its `access.key-allowlist` entry. The launcher presents the same
+key through `normalized.proxy`; CPA fails closed for each listed key (see
+`cliproxyapi-key-allowlist.md`). Runtime `proxy.allow` and `proxy.providers` are
+removed: selecting a client key selects its declared routes.
 
-The instance reads published clients. A runtime must not define the instance:
-that would make a misspelled name look valid, and checking existence from the
-definition would recurse.
-
-`allow` uses CPA's generated credential-rule type. Claude and Codex default to
-their own OAuth provider; another runtime must set `allow` or enable a provider
-when it routes through an instance. `allow` and `providers` apply whichever
-scope selects. Set `allow = []` to drop the own login; a rule can narrow it by
-`ids` or name a hand-written credential block.
+A harness must not define the instance: that would make a misspelled name look
+valid, and checking existence from the definition would recurse. Multiple
+harnesses can select the same named client key. A client key decides upstream
+access; separate local harness state requires `CLAUDE_CONFIG_DIR` or
+`CODEX_HOME`.
 
 ### Providers
 
-`ai.cliproxyapi.instances.<n>.providers.<name>` supplies a key, models and base
-URLs for the `anthropic`, `chat` or `responses` API. The API table in
-`packages/cliproxyapi/lib/providers.nix` lowers each to CPA's credential family;
-the settings list joins provider blocks with hand-written blocks. A runtime
-enables one through `ai.<runtime>.proxy.providers.<name>.enable`; its optional
-`api` defaults to its record's `proxyApi` (Claude `anthropic`, Codex
-`responses`). The generated allowlist rule names the selected block's provider
-and base URL.
+`ai.cliproxyapi.instances.<n>.credentials.<name>` declares exactly one of
+`oauth` or `apiKey`. OAuth declares `vendor` (CPA's provider name, such as
+`claude` or `codex`) and `authFile`, an exact JSON filename in
+`<stateDir>/auth`. Find it with `ls <stateDir>/auth` after CPA login; replace
+the illustrative filenames below with the actual names. Re-login can change the
+filename, so update `authFile` when it does. The generated OAuth rule uses
+`provider = vendor`, `kind = "oauth"`, and `ids = [authFile]`.
+
+An `apiKey` declares `key`, `models` and `apis.<api>.base-url` for the
+`anthropic`, `chat` or `responses` API. The API table in
+`packages/cliproxyapi/lib/providers.nix` lowers each into CPA's credential
+family; the settings list joins these blocks with hand-written blocks. A route
+can select `api`; omitting it selects a credential's sole API, and a multi-API
+credential requires it. OAuth routes omit `api`. Unknown credentials and
+unserved APIs fail evaluation. Generated API-key rules use the selected API's
+provider, `kind = "apikey"`, and exact `base-urls`.
 
 CPA trims base URLs with Go's `strings.TrimSpace`, which Nix cannot reproduce
 for every Unicode space. Provider URLs are printable ASCII, hand-written URLs in
 their family must have printable edges, and blocks in that family cannot share
 the provider's URL. These checks make CPA's exact match agree with Nix's.
-Provider names are plain ASCII words so Go and Nix normalize them alike and
-Codex can use them as profile file names.
+API-key credential names use letters, digits, `.`, `_` and `-`, starting with a
+letter or digit, so Go and Nix normalize their compatibility-provider identities
+alike.
 
-`normalized.proxy.providers` is `[{name; models;}]`: Claude turns it into
-`/model` picker rows and Codex into `-p` profiles (`ai-proxy-runtimes.md`).
+`normalized.proxy.credentials` is `[{name; models;}]` in client route order.
+Claude turns declared API-key models into `/model` picker rows; Codex discovers
+CPA's catalog without per-credential `-p` profiles (`ai-proxy-runtimes.md`).
+Route list order is preserved in generated rules and picker rows; it does not
+define CPA priority or fallback. Overlapping models can be spread across a
+client's credentials by CPA. Model overlap enforcement, per-client routing
+order/fallback and account prefixes are deferred.
 
-Refused at evaluation, inside the enable gate:
+A named client key also listed by hand in `access.api-keys`, or given a
+hand-written `access.key-allowlist` entry, is refused: a second owner could
+widen or contradict its routes. Evaluation compares references, not secret
+values; distinct references resolving to the same key are rejected by CPA at
+startup or leave the old config on reload.
 
-- One key reference on two runtimes: each claims `proxy-client-key` through
-  `ai.<runtime>.claims`. A root instance selection therefore serves one enabled
-  runtime. Evaluation cannot compare secret values; if distinct references
-  resolve to one key, CPA refuses startup or keeps the old config on reload.
-- A runtime key also listed by hand in `access.api-keys`, or given a
-  hand-written `access.key-allowlist` entry: a second owner could widen or
-  contradict its rules. Counting runtime clients first ensures a shared key
-  reports the claim rather than a hand-written-entry error.
+An external `url` selection adds no instance keys or rules. A hand-written key
+of another client stays allowed, but once named client keys set the allowlist,
+that key needs its own hand-written entry.
 
-A `url` selection and a disabled runtime publish nothing. A hand-written key of
-some other client stays allowed, but once any runtime routes through the
-instance the allowlist is set, so that key needs its own hand-written entry.
+```nix
+{inputs, ...}: let
+  redact = inputs.nix-agentic-tools.lib.redact;
+  secret = name: redact.file "/run/user/1000/secrets/${name}";
+  route = credential: {inherit credential;};
+  client = name: routes: {key = secret name; inherit routes;};
+in {
+  ai.cliproxyapi.instances.main = {
+    credentials = {
+      chatgpt-oauth-personal.oauth = {
+        authFile = "codex-personal.json";
+        vendor = "codex";
+      };
+      chatgpt-oauth-work.oauth = {
+        authFile = "codex-work.json";
+        vendor = "codex";
+      };
+      claude-api-personal.apiKey = {
+        apis.anthropic.base-url = "https://api.anthropic.com";
+        key = secret "claude-api-personal";
+        models = ["claude-sonnet-4-6"];
+      };
+      claude-oauth-personal.oauth = {
+        authFile = "claude-personal.json";
+        vendor = "claude";
+      };
+      claude-oauth-work.oauth = {
+        authFile = "claude-work.json";
+        vendor = "claude";
+      };
+      zai-api-personal.apiKey = {
+        apis.anthropic.base-url = "https://api.z.ai/api/anthropic";
+        key = secret "zai-api-personal";
+        models = ["glm-5.3"];
+      };
+    };
+    clientKeys = {
+      claude-personal = client "claude-personal" [
+        (route "claude-oauth-personal")
+        (route "claude-api-personal")
+        (route "zai-api-personal")
+      ];
+      claude-work = client "claude-work" [(route "claude-oauth-work")];
+      codex-personal = client "codex-personal" [
+        (route "chatgpt-oauth-personal")
+        (route "zai-api-personal")
+      ];
+      codex-work = client "codex-work" [(route "chatgpt-oauth-work")];
+    };
+  };
+  ai.claude = {
+    enable = true;
+    proxy = {instance = "main"; clientKey = "claude-personal";};
+  };
+  ai.codex = {
+    enable = true;
+    proxy = {instance = "main"; clientKey = "codex-personal";};
+  };
+}
+```
+
+For devenv, `redact.file "/run/user/<uid>/secrets/<name>"` can read a secret
+sops-nix already decrypted through Home Manager. Substitute your UID and secret
+name. The service launcher resolves upstream keys at start; the shared
+`lib/ai/proxy/key-helper.nix` resolves the selected client key when a harness
+asks. Values remain outside generated store files and evaluation output.
 
 ### Checks
 
-`module-ai-proxy-instance-clients` checks generated blocks, claims, rules and
-refusals on both backends. `module-service-instances-runtime-providers` sends
-Anthropic and Responses requests through the packaged CPA. The other proxy
-checks cover selection, key references and runtime delivery.
+`module-ai-proxy-instance-clients` checks generated blocks, named routes, exact
+OAuth IDs, rules and refusals on both backends.
+`module-service-instances-runtime-providers` sends Anthropic and Responses
+requests through the packaged CPA. The other proxy checks cover selection, key
+references and runtime delivery.

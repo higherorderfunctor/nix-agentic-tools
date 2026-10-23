@@ -7,26 +7,27 @@ applyTo: "packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix,packages/chatgpt
 
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-21 — Claude uses `redact.assign` and the shared
+> **Last verified:** 2026-10-22 — Claude uses `redact.assign` and the shared
 > reader through `apiKeyHelper` for file, command and concat references, and
 > clears inherited API keys, bearer tokens, custom headers and
 > Bedrock/Vertex/Foundry switches in settings, and suppresses the inherited
 > API-key descriptor before Claude starts. Codex uses command-backed provider
-> auth. Enabled instance providers become Claude `/model` picker rows (listed
-> and selectable for a non-Anthropic id in 2.1.306, read from the bundle) and
-> Codex `-p` profiles on Home Manager. Kimchi, Kiro and Copilot omit `proxy`
-> from `surfaceSupport` and warn through the generated warning cases.
+> auth. Named client routes supply Claude `/model` picker rows (listed and
+> selectable for a non-Anthropic id in 2.1.306, read from the bundle); Codex
+> discovers CPA models without per-credential profiles. Both use the shared
+> client-key helper. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport`
+> and warn through the generated warning cases.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
 A settings `env` beats the process env, so the endpoint travels through settings
 files. `render` writes `env.ANTHROPIC_BASE_URL` (the origin; Claude appends
-`/v1/messages`) and one strict `apiKeyHelper`. That helper calls `redact.assign`
-with the selected file, command or concat reference, then prints the resolved
-key with a constant `printf` format. Its shell source carries only reference
-paths and concat's literal parts; the secret stays in the shared reader's stdout
-and the helper's shell variable. Resolution failures abort the helper before it
-returns a key.
+`/v1/messages`) and one strict `apiKeyHelper`. `lib/ai/proxy/key-helper.nix`,
+shared with Codex, calls `redact.assign` with the selected file, command or
+concat reference, then prints the resolved key with a constant `printf` format.
+Its shell source carries only reference paths and concat's literal parts; the
+secret stays in the shared reader's stdout and the helper's shell variable.
+Resolution failures abort the helper before it returns a key.
 
 Both `env.ANTHROPIC_API_KEY` and `env.ANTHROPIC_AUTH_TOKEN` are written blank.
 Settings merge per key across scopes, so an inherited token or a lower-scope key
@@ -46,16 +47,17 @@ explicit `ai.claude.package = null` keeps settings delivery and warns that the
 caller must unset the descriptor when launching an unmanaged Claude.
 
 Any selection also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
-`DISABLE_AUTOUPDATER` at `mkDefault`.
+`DISABLE_AUTOUPDATER` at `mkDefault`, and defaults
+`settings.disableClaudeAiConnectors` to `true` to disable claude.ai connectors.
 
 The endpoint lands in `native.settings`, so the settings.json the backend
 already writes (user on Home Manager, project on devenv). The proxy leaves are
 at ordinary priority, so a consumer's own value for one is a definition
 conflict.
 
-Each model of each enabled provider (`normalized.proxy.providers`) becomes one
-`modelPicker.options` row,
-`{model; description = "<provider> through CLIProxyAPI";}`, labelled with its
+Each declared API-key model of each routed upstream credential
+(`normalized.proxy.credentials`) becomes one `modelPicker.options` row,
+`{model; description = "<credential> through CLIProxyAPI";}`, labelled with its
 id. `replaceBuiltInOptions` stays unset: Claude Code 2.1.306's picker builder
 returns the built-in lineup plus each new row unless that flag is `=== true`,
 and its schema says unset adds the rows after the built-ins. The same schema
@@ -63,8 +65,8 @@ says `modelPicker` is honored only from managed, `--settings`/SDK and user
 settings, never a project checkout. So Home Manager writes the rows to user
 settings, where a consumer's own rows concatenate, and devenv's launcher adds
 `--settings <store file>` holding only `modelPicker`. Since the highest scope
-that defines `modelPicker` wins outright, that devenv session shows the provider
-rows instead of any user picker rows.
+that defines `modelPicker` wins outright, that devenv session shows the
+credential rows instead of any user picker rows.
 
 A row for a non-Anthropic id such as `glm-5.3` is listed and selectable in
 2.1.306 (read from the bundle; the live TUI render was not observed). The row
@@ -94,22 +96,26 @@ environment does not reach devenv's.
 - **Home Manager** writes `model_provider = "ai-proxy"` and
   `[model_providers.ai-proxy]` into user config.toml. A devenv shell inherits
   the user file with no devenv configuration.
-- **devenv** cannot use project config: Codex strips `model_provider` and
-  `model_providers` from project layers. Its launcher passes
-  `-c model_providers.ai-proxy-devenv={…}` and
+- **devenv** cannot use project config for providers: Codex strips
+  `model_provider` and `model_providers` from project layers. Its launcher
+  passes `-c model_providers.ai-proxy-devenv={…}` and
   `-c model_provider=ai-proxy-devenv`, the highest layer, baked in as
   `--add-flag`s. With `ai.codex.package = null` nothing carries them, so devenv
   warns.
-- **Providers.** Codex already lists the proxy's models: an `auth.command`
-  provider fetches `<base_url>/models?client_version=`, which CPA 8.0.36 answers
-  in Codex's catalog shape (every registered model, not filtered by the key's
-  allowlist), merged into the bundled list. Codex has no per-provider default
-  model, so Home Manager writes `<configDir>/<provider>.config.toml` with
-  `model` (the provider's first) and `model_provider = "ai-proxy"`, and
-  `codex -p <provider>` selects it. Profiles live in CODEX_HOME, which devenv
-  does not own, so devenv writes none and warns. `model_catalog_url` was not
-  set: it would replace the bundled list and empty the picker whenever the proxy
-  is down.
+- **Models.** Codex's `auth.command` provider fetches
+  `<base_url>/models?client_version=`, which CPA answers in Codex's catalog
+  shape (every registered model, unfiltered by client key), merged into the
+  bundled list. Client routes still constrain requests. No per-credential
+  profiles are written. `model_catalog_url` stays unset: it would replace the
+  bundled list and empty the picker whenever CPA is down.
+- **Availability tooltip.** Any proxy selection defaults
+  `tui.model_availability_nux."gpt-6.1-sol" = 4` on both backends. Codex
+  0.163.0's pinned source (`83086188`, `tui/src/app/startup_prompts.rs`)
+  suppresses the startup availability tooltip once that model's shown count
+  reaches four. Its bundled catalog announces only `gpt-6.1-sol`; the extracted
+  catalog omits `availability_nux`, so this is a static default for that pin,
+  not a claim about CPA's catalog. Consumers can override the count; other
+  tooltips remain enabled.
 - **A separate id on devenv is load-bearing.** Codex deep-merges layers per key,
   so session flags reusing `ai-proxy` could inherit incompatible user auth
   fields, such as `experimental_bearer_token`, beside the proxy's `auth`.

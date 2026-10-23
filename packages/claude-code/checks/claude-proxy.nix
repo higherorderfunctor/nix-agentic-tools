@@ -45,7 +45,8 @@
   quiet = settings:
     settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
     == "1"
-    && settings.env.DISABLE_AUTOUPDATER == "1";
+    && settings.env.DISABLE_AUTOUPDATER == "1"
+    && settings.disableClaudeAiConnectors;
 in {
   checks = lib.mergeAttrsList [
     # Every reference uses the reader through apiKeyHelper; neither inherited
@@ -65,7 +66,10 @@ in {
     # ignores ai.proxy.
     (perBackend "precedence" (eval: let
       overridden = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-proxy-key")) {
-        ai.claude.native.settings.env.DISABLE_AUTOUPDATER = "0";
+        ai.claude.native.settings = {
+          disableClaudeAiConnectors = false;
+          env.DISABLE_AUTOUPDATER = "0";
+        };
       })));
       conflicting = eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-proxy-key")) {
         ai.claude.native.settings.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:9999";
@@ -76,12 +80,14 @@ in {
     in
       overridden.env.DISABLE_AUTOUPDATER
       == "0"
+      && !overridden.disableClaudeAiConnectors
       && !(builtins.tryEval (builtins.deepSeq (claudeSettings conflicting) true)).success
       && installed unselected == unselected.config.ai.claude.package
       && (withoutPackage.config.home.packages or withoutPackage.config.packages) == []
       && builtins.any (lib.hasInfix "only the managed launcher suppresses") withoutPackage.config.warnings
       && !((claudeSettings unselected).env or {} ? ANTHROPIC_BASE_URL)
       && !((claudeSettings unselected).env or {} ? DISABLE_AUTOUPDATER)
+      && !((claudeSettings unselected) ? disableClaudeAiConnectors)
       && !(builtins.any (lib.hasInfix "does not deliver it to claude") selected.config.warnings)))
 
     # `ai.claude.proxy` replaces the root selection whole.

@@ -260,7 +260,8 @@ install check needs a version that a local path lacks.
 > loading rejects duplicate client keys and startup exits 1 on refusal. Hot
 > reload can briefly serve a retired config credential under newly widened
 > rules, so rotation that also widens access requires a restart or an `ids`
-> rule.
+> rule. Named instance client routes derive exact OAuth IDs or API base-URL
+> rules.
 
 ## Why selection lives in CPA
 
@@ -277,18 +278,25 @@ CPA's access middleware records the authenticated key for headers, `?key=`, and
 Missing or unknown keys select nothing while the allowlist is set; an absent or
 empty allowlist leaves native selection unchanged. A configured key whose
 eligible credentials are unavailable gets `auth_not_found`. Model listings still
-expose all models.
+expose all models. With no upstream credential serving a requested model, CPA
+returns `400 unknown provider for model <name>`. Log in with
+`cliproxyapi -config <file with auth-dir> -claude-login -no-browser` (or
+`-codex-login`), or through Manager Plus; login files are picked up without a
+restart.
 
 An entry identifies one client key and grants a list of credential rules. The
-client key is a redact reference shared with `access.api-keys[]`. An
-instance-routed runtime derives both entries from `ai.<runtime>.proxy.allow` and
-enabled providers (see `ai-proxy.md`); write entries by hand only for other
-clients. A rule requires `provider` and `kind` (`oauth` or `apikey`); `ids` and
-`base-urls` narrow it further. Generated compatibility-provider rules follow
-CPA's name normalization in `internal/util/provider.go`. An OAuth credential's
-ID is its auth-file path. A config API key's ID hashes its secret, so use
-provider and `base-urls` to address a group through rotation. The settings types
-and module refinements are in `cliproxyapi-settings.md`.
+client key is a redact reference shared with `access.api-keys[]`. An Instance
+owns named client keys and upstream credentials (`ai-proxy.md`); each named
+route generates one rule, and Harness selection adds no rules. Write settings
+entries by hand only for other clients. A rule requires `provider` and `kind`
+(`oauth` or `apikey`); `ids` and `base-urls` narrow it further. Generated
+compatibility-provider rules follow CPA's name normalization in
+`internal/util/provider.go`. An OAuth credential's ID is its auth-file path
+relative to `<stateDir>/auth`, found by listing that directory after CPA login.
+A re-login can change the filename; update `credentials.<name>.oauth.authFile`
+when it does. A config API key's ID hashes its secret, so use provider and
+`base-urls` to address a group through rotation. The settings types and module
+refinements are in `cliproxyapi-settings.md`.
 
 The `apikey` kind matches only credentials synthesized from config. A
 store-loaded login can temporarily classify as `apikey` from its file or a Meta
@@ -365,15 +373,16 @@ change, then run the module assertions and Go check in CI.
 
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-21 — 926 config nodes, including the patched
+> **Last verified:** 2026-10-22 — 926 config nodes, including the patched
 > `access.key-allowlist`, give the settings type through
 > `lib/extracted/options.nix`, with eight refinements and one module assertion
 > on the allowlist; the clean render passes native v8 validation and loads
 > through CPA 8.0.38's `LoadConfig` in `cliproxyapi-settings`;
 > `ai.cliproxyapi.instances` renders it at start, defaults its listener to
 > loopback, turns off the unprompted fetches the pinned CPA has a switch for,
-> types `server.tls.key` as a secret file, and derives each routed runtime's
-> `access.api-keys` and `access.key-allowlist` entries.
+> types `server.tls.key` as a secret file, and derives named client keys'
+> `access.api-keys` and `access.key-allowlist` entries from named upstream
+> routes.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -396,9 +405,11 @@ execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
 reach only that copy and are lost at restart. `ai.proxy.instance` points the
 harnesses at an instance by name.
 
-An enabled instance-routed runtime adds its key and allowlist entry. The `allow`
-option uses `keyAllowlistCredentialsType`, generated from CPA's credential-rule
-settings.
+`credentials` and `clientKeys` declare upstream credentials and client access
+once on the Instance. Harnesses select
+`proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
+four-client example, OAuth filename selection and devenv secret references are
+in `dev/fragments/ai-proxy/ai-proxy.md`.
 
 ## Unprompted network calls
 

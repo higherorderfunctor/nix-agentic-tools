@@ -169,43 +169,10 @@
     then
       proxyLib.resolve {
         instances = config.ai.cliproxyapi.instances or {};
-        providers = proxyProviders.resolved;
         root = config.ai.proxy;
         runtime = poolCfg.proxy;
       }
     else null;
-
-  # The runtime's enabled providers against its instance; `proxyApi` on the
-  # record is the API it speaks.
-  proxyProviders = proxyLib.providersFor {
-    api = appRecord.proxyApi or null;
-    instances = config.ai.cliproxyapi.instances or {};
-    option = poolOptionName "proxy";
-    inherit (poolCfg.proxy) providers;
-    selection = proxyLib.selectionFor config.ai.proxy poolCfg.proxy;
-  };
-
-  # What this runtime publishes to its instance, when it is enabled.
-  proxyClient =
-    if supportsPool "proxy"
-    then
-      proxyLib.client {
-        option = poolOptionName "proxy";
-        providers = proxyProviders.resolved;
-        root = config.ai.proxy;
-        runtime = poolCfg.proxy;
-      }
-    else null;
-  # The instance lists the key and its allowlist entry, and the claim keeps
-  # the key this runtime's own. Gated like the files: a disabled runtime
-  # sends no requests, so its key opens nothing. A mkIf, not optionalAttrs:
-  # the client reads config.
-  proxyClientConfig = lib.mkIf (proxyClient != null) {
-    ai = {
-      ${appRecord.name}.claims.proxy-client-key = [(proxyLib.keyClaim proxyClient.key)];
-      internal.proxyClients.${appRecord.name} = proxyClient;
-    };
-  };
 
   # The jail folds field by field (`jailLib.resolve`). Null unless the result
   # enables it, or when the runtime does not consume the pool.
@@ -498,11 +465,7 @@
     // lib.optionalAttrs (supportsPool "proxy") {
       proxy = lib.mkOption {
         type = lib.types.submodule {
-          options = proxyLib.runtimeOptions {
-            api = appRecord.proxyApi or null;
-            default = appRecord.proxyAllow or null;
-            inherit (appRecord) name;
-          };
+          options = proxyLib.runtimeOptions;
         };
         default = {};
         description = ''
@@ -866,9 +829,6 @@ in {
     (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
       assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
     })
-    (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
-      assertions = lib.mkIf cfg.enable (proxyLib.clientAssertions proxyClient proxyProviders);
-    })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let
         shared = builtins.attrNames (builtins.intersectAttrs rawAgents cfg.native.agents);
@@ -904,7 +864,6 @@ in {
     (lib.mkIf cfg.enable (lib.mkMerge [
       packageInstallConfig
       customConfig
-      proxyClientConfig
       sharedAgentsMdConfig
       {ai.${appRecord.name}.files = generatedFiles.layer1 generatedArgs;}
     ]))

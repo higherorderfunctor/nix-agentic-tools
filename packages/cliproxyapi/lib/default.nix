@@ -59,12 +59,8 @@
     nodes = (import ../extract/rules.nix {inherit lib;}).config.entries;
     tool = "CLIProxyAPI";
   };
-  subOptions = type: type.getSubOptions [];
 in {
   cliproxyapi = {
-    # `access.key-allowlist[].credentials`'s own type, so a rule written
-    # elsewhere (`ai.<runtime>.proxy.allow`) is checked where it is written.
-    keyAllowlistCredentialsType = (subOptions (subOptions (subOptions generated.type).access.type).key-allowlist.type).credentials.type;
     # Named upstream API-key providers (./providers.nix).
     providers = import ./providers.nix {inherit lib;};
     inherit refinements;

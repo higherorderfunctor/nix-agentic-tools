@@ -6,12 +6,7 @@
 # CLIProxyAPI fetches its model catalogs and its management panel from the
 # network unprompted; both default off here (see docs/cliproxyapi-settings.md).
 #
-# Each runtime routed through an instance (`ai.<runtime>.proxy.instance`)
-# publishes its key and credential rules (lib/ai/proxy `client`); the instance
-# lists the key in `access.api-keys` and gives it its `access.key-allowlist`
-# entry, so the module, not the consumer, owns those runtime keys.
-#
-# Named providers lower through ../lib/providers.nix.
+# Named upstream credentials and client keys belong to the Instance.
 backend: {
   config,
   lib,
@@ -19,11 +14,9 @@ backend: {
 }: let
   inherit (import ../lib/default.nix {inherit lib;}) cliproxyapi;
   providersLib = cliproxyapi.providers;
-  proxyLib = import ../../../lib/ai/proxy {inherit lib;};
-  # A runtime key also written by hand: a second owner of the key, or of its
-  # allowlist entry, which would widen or contradict the runtime's rules.
+  # A named client key also written by hand could widen its allowlist rules.
   handWritten = name: instance: let
-    clients = proxyLib.clientsOf config name;
+    clients = lib.mapAttrsToList (clientName: client: client // {option = "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}";}) instance.clientKeys;
     access = instance.settings.access or null;
     listed = field: lib.filter (value: value != null) (lib.defaultTo [] (access.${field} or null));
     keys = listed "api-keys";
@@ -35,7 +28,7 @@ backend: {
       lib.optional (extra keys client)
       "${path}.api-keys lists ${client.option}.key by hand; ${client.option} adds it to this instance. Remove the hand-written entry."
       ++ lib.optional (extra entries client)
-      "${path}.key-allowlist has a hand-written entry for ${client.option}.key, whose entry ${client.option}.allow and .providers set. Remove the hand-written entry.")
+      "${path}.key-allowlist has a hand-written entry for ${client.option}.key, whose routes ${client.option}.routes sets. Remove the hand-written entry.")
     clients;
   # Go trims every Unicode space before comparing URLs. Printable edges make
   # that trim a no-op for hand-written blocks sharing a provider's family.
@@ -44,7 +37,7 @@ backend: {
   baseUrlOf = block: lib.defaultTo "" (block.base-url or null);
   sharedBaseUrls = name: instance: let
     served = definition: builtins.attrNames (providersLib.served definition);
-    families = lib.unique (lib.concatMap (definition: map (api: providersLib.apis.${api}.family) (served definition)) (builtins.attrValues instance.providers));
+    families = lib.unique (lib.concatMap (definition: map (api: providersLib.apis.${api}.family) (served definition)) (builtins.attrValues (providersLib.apiKeys instance)));
     blocksOf = family: lib.defaultTo [] (instance.settings.api-keys.${family} or null);
   in
     lib.concatMap (family:
@@ -57,13 +50,12 @@ backend: {
         url = definition.apis.${api}.base-url;
       in
         lib.optional (lib.count (block: baseUrlOf block == url) (blocksOf family) > 1)
-        "ai.cliproxyapi.instances.${name}.providers.${provider}.apis.${api}.base-url `${url}` is also the base URL of another settings.api-keys.${family} block, which the provider's allowlist rule would reach too. Give each block its own base URL.")
+        "ai.cliproxyapi.instances.${name}.credentials.${provider}.apiKey.apis.${api}.base-url `${url}` is also the base URL of another settings.api-keys.${family} block, which the provider's allowlist rule would reach too. Give each block its own base URL.")
       (served definition))
-    instance.providers)
-    # The name becomes a group name, a credential provider and a runtime's
-    # file name (Codex's `<name>.config.toml`), so it stays one plain word.
-    ++ map (provider: "ai.cliproxyapi.instances.${name}.providers.${provider}: a provider name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
-    (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames instance.providers));
+    (providersLib.apiKeys instance))
+    # API-key names become CPA compatibility provider identities.
+    ++ map (provider: "ai.cliproxyapi.instances.${name}.credentials.${provider}: an API-key credential name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
+    (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames (providersLib.apiKeys instance)));
 in {
   imports = [
     ((import ../../ai-module/lib/instances.nix {inherit lib;}).module {
@@ -74,24 +66,17 @@ in {
         + lib.optionalString (!instance.fetchModelCatalogs) " --local-model";
       inherit backend;
       defaultPort = 8317;
-      derived = {
-        config,
-        instance,
-        name,
-      }: {
-        api-keys = lib.mkIf (instance.providers != {}) (providersLib.lower instance.providers);
-        access = let
-          clients = proxyLib.clientsOf config name;
-        in
-          lib.mkIf (clients != []) {
-            api-keys = map (client: client.key) clients;
-            key-allowlist =
-              map (client: {
-                api-key = client.key;
-                credentials = (lib.defaultTo [] client.allow) ++ map (provider: provider.rule) client.providers;
-              })
-              clients;
-          };
+      derived = {instance, ...}: {
+        api-keys = lib.mkIf ((providersLib.apiKeys instance) != {}) (providersLib.lower (providersLib.apiKeys instance));
+        access = lib.mkIf (instance.clientKeys != {}) {
+          api-keys = map (client: client.key) (builtins.attrValues instance.clientKeys);
+          key-allowlist =
+            lib.mapAttrsToList (clientName: client: {
+              api-key = client.key;
+              credentials = lib.concatMap (choice: lib.toList ((providersLib.route instance "clientKeys.${clientName}.routes" choice).rule or [])) client.routes;
+            })
+            instance.clientKeys;
+        };
         # Without this the daemon downloads its control panel from GitHub at
         # start and every 3 hours after.
         management.disable-auto-update-panel = lib.mkDefault true;
@@ -102,26 +87,28 @@ in {
         };
       };
       directories = instance: ["${instance.stateDir}/auth"];
-      extraOptions.fetchModelCatalogs = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Whether the daemon fetches its model catalogs from
-          raw.githubusercontent.com and models.router-for.me at start and every
-          3 hours. Off, it runs with `--local-model` and serves the catalogs
-          embedded in the package; a `settings.models.*` source still takes
-          precedence.
-        '';
-      };
-      extraOptions.providers = lib.mkOption {
-        type = lib.types.attrsOf providersLib.providerType;
-        default = {};
-        description = ''
-          Named upstream key, models and API base URLs. Each served API adds a
-          `settings.api-keys` block. A runtime enables a provider through
-          `ai.<runtime>.proxy.providers.<name>` and gets a rule restricted to
-          its block's base URL.
-        '';
+      extraOptions = {
+        clientKeys = lib.mkOption {
+          type = lib.types.attrsOf providersLib.clientKeyType;
+          default = {};
+          description = "Named client keys, each with a redact key and ordered routes to named upstream credentials.";
+        };
+        credentials = lib.mkOption {
+          type = lib.types.attrsOf providersLib.credentialType;
+          default = {};
+          description = "Declare each upstream credential once by name, as OAuth or API key.";
+        };
+        fetchModelCatalogs = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Whether the daemon fetches its model catalogs from
+            raw.githubusercontent.com and models.router-for.me at start and every
+            3 hours. Off, it runs with `--local-model` and serves the catalogs
+            embedded in the package; a `settings.models.*` source still takes
+            precedence.
+          '';
+        };
       };
       owner = "cliproxyapi";
       packagePath = "generic.cliproxyapi";
@@ -155,10 +142,6 @@ in {
       rules = lib.concatMap credentialsOf entries;
       emptied = field: lib.filter (rule: rule.${field} == []) rules;
       unmatchable = entry: lib.filter (rule: rule.kind == "oauth" && lib.defaultTo [] rule."base-urls" != []) (credentialsOf entry);
-      clients = proxyLib.clientsOf config name;
-      # A runtime's entry holds the rules of its `allow`, so a refusal names
-      # that option rather than the instance setting the user never wrote.
-      ownerOf = entry: lib.findFirst (client: client.key == entry.api-key) null clients;
       refusal = where: "${where} has a rule with kind = \"oauth\" and base-urls, which can never match: base-urls compare an API-key credential's base URL and never match an OAuth login. Use kind = \"apikey\" or drop base-urls.";
       offending = lib.filter (entry: unmatchable entry != []) entries;
     in
@@ -172,7 +155,7 @@ in {
             message = "ai.cliproxyapi.instances.${name}: settings.access.key-allowlist has a null entry, which the renderer drops: a list of only nulls renders as [] and switches enforcement off for every key. Remove the null entry, or set the list to [] to switch the allowlist off.";
           }
           {
-            assertion = lib.filter (entry: ownerOf entry == null) offending == [];
+            assertion = offending == [];
             message = "ai.cliproxyapi.instances.${name}: ${refusal "settings.access.key-allowlist"}";
           }
         ]
@@ -180,11 +163,20 @@ in {
           assertion = emptied field == [];
           message = "ai.cliproxyapi.instances.${name}: settings.access.key-allowlist[].credentials[].${field} merged to an empty list, which CPA reads as no restriction on that dimension and admits every credential of the provider and kind. Leave the option unset to leave it unrestricted, or list at least one value.";
         }) ["base-urls" "ids"]
-        ++ map (client: {
-          assertion = lib.all (entry: (ownerOf entry).option or null != client.option) offending;
-          message = refusal "${client.option}.allow";
+        ++ lib.mapAttrsToList (credentialName: credential: {
+          assertion = (credential.oauth != null) != (credential.apiKey != null);
+          message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}: declare exactly one of oauth or apiKey.";
         })
-        clients))
+        instance.credentials
+        ++ lib.concatLists (lib.mapAttrsToList (clientName: client:
+          map (choice: let
+            result = providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" choice;
+          in {
+            assertion = !(result ? problem);
+            message = result.problem or "";
+          })
+          client.routes)
+        instance.clientKeys)))
     config.ai.cliproxyapi.instances)
     ++ map (message: {
       assertion = false;

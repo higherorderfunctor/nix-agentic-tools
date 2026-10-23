@@ -426,15 +426,15 @@ directories.
 Exclusive resources share `ai.claims.<group>.<key>`, a hidden registry of owner
 lists validated once in `modules/common.nix`. Runtime helpers register
 non-shared paths in `path`, service names in `service` and decimal ports in
-`port`. Other resources use `ai.<owner>.claims.<group> = [keys]`; `ai.proxy`
-claims each instance-routed runtime's client key in `proxy-client-key`. Port
-owners are `<owner>:<service>.ports.<name>`. A list with more than one owner
-fails with `ai.claims.<group>.<key>: claimed by <a> and <b>`, sorted by owner.
-Adding a resource group needs no new validation code; owners register resources
-and never assert uniqueness. The internal shared owner accepts scoped service
-claims for proxies (`proxy:root`, `proxy:<runtime>`), so identical proxy
-declarations fail the shared ownership assertion at the native assertion
-boundary.
+`port`. Other resources use `ai.<owner>.claims.<group> = [keys]`. CPA client
+keys belong to named instance entries, so Harness selection adds no runtime
+client-key claim. Port owners are `<owner>:<service>.ports.<name>`. A list with
+more than one owner fails with
+`ai.claims.<group>.<key>: claimed by <a> and <b>`, sorted by owner. Adding a
+resource group needs no new validation code; owners register resources and never
+assert uniqueness. The internal shared owner accepts scoped service claims for
+proxies (`proxy:root`, `proxy:<runtime>`), so identical proxy declarations fail
+the shared ownership assertion at the native assertion boundary.
 
 ## Backend graph and execution
 

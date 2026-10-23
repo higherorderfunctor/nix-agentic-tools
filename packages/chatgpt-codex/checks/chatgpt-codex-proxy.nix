@@ -53,8 +53,36 @@
 in {
   checks =
     {
+      module-codex-proxy-availability-nux = mkTest "codex-proxy-availability-nux" (
+        lib.all (
+          eval: let
+            evaluate = settings: proxy:
+              eval {
+                ai = {
+                  codex = {
+                    enable = true;
+                    native.settings = settings;
+                  };
+                  inherit proxy;
+                };
+              };
+            proxy = {
+              url = hmOrigin;
+              key = keys.file;
+            };
+            selected = evaluate {} proxy;
+            unselected = evaluate {} {};
+            overridden = evaluate {tui.model_availability_nux."gpt-6.1-sol" = 0;} proxy;
+          in
+            selected.config.ai.codex.native.settings.tui.model_availability_nux."gpt-6.1-sol"
+            == 4
+            && !(unselected.config.ai.codex.native.settings.tui or {} ? model_availability_nux)
+            && overridden.config.ai.codex.native.settings.tui.model_availability_nux."gpt-6.1-sol" == 0
+        ) [evalDevenv evalHm]
+      );
+
       # Project config cannot carry providers. The launcher supplies them as
-      # session flags without writing a project file.
+      # session flags; only the availability tooltip default reaches project config.
       module-codex-proxy-devenv-project-config = mkTest "codex-proxy-devenv-project-config" (
         let
           url = devenvWith {
@@ -76,7 +104,8 @@ in {
           == []
           && builtins.any (lib.hasPrefix "ai.codex.proxy is selected but ai.codex.package is null") unmanaged.config.warnings
           && !(builtins.any (lib.hasPrefix "ai.codex.proxy is selected") url.config.warnings)
-          && !(url.config.ai.codex.files ? ".codex/config.toml")
+          && !(url.config.ai.codex.files.".codex/config.toml".content.value ? model_provider)
+          && !(url.config.ai.codex.files.".codex/config.toml".content.value ? model_providers)
           && !(none.config.ai.codex.files ? ".codex/config.toml")
           && !(builtins.any (unsupportedWarning "devenv") url.config.warnings)
       );
@@ -117,7 +146,7 @@ in {
           && lib.all (key: let
             auth = (hmSettings (hmEndpoint key)).model_providers.ai-proxy.auth;
           in
-            builtins.attrNames auth == ["command"] && lib.hasSuffix "/bin/codex-proxy-key" auth.command) (builtins.attrValues keys)
+            builtins.attrNames auth == ["command"] && lib.hasSuffix "/bin/cpa-client-key" auth.command) (builtins.attrValues keys)
           && (hmSettings overridden).model_providers.ai-proxy.base_url == "${devenvOrigin}/v1"
           && (hmSettings overridden).model_providers.ai-proxy.auth == (hmSettings (hmEndpoint keys.command)).model_providers.ai-proxy.auth
           && !(builtins.any (unsupportedWarning "hm") file.config.warnings)

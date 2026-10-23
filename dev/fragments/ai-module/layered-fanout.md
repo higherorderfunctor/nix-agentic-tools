@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-21 — non-AI owners use the same layer-1 helper;
+> **Last verified:** 2026-10-22 — non-AI owners use the same layer-1 helper;
 > delivery facts derive delivered and absent cells, keyed withdrawal and
 > normalized gaps from option and runtime declarations; `poolOptions` covers
 > `agentsDir` and `environmentVariables` only; `optionNamespaces` places
@@ -12,10 +12,10 @@
 > hooks, settings and steering legacy ledgers declared outside its enable gate;
 > Kimchi stages every surface, with every legacy ledger ungated; Codex stages
 > every surface and declares both copy ledgers while disabled; hand rows are
-> confined to the policy-only permissions surface; `proxyApi` needs the proxy
-> pool; Claude's `native.unpinLaunchEffort` is declared for Home Manager only,
-> so delivery facts carry no supplement rows; backend lowering and validation
-> live only in ai-module.
+> confined to the policy-only permissions surface; named CPA routing replaces
+> runtime proxy defaults; Claude's `native.unpinLaunchEffort` is declared for
+> Home Manager only, so delivery facts carry no supplement rows; backend
+> lowering and validation live only in ai-module.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -329,11 +329,10 @@ cells without policy edits.
   `agentsDir` without `agents`. It also rejects `agentNativeType` without
   `agentTransformer` or the reverse, either one, `agentsDirSuffixes` or
   `agentsDescriptionSuffix` without the agents pool, an empty or non-string
-  `agentsDirSuffixes`, `proxyAllow` (the default of `ai.<name>.proxy.allow`)
-  without the proxy pool, and `proxyApi` (the default of each
-  `ai.<name>.proxy.providers.<p>.api`) without the proxy pool or naming no
-  provider API. The native pair is tested for presence, so an explicit null
-  counts as set.
+  `agentsDirSuffixes`. The native pair is tested for presence, so an explicit
+  null counts as set. Proxy selection uses `instance` + `clientKey` or external
+  `url` + `key`; runtime records no longer supply `proxyAllow` or `proxyApi`
+  defaults (see `dev/fragments/ai-proxy/ai-proxy.md`).
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
