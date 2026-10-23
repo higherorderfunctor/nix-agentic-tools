@@ -176,4 +176,38 @@ module RawBridge {
     or result = node.(Generated::Nix::LetExpression).getChild().getABinding()
   }
 
+  /** Authenticated structural edges used by meaning layers. */
+  Node parent(Node node) { result = node.(Generated::Nix::AstNode).getParent() }
+  predicate variable(Node node) {
+    node = any(Generated::Nix::VariableExpression v).getName()
+  }
+  predicate precedes(Node left, Node right) {
+    left.getLocation().getStartLine() < right.getLocation().getStartLine()
+    or left.getLocation().getStartLine() = right.getLocation().getStartLine() and
+      left.getLocation().getStartColumn() < right.getLocation().getStartColumn()
+  }
+  predicate setExpression(Node node) {
+    node.getKind() in ["AttrsetExpression", "RecAttrsetExpression"]
+  }
+  private Generated::Nix::BindingSet bindingSet(Node node) {
+    result = node.(Generated::Nix::AttrsetExpression).getChild()
+    or result = node.(Generated::Nix::LetExpression).getChild()
+    or result = node.(Generated::Nix::RecAttrsetExpression).getChild()
+  }
+  Node container(Node node) { node = bindingSet(result).getABinding() }
+  Node pathToken(Node node, int index) {
+    result = node.(Generated::Nix::Binding).getAttrpath().getAttr(index)
+  }
+  string binderName(Node binder) { result = literal(binder) }
+  Node unparenthesized(Node node) {
+    not node instanceof Generated::Nix::ParenthesizedExpression and result = node
+    or result = unparenthesized(node.(Generated::Nix::ParenthesizedExpression).getExpression())
+  }
+  Node bindingValue(Node node) {
+    result = unparenthesized(node.(Generated::Nix::Binding).getExpression())
+  }
+  predicate functionBinder(Node frame, Node binder) {
+    binder = frame.(Generated::Nix::FunctionExpression).getUniversal()
+    or binder = frame.(Generated::Nix::FunctionExpression).getFormals().getAFormal().getName()
+  }
 }
