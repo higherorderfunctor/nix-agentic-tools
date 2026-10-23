@@ -1,8 +1,9 @@
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-22 — environment facts include destructuring and
+> **Last verified:** 2026-10-23 — environment facts include destructuring and
 > named process imports; std-env CI-provider tuple keys resolve per row with
-> their `||` fallback.
+> their `||` fallback. Declared key helpers resolve literal call arguments, and
+> bundled bindings follow assignment initializers.
 
 `extracted.json`'s `environment` surface is one fact the CodeQL database
 produces. `extract/environment.nix` runs the two-query pack
@@ -27,17 +28,18 @@ through known callees at the corresponding argument index, including aliases and
 multiple helper calls; unrelated object arguments are not environment sources. A
 computed name is evaluated by a QL copy of the extractor's `stringConstant`:
 literals, templates, `.toUpperCase()`, identifiers followed through their
-declarators and ES imports (minified `export{a as K}` included), and a by-name
-fallback for a constant with no reachable initializer, two strata deep, that
-fails when same-named constants disagree. pi's `APP_NAME` takes
-`kimchi/package.json`'s `piConfig.name`, as at runtime. `+` is not folded, a
-`delete` operand is not a read, `+=` and `??=` are. For-of bindings never use
-the global by-name fallback: their names come from dense literal arrays,
-including a destructured tuple column and nested iteration. All table uses must
-belong to the traced definitions and loop domains; escaping or mutated tables,
-sparse arrays, spreads and unresolved elements fail. A `typeof key === "string"`
-conditional permits function alternatives only when they are function literals
-or direct declared helpers returning function literals.
+declarators, assignments to uninitialized bindings, and ES imports (minified
+`export{a as K}` included), and a by-name fallback for a constant with no
+reachable initializer, two strata deep, that fails when same-named constants
+disagree. pi's `APP_NAME` takes `kimchi/package.json`'s `piConfig.name`, as at
+runtime. `+` is not folded, a `delete` operand is not a read, `+=` and `??=`
+are. For-of bindings never use the global by-name fallback: their names come
+from dense literal arrays, including a destructured tuple column and nested
+iteration. All table uses must belong to the traced definitions and loop
+domains; escaping or mutated tables, sparse arrays, spreads and unresolved
+elements fail. A `typeof key === "string"` conditional permits function
+alternatives only when they are function literals or direct declared helpers
+returning function literals.
 
 `LaunchOverwrites.ql` names the variables `entry.ts` fixes on every launch, by
 the rules `launchOverwrites` applied: top-level statements in order, entering
@@ -73,9 +75,20 @@ comma expression around the literal table contributes its final operand. Other
 literal-index uses of a tuple, including its returned metadata, do not make the
 table escape.
 
-Measured on the pinned Kimchi 1.19.1 database after this resolution, 63 computed
-environment-read sites still have no resolved name and emit no refusal. These
-include dynamic helper parameters and SDK constants initialized by assignments.
+Declared helpers whose parameter names the environment key contribute the names
+of literal or constant call arguments at that parameter index. This includes
+`boolEnv` and `nonEmptyEnv` in `src/oauth-config.ts:63-70`, `parseEnvInt` in
+`src/shared/env-int.ts:7`, and pi's `getProviderEnvValue`; the latter no longer
+has a name-based special case. A helper site resolves completely only when all
+known call arguments resolve. `nonEmptyEnv` also receives the dynamic
+region-specific template at `src/oauth-config.ts:85`, so its literal calls
+contribute names while its computed read remains unresolved. Uninitialized
+bundled bindings assigned string literals also resolve, including
+`AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
+`bedrock-converse-stream.js:24`.
+
+Measured on the pinned Kimchi 1.19.1 database, 41 computed environment-read
+sites remain unresolved (down from 63 before helper and assignment resolution).
 This measurement counts sites, including separate reads of a name also resolved
 elsewhere. No general computed-key refusal is added.
 
@@ -111,11 +124,13 @@ helper declarations merged into their case. The reads fixture also checks a
 nested literal table with string/function alternatives and an aliased
 environment passed through two helpers, alongside unrelated objects that must
 add no names; fail-shapes refuses an unresolved iteration key and rest copies
-passed to unknown functions. The positive reads fixture copies std-env's 58-row
-provider table and checks its 58 environment keys. The overwrites fixture checks
-reads through helper forwarding, aliases and rest copies before writes. A new
-shape goes into one of these trees, not into a mutant of the real source: a
-real-tree mutant costs a database build each.
+passed to unknown functions. The positive reads fixture uses two rows from
+std-env's provider table: `["GITHUB_ACTIONS"]` and `["CIRCLE", "CIRCLECI"]`,
+checking two environment keys. It also checks literal and constant helper
+arguments and a binding assigned a string literal before its computed read. The
+overwrites fixture checks reads through helper forwarding, aliases and rest
+copies before writes. A new shape goes into one of these trees, not into a
+mutant of the real source: a real-tree mutant costs a database build each.
 
 ### Running it without Nix
 

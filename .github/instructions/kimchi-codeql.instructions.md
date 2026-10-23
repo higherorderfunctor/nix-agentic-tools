@@ -7,7 +7,7 @@ applyTo: "packages/kimchi/checks/fixtures/codeql-environment/**,packages/kimchi/
 
 ## Kimchi CodeQL database
 
-> **Last verified:** 2026-10-23 — dependency patches use
+> **Last verified:** 2026-10-22 — dependency patches use
 > `git apply --ignore-space-change`; the database carries pi-mcp-adapter's root
 > TypeScript and dist, including its patched project-trust environment read.
 
@@ -58,13 +58,18 @@ kimchi/node_modules/pi-mcp-adapter/{package.json,dist/,<root JS/TS modules>}
   postinstall rewrite: `scripts/patch-pi-ai-oauth.js` replaces pi-ai's
   `dist/utils/oauth-page.js`, and `extract.mjs` does not apply it.
 - **pi's four packages sit under `kimchi/node_modules`**, where Kimchi's imports
-  resolve them. The database holds all four `dist/` trees, patched.
+  resolve them. Measured on 1.17.2: 506 of Kimchi's 508 `@earendil-works/*`
+  import declarations resolve to a pi module in the database. The TypeScript
+  extractor scanned only pi-coding-agent's dist, saw the other three as
+  `index.d.ts` types and read patch `+` lines; the database holds all four
+  `dist/` trees, patched. On 1.17.0 the environment fact is the same either way.
 - **Kimchi's own `node_modules` (its pnpm store) is not in it.** That is every
   third-party dependency except pi-mcp-adapter and what pi's bundle inlines
   (below). The adapter exports root TypeScript modules, so its root JS/TS files
   are carried with its dist. Its docs, examples and skills are not code the
   runtime loads and are not copied.
-- **Source maps are dropped:** the extractor never reads them.
+- **Source maps are dropped:** 13.5 MB on pi 0.85.1 that the extractor never
+  reads.
 - **The extractor skips `node_modules` by default.**
   `LGTM_INDEX_FILTERS=include:kimchi/node_modules` brings pi back in: without it
   the database held none of pi's files. The value is a directory: an include
@@ -74,10 +79,11 @@ kimchi/node_modules/pi-mcp-adapter/{package.json,dist/,<root JS/TS modules>}
 
 `pi-coding-agent/dist/bundle/` is pi's minified standalone CLI, which Kimchi
 never loads. It is carried for the environment reads of pi's bundled third-party
-dependencies (AWS SDK, Google auth, undici, ws) at pi's build-time versions. It
-also holds unpatched copies of patched pi-ai, pi-tui and pi-coding-agent code,
-so a query scopes or labels its `dist/bundle` rows. The extractor skips a file
-it judges minified: without
+dependencies (AWS SDK, Google auth, undici, ws) at pi's build-time versions: 48
+of the 237 variables in the 1.17.2 environment fact are named in its chunks and
+nowhere else in pi, Kimchi or its patches. It also holds unpatched copies of
+patched pi-ai, pi-tui and pi-coding-agent code, so a query scopes or labels its
+`dist/bundle` rows. The extractor skips a file it judges minified: without
 `CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true` it skipped 46 files: 42
 chunks, the three `dist/bundle` entry files (`cli.js`, `index.js`,
 `rpc-entry.js`) and the vendored `marked.min.js`. The flag grows the 2.27.3
@@ -163,11 +169,10 @@ the database reads its npm dist, which is built from that repository.
 
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-23 (commit d5f613ea) — `environment.variables`
-> includes the carried pi-mcp-adapter; the reads fixture verifies its patched
-> project-trust variable is attributed to the pi runtime; literal iteration
-> tables resolve environment names, named reads follow known helper parameters,
-> and launch analysis follows known helpers and rest copies.
+> **Last verified:** 2026-10-23 — environment facts include destructuring and
+> named process imports; std-env CI-provider tuple keys resolve per row with
+> their `||` fallback. Declared key helpers resolve literal call arguments, and
+> bundled bindings follow assignment initializers.
 
 `extracted.json`'s `environment` surface is one fact the CodeQL database
 produces. `extract/environment.nix` runs the two-query pack
@@ -192,17 +197,18 @@ through known callees at the corresponding argument index, including aliases and
 multiple helper calls; unrelated object arguments are not environment sources. A
 computed name is evaluated by a QL copy of the extractor's `stringConstant`:
 literals, templates, `.toUpperCase()`, identifiers followed through their
-declarators and ES imports (minified `export{a as K}` included), and a by-name
-fallback for a constant with no reachable initializer, two strata deep, that
-fails when same-named constants disagree. pi's `APP_NAME` takes
-`kimchi/package.json`'s `piConfig.name`, as at runtime. `+` is not folded, a
-`delete` operand is not a read, `+=` and `??=` are. For-of bindings never use
-the global by-name fallback: their names come from dense literal arrays,
-including a destructured tuple column and nested iteration. All table uses must
-belong to the traced definitions and loop domains; escaping or mutated tables,
-sparse arrays, spreads and unresolved elements fail. A `typeof key === "string"`
-conditional permits function alternatives only when they are function literals
-or direct declared helpers returning function literals.
+declarators, assignments to uninitialized bindings, and ES imports (minified
+`export{a as K}` included), and a by-name fallback for a constant with no
+reachable initializer, two strata deep, that fails when same-named constants
+disagree. pi's `APP_NAME` takes `kimchi/package.json`'s `piConfig.name`, as at
+runtime. `+` is not folded, a `delete` operand is not a read, `+=` and `??=`
+are. For-of bindings never use the global by-name fallback: their names come
+from dense literal arrays, including a destructured tuple column and nested
+iteration. All table uses must belong to the traced definitions and loop
+domains; escaping or mutated tables, sparse arrays, spreads and unresolved
+elements fail. A `typeof key === "string"` conditional permits function
+alternatives only when they are function literals or direct declared helpers
+returning function literals.
 
 `LaunchOverwrites.ql` names the variables `entry.ts` fixes on every launch, by
 the rules `launchOverwrites` applied: top-level statements in order, entering
@@ -220,26 +226,55 @@ which would accept `if (c) { await 0 } else { process.env.X = "1" }`.
 Either query emits `fail` rows instead of guessing; the transform fails on any,
 naming each, and the `extracted` build fails with it.
 
-### Two shapes kept out on purpose
+### Reads beyond the former TypeScript extractor
 
-The extractor at 1.17.2 did not read `const { X } = process.env` or a read
-through `import { env } from "node:process"`. The database finds both: seven
-names, `GIT_*` from `src/extensions/work-attribution/scope.ts`, `HOMEDRIVE` and
-`HOMEPATH`, and `AWS_EXECUTION_ENV` from the bundled AWS SDK. `tsIncompatible`
-in `EnvReads.qll` drops them so the committed fact is unchanged. They are real
-reads; deleting that predicate adds them, and `rules.nix` reconciles unannotated
-non-secret names without a row. That is a data decision, not a bug fix.
+Destructuring `process.env` and a named `env` import from `node:process` count
+as real reads. Kimchi 1.19.1's `src/extensions/work-attribution/scope.ts:35`
+reads `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` through
+an object pattern; the carried pi bundle also reads `HOMEDRIVE`, `HOMEPATH` and
+`AWS_EXECUTION_ENV`. The former `tsIncompatible` filter dropped those names
+solely to match the deleted TypeScript extractor. No compatibility filter
+remains.
 
-The database reads `process["env"]`, `(process.env as T).X`,
-`require("process").env` and aliases of `process` itself. It does not read the
-namespace binding of `import d, * as ns from "node:process"`. It reads pi-ai,
-pi-tui and pi-agent-core whole.
+The bundled std-env CI-provider table indexes a for-of tuple with
+`row[1] || row[0]`. The query resolves literal numeric tuple columns and
+evaluates the fallback separately for each row: `CIRCLECI` is the key for
+`["CIRCLE", "CIRCLECI"]`, while `["GITHUB_ACTIONS"]` uses `GITHUB_ACTIONS`. A
+comma expression around the literal table contributes its final operand. Other
+literal-index uses of a tuple, including its returned metadata, do not make the
+table escape.
+
+Declared helpers whose parameter names the environment key contribute the names
+of literal or constant call arguments at that parameter index. This includes
+`boolEnv` and `nonEmptyEnv` in `src/oauth-config.ts:63-70`, `parseEnvInt` in
+`src/shared/env-int.ts:7`, and pi's `getProviderEnvValue`; the latter no longer
+has a name-based special case. A helper site resolves completely only when all
+known call arguments resolve. `nonEmptyEnv` also receives the dynamic
+region-specific template at `src/oauth-config.ts:85`, so its literal calls
+contribute names while its computed read remains unresolved. Uninitialized
+bundled bindings assigned string literals also resolve, including
+`AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
+`bedrock-converse-stream.js:24`.
+
+Measured on the pinned Kimchi 1.19.1 database, 41 computed environment-read
+sites remain unresolved (down from 63 before helper and assignment resolution).
+This measurement counts sites, including separate reads of a name also resolved
+elsewhere. No general computed-key refusal is added.
+
+The database also recognizes bracket `env`, asserted environments,
+`require("process").env`, and process aliases. Refusals tied only to the former
+extractor's inability to distinguish a shadowed `process` or read nested
+destructuring have been removed. The overwrite analysis still establishes writes
+only through `process.env` spelled out.
 
 ### Annotations
 
 `extract/annotations.json`'s `environment` and `environmentIgnored` are not an
 input of the transform. `rules.nix` applies them downstream, against
-`environment.variables.<name>`, as it always did.
+`environment.variables.<name>`, as it always did. Ordinary new names need no
+annotation. The std-env table's `INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN` matches
+the shared secret classifier, so its required `controls` row records that
+std-env tests its presence for CI-provider detection.
 
 ### The guard
 
@@ -249,20 +284,22 @@ and extracted by `kimchi-codeql-create-database <dir> <tree>`. `reads` holds
 seven read shapes absent from the pinned tree in one Kimchi file: bracket `env`,
 an asserted environment, a process alias, bracket `globalThis.process`, literal
 `require("process")`, a namespace process import, and `+=`; concatenation
-remains unevaluated. The pinned release's byte identity covers its actual read
-shapes, including pi's APP_NAME and bundled imports. The reads fixture also
-holds the adapter's `KIMCHI_MANAGES_MCP_PROJECT_TRUST` read outside the
-@earendil-works scope, attributed to `pi`. `overwrites` holds the launch-order
-mix; `fail-shapes`, `fail-order` and `fail-sources` retain every refusal
-assertion, with helper declarations merged into their case. The reads fixture
-also checks a nested literal table with string/function alternatives and an
-aliased environment passed through two helpers, alongside unrelated objects that
-must add no names; fail-shapes refuses unknown and mixed elements, missing tuple
-columns, mutation, spreads, sparse arrays and rest copies passed to unknown
-functions. The overwrites fixture checks reads through helper forwarding,
-aliases and rest copies before writes. A new shape goes into one of these trees,
-not into a mutant of the real source: a real-tree mutant costs a database build
-each.
+remains unevaluated. The release query covers its actual read shapes, including
+pi's APP_NAME and bundled imports. The reads fixture also holds the adapter's
+`KIMCHI_MANAGES_MCP_PROJECT_TRUST` read outside the @earendil-works scope,
+attributed to `pi`. `overwrites` holds the launch-order mix; `fail-shapes`,
+`fail-order` and `fail-sources` exercise the retained refusal classes, with
+helper declarations merged into their case. The reads fixture also checks a
+nested literal table with string/function alternatives and an aliased
+environment passed through two helpers, alongside unrelated objects that must
+add no names; fail-shapes refuses an unresolved iteration key and rest copies
+passed to unknown functions. The positive reads fixture uses two rows from
+std-env's provider table: `["GITHUB_ACTIONS"]` and `["CIRCLE", "CIRCLECI"]`,
+checking two environment keys. It also checks literal and constant helper
+arguments and a binding assigned a string literal before its computed read. The
+overwrites fixture checks reads through helper forwarding, aliases and rest
+copies before writes. A new shape goes into one of these trees, not into a
+mutant of the real source: a real-tree mutant costs a database build each.
 
 ### Running it without Nix
 

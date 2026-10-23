@@ -59,9 +59,19 @@ VariableDeclarator declaratorOf(VarAccess v) {
   )
 }
 
-/** A variable with no initialized declarator and no parameter declaration: a binding element, an uninitialized declarator or an unresolved import. */
+/** Initializers of a binding, including assignments in bundled module factories. */
+Expr initializerOf(VarAccess v) {
+  result = declaratorOf(v).getInit()
+  or
+  exists(AssignExpr assignment |
+    assignment.getLhs().(VarAccess).getVariable() = v.getVariable() and
+    result = assignment.getRhs().(StringLiteral)
+  )
+}
+
+/** A variable with no initializer or assignment and no parameter declaration: a binding element, an uninitialized declarator or an unresolved import. */
 predicate constantShaped(VarAccess v) {
-  not exists(declaratorOf(v).getInit()) and
+  not exists(initializerOf(v)) and
   not exists(Parameter p | p.getAVariable() = v.getVariable()) and
   not exists(EnhancedForLoop loop | loop.getAnIterationVariable() = v.getVariable())
 }
@@ -83,6 +93,8 @@ module Eval<fallbackSig/2 fallback> {
 
   string identValue(VarAccess v) {
     result = declaratorValue(declaratorOf(v))
+    or
+    not exists(declaratorOf(v).getInit()) and result = constValue(initializerOf(v))
     or
     constantShaped(v) and fallback(v.getName(), result)
   }
@@ -311,16 +323,14 @@ string indexedIterationName(Expr key) {
 predicate evaluated(Expr e) {
   e = any(DataFlow::PropRead r | r = envReadSource().getAPropertyRead()).getPropertyNameExpr()
   or
-  exists(CallExpr c |
-    c.getCallee().(Identifier).getName() = "getProviderEnvValue" and e = c.getArgument(0)
-  )
+  exists(VarAccess key, DataFlow::InvokeNode call | helperKeyArgument(key, call, e))
   or
   exists(Expr p | evaluated(p) |
     e = p.(TemplateLiteral).getAnElement()
     or
     e = p.(MethodCallExpr).getReceiver()
     or
-    e = declaratorOf(p).getInit()
+    e = initializerOf(p)
     or
     constantShaped(p) and
     exists(VariableDeclarator d |
@@ -355,6 +365,16 @@ DataFlow::SourceNode envReadSource() {
 }
 
 
+/** A declared environment reader's key parameter and the corresponding call argument. */
+predicate helperKeyArgument(VarAccess key, DataFlow::InvokeNode call, Expr argument) {
+  exists(DataFlow::PropRead read, FunctionDeclStmt callee, int index, SimpleParameter parameter |
+    read = envReadSource().getAPropertyRead() and key = read.getPropertyNameExpr() and
+    parameter = callee.getParameter(index) and parameter.getAVariable() = key.getVariable() and
+    not parameter.isRestParameter() and callee = call.getACallee() and
+    argument = call.getArgument(index).asExpr()
+  )
+}
+
 /** The name the property read `r` reads: its property name, or its computed key evaluated. */
 string readName(DataFlow::PropRead r) {
   not r.asExpr() = any(DeleteExpr d).getOperand() and
@@ -362,6 +382,14 @@ string readName(DataFlow::PropRead r) {
     result = r.getPropertyName()
     or
     not exists(r.getPropertyName()) and result = constValue(r.getPropertyNameExpr())
+    or
+    exists(VarAccess key, DataFlow::InvokeNode call, Expr argument |
+      key = r.getPropertyNameExpr() and helperKeyArgument(key, call, argument) and
+      forall(DataFlow::InvokeNode other, Expr actual | helperKeyArgument(key, other, actual) |
+        exists(constValue(actual))
+      ) and
+      result = constValue(argument)
+    )
     or
     result = indexedIterationName(r.getPropertyNameExpr())
     or
@@ -374,10 +402,9 @@ string readName(DataFlow::PropRead r) {
 predicate envRead(DataFlow::Node site, string name) {
   exists(DataFlow::PropRead r | r = envReadSource().getAPropertyRead() | site = r and name = readName(r))
   or
-  // pi's provider helper reads the variable its first argument names.
-  exists(CallExpr c | c = site.asExpr() |
-    c.getCallee().(Identifier).getName() = "getProviderEnvValue" and
-    name = constValue(c.getArgument(0))
+  // Literal calls remain named even when other calls leave the helper open.
+  exists(VarAccess key, DataFlow::InvokeNode call, Expr argument |
+    helperKeyArgument(key, call, argument) and site = call and name = constValue(argument)
   )
 }
 

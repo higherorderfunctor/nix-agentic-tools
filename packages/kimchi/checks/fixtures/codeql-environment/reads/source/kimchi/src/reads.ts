@@ -42,3 +42,16 @@ function ciProvider() {
 }
 
 const { GIT_DIR, GIT_COMMON_DIR, GIT_WORK_TREE, GIT_INDEX_FILE } = process.env;
+
+// Declared key helpers: oauth-config and shared/env-int.
+function readKey(name: string) {
+  return process.env[name];
+}
+const helperKey = "HELPER_CONSTANT";
+void readKey("HELPER_LITERAL");
+void readKey(helperKey);
+
+// Bundled module initialization assigns a previously declared binding.
+let assignedKey: string;
+assignedKey = "ASSIGNED_KEY";
+void process.env[assignedKey];

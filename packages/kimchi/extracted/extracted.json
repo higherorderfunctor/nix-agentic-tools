@@ -68,9 +68,18 @@
           "fieldWeights": {
             "optional": true,
             "properties": {
-              "description": { "type": "number", "typeExpression": "number" },
-              "name": { "type": "number", "typeExpression": "number" },
-              "schemaKey": { "type": "number", "typeExpression": "number" }
+              "description": {
+                "type": "number",
+                "typeExpression": "number"
+              },
+              "name": {
+                "type": "number",
+                "typeExpression": "number"
+              },
+              "schemaKey": {
+                "type": "number",
+                "typeExpression": "number"
+              }
             },
             "type": "object",
             "typeExpression": "{ name: number; description: number; schemaKey: number; }"
@@ -199,7 +208,10 @@
         "typeExpression": "string"
       },
       "skillPaths": {
-        "items": { "type": "string", "typeExpression": "string" },
+        "items": {
+          "type": "string",
+          "typeExpression": "string"
+        },
         "optional": true,
         "project": true,
         "type": "array",
@@ -316,6 +328,11 @@
   },
   "environment": {
     "variables": {
+      "AC_APPCIRCLE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "AI_AGENT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -346,7 +363,17 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "APPCENTER_BUILD_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "APPDATA": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "APPVEYOR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -362,6 +389,11 @@
         "type": "string"
       },
       "AWS_ACCOUNT_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_APP_ID": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -382,6 +414,11 @@
         "type": "string"
       },
       "AWS_BEDROCK_SKIP_AUTH": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_CONFIG_FILE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -436,7 +473,17 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "AWS_EXECUTION_ENV": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "AWS_LAMBDA_BENCHMARK_MODE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_LAMBDA_FUNCTION_NAME": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -491,6 +538,11 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "AWS_SHARED_CREDENTIALS_FILE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "AWS_WEB_IDENTITY_TOKEN_FILE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -521,7 +573,27 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "BITBUCKET_COMMIT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "BITRISE_IO": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "BROWSER": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "BUDDY_WORKSPACE_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "BUILDKITE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -531,7 +603,36 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
-      "CI": { "consumerOverridable": true, "readBy": ["pi"], "type": "string" },
+      "CF_BUILD_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CF_PAGES": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CIRCLECI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CIRRUS_CI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CI_MERGE_REQUEST_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "CI_NAME": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -547,12 +648,37 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "CLEAVR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "CLOUDSDK_CONFIG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
       },
       "CLOUD_RUN_JOB": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CODEBUILD_BUILD_ARN": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CODESANDBOX_HOST": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CODESANDBOX_SSE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CODESPHERE_APP_ID": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -602,6 +728,16 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "DENO_DEPLOY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "DENO_DEPLOYMENT_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "DETECT_GCP_RETRIES": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -617,7 +753,32 @@
         "readBy": ["kimchi", "pi"],
         "type": "string"
       },
+      "DRONE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "DRONE_BUILD_EVENT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "DSARI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "EDITOR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "EO_PAGES_CI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "FIREBASE_APP_HOSTING": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -662,6 +823,11 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "GEMINI_API_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "GEMINI_CLI": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -687,6 +853,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "GITHUB_ACTIONS": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "GITHUB_ENTERPRISE_TOKEN": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -702,6 +873,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "GITLAB_CI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "GITLAB_HOST": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -713,6 +889,26 @@
         "type": "string"
       },
       "GITLAB_URI": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "GIT_COMMON_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "GIT_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "GIT_INDEX_FILE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "GIT_WORK_TREE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -735,6 +931,11 @@
       "GL_HOST": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "GOOGLE_API_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
         "type": "string"
       },
       "GOOGLE_APPLICATION_CREDENTIALS": {
@@ -762,7 +963,32 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "GOOGLE_GEMINI_BASE_URL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GOOGLE_GENAI_USE_ENTERPRISE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GOOGLE_GENAI_USE_VERTEXAI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GOOGLE_VERTEX_BASE_URL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "GOOSE_PROVIDER": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GO_PIPELINE_LABEL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -797,6 +1023,16 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "HOMEDRIVE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "HOMEPATH": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "HOSTNAME": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -812,7 +1048,22 @@
         "readBy": ["kimchi", "pi"],
         "type": "string"
       },
+      "HUDSON_URL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "ITERM_SESSION_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JENKINS_URL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -822,7 +1073,37 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "JITI_ALIAS": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_EXTENSIONS": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_NATIVE_MODULES": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "JITI_RESPECT_TMPDIR_ENV": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_TRANSFORM_MODULES": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_TRY_NATIVE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JITI_TSCONFIG_PATHS": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -904,6 +1185,36 @@
         "reason": "src/entry.ts assigns it on every launch before anything reads it",
         "type": "string"
       },
+      "KIMCHI_E2E_COMPLETION_REMINDER_MS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_E2E_COST_REPORT_REFRESH_MS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_E2E_FAKE_BROWSER_REVIEW": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_E2E_FAKE_PLANNOTATOR_DECISION": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_E2E_FAKE_REMOTE_COMPLETION": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_E2E_FAKE_SANDBOX_GIT": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_ENABLE_RESOURCES": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -929,12 +1240,27 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_GC_GROWTH_BYTES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_GC_MIN_INTERVAL_MS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_IDE_LOCKFILE_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
       },
       "KIMCHI_IDLE_GC": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_IDLE_GC_DELAY_MS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -989,13 +1315,43 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_OAUTH_AUDIENCE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_OAUTH_AUTHORIZE_URL": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_OAUTH_CLIENT_ID": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_OAUTH_TEMPLATE_DIR": {
         "consumerOverridable": false,
         "readBy": ["kimchi", "pi"],
         "reason": "src/entry.ts assigns it on every launch before anything reads it",
         "type": "string"
       },
+      "KIMCHI_OAUTH_TOKEN_URL": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_OAUTH_USE_ID_TOKEN": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_OLLAMA_HOST": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_ORGANIZATIONS_URL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -1110,6 +1466,16 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_TOOL_OUTPUT_CACHE_BYTES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_TOOL_OUTPUT_EXTERNALIZE_BYTES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_TOOL_OUTPUT_STORE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -1150,6 +1516,11 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "LAYERCI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "LINES": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -1165,6 +1536,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "MAGNUM": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "MCP_DIRECT_TOOLS": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -1178,6 +1554,11 @@
       "MCP_OAUTH_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "MCP_OUTPUT_GUARD": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
         "type": "string"
       },
       "MCP_UI_DEBUG": {
@@ -1215,6 +1596,21 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "NETLIFY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "NETLIFY_LOCAL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "NEVERCODE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "NODE_DEBUG": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
@@ -1223,6 +1619,11 @@
       "NODE_ENV": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "NOW_BUILDER": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
         "type": "string"
       },
       "NO_COLOR": {
@@ -1476,7 +1877,37 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "RAILWAY_PROJECT_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "RAILWAY_SERVICE_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "RENDER": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "REPL_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "SAILCI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "SCREWDRIVER": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "SEMAPHORE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -1484,6 +1915,11 @@
       "SHELL": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "SHIPPABLE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
         "type": "string"
       },
       "SKILLS_DIR": {
@@ -1511,6 +1947,21 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "STACKBLITZ": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "STORMKIT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "STRIDER": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "STY": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -1526,7 +1977,17 @@
         "readBy": ["pi"],
         "type": "string"
       },
+      "SYSTEM_TEAMFOUNDATIONCOLLECTIONURI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "SystemRoot": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "TDDIUM": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -1581,6 +2042,11 @@
         "readBy": ["kimchi", "pi"],
         "type": "string"
       },
+      "TRAVIS": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "TYPESAFE_API_KEY": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -1602,6 +2068,16 @@
         "type": "string"
       },
       "USERPROFILE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "VERCEL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "VERCEL_ENV": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -1637,6 +2113,11 @@
         "type": "string"
       },
       "WINDIR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "WORKERS_CI": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -1691,12 +2172,27 @@
         "readBy": ["kimchi", "pi"],
         "type": "string"
       },
+      "ZEABUR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "ZELLIJ": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
       },
+      "_X_AMZN_TRACE_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "__MINIMATCH_TESTING_PLATFORM__": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "bamboo_planKey": {
         "consumerOverridable": true,
         "readBy": ["pi"],
         "type": "string"
@@ -1885,7 +2381,10 @@
         "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\""
       },
       "defaultTools": {
-        "items": { "type": "string", "typeExpression": "string" },
+        "items": {
+          "type": "string",
+          "typeExpression": "string"
+        },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -1936,7 +2435,10 @@
         "typeExpression": "boolean"
       },
       "enabledModels": {
-        "items": { "type": "string", "typeExpression": "string" },
+        "items": {
+          "type": "string",
+          "typeExpression": "string"
+        },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -1944,7 +2446,10 @@
         "typeExpression": "string[]"
       },
       "extensions": {
-        "items": { "type": "string", "typeExpression": "string" },
+        "items": {
+          "type": "string",
+          "typeExpression": "string"
+        },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -2025,8 +2530,15 @@
       },
       "fullscreenWheelScrollLines": {
         "alternatives": [
-          { "type": "number", "typeExpression": "number" },
-          { "enum": ["auto"], "type": "enum", "typeExpression": "\"auto\"" }
+          {
+            "type": "number",
+            "typeExpression": "number"
+          },
+          {
+            "enum": ["auto"],
+            "type": "enum",
+            "typeExpression": "\"auto\""
+          }
         ],
         "enum": ["auto"],
         "optional": true,
@@ -2051,7 +2563,10 @@
       },
       "httpIdleTimeoutMs": {
         "alternatives": [
-          { "type": "number", "typeExpression": "number" },
+          {
+            "type": "number",
+            "typeExpression": "number"
+          },
           {
             "enum": ["disabled"],
             "type": "enum",
@@ -2169,9 +2684,15 @@
         "properties": {
           "builder": {
             "alternatives": [
-              { "type": "string", "typeExpression": "string" },
               {
-                "items": { "type": "string", "typeExpression": "string" },
+                "type": "string",
+                "typeExpression": "string"
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "typeExpression": "string"
+                },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -2189,9 +2710,15 @@
           },
           "explorer": {
             "alternatives": [
-              { "type": "string", "typeExpression": "string" },
               {
-                "items": { "type": "string", "typeExpression": "string" },
+                "type": "string",
+                "typeExpression": "string"
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "typeExpression": "string"
+                },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -2203,9 +2730,15 @@
           },
           "judge": {
             "alternatives": [
-              { "type": "string", "typeExpression": "string" },
               {
-                "items": { "type": "string", "typeExpression": "string" },
+                "type": "string",
+                "typeExpression": "string"
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "typeExpression": "string"
+                },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -2223,9 +2756,15 @@
           },
           "planner": {
             "alternatives": [
-              { "type": "string", "typeExpression": "string" },
               {
-                "items": { "type": "string", "typeExpression": "string" },
+                "type": "string",
+                "typeExpression": "string"
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "typeExpression": "string"
+                },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -2237,9 +2776,15 @@
           },
           "researcher": {
             "alternatives": [
-              { "type": "string", "typeExpression": "string" },
               {
-                "items": { "type": "string", "typeExpression": "string" },
+                "type": "string",
+                "typeExpression": "string"
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "typeExpression": "string"
+                },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -2251,9 +2796,15 @@
           },
           "reviewer": {
             "alternatives": [
-              { "type": "string", "typeExpression": "string" },
               {
-                "items": { "type": "string", "typeExpression": "string" },
+                "type": "string",
+                "typeExpression": "string"
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "typeExpression": "string"
+                },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -2288,7 +2839,10 @@
         "typeExpression": "boolean"
       },
       "npmCommand": {
-        "items": { "type": "string", "typeExpression": "string" },
+        "items": {
+          "type": "string",
+          "typeExpression": "string"
+        },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -2306,7 +2860,10 @@
       "packages": {
         "items": {
           "alternatives": [
-            { "type": "string", "typeExpression": "string" },
+            {
+              "type": "string",
+              "typeExpression": "string"
+            },
             {
               "properties": {
                 "autoload": {
@@ -2315,26 +2872,41 @@
                   "typeExpression": "boolean"
                 },
                 "extensions": {
-                  "items": { "type": "string", "typeExpression": "string" },
+                  "items": {
+                    "type": "string",
+                    "typeExpression": "string"
+                  },
                   "optional": true,
                   "type": "array",
                   "typeExpression": "string[]"
                 },
                 "prompts": {
-                  "items": { "type": "string", "typeExpression": "string" },
+                  "items": {
+                    "type": "string",
+                    "typeExpression": "string"
+                  },
                   "optional": true,
                   "type": "array",
                   "typeExpression": "string[]"
                 },
                 "skills": {
-                  "items": { "type": "string", "typeExpression": "string" },
+                  "items": {
+                    "type": "string",
+                    "typeExpression": "string"
+                  },
                   "optional": true,
                   "type": "array",
                   "typeExpression": "string[]"
                 },
-                "source": { "type": "string", "typeExpression": "string" },
+                "source": {
+                  "type": "string",
+                  "typeExpression": "string"
+                },
                 "themes": {
-                  "items": { "type": "string", "typeExpression": "string" },
+                  "items": {
+                    "type": "string",
+                    "typeExpression": "string"
+                  },
                   "optional": true,
                   "type": "array",
                   "typeExpression": "string[]"
@@ -2354,7 +2926,10 @@
         "typeExpression": "(string | { extensions?: string[]; skills?: string[]; prompts?: string[]; themes?: string[]; autoload?: boolean; source: string; })[]"
       },
       "prompts": {
-        "items": { "type": "string", "typeExpression": "string" },
+        "items": {
+          "type": "string",
+          "typeExpression": "string"
+        },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -2482,7 +3057,10 @@
         "typeExpression": "boolean"
       },
       "skills": {
-        "items": { "type": "string", "typeExpression": "string" },
+        "items": {
+          "type": "string",
+          "typeExpression": "string"
+        },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -2617,7 +3195,10 @@
         "typeExpression": "string"
       },
       "themes": {
-        "items": { "type": "string", "typeExpression": "string" },
+        "items": {
+          "type": "string",
+          "typeExpression": "string"
+        },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -2700,7 +3281,10 @@
       },
       "websocketConnectTimeoutMs": {
         "alternatives": [
-          { "type": "number", "typeExpression": "number" },
+          {
+            "type": "number",
+            "typeExpression": "number"
+          },
           {
             "enum": ["disabled"],
             "type": "enum",

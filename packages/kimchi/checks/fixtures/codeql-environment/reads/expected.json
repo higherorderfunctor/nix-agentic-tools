@@ -1,5 +1,12 @@
 {
   "variables": {
+    "ASSIGNED_KEY": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
     "CIRCLECI": {
       "consumerOverridable": true,
       "readBy": [
@@ -36,6 +43,20 @@
       "type": "string"
     },
     "GIT_WORK_TREE": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "HELPER_CONSTANT": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "HELPER_LITERAL": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"
