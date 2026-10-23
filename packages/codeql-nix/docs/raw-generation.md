@@ -1,8 +1,8 @@
 # Raw syntax generation
 
 > **Last verified:** 2026-10-23 — S1 checks standalone location rows against
-> exact archived fixture bytes and rejects missing/corrupt archive entries;
-> production extraction remains later work.
+> exact archived fixture bytes and rejects missing/corrupt archive entries; S2
+> adds the authenticated source driver and companion raw bridge.
 
 ## Purpose and fit
 
@@ -16,9 +16,10 @@ as a stable public API.
 `lib/kit.nix` shares F0's grammar/kit pins, Cargo lock and vendoring with S1. It
 builds the small `src/generate.rs` entry point alongside the private bootstrap
 fixture. That reuse supplies generation and the test-only syntax producer; it
-does not install a production extractor or evaluation producer.
-`lib/packaging.nix` requires the existing CodeQL owner's engine version to
-remain `2.27.3`, so an engine update requires a kit compatibility audit.
+supplies the raw binary reused by S2's source driver, without installing the
+final extractor distribution or an evaluation producer. `lib/packaging.nix`
+requires the existing CodeQL owner's engine version to remain `2.27.3`, so an
+engine update requires a kit compatibility audit.
 
 ## Generated artifacts and manifest
 
@@ -51,9 +52,10 @@ file and start/end line/column from `locations_default`. This adapter depends on
 the combined schema directly and declares no other language-library dependency.
 
 The adapter preserves F0's file/location interface; it does not authenticate
-source snapshots or associate handwritten anchors with raw nodes. Those joins
-belong to S2. A path/location row alone does not establish a unique syntax
-anchor or expression-to-value provenance.
+source snapshots or associate handwritten anchors with raw nodes. S2's
+[source driver and RawBridge](source-identity.md) supply those joins through a
+namespaced companion metadata index. A path/location row alone does not
+establish a unique syntax anchor or expression-to-value provenance.
 
 ## Check and change procedure
 

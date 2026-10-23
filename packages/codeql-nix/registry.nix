@@ -10,6 +10,7 @@
         "database-contract"
         "integration-gate"
         "owner-layout"
+        "source-identity"
         "target-contract"
       ];
   };

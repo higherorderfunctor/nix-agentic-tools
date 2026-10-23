@@ -35,7 +35,22 @@ in
       cp -r ${generated}/. "$out/" # bare-commands: ok
       cp ${../ql/lib/qlpack.yml} "$out/qlpack.yml" # bare-commands: ok
       cp ${../ql/lib/codeql/Locations.qll} "$out/codeql/Locations.qll" # bare-commands: ok
+      mkdir -p "$out/nix/internal" # bare-commands: ok
+      chmod u+w "$out/nix/internal" # bare-commands: ok
+      cp ${../ql/lib/nix/internal/RawBridge.qll} "$out/nix/internal/RawBridge.qll" # bare-commands: ok
       printf '<dbstats><typesizes/><stats/></dbstats>\n' > "$out/nix.dbscheme.stats"
     '';
     inherit (inputs) syntaxFixture;
+    syntaxDriver = strictShell {
+      name = "nixql-syntax";
+      text = ''
+        if [[ "$#" != 2 ]]; then
+          echo 'usage: nixql-syntax MANIFEST_JSON OUTPUT_DIRECTORY' >&2
+          exit 2
+        fi
+        exec ${pkgs.python3}/bin/python3 ${../src/syntax.py} \
+          ${inputs.syntaxFixture}/bin/nixql-anchors ${../schema} \
+          ${generated}/nix.dbscheme ${pins} "$@"
+      '';
+    };
   }
