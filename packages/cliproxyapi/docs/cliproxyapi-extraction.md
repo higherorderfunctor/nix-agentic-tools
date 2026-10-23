@@ -1,8 +1,8 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-21 — CPA 8.0.38 custom YAML decoders are probed
-> through yaml.v3; the shared `goTestExtract` runs the extractor over the
-> patched `src`.
+> **Last verified:** 2026-10-22 — the extractor copies the pinned embedded model
+> catalog alongside the v8 configuration; the shared `goTestExtract` runs over
+> the patched `src`.
 
 ## Why reflection also needs the v8 tables
 
@@ -56,11 +56,16 @@ keeps any YAML subtree, so both are `any`. An `any` struct still retains its
 known child fields: the mapping form of `plugins.configs.<name>` has the
 measured `enabled` and `priority` fields.
 
-The raw has one `config` tree. `extracted/facts.json` declares it as an opaque
-`object` because its keys contain dots, with one Linux measurement because the
-configuration shape is host-independent. Shared `lib/extracted` owns loading,
-platform carrying and regeneration. The reconciliation reader consumes the
-declared object directly.
+The raw has a `config` tree and the complete `models` value copied from
+`internal/registry/models/models.json`. `lib/exact-models.nix` reads its Claude
+and Codex tier rows through the facts loader, refuses a changed consumed shape,
+and supplies the OAuth vendor catalog for exact-model mode. The existing drift
+check regenerates both facts on every CPA bump.
+
+`extracted/facts.json` declares both as opaque `object` facts, with one Linux
+measurement because their values are host-independent. The `config` keys contain
+dots. Shared `lib/extracted` owns loading, platform carrying and regeneration.
+The reconciliation reader consumes the declared object directly.
 
 ## Hand annotations
 

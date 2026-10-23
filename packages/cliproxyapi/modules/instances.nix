@@ -10,10 +10,12 @@
 backend: {
   config,
   lib,
+  pkgs,
   ...
 }: let
   inherit (import ../lib/default.nix {inherit lib;}) cliproxyapi;
   providersLib = cliproxyapi.providers;
+  exact = import ../lib/exact-models.nix {inherit lib;};
   # A named client key also written by hand could widen its allowlist rules.
   handWritten = name: instance: let
     clients = lib.mapAttrsToList (clientName: client: client // {option = "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}";}) instance.clientKeys;
@@ -63,29 +65,41 @@ in {
       # selects the embedded catalogs, and no setting selects the embedded catalogs.
       arguments = instance:
         ''--config "$CPA_CONFIG"''
-        + lib.optionalString (!instance.fetchModelCatalogs) " --local-model";
+        + lib.optionalString (instance.exactModels || !instance.fetchModelCatalogs) " --local-model";
       inherit backend;
       defaultPort = 8317;
-      derived = {instance, ...}: {
-        api-keys = lib.mkIf ((providersLib.apiKeys instance) != {}) (providersLib.lower (providersLib.apiKeys instance));
-        access = lib.mkIf (instance.clientKeys != {}) {
-          api-keys = map (client: client.key) (builtins.attrValues instance.clientKeys);
-          key-allowlist =
-            lib.mapAttrsToList (clientName: client: {
-              api-key = client.key;
-              credentials = lib.concatMap (choice: lib.toList ((providersLib.route instance "clientKeys.${clientName}.routes" choice).rule or [])) client.routes;
-            })
-            instance.clientKeys;
-        };
-        # Without this the daemon downloads its control panel from GitHub at
-        # start and every 3 hours after.
-        management.disable-auto-update-panel = lib.mkDefault true;
-        oauth.auth-dir = "${instance.stateDir}/auth";
-        server = {
-          host = lib.mkDefault "127.0.0.1";
-          inherit (instance) port;
-        };
-      };
+      derived = {instance, ...}:
+        lib.mkMerge [
+          {
+            api-keys = lib.mkIf ((providersLib.apiKeys instance) != {}) (providersLib.lower (providersLib.apiKeys (
+              if instance.exactModels
+              then exact.narrow instance
+              else instance
+            )));
+            access = lib.mkIf (instance.clientKeys != {}) {
+              api-keys = map (client: client.key) (builtins.attrValues instance.clientKeys);
+              key-allowlist =
+                lib.mapAttrsToList (clientName: client: {
+                  api-key = client.key;
+                  credentials = lib.concatMap (choice: lib.toList ((providersLib.route instance "clientKeys.${clientName}.routes" choice).rule or [])) client.routes;
+                })
+                instance.clientKeys;
+            };
+            # Without this the daemon downloads its control panel from GitHub at
+            # start and every 3 hours after.
+            management.disable-auto-update-panel = lib.mkDefault true;
+            oauth.auth-dir = "${instance.stateDir}/auth";
+            server = {
+              host = lib.mkDefault "127.0.0.1";
+              inherit (instance) port;
+            };
+          }
+          (lib.mkIf instance.exactModels (exact.settings // {oauth = exact.settings.oauth // {excluded-models = exact.exclusions instance;};}))
+        ];
+      preStart = instance:
+        lib.optionalString instance.exactModels ''
+          ${pkgs.python3}/bin/python3 ${../lib/exact-models-scan.py} ${lib.escapeShellArg "${instance.stateDir}/auth"}
+        '';
       directories = instance: ["${instance.stateDir}/auth"];
       extraOptions = {
         clientKeys = lib.mkOption {
@@ -97,6 +111,11 @@ in {
           type = lib.types.attrsOf providersLib.credentialType;
           default = {};
           description = "Declare each upstream credential once by name, as OAuth or API key.";
+        };
+        exactModels = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Use exact upstream model names, native model exclusions, embedded catalogs and no CPA model rewrites. This does not enable the front gate.";
         };
         fetchModelCatalogs = lib.mkOption {
           type = lib.types.bool;
@@ -145,7 +164,11 @@ in {
       refusal = where: "${where} has a rule with kind = \"oauth\" and base-urls, which can never match: base-urls compare an API-key credential's base URL and never match an OAuth login. Use kind = \"apikey\" or drop base-urls.";
       offending = lib.filter (entry: unmatchable entry != []) entries;
     in
-      lib.optionals instance.enable ([
+      lib.optionals instance.enable (lib.optionals instance.exactModels (map (message: {
+          assertion = false;
+          inherit message;
+        }) (exact.problems name instance))
+        ++ [
           {
             assertion = setting ["plugins" "enabled"] != true || lib.elem (setting ["access" "key-allowlist"]) [null []];
             message = "ai.cliproxyapi.instances.${name}: settings.plugins.enabled = true voids settings.access.key-allowlist: plugin executors choose credentials outside it and can read every credential through host.auth.get. Disable plugins or drop the allowlist.";
