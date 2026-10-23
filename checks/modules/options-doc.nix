@@ -47,7 +47,7 @@
     };
     backendOnly = {
       devenv = ["ai.codex.trustProjectForSession"];
-      hm = ["ai.claude.native.unpinLaunchEffort" "ai.codex.pinDaemonToPackage"];
+      hm = ["ai.claude.native.installMethod" "ai.claude.native.unpinLaunchEffort" "ai.codex.pinDaemonToPackage"];
     };
     comparable = backend: let
       excluded = map (owner: "ai.${owner}.") localOwners.${backend} ++ backendOnly.${backend};

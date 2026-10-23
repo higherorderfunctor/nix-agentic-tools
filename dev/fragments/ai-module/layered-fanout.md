@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-22 — non-AI owners use the same layer-1 helper;
+> **Last verified:** 2026-10-23 — non-AI owners use the same layer-1 helper;
 > delivery facts derive delivered and absent cells, keyed withdrawal and
 > normalized gaps from option and runtime declarations; `poolOptions` covers
 > `agentsDir` and `environmentVariables` only; `optionNamespaces` places
@@ -13,9 +13,10 @@
 > Kimchi stages every surface, with every legacy ledger ungated; Codex stages
 > every surface and declares both copy ledgers while disabled; hand rows are
 > confined to the policy-only permissions surface; named CPA routing replaces
-> runtime proxy defaults; Claude's `native.unpinLaunchEffort` is declared for
-> Home Manager only, so delivery facts carry no supplement rows; backend
-> lowering and validation live only in ai-module.
+> runtime proxy defaults; Claude's `native.installMethod` and
+> `native.unpinLaunchEffort` are declared for Home Manager only, so delivery
+> facts carry no supplement rows; backend lowering and validation live only in
+> ai-module.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -145,11 +146,12 @@ rather than a second path field: a runtime names exactly the groups it moves.
   change such as `/tui` does not persist. Every settings contribution goes
   through `ai.claude.native.settings`, so one entry carries the whole document.
   Claude's user-global `.claude.json` is the exception: it holds OAuth tokens
-  and runtime state, so it uses `rw` on Home Manager only. Empty unpin
-  declarations stage no document; the engine still retires previous keys. The
-  legacy JSON ledger is declared while disabled too.
-  `activation.claude-config-mode` runs after `materialized`, even with no flags,
-  stripping group and other access from regular files while Claude is enabled.
+  and runtime state, so it uses `rw` on Home Manager only. It carries the unpin
+  flags and `installMethod`; with no flags and a null `installMethod` no
+  document is staged, and the engine still retires previous keys. The legacy
+  JSON ledger is declared while disabled too. `activation.claude-config-mode`
+  runs after `materialized`, even with no flags, stripping group and other
+  access from regular files while Claude is enabled.
 - **The CLI's write primitive picks the method.** Codex's `config.toml` is a
   store symlink on both backends: every Codex config writer writes a temporary
   beside the link's target, so an in-app save fails and the link survives
@@ -302,8 +304,8 @@ the policy-only permissions surface; a hand row on a shared surface fails naming
 the cell, because it would replace the row derived from the runtime record.
 Input associations are consumer facts. An option only Home Manager can write is
 declared under the record's `hm.options` instead of warning through a row:
-Claude's `native.unpinLaunchEffort` does not exist on devenv, so setting it
-there is an unknown-option error.
+Claude's `native.installMethod` and `native.unpinLaunchEffort` do not exist on
+devenv, so setting either there is an unknown-option error.
 
 Where a delivered file lands, and how, is the files plan's business, not these
 facts'. Adding a shared surface or dropping runtime support creates absence
