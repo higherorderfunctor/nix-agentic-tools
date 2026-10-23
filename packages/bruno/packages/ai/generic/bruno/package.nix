@@ -1,4 +1,4 @@
-# cspell:ignore moreutils
+# cspell:ignore ENOTCACHED packument packuments
 # bruno — the open-source API client, re-pinned onto this repo's update
 # cadence. Built from source, never from the prebuilt .deb.
 #
@@ -91,13 +91,14 @@
 # 4.0.0 builder inputs byte-identical, so the normal sidecar fixer remains solely
 # responsible for hashes on the 4.1.0 bump.
 #
-# NORMALIZE STALE WORKSPACE LOCK ENTRIES BY THEIR REQUIREMENTS. Upstream 4.2.x
-# and 4.3.0 ship nested dependencies that violate their workspace manifests.
-# Offline npm ci then requests uncached registry metadata. The owner helper
-# removes only an incompatible workspace entry whose nearest locked ancestor
-# satisfies the manifest, leaving valid entries and unrelated lock data intact.
-# Both fetchNpmDeps and npmConfigHook run this same postPatch, so the dependency
-# cache and package build consume the identical repaired lock.
+# BRUNO 4.2.0 THROUGH 4.3.0 HAVE THREE STALE QS COPIES. Each Bruno workspace
+# requires qs ^6.15.2, but package-lock.json still nests 6.14.1 under that
+# workspace. npm ci re-checks root and workspace edges against the lock, and an
+# invalid one makes it fetch that package's registry metadata (packument). The
+# default fetchNpmDeps caches tarballs only, so the offline build fails with
+# ENOTCACHED. `npmDepsFetcherVersion = 2` is nixpkgs' own fix: it caches
+# packuments too, npm resolves the edge to the root 6.15.3 copy, and no lock
+# repair is needed here. The fetcher version is an input to `npmDepsHash`.
 #
 # No platform gating: the source build supports darwin. A `--replace-fail`
 # whose anchor moved is a HARD failure and this host cannot build darwin, so
@@ -153,6 +154,7 @@ in
             hash = sources.srcHash or lib.fakeHash;
           };
 
+          npmDepsFetcherVersion = 2;
           npmDepsHash = sources.npmDepsHash or lib.fakeHash;
 
           postPatch =
@@ -160,10 +162,6 @@ in
             [upstream.version]
             [version]
             upstream.postPatch
-            + ''
-              ${finalAttrs.nodejs}/bin/node ${../../../../src/normalize-workspace-lock.cjs} \
-                ${finalAttrs.nodejs}/lib/node_modules/npm/node_modules/semver
-            ''
             + lib.optionalString needsBrunoSqliteLifecycleShim ''
               substituteInPlace packages/bruno-sqlite/package.json \
                 --replace-fail '"prepare": "npm run generate",' '"prepare": ":",'
