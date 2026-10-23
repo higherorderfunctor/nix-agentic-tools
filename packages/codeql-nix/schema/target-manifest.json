@@ -1,0 +1,223 @@
+{
+  "$defs": {
+    "budget": {
+      "format": "nixql-native-int",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "descriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "enum": ["evalModules"]
+        },
+        "adapterVersion": {
+          "$ref": "#/$defs/identity"
+        },
+        "argumentDescription": {
+          "additionalProperties": false,
+          "description": "Hash the admitted source/argument description. References identify admitted runtime arguments; do not serialize functions or secrets wholesale.",
+          "properties": {
+            "hash": {
+              "$ref": "#/$defs/identity"
+            },
+            "moduleArgumentsRef": {
+              "$ref": "#/$defs/identity"
+            },
+            "specialArgumentsRef": {
+              "$ref": "#/$defs/identity"
+            }
+          },
+          "required": ["hash", "moduleArgumentsRef", "specialArgumentsRef"],
+          "type": "object"
+        },
+        "evaluation": {
+          "additionalProperties": false,
+          "description": "An opaque admitted runtime reference to module arguments or a rich evaluation result containing config and option metadata.",
+          "properties": {
+            "kind": {
+              "enum": ["arguments", "rich-result"]
+            },
+            "reference": {
+              "$ref": "#/$defs/identity"
+            }
+          },
+          "required": ["kind", "reference"],
+          "type": "object"
+        },
+        "fingerprint": {
+          "additionalProperties": false,
+          "description": "Together with adapterVersion, argumentDescription.hash and system, these are the F1 evaluation fingerprint components. Input identities and source roots additionally describe the admitted closure.",
+          "properties": {
+            "evaluatorVersion": {
+              "$ref": "#/$defs/identity"
+            },
+            "libVersion": {
+              "$ref": "#/$defs/identity"
+            },
+            "modelVersion": {
+              "const": "not-requested"
+            },
+            "policyHash": {
+              "$ref": "#/$defs/identity"
+            },
+            "sourceSnapshotHash": {
+              "$ref": "#/$defs/identity"
+            }
+          },
+          "required": [
+            "evaluatorVersion",
+            "libVersion",
+            "modelVersion",
+            "policyHash",
+            "sourceSnapshotHash"
+          ],
+          "type": "object"
+        },
+        "inputIdentities": {
+          "additionalProperties": {
+            "$ref": "#/$defs/identity"
+          },
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/identity"
+          },
+          "type": "object"
+        },
+        "observationModes": {
+          "items": {
+            "enum": ["metadata"]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "requests": {
+          "items": {
+            "$ref": "#/$defs/request"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "sourceRoots": {
+          "items": {
+            "additionalProperties": false,
+            "description": "logicalName and rootContentIdentity form the F1 root key. The checkout path is mapping data, never a durable identity component.",
+            "properties": {
+              "logicalName": {
+                "$ref": "#/$defs/identity"
+              },
+              "path": {
+                "$ref": "#/$defs/identity"
+              },
+              "rootContentIdentity": {
+                "$ref": "#/$defs/identity"
+              }
+            },
+            "required": ["logicalName", "path", "rootContentIdentity"],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "syntaxOnlyFallback": {
+          "description": "Whether syntax-only fallback is permitted if this target is blocked; this does not turn failed evaluation into successful observation.",
+          "type": "boolean"
+        },
+        "system": {
+          "$ref": "#/$defs/identity"
+        }
+      },
+      "required": [
+        "adapter",
+        "adapterVersion",
+        "argumentDescription",
+        "evaluation",
+        "fingerprint",
+        "inputIdentities",
+        "observationModes",
+        "requests",
+        "sourceRoots",
+        "syntaxOnlyFallback",
+        "system"
+      ],
+      "type": "object"
+    },
+    "identity": {
+      "$ref": "#/$defs/text",
+      "minLength": 1
+    },
+    "request": {
+      "description": "Every metadata request is explicit. Paths are literal segments, never dot-split. No default traversal or value request is implied.",
+      "properties": {
+        "domain": {
+          "const": "option-metadata"
+        },
+        "facet": {
+          "enum": ["declarations", "isDefined", "priority"]
+        },
+        "maxBytes": {
+          "$ref": "#/$defs/budget"
+        },
+        "maxDepth": {
+          "$ref": "#/$defs/budget"
+        },
+        "maxMemoryMiB": {
+          "$ref": "#/$defs/budget"
+        },
+        "maxNodes": {
+          "$ref": "#/$defs/budget"
+        },
+        "maxSeconds": {
+          "$ref": "#/$defs/budget"
+        },
+        "path": {
+          "format": "nixql-path",
+          "items": {
+            "$ref": "#/$defs/text"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "domain",
+        "facet",
+        "maxBytes",
+        "maxDepth",
+        "maxMemoryMiB",
+        "maxNodes",
+        "maxSeconds",
+        "path"
+      ],
+      "type": "object",
+      "unevaluatedProperties": false
+    },
+    "text": {
+      "format": "nixql-exact-text",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Version-one admitted target description. Target names are exact labels, never flake attribute expressions. Consumers MUST enable nixql-exact-text (UTF-8 encodable, at most 1048576 encoded bytes), nixql-path (compact ensure_ascii=False JSON array encoding, at most 1048576 UTF-8 bytes, including escapes), and nixql-native-int (native integer values only, excluding Booleans and floating-point values such as 1.0; no coercion). JSON Schema format assertions are not enabled by default. No evaluator, reference resolution, closure authentication or budget enforcement is supplied by this schema.",
+  "properties": {
+    "manifestVersion": {
+      "const": 1,
+      "type": "integer"
+    },
+    "targets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/descriptor"
+      },
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/identity"
+      },
+      "type": "object"
+    }
+  },
+  "required": ["manifestVersion", "targets"],
+  "title": "NixQL target manifest, version one",
+  "type": "object"
+}
