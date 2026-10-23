@@ -8,7 +8,9 @@ diff --git i/src/cli.ts w/src/cli.ts
 index 43f2bce..72ec5c2 100644
 --- i/src/cli.ts
 +++ w/src/cli.ts
-@@ -889,4 +889,6 @@ try {
+@@ -907,8 +907,10 @@ try {
+ 				inputHistoryExtension,
+ 				bugReportDestinationExtension,
  				tagsExtension,
 -				teleportExtension,
 -				remoteRunExtension,
@@ -17,6 +19,8 @@ index 43f2bce..72ec5c2 100644
 +					{ id: "extensions.teleport", factory: teleportExtension },
 +				] satisfies ManagedExtensionFactory[]),
  				telemetryExtension(telemetryConfig),
+ 				sessionMetadataExtension(),
+ 				surveysExtension(),
 diff --git i/src/extensions/remote-run/runner.ts w/src/extensions/remote-run/runner.ts
 index 0e1930c..54da171 100644
 --- i/src/extensions/remote-run/runner.ts

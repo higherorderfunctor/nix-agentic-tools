@@ -77,6 +77,7 @@
   codeql = import ../../../lib/codeql.nix {
     engine = pkgs.ai.devTools.codeql.codeql-javascript;
     inherit (extractionSources) kimchi;
+    # TypeBox 1.3.27 supplies pi declarations to extract.mjs; Kimchi runs 1.3.7.
     dependencies = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi" "typebox"]);
     inherit pkgs;
     inherit (sources) version;

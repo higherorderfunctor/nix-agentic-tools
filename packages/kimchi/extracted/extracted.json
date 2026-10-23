@@ -1739,35 +1739,6 @@
     }
   },
   "harness": {
-    "definitions": {
-      "RetrySettings": {
-        "baseDelayMs": {
-          "optional": true,
-          "type": "number",
-          "typeExpression": "number"
-        },
-        "enabled": {
-          "optional": true,
-          "type": "boolean",
-          "typeExpression": "boolean"
-        },
-        "maxAgentDelayMs": {
-          "optional": true,
-          "type": "number",
-          "typeExpression": "number"
-        },
-        "maxRetries": {
-          "optional": true,
-          "type": "number",
-          "typeExpression": "number"
-        },
-        "provider": {
-          "optional": true,
-          "type": "object",
-          "typeExpression": "{ maxRetries?: number; timeoutMs?: number; maxRetryDelayMs?: number; }"
-        }
-      }
-    },
     "keys": {
       "$schema": {
         "optional": true,

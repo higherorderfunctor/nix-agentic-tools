@@ -10,8 +10,8 @@
   pnpm = pkgs.ai.generic.pnpm_10;
   kimchi = pkgs.ai.kimchi;
   toolchainConfiguration = pkgs.writeText "kimchi-workflow-toolchain.json" (builtins.toJSON {
-    packages = ["@earendil-works/pi-coding-agent" "@earendil-works/pi-tui" "typebox"];
     gitCommand = lib.getExe pkgs.gitMinimal;
+    packages = ["@earendil-works/pi-coding-agent" "@earendil-works/pi-tui" "typebox"];
     patchedSource = kimchi.src;
     tarCommand = lib.getExe pkgs.gnutar;
   });

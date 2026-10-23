@@ -7,9 +7,9 @@ applyTo: "checks/references/kimchi-egress-report.nix,dev/skills/kimchi-egress-re
 
 ## Kimchi egress report
 
-> **Last verified:** 2026-10-22 — the report's network fields come from the
-> `network` and `environment` facts, read through `lib.extracted`, by
-> `generate.mjs`; `scan.mjs` 2.0.0 writes only the fields the facts do not
+> **Last verified:** 2026-10-22 (commit d5f613ea) — the report's network fields
+> come from the `network` and `environment` facts, read through `lib.extracted`,
+> by `generate.mjs`; `scan.mjs` 2.0.0 writes only the fields the facts do not
 > cover; the drift check compares parsed JSON; regeneration uses installed
 > `treefmt`.
 
@@ -35,8 +35,8 @@ one list of who writes what.
 
 A host's `files` are where its literal sits; its `callSites` are the call sites
 it reaches, empty for a literal no call site reads. File labels are the fact's
-own: `src/...` for Kimchi, `@earendil-works/...` for pi. The scanner's fields
-keep its `kimchi/` and `pi/` labels.
+own: `src/...` for Kimchi, and `@earendil-works/...` or `pi-mcp-adapter/...` for
+pi and its adapter. The scanner's fields keep its `kimchi/` and `pi/` labels.
 
 `header.facts` is the release in `sources.json`. It names the facts' release
 because `checks.kimchi-extracted` fails when the committed facts are not the

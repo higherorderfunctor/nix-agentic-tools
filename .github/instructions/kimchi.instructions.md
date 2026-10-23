@@ -7,10 +7,11 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-22 — pi 1.3 settings follow reexports and inherited
-> TypeBox properties through lock-pinned declaration entrypoints; scope follows
-> settings accessors, with unread JSON Schema metadata explicitly ignored. The
-> sidecar carries CodeQL environment and network facts on x86_64-linux.
+> **Last verified:** 2026-10-22 (commit d5f613ea) — pi 1.3 settings follow
+> reexports and inherited TypeBox properties through lock-pinned declaration
+> entrypoints; scope follows settings accessors, with unread JSON Schema
+> metadata explicitly ignored. The sidecar carries CodeQL environment and
+> network facts on x86_64-linux.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -33,7 +34,7 @@ The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings` and
 `ai.kimchi.native.harnessSettings`. The closed `ai.kimchi.settings` submodule is
 the shared normalized surface. Its `reasoningEffort` field lowers losslessly to
 `native.harnessSettings.defaultThinkingLevel` at `mkDefault` priority, so an
-explicit native harness value wins: pi 0.85.1's `ThinkingLevel` is a superset of
+explicit native harness value wins: pi 1.3.0's `ThinkingLevel` is a superset of
 the normalized enum, and pi reads the key from the merged user and project
 harness settings. Locked by `module-kimchi-normalized-reasoning-effort`. On
 devenv the key lands in the project harness `settings.json`, so a root effort
@@ -76,7 +77,7 @@ harness `settings.json` it declares:
   - **Multi-model.** Any saved default, Auto included, turns off the global
     `multiModel` default on a fresh launch whose model is not on `kimchi-dev`
     (`auto-model/index.ts:130-132,316-321`). An account whose catalog lacks Auto
-    still starts, because pi 0.85.1 silently falls back to the model it picks
+    still starts, because pi 1.3.0 silently falls back to the model it picks
     when none is declared, but that fallback runs with multi-model off.
     `multiModel = true` needs `defaultModel = null`. Devenv is an explicit
     exclusion. A project model default would make every devenv Kimchi's harness
@@ -95,35 +96,34 @@ environment variables Kimchi and pi read, and pi’s `virtualPackages` from its
 (deduplicated npm package names). Consumers load the declared aggregate through
 `lib.extracted`: the workflows recipe reads `virtualPackages` directly, while
 `lib/extracted.nix` generates the closed `native.settings` (from
-`config.keys.<name>`) and `native.harnessSettings` (from `harness.keys.<name>`,
-resolving `harness.definitions.<name>`) option trees: scalars and enums map
-directly, objects with properties become closed submodules,
-`additionalProperties` becomes `attrsOf`, and arrays keep untyped elements
-unless they are scalars, because `filterNulls` does not recurse into lists. So a
-key upstream adds to pi's `Settings` or to config.ts's `readConfigExtras`
-becomes an option at the next re-extraction, and a key it removes fails its
-consumer as an unknown option instead of writing bytes nothing reads. Every
-option is `nullOr` with a null default. Config annotations may carry `aliasFor`
-or `excluded`; harness annotations may carry `type` or `excluded`. Names whose
-facts suffice need no row. `extract/rules.nix` defines the config, environment
-and harness surfaces once, using the shared `extractedLib` function’s
-`reconcile`. Recipes receive the function through `scopeArgs`, checks through
-module arguments. `mkKimchi` binds `lib.ai.extracted` independently of runtime
-package replacements. Consumers merge those rows with the committed facts;
-extraction itself emits facts and clones alias types from the rows' `aliasFor`
-references. Alias keys and inert keys have no option. A key is inert when
-upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code
-consumes it: nothing reads the loaded member, and nothing outside `config.ts`
-reads the raw `readConfigExtras` member, while `config.ts` still parses it to
-warn that it is obsolete. A release that consumes it again clears the flag, and
-the key becomes an option. Secret exclusions (`apiKey`, its alias, and
-`gitTokens`) live in the config rows, naming `ai.kimchi.apiKey` or
-`ai.kimchi.gitTokens` as their delivery path. The option generator keeps two
-hand tables: one refinement (`modelRoles`, whose role names and single-string
-roles come from the sidecar while the non-blank and non-empty checks do not),
-and one description note. `report.stale*` lists any refinement or note whose
-path the sidecar lost, and `checks/native-options.nix` fails on it. Reconcile
-detects stale exclusion rows.
+`config.keys.<name>`) and `native.harnessSettings` (from `harness.keys.<name>`)
+option trees: scalars and enums map directly, objects with properties become
+closed submodules, `additionalProperties` becomes `attrsOf`, and arrays keep
+untyped elements unless they are scalars, because `filterNulls` does not recurse
+into lists. So a key upstream adds to pi's `Settings` or to config.ts's
+`readConfigExtras` becomes an option at the next re-extraction, and a key it
+removes fails its consumer as an unknown option instead of writing bytes nothing
+reads. Every option is `nullOr` with a null default. Config annotations may
+carry `aliasFor` or `excluded`; harness annotations may carry `type` or
+`excluded`. Names whose facts suffice need no row. `extract/rules.nix` defines
+the config, environment and harness surfaces once, using the shared
+`extractedLib` function’s `reconcile`. Recipes receive the function through
+`scopeArgs`, checks through module arguments. `mkKimchi` binds
+`lib.ai.extracted` independently of runtime package replacements. Consumers
+merge those rows with the committed facts; extraction itself emits facts and
+clones alias types from the rows' `aliasFor` references. Alias keys and inert
+keys have no option. A key is inert when upstream tags its `KimchiConfig` member
+`@deprecated` and no Kimchi code consumes it: nothing reads the loaded member,
+and nothing outside `config.ts` reads the raw `readConfigExtras` member, while
+`config.ts` still parses it to warn that it is obsolete. A release that consumes
+it again clears the flag, and the key becomes an option. Secret exclusions
+(`apiKey`, its alias, and `gitTokens`) live in the config rows, naming
+`ai.kimchi.apiKey` or `ai.kimchi.gitTokens` as their delivery path. The option
+generator keeps two hand tables: one refinement (`modelRoles`, whose role names
+and single-string roles come from the sidecar while the non-blank and non-empty
+checks do not), and one description note. `report.stale*` lists any refinement
+or note whose path the sidecar lost, and `checks/native-options.nix` fails on
+it. Reconcile detects stale exclusion rows.
 
 The sidecar's `network` fact comes from CodeQL, not `extract.mjs`, on
 x86_64-linux only (`kimchi-codeql-network.md`). `extract/rules.nix` passes it
@@ -223,40 +223,38 @@ alias resolution; using the main program's checker on those foreign nodes can
 crash inside the compiler. A declaration is never taken by bare name when a
 reference can pick it: config.ts's functions and interfaces resolve in
 config.ts's own scope (Kimchi 1.1.37 has a second `loadConfig`), pi's `Settings`
-comes from `settings-manager.d.ts`'s exports, and the harness `definitions` are
-the interfaces `Settings` references, collected through the checker (pi also
-declares an all-required `CompactionSettings` in `compaction.d.ts`). The Kimchi
-harness schemas still looked up by name must match exactly one declaration among
-the modules reachable from `src/entry.ts`, so the dead
-`model-catalog/model-metadata.ts` is ignored, and a second live
-`ModelCustomMetadataSchema` stops the extraction instead of narrowing the
-option. Same-named constants back a constant only where the checker finds no
-initializer, and only when they all agree. Four additional hash-pinned pi
-declaration packages, including TypeBox, resolve the settings type's external
-imports through each package's declared `types` entrypoint; unresolved named
-leaves fail extraction. Pi 1.3 reexports `Settings` from `settings-schema.d.ts`;
-the same checker follows that alias and inherited `Omit<Static<...>>`
-properties, retaining their optionality through the existing type renderer. Deep
-union descriptors carry each alternative, so numeric settings with literal
-sentinels produce native union types; an unresolved alternative still fails type
-coverage. Default accessors that return a property such as
-`SETTINGS_DEFAULTS.defaultProjectTrust` are accepted only when its checker type
-is one string literal. Harness project scope recognizes reads through both
-`getGlobalSettings()` and the merged `getSettings()` accessor. The inherited
-`$schema` field is JSON Schema metadata (`settings-schema.js`'s JSON Schema
-reference), with no settings accessor read; its existing ignored annotation
-keeps the raw field with unknown project scope and removes it before native
-options are generated. Other unread settings still stop extraction. Their
-versions are the ones Kimchi's `pnpm-lock.yaml` resolves pi's dependencies to,
-which is what the source build bundles, not the floor of pi's caret ranges: the
-update job reads them from the lockfile. The same updater also pins the direct
-`pi-mcp-adapter` dependency for the CodeQL database, including its root
-TypeScript exports and upstream patch. The extractor (handed the lockfile as
-JSON through `yq`) fails when a supplied package differs from it. The extractor
-also checks that the hash-pinned source URL names the same release tag recorded
-in provenance; Kimchi's source `package.json` intentionally retains the `0.0.0`
-development placeholder. It no longer extracts the CLI: the wrapper passes no
-flags, so that surface had no reader.
+comes from `settings-manager.d.ts`'s exports, and each Settings member carries
+its recursively resolved type inline. The Kimchi harness schemas still looked up
+by name must match exactly one declaration among the modules reachable from
+`src/entry.ts`, so the dead `model-catalog/model-metadata.ts` is ignored, and a
+second live `ModelCustomMetadataSchema` stops the extraction instead of
+narrowing the option. Same-named constants back a constant only where the
+checker finds no initializer, and only when they all agree. Four additional
+hash-pinned pi declaration packages, including TypeBox, use the versions
+Kimchi's `pnpm-lock.yaml` resolves for pi, rather than the floors of pi's caret
+ranges. The update job reads those versions from the lockfile. These packages
+resolve the settings type's external imports through each package's declared
+`types` entrypoint; unresolved named leaves fail extraction. Pi 1.3 reexports
+`Settings` from `settings-schema.d.ts`; the same checker follows that alias and
+inherited `Omit<Static<...>>` properties, retaining their optionality through
+the existing type renderer. Deep union descriptors carry each alternative, so
+numeric settings with literal sentinels produce native union types; an
+unresolved alternative still fails type coverage. Default accessors that return
+a property such as `SETTINGS_DEFAULTS.defaultProjectTrust` are accepted only
+when its checker type is one string literal. Harness project scope recognizes
+reads through both `getGlobalSettings()` and the merged `getSettings()`
+accessor. The inherited `$schema` field is JSON Schema metadata
+(`settings-schema.js`'s JSON Schema reference), with no settings accessor read;
+the ignored annotation added for pi 1.3 keeps the raw field with unknown project
+scope and removes it before native options are generated. Other unread settings
+still stop extraction. The same updater also pins the direct `pi-mcp-adapter`
+dependency for the CodeQL database, including its root TypeScript exports and
+upstream patch. The extractor (handed the lockfile as JSON through `yq`) fails
+when a supplied package differs from it. The extractor also checks that the
+hash-pinned source URL names the same release tag recorded in provenance;
+Kimchi's source `package.json` intentionally retains the `0.0.0` development
+placeholder. It no longer extracts the CLI: the wrapper passes no flags, so that
+surface had no reader.
 
 ## User and project paths (the load-bearing fact)
 
@@ -469,9 +467,9 @@ bounded to one second, no stdin, stdout discarded, failure ignored.
 launcher, covering both project namespaces with positive controls.
 
 `ai.kimchi.projectTrust` (absolute path → bool) is the persisted decision,
-declared. pi 0.85.1 keeps it in `<agentDir>/trust.json`, which Kimchi pins to
-its harness directory, and looks it up under `realpath(cwd)` and then each
-parent, reading keys verbatim (`findNearestTrustEntry`,
+declared. pi 1.3.0 keeps it in `<agentDir>/trust.json`, which Kimchi pins to its
+harness directory, and looks it up under `realpath(cwd)` and then each parent,
+reading keys verbatim (`findNearestTrustEntry`,
 `dist/core/trust-manager.js:20-33`). So one entry covers every project beneath
 it, `false` denies a subtree, and a key reached through a symlink never matches.
 Home Manager stages the file as a read-only `ro` copy, declared `{}` when
@@ -500,7 +498,7 @@ The devenv module rejects every `native.harnessSettings` key whose sidecar
 The extractor derives the flag: a pi key honors the project file only if pi
 reads it through SettingsManager's merged `this.settings`, so keys read only
 through `this.globalSettings` or `getGlobalSettings()` (`defaultProjectTrust`,
-`httpProxy` in pi 0.85.1) are user scope, and a key it sees read neither way
+`httpProxy` in pi 1.3.0) are user scope, and a key it sees read neither way
 stops the extraction. Every Kimchi addition is user scope, because Kimchi reads
 them itself from `~/.config/kimchi/harness/settings.json`, never through pi's
 merged manager. The one exception is `resources`, which devenv passes as
@@ -731,7 +729,7 @@ shared pnpm hash fixer. The standalone dependency fixers also participate in
 input-bump repairs. The source checkout reports version `0.0.0`, so upstream's
 `set-version.js` runs before compiling and staging the resources.
 
-The build rewrites pi 0.85.1's shared `getToolPath()` choke point after pnpm
+The build rewrites pi 1.3.0's shared `getToolPath()` choke point after pnpm
 materializes `node_modules` and before Bun compiles the module graph. `fd` and
 `rg` then resolve directly to the package inputs, ahead of pi's managed-bin,
 `PATH`, offline, and download branches. The build keeps Kimchi's typecheck:
@@ -792,9 +790,10 @@ the link targets.
 
 # External workflows
 
-> **Last verified:** 2026-10-22 — the identity hunk is rebased onto pi 1.3.0;
-> pnpm's bounded hunk-position search and packed-archive reverse checks use the
-> released patch context; the Linux clipboard binding links libxcb.
+> **Last verified:** 2026-10-22 (commit d5f613ea) — the identity hunk is rebased
+> onto pi 1.3.0; pnpm's bounded hunk-position search and packed-archive reverse
+> checks use the released patch context; the Linux clipboard binding links
+> libxcb.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's workflows dependency pin.
@@ -810,13 +809,13 @@ compiled distribution metadata.
 Every managed project dependency uses a `file:/nix/store/...tgz` spec. The
 framework archive comes from this extension's installed output; TypeScript
 7.0.2, Vitest 4.1.10 and `@types/node` 22.20.1 point at its copied runtime
-graph. PI and pi-tui 0.85.1 and typebox 1.3.7 come from the `toolchain`
-passthru. That derivation materializes Kimchi's frozen offline pnpm graph
-without building Kimchi's binary. It copies the packages pnpm materializes from
-Kimchi's patched source, including PI's upstream patches and NAT's package
-identity fix. The pristine `extractionSources` tarballs are
-declaration-extraction inputs, not workflow toolchain replacements. There is no
-separately maintained PI or typebox version pin.
+graph. PI and pi-tui 1.3.0 and typebox 1.3.7 come from the `toolchain` passthru.
+That derivation materializes Kimchi's frozen offline pnpm graph without building
+Kimchi's binary. It copies the packages pnpm materializes from Kimchi's patched
+source, including PI's upstream patches and NAT's package identity fix. The
+pristine `extractionSources` tarballs are declaration-extraction inputs, not
+workflow toolchain replacements. There is no separately maintained PI or typebox
+version pin.
 
 `install-runtime.mjs` copies each physical package once, retains its dependency
 links for direct store use, and rewrites the copied manifests' runtime
@@ -865,7 +864,7 @@ enforcement.
 
 The supported host baseline is PI >=0.85.1, whose public setter does not persist
 defaults. Earlier setters write global preferences and are unsupported. The
-packaged host and verification toolchain use PI 0.85.1. The build runs generated
+packaged host and verification toolchain use PI 1.3.0. The build runs generated
 API document checks, TypeScript checks and focused thinking regressions without
 inference calls. The opt-in docs skill links the installed package, patched
 source and generated authoring reference.

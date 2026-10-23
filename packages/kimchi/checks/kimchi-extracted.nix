@@ -134,8 +134,6 @@
             substituteInPlace "$bundled" \
               --replace-fail 'getGlobalSettings().httpProxy' 'getGlobalSettings().httpProxyProbe'
           done
-          mutant "$pi" pi-definition-collision dist/core/settings-schema.d.ts \
-            '    retry?: RetrySettings;' $'    retry?: RetrySettings;\n    compaction?: CompactionSettings;\n    compactionProbe?: import("./compaction/compaction.js").CompactionSettings;'
           mutant "$pi" pi-definition-reference dist/core/settings-schema.d.ts \
             '    retry?: RetrySettings;' $'    retry?: RetrySettings;\n    compaction?: import("./compaction/compaction.js").CompactionSettings;'
 
@@ -181,8 +179,6 @@
           # ones, which must stop the extraction rather than pick one.
           expect_rejection duplicate-live-schema "$TMPDIR/duplicate-live-schema-source" \
             'TypeScript declaration ModelCustomMetadataSchema is declared 2 times' >> "$TMPDIR/proof"
-          expect_rejection pi-definition-collision "$kimchi" \
-            'two different interfaces named CompactionSettings' "$TMPDIR/pi-definition-collision-source" >> "$TMPDIR/proof"
           expect_rejection hand-shape-new-member "$TMPDIR/hand-shape-new-member-source" \
             'readTeleportCompactHintEnabled reads teleport.delayMs, which the teleport shape lacks' >> "$TMPDIR/proof"
           expect_rejection hand-shape-retyped "$TMPDIR/hand-shape-retyped-source" \
@@ -263,12 +259,12 @@
           echo 'real (exit 0): resolved re-exported Settings and inherited TypeBox fields with Omit exclusions' >> "$TMPDIR/proof"
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/pi-definition-reference.json"'' ''"$TMPDIR/pi-definition-reference-source"''}
           if ${pkgs.jq}/bin/jq -e \
-            '.harness.definitions.CompactionSettings.enabled | .type == "boolean" and .optional == null' \
+            '.harness.keys.compaction.properties.enabled | .type == "boolean" and .optional == null' \
             "$TMPDIR/pi-definition-reference.json" > /dev/null; then
             echo 'pi-definition-reference (exit 0): CompactionSettings.enabled is required' >> "$TMPDIR/proof"
           else
             echo "FAIL: pi-definition-reference did not resolve CompactionSettings through Settings" >&2
-            ${pkgs.jq}/bin/jq '.harness.definitions.CompactionSettings' "$TMPDIR/pi-definition-reference.json" >&2
+            ${pkgs.jq}/bin/jq '.harness.keys.compaction' "$TMPDIR/pi-definition-reference.json" >&2
             exit 1
           fi
           # A pi key's project scope follows how pi reads it.

@@ -215,7 +215,7 @@ predicate closedIteration(VarAccess key) {
   // Scalar binding reassignment also makes the set of values open.
   not exists(VarAccess v, VarAccess use |
     v = iterationDependency*(key) and use.getVariable() = v.getVariable() and
-    (use = any(Assignment a).getLhs() or use = any(UpdateExpr update).getOperand() or use = any(PropAccess p | p = any(Assignment a).getLhs()).getBase())
+    use.isLValue()
   )
 }
 

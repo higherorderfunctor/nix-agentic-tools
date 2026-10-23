@@ -1,10 +1,10 @@
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-22 — `environment.variables` includes the carried
-> pi-mcp-adapter; the reads fixture verifies its patched project-trust variable
-> is attributed to the pi runtime; literal iteration tables resolve environment
-> names, named reads follow known helper parameters, and launch analysis follows
-> known helpers and rest copies.
+> **Last verified:** 2026-10-22 (commit d5f613ea) — `environment.variables`
+> includes the carried pi-mcp-adapter; the reads fixture verifies its patched
+> project-trust variable is attributed to the pi runtime; literal iteration
+> tables resolve environment names, named reads follow known helper parameters,
+> and launch analysis follows known helpers and rest copies.
 
 `extracted.json`'s `environment` surface is one fact the CodeQL database
 produces. `extract/environment.nix` runs the two-query pack
@@ -130,9 +130,10 @@ The fourth column of a reads row and the third of an overwrites row is the site,
 
 ### Patches the tree does not carry
 
-Kimchi patches the MCP SDK and client and playwright-core too, packages the
+Kimchi 1.19.1 patches the MCP client and playwright-core too, packages the
 source root does not carry, so the queries never see their added lines. The
 extractor read them as text. `source` refuses an added line in one of them that
 names `env`, with the fix: carry the package. Joining a patch's `+` lines into a
-file does not work here: CodeQL drops a file with any syntax error, and five of
-the seven joined patches had none of their code extracted.
+file does not work here: CodeQL drops a file with any syntax error, and the
+earlier seven-patch experiment left five joined patches with none of their code
+extracted.

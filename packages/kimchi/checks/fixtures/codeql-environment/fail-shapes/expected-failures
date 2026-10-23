@@ -9,13 +9,6 @@ src/entry.ts hands process.env to whole = process.env, and the names that reads 
 src/entry.ts takes process.env apart by destructuring, so the names it reads cannot be listed (kimchi/src/entry.ts:4)
 takes env from a local binding named process, which cannot be identified as the environment (kimchi/src/entry.ts:34)
 takes process.env apart by destructuring, so the names it reads cannot be listed (kimchi/src/entry.ts:28)
+the environment iteration key unknownListKey cannot be resolved to a finite set of names (kimchi/src/entry.ts:49)
 the environment parameter env is indexed by a name that cannot be evaluated, so the names it reads cannot be listed (kimchi/src/entry.ts:40)
-the environment parameter env is used as a whole, so the names it reads cannot be listed
-the environment iteration key mixedKey cannot be resolved to a finite set of names
-the environment iteration key missingKey cannot be resolved to a finite set of names
-the environment iteration key unknownListKey cannot be resolved to a finite set of names
-the environment iteration key mutationKey cannot be resolved to a finite set of names
-the environment iteration key nestedKey cannot be resolved to a finite set of names
-the environment iteration key sparseKey cannot be resolved to a finite set of names
-the environment iteration key spreadKey cannot be resolved to a finite set of names
-the environment iteration key updateKey cannot be resolved to a finite set of names
+the environment parameter env is used as a whole, so the names it reads cannot be listed (kimchi/src/entry.ts:46)

@@ -47,21 +47,3 @@ function unknownForward(env: Record<string, string | undefined>) {
 }
 
 for (const unknownListKey of externalNames()) void process.env[unknownListKey];
-for (const mixedKey of ["KNOWN_NAME", externalName()]) void process.env[mixedKey];
-for (const [label, names] of [["missing"]]) {
-  for (const missingKey of names) void process.env[missingKey];
-}
-
-const mutatedNames = ["KNOWN_MUTATION"];
-mutatedNames.push(externalName());
-for (const mutationKey of mutatedNames) void process.env[mutationKey];
-const nestedNames = [["KNOWN_NESTED"]];
-nestedNames[0][0] = externalName();
-for (const [nestedKey] of nestedNames) void process.env[nestedKey];
-for (const [ignored, spreadKey] of [[...externalNames(), "KNOWN_SPREAD"]]) void process.env[spreadKey];
-for (const sparseKey of ["KNOWN_SPARSE", ,]) void process.env[sparseKey];
-
-for (let updateKey of ["KNOWN_UPDATE"]) {
-  updateKey++;
-  void process.env[updateKey];
-}

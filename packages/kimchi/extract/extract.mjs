@@ -1153,44 +1153,6 @@ function extractDefaultProjectTrust(sourceFile, checker, ts) {
   return fallback;
 }
 
-// The interfaces a declaration's properties are typed with, transitively and
-// by the checker's own resolution, keyed by the name walkType looks them up by.
-// Resolving by name instead picked whichever same-named interface loaded first
-// (pi 0.85.1 declares CompactionSettings twice, with different optionality).
-function referencedInterfaces(root, checker, ts) {
-  const found = new Map();
-  const queue = [root];
-  while (queue.length) {
-    const declaration = queue.pop();
-    for (const property of checker.getPropertiesOfType(
-      checker.getTypeAtLocation(declaration),
-    )) {
-      const member =
-        property.valueDeclaration ?? property.declarations?.[0] ?? declaration;
-      const type = checker.getNonNullableType(
-        checker.getTypeOfSymbolAtLocation(property, member),
-      );
-      if (checker.isArrayType(type)) continue;
-      const referenced = (type.aliasSymbol ? [] : [type.symbol])
-        .flatMap((symbol) => symbol?.declarations ?? [])
-        .filter(ts.isInterfaceDeclaration);
-      for (const target of referenced) {
-        const name = target.name.text;
-        const previous = found.get(name);
-        if (previous && previous !== target)
-          fail(
-            `two different interfaces named ${name} type ${root.name.text}'s settings (${previous.getSourceFile().fileName}, ${target.getSourceFile().fileName})`,
-          );
-        if (!previous) {
-          found.set(name, target);
-          queue.push(target);
-        }
-      }
-    }
-  }
-  return found;
-}
-
 // Which scope pi reads each Settings key from. SettingsManager deep-merges the
 // project file over the global one into `this.settings`; a key read through
 // that merge honors a project harness settings.json. A key read only through
@@ -1384,11 +1346,6 @@ function extractHarness(
   if (!baseKeys.defaultProjectTrust?.enum?.includes(defaultProjectTrust))
     fail("pi default project trust is outside DefaultProjectTrust");
   baseKeys.defaultProjectTrust.default = defaultProjectTrust;
-  const definitions = {};
-  const referenced = referencedInterfaces(settings, checker, ts);
-  for (const name of [...referenced.keys()].sort())
-    definitions[name] = membersOfDeclaration(referenced.get(name), checker, ts);
-
   const ferment = requireDeclaration(
     declarations,
     "FermentV2Settings",
@@ -1555,7 +1512,6 @@ function extractHarness(
     };
   }
   return {
-    definitions: sortObject(definitions),
     keys: sortObject(keys),
   };
 }

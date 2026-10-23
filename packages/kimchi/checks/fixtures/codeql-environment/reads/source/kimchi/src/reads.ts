@@ -14,8 +14,8 @@ const agents = [
   ["two", ["ITERATED_THREE", matcher()]],
 ];
 function matcher() { return () => true; }
-for (const [agent, names] of agents) {
-  for (const key of names) {
+for (let [agent, names] of agents) {
+  for (let key of names) {
     void (typeof key === "string" ? process.env[key] : key());
   }
 }

@@ -1,8 +1,9 @@
 # External workflows
 
-> **Last verified:** 2026-10-22 — the identity hunk is rebased onto pi 1.3.0;
-> pnpm's bounded hunk-position search and packed-archive reverse checks use the
-> released patch context; the Linux clipboard binding links libxcb.
+> **Last verified:** 2026-10-22 (commit d5f613ea) — the identity hunk is rebased
+> onto pi 1.3.0; pnpm's bounded hunk-position search and packed-archive reverse
+> checks use the released patch context; the Linux clipboard binding links
+> libxcb.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's workflows dependency pin.
@@ -18,13 +19,13 @@ compiled distribution metadata.
 Every managed project dependency uses a `file:/nix/store/...tgz` spec. The
 framework archive comes from this extension's installed output; TypeScript
 7.0.2, Vitest 4.1.10 and `@types/node` 22.20.1 point at its copied runtime
-graph. PI and pi-tui 0.85.1 and typebox 1.3.7 come from the `toolchain`
-passthru. That derivation materializes Kimchi's frozen offline pnpm graph
-without building Kimchi's binary. It copies the packages pnpm materializes from
-Kimchi's patched source, including PI's upstream patches and NAT's package
-identity fix. The pristine `extractionSources` tarballs are
-declaration-extraction inputs, not workflow toolchain replacements. There is no
-separately maintained PI or typebox version pin.
+graph. PI and pi-tui 1.3.0 and typebox 1.3.7 come from the `toolchain` passthru.
+That derivation materializes Kimchi's frozen offline pnpm graph without building
+Kimchi's binary. It copies the packages pnpm materializes from Kimchi's patched
+source, including PI's upstream patches and NAT's package identity fix. The
+pristine `extractionSources` tarballs are declaration-extraction inputs, not
+workflow toolchain replacements. There is no separately maintained PI or typebox
+version pin.
 
 `install-runtime.mjs` copies each physical package once, retains its dependency
 links for direct store use, and rewrites the copied manifests' runtime
@@ -73,7 +74,7 @@ enforcement.
 
 The supported host baseline is PI >=0.85.1, whose public setter does not persist
 defaults. Earlier setters write global preferences and are unsupported. The
-packaged host and verification toolchain use PI 0.85.1. The build runs generated
+packaged host and verification toolchain use PI 1.3.0. The build runs generated
 API document checks, TypeScript checks and focused thinking regressions without
 inference calls. The opt-in docs skill links the installed package, patched
 source and generated authoring reference.
