@@ -117,6 +117,7 @@ collab
 combinators
 commentchar
 commondir
+configaccess
 configdir
 convco
 coreutils
@@ -449,6 +450,7 @@ sigmask
 sigpipe
 sigtool
 simpara
+sjson
 skillsdir
 slurpfile
 smartlog
@@ -495,6 +497,7 @@ toolsets
 tostring
 traceparent
 trailcomma
+translatorcommon
 treefmt
 trustdel
 tsgo
