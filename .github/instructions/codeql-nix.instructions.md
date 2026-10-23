@@ -587,11 +587,10 @@ admission without changing the opaque digest ABI.
 The driver resolves roots and source paths, refuses escapes through symlinks,
 verifies the declared digest and snapshots the bytes privately. The pinned kit
 and `src/anchors.rs` both read those snapshot bytes. A second checkout read
-after extraction must match before publication. Renaming or moving a checkout
-changes physical mapping, while byte edits change file and anchor identity.
-`rootContentIdentity` is caller-supplied; the driver verifies selected file
-digests rather than recomputing a digest of the whole root. Equal text in
-different files or roots remains distinct.
+after extraction must match before publication. Byte edits change file and
+anchor identity. `rootContentIdentity` is caller-supplied; the driver verifies
+selected file digests rather than recomputing a digest of the whole root. Equal
+text in different files or roots remains distinct.
 
 Completed raw TRAP is published by rename only after source authentication,
 exact-text preflight and F1 transaction validation succeed. Source bytes are
@@ -631,7 +630,7 @@ path and supplies the kit structural path. Fields escape `%` as `%25` and `|` as
 bytes and the independent line map; changing an anchor byte span cannot inherit
 the original coordinates. Both metadata columns are exact UTF-8 tuple text and
 are checked against F1's 1,048,576-byte ceiling before publication. These
-entries use the existing generated schema table; neither the 35-relation
+entries use the existing generated schema table; neither the 23-relation
 handwritten ABI nor the combined schema changes. They are not evaluation facts
 or authenticated evaluator origins. As with every extractor relation, these are
 trusted producer evidence; fabricating a file admission record is outside the QL

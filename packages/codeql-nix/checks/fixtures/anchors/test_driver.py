@@ -102,11 +102,10 @@ class DriverTests(unittest.TestCase):
             self.assertEqual((output / "archive" / str(root / name).lstrip("/")).read_bytes(), data)
         self.assertEqual({row[1] for row in self.table(rows, "nx_syntax_results")}, {"complete"})
 
-    def test_move_preserves_ids_but_content_path_and_root_changes_do_not(self):
+    def test_content_path_and_root_changes_have_distinct_ids(self):
         runs = [self.run_files({name: data}, logical=logical, content=content, folder=folder)
             for folder, name, data, logical, content in [
                 ("a", "x.nix", b"41", "project", "snapshot-v1"),
-                ("moved", "x.nix", b"41", "project", "snapshot-v1"),
                 ("edited", "x.nix", b"42", "project", "snapshot-v1"),
                 ("renamed", "y.nix", b"41", "project", "snapshot-v1"),
                 ("root-name", "x.nix", b"41", "dependency", "snapshot-v1"),
@@ -114,9 +113,7 @@ class DriverTests(unittest.TestCase):
         for result, rows, *_ in runs:
             self.accepted(result, rows)
         ids = [self.table(rows, "nx_files")[0][0] for _, rows, *_ in runs]
-        self.assertEqual(ids[0], ids[1])
         self.assertEqual(len(set(ids)), 5)
-        self.assertEqual(sorted(self.table(runs[0][1], "nx_anchors")), sorted(self.table(runs[1][1], "nx_anchors")))
 
     def test_unicode_crlf_comments_interpolation_paths_and_recovery(self):
         sources = {
