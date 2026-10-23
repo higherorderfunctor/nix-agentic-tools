@@ -5,7 +5,8 @@
 > model set after credential and client selection, in calls and Responses
 > websocket messages; Claude pickers consume the same set when a client list is
 > configured. The CPA bump golden inventories source contracts before accepting
-> a release. Restart triggers remain shared.
+> a release and emits the complete canonical JSON on drift. Restart triggers
+> remain shared.
 
 **cpa-gate is NOT a security boundary.** A harness that runs under the same uid
 as the gate can read the policy file, which holds every client key and every
@@ -236,15 +237,24 @@ install check needs a version that a local path lacks.
   `SetRawBytes` calls whose path expression names `tools`, hosted-tool helpers
   and their callers, cloak policy guards and prefix. Reviewed contracts live in
   `checks/fixtures/gate-bump-golden.json`; changes fail with the affected
-  category, file and function. Source literals are omitted from write
-  diagnostics. Comment/layout controls pass; added route, carrier and tool write
-  controls fail, including a prefix constant changed to a variable with the same
-  initializer. Drift failures name the golden and require reviewing CPA source
-  and gate coverage before updating it. The same Go tests run in CPA's package
-  check phase. Forced switch paths must remain in the extracted config; the
-  existing `cliproxyapi-extracted` check regenerates both config and embedded
-  catalog, so a bump cannot retain stale catalog facts. Review the source change
-  before updating the golden; never accept a new contract only to clear CI.
+  category, file and function. The change summary hashes write/prefix literals;
+  a following `BEGIN CPA GATE GOLDEN JSON` / `END CPA GATE GOLDEN JSON` block
+  contains the complete actual inventory from the same parser. After source and
+  gate-coverage review, replace the golden with exactly the JSON between those
+  lines, including the final newline. Copy from the failed
+  `cliproxyapi-gate-bump` CI log after removing only CI transport prefixes; the
+  test prints the block directly without `testing.T` indentation. Do not copy
+  the `+/-` summary or accept a new contract only to clear CI. Comment/layout
+  controls pass; added route, carrier and tool write controls fail, including a
+  prefix constant changed to a variable with the same initializer; each parses
+  its emitted JSON block and checks it equals the complete sorted actual
+  inventory. Drift failures name the golden and require reviewing CPA source and
+  gate coverage before updating it. The same Go tests run in CPA's package check
+  phase. Forced switch paths must remain in the extracted config; the existing
+  `cliproxyapi-extracted` check regenerates both config and embedded catalog, so
+  a bump cannot retain stale catalog facts. Its
+  `nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate`
+  command updates those extracted facts, not the gate golden.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
 - `cliproxyapi-gate-validate`: the real binary validates the rendered Caddyfile
   with a good policy, and refuses a shared key, a missing file and an empty
