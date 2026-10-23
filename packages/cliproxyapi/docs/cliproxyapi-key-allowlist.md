@@ -22,7 +22,11 @@ CPA's access middleware records the authenticated key for headers, `?key=`, and
 Missing or unknown keys select nothing while the allowlist is set; an absent or
 empty allowlist leaves native selection unchanged. A configured key whose
 eligible credentials are unavailable gets `auth_not_found`. Model listings still
-expose all models.
+expose all models. With no upstream credential serving a requested model, CPA
+returns `400 unknown provider for model <name>`. Log in with
+`cliproxyapi -config <file with auth-dir> -claude-login -no-browser` (or
+`-codex-login`), or through Manager Plus; login files are picked up without a
+restart.
 
 An entry identifies one client key and grants a list of credential rules. The
 client key is a redact reference shared with `access.api-keys[]`. An Instance

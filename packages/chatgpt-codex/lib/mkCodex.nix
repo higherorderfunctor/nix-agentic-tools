@@ -1407,6 +1407,7 @@ in
             # ai.proxy (./proxy.nix): Home Manager selects the provider in
             # user config.toml; devenv's launcher selects its own.
             (lib.mkIf (isHm && resolvedProxy != null) (codexProxy.hmSettings resolvedProxy))
+            (lib.mkIf (resolvedProxy != null) codexProxy.quietSettings)
           ];
           # `pinDaemonToPackage` is Home Manager-only (see its option), so this
           # must not force `options.ai.codex.pinDaemonToPackage` under devenv,

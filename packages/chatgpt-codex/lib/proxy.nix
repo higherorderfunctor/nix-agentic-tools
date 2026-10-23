@@ -73,4 +73,8 @@
   };
 in {
   inherit hmSettings launcherFlags;
+
+  # Codex 0.163.0: startup_prompts.rs stops at four impressions. Its bundled
+  # models.json announces only gpt-6.1-sol; extracted models omit availability_nux.
+  quietSettings.tui.model_availability_nux."gpt-6.1-sol" = lib.mkDefault 4;
 }

@@ -91,7 +91,10 @@ in {
   }:
     lib.mkMerge [
       (lib.mkIf (resolvedProxy != null) {
-        ai.claude.native.settings.env = lib.mapAttrs (_: lib.mkDefault) quietEnv;
+        ai.claude.native.settings = {
+          disableClaudeAiConnectors = lib.mkDefault true;
+          env = lib.mapAttrs (_: lib.mkDefault) quietEnv;
+        };
       })
       # At ordinary priority: a consumer's own value for one of these leaves
       # is a definition conflict, not a silent override either way.

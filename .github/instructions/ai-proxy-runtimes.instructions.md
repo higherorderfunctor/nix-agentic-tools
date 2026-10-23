@@ -47,7 +47,8 @@ explicit `ai.claude.package = null` keeps settings delivery and warns that the
 caller must unset the descriptor when launching an unmanaged Claude.
 
 Any selection also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
-`DISABLE_AUTOUPDATER` at `mkDefault`.
+`DISABLE_AUTOUPDATER` at `mkDefault`, and defaults
+`settings.disableClaudeAiConnectors` to `true` to disable claude.ai connectors.
 
 The endpoint lands in `native.settings`, so the settings.json the backend
 already writes (user on Home Manager, project on devenv). The proxy leaves are
@@ -95,9 +96,9 @@ environment does not reach devenv's.
 - **Home Manager** writes `model_provider = "ai-proxy"` and
   `[model_providers.ai-proxy]` into user config.toml. A devenv shell inherits
   the user file with no devenv configuration.
-- **devenv** cannot use project config: Codex strips `model_provider` and
-  `model_providers` from project layers. Its launcher passes
-  `-c model_providers.ai-proxy-devenv={…}` and
+- **devenv** cannot use project config for providers: Codex strips
+  `model_provider` and `model_providers` from project layers. Its launcher
+  passes `-c model_providers.ai-proxy-devenv={…}` and
   `-c model_provider=ai-proxy-devenv`, the highest layer, baked in as
   `--add-flag`s. With `ai.codex.package = null` nothing carries them, so devenv
   warns.
@@ -107,6 +108,14 @@ environment does not reach devenv's.
   bundled list. Client routes still constrain requests. No per-credential
   profiles are written. `model_catalog_url` stays unset: it would replace the
   bundled list and empty the picker whenever CPA is down.
+- **Availability tooltip.** Any proxy selection defaults
+  `tui.model_availability_nux."gpt-6.1-sol" = 4` on both backends. Codex
+  0.163.0's pinned source (`83086188`, `tui/src/app/startup_prompts.rs`)
+  suppresses the startup availability tooltip once that model's shown count
+  reaches four. Its bundled catalog announces only `gpt-6.1-sol`; the extracted
+  catalog omits `availability_nux`, so this is a static default for that pin,
+  not a claim about CPA's catalog. Consumers can override the count; other
+  tooltips remain enabled.
 - **A separate id on devenv is load-bearing.** Codex deep-merges layers per key,
   so session flags reusing `ai-proxy` could inherit incompatible user auth
   fields, such as `experimental_bearer_token`, beside the proxy's `auth`.
