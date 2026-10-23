@@ -1,0 +1,48 @@
+"""F3 health and ABI witnesses; no producer is used to derive expectations."""
+
+from pathlib import Path
+import sys
+import unittest
+
+OWNER = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(OWNER / "schema"))
+sys.path.insert(0, str(OWNER / "checks/fixtures/abi"))
+import abi
+from golden import GRAPH
+
+# F1 inventory, spelled independently of abi.CONTRACT or generated schema.
+RELATIONS = {
+    "nx_anchors", "nx_capabilities", "nx_context_parents", "nx_contexts",
+    "nx_definition_order", "nx_definitions", "nx_diagnostic_origins",
+    "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics",
+    "nx_files", "nx_member_values", "nx_module_imports", "nx_module_roots",
+    "nx_modules", "nx_observation_values", "nx_observations",
+    "nx_option_declarations", "nx_option_metadata", "nx_option_priority",
+    "nx_options", "nx_origin_files", "nx_origin_positions", "nx_origins",
+    "nx_phases", "nx_request_results", "nx_requests", "nx_runs",
+    "nx_scalar_values", "nx_string_context", "nx_syntax_results",
+    "nx_target_inputs", "nx_targets", "nx_value_members", "nx_values",
+}
+
+
+class SentinelTests(unittest.TestCase):
+    def test_abi_witness_covers_every_relation(self):
+        abi.validate(GRAPH)
+        self.assertEqual({name for name, _ in GRAPH}, RELATIONS)
+
+    def test_health_has_explicit_successful_work(self):
+        rows = lambda name: [args for relation, args in GRAPH if relation == name]
+        runs = rows("nx_runs")
+        self.assertTrue(runs, "no extraction run")
+        self.assertTrue(rows("nx_targets"), "no admitted target")
+        self.assertTrue(rows("nx_syntax_results"), "no syntax result")
+        self.assertTrue(rows("nx_request_results"), "no observation result")
+        for run in runs:
+            self.assertIn([run[0], "discovery", "complete", ""], rows("nx_phases"))
+        self.assertTrue(all(args[-1] == "complete" for args in rows("nx_targets")))
+        self.assertTrue(all(args[1:] == ["complete", 0] for args in rows("nx_syntax_results")))
+        self.assertTrue(all(args[1] == "complete" and args[3] > 0 for args in rows("nx_request_results")))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
