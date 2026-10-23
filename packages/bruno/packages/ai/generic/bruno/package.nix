@@ -1,4 +1,4 @@
-# cspell:ignore moreutils
+# cspell:ignore moreutils packument packuments
 # bruno — the open-source API client, re-pinned onto this repo's update
 # cadence. Built from source, never from the prebuilt .deb.
 #
@@ -101,6 +101,15 @@
 # Keep the repair limited to the affected releases and assert its exact input shape: a later
 # release or an upstream lock fix should be handled on its own terms.
 #
+# EVERY OTHER RELEASE USES `npmDepsFetcherVersion = 2` INSTEAD. 4.3.0 ships the
+# same stale qs entries. npm ci re-checks root and workspace edges, and fetches
+# the registry metadata (packument) of an invalid one; fetcher version 2 caches
+# packuments, so npm resolves the edge to the root copy with no lock repair.
+# The fetcher version is an input to `npmDepsHash`, so it is gated off exactly
+# where the repair runs: 4.2.x keeps its committed hash, and the bump's update
+# script derives the new one. Once the pin leaves 4.2.x, the repair block and
+# the gate are dead code and can go without moving any hash.
+#
 # No platform gating: the source build supports darwin. A `--replace-fail`
 # whose anchor moved is a HARD failure and this host cannot build darwin, so
 # both darwin-only anchors in
@@ -145,6 +154,7 @@ in
         needsBrunoSqliteLifecycleShim =
           lib.versionAtLeast version "4.1.0"
           && lib.versionOlder upstream.version "4.1.0";
+        needsQsLockRepair = lib.elem version ["4.2.0" "4.2.1"];
       in
         upstream
         // {
@@ -162,7 +172,7 @@ in
             [upstream.version]
             [version]
             upstream.postPatch
-            + lib.optionalString (lib.elem version ["4.2.0" "4.2.1"]) ''
+            + lib.optionalString needsQsLockRepair ''
               if ! ${pkgs.jq}/bin/jq -e '
                 . as $lock
                 | .packages["node_modules/qs"].version == "6.15.3"
@@ -221,5 +231,8 @@ in
                 };
               };
             };
+        }
+        // lib.optionalAttrs (!needsQsLockRepair) {
+          npmDepsFetcherVersion = 2;
         });
   })
