@@ -650,7 +650,7 @@ jobs:
           shopt -s inherit_errexit 2>/dev/null || :
           nix eval --raw .#.ciPackages.x86_64-linux --apply 'packages:
             builtins.concatStringsSep "" (map (name: packages.${name}.drvPath + "\n")
-              (builtins.filter (name: builtins.substring 0 7 name == "codeql-") (builtins.attrNames packages)))' \
+              (builtins.filter (name: name != "codeql-query" && builtins.substring 0 7 name == "codeql-") (builtins.attrNames packages)))' \
             > "$RUNNER_TEMP/codeql-engines"
           engines=()
           while read -r drv; do engines+=("$drv"); done < "$RUNNER_TEMP/codeql-engines"
