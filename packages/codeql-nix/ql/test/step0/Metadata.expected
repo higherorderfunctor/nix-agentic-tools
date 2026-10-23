@@ -1,0 +1,32 @@
+| admission | first | beta | unmapped | 0 |  |
+| declaration | alpha | ["demo","answer"] | shared.nix | 7 | 13 |
+| declaration | beta | ["demo","answer"] | unique.nix | 7 | 13 |
+| option | alpha | ["demo","answer"] | -9223372036854775808 | 2 |  |
+| option | alpha | ["demo.answer"] | -1 | 2 |  |
+| option | alpha | ["observed","subject"] | unknown | 0 |  |
+| option | alpha | ["partial"] | unknown | 0 |  |
+| option | alpha | ["sparse"] | 0 | 1 |  |
+| option | beta | ["demo","answer"] | 9223372036854775807 | 1 |  |
+| origin | dot | unmapped | 0 | shared.nix | unknown |
+| origin | first | ambiguous | 2 | shared.nix | unknown |
+| origin | only | unique | 1 | unique.nix | unknown |
+| origin | retained | unmapped | 0 | shared.nix | unknown |
+| origin | second | ambiguous | 2 | shared.nix | unknown |
+| origin | synthetic | unmapped | 0 | none | unknown |
+| request | alpha | ["demo","answer"] | declarations | complete | :1 |
+| request | alpha | ["demo","answer"] | priority | complete | :3 |
+| request | alpha | ["demo.answer"] | priority | complete | :3 |
+| request | alpha | ["failed"] | isDefined | failed | timeout:2 |
+| request | alpha | ["partial"] | isDefined | partial | :1 |
+| request | alpha | ["requested","prefix"] | isDefined | complete | :1 |
+| request | alpha | ["sparse"] | priority | complete | :3 |
+| request | beta | ["demo","answer"] | declarations | complete | :1 |
+| request | beta | ["demo","answer"] | priority | complete | :2 |
+| selected | alpha | ["demo","answer"] | 0 | -9223372036854775808 | shared.nix |
+| selected | alpha | ["demo","answer"] | 1 | -9223372036854775808 | shared.nix |
+| selected | alpha | ["demo.answer"] | 0 | -1 | shared.nix |
+| selected | alpha | ["demo.answer"] | 1 | -1 | none |
+| selected | alpha | ["sparse"] | 0 | 0 | shared.nix |
+| selected | beta | ["demo","answer"] | 0 | 9223372036854775807 | unique.nix |
+| unknown | alpha | ["failed"] | unknown | unknown |  |
+| unknown | alpha | ["missing"] | unknown | unknown |  |
