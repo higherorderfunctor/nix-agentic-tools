@@ -28,8 +28,10 @@
       else key;
     applied = lib.applyModuleArgsIfFunction effectiveKey loaded args;
     file =
-      if isPath
-      then toString module
+      if builtins.isPath module
+      then builtins.appendContext (toString module) (builtins.getContext "${module}")
+      else if isPath
+      then module
       else parent;
     normalized = lib.unifyModuleSyntax file effectiveKey applied;
     label =

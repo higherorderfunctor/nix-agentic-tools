@@ -39,7 +39,7 @@ class InstalledTests(unittest.TestCase):
 
     def run_codeql(self, *args, success=True, env=None):
         argv = [self.command, *map(str, args)]
-        if args[:2] in (("database", "create"), ("query", "run"), ("test", "run")):
+        if args[:2] in (("database", "create"), ("database", "finalize"), ("query", "run"), ("test", "run")):
             argv = ["flock", os.environ["CODEQL_NIX_TEST_LOCK"], *argv, "--threads=4", "--ram=6000"]
         result = subprocess.run(argv, cwd=self.scratch, env=self.env if env is None else env, capture_output=True, text=True, timeout=900)
         if success:

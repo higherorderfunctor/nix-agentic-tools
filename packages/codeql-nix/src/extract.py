@@ -180,7 +180,9 @@ def main():
             # fetchTree uses the same content-addressed source spelling in every
             # request's private store. E1 verifies bytes before admitting links.
             copied_project = discovered["trees"][list(roots).index(None)]
-            mappings = {copied_project + "/" + row[1][2]: row[1][0] for row in source_files}
+            mappings = {}
+            for _, (file, _, relative, _, _) in source_files:
+                mappings.setdefault(copied_project + "/" + relative, []).append(file)
             evaluation = supervise(manifest, bindings, staged_trap, source_files=source_files,
                                    source_mappings=mappings, nix=nix, identity=identity)
             facts += identity.accept(abi, evaluation)

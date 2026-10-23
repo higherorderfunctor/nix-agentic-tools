@@ -4,7 +4,7 @@
 > explicit owner check imports; document and check inventories live in the owner
 > registry and checks entry point. S1 adds combined-schema generation and
 > standalone raw location tests; E1 adds the isolated metadata projection check;
-> S2 registers source and anchor acceptance.
+> S2 registers source and anchor acceptance; Q0 adds the installed query check.
 
 ## Purpose and fit
 
@@ -64,17 +64,19 @@ Each pack has its own `qlpack.yml` at the reserved interface:
 - `ql/test/`: `nix-agentic-tools/nix-tests`, depending on `nix-all` and
   selecting extractor `nix`.
 
-All versions are `0.0.0`; these manifests establish identities, not an installed
-product. `ql/lib/nix.dbscheme` is a symlink to `../../generated/nix.dbscheme`,
-S1's combined generated/handwritten schema. S1's private raw QL and location
-adapter supply the library's syntax interface; `codeql-nix-raw-inventory` checks
+All versions are `0.0.0`; these manifests establish identities. The
+[installed extractor](installed-extractor.md) assembles the installed products.
+`ql/lib/nix.dbscheme` is a symlink to `../../generated/nix.dbscheme`, S1's
+combined generated/handwritten schema. S1's private raw QL and location adapter
+supply the library's syntax interface; `codeql-nix-raw-inventory` checks
 deterministic generation, inventory drift and standalone generated-node
 file/location traversal. S2 adds the syntax driver and private
 [authenticated anchor bridge](source-identity.md), tested by
 `codeql-nix-anchors` through F3 driver contracts, raw preflight and QL/archive
-assertions. The final installed extractor, public meaning API and query suite
-remain later slices. The bootstrap's separate fixture packs remain disposable
-evidence.
+assertions. The installed extractor, public metadata API and
+[Step 0 queries](step0-query.md) now have separate owner checks; Q0 acceptance
+requires its installed lifecycle check to pass. The bootstrap's separate fixture
+packs remain disposable evidence.
 
 ## Adding a domain
 
