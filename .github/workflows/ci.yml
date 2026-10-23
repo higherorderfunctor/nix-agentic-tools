@@ -83,6 +83,23 @@ jobs:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           pushFilter: kiro-cli|codeql
+          installCommand: |
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+            for attempt in 1 2 3; do
+              if nix-env --quiet -j8 -iA cachix -f https://cachix.org/api/v1/install; then
+                exit 0
+              else
+                status=$?
+              fi
+              if (( status >= 128 || attempt == 3 )); then
+                exit "$status"
+              fi
+              echo "::warning::Cachix install attempt $attempt/3 failed; retrying."
+              sleep "$((attempt * 5))"
+            done
       - name: Warm IFD sources (retry, best-effort)
         uses: ./.github/actions/warm-ifd
         with:
