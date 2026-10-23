@@ -7,7 +7,10 @@
   ...
 }: let
   configFacts = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi.passthru.extracted;
-  vendorFacts = import ../extract/z-ai.nix {inherit pkgs;};
+  vendorFacts = import ../extract/z-ai.nix {
+    inherit pkgs;
+    docs = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi-z-ai-docs;
+  };
   extracted = pkgs.runCommand "cliproxyapi-extracted" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :

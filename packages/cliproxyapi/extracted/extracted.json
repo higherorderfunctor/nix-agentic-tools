@@ -3019,16 +3019,10 @@
   },
   "zAi": {
     "apis": {
-      "anthropic": {
-        "base-url": "https://api.z.ai/api/anthropic"
-      },
-      "chat": {
-        "base-url": "https://api.z.ai/api/paas/v4"
-      }
+      "anthropic": { "base-url": "https://api.z.ai/api/anthropic" },
+      "chat": { "base-url": "https://api.z.ai/api/paas/v4" }
     },
-    "claudeDefaults": {
-      "API_TIMEOUT_MS": "3000000"
-    },
+    "claudeDefaults": { "API_TIMEOUT_MS": "3000000" },
     "claudeModels": {
       "haiku": "glm-5.3-flash",
       "opus": "glm-5.3-flash",

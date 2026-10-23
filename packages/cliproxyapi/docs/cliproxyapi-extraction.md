@@ -1,14 +1,20 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-23 — CPA 8.0.40 custom YAML decoders are probed
-> through yaml.v3; the shared `goTestExtract` runs the extractor over the
-> patched `src`; z.ai vendor defaults are extracted from pinned official docs
-> into the same owner facts and checked by the owner regenerator.
+> **Last verified:** 2026-10-23 — CPA 8.0.41 custom YAML decoders are probed
+> through yaml.v3; z.ai documentation uses the shared `webDocsLib.mkSnapshot`
+> updater, validates candidate pages, and refreshes the same owner facts after
+> pinning changed content.
 
 ## Why reflection also needs the v8 tables
 
-`extract/z-ai-sources.json` pins official Markdown documents by content hash
-(accessed 2026-10-23). `extract/z-ai.py` parses the overview's chat API table,
+`packages/docs/cliproxyapi-z-ai-docs/package.nix` pins three official Markdown
+documents through `webDocsLib.mkSnapshot`, shared with `kimchi-docs` and
+`kiro-model-catalog`. Its explicit URL-to-path mapping produces a recursively
+hashed snapshot. The `cliproxyapi-z-ai-docs` update target fetches the mutable
+URLs on every sweep, keeps pins unchanged when the bytes match, and validates
+changed pages with `extract/z-ai.py` before publishing the content and NAR
+hashes. The updater then runs the existing owner regenerator; failure restores
+the original pins. `extract/z-ai.py` parses the overview's chat API table,
 Claude Code's JSON environment example, and the quick start's Python AST for the
 two base URLs. Featured/Text Models tables require a known chat reference on
 every model row, accepting relative paths or absolute links on
@@ -25,9 +31,9 @@ are checked separately: identical URLs may repeat, conflicting values fail. All
 three tiers must be present, so a changed or unclassified tier fails. These
 facts do not alter harness environment variables.
 
-Refresh the three source hashes after reviewing the official documentation, then
-run the existing owner regeneration command:
-`nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate`.
+The snapshot's update script refreshes both its pins and extracted facts; no
+source hashes are maintained by hand. To regenerate facts from the current pins,
+run `nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate`.
 `cliproxyapi-extracted` joins the config and vendor extraction and checks their
 shared committed facts through `mkOwnerCheck`.
 
