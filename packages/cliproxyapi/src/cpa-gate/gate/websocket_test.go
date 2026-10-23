@@ -166,6 +166,39 @@ func TestWebsocketRelayAndControls(t *testing.T) {
 	}
 }
 
+// The upstream is reachable, so these must exercise Gorilla's client-facing
+// handshake error callback rather than a failed upstream dial.
+func TestWebsocketHandshakeRefusals(t *testing.T) {
+	front, received := websocketFixture(t)
+	for _, key := range []string{"", "malformed", "AA=="} {
+		req, err := http.NewRequest(http.MethodGet, "http"+strings.TrimPrefix(front, "ws")+"/v1/responses", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header = http.Header{"Authorization": {"Bearer " + responsesKey}, "Connection": {"Upgrade"}, "Upgrade": {"websocket"}, "Sec-Websocket-Version": {"13"}, "X-Client": {"retained"}}
+		if key != "" {
+			req.Header.Set("Sec-WebSocket-Key", key)
+		}
+		resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil || resp.StatusCode != http.StatusNotFound || len(body) != 0 || resp.Header.Get("Sec-WebSocket-Version") != "" {
+			t.Fatalf("handshake refusal: %d %v %q %v", resp.StatusCode, resp.Header, body, err)
+		}
+		select {
+		case got := <-received:
+			if got != "closed" {
+				t.Fatalf("bad handshake forwarded data: %q", got)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("upstream handshake was not exercised and closed")
+		}
+	}
+}
+
 func TestWebsocketUpstreamClose(t *testing.T) {
 	front, _ := websocketFixture(t)
 	conn := dialWebsocket(t, front+"/v1/responses?key="+responsesKey, "close")

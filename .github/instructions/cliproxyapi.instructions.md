@@ -109,8 +109,6 @@ that runs under the same uid as the gate can read the policy file, which holds
 every client key and every internal key, and can read CLIProxyAPI's own config
 and logins. It becomes a boundary only once each harness has its own VM or uid.
 
-## What it is
-
 A Caddy HTTP handler, `http.handlers.cpa_gate`, meant to sit in front of
 CLIProxyAPI (CPA). It admits a request only when it carries exactly one known
 client key on an allowed route, and replaces that key with the entry's internal
@@ -197,10 +195,10 @@ The first needs a model; later messages may inherit it. Every supplied model is
 checked, including interrupt messages. Top-level values with surrounding
 whitespace are refused even if literally in the set: CPA trims them. Accepted
 bytes, upstream text/binary messages and both directions of ping/pong/close
-controls relay unchanged. Invalid, oversized, binary or disallowed client
-messages close both connections; the client always gets close code 1008 and
-`request refused`. A service restart ends hijacked sessions by exiting the
-process.
+controls relay unchanged. Application messages with invalid JSON/UTF-8, excess
+size, binary data or disallowed models close both connections with fixed code
+1008 and `request refused`. Gorilla closes transport protocol errors itself. A
+service restart ends hijacked sessions by exiting the process.
 
 Listings are parsed by wire shape, never by request header or user agent. Only
 exact allowed IDs survive, `first_id`/`last_id` are recomputed, and an object
@@ -232,8 +230,6 @@ header or the URI.
 Caddy copies requests before handlers run, including query strings and
 nonstandard key headers. The global log filter therefore deletes both
 `request>headers` and `request>uri`. No access log is enabled.
-
-## Package and updates
 
 `packages/ai/generic/cpa-gate` builds `cmd/cpa-gate` with `buildGoModule` and
 nixpkgs' Caddy version and build tags. `gate.json` pins `goFloor` and

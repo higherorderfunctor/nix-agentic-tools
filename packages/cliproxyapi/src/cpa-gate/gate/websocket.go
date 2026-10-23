@@ -39,6 +39,9 @@ func (g *Gate) serveWebsocket(w http.ResponseWriter, r *http.Request, e *entry) 
 	}
 	defer upstream.Close()
 	upgrader := websocket.Upgrader{
+		Error: func(w http.ResponseWriter, _ *http.Request, _ int, _ error) {
+			_ = g.refuse(w, notFound, e.name, classWebsocket, "websocket")
+		},
 		// As with CPA, credentials authenticate non-browser clients. Origin is
 		// forwarded to CPA, whose handshake may impose its own check.
 		CheckOrigin:  func(*http.Request) bool { return true },

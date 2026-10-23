@@ -95,10 +95,10 @@ The first needs a model; later messages may inherit it. Every supplied model is
 checked, including interrupt messages. Top-level values with surrounding
 whitespace are refused even if literally in the set: CPA trims them. Accepted
 bytes, upstream text/binary messages and both directions of ping/pong/close
-controls relay unchanged. Invalid, oversized, binary or disallowed client
-messages close both connections; the client always gets close code 1008 and
-`request refused`. A service restart ends hijacked sessions by exiting the
-process.
+controls relay unchanged. Application messages with invalid JSON/UTF-8, excess
+size, binary data or disallowed models close both connections with fixed code
+1008 and `request refused`. Gorilla closes transport protocol errors itself. A
+service restart ends hijacked sessions by exiting the process.
 
 Listings are parsed by wire shape, never by request header or user agent. Only
 exact allowed IDs survive, `first_id`/`last_id` are recomputed, and an object
