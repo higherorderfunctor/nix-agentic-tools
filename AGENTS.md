@@ -130,6 +130,14 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`packages/codeql/docs/codeql.md`](packages/codeql/docs/codeql.md)
     - [`packages/codeql/docs/customize.md`](packages/codeql/docs/customize.md)
+- **`codeql-nix`**
+  - Match:
+    - `packages/codeql-nix/**`
+  - Read:
+    - [`packages/codeql-nix/docs/database-contract.md`](packages/codeql-nix/docs/database-contract.md)
+    - [`packages/codeql-nix/docs/integration-gate.md`](packages/codeql-nix/docs/integration-gate.md)
+    - [`packages/codeql-nix/docs/owner-layout.md`](packages/codeql-nix/docs/owner-layout.md)
+    - [`packages/codeql-nix/docs/target-contract.md`](packages/codeql-nix/docs/target-contract.md)
 - **`codex-daemon`**
   - Match:
     - `packages/chatgpt-codex/**`

@@ -1,0 +1,88 @@
+# Nix CodeQL owner and test entry points
+
+> **Last verified:** 2026-10-23 — Step 0 retains 23 metadata relations and
+> explicit owner check imports; document and check inventories live in the owner
+> registry and checks entry point. The language packs remain a skeleton.
+
+## Purpose and fit
+
+`packages/codeql-nix/` owns the Nix language contracts, fixtures and pack
+manifests. Its `registry.nix` is the source of scoped architecture documents,
+including this note. It contributes through the existing owner registry; no root
+owner allowlist or separate discovery mechanism is needed.
+
+`checks.nix` is the source of explicit check imports. Supporting files are not
+recursively discovered as checks. Each imported check declares its selected
+fixtures, dependencies and platform guards. Add a deliberate owner-local import
+when adding a domain, without changing the root flake or copying the inventory
+into this document.
+
+## Checks and nonempty evidence
+
+The bootstrap proves its disposable syntax/target integration fixture. The ABI
+check validates the handwritten schema and independent typed golden TRAP. The
+contracts check runs explicitly selected Python suites, including the
+manifest/observation boundary, runner behavior and ABI/health sentinels. These
+fixture checks do not establish production extraction. Read their imports and
+commands through `checks.nix` for the current check and suite inventory.
+
+A check must fail when a selected suite fails and publish its evidence only
+after every selected suite passes. Register transport tests in an owner check so
+verification does not depend on a manual invocation.
+
+`checks/run-domain-tests.py` accepts one or more explicit unittest file paths.
+Each file runs in a separate Python process, with its parent directory available
+for companion imports. The runner reports total and executed test counts per
+file. Missing files, import errors, failed tests, empty suites, entirely skipped
+suites and early `SystemExit` fail the aggregate. It never searches sibling
+directories for tests; a passing suite cannot hide an empty later suite.
+
+The ABI sentinel validates the golden graph and compares its relation inventory
+with an independently spelled set of all 23 Step 0 relations. The health
+sentinel requires runs, targets, syntax results and request results, completed
+discovery, successful target/syntax statuses and positive request work counts.
+These witnesses prevent empty or failed fixture output from looking like clean
+analysis. They validate the fixture contract, not live extraction health or
+future evaluator completeness.
+
+## Pack boundaries
+
+Each pack has its own `qlpack.yml` at the reserved interface:
+
+- `ql/lib/`: `nix-agentic-tools/nix-all`, a library selecting
+  `evaluation.dbscheme` and extractor `nix`.
+- `ql/queries/`: `nix-agentic-tools/nix-queries`, depending on `nix-all`.
+- `ql/test/`: `nix-agentic-tools/nix-tests`, depending on `nix-all` and
+  selecting extractor `nix`.
+
+All versions are `0.0.0`; these manifests establish identities, not an installed
+product. `ql/lib/evaluation.dbscheme` is a symlink to
+`../../schema/evaluation.dbscheme`, the handwritten-only F1 schema. It is
+neither S1's combined generated/handwritten schema nor an installed extractor
+schema. There is no production extractor, public QL API or query suite supplied
+by these manifests. The bootstrap's separate fixture packs remain disposable
+evidence.
+
+## Adding a domain
+
+Reserve a distinct `ql/test/<domain>/` for each domain's source, `.ql` and
+reviewed `.expected` fixtures, and a distinct `checks/fixtures/<domain>/` when
+Python or other contract fixtures are needed. Keep those paths disjoint from the
+existing `abi`, `bootstrap`, `contracts` and `protocol` fixtures. A directory
+reservation does not implement a later capability or make it a passing test.
+
+Add an owner-local `checks/<domain>.nix` and explicitly import it from
+`checks.nix`. For Python contracts, invoke `checks/run-domain-tests.py` with the
+exact selected files and declare their dependencies in that check. For QL
+fixtures, a domain check must explicitly run the appropriate tests against its
+required producer/library; the Python runner does not run CodeQL tests. Preserve
+the nonempty guards and independent expectations rather than learning expected
+output from the implementation.
+
+Keep shared pack manifests and the ABI coordinated instead of letting domains
+rewrite them independently. Change F1 first when relation semantics change;
+update F2's independent transport fixtures when that boundary changes. Future
+combined schema generation and extractor installation need their own checks
+before this note can claim those capabilities. Format changed files with
+`treefmt`, run the affected checks through CI and update this note when
+ownership or entry-point obligations change.
