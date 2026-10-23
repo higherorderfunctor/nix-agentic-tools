@@ -154,7 +154,8 @@ consumer.
 # Evaluation isolation and projection publication
 
 > **Last verified:** 2026-10-23 — E1 implements the serialized projection
-> boundary; module adapters and value semantics remain later slices.
+> boundary for Step 0 metadata; module adapters and value semantics remain later
+> slices.
 
 ## Purpose and fit
 
@@ -163,9 +164,10 @@ bindings and a TRAP destination through `supervise`. It launches one subprocess
 at a time for each selected request. Failure in one request leaves completed
 projections available. It does not discover flake outputs, enter a devenv shell
 or implement the adapter named by a descriptor. The capability rows distinguish
-supported projection transport from unavailable module adapters. E1 admits only
-`config`/`value` requests authorized by `selected-value`; other combinations are
-blocked before producer execution until E2/E3 implement their contracts.
+supported projection transport from unavailable module adapters. E1 admits the
+F2 `option-metadata` domain, `metadata` observation mode and `declarations`,
+`isDefined` or `priority` facets at root depth (`maxDepth = 0`). It supplies no
+module adapter or production metadata projection.
 
 `src/eval/protocol.py` enables all three F2 custom formats and delegates exact
 text, identity and fact validation to F1's `schema/abi.py`. Its TRAP renderer
@@ -226,21 +228,30 @@ exceed that size in aggregate. Timeout or excess output kills and reaps the
 process group. Run diagnostics retain at most 4096 UTF-8 bytes of a message.
 
 Accepted output must be one F2 envelope with exactly the supplied request
-result. Producers can emit only the selected value/membership/observation
-tables, cannot overwrite supervisor facts, and must keep config observations on
-the selected literal path and `applied-config` stage. Unrequested string-context
-rows are rejected. A complete request requires an observed selected-root
-observation linked to an `nx_values` row; a scalar row is optional, so opaque
-functions, empty containers and null retain explicit successful witnesses. The
-complete graph passes F1 validation before publication. Reachability, depth,
-cycles and node counts are checked on the supplied graph; these checks do not
-bound arbitrary internal work in a trusted producer. They supplement the
-subprocess time and memory limits. The deadline and address-space limit apply to
-child execution; JSON/F1 validation and publication are outside that deadline,
-and the supervisor has no aggregate memory ceiling.
+result. Producers can emit option, requested metadata, declaration, origin,
+origin-position and observation rows; they cannot overwrite supervisor facts.
+Every option must belong to the selected context and exact literal path. Every
+observation must name that request and option at `pre-apply-metadata`. Metadata
+rows must name an emitted option and the requested facet; priority additionally
+permits its `isDefined` witness. Origins must be used by emitted declarations,
+and positions must name those origins. Source-file authentication and source
+origin links need E2a's admitted syntax inputs.
+
+A complete request requires a positive observed count and an `observed` option
+witness for the selected facet. `isDefined` and `priority` also require their
+respective metadata rows; declarations may be empty with an observed option. F1
+independently requires each priority's same-option `isDefined = true` and
+priority-request observation. A result-only envelope, unforced observation or
+missing metadata cannot establish success. The complete graph passes F1
+validation before publication. Option and declaration records count against
+`maxNodes`, independently of the reported count; observation and reported counts
+are also bounded. These checks bound the supplied records, not arbitrary
+internal work in a trusted producer. The deadline and address-space limit apply
+to child execution; JSON/F1 validation and publication are outside that
+deadline, and the supervisor has no aggregate memory ceiling.
 
 Each validated projection is written to a temporary file, flushed and renamed to
-a completed `.trap` file. An invalid transaction publishes no values.
+a completed `.trap` file. An invalid transaction publishes no metadata.
 Supervisor-owned run, phase, target, context, capability, request and diagnostic
 rows are published separately at completion. This is a per-projection handoff,
 not an atomic whole-run snapshot or a proof of crash recovery. Completed
@@ -253,7 +264,7 @@ are blocked; other producer errors fail. Targets and the evaluation phase expose
 incomplete requests. Exception messages classify some Nix refusals, so changed
 runtime wording requires checking the blocked/failed distinction. A malformed
 manifest records failed discovery before any target is admitted. Missing
-observations never imply absent options or successful null.
+observations never imply absent options or completed metadata.
 
 ## Exact CI entry point and cases
 
@@ -266,23 +277,23 @@ or database import runs in this check.
 
 The fixture has two complementary oracle groups:
 
-- Fake producers check bound arguments, literal target names and path segments,
-  statuses and completed-file handoff; serialized execution; error isolation
-  with strict-mode evidence; crash/malformed/invalid/forged/foreign-request
-  refusal; time, address-space, output, node, depth and diagnostic budgets;
-  invalid manifests (including lone surrogates) and custom formats; every
-  missing opaque binding; unsupported requests and unrequested string-context
-  output; legal multi-field output above 1 MiB versus aggregate/individual
-  overflow; shared DAGs under an outer timeout, cycles and longest-path depth;
-  refusal of result-only or unlinked-observation success; and positive opaque,
-  empty-container and null witnesses.
-- Real Nix checks compare a selected Boolean to an independently invoked direct
-  Nix expression with an unselected throwing leaf; import an admitted sibling
-  and bound arguments; read a second declared root through its pinned
-  `fetchTree`; distinguish a selected throw from a missing input; hide a host
-  environment input; deny an undeclared path and an expression outside the
-  roots; refuse a hash-pinned loopback fetch before the HTTP server receives any
-  request; and reject IFD without the builder marker or a lockfile appearing.
+- Fake producers check bound arguments, literal target names and paths, statuses
+  and completed-file handoff; serialized execution; error isolation with
+  strict-mode evidence; crash/malformed/invalid/forged/foreign-request, context,
+  option-path and origin refusal; time, address-space, output, root depth, node
+  and diagnostic budgets; invalid manifests (including lone surrogates), custom
+  formats and missing opaque bindings; unrequested metadata; legal multi-field
+  output above 1 MiB versus aggregate/individual overflow; actual metadata
+  record counts at and over the node budget despite a smaller reported count;
+  refusal of result-only, unobserved or missing-metadata success; all three
+  metadata facets and priority's independent witness.
+- Real Nix checks compare `isDefined` metadata to an independently invoked
+  direct Nix Boolean expression with an unselected throwing leaf; import an
+  admitted sibling and bound arguments; read a second declared root through its
+  pinned `fetchTree`; distinguish a selected throw from a missing input; hide a
+  host environment input; deny an undeclared path and an expression outside the
+  roots; refuse a hash-pinned loopback fetch before the HTTP server receives a
+  request; and reject IFD without a builder marker or lockfile appearing.
 
 These tests establish the exercised runtime controls and projection handoff.
 They do not establish general adapter correctness, scalar/path serialization,
@@ -298,6 +309,16 @@ successful unrelated requests and health evidence on failures. Format changed
 files, run the affected owner checks, and update this note and the existing
 registry source list when the abstraction changes. Regenerate instruction
 projections through `generate:all`; never edit generated consumers directly.
+
+## Deferred consumers
+
+Increment 4 restores value/member/scalar/string-context validation and fixtures,
+including selected-root value success, opaque/empty/null witnesses,
+reachability, cycles, shared DAG processing and longest-path depth checks. Their
+text and aggregate-output checks remain here on metadata rows. Increment 3
+restores nested contexts; the retained transport accepts roots only. E2a
+supplies the module adapter and admitted syntax-to-origin links without adding a
+value serializer.
 
 <!-- Fragment: packages/codeql-nix/docs/integration-gate.md -->
 
@@ -449,7 +470,7 @@ prerequisites.
 > **Last verified:** 2026-10-23 — Step 0 retains 23 metadata relations and
 > explicit owner check imports; document and check inventories live in the owner
 > registry and checks entry point. S1 adds combined-schema generation and
-> standalone raw location tests; E1 adds the isolated projection check.
+> standalone raw location tests; E1 adds the isolated metadata projection check.
 
 ## Purpose and fit
 
@@ -494,10 +515,10 @@ future evaluator completeness.
 
 `codeql-nix-eval-isolation` adds the Linux-only E1 supervisor fixture through
 the same domain runner. Its fake producers and real minimal Nix projections
-check serialized requests, budgets, refusal paths and validated TRAP handoff.
-See [evaluation-isolation.md](evaluation-isolation.md) for admission rules,
-runtime limits and the exact cases. This check supplies no module adapter or
-CodeQL database import.
+check serialized metadata requests, budgets, refusal paths and validated TRAP
+handoff. See [evaluation-isolation.md](evaluation-isolation.md) for admission
+rules, runtime limits and the exact cases. This check supplies no module adapter
+or CodeQL database import.
 
 ## Pack boundaries
 

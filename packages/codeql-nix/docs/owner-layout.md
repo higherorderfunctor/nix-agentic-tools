@@ -3,7 +3,7 @@
 > **Last verified:** 2026-10-23 — Step 0 retains 23 metadata relations and
 > explicit owner check imports; document and check inventories live in the owner
 > registry and checks entry point. S1 adds combined-schema generation and
-> standalone raw location tests; E1 adds the isolated projection check.
+> standalone raw location tests; E1 adds the isolated metadata projection check.
 
 ## Purpose and fit
 
@@ -48,10 +48,10 @@ future evaluator completeness.
 
 `codeql-nix-eval-isolation` adds the Linux-only E1 supervisor fixture through
 the same domain runner. Its fake producers and real minimal Nix projections
-check serialized requests, budgets, refusal paths and validated TRAP handoff.
-See [evaluation-isolation.md](evaluation-isolation.md) for admission rules,
-runtime limits and the exact cases. This check supplies no module adapter or
-CodeQL database import.
+check serialized metadata requests, budgets, refusal paths and validated TRAP
+handoff. See [evaluation-isolation.md](evaluation-isolation.md) for admission
+rules, runtime limits and the exact cases. This check supplies no module adapter
+or CodeQL database import.
 
 ## Pack boundaries
 

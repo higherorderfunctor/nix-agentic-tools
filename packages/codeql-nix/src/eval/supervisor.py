@@ -4,7 +4,7 @@ Command bindings are explicitly trusted producer fixtures, not a Nix sandbox.
 Real expressions run in pure/restricted Nix against hash-pinned admitted roots.
 """
 
-# cspell:ignore preexec RLIMIT setrlimit setsid
+# cspell:ignore preexec RLIMIT setrlimit setsid unrequested
 
 import hashlib
 import json
@@ -131,57 +131,46 @@ def nix_command(nix, binding, job, request, directory, deadline, env):
 def projection_rows(packet, job, outer):
     validate(packet, "observation-protocol.json")
     facts = packet["facts"]
-    permitted = {"nx_member_values", "nx_observation_values", "nx_observations",
-                 "nx_request_results", "nx_scalar_values",
-                 "nx_value_members", "nx_values"}
+    permitted = {"nx_observations", "nx_option_declarations", "nx_option_metadata",
+                 "nx_option_priority", "nx_options", "nx_origin_positions",
+                 "nx_origins", "nx_request_results"}
     if any(relation not in permitted for relation, _ in facts):
         raise ValueError("producer attempted to overwrite supervisor-owned facts")
     identity, request = job["identities"]["request"], job["request"]
     results = [args for relation, args in facts if relation == "nx_request_results"]
     if len(results) != 1 or results[0][0] != identity:
         raise ValueError("projection must return exactly its supplied request result")
+    allowed = {"nx_option_declarations": ("declarations",), "nx_option_metadata": ("isDefined", "priority"),
+               "nx_option_priority": ("priority",)}
+    options = {args[0] for relation, args in facts if relation == "nx_options"}
+    for relation, args in facts:
+        if relation == "nx_options" and args[1:] != [job["identities"]["context"], abi.path(request["path"])]:
+            raise ValueError("projection selected an unauthorized option")
+        if relation in ("nx_option_declarations", "nx_option_metadata", "nx_option_priority") and args[0] not in options:
+            raise ValueError("projection metadata escapes the selected option")
+        if relation in allowed and request["facet"] not in allowed[relation]:
+            raise ValueError("projection emitted unrequested metadata")
     observations = [args for relation, args in facts if relation == "nx_observations"]
     for _, req, kind, subject, stage, _ in observations:
-        if req != identity or kind not in ("config-path", "member") or stage != "applied-config":
+        if req != identity or kind != "option" or subject not in options or stage != "pre-apply-metadata":
             raise ValueError("projection observation escapes the selected request")
-        if kind == "config-path" and subject != abi.path(request["path"]):
-            raise ValueError("projection selected an unauthorized path")
+    origins = {args[0] for relation, args in facts if relation == "nx_origins"}
+    referenced = {args[2] for relation, args in facts if relation == "nx_option_declarations"}
+    if origins != referenced or any(args[0] not in origins for relation, args in facts if relation == "nx_origin_positions"):
+        raise ValueError("projection contains detached or foreign origins")
     envelope(outer + facts)
-    values = {args[0] for relation, args in facts if relation == "nx_values"}
-    members = {args[0]: args[1] for relation, args in facts if relation == "nx_value_members"}
-    links = {args[0]: args[1] for relation, args in facts if relation == "nx_member_values"}
-    observed = {args[0]: args[1] for relation, args in facts if relation == "nx_observation_values"}
-    roots = {observed[obs] for obs, _, kind, _, _, _ in observations if kind == "config-path" and obs in observed}
-    if results[0][1] == "complete" and not roots:
-        raise Refusal("projection-incomplete", "complete config-value projection lacks an observed selected-root value")
-    edges = {}
-    for member, parent in members.items():
-        if member in links:
-            edges.setdefault(parent, []).append(links[member])
-    if max(len(values), len(members), len(observations), results[0][3]) > request["maxNodes"]:
+    if results[0][1] not in ("complete", "partial") and any(relation in allowed for relation, _ in facts):
+        raise ValueError("unsuccessful transaction contains successful metadata")
+    observed = {args[3] for args in observations if args[-1] == "observed"}
+    witnesses = options
+    if request["facet"] in ("isDefined", "priority"):
+        relation = "nx_option_metadata" if request["facet"] == "isDefined" else "nx_option_priority"
+        witnesses = {args[0] for name, args in facts if name == relation}
+    if results[0][1] == "complete" and (not observed.intersection(witnesses) or results[0][3] == 0):
+        raise Refusal("projection-incomplete", "complete metadata projection lacks an observed selected-option witness")
+    records = sum(relation in ("nx_options", "nx_option_declarations") for relation, _ in facts)
+    if max(records, len(observations), results[0][3]) > request["maxNodes"]:
         raise Refusal("node-limit", "projection node limit exceeded")
-    # Topological traversal bounds shared DAGs without exponentially revisiting paths.
-    incoming = dict.fromkeys(values, 0)
-    for children in edges.values():
-        for child in children:
-            incoming[child] += 1
-    depths = dict.fromkeys(roots, 0)
-    pending = [value for value in roots if incoming[value] == 0]
-    reached = set()
-    while pending:
-        value = pending.pop()
-        if depths[value] > request["maxDepth"]:
-            raise Refusal("depth-limit", "projection exceeds depth limit")
-        reached.add(value)
-        for child in edges.get(value, []):
-            depths[child] = max(depths.get(child, 0), depths[value] + 1)
-            incoming[child] -= 1
-            if incoming[child] == 0:
-                pending.append(child)
-    if reached != values or any(parent not in reached for parent in members.values()):
-        raise ValueError("detached or cyclic projection values or members")
-    if results[0][1] not in ("complete", "partial") and values:
-        raise ValueError("unsuccessful transaction contains successful values")
     return facts, results[0][1]
 
 
@@ -206,7 +195,7 @@ def supervise(manifest, bindings, trap_dir, *, strict=False, nix="nix"):
     run = abi.key("run", [str(time.time_ns())])
     schema_hash = hashlib.sha256((Path(__file__).resolve().parents[2] / "schema/contract.json").read_bytes()).hexdigest()
     extractor_hash = hashlib.sha256(Path(__file__).read_bytes() + Path(__file__).with_name("protocol.py").read_bytes()).hexdigest()
-    facts = [["nx_runs", [run, schema_hash, extractor_hash, "not-requested", "not-admitted", "not-admitted"]],
+    facts = [["nx_runs", [run, schema_hash, extractor_hash, "not-requested", "not-requested", "not-admitted"]],
              ["nx_phases", [run, "syntax", "not-requested", "evaluation supervisor only"]]]
     incomplete = False
     published = set()
@@ -231,8 +220,7 @@ def supervise(manifest, bindings, trap_dir, *, strict=False, nix="nix"):
         incomplete = True
     else:
         fingerprints = [target["fingerprint"] for target in manifest["targets"].values()]
-        facts[0][1][-2:] = [digest(sorted(pin[field] for pin in fingerprints))
-                           for field in ("modelVersion", "sourceSnapshotHash")]
+        facts[0][1][-2:] = ["not-requested", digest(sorted(pin["sourceSnapshotHash"] for pin in fingerprints))]
         facts.append(["nx_phases", [run, "discovery", "complete", ""]])
         for name, target in manifest["targets"].items():
             fingerprint = target["fingerprint"]
@@ -253,8 +241,8 @@ def supervise(manifest, bindings, trap_dir, *, strict=False, nix="nix"):
                 facts.append(["nx_requests", [req, identity, context, request["domain"], abi.path(request["path"]), request["facet"],
                               *[request[key] for key in ("maxDepth", "maxNodes", "maxBytes", "maxSeconds", "maxMemoryMiB")]]])
                 try:
-                    if (request["domain"], request["facet"]) != ("config", "value") or "selected-value" not in target["observationModes"]:
-                        raise Refusal("request-unsupported", "E1 supports only selected config-value projections", "blocked")
+                    if request["maxDepth"] != 0:
+                        raise Refusal("request-unsupported", "E1 supports only root metadata projections", "blocked")
                     args = target["argumentDescription"]
                     binding = bindings[target["evaluation"]["reference"]]
                     job = {"identities": {"context": context, "request": req, "run": run, "target": identity},
