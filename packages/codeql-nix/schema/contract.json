@@ -1,0 +1,288 @@
+{
+  "abiVersion": 1,
+  "entities": [
+    "anchor",
+    "context",
+    "definition",
+    "diagnostic",
+    "file",
+    "member",
+    "module",
+    "observation",
+    "option",
+    "origin",
+    "request",
+    "run",
+    "target",
+    "value"
+  ],
+  "enums": {
+    "nx_capabilities.state": [
+      "not-requested",
+      "supported",
+      "unavailable",
+      "unsupported"
+    ],
+    "nx_context_parents.memberKind": ["attribute", "list", "submodule"],
+    "nx_contexts.kind": ["concrete-submodule", "root", "schema"],
+    "nx_files.sourceKind": ["dependency", "generated", "project"],
+    "nx_observations.stage": [
+      "applied-config",
+      "pre-apply-metadata",
+      "selected-definition"
+    ],
+    "nx_observations.state": [
+      "blocked",
+      "failed",
+      "observed",
+      "unforced",
+      "unsupported"
+    ],
+    "nx_observations.subjectKind": [
+      "config-path",
+      "definition",
+      "member",
+      "option"
+    ],
+    "nx_option_metadata.field": [
+      "internal",
+      "isDefined",
+      "readOnly",
+      "typeName",
+      "visible"
+    ],
+    "nx_origin_positions.convention": ["utf8-byte-1-based"],
+    "nx_origins.kind": ["external", "source", "synthetic", "unknown"],
+    "nx_phases.phase": [
+      "discovery",
+      "evaluation",
+      "syntax",
+      "target-discovery"
+    ],
+    "nx_phases.state": ["complete", "failed", "not-requested", "partial"],
+    "nx_request_results.state": [
+      "blocked",
+      "complete",
+      "failed",
+      "partial",
+      "skipped",
+      "unsupported"
+    ],
+    "nx_requests.domain": [
+      "config",
+      "definition-value",
+      "graph",
+      "option-metadata",
+      "option-value",
+      "schema"
+    ],
+    "nx_string_context.contextKind": ["all-outputs", "opaque", "output"],
+    "nx_syntax_results.state": ["complete", "excluded", "failed", "recovered"],
+    "nx_target_inputs.role": ["adapter", "input", "lock", "manifest", "root"],
+    "nx_targets.state": [
+      "blocked",
+      "complete",
+      "failed",
+      "not-requested",
+      "partial",
+      "unsupported"
+    ],
+    "nx_value_members.memberKind": ["attribute", "list"],
+    "nx_values.completeness": ["complete", "opaque", "partial"],
+    "nx_values.kind": [
+      "attrset",
+      "boolean",
+      "derivation",
+      "float",
+      "function",
+      "integer",
+      "list",
+      "null",
+      "path",
+      "string"
+    ]
+  },
+  "identity": {
+    "anchor": [
+      "file",
+      "startByte:decimal",
+      "endByte:decimal",
+      "nodeKind",
+      "childPath"
+    ],
+    "evaluation": [
+      "evaluatorVersion",
+      "libVersion",
+      "adapterVersion",
+      "modelVersion",
+      "manifestArgumentsHash",
+      "sourceSnapshotHash",
+      "policyHash",
+      "system"
+    ],
+    "file": ["rootKey", "relativePath", "contentHash"],
+    "framing": "nixql:v1:<namespace>: followed by <utf8-byte-length>:<part> per component; no normalization",
+    "root": ["logicalName", "rootContentIdentity"]
+  },
+  "maxExactTextBytes": 1048576,
+  "priority": {
+    "encoding": "signed-decimal-v1",
+    "maximum": "9223372036854775807",
+    "minimum": "-9223372036854775808",
+    "optionWitness": {
+      "domain": "option-metadata",
+      "facet": "priority",
+      "stage": "pre-apply-metadata"
+    }
+  },
+  "relations": {
+    "nx_anchors": {
+      "columns": "anchor:anchor file:file startByte:int endByte:int nodeKind:text childPath:text",
+      "key": [0]
+    },
+    "nx_capabilities": {
+      "columns": "target:target capability:text state:text reason:text",
+      "key": [0, 1]
+    },
+    "nx_context_parents": {
+      "columns": "context:context parent:context option:option memberKind:text memberKey:text",
+      "key": [0]
+    },
+    "nx_contexts": {
+      "columns": "context:context target:target kind:text instancePathJson:text",
+      "key": [0]
+    },
+    "nx_definition_order": {
+      "columns": "definition:definition priorityDecimal:text",
+      "key": [0]
+    },
+    "nx_definitions": {
+      "columns": "definition:definition option:option ordinal:int origin:origin",
+      "key": [0]
+    },
+    "nx_diagnostic_origins": {
+      "columns": "diagnostic:diagnostic origin:origin",
+      "key": [0]
+    },
+    "nx_diagnostic_requests": {
+      "columns": "diagnostic:diagnostic request:request",
+      "key": [0]
+    },
+    "nx_diagnostic_targets": {
+      "columns": "diagnostic:diagnostic target:target",
+      "key": [0]
+    },
+    "nx_diagnostics": {
+      "columns": "diagnostic:diagnostic run:run code:text message:text",
+      "key": [0]
+    },
+    "nx_files": {
+      "columns": "file:file rootKey:text relativePath:text contentHash:text sourceKind:text",
+      "key": [0]
+    },
+    "nx_member_values": {
+      "columns": "member:member value:value",
+      "key": [0]
+    },
+    "nx_module_imports": {
+      "columns": "parent:module ordinal:int child:module",
+      "key": [0, 1]
+    },
+    "nx_module_roots": {
+      "columns": "context:context ordinal:int module:module",
+      "key": [0, 1]
+    },
+    "nx_modules": {
+      "columns": "module:module context:context moduleKey:text origin:origin disabled:bool",
+      "key": [0]
+    },
+    "nx_observation_values": {
+      "columns": "observation:observation value:value",
+      "key": [0]
+    },
+    "nx_observations": {
+      "columns": "observation:observation request:request subjectKind:text subjectKey:text stage:text state:text",
+      "key": [0]
+    },
+    "nx_option_declarations": {
+      "columns": "option:option ordinal:int origin:origin",
+      "key": [0, 1]
+    },
+    "nx_option_metadata": {
+      "columns": "option:option field:text scalarJson:text",
+      "key": [0, 1]
+    },
+    "nx_option_priority": {
+      "columns": "option:option priorityDecimal:text",
+      "key": [0]
+    },
+    "nx_options": {
+      "columns": "option:option context:context pathJson:text",
+      "key": [0]
+    },
+    "nx_origin_files": {
+      "columns": "origin:origin file:file",
+      "key": [0]
+    },
+    "nx_origin_positions": {
+      "columns": "origin:origin line:int column:int convention:text",
+      "key": [0]
+    },
+    "nx_origins": {
+      "columns": "origin:origin label:text kind:text",
+      "key": [0]
+    },
+    "nx_phases": {
+      "columns": "run:run phase:text state:text reason:text",
+      "key": [0, 1]
+    },
+    "nx_request_results": {
+      "columns": "request:request state:text reason:text observedCount:int",
+      "key": [0]
+    },
+    "nx_requests": {
+      "columns": "request:request target:target context:context domain:text pathJson:text facet:text maxDepth:int maxNodes:int maxBytes:int maxSeconds:int maxMemoryMiB:int",
+      "key": [0]
+    },
+    "nx_runs": {
+      "columns": "run:run schemaHash:text extractorHash:text grammarHash:text modelHash:text sourceSnapshotHash:text",
+      "key": [0]
+    },
+    "nx_scalar_values": {
+      "columns": "value:value encoding:text payload:text",
+      "key": [0]
+    },
+    "nx_string_context": {
+      "columns": "value:value storePath:text contextKind:text outputName:text",
+      "key": [0, 1, 2, 3]
+    },
+    "nx_syntax_results": {
+      "columns": "file:file state:text errorCount:int",
+      "key": [0]
+    },
+    "nx_target_inputs": {
+      "columns": "target:target file:file role:text",
+      "key": [0, 1, 2]
+    },
+    "nx_targets": {
+      "columns": "target:target run:run name:text adapter:text system:text evaluatorHash:text libHash:text inputHash:text policyHash:text state:text",
+      "key": [0]
+    },
+    "nx_value_members": {
+      "columns": "member:member parent:value memberKind:text memberKey:text ordinal:int",
+      "key": [0]
+    },
+    "nx_values": {
+      "columns": "value:value kind:text completeness:text",
+      "key": [0]
+    }
+  },
+  "scalarEncodings": {
+    "boolean": "boolean-json-v1",
+    "float": "float-hex-v1",
+    "integer": "integer-decimal-v1",
+    "null": "null-json-v1",
+    "path": "evaluated-path-json-v1",
+    "string": "string-json-v1"
+  }
+}
