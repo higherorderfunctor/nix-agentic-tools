@@ -78,7 +78,11 @@ fingerprint. [Target admission](target-contract.md) rejects an explicitly
 requested different model. Legacy `not-requested` targets remain valid. Lexical
 binding resolution and shadowing belong to the name resolver; import edges
 belong to the later import domain. This module supplies identities for those
-consumers without resolving source names itself.
+consumers without resolving source names itself. [N2](implicit-scope.md) wires
+generated globals into the outer explicit frame. `globalBindingIdentity` exposes
+raw global inventory only to reserve recognized spellings when fingerprints are
+absent or incompatible; this does not establish compatible resolution.
+`builtinIdentity` retains its fingerprint gate.
 
 ## Verification and changes
 

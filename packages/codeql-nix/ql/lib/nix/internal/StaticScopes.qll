@@ -105,22 +105,25 @@ module StaticScopes {
     exists(RawBridge::Node token |
       binder(frame, token) and RawBridge::binderName(token) = RawBridge::binderName(use))
   }
-  /** Unknown membership may insert or change frames within this composition root. */
-  int uncertaintyDepth(RawBridge::Node use) {
+  /** Boundaries retain their frame and whether known same-frame names win. */
+  int uncertaintyDepth(RawBridge::Node use, RawBridge::Node origin, boolean knownNamesWin) {
     exists(RawBridge::Node binding, RawBridge::Node root, string prefix |
-      computedPrefix(binding, root, prefix) and
+      computedPrefix(binding, root, prefix) and knownNamesWin = false and
       (exists(int i | unknown(binding, i) and i < last(binding) and afterSegment(binding, i, use))
        or RawBridge::setExpression(RawBridge::bindingValue(binding)) and inValue(binding, use)) and
       (RawBridge::setExpression(RawBridge::bindingValue(binding)) and inValue(binding, use) and
-        result = nodeDepth(RawBridge::bindingValue(binding))
+        origin = RawBridge::bindingValue(binding) and result = nodeDepth(origin)
        or not (RawBridge::setExpression(RawBridge::bindingValue(binding)) and inValue(binding, use)) and
-        (result = nodeDepth(root) or exists(RawBridge::Node frame |
-          StaticScopes::frame(frame, root, _) and contains(frame, use) and result = depth(frame)))))
+        (origin = root and result = nodeDepth(root) or exists(RawBridge::Node frame |
+          StaticScopes::frame(frame, root, _) and contains(frame, use) and
+          origin = frame and result = depth(frame)))))
     or exists(RawBridge::Node binding, RawBridge::Node root, string prefix, string enclosing |
       computedPrefix(binding, root, prefix) and context(use, root, enclosing) and
       (computedSet(binding) and enclosing != prefix and enclosing.indexOf(prefix) = 0 and
-        (result = nodeDepth(root) or exists(RawBridge::Node frame |
-          StaticScopes::frame(frame, root, enclosing) and not bindsName(frame, use) and result = depth(frame)))
+        (origin = root and knownNamesWin = false and result = nodeDepth(root)
+         or exists(RawBridge::Node frame |
+          StaticScopes::frame(frame, root, enclosing) and not bindsName(frame, use) and
+          origin = frame and knownNamesWin = true and result = depth(frame)))
        or enclosing = prefix and exists(RawBridge::Node frame |
          placement(frame, root, prefix) and
          frame.getKind() in ["LetExpression", "RecAttrsetExpression"] and
@@ -129,9 +132,14 @@ module StaticScopes {
          // A direct computed key is evaluated outside its own recursive set.
          not (frame = RawBridge::container(binding) and
            exists(int i | below(RawBridge::pathToken(binding, i), use))) and
-         not bindsName(frame, use) and result = nodeDepth(frame))))
+         not bindsName(frame, use) and origin = frame and knownNamesWin = true and result = nodeDepth(frame))))
   }
 
+  /** Inherited declarations share the same composed frame as ordinary attributes. */
+  predicate declarationFrame(RawBridge::Node container, RawBridge::Node frame) {
+    exists(RawBridge::Node root, string prefix |
+      placement(container, root, prefix) and StaticScopes::frame(frame, root, prefix))
+  }
   predicate binder(RawBridge::Node frame, RawBridge::Node token) {
     RawBridge::functionBinder(frame, token)
     or exists(RawBridge::Node root, string prefix, string key |

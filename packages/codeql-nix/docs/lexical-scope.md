@@ -1,7 +1,8 @@
 # Explicit lexical scope
 
 > **Last verified:** 2026-10-23 — N1 resolves explicit names and reserves
-> extension interfaces for inheritance, implicit names and runtime primitives.
+> extension interfaces consumed by inheritance, implicit names and runtime
+> primitives.
 
 A binding introduces a name; an occurrence uses one. Lexical scope determines
 which binding an occurrence can see from its position in source. A frame is one
@@ -94,26 +95,30 @@ occurrence locations, status and definite target locations; zero target
 coordinates mean no located definite target.
 
 Inheritance copies named attributes; implicit scope supplies names from an
-expression. N2, the later slice for these features, extends
-`LexicalScopeProvider` with declarations and their frames, extra occurrences,
-and per-occurrence frame exclusions. Occurrences are authenticated nodes with
-supported static-name evidence: native variable uses or nodes selected by this
-provider. Selected plain quoted names are allowed; computed names and unselected
-strings are excluded. An exclusion starts lookup outside a frame, allowing an
-inherited name to refer outward instead of to itself. These contributions use
-the same nearest-frame selection, collision checks and identity rules as native
+expression. [N2](implicit-scope.md) extends `LexicalScopeProvider` with
+declarations and their frames, extra occurrences, and per-occurrence frame
+exclusions. Occurrences are authenticated nodes with supported static-name
+evidence: native variable uses or nodes selected by this provider. Selected
+plain quoted names are allowed; computed names and unselected strings are
+excluded. An exclusion starts lookup outside a frame, allowing an inherited name
+to refer outward instead of to itself. These contributions use the same
+nearest-frame selection, collision checks and identity rules as native
 declarations. `ImplicitScopeProvider` supplies fallback candidates only after
-explicit names, including the outer runtime frame. No production inheritance or
-`with` interpretation is implemented here.
+explicit names, including the outer runtime frame. The production providers live
+in `Inheritance.qll` and `ImplicitScopes.qll`. Source-backed implicit candidates
+retain locations through the optional `getDeclaration` method; its default
+returns no declaration.
 
-M3, the later runtime-identity slice, supplies `OutermostBuiltinFrameProvider`.
-Builtins are Nix's runtime-provided primitives; their outer frame loses to local
-declarations. A runtime identity identifies the selected Nix runtime; a model
-identity identifies the runtime described by supplied facts. Only matching,
-nonempty identities admit a definite builtin target. A missing or mismatched
-model leaves resolution unavailable; a recognized builtin with incompatible
-evidence cannot fall through to an implicit candidate. N1 provides this hook and
-synthetic checks, without implementing runtime models.
+The `OutermostBuiltinFrameProvider` hook admits generated runtime identities
+through N2's production provider. Builtins are Nix's runtime-provided
+primitives; their outer frame loses to local declarations. A runtime identity
+identifies the selected Nix runtime; a model identity identifies the runtime
+described by supplied facts. Only matching, nonempty identities admit a definite
+builtin target. A missing or mismatched model leaves resolution unavailable; a
+recognized builtin with incompatible evidence cannot fall through to an implicit
+candidate. N1 provides this hook and synthetic checks; [M3](builtin-models.md)
+generates the model. Production and synthetic providers use distinct identities
+so their facts cannot combine.
 
 `checks.x86_64-linux.codeql-nix-anchors` is the continuous-integration entry
 point. It runs reviewed expected rows for scopes, merges, declaration
@@ -126,5 +131,6 @@ together. Preserve authenticated nodes, canonical merged identities,
 explicit-name precedence, must within may, and invalid versus unavailable.
 Extend the provider interfaces through their shared selection rules. Format
 changed files with `treefmt` and run the owner check through continuous
-integration. Imports, value evaluation, actual inheritance/`with` semantics and
-builtin-model generation remain separate slices.
+integration. Imports, value evaluation and builtin-model generation remain
+separate responsibilities; inheritance and `with` use the providers described
+above.
