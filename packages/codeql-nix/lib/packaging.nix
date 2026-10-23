@@ -31,13 +31,10 @@ in
     library = pkgs.runCommand "nixql-library" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      mkdir -p "$out/codeql" # bare-commands: ok
+      mkdir -p "$out" # bare-commands: ok
       cp -r ${generated}/. "$out/" # bare-commands: ok
-      cp ${../ql/lib/qlpack.yml} "$out/qlpack.yml" # bare-commands: ok
-      cp ${../ql/lib/codeql/Locations.qll} "$out/codeql/Locations.qll" # bare-commands: ok
-      mkdir -p "$out/nix/internal" # bare-commands: ok
-      chmod u+w "$out/nix/internal" # bare-commands: ok
-      cp ${../ql/lib/nix/internal/RawBridge.qll} "$out/nix/internal/RawBridge.qll" # bare-commands: ok
+      chmod -R u+w "$out" # bare-commands: ok
+      cp -rL ${../.}/ql/lib/. "$out/" # bare-commands: ok
       printf '<dbstats><typesizes/><stats/></dbstats>\n' > "$out/nix.dbscheme.stats"
     '';
     inherit (inputs) syntaxFixture;

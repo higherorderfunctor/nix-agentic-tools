@@ -1,0 +1,1 @@
+x: { demo.answer = x; demo."answer" = x; "demo.answer" = x; demo.${x} = x; ${x}.answer = x; }

@@ -1,0 +1,14 @@
+| candidates.nix | bindings.with.segments | 0 |
+| candidates.nix | demo.answer | 0 |
+| candidates.nix | malformed.binding | 0 |
+| candidates.nix | one.dotted.segment | 0 |
+| forms.nix | demo.answer | 0 |
+| forms.nix | malformed.binding | 0 |
+| forms.nix | one.dotted.segment | 0 |
+| malformed.nix | demo.answer | 0 |
+| malformed.nix | malformed.binding | 0 |
+| malformed.nix | one.dotted.segment | 0 |
+| negative.nix | demo.answer | 0 |
+| negative.nix | five.forms | 0 |
+| negative.nix | malformed.binding | 0 |
+| negative.nix | one.dotted.segment | 0 |
