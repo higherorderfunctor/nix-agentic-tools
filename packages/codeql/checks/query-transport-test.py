@@ -18,6 +18,24 @@ cli = sys.argv[1]
 module = types.ModuleType("codeql_query")
 importlib.machinery.SourceFileLoader(module.__name__, cli).exec_module(module)
 
+# A live publication can already point its engine at the next generation.
+# Resolve the DB once and prefer that generation's engine; retain old aliases.
+with tempfile.TemporaryDirectory(prefix="cq-generation-") as temporary:
+    root = Path(temporary)
+    generation, live = root / "generation", root / "live"
+    (generation / "db").mkdir(parents=True)
+    live.mkdir()
+    (live / "db").symlink_to(generation / "db")
+    for parent in (generation, live):
+        (parent / "engine/bin").mkdir(parents=True)
+        executable = parent / "engine/bin/codeql"
+        executable.write_text("")
+        executable.chmod(0o700)
+    assert module.resolve_database(live / "db") == (generation / "db", str(generation / "engine/bin/codeql"))
+    (generation / "engine/bin/codeql").unlink()
+    assert module.resolve_database(live / "db") == (generation / "db", str(live / "engine/bin/codeql"))
+    print("generation engine wins over live engine; legacy plain-directory alias remains supported")
+
 # Pause a real file write after open() exposes an empty inode. The other caller
 # must reach the compiler with both complete files while that writer is paused.
 for filename in ("qlpack.yml", "Query.ql"):

@@ -61,7 +61,9 @@ def resolve_database(path):
     # Keep the lexical path: resolving it once at daemon startup pins generations.
     logical = Path(path)
     db = logical.resolve(strict=True)
-    candidates = [logical.parent / "engine", db.parent / "engine"]
+    # Pin the engine to the resolved generation across a live-link swap.
+    # Legacy publications of plain directories can keep it beside the db alias.
+    candidates = [db.parent / "engine", logical.parent / "engine"]
     for candidate in candidates:
         engine = candidate / "bin/codeql"
         if engine.is_file() and os.access(engine, os.X_OK):

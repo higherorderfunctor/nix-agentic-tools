@@ -25,7 +25,6 @@ hpath
 jamiemagee
 Magee
 Menlo
-nixql
 NOSYSTEM
 NPROCESSORS
 nullish
