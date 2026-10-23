@@ -44,7 +44,7 @@ inputs.nix-agentic-tools = {
 # builds without it.
 nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 
-# Unfree: claude-code, codeql-actions, codeql-bare, codeql-cpp, codeql-csharp, codeql-full, codeql-go, codeql-java, codeql-javascript, codeql-python, codeql-ruby, codeql-rust, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
+# Unfree: claude-code, cliproxyapi-z-ai-docs, codeql-actions, codeql-bare, codeql-cpp, codeql-csharp, codeql-full, codeql-go, codeql-java, codeql-javascript, codeql-python, codeql-ruby, codeql-rust, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
 # Allow them in the nixpkgs.config your pkgs comes from (NixOS's when
 # useGlobalPkgs is set).
 
@@ -87,7 +87,7 @@ services.mcp-servers.servers.github-mcp = {
 
 ```yaml
 # devenv.yaml
-# Unfree: claude-code, codeql-actions, codeql-bare, codeql-cpp, codeql-csharp, codeql-full, codeql-go, codeql-java, codeql-javascript, codeql-python, codeql-ruby, codeql-rust, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
+# Unfree: claude-code, cliproxyapi-z-ai-docs, codeql-actions, codeql-bare, codeql-cpp, codeql-csharp, codeql-full, codeql-go, codeql-java, codeql-javascript, codeql-python, codeql-ruby, codeql-rust, copilot-cli, kimchi-docs, kiro-cli, kiro-model-catalog and slack-mcp.
 # Opt in as for nixpkgs.
 allowUnfree: true
 inputs:
