@@ -1,8 +1,8 @@
 {
-  "version": "3.7.0",
+  "version": "3.7.1",
   "src": {
-    "url": "https://github.com/luckyPipewrench/pipelock/archive/v3.7.0.tar.gz",
-    "hash": "sha256-XxWuBDefZzB4ISJjqL3W6f9rciq84yZA8OMwNxEjQ/w="
+    "url": "https://github.com/luckyPipewrench/pipelock/archive/v3.7.1.tar.gz",
+    "hash": "sha256-MWl8MtWFBEVzJkwAWVTpVcyIxRP7wU9OEkavFSG7Uwc="
   },
   "goFloor": "1.26.0",
   "vendorHash": "sha256-ep1I9URlal+2MWy/DJ62APgvFpey9BvISJrtPPY8E7E="
