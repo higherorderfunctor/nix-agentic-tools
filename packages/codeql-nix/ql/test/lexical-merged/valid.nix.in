@@ -1,0 +1,16 @@
+[
+  (let a.b = 1; a.c = 2; in [a.b a.c])
+  (let a = { b = 3; }; a.c = 4; in [a.b a.c])
+  (let a.c = 6; a = { b = 5; }; in [a.b a.c])
+  (let a = { b = 7; }; a = { c = 8; }; in [a.b a.c])
+  (let a = { c = 10; }; a = { b = 9; }; in [a.b a.c])
+  (let c = 99; a = rec { b = c; }; a.c = 2; in a.b)
+  (let c = 99; a.c = 2; a = rec { b = c; }; in a.b)
+  (let c = 99; a = { c = 2; }; a = rec { b = c; }; in a.b)
+  (let c = 99; a = rec { b = c; }; a = { c = 2; }; in a.b)
+  (let c = 99; a = { b = c; }; a.c = 2; in a.b)
+  (let c = 99; a = rec { b = c; }; a.renamed = 2; in a.b)
+  (let c = 99; a = rec { b = renamed; }; a.renamed = 2; in a.b)
+  (rec { a = { b = 1; }; a.c = 2; result = a; }.result)
+  (let a = { b = { c = 1; }; }; a.b.d = 2; in a)
+]

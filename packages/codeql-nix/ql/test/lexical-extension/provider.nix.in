@@ -1,0 +1,18 @@
+let
+  x = 1;
+in
+let
+  holder = [
+    { x = 2; clash = 3; extra = 4; }
+    { clash = 5; }
+  ];
+in {
+  near = x;
+  bypass = x;
+  conflict = clash;
+  occurrence = { extra = 6; };
+  quoted = { "extra" = 7; };
+  quotedBypass = { "x" = 8; };
+  computed = { "${"extra"}" = 9; };
+  unselected = { "extra" = 10; };
+}

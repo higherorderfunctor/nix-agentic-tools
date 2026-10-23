@@ -1,0 +1,6 @@
+[
+  (let a=rec {c=2;probe=b;}; a.${"b"}.d=7; in a.probe)
+  (let a=rec {c=2;probe=d;}; a.${"b"}.d=7; in a.probe)
+  (let b=99; a=rec {c=2;probe=b;}; a.${"b"}.d=7; in a.probe)
+  (let c=99; a=rec {}; a.${"c"}=c; in a.c)
+]
