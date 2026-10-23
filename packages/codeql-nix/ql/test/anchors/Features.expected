@@ -1,0 +1,6 @@
+| features.nix | = | 14 | 15 | unique | 1 | 2 | 7 | 2 | 7 |
+| features.nix | comment | 0 | 7 | unique | 1 | 1 | 1 | 1 | 7 |
+| features.nix | interpolation | 27 | 41 | unique | 1 | 2 | 20 | 2 | 33 |
+| features.nix | let | 8 | 11 | unique | 1 | 2 | 1 | 2 | 3 |
+| features.nix | path_expression | 16 | 21 | unique | 1 | 2 | 9 | 2 | 13 |
+| recovered.nix | integer_expression | 22 | 24 | unique | 1 | 3 | 9 | 3 | 10 |
