@@ -13,6 +13,11 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
+
+
+CACHE_MB = 512
+ORPHAN_GRACE_SECONDS = 300
 
 
 def run(*args, cwd=None):
@@ -86,15 +91,19 @@ def create(root, spec, resolved, generation, commit=None):
         shutil.rmtree(source)
 
 
+def cleanup(resolved, database, mode="fit"):
+    subprocess.run([str(Path(resolved["engine"]) / "bin/codeql"), "database", "cleanup", str(database),
+                    f"--cache-cleanup={mode}", f"--max-disk-cache={CACHE_MB}"], check=True)
+
+
 def warm(resolved, database, overlay):
     engine = str(Path(resolved["warm"]) / "bin/codeql")
     # Ordinary .qlx plans cannot execute in overlay mode. Let CodeQL compile
     # from the standing pack's source against the overlay-prepared database.
     options = ["--cache-at-frontier", "--no-use-precompiled"] if overlay else ["--no-cache-at-frontier"]
     subprocess.run([engine, "database", "run-queries", str(database), resolved["pack"],
-                    *options, "--threads=4", "--ram=6000"], check=True)
-    subprocess.run([engine, "database", "cleanup", str(database),
-                    "--cache-cleanup=" + ("overlay" if overlay else "trim")], check=True)
+                    *options, "--threads=4", "--ram=6000", f"--max-disk-cache={CACHE_MB}"], check=True)
+    cleanup(resolved, database, "overlay" if overlay else "trim")
 
 
 def supports_overlay(resolved):
@@ -102,10 +111,23 @@ def supports_overlay(resolved):
     return any(line.startswith("overlay_support_version:") for line in Path(resolved["manifest"]).read_text().splitlines())
 
 
-def git_generation(root, name, spec, resolved, generation, head, base, overlay, working):
+def implementation():
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
+
+def base_key(inputs):
+    return digest([inputs["base"], inputs["tools"], inputs["spec"], inputs["overlay"], inputs["lifecycle"]])
+
+
+def shared_directory(root, name):
     common = Path(run("git", "rev-parse", "--path-format=absolute", "--git-common-dir", cwd=root))
-    shared = common / "codeql" / name
-    key = digest([base, resolved, spec, overlay, hashlib.sha256(Path(__file__).read_bytes()).hexdigest()])
+    return common / "codeql" / name
+
+
+def git_generation(root, name, spec, resolved, generation, head, base, overlay, working):
+    shared = shared_directory(root, name)
+    inputs = {"base": base, "lifecycle": implementation(), "overlay": overlay, "spec": spec, "tools": resolved}
+    key = base_key(inputs)
     cached = shared / key
     with locked(shared / "base.lock"):
         if not cached.is_dir():
@@ -151,6 +173,106 @@ def git_generation(root, name, spec, resolved, generation, head, base, overlay, 
         create(root, spec, resolved, generation, head)
 
 
+def read_inputs(path):
+    try:
+        inputs = json.loads(path.read_text())
+        base_key(inputs)  # Reject legacy or malformed stamps without complete inputs.
+        return inputs
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def optional_git(root, *args):
+    result = subprocess.run(["git", *args], cwd=root, stdout=subprocess.PIPE, text=True)
+    if result.returncode == 1:
+        return None
+    result.check_returncode()
+    return result.stdout.strip()
+
+
+def worktree_bases(root, name):
+    # Missing origin/main is an error, even if a checkout has no usable HEAD.
+    main = run("git", "rev-parse", "--verify", "origin/main^{commit}", cwd=root)
+    records = subprocess.check_output(["git", "worktree", "list", "--porcelain", "-z"], cwd=root).split(b"\0")
+    references = []
+    for record in records:
+        if not record.startswith(b"worktree "):
+            continue
+        worktree = Path(os.fsdecode(record[len(b"worktree "):]))
+        if not worktree.is_dir():
+            continue
+        inputs = read_inputs(worktree / ".devenv/state/codeql" / name / "stamp")
+        if not inputs:
+            continue
+        head = optional_git(worktree, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+        if head is None:  # An unborn checkout has no current base.
+            continue
+        base = optional_git(worktree, "merge-base", head, main)
+        if base is None:  # An unrelated history has no current base.
+            continue
+        inputs["base"] = base
+        references.append((worktree, base_key(inputs)))
+    return references
+
+
+def base_references(cached, references):
+    return [str(worktree) for worktree, key in references if key == cached.name]
+
+
+def prune(root, name, keep=None):
+    # Caller holds this checkout's builder lock. Shared locks are always nested
+    # inside it; never acquire another checkout's lock while holding base.lock.
+    state = root / ".devenv/state/codeql" / name
+    current = (state / "db").resolve() if (state / "db").is_symlink() else None
+    for generation in sorted(state.glob("generation.*")):
+        if (generation.is_dir() and not generation.is_symlink()
+                and generation / "db" != current
+                and time.time() - generation.stat().st_mtime >= ORPHAN_GRACE_SECONDS):
+            shutil.rmtree(generation)
+            print(f"{name}: removed orphan {generation.name}")
+    shared = shared_directory(root, name)
+    if not shared.is_dir():
+        return
+    with locked(shared / "base.lock"):
+        references = worktree_bases(root, name)
+        for cached in sorted(shared.iterdir()):
+            if (cached.is_dir() and not cached.is_symlink() and cached.name != keep
+                    and not base_references(cached, references)):
+                shutil.rmtree(cached)
+                print(f"{name}: removed shared base {cached.name}")
+
+
+def disk_bytes(path):
+    # du counts allocated blocks without following the engine's store symlink.
+    return int(run("du", "-s", "--block-size=1", str(path)).split()[0]) if path.exists() else 0
+
+
+def status(root, specs):
+    checkout_total = shared_total = 0
+    for name in sorted(specs):
+        state = root / ".devenv/state/codeql" / name
+        with locked(state / "lock"):
+            database = state / "db"
+            generation = database.resolve().parent.name if database.is_symlink() else "none"
+            stamp = state / "stamp"
+            age = f"{max(0, int(time.time() - stamp.stat().st_mtime))}s" if stamp.exists() else "unknown"
+            size = disk_bytes(state)
+            checkout_total += size
+            print(f"database {name} generation={generation} stamp-age={age} size={size}B")
+            shared = shared_directory(root, name)
+            if not shared.is_dir():
+                continue
+            with locked(shared / "base.lock"):
+                references = worktree_bases(root, name)
+                for cached in sorted(shared.iterdir()):
+                    if cached.is_dir() and not cached.is_symlink():
+                        size = disk_bytes(cached)
+                        shared_total += size
+                        refs = json.dumps(base_references(cached, references))
+                        print(f"base {name} key={cached.name} size={size}B worktrees={refs}")
+    print(f"total checkout={checkout_total}B shared={shared_total}B combined={checkout_total + shared_total}B")
+
+
 def lifecycle(root, name, spec, action, existing=False):
     state = root / ".devenv/state/codeql" / name
     # Hooks do not activate a database, including when down wins the lock race.
@@ -173,12 +295,15 @@ def lifecycle(root, name, spec, action, existing=False):
             if old and old.parent.is_dir():
                 shutil.rmtree(old.parent)
             return
+        if action == "gc":
+            prune(root, name)
+            return
         attribute, resolved = tools(root, spec)
         # Realize the manifest before inspecting capabilities; all tool paths
         # participate in both the worktree stamp and shared-base key.
         subprocess.run(["nix", "build", "--no-link", attribute + ".engine", attribute + ".createDatabase"]
                        + ([attribute + ".warmEngine"] if spec["source"] == "git" else []), cwd=root, check=True)
-        inputs = {"spec": spec, "tools": resolved, "lifecycle": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+        inputs = {"spec": spec, "tools": resolved, "lifecycle": implementation()}
         head = base = None
         overlay = False
         if spec["source"] == "git":
@@ -190,6 +315,7 @@ def lifecycle(root, name, spec, action, existing=False):
                 inputs["working"] = content_stamp(root, changes(root, base, spec["extensions"]))
         stamp = json.dumps(inputs, sort_keys=True, separators=(",", ":")) + "\n"
         if action == "up" and old and (state / "stamp").exists() and (state / "stamp").read_text() == stamp:
+            prune(root, name, base_key(inputs) if spec["source"] == "git" else None)
             print(f"{name}: current ({database})")
             return
         generation = Path(tempfile.mkdtemp(prefix="generation.", dir=state))
@@ -204,6 +330,7 @@ def lifecycle(root, name, spec, action, existing=False):
                 create(root, spec, resolved, generation)
             if not (generation / "db").is_dir():
                 raise RuntimeError("creator did not produce a database")
+            cleanup(resolved, generation / "db")
             (generation / "stamp").write_text(stamp)
             # Publish only complete generations; the adjacent stamp is a link
             # through db, so it changes in the same atomic operation.
@@ -215,17 +342,23 @@ def lifecycle(root, name, spec, action, existing=False):
             raise
         if old and old.parent.is_dir():
             shutil.rmtree(old.parent)
+        prune(root, name, base_key(inputs) if spec["source"] == "git" else None)
         print(f"{name}: published {database.resolve()}")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["up", "refresh", "down", "hook", "refresh-existing"])
+    parser.add_argument("action", choices=["up", "refresh", "down", "gc", "status", "hook", "refresh-existing"])
     parser.add_argument("name", nargs="?")
     args = parser.parse_args()
     root = Path(run("git", "rev-parse", "--show-toplevel"))
     specs = json.loads((root / "dev/codeql-databases.json").read_text())
-    if args.action == "hook":
+    if args.action == "status":
+        status(root, specs)
+    elif args.action == "gc":
+        for name in sorted(specs):
+            lifecycle(root, name, specs[name], "gc")
+    elif args.action == "hook":
         if os.environ.get("PRE_COMMIT_CHECKOUT_TYPE") == "0":
             return
         for name in specs:

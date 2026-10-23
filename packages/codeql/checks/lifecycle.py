@@ -2,13 +2,16 @@
 """Lifecycle integration fixtures; no CodeQL binary or Nix build is needed."""
 
 import contextlib
+import io
 import importlib.util
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -277,6 +280,178 @@ if args[:2] == ["database", "create"]:
         self.assertNotEqual((self.state / "db").resolve(), original)
         self.assertEqual(self.calls.read_text().count("create"), 2)
         self.assertNotIn("head", json.loads((self.state / "stamp").read_text()))
+
+    def test_prune_current_orphan_young_generations_on_reused_up_and_refresh(self):
+        self.execute()
+        for action in ("up", "refresh", "gc"):
+            original = (self.state / "db").resolve().parent
+            orphan = self.state / "generation.orphan"
+            young = self.state / "generation.young"
+            orphan.mkdir()
+            young.mkdir(exist_ok=True)
+            before_grace = time.time() - lifecycle.ORPHAN_GRACE_SECONDS - 1
+            os.utime(original, (before_grace, before_grace))
+            os.utime(orphan, (before_grace, before_grace))
+            self.execute(action)
+            self.assertFalse(orphan.exists())
+            self.assertTrue(young.is_dir())
+            self.assertTrue((self.state / "db").resolve().is_dir())
+            if action != "refresh":
+                self.assertTrue(original.is_dir())
+        self.assertIn("--cache-cleanup=fit --max-disk-cache=512", self.calls.read_text())
+        self.assertIn("--max-disk-cache=512", self.calls.read_text().splitlines()[1])
+
+    def test_shared_prune_tracks_live_base_not_stale_stamp_and_ignores_missing_worktrees(self):
+        self.execute()
+        shared = lifecycle.shared_directory(self.root, "nix")
+        original = next(p for p in shared.iterdir() if p.is_dir())
+        worktree = self.root.parent / "worktree with spaces"
+        self.git("worktree", "add", "-q", "-b", "fixture", str(worktree))
+        lifecycle.lifecycle(worktree, "nix", self.db_spec, "up")
+        (self.root / "a.nix").write_text("new base\n")
+        self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        self.execute()
+        self.assertTrue(original.is_dir())  # The live other checkout still has its old merge-base.
+        subprocess.run(["git", "merge", "--ff-only", "origin/main"], cwd=worktree, check=True,
+                       stdout=subprocess.DEVNULL)
+        self.execute("gc")
+        self.assertFalse(original.exists())  # Its published stamp is stale after the merge.
+        (self.root / "a.nix").write_text("newer base\n")
+        self.commit()
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        self.execute()
+        held = [p for p in shared.iterdir() if p.is_dir() and p.name != lifecycle.base_key(
+            lifecycle.read_inputs(self.state / "stamp"))]
+        self.assertEqual(len(held), 1)
+        # Leave Git's administrative worktree record in place, but remove its directory.
+        shutil.rmtree(worktree)
+        self.execute("gc")
+        self.assertFalse(held[0].exists())
+
+    def test_shared_prune_keeps_exact_active_tool_versions_and_current_run_key(self):
+        self.execute()
+        shared = lifecycle.shared_directory(self.root, "nix")
+        original = next(p for p in shared.iterdir() if p.is_dir())
+        worktree = self.root.parent / "active"
+        self.git("worktree", "add", "-q", "-b", "active", str(worktree))
+        lifecycle.lifecycle(worktree, "nix", self.db_spec, "up")
+        self.resolved["pack"] = "standing/updated"
+        self.execute()
+        self.assertTrue(original.is_dir())  # The other checkout records its own tool version.
+        with patch.object(lifecycle, "worktree_bases", return_value=[]):
+            current_key = lifecycle.base_key(lifecycle.read_inputs(self.state / "stamp"))
+            with lifecycle.locked(self.state / "lock"):
+                lifecycle.prune(self.root, "nix", current_key)
+            self.assertTrue((shared / current_key).is_dir())
+            self.assertFalse(original.exists())
+
+    def test_unstamped_inactive_worktree_does_not_pin_obsolete_or_interrupted_bases(self):
+        self.execute()
+        shared = lifecycle.shared_directory(self.root, "nix")
+        original = next(p for p in shared.iterdir() if p.is_dir())
+        inactive = self.root.parent / "inactive"
+        self.git("worktree", "add", "-q", "-b", "inactive", str(inactive))
+        self.resolved["pack"] = "standing/updated"
+        self.execute()
+        self.assertFalse(original.exists())
+        for name in ("f" * 64, "base.interrupted"):
+            (shared / name).mkdir()
+        self.execute("gc")
+        current_key = lifecycle.base_key(lifecycle.read_inputs(self.state / "stamp"))
+        self.assertEqual([p.name for p in shared.iterdir() if p.is_dir()], [current_key])
+
+    def test_unborn_and_unrelated_worktrees_do_not_abort_up_gc_or_status(self):
+        self.execute()
+        original = (self.state / "db").resolve()
+        worktree = self.root.parent / "unrelated"
+        self.git("worktree", "add", "-q", "-b", "unrelated", str(worktree))
+        other_state = worktree / ".devenv/state/codeql/nix"
+        other_state.mkdir(parents=True)
+        (other_state / "stamp").write_text((self.state / "stamp").read_text())
+        subprocess.run(["git", "checkout", "--orphan", "unborn"], cwd=worktree, check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for committed in (False, True):
+            if committed:
+                subprocess.run(["git", "commit", "-qm", "unrelated root"], cwd=worktree, check=True)
+            with self.subTest(committed=committed):
+                self.execute()
+                self.execute("gc")
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    lifecycle.status(self.root, {"nix": self.db_spec})
+                self.assertNotIn(str(worktree), output.getvalue())
+                self.assertEqual((self.state / "db").resolve(), original)
+                self.assertEqual(lifecycle.worktree_bases(self.root, "nix"), [
+                    (self.root, lifecycle.base_key(lifecycle.read_inputs(self.state / "stamp")))])
+
+    def test_missing_base_ref_and_git_failures_remain_errors(self):
+        self.execute()
+        self.git("update-ref", "-d", "refs/remotes/origin/main")
+        for action in ("up", "gc", "status"):
+            with self.subTest(action=action), self.assertRaises(subprocess.CalledProcessError):
+                if action != "status":
+                    self.execute(action)
+                else:
+                    lifecycle.status(self.root, {"nix": self.db_spec})
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        actual_run = lifecycle.subprocess.run
+        def failed_git(args, **kwargs):
+            if args[:2] == ["git", "merge-base"]:
+                return subprocess.CompletedProcess(args, 128)
+            return actual_run(args, **kwargs)
+        with patch.object(lifecycle.subprocess, "run", side_effect=failed_git):
+            with self.assertRaises(subprocess.CalledProcessError) as error:
+                self.execute("gc")
+            self.assertEqual(error.exception.returncode, 128)
+
+    def test_builder_then_shared_lock_order_covers_creation_prune_and_status(self):
+        actual_lock = lifecycle.locked
+        held = []
+        shared = lifecycle.shared_directory(self.root, "nix") / "base.lock"
+        @contextlib.contextmanager
+        def checked_lock(path):
+            if path == shared:
+                self.assertEqual(held, [self.state / "lock"])
+            else:
+                self.assertEqual(held, [])
+                self.assertEqual(path, self.state / "lock")
+            with actual_lock(path):
+                held.append(path)
+                try:
+                    yield
+                finally:
+                    held.pop()
+        actual_references = lifecycle.worktree_bases
+        def checked_references(*args):
+            self.assertEqual(held, [self.state / "lock", shared])
+            # A second descriptor cannot acquire either held lock.
+            for path in held:
+                with path.open("a") as handle:
+                    with self.assertRaises(BlockingIOError):
+                        lifecycle.fcntl.flock(handle, lifecycle.fcntl.LOCK_EX | lifecycle.fcntl.LOCK_NB)
+            return actual_references(*args)
+        with patch.object(lifecycle, "locked", checked_lock), patch.object(lifecycle, "worktree_bases", checked_references):
+            self.execute()
+            self.execute()
+            self.execute("refresh")
+            self.execute("gc")
+            with contextlib.redirect_stdout(io.StringIO()):
+                lifecycle.status(self.root, {"nix": self.db_spec})
+        self.assertEqual(held, [])
+
+    def test_status_reports_sizes_age_and_shared_worktree_references(self):
+        self.execute()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            lifecycle.status(self.root, {"nix": self.db_spec})
+        lines = output.getvalue().splitlines()
+        self.assertRegex(lines[0], r"database nix generation=generation\.[^ ]+ stamp-age=\d+s size=\d+B")
+        self.assertRegex(lines[1], r"base nix key=[a-f0-9]{64} size=\d+B worktrees=")
+        self.assertIn(str(self.root), lines[1])
+        checkout = lifecycle.disk_bytes(self.state)
+        shared = sum(lifecycle.disk_bytes(p) for p in lifecycle.shared_directory(self.root, "nix").iterdir() if p.is_dir())
+        self.assertEqual(lines[2], f"total checkout={checkout}B shared={shared}B combined={checkout + shared}B")
 
     def test_hook_detaches_only_existing_databases_on_branch_checkout(self):
         (self.root / "dev").mkdir()

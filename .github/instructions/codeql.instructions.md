@@ -10,7 +10,8 @@ applyTo: "packages/codeql/**"
 > **Last verified:** 2026-10-22 — eleven engines at 2.27.3 from one `mkEngine`
 > factory, plus the MIT Nix extractor at 0.3.0; the javascript engine wraps its
 > launcher with a Node; local databases use named lifecycle tasks, shared warmed
-> merge-base snapshots and atomic checkout generations. Packs: customize.md.
+> merge-base snapshots, atomic checkout generations and locked space management
+> with exact stamped worktree references. Packs: customize.md.
 
 ### What a bundle is
 
@@ -129,12 +130,15 @@ extractor; `additional-packs` cannot do that.
 
 `dev/codeql-databases.json` declares each database's name, source kind, CodeQL
 passthru, and creator program. `dev/tasks/codeql.nix` generates three explicit
-tasks per name, using one lifecycle implementation:
+tasks per name plus shared space-management tasks, using one lifecycle
+implementation:
 
 ```bash
 devenv tasks run codeql:nix:up       # create only when source/tool inputs changed
 devenv tasks run codeql:nix:refresh  # force a new generation
 devenv tasks run codeql:nix:down     # remove this checkout's publication/generation
+devenv tasks run codeql:gc           # prune unused shared bases and orphan generations
+devenv tasks run codeql:status       # show generations, stamp ages, allocated bytes and references
 ```
 
 `<checkout>/.devenv/state/codeql/<name>/db` links to a complete generation.
@@ -161,7 +165,11 @@ extractors warm it with
 `database run-queries --cache-at-frontier --no-use-precompiled` and retain
 overlay caches with `database cleanup --cache-cleanup=overlay`. Ordinary
 fallback databases use `database run-queries --no-cache-at-frontier` and
-`database cleanup --cache-cleanup=trim` (CLI 2.27.3).
+`database cleanup --cache-cleanup=trim` (CLI 2.27.3). Warming and cleanup set
+`--max-disk-cache=512` in MB. Before publication, each generation runs
+`database cleanup --cache-cleanup=fit --max-disk-cache=512`: keep useful cached
+results within the limit. This bounds intermediate query results, not database
+relations or source archives; future queries need the same evaluator cap.
 
 The actual extractor's `codeql-extractor.yml` selects the source behavior. If it
 declares `overlay_support_version`, every refresh copies the pristine warmed
@@ -172,6 +180,30 @@ HEAD rebuild from `git archive HEAD`, while HEAD equal to the base reuses its
 warm copy. Dirty edits are excluded in this fallback and do not invalidate its
 stamp. A moved merge-base or tool path does invalidate it. Shared bases survive
 `down` for other worktrees to reuse.
+
+Every successful `up` (including a matching stamp) and `refresh` prunes, as does
+`codeql:gc`. The checkout builder lock protects generation deletion; only
+unpublished `generation.*` directories at least five minutes old are orphans.
+The current generation is preserved regardless of age, and replacement still
+retires the previous generation immediately. Shared-base pruning takes the same
+`base.lock` as creation and copying, always inside the checkout lock, without
+locking other checkouts. It reads `git worktree list --porcelain -z`, ignores
+missing directories and recomputes each live checkout's merge-base. Each
+checkout's published stamp supplies the tools, descriptor and lifecycle hash for
+its exact current base key; the current invocation's used key is preserved too.
+Missing, legacy or malformed stamps do not retain caches. Unborn checkouts and
+unrelated histories have no current base and are skipped; a missing
+`origin/main` or another Git failure remains an error. Unreferenced bases and
+interrupted `base.*` staging directories are deleted under `base.lock`. Deleting
+a cache can require a later rebuild; published generations hold independent
+copies. No Nix evaluation is needed for `gc` or `status`.
+
+`status` prints one line per declared checkout database (name, generation, stamp
+age and allocated size), one per shared base (key, allocated size and worktree
+references), then checkout, shared and combined byte totals. Sizes include
+retained orphans and query output in the checkout state, without following the
+engine's Nix store link. Shared totals cover the declared databases in this
+clone's common Git directory.
 
 The local-only `codeql-refresh` entry in `config/repo-validation.nix` uses the
 existing prek installer and `hooks:isolate-config` mechanism. After a merge or
@@ -187,7 +219,11 @@ to check freshness.
 `codeql-lifecycle` fixture-tests stamps, committed snapshots, shared base reuse,
 independent copy inodes, cumulative overlays, publication and failure retention,
 forced refresh, registered engine root lifetime, down, detached hook selection
-and launcher failure handling without real CodeQL.
+and launcher failure handling without real CodeQL. It also covers current, young
+and orphan generations; live and missing worktree references; stale stamps after
+merge-base changes; exact tool-version retention; inactive, unborn and unrelated
+worktrees; Git error propagation; interrupted-base cleanup; current-run base
+protection; builder/shared lock ordering; and status byte totals.
 
 `codeql-nix-strict-header` compiles the shipped Nix query pack, resolves the
 external language through merged and nested config files, checks conflicting
