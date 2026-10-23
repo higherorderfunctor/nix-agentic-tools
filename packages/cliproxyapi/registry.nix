@@ -5,7 +5,6 @@
 }: {
   documentation.genericDescriptions = {
     cliproxyapi = "OpenAI-compatible proxy for AI CLI subscriptions and APIs";
-    cpa-gate = "Caddy with a client-key and route gate for CLIProxyAPI (not yet wired)";
   };
   fragments.categories.cliproxyapi = {
     scopes = ["packages/${facetOwner}/**"];
@@ -14,11 +13,6 @@
         dir = facetOwner;
         location = "package";
         name = "cliproxyapi-extraction";
-      }
-      {
-        dir = facetOwner;
-        location = "package";
-        name = "cliproxyapi-front-gate";
       }
       {
         dir = facetOwner;
