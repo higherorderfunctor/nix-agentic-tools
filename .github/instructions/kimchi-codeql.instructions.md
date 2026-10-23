@@ -7,7 +7,7 @@ applyTo: "packages/kimchi/checks/fixtures/codeql-environment/**,packages/kimchi/
 
 ## Kimchi CodeQL database
 
-> **Last verified:** 2026-10-22 — dependency patches use
+> **Last verified:** 2026-10-23 — dependency patches use
 > `git apply --ignore-space-change`; the database carries pi-mcp-adapter's root
 > TypeScript and dist, including its patched project-trust environment read.
 
@@ -58,18 +58,13 @@ kimchi/node_modules/pi-mcp-adapter/{package.json,dist/,<root JS/TS modules>}
   postinstall rewrite: `scripts/patch-pi-ai-oauth.js` replaces pi-ai's
   `dist/utils/oauth-page.js`, and `extract.mjs` does not apply it.
 - **pi's four packages sit under `kimchi/node_modules`**, where Kimchi's imports
-  resolve them. Measured on 1.17.2: 506 of Kimchi's 508 `@earendil-works/*`
-  import declarations resolve to a pi module in the database. The TypeScript
-  extractor scanned only pi-coding-agent's dist, saw the other three as
-  `index.d.ts` types and read patch `+` lines; the database holds all four
-  `dist/` trees, patched. On 1.17.0 the environment fact is the same either way.
+  resolve them. The database holds all four `dist/` trees, patched.
 - **Kimchi's own `node_modules` (its pnpm store) is not in it.** That is every
   third-party dependency except pi-mcp-adapter and what pi's bundle inlines
   (below). The adapter exports root TypeScript modules, so its root JS/TS files
   are carried with its dist. Its docs, examples and skills are not code the
   runtime loads and are not copied.
-- **Source maps are dropped:** 13.5 MB on pi 0.85.1 that the extractor never
-  reads.
+- **Source maps are dropped:** the extractor never reads them.
 - **The extractor skips `node_modules` by default.**
   `LGTM_INDEX_FILTERS=include:kimchi/node_modules` brings pi back in: without it
   the database held none of pi's files. The value is a directory: an include
@@ -79,11 +74,10 @@ kimchi/node_modules/pi-mcp-adapter/{package.json,dist/,<root JS/TS modules>}
 
 `pi-coding-agent/dist/bundle/` is pi's minified standalone CLI, which Kimchi
 never loads. It is carried for the environment reads of pi's bundled third-party
-dependencies (AWS SDK, Google auth, undici, ws) at pi's build-time versions: 48
-of the 237 variables in the 1.17.2 environment fact are named in its chunks and
-nowhere else in pi, Kimchi or its patches. It also holds unpatched copies of
-patched pi-ai, pi-tui and pi-coding-agent code, so a query scopes or labels its
-`dist/bundle` rows. The extractor skips a file it judges minified: without
+dependencies (AWS SDK, Google auth, undici, ws) at pi's build-time versions. It
+also holds unpatched copies of patched pi-ai, pi-tui and pi-coding-agent code,
+so a query scopes or labels its `dist/bundle` rows. The extractor skips a file
+it judges minified: without
 `CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true` it skipped 46 files: 42
 chunks, the three `dist/bundle` entry files (`cli.js`, `index.js`,
 `rpc-entry.js`) and the vendored `marked.min.js`. The flag grows the 2.27.3
@@ -232,9 +226,7 @@ Destructuring `process.env` and a named `env` import from `node:process` count
 as real reads. Kimchi 1.19.1's `src/extensions/work-attribution/scope.ts:35`
 reads `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` through
 an object pattern; the carried pi bundle also reads `HOMEDRIVE`, `HOMEPATH` and
-`AWS_EXECUTION_ENV`. The former `tsIncompatible` filter dropped those names
-solely to match the deleted TypeScript extractor. No compatibility filter
-remains.
+`AWS_EXECUTION_ENV`.
 
 The bundled std-env CI-provider table indexes a for-of tuple with
 `row[1] || row[0]`. The query resolves literal numeric tuple columns and
@@ -247,34 +239,30 @@ table escape.
 Declared helpers whose parameter names the environment key contribute the names
 of literal or constant call arguments at that parameter index. This includes
 `boolEnv` and `nonEmptyEnv` in `src/oauth-config.ts:63-70`, `parseEnvInt` in
-`src/shared/env-int.ts:7`, and pi's `getProviderEnvValue`; the latter no longer
-has a name-based special case. A helper site resolves completely only when all
-known call arguments resolve. `nonEmptyEnv` also receives the dynamic
-region-specific template at `src/oauth-config.ts:85`, so its literal calls
-contribute names while its computed read remains unresolved. Uninitialized
-bundled bindings assigned string literals also resolve, including
-`AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
+`src/shared/env-int.ts:7`, and pi's `getProviderEnvValue`. A helper site
+resolves completely only when all known call arguments resolve. `nonEmptyEnv`
+also receives the dynamic region-specific template at `src/oauth-config.ts:85`,
+so its literal calls contribute names while its computed read remains
+unresolved. Uninitialized bundled bindings assigned string literals also
+resolve, including `AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
 `bedrock-converse-stream.js:24`.
 
 Measured on the pinned Kimchi 1.19.1 database, 41 computed environment-read
-sites remain unresolved (down from 63 before helper and assignment resolution).
-This measurement counts sites, including separate reads of a name also resolved
-elsewhere. No general computed-key refusal is added.
+sites remain unresolved. This measurement counts sites, including separate reads
+of a name also resolved elsewhere. No general computed-key refusal is added.
 
 The database also recognizes bracket `env`, asserted environments,
-`require("process").env`, and process aliases. Refusals tied only to the former
-extractor's inability to distinguish a shadowed `process` or read nested
-destructuring have been removed. The overwrite analysis still establishes writes
-only through `process.env` spelled out.
+`require("process").env`, and process aliases. The overwrite analysis
+establishes writes only through `process.env` spelled out.
 
 ### Annotations
 
 `extract/annotations.json`'s `environment` and `environmentIgnored` are not an
 input of the transform. `rules.nix` applies them downstream, against
-`environment.variables.<name>`, as it always did. Ordinary new names need no
-annotation. The std-env table's `INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN` matches
-the shared secret classifier, so its required `controls` row records that
-std-env tests its presence for CI-provider detection.
+`environment.variables.<name>`. Ordinary new names need no annotation. The
+std-env table's `INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN` matches the shared
+secret classifier, so its required `controls` row records that std-env tests its
+presence for CI-provider detection.
 
 ### The guard
 
@@ -320,9 +308,7 @@ jq -S .environment packages/kimchi/extracted/extracted.json | cmp - /tmp/environ
 ```
 
 The fourth column of a reads row and the third of an overwrites row is the site,
-`path:line`, for reading a result back; the transform ignores it. Measured on a
-16-core x86_64-linux workstation: the reads query takes 27 to 90 s against the
-1.17.2 database, the overwrites query about 30 s.
+`path:line`, for reading a result back; the transform ignores it.
 
 ### Patches the tree does not carry
 

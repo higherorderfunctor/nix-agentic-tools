@@ -63,9 +63,7 @@ Destructuring `process.env` and a named `env` import from `node:process` count
 as real reads. Kimchi 1.19.1's `src/extensions/work-attribution/scope.ts:35`
 reads `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` through
 an object pattern; the carried pi bundle also reads `HOMEDRIVE`, `HOMEPATH` and
-`AWS_EXECUTION_ENV`. The former `tsIncompatible` filter dropped those names
-solely to match the deleted TypeScript extractor. No compatibility filter
-remains.
+`AWS_EXECUTION_ENV`.
 
 The bundled std-env CI-provider table indexes a for-of tuple with
 `row[1] || row[0]`. The query resolves literal numeric tuple columns and
@@ -78,34 +76,30 @@ table escape.
 Declared helpers whose parameter names the environment key contribute the names
 of literal or constant call arguments at that parameter index. This includes
 `boolEnv` and `nonEmptyEnv` in `src/oauth-config.ts:63-70`, `parseEnvInt` in
-`src/shared/env-int.ts:7`, and pi's `getProviderEnvValue`; the latter no longer
-has a name-based special case. A helper site resolves completely only when all
-known call arguments resolve. `nonEmptyEnv` also receives the dynamic
-region-specific template at `src/oauth-config.ts:85`, so its literal calls
-contribute names while its computed read remains unresolved. Uninitialized
-bundled bindings assigned string literals also resolve, including
-`AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
+`src/shared/env-int.ts:7`, and pi's `getProviderEnvValue`. A helper site
+resolves completely only when all known call arguments resolve. `nonEmptyEnv`
+also receives the dynamic region-specific template at `src/oauth-config.ts:85`,
+so its literal calls contribute names while its computed read remains
+unresolved. Uninitialized bundled bindings assigned string literals also
+resolve, including `AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
 `bedrock-converse-stream.js:24`.
 
 Measured on the pinned Kimchi 1.19.1 database, 41 computed environment-read
-sites remain unresolved (down from 63 before helper and assignment resolution).
-This measurement counts sites, including separate reads of a name also resolved
-elsewhere. No general computed-key refusal is added.
+sites remain unresolved. This measurement counts sites, including separate reads
+of a name also resolved elsewhere. No general computed-key refusal is added.
 
 The database also recognizes bracket `env`, asserted environments,
-`require("process").env`, and process aliases. Refusals tied only to the former
-extractor's inability to distinguish a shadowed `process` or read nested
-destructuring have been removed. The overwrite analysis still establishes writes
-only through `process.env` spelled out.
+`require("process").env`, and process aliases. The overwrite analysis
+establishes writes only through `process.env` spelled out.
 
 ### Annotations
 
 `extract/annotations.json`'s `environment` and `environmentIgnored` are not an
 input of the transform. `rules.nix` applies them downstream, against
-`environment.variables.<name>`, as it always did. Ordinary new names need no
-annotation. The std-env table's `INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN` matches
-the shared secret classifier, so its required `controls` row records that
-std-env tests its presence for CI-provider detection.
+`environment.variables.<name>`. Ordinary new names need no annotation. The
+std-env table's `INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN` matches the shared
+secret classifier, so its required `controls` row records that std-env tests its
+presence for CI-provider detection.
 
 ### The guard
 
@@ -151,9 +145,7 @@ jq -S .environment packages/kimchi/extracted/extracted.json | cmp - /tmp/environ
 ```
 
 The fourth column of a reads row and the third of an overwrites row is the site,
-`path:line`, for reading a result back; the transform ignores it. Measured on a
-16-core x86_64-linux workstation: the reads query takes 27 to 90 s against the
-1.17.2 database, the overwrites query about 30 s.
+`path:line`, for reading a result back; the transform ignores it.
 
 ### Patches the tree does not carry
 

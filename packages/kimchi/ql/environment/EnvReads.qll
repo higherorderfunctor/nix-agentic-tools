@@ -31,11 +31,11 @@ string hostAppName() {
  * `APP_NAME = piConfigName || "<default>"` with `piConfigName` declared as
  * `<x>.piConfig?.name`: pi names two variables after the host application.
  */
-predicate appNameShape(VariableDeclarator d, string defaultName) {
+predicate appNameShape(VariableDeclarator d) {
   exists(LogicalOrExpr choice, VarAccess left, VariableDeclarator src, PropAccess name |
     choice = d.getInit() and
     left = choice.getLeftOperand() and
-    defaultName = choice.getRightOperand().(StringLiteral).getValue() and
+    exists(choice.getRightOperand().(StringLiteral)) and
     src.getBindingPattern().(VarDecl).getVariable() = left.getVariable() and
     name = src.getInit() and
     name.getPropertyName() = "name" and
@@ -83,11 +83,7 @@ module Eval<fallbackSig/2 fallback> {
   string declaratorValue(VariableDeclarator d) {
     if isAppNameDeclarator(d)
     then
-      exists(string defaultName | appNameShape(d, defaultName) |
-        result = hostAppName()
-        or
-        not exists(hostAppName()) and result = defaultName
-      )
+      appNameShape(d) and result = hostAppName()
     else result = constValue(d.getInit())
   }
 
@@ -427,16 +423,5 @@ predicate readFailure(string message, string where_) {
     exists(iterationOf(key)) and not resolvedIteration(key) and
     message = "the environment iteration key " + key.getName() + " cannot be resolved to a finite set of names" and
     where_ = key.getFile().getRelativePath() + ":" + key.getLocation().getStartLine()
-  )
-  or
-  // pi's APP_NAME no longer takes the host's piConfig.name (a `.d.ts`
-  // declares it without an initializer, which says nothing)
-  exists(VariableDeclarator d |
-    isAppNameDeclarator(d) and
-    exists(d.getInit()) and
-    inPiAgent(d.getFile()) and
-    not appNameShape(d, _) and
-    message = "pi APP_NAME is no longer piConfig.name || \"<default>\"" and
-    where_ = d.getFile().getRelativePath() + ":" + d.getLocation().getStartLine()
   )
 }
