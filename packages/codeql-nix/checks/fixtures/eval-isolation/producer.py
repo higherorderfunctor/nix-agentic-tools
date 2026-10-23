@@ -21,9 +21,10 @@ def packet(count=1):
     option = key("option")
     facts = [
         ["nx_request_results", [ids["request"], "complete", "", count]],
-        ["nx_observations", [key("observation"), ids["request"], "option", option, "pre-apply-metadata", "observed"]],
+        ["nx_observations", [key("observation"), ids["request"], "pre-apply-metadata", "observed"]],
         ["nx_options", [option, ids["context"], json.dumps(job["request"]["path"], ensure_ascii=False, separators=(",", ":"))]],
     ]
+    facts.append(["nx_observation_options", [key("observation"), option]])
     if job["request"]["facet"] in ("isDefined", "priority"):
         facts.append(["nx_option_metadata", [option, "isDefined", "true"]])
     if job["request"]["facet"] == "priority":
@@ -71,7 +72,7 @@ if mode in ("large-fields", "oversized-field", "bytes"):
 elif mode == "result-only":
     response["facts"] = response["facts"][:1]
 elif mode == "observation-without-metadata":
-    response["facts"] = response["facts"][:3]
+    response["facts"] = response["facts"][:4]
 elif mode == "unobserved-metadata":
     response["facts"][1][1][-1] = "unforced"
 elif mode == "invalid-abi":

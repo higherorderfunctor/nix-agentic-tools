@@ -18,7 +18,8 @@ LIMIT = 1048576
 STEP0_TABLES = {
     "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definitions",
     "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files",
-    "nx_observations", "nx_option_declarations", "nx_option_metadata",
+    "nx_observation_definitions", "nx_observation_options", "nx_observations",
+    "nx_option_declarations", "nx_option_metadata",
     "nx_option_priority", "nx_options", "nx_origin_files", "nx_origin_positions",
     "nx_origins", "nx_phases", "nx_request_results", "nx_requests", "nx_runs",
     "nx_syntax_results", "nx_target_inputs", "nx_targets",
@@ -127,9 +128,9 @@ class AbiTests(unittest.TestCase):
                   "nx_syntax_results": 1, "nx_targets": 9}
         for name, column in fields.items():
             self.rejects(name, column, "bogus")
-        for column in (2, 4, 5):
+        for column in (2, 3):
             self.rejects("nx_observations", column, "bogus")
-        self.rejects("nx_observations", 3, I["q"])
+        self.rejects("nx_observation_options", 1, I["q"])
         self.rejects("nx_options", 2, '["a", "b"]')  # Whitespace is not canonical.
         self.rejects("nx_options", 2, '[1]')
         self.rejects("nx_option_metadata", 1, "description")
@@ -170,8 +171,8 @@ class AbiTests(unittest.TestCase):
         for reason in ("timeout", "text-field-too-large"):
             self.rejects("nx_request_results", 2, reason)
         self.rejects("nx_request_results", 1, "unsupported", 1)
-        self.rejects("nx_observations", 5, "unforced")
-        self.rejects("nx_observations", 5, "failed")
+        self.rejects("nx_observations", 3, "unforced")
+        self.rejects("nx_observations", 3, "failed")
         rows = [deepcopy(item) for item in GRAPH if item[0] in {
             "nx_contexts", "nx_phases", "nx_request_results", "nx_requests", "nx_runs", "nx_targets"}]
         rows = [item for item in rows if not (item[0] == "nx_contexts" and item[1][0] == I["j"])]
@@ -186,7 +187,7 @@ class AbiTests(unittest.TestCase):
         def priority_rows():
             return [deepcopy(item) for item in GRAPH if item[0] in {
                 "nx_contexts", "nx_options", "nx_option_metadata", "nx_option_priority",
-                "nx_requests", "nx_request_results", "nx_observations", "nx_runs", "nx_targets"
+                "nx_requests", "nx_request_results", "nx_observation_options", "nx_observations", "nx_runs", "nx_targets"
             } and (item[0] != "nx_observations" or item[1][0] == I["i"])]
 
         for state in ("complete", "partial"):
@@ -199,14 +200,15 @@ class AbiTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "option priority lacks defined observation"):
                 abi.validate(rows)
         for table in ("nx_option_metadata", "nx_observations"):
-            rows = [item for item in priority_rows() if item[0] != table]
+            rows = [item for item in priority_rows() if item[0] != table
+                    and not (table == "nx_observations" and item[0] == "nx_observation_options")]
             with self.assertRaisesRegex(ValueError, "option priority lacks defined observation"):
                 abi.validate(rows)
         for table, column, value in (
             ("nx_requests", 4, '["a","b"]'),
             ("nx_requests", 5, "value"),
-            ("nx_observations", 5, "unforced"),
-            ("nx_observations", 5, "failed"),
+            ("nx_observations", 3, "unforced"),
+            ("nx_observations", 3, "failed"),
         ):
             with self.subTest(table=table, column=column, value=value):
                 rows = priority_rows()
@@ -226,11 +228,11 @@ class AbiTests(unittest.TestCase):
             rows = priority_rows()
             other = "nixql:v1:option:1:2"
             rows.append(["nx_options", [other, context, '["a.b"]']])
-            row(rows, "nx_observations")[3] = other
+            row(rows, "nx_observation_options")[1] = other
             row(rows, "nx_requests", 1)[2] = context
             with self.assertRaisesRegex(ValueError, "option priority lacks defined observation"):
                 abi.validate(rows)
-        rows = [deepcopy(item) for item in GRAPH if not (item[0] == "nx_observations" and item[1][0] == I["i"])]
+        rows = [deepcopy(item) for item in GRAPH if not (item[0] in {"nx_observation_options", "nx_observations"} and item[1][0] == I["i"])]
         with self.assertRaisesRegex(ValueError, "option priority lacks defined observation"):
             abi.validate(rows)  # Other metadata requests prove no priority.
 
@@ -263,17 +265,12 @@ class AbiTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         abi.validate(rows)
 
-    def test_global_keys_exempt_but_subject_text_is_bounded(self):
+    def test_global_keys_remain_unbounded_through_typed_links(self):
         huge = abi.key("option", ["x" * (LIMIT + 1)])
         rows = deepcopy(GRAPH)
-        old = I["o"]
         for _, arguments in rows:
-            arguments[:] = [huge if value == old else value for value in arguments]
-        without_observations = [item for item in rows if item[0] not in {
-            "nx_observations", "nx_option_priority"}]
-        abi.validate(without_observations)
-        with self.assertRaises(ValueError):
-            abi.validate(rows)
+            arguments[:] = [huge if value == I["o"] else value for value in arguments]
+        abi.validate(rows)  # Typed entity links do not repeat identity in bounded text.
 
 
 if __name__ == "__main__":

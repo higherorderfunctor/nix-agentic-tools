@@ -131,7 +131,7 @@ def nix_command(nix, binding, job, request, directory, deadline, env):
 def projection_rows(packet, job, outer):
     validate(packet, "observation-protocol.json")
     facts = packet["facts"]
-    permitted = {"nx_observations", "nx_option_declarations", "nx_option_metadata",
+    permitted = {"nx_observation_options", "nx_observations", "nx_option_declarations", "nx_option_metadata",
                  "nx_option_priority", "nx_options", "nx_origin_positions",
                  "nx_origins", "nx_request_results"}
     if any(relation not in permitted for relation, _ in facts):
@@ -151,8 +151,9 @@ def projection_rows(packet, job, outer):
         if relation in allowed and request["facet"] not in allowed[relation]:
             raise ValueError("projection emitted unrequested metadata")
     observations = [args for relation, args in facts if relation == "nx_observations"]
-    for _, req, kind, subject, stage, _ in observations:
-        if req != identity or kind != "option" or subject not in options or stage != "pre-apply-metadata":
+    observation_options = {args[0]: args[1] for relation, args in facts if relation == "nx_observation_options"}
+    for observation, req, stage, _ in observations:
+        if req != identity or observation_options.get(observation) not in options or stage != "pre-apply-metadata":
             raise ValueError("projection observation escapes the selected request")
     origins = {args[0] for relation, args in facts if relation == "nx_origins"}
     referenced = {args[2] for relation, args in facts if relation == "nx_option_declarations"}
@@ -161,7 +162,7 @@ def projection_rows(packet, job, outer):
     envelope(outer + facts)
     if results[0][1] not in ("complete", "partial") and any(relation in allowed for relation, _ in facts):
         raise ValueError("unsuccessful transaction contains successful metadata")
-    observed = {args[3] for args in observations if args[-1] == "observed"}
+    observed = {observation_options[args[0]] for args in observations if args[-1] == "observed"}
     witnesses = options
     if request["facet"] in ("isDefined", "priority"):
         relation = "nx_option_metadata" if request["facet"] == "isDefined" else "nx_option_priority"

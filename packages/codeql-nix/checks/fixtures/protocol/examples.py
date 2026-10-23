@@ -45,7 +45,8 @@ def result(state="complete", reason="", observation=None):
     if observation is not None:
         facts.extend([
             ["nx_options", [I["option"], I["context"], '["a.b"]']],
-            ["nx_observations", [I["observation"], I["request"], "option", I["option"], "pre-apply-metadata", observation]],
+            ["nx_observations", [I["observation"], I["request"], "pre-apply-metadata", observation]],
+            ["nx_observation_options", [I["observation"], I["option"]]],
         ])
     return {"protocolVersion": 1, "facts": facts}
 

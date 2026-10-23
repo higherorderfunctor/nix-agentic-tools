@@ -78,13 +78,16 @@ process group. Run diagnostics retain at most 4096 UTF-8 bytes of a message.
 
 Accepted output must be one F2 envelope with exactly the supplied request
 result. Producers can emit option, requested metadata, declaration, origin,
-origin-position and observation rows; they cannot overwrite supervisor facts.
-Every option must belong to the selected context and exact literal path. Every
-observation must name that request and option at `pre-apply-metadata`. Metadata
-rows must name an emitted option and the requested facet; priority additionally
-permits its `isDefined` witness. Origins must be used by emitted declarations,
-and positions must name those origins. Source-file authentication and source
-origin links need E2a's admitted syntax inputs.
+origin-position, observation and typed observation-option link rows; they cannot
+overwrite supervisor facts. Every option must belong to the selected context and
+exact literal path. Every observation must name that request at
+`pre-apply-metadata` and have its typed `nx_observation_options` link to an
+emitted option. This option-only projection policy rejects definition links; F1
+independently validates the complete graph and exactly one subject link per
+observation. Metadata rows must name an emitted option and the requested facet;
+priority additionally permits its `isDefined` witness. Origins must be used by
+emitted declarations, and positions must name those origins. Source-file
+authentication and source origin links need E2a's admitted syntax inputs.
 
 A complete request requires a positive observed count and an `observed` option
 witness for the selected facet. `isDefined` and `priority` also require their

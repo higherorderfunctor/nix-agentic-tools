@@ -58,9 +58,9 @@ path and supplies the kit structural path. Fields escape `%` as `%25` and `|` as
 bytes and the independent line map; changing an anchor byte span cannot inherit
 the original coordinates. Both metadata columns are exact UTF-8 tuple text and
 are checked against F1's 1,048,576-byte ceiling before publication. These
-entries use the existing generated schema table; neither the 23-relation
-handwritten ABI nor the combined schema changes. They are not evaluation facts
-or authenticated evaluator origins. As with every extractor relation, these are
+entries use the existing generated schema table; S2 adds no handwritten ABI
+relation or combined-schema table. They are not evaluation facts or
+authenticated evaluator origins. As with every extractor relation, these are
 trusted producer evidence; fabricating a file admission record is outside the QL
 consumer's archive-authentication boundary. The driver tests establish that
 boundary from actual bytes.

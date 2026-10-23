@@ -1,8 +1,8 @@
 # Handwritten database contract
 
-> **Last verified:** 2026-10-23 — F1 retains the 23 Step 0 metadata relations,
-> root contexts and reference validation rules; runtime extraction remains a
-> later slice.
+> **Last verified:** 2026-10-23 — X1 adds typed observation subjects to the 25
+> Step 0 relations; F1 validates their identity and scope, while E2a remains the
+> metadata producer slice.
 
 ## Purpose and ownership
 
@@ -10,15 +10,13 @@
 primary keys, enums and serialization encodings. `schema/abi.py` supplies
 reference encoders and validates unordered fact collections. Its `dbscheme()`
 renders the committed `schema/evaluation.dbscheme`; the ABI check rejects
-divergence. All 23 handwritten relations are independent of generated AST entity
+divergence. All 25 handwritten relations are independent of generated AST entity
 types, so later syntax and evaluation producers can contribute to one database
 without manufacturing raw kit labels.
 
-F0's disposable bootstrap proves the integration prerequisites described in
-[integration-gate.md](integration-gate.md). F1 defines the shared ABI; it does
-not implement a target manifest, projection transport, evaluator, production
-extractor or QL source bridge. Those consumers must preserve this contract
-rather than infer semantics from a missing row.
+F0 proves the prerequisites in [integration-gate.md](integration-gate.md). F1
+defines the shared ABI; later producers and QL consumers preserve it rather than
+infer semantics from missing rows.
 
 ## Durable identity
 
@@ -77,8 +75,7 @@ Every text column is limited to **1,048,576 UTF-8 bytes**, measured before TRAP
 quote doubling. JSON payloads and path arrays are checked after JSON encoding,
 including escaping expansion. Invalid UTF-8 and oversized fields raise
 `ValueError`; no truncation or chunk protocol exists. Global key framing itself
-is exempt, but a key repeated in a text column, such as an observation subject,
-still obeys the ceiling.
+is exempt; keys repeated in text columns still obey the ceiling.
 
 A later producer must reject an oversized file/projection transaction and report
 `text-field-too-large` using representable enclosing identities. It must publish
@@ -90,9 +87,20 @@ the pinned kit's separate preflight evidence.
 ## Scope, admission and completeness
 
 Primary keys are unique per relation, definition ordinals are unique per option,
-foreign entities must exist with the declared type, and observations use a valid
-option/definition subject. Requests belong to their context's target. Option and
-definition subjects must belong to the request context.
+foreign entities must exist with the declared type. `nx_observations` contains
+only observation, request, stage and state. Every observation in every state has
+exactly one subject row in total: `nx_observation_options(observation, option)`
+or `nx_observation_definitions(observation, definition)`. Both columns are typed
+entity references; text subject kind/key columns are removed. Missing,
+duplicate, wrong-type, dangling and simultaneous option/definition links are
+invalid.
+
+Requests belong to their context's target. The linked option, or a linked
+definition's parent option, must belong to that exact context and hence target.
+A request path need not equal its subject's option path except for the priority
+witness above. Consumers must join typed subjects, rather than infer identity
+from request paths or metadata presence. A definition observation identifies
+only its linked definition, not every sibling definition of its option.
 
 `nx_target_inputs` admits a file to the source snapshot of its target's run. For
 origins used by declarations or definitions, an `nx_origin_files` link must have
@@ -119,15 +127,15 @@ and a graph covering every relation. `test_abi.py` checks identity,
 enum/reference/scope rules, priority witnesses, refusal and UTF-8/JSON-expansion
 boundaries. `checks/abi.nix` runs these tests, checks schema projection
 equality, compiles against the standalone handwritten schema and imports/checks
-typed golden TRAP. This does not prove later producer behavior or the combined
-production schema.
+typed golden TRAP. This does not prove production extraction.
 
-Change the contract first, update reference validation and independent golden
-expectations, regenerate the schema through `dbscheme()`, then format the
-affected files and run `checks.x86_64-linux.codeql-nix-abi`. Preserve
-typed-schema import coverage as well as rejection tests. An ABI change requires
-full database regeneration; version one promises no in-place upgrade or
-migration path. Revisit this note whenever those obligations change.
+Change the contract first, update validation and independent ABI/F2/supervisor
+fixtures, regenerate `evaluation.dbscheme` through `dbscheme()` and the combined
+schema through S1, then format affected files. Run the owner ABI, contracts, raw
+inventory and evaluation-isolation checks through CI. Preserve typed-schema
+import coverage, scope rejection tests and adversarial subject-link controls. An
+ABI change requires full database regeneration; version one promises no in-place
+upgrade or migration path.
 
 ## Deferred consumers
 

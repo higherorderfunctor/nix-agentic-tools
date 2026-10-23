@@ -14,7 +14,8 @@ from golden import GRAPH
 RELATIONS = {
     "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definitions",
     "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files",
-    "nx_observations", "nx_option_declarations", "nx_option_metadata",
+    "nx_observation_definitions", "nx_observation_options", "nx_observations",
+    "nx_option_declarations", "nx_option_metadata",
     "nx_option_priority", "nx_options", "nx_origin_files", "nx_origin_positions",
     "nx_origins", "nx_phases", "nx_request_results", "nx_requests", "nx_runs",
     "nx_syntax_results", "nx_target_inputs", "nx_targets",
