@@ -10,7 +10,8 @@
 > a secret file, and derives named client keys' `access.api-keys` and
 > `access.key-allowlist` entries from named upstream routes. Built-in
 > `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
-> official documentation.
+> official documentation. Named API-key credentials accept an optional integer
+> priority, omitted when unset.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -37,7 +38,10 @@ harnesses at an instance by name.
 once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
 four-client example, required OAuth vendor/account selection and devenv secret
-references are in `dev/fragments/ai-proxy/ai-proxy.md`.
+references and the overlapping subscription/API-key recipe using
+`apiKey.priority = -1` are in `dev/fragments/ai-proxy/ai-proxy.md`. Priority
+applies to every API served by the credential; OAuth priority belongs to CPA's
+login file metadata and cannot be set through `oauth`.
 
 For the built-in z.ai vendor, the upstream credential needs only its secret:
 

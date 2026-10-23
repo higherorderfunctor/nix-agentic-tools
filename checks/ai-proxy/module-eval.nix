@@ -180,6 +180,7 @@ in {
               };
               key = clientKey "override";
               models = ["custom-model"];
+              priority = null;
             };
           "picker catalog retained" =
             result.config.ai.claude.normalized.proxy.credentials
@@ -226,7 +227,16 @@ in {
         pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
+        priorityBlocks = priority:
+          lib.concatLists (builtins.attrValues
+            (rendered (evaluate backend (instanceChange {
+              credentials = lib.mapAttrs (_: _: {apiKey = {inherit priority;};}) (lib.filterAttrs (_: credential: credential ? apiKey) credentials);
+            }))).api-keys);
         checks = {
+          "API-key priority on every served API" = lib.all (priority: map (block: block.priority) (priorityBlocks priority) == [priority priority priority]) [(-1) 0 3];
+          "unset API-key priority omitted" = lib.all (block: !(block ? priority)) (lib.concatLists (builtins.attrValues settings.api-keys));
+          "null API-key priority omitted" = lib.all (block: !(block ? priority)) (priorityBlocks null);
+          "OAuth rejects priority" = rejectsType (instanceChange {credentials.work.oauth.priority = -1;});
           "fixture accepted" = failedMessages result == [];
           "named keys" = settings.access.api-keys == map clientKey ["personal" "work"];
           "OAuth exact accounts, API exact URL, route order" =

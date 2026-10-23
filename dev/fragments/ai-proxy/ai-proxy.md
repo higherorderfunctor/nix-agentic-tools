@@ -4,7 +4,7 @@
 > a secret account email; native CPA account rules match logins, including ones
 > added while the service runs. The existing rendered-file launcher lifts
 > accounts into secret placeholders on both backends. Named API-key credentials
-> can select the built-in z.ai vendor defaults.
+> can select the built-in z.ai vendor defaults and an optional priority.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -124,9 +124,19 @@ alike.
 Claude turns declared API-key models into `/model` picker rows; Codex discovers
 CPA's catalog without per-credential `-p` profiles (`ai-proxy-runtimes.md`).
 Route list order is preserved in generated rules and picker rows; it does not
-define CPA priority or fallback. Overlapping models can be spread across a
-client's credentials by CPA. Model overlap enforcement, per-client routing
-order/fallback and account prefixes are deferred.
+define CPA priority or fallback. `apiKey.priority` is an optional integer,
+omitted from CPA config when unset; CPA defaults it to 0. Higher values win
+among available credentials for the requested model; credentials in cooldown are
+skipped. For an overlapping subscription login and API key, allow both in the
+client's routes and set `credentials.claude-api-personal.apiKey.priority = -1`
+to prefer the default-priority OAuth login and use the API key when that login
+is unavailable. If both priorities are 0, CPA selects within that tier using
+`routing.strategy`. OAuth priority lives in CPA's login file metadata, so
+`oauth.priority` is not a Nix option; this declaration never edits login files.
+For Codex and xAI WebSocket requests, CPA can prefer a WebSocket-capable
+credential even at a lower priority than an HTTP-only credential. Existing
+session affinity can keep using a bound credential after a higher-priority one
+recovers. Per-client routing order/fallback and account prefixes are deferred.
 
 A named client key also listed by hand in `access.api-keys`, or given a
 hand-written `access.key-allowlist` entry, is refused: a second owner could
