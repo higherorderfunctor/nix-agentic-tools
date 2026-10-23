@@ -40,8 +40,15 @@
       delivered = [".claude/skills/probe/SKILL.md" ".claude/skills/probe/references/nested.md" ".claude/skills/probe/scripts/executable-probe"];
       evaluate = {
         devenv = harness.evalDevenv;
-        # A non-empty unpin map stages Home Manager's `.claude.json`.
-        hm = config: harness.evalHm (lib.recursiveUpdate config {ai.claude.native.unpinLaunchEffort = {};});
+        # Either input would stage Home Manager's `.claude.json`; this case
+        # delivers skills only.
+        hm = config:
+          harness.evalHm (lib.recursiveUpdate config {
+            ai.claude.native = {
+              installMethod = null;
+              unpinLaunchEffort = {};
+            };
+          });
       };
       runtime = "claude";
       surface = "skills";

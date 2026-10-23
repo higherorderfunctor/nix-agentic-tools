@@ -28,6 +28,8 @@
         ai = {
           claude = {
             inherit enable;
+            # The flags alone: installMethod is a string leaf, read in module-eval.
+            native.installMethod = null;
             native.unpinLaunchEffort = lib.mkForce settings;
           };
           gitSshConfigWorkaround = false;

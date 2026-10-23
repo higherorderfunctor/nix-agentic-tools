@@ -208,7 +208,8 @@
       ))
     values;
   # Declared per backend below: a backend's `native` options replace the shared
-  # ones whole, and Home Manager's also carry `unpinLaunchEffort`.
+  # ones whole, and Home Manager's also carry `installMethod` and
+  # `unpinLaunchEffort`.
   nativeSettingsOption = lib.mkOption {
     type = lib.types.submodule {
       freeformType = (pkgs.formats.json {}).type;
@@ -737,10 +738,14 @@ in
           }
           {
             ai.claude = {
-              _generatedFiles.".claude.json" =
-                staged "settings" "json" {value = cfg.native.unpinLaunchEffort;}
+              _generatedFiles.".claude.json" = let
+                value =
+                  cfg.native.unpinLaunchEffort
+                  // lib.optionalAttrs (cfg.native.installMethod != null) {inherit (cfg.native) installMethod;};
+              in
+                staged "settings" "json" {inherit value;}
                 // {
-                  enable = cfg.native.unpinLaunchEffort != {};
+                  enable = value != {};
                   method = lib.mkDefault "rw";
                 };
               # Keep credential repair after the engine, even with no flags.
@@ -764,6 +769,19 @@ in
     # Home Manager only: devenv never writes HOME, so on devenv the option
     # does not exist and setting it is an unknown-option evaluation error.
     hm.options.native = {
+      installMethod = lib.mkOption {
+        # The values the packaged binary writes and compares (2.1.308).
+        type = lib.types.nullOr (lib.types.enum ["development" "global" "local" "native" "unknown"]);
+        default = "native";
+        description = ''
+          The `installMethod` key merged into ~/.claude.json. Claude compares
+          it with the build it is running and warns on a mismatch;
+          the packaged binary is the native build, so the default `"native"`
+          silences "Running native installation but config install method
+          is 'global'". `null` leaves the key to Claude, though a value this
+          option wrote earlier is removed once. Home Manager only.
+        '';
+      };
       settings = nativeSettingsOption;
       unpinLaunchEffort = lib.mkOption {
         type = lib.types.attrsOf lib.types.bool;

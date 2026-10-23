@@ -7,7 +7,7 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-20 — the services reconcile entry follows
+> **Last verified:** 2026-10-23 — the services reconcile entry follows
 > `reloadSystemd`; glab resolves redact references at service runtime; non-AI
 > owners use the layer-1 helper; Claude uses engine-backed `rw` ownership, Kiro
 > stages settings and hooks and drains all three legacy ledgers through the
@@ -231,9 +231,10 @@ concurrent native writers; those are outside the engine MVP.
 
 A new `rw` document defaults to 0600; an existing one loses group/other access.
 Claude also declares `activation.claude-config-mode` after `materialized`,
-because its empty unpin map omits the document but still needs mode repair. The
-command skips symlinks and missing files. `ai-activation-settings-mode` executes
-the actual HM bodies with both nonempty and empty declarations.
+because an empty unpin map with a null `installMethod` omits the document but
+still needs mode repair. The command skips symlinks and missing files.
+`ai-activation-settings-mode` executes the actual HM bodies with both nonempty
+and empty declarations.
 
 The merged `ai.files` map is the eval-visible delivery plan. Checks read it
 directly or use the plan-aware `harness.ownedDocument` reader. Callers supply

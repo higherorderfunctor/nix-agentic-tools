@@ -852,13 +852,18 @@ in {
           && document.value.unpinOpus48LaunchEffort
       );
 
-      # An empty flag map delivers no files. Prune still retires the prior
-      # generation's flags; no apply pass is needed.
+      # An empty flag map with no installMethod delivers no files. Prune still
+      # retires the prior generation's keys; no apply pass is needed.
       module-claude-hm-unpin-empty-emits-prune = mkTest "claude-hm-unpin-empty-emits-prune" (
         let
           result = evalHm {
-            ai.claude.enable = true;
-            ai.claude.native.unpinLaunchEffort = lib.mkForce {};
+            ai.claude = {
+              enable = true;
+              native = {
+                installMethod = null;
+                unpinLaunchEffort = lib.mkForce {};
+              };
+            };
           };
         in
           result.config.home.activation ? ai-files-prune
@@ -866,6 +871,21 @@ in {
           && result.config.ai.files == {}
           && result.config.ai.claude._generatedFiles.".claude.json".content.value == {}
           && !(result.config.ai.files ? ".claude.json")
+      );
+
+      # installMethod defaults to "native" and stages the document alone;
+      # null drops the key and leaves the flags.
+      module-claude-hm-install-method = mkTest "claude-hm-install-method" (
+        let
+          document = native: (unpinDocument (evalHm {ai.claude = {enable = true;} // native;})).value;
+          alone = document {native.unpinLaunchEffort = lib.mkForce {};};
+          unset = document {native.installMethod = null;};
+        in
+          alone
+          == {installMethod = "native";}
+          && (document {}).installMethod == "native"
+          && !(unset ? installMethod)
+          && unset.unpinOpus48LaunchEffort
       );
 
       # A key set false is still written (re-pins that model deliberately).
