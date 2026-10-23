@@ -7,11 +7,11 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,lib/toolchains.nix,pack
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-21 — an owner overlay returns only the leaves it
+> **Last verified:** 2026-10-22 — an owner overlay returns only the leaves it
 > claims and the composer deep-merges each one into `prev`, stopping at
 > derivations; nat-overlay-parity compares package leaves and checks owner
 > overlay leaves for presence; Go check names come from one declared table; the
-> flake has no `apps` output.
+> flake has no `apps` output; Bruno past 4.2.x uses `npmDepsFetcherVersion = 2`.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -474,6 +474,11 @@ despite the required 6.15.3 tarball being cached. `postPatch` checks the exact
 lock and manifest shape, then removes those stale nested entries so npm can use
 the root 6.15.3 copy. `fetchNpmDeps` and the package build both consume this
 `postPatch`; changing the lock repair requires recalculating `npmDepsHash`.
+Every other release sets `npmDepsFetcherVersion = 2` instead, because 4.3.0
+ships the same stale entries: fetcher version 2 caches the registry metadata npm
+asks for, so no lock repair is needed. Both are gated on the same release list,
+which keeps the pinned 4.2.x derivation and its committed hash unchanged and
+leaves the new hash to the bump's update script.
 
 `packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix` is a
 plain `overrideAttrs` and is CORRECT as one: it sets `cargoDeps` — an
