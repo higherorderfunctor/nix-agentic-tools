@@ -62,6 +62,7 @@ def response_events():
         "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
     }
     events = [
+        {"content_index": 0, "delta": NAME, "item_id": item["id"], "output_index": 0, "type": "response.output_text.delta"},
         {"item": item, "output_index": 0, "type": "response.output_item.done"},
         {"response": response, "type": "response.completed"},
     ]
@@ -104,14 +105,18 @@ class Upstream(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         if request.get("stream"):
-            for event in body.split(b"\n\n"):
-                if event:
-                    self.wfile.write(event + b"\n\n")
-                    self.wfile.flush()
-                    time.sleep(0.2)
+            events = [event for event in body.split(b"\n\n") if event]
+            for index, event in enumerate(events):
+                # Mark BEFORE sending the final event: a buffered client must
+                # never pass the assertion merely by beating cleanup afterward.
+                if index == len(events) - 1:
+                    done.touch()
+                self.wfile.write(event + b"\n\n")
+                self.wfile.flush()
+                time.sleep(0.2)
         else:
             self.wfile.write(body)
-        done.touch()
+            done.touch()
 
     def log_message(self, *_):
         pass

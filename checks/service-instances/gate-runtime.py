@@ -77,6 +77,9 @@ for name, api, upstream, allowed in [
     for bad in [
         {"model": "outside"},
         {"model": "GLM-shared"},
+        {"model": "glm-shared", "metadata": {"model": "outside"}},
+        {"model": "glm-shared", "input": [{"type": "web_search_call", "id": "x", "status": "completed"}]},
+        {"model": "glm-shared", "messages": [{"role": "assistant", "content": [{"type": "server_tool_use", "name": "x", "model": "outside"}]}]},
         {"model": "glm-shared", "fallbacks": [{"model": "outside"}]},
         {"model": "glm-shared", "tools": [{"type": "web_search"}]},
         {"model": "glm-shared", "tools": [{"type": "function", "function": {"name": "x", "model": "outside"}}]},
@@ -92,7 +95,7 @@ models = [model.encode() for entry in entries.values() for model in entry["model
 leaks = lambda raw: any(value in raw for value in secrets + models)
 assert leaks(secrets[0])
 assert not leaks(Path("gate.log").read_bytes())
-assert not leaks(Path("cpa.log").read_bytes())
+assert Path("cpa.log").read_bytes() == b""
 for log in [Path("zai.log"), Path("other.log")]:
     log.write_text("")
 print("ok: per-key listings, HTTP, incremental SSE, split keys and uniform refusals")
