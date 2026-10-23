@@ -1,0 +1,14 @@
+{
+  "claude": {
+    "hash": "sha256-sKZVYU/YRAnv6osqps5Qm6/HrmZ7b0UQ+cFag6bnWYo=",
+    "url": "https://docs.z.ai/devpack/tool/claude.md"
+  },
+  "overview": {
+    "hash": "sha256-l+F7SKSD0b6KMND/jSUDzNeRAnWh8lhTrJIE9TPLOqY=",
+    "url": "https://docs.z.ai/guides/overview/overview.md"
+  },
+  "quick-start": {
+    "hash": "sha256-R56941L1ZErHAIw8QcOi995/S2eyuhXbt7l2Hb6+Gy0=",
+    "url": "https://docs.z.ai/guides/overview/quick-start.md"
+  }
+}

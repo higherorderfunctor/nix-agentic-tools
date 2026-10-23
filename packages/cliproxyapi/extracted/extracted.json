@@ -3011,5 +3011,34 @@
       "template": "When true, inject the native x_search tool when the request does not declare it.\nThe injected tool is also added to tool_choice.allowed_tools when applicable.",
       "type": "bool"
     }
+  },
+  "zAi": {
+    "apis": {
+      "anthropic": {
+        "base-url": "https://api.z.ai/api/anthropic"
+      },
+      "chat": {
+        "base-url": "https://api.z.ai/api/paas/v4"
+      }
+    },
+    "claudeDefaults": {
+      "API_TIMEOUT_MS": "3000000"
+    },
+    "claudeModels": {
+      "haiku": "glm-5.3-flash",
+      "opus": "glm-5.3-flash",
+      "sonnet": "glm-5.3-flash"
+    },
+    "models": [
+      "glm-4.6",
+      "glm-4.7",
+      "glm-5",
+      "glm-5.1",
+      "glm-5.2",
+      "glm-5.3",
+      "glm-5.3-flash",
+      "glm-5.3-flashx",
+      "glm-5.3-flashx-legal"
+    ]
   }
 }

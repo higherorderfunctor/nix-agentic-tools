@@ -2,6 +2,8 @@
 {lib}: let
   inherit (lib) mkOption types;
   redact = import ../../../lib/redact {inherit lib;};
+  facts = import ../../../lib/extracted/facts.nix {inherit lib;};
+  vendors.z-ai = facts.get (facts.load {dir = ../extracted;}).aggregate "zAi";
 
   # CPA's OpenAICompatibleProviderKey preserves one exact name and one prefix.
   # Provider names are ASCII (../modules/instances.nix), so toLower agrees.
@@ -86,7 +88,7 @@
     kind = "apikey";
     provider = apis.${api}.provider name;
   };
-  credentialType = types.submodule {
+  credentialType = types.submodule ({config, ...}: {
     options = {
       apiKey = mkOption {
         type = types.nullOr apiKeyType;
@@ -109,8 +111,19 @@
         default = null;
         description = "An OAuth upstream credential held in CPA's auth directory. Declare exactly one of oauth or apiKey.";
       };
+      vendor = mkOption {
+        type = types.nullOr (types.enum (builtins.attrNames vendors));
+        default = null;
+        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+      };
     };
-  };
+    config = lib.mkIf (config.vendor != null) {
+      apiKey = {
+        apis = lib.mapAttrs (_: lib.mkDefault) vendors.${config.vendor}.apis;
+        models = lib.mkDefault vendors.${config.vendor}.models;
+      };
+    };
+  });
   clientKeyType = types.submodule {
     options = {
       key = mkOption {

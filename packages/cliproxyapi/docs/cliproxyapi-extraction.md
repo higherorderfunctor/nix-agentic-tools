@@ -2,9 +2,31 @@
 
 > **Last verified:** 2026-10-21 — CPA 8.0.38 custom YAML decoders are probed
 > through yaml.v3; the shared `goTestExtract` runs the extractor over the
-> patched `src`.
+> patched `src`; z.ai vendor defaults are extracted from pinned official docs
+> into the same owner facts and checked by the owner regenerator.
 
 ## Why reflection also needs the v8 tables
+
+`extract/z-ai-sources.json` pins official Markdown documents by content hash
+(accessed 2026-10-22). `extract/z-ai.py` parses the overview's chat API table,
+Claude Code's JSON environment example, and the quick start's Python AST for the
+two base URLs. Model IDs come from table rows linking the chat API, rather than
+a hand-written catalog. Missing tables, ambiguous URLs, malformed tier bullets,
+or a tier pointing outside the catalog fail extraction. The fixtures exclude
+prose-only model mentions and image models.
+
+The Claude Code page's explicitly labeled default tier bullets are parsed as
+prose (the regex tier: no executable mapping or structured source exists). Later
+manual JSON examples disagree with those bullets; the extractor selects the
+explicit defaults, and its fixture preserves that distinction. All three tiers
+must be present, so a changed or unclassified tier fails. These facts do not
+alter harness environment variables.
+
+Refresh the three source hashes after reviewing the official documentation, then
+run the existing owner regeneration command:
+`nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate`.
+`cliproxyapi-extracted` joins the config and vendor extraction and checks their
+shared committed facts through `mkOwnerCheck`.
 
 `v8Paths` contains relocated paths, not a schema. Fields already at their v8
 paths, such as `routing.*` and `models.*`, have no relocation entry. Upstream

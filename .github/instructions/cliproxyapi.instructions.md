@@ -9,9 +9,31 @@ applyTo: "packages/cliproxyapi/**"
 
 > **Last verified:** 2026-10-21 — CPA 8.0.38 custom YAML decoders are probed
 > through yaml.v3; the shared `goTestExtract` runs the extractor over the
-> patched `src`.
+> patched `src`; z.ai vendor defaults are extracted from pinned official docs
+> into the same owner facts and checked by the owner regenerator.
 
 ## Why reflection also needs the v8 tables
+
+`extract/z-ai-sources.json` pins official Markdown documents by content hash
+(accessed 2026-10-22). `extract/z-ai.py` parses the overview's chat API table,
+Claude Code's JSON environment example, and the quick start's Python AST for the
+two base URLs. Model IDs come from table rows linking the chat API, rather than
+a hand-written catalog. Missing tables, ambiguous URLs, malformed tier bullets,
+or a tier pointing outside the catalog fail extraction. The fixtures exclude
+prose-only model mentions and image models.
+
+The Claude Code page's explicitly labeled default tier bullets are parsed as
+prose (the regex tier: no executable mapping or structured source exists). Later
+manual JSON examples disagree with those bullets; the extractor selects the
+explicit defaults, and its fixture preserves that distinction. All three tiers
+must be present, so a changed or unclassified tier fails. These facts do not
+alter harness environment variables.
+
+Refresh the three source hashes after reviewing the official documentation, then
+run the existing owner regeneration command:
+`nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate`.
+`cliproxyapi-extracted` joins the config and vendor extraction and checks their
+shared committed facts through `mkOwnerCheck`.
 
 `v8Paths` contains relocated paths, not a schema. Fields already at their v8
 paths, such as `routing.*` and `models.*`, have no relocation entry. Upstream
@@ -395,7 +417,8 @@ change, then run the module assertions and Go check in CI.
 > loopback, turns off the unprompted fetches the pinned CPA has a switch for,
 > types `server.tls.key` as a secret file, and derives named client keys'
 > `access.api-keys` and `access.key-allowlist` entries from named upstream
-> routes.
+> routes. Built-in `vendor = "z-ai"` defaults upstream API-key models and APIs
+> from pinned official documentation.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -423,6 +446,28 @@ once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
 four-client example, OAuth filename selection and devenv secret references are
 in `dev/fragments/ai-proxy/ai-proxy.md`.
+
+For the built-in z.ai vendor, the upstream credential needs only its secret:
+
+```nix
+ai.cliproxyapi.instances.main.credentials.zai-api-personal = {
+  vendor = "z-ai";
+  apiKey.key = redact.file "/run/secrets/zai-api-key";
+};
+```
+
+`apiKey.apis` defaults to Anthropic-compatible and OpenAI chat-compatible
+endpoints, and `apiKey.models` to z.ai's published general API chat catalog.
+Override either endpoint's `base-url`, set an API to `null`, or replace `models`
+with the subset your upstream credential permits. The standard chat API uses
+pay-as-you-go billing; a Coding Plan has its own endpoint and model entitlement.
+The defaults describe the general API, not a guarantee of account access. Client
+keys still choose this credential and its API through `routes`; selecting
+`api = "chat"` lets CPA translate a Codex CLI Responses request to chat.
+
+The measured Claude Code tier mapping and timeout remain extraction data. The
+existing per-client-key model list carries model IDs for picker rows, without
+vendor or tier intent; it cannot safely supply Claude Code environment defaults.
 
 ## Unprompted network calls
 
