@@ -309,10 +309,10 @@ index 68bd7d9..6fbec04 100644
  		{"request-retry", "routing.retry.request-retry"}, {"max-retry-credentials", "routing.retry.max-retry-credentials"},
 diff --git a/internal/config/key_allowlist.go b/internal/config/key_allowlist.go
 new file mode 100644
-index 0000000..8fed490
+index 0000000..ef56d03
 --- /dev/null
 +++ b/internal/config/key_allowlist.go
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,72 @@
 +package config
 +
 +import (
@@ -337,13 +337,16 @@ index 0000000..8fed490
 +func (e KeyAllowlist) ClientKey() string { return strings.TrimSpace(e.APIKey) }
 +
 +// KeyAllowlistCredential matches upstream credentials by provider and kind,
-+// optionally narrowed to credential IDs and API-key base URLs.
++// optionally narrowed to OAuth accounts, credential IDs and API-key base URLs.
 +type KeyAllowlistCredential struct {
 +	// Provider is the credential's provider as CPA records it, such as claude,
 +	// codex or gemini, and openai-compatible-<name> for an openai-compatibility group.
 +	Provider string `yaml:"provider" json:"provider"`
 +	// Kind is the credential kind, oauth or apikey. A rule with any other kind matches nothing.
 +	Kind string `yaml:"kind" json:"kind"`
++	// Accounts, when set, narrows the rule to OAuth account emails returned by
++	// AccountInfo, trimmed and compared case-sensitively. Empty emails never match.
++	Accounts []string `yaml:"accounts,omitempty" json:"accounts,omitempty"`
 +	// IDs, when set, narrows the rule to these credential IDs; an OAuth login's
 +	// ID is its file path relative to the auth directory.
 +	IDs []string `yaml:"ids,omitempty" json:"ids,omitempty"`
@@ -654,10 +657,10 @@ index d942147..0c7f9f0 100644
  	wait, found := manager.closestCooldownWaitWithAttempted([]string{"openai-compatibility"}, model, 0, eligibility, "", 5, http.StatusTooManyRequests, attempted)
 diff --git a/sdk/cliproxy/auth/key_allowlist.go b/sdk/cliproxy/auth/key_allowlist.go
 new file mode 100644
-index 0000000..360a1e7
+index 0000000..6acea1e
 --- /dev/null
 +++ b/sdk/cliproxy/auth/key_allowlist.go
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,100 @@
 +package auth
 +
 +import (
@@ -722,6 +725,7 @@ index 0000000..360a1e7
 +		kind := normalizeAuthKind(rule.Kind)
 +		if kind != "" && kind == allowlistKind(auth) &&
 +			strings.EqualFold(strings.TrimSpace(rule.Provider), strings.TrimSpace(auth.Provider)) &&
++			(len(rule.Accounts) == 0 || (kind == AuthKindOAuth && accountListed(rule.Accounts, auth))) &&
 +			(len(rule.IDs) == 0 || slices.Contains(rule.IDs, auth.ID)) &&
 +			(len(rule.BaseURLs) == 0 || (kind == AuthKindAPIKey && baseURLListed(rule.BaseURLs, auth))) {
 +			return true
@@ -751,12 +755,18 @@ index 0000000..360a1e7
 +	base := strings.TrimSpace(auth.Attributes["base_url"])
 +	return base != "" && slices.ContainsFunc(baseURLs, func(listed string) bool { return strings.TrimSpace(listed) == base })
 +}
++
++// accountListed compares native OAuth account identity, never a login filename.
++func accountListed(accounts []string, auth *Auth) bool {
++	_, email := auth.AccountInfo()
++	return email != "" && slices.ContainsFunc(accounts, func(account string) bool { return strings.TrimSpace(account) == email })
++}
 diff --git a/sdk/cliproxy/auth/key_allowlist_test.go b/sdk/cliproxy/auth/key_allowlist_test.go
 new file mode 100644
-index 0000000..72fd8f0
+index 0000000..233e2b1
 --- /dev/null
 +++ b/sdk/cliproxy/auth/key_allowlist_test.go
-@@ -0,0 +1,333 @@
+@@ -0,0 +1,397 @@
 +package auth
 +
 +import (
@@ -1088,6 +1098,70 @@ index 0000000..72fd8f0
 +				t.Errorf("%s: key %q allows = %v, want %v", test.name, key, got, test.allow)
 +			}
 +		}
++	}
++}
++
++func TestKeyAllowlistOAuthAccounts(t *testing.T) {
++	const email = "personal@example.com"
++	allowlist := clientKeyAllowlist{
++		"personal": {{Provider: "claude", Kind: "oauth", Accounts: []string{" \t" + email + "\n"}}},
++		"api":      {{Provider: "claude", Kind: "apikey", Accounts: []string{email}}},
++	}
++	cases := []struct {
++		name  string
++		email string
++		kind  string
++		allow bool
++	}{
++		{name: "match", email: " " + email + " ", kind: AuthKindOAuth, allow: true},
++		{name: "other account", email: "work@example.com", kind: AuthKindOAuth},
++		{name: "case differs", email: "Personal@example.com", kind: AuthKindOAuth},
++		{name: "empty email", email: " \t", kind: AuthKindOAuth},
++		{name: "api key", email: email, kind: AuthKindAPIKey},
++	}
++	for _, test := range cases {
++		auth := &Auth{Provider: "claude", Attributes: map[string]string{AttributeAuthKind: test.kind, AttributeAPIKey: email, AttributeSource: "config:claude[x]"}, Metadata: map[string]any{"email": test.email}}
++		if got := allowlist.allows("personal", auth); got != test.allow {
++			t.Errorf("%s: allows = %v, want %v", test.name, got, test.allow)
++		}
++		if allowlist.allows("api", auth) {
++			t.Errorf("%s: accounts with apikey kind matched", test.name)
++		}
++	}
++}
++
++// A new matching login is usable after registration, with the original config.
++func TestKeyAllowlistHotAddedOAuthAccount(t *testing.T) {
++	for selectorName, selector := range keyAllowlistSelectors {
++		t.Run(selectorName, func(t *testing.T) {
++			cfg := &internalconfig.Config{SDKConfig: internalconfig.SDKConfig{KeyAllowlist: []internalconfig.KeyAllowlist{
++				{APIKey: "personal", Credentials: []internalconfig.KeyAllowlistCredential{{Provider: "claude", Kind: "oauth", Accounts: []string{"personal@example.com"}}}},
++			}}}
++			manager, executors := newKeyAllowlistManager(t, selector(), cfg, false)
++			ctx := coreusage.WithAPIKey(context.Background(), "personal")
++			request := cliproxyexecutor.Request{Model: keyAllowlistModel}
++			if _, err := manager.Execute(ctx, []string{"claude"}, request, cliproxyexecutor.Options{}); err == nil {
++				t.Fatal("selected a login without the account")
++			}
++			for _, name := range []string{"work", "personal"} {
++				auth := &Auth{ID: "hot-" + name, Provider: "claude", Attributes: map[string]string{AttributeAuthKind: AuthKindOAuth}, Metadata: map[string]any{"email": name + "@example.com"}}
++				registry.GetGlobalRegistry().RegisterClient(auth.ID, auth.Provider, []*registry.ModelInfo{{ID: keyAllowlistModel}})
++				id := auth.ID
++				t.Cleanup(func() { registry.GetGlobalRegistry().UnregisterClient(id) })
++				if _, err := manager.Register(context.Background(), auth); err != nil {
++					t.Fatalf("register hot login: %v", err)
++				}
++			}
++			for range keyAllowlistRounds {
++				response, err := manager.Execute(ctx, []string{"claude"}, request, cliproxyexecutor.Options{})
++				if err != nil || string(response.Payload) != "hot-personal" {
++					t.Fatalf("hot login response = %q, %v", response.Payload, err)
++				}
++			}
++			if used := keyAllowlistAttempts(executors); len(used) != 1 || !used["hot-personal"] {
++				t.Fatalf("account rule used %v", used)
++			}
++		})
 +	}
 +}
 diff --git a/sdk/cliproxy/auth/scheduler.go b/sdk/cliproxy/auth/scheduler.go

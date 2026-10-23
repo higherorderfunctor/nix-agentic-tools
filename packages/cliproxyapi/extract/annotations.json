@@ -6,6 +6,9 @@
     "access.key-allowlist[].api-key": {
       "secret": "A client key from access.api-keys; its entry decides which logins behind the proxy it may use."
     },
+    "access.key-allowlist[].credentials[].accounts[]": {
+      "secret": "An OAuth account email used to select logins without exposing the account in generated configuration."
+    },
     "api-keys.*[].headers.<name>": {
       "secret": "An upstream request header, which can carry a credential (an Authorization value)."
     },

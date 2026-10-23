@@ -158,11 +158,15 @@ in {
             assertion = offending == [];
             message = "ai.cliproxyapi.instances.${name}: ${refusal "settings.access.key-allowlist"}";
           }
+          {
+            assertion = lib.all (rule: !(lib.elem null (lib.defaultTo [] rule.accounts))) rules;
+            message = "ai.cliproxyapi.instances.${name}: settings.access.key-allowlist[].credentials[].accounts contains null, which the renderer drops and could remove the account restriction. List account references only.";
+          }
         ]
         ++ map (field: {
           assertion = emptied field == [];
           message = "ai.cliproxyapi.instances.${name}: settings.access.key-allowlist[].credentials[].${field} merged to an empty list, which CPA reads as no restriction on that dimension and admits every credential of the provider and kind. Leave the option unset to leave it unrestricted, or list at least one value.";
-        }) ["base-urls" "ids"]
+        }) ["accounts" "base-urls" "ids"]
         ++ lib.mapAttrsToList (credentialName: credential: {
           assertion = (credential.oauth != null) != (credential.apiKey != null);
           message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}: declare exactly one of oauth or apiKey.";
