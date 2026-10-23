@@ -27,11 +27,24 @@ class ModulesTests(previous.ProjectionCase):
         self.store = f"local?store={self.temp.name}/store&state={self.temp.name}/state&log={self.temp.name}/log"
         self.bindings["eval:1"] = {"command": [sys.executable, str(Path(__file__).with_name("producer.py"))]}
 
+    def assert_typed_subjects(self, packet):
+        observations = previous.rows(packet, "nx_observations")
+        links = previous.rows(packet, "nx_observation_options") + previous.rows(packet, "nx_observation_definitions")
+        self.assertTrue(observations)
+        self.assertEqual(len({row[0] for row in observations}), len(observations))
+        self.assertCountEqual([row[0] for row in links], [row[0] for row in observations])
+        for observation in observations:
+            self.assertEqual(len(observation), 4)
+            self.assertEqual(observation[2:], ["pre-apply-metadata", "observed"])
+        for relation, entities in (("nx_observation_definitions", "nx_definitions"), ("nx_observation_options", "nx_options")):
+            self.assertCountEqual([row[1] for row in previous.rows(packet, relation)],
+                                  [row[0] for row in previous.rows(packet, entities)])
+
     def test_definitions_are_observed_and_contiguous_without_values(self):
         packet = self.run_jobs(previous.request("ok", facet="definitions"), previous.request("ok", facet="definitions"), strict=True)
         self.assertEqual([[row[2] for row in previous.rows(packet, "nx_definitions") if row[1] == option[0]] for option in previous.rows(packet, "nx_options")], [[0, 1], [0, 1]])
         self.assertEqual([row[1] for row in previous.rows(packet, "nx_request_results")], ["complete"] * 2)
-        self.assertTrue(previous.rows(packet, "nx_observations"))
+        self.assert_typed_subjects(packet)
         self.assertFalse(previous.rows(packet, "nx_option_priority"))
         self.assertTrue(any("nx_definitions" in path.read_text() for path in self.trap.glob("*.trap")))
 
@@ -50,6 +63,32 @@ class ModulesTests(previous.ProjectionCase):
                 self.assert_failed_request(packet)
                 self.assertFalse(previous.rows(packet, "nx_definitions"))
                 self.assertFalse(previous.rows(packet, "nx_options"))
+
+    def test_missing_foreign_or_repeated_subject_links_refuse_atomically(self):
+        self.assert_typed_subjects(self.run_jobs(previous.request("ok", facet="definitions"), strict=True))
+        modes = ("duplicate-definition-observation", "duplicate-option-observation", "duplicate-subject-link",
+                 "foreign-definition-link", "foreign-observation-link", "foreign-option-link",
+                 "missing-definition-link", "missing-definition-observation", "missing-option-link",
+                 "mixed-subject-links", "wrong-definition-sibling")
+        for mode in modes:
+            with self.subTest(mode=mode):
+                refused = self.run_jobs(previous.request(mode, facet="definitions"))
+                self.assert_failed_request(refused)
+                for relation in ("nx_definitions", "nx_observation_definitions", "nx_observation_options", "nx_observations", "nx_options"):
+                    self.assertFalse(previous.rows(refused, relation), relation)
+                    for path in self.trap.glob("*.trap"):
+                        self.assertNotIn(relation + "(", path.read_text())
+                packet = self.run_jobs(previous.request("ok", facet="definitions"), previous.request(mode, facet="definitions"), previous.request("ok", facet="definitions"))
+                results = previous.rows(packet, "nx_request_results")
+                self.assertEqual([row[1] for row in results], ["complete", "failed", "complete"])
+                self.assertEqual(len(previous.rows(packet, "nx_options")), 2)
+                self.assertEqual(len(previous.rows(packet, "nx_definitions")), 4)
+                self.assert_typed_subjects(packet)
+                self.assertTrue(previous.rows(packet, "nx_diagnostics"))
+                self.assertEqual(previous.rows(packet, "nx_targets")[0][-1], "partial")
+                projected = [path.read_text() for path in self.trap.glob("*.trap") if "nx_observations(" in path.read_text()]
+                self.assertEqual(len(projected), 2)
+                self.assertTrue(all(results[1][0] not in text for text in projected))
 
     def test_definition_depth_root_at_and_over_and_refusal_preserves_other_request(self):
         packet = self.run_jobs(previous.request("ok", facet="definitions", maxDepth=0), strict=True)
@@ -87,7 +126,10 @@ class ModulesTests(previous.ProjectionCase):
         ids = {name: previous.abi.key(name, ["fixture"]) for name in ("context", "request", "run", "target")}
         request = previous.request(facet=facet, path=path or ["demo", "answer"])
         job = {"identities": ids, "request": request, "moduleArguments": {}, "specialArguments": {}}
-        return self.nix(expression(setup, job), succeeds)
+        packet = self.nix(expression(setup, job), succeeds)
+        if succeeds and previous.rows(packet, "nx_request_results")[0][1] == "complete":
+            self.assert_typed_subjects(packet)
+        return packet
 
     def test_real_module_files_declarations_and_priority_match_independent_nix_oracle(self):
         for override, selected, priority in (("lib.mkDefault", "ordinary.nix", "100"), ("lib.mkOverride 50", "default.nix", "50"), ("lib.mkOverride (-7)", "default.nix", "-7")):
@@ -122,6 +164,16 @@ class ModulesTests(previous.ProjectionCase):
             packet = self.project(setup, "priority", path)
             self.assertFalse(previous.rows(packet, "nx_option_priority"))
             self.assertNotEqual(previous.rows(packet, "nx_request_results")[0][1], "complete")
+
+    def test_empty_definitions_and_is_defined_keep_one_option_subject(self):
+        setup = self.fixture()
+        for facet in ("definitions", "isDefined"):
+            with self.subTest(facet=facet):
+                packet = self.project(setup, facet, ["demo", "unset"])
+                self.assertEqual(previous.rows(packet, "nx_request_results")[0][1], "complete")
+                self.assertEqual(len(previous.rows(packet, "nx_observation_options")), 1)
+                self.assertFalse(previous.rows(packet, "nx_observation_definitions"))
+                self.assertFalse(previous.rows(packet, "nx_definitions"))
 
     def test_synthetic_file_label_never_establishes_source_identity(self):
         packet = self.project(self.fixture(label="synthetic-module"), "definitions")
@@ -164,6 +216,7 @@ class ModulesTests(previous.ProjectionCase):
         self.assertEqual([row[1] for row in previous.rows(packet, "nx_option_priority")], ["100"])
         self.assertTrue(previous.rows(packet, "nx_target_inputs"))
         previous.abi.validate(packet["facts"])
+        self.assert_typed_subjects(packet)
 
     def test_changed_nix_copy_refuses_without_publishing_definition_or_source_link(self):
         packet = self.authenticate(self.fixture(), mutate=lambda copy: (copy / "ordinary.nix").write_text('{...}: { demo.answer = 18; }'))

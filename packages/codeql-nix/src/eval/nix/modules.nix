@@ -18,8 +18,15 @@
     else if request.facet == "declarations"
     then option.declarations
     else [];
+  definitionKey = i: key "definition" [optionKey (toString i)];
   origin = i: key "origin" [identities.request (toString i)];
   row = relation: args: [relation args];
+  observation = kind: subject: let
+    identity = key "observation" [identities.request kind subject];
+  in [
+    (row "nx_observations" [identity identities.request "pre-apply-metadata" "observed"])
+    (row "nx_observation_${kind}s" [identity subject])
+  ];
   observed = exists && (request.facet != "priority" || option.isDefined);
   outcome =
     if observed
@@ -34,7 +41,8 @@
     else if request.facet == "isDefined"
     then [(row "nx_option_metadata" [optionKey "isDefined" (builtins.toJSON option.isDefined)])]
     else
-      lib.concatLists (lib.imap0 (i: label: [
+      lib.concatLists (lib.imap0 (i: label:
+        [
           (row "nx_origins" [
             (origin i)
             label
@@ -46,18 +54,19 @@
           ])
           (
             if request.facet == "definitions"
-            then row "nx_definitions" [(key "definition" [optionKey (toString i)]) optionKey i (origin i)]
+            then row "nx_definitions" [(definitionKey i) optionKey i (origin i)]
             else row "nx_option_declarations" [optionKey i (origin i)]
           )
-        ])
-        labels);
+        ]
+        ++ lib.optionals (request.facet == "definitions") (observation "definition" (definitionKey i)))
+      labels);
 in {
   protocolVersion = 1;
   facts =
     [(row "nx_request_results" ([identities.request] ++ outcome))]
     ++ lib.optionals observed ([
         (row "nx_options" [optionKey identities.context (builtins.toJSON request.path)])
-        (row "nx_observations" [(key "observation" [identities.request]) identities.request "option" optionKey "pre-apply-metadata" "observed"])
       ]
+      ++ observation "option" optionKey
       ++ metadata);
 }

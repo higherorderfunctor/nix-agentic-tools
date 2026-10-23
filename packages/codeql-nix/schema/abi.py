@@ -190,8 +190,9 @@ def validate(rows):
     for req, _, ctx, _, segments, facet, *_ in tables["nx_requests"]:
         if facet == "definitions" and result.get(req, [None])[0] == "complete":
             selected = {opt for opt, context_key, path_json in tables["nx_options"] if (context_key, path_json) == (ctx, segments)}
-            witnessed = {subject for _, request_key, kind, subject, _, state in tables["nx_observations"]
-                         if request_key == req and kind == "option" and state == "observed"}
+            witnessed = {subject for observation, request_key, _, state in tables["nx_observations"]
+                         if request_key == req and state == "observed"
+                         for kind, subject in subjects[observation] if kind == "option"}
             selected &= witnessed
             require(selected and result[req][2] > 0, "definitions lack observed completion")
             for opt in selected:

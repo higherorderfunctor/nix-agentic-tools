@@ -76,10 +76,12 @@ process group. Run diagnostics retain at most 4096 UTF-8 bytes of a message.
 Accepted output must be one F2 envelope with exactly its request result. Options
 and observations must match the selected context, path and request; metadata
 must match the requested facet. Every observation has exactly one typed subject
-link, validated by F1; the supervisor accepts option subjects for the selected
-option. Origins belong to emitted definitions or declarations, and positions
-belong to those origins. Producers cannot emit supervisor facts.
-[E2a](module-adapter.md) authenticates caller-admitted source links.
+link, validated by F1; the supervisor accepts option subjects for emitted
+options and definition subjects for emitted definitions. A complete projection
+observes each emitted option and definition exactly once. Origins belong to
+emitted definitions or declarations, and positions belong to those origins.
+Producers cannot emit supervisor facts. [E2a](module-adapter.md) authenticates
+caller-admitted source links.
 
 A complete request requires a positive observed count and an `observed` option
 witness for the selected facet. `isDefined` and `priority` also require their

@@ -235,10 +235,12 @@ process group. Run diagnostics retain at most 4096 UTF-8 bytes of a message.
 Accepted output must be one F2 envelope with exactly its request result. Options
 and observations must match the selected context, path and request; metadata
 must match the requested facet. Every observation has exactly one typed subject
-link, validated by F1; the supervisor accepts option subjects for the selected
-option. Origins belong to emitted definitions or declarations, and positions
-belong to those origins. Producers cannot emit supervisor facts.
-[E2a](module-adapter.md) authenticates caller-admitted source links.
+link, validated by F1; the supervisor accepts option subjects for emitted
+options and definition subjects for emitted definitions. A complete projection
+observes each emitted option and definition exactly once. Origins belong to
+emitted definitions or declarations, and positions belong to those origins.
+Producers cannot emit supervisor facts. [E2a](module-adapter.md) authenticates
+caller-admitted source links.
 
 A complete request requires a positive observed count and an `observed` option
 witness for the selected facet. `isDefined` and `priority` also require their
@@ -467,15 +469,20 @@ prerequisites.
 
 # Module metadata adapter
 
-> **Last verified:** 2026-10-23 — E2a adds root option metadata.
+> **Last verified:** 2026-10-23 — E2a emits root option metadata with X1 typed
+> observation subjects.
 
 An adapter obtains configuration plus option metadata: a rich result.
 `src/eval/nix/adapters/evalModules.nix` takes pinned `lib`, module paths and
 JSON arguments; `src/eval/nix/modules.nix` selects one option's metadata without
 values. Definitions are retained assignments; declarations introduce options;
 origins are file labels; priority is the override number, lower wins. Tied
-definitions survive. `definitions` adds contiguous ordinals beside
-`declarations`, `isDefined` and `priority`; priority includes `isDefined`. The
+definitions survive. Every emitted option and retained definition has its own
+observation and exactly one typed `nx_observation_options` or
+`nx_observation_definitions` link; definition observations identify their
+sibling ordinal through the definition entity, never through request text.
+`definitions` adds contiguous ordinals beside `declarations`, `isDefined` and
+`priority`; priority includes `isDefined`. The
 [supervisor](evaluation-isolation.md) keeps limits and publication. Callers
 supply [S2](source-identity.md) file rows and copy mappings; original and copied
 bytes must match before linking. Synthetic labels, explicit `_file` and explicit

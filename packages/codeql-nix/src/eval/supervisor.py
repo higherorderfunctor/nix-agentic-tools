@@ -131,7 +131,7 @@ def nix_command(nix, binding, job, request, directory, deadline, env):
 def projection_rows(packet, job, outer):
     validate(packet, "observation-protocol.json")
     facts = packet["facts"]
-    permitted = {"nx_definitions", "nx_observation_options", "nx_observations", "nx_option_declarations", "nx_option_metadata",
+    permitted = {"nx_definitions", "nx_observation_definitions", "nx_observation_options", "nx_observations", "nx_option_declarations", "nx_option_metadata",
                  "nx_option_priority", "nx_options", "nx_origin_positions",
                  "nx_origins", "nx_request_results"}
     if any(relation not in permitted for relation, _ in facts):
@@ -151,9 +151,13 @@ def projection_rows(packet, job, outer):
         if relation in allowed and request["facet"] not in allowed[relation]:
             raise ValueError("projection emitted unrequested metadata")
     observations = [args for relation, args in facts if relation == "nx_observations"]
-    observation_options = {args[0]: args[1] for relation, args in facts if relation == "nx_observation_options"}
+    subjects = {kind: {args[0]: args[1] for relation, args in facts if relation == f"nx_observation_{kind}s"}
+                for kind in ("definition", "option")}
+    definitions = {args[0] for relation, args in facts if relation == "nx_definitions"}
     for observation, req, stage, _ in observations:
-        if req != identity or observation_options.get(observation) not in options or stage != "pre-apply-metadata":
+        subject_is_local = (subjects["option"].get(observation) in options or
+                            subjects["definition"].get(observation) in definitions)
+        if req != identity or not subject_is_local or stage != "pre-apply-metadata":
             raise ValueError("projection observation escapes the selected request")
     origins = {args[0] for relation, args in facts if relation == "nx_origins"}
     referenced = {args[-1] for relation, args in facts if relation in ("nx_definitions", "nx_option_declarations")}
@@ -162,12 +166,17 @@ def projection_rows(packet, job, outer):
     envelope(outer + facts)
     if results[0][1] not in ("complete", "partial") and any(relation in allowed for relation, _ in facts):
         raise ValueError("unsuccessful transaction contains successful metadata")
-    observed = {observation_options[args[0]] for args in observations if args[-1] == "observed"}
+    observed = {kind: [links[args[0]] for args in observations if args[-1] == "observed" and args[0] in links]
+                for kind, links in subjects.items()}
+    if results[0][1] == "complete":
+        for kind, entities in (("definition", definitions), ("option", options)):
+            if set(observed[kind]) != entities or len(observed[kind]) != len(entities):
+                raise Refusal("projection-incomplete", "complete metadata projection lacks exactly one observation per subject")
     witnesses = options
     if request["facet"] in ("isDefined", "priority"):
         relation = "nx_option_metadata" if request["facet"] == "isDefined" else "nx_option_priority"
         witnesses = {args[0] for name, args in facts if name == relation}
-    if results[0][1] == "complete" and (not observed.intersection(witnesses) or results[0][3] == 0):
+    if results[0][1] == "complete" and (not set(observed["option"]).intersection(witnesses) or results[0][3] == 0):
         raise Refusal("projection-incomplete", "complete metadata projection lacks an observed selected-option witness")
     records = sum(relation in ("nx_options", "nx_definitions", "nx_option_declarations") for relation, _ in facts)
     if max(records, len(observations), results[0][3]) > request["maxNodes"]:
