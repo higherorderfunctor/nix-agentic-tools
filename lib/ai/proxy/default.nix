@@ -97,7 +97,7 @@ in {
   rootOption = mkOption {
     type = types.submodule {options = selectionOptions;};
     default = {};
-    description = "Point a Harness at CPA with `instance` + `clientKey`, or external `url` + `key`. A per-Harness selection replaces this whole selection. Instance routes select named upstream credentials; no Harness publishes keys or rules.";
+    description = "Point a Harness (Claude Code or Codex CLI) at CPA with `instance` + `clientKey`, or external `url` + `key`. A per-Harness selection replaces this whole selection. Instance routes select named upstream credentials; no Harness publishes keys or rules.";
   };
   runtimeOptions = selectionOptions;
   resolvedType = types.nullOr (types.submodule {
