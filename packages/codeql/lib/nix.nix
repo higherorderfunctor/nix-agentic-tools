@@ -38,5 +38,7 @@ in {
     '';
   };
   engine = configured;
+  extractorManifest = "${extractor}/extractor/codeql-extractor.yml";
+  warmEngine = configured.customizePackage {queries = [queries];};
   inherit queries;
 }

@@ -27,6 +27,15 @@ if [ -n "${DEVENV_ROOT:-}" ] &&
 fi
 _devenv_config="$_devenv_base/.pre-commit-config.yaml"
 if [ ! -f "$_devenv_config" ]; then
+    # Refresh is advisory. Preserve prek's migration-mode legacy hook even
+    # when there is no launch config from which to run the refresh hook.
+    case "${0##*/}" in
+      post-checkout|post-merge)
+        if [ -x "$0.legacy" ]; then "$0.legacy" "$@" || :; fi
+        exit 0
+        ;;
+      *) ;;
+    esac
     echo "prek: missing: $_devenv_config" >&2
     echo "  Run \"devenv shell true\" in $_devenv_base, then commit again." >&2
     exit 1

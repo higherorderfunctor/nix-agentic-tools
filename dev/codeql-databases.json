@@ -1,0 +1,14 @@
+{
+  "kimchi": {
+    "codeql": "kimchi.passthru.codeql",
+    "create": "kimchi-codeql-create-database",
+    "source": "pinned"
+  },
+  "nix": {
+    "codeql": "codeql-extractor-nix.codeql",
+    "create": "nix-codeql-create-database",
+    "extensions": [".nix"],
+    "language": "nix",
+    "source": "git"
+  }
+}

@@ -1,11 +1,13 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-20 — `service-secret-ordering` is the tenth
-> required context, from #2765's merge; CI watching exits on the first failure
-> through the `pr-review-loop` watcher; `test` evaluates only. The worker and
-> three review roles run inside a loop of at most 3 rounds; unsettled findings
-> go back to the orchestrator to validate. Merge teardown deletes the PR's
-> `archive/*` backups.
+> **Last verified:** 2026-10-22 — named CodeQL databases refresh asynchronously
+> through local prek post-merge and branch post-checkout hooks; missing launch
+> config skips refresh while preserving migration-mode legacy hooks;
+> `service-secret-ordering` is the tenth required context, from #2765's merge;
+> CI watching exits on the first failure through the `pr-review-loop` watcher;
+> `test` evaluates only. The worker and three review roles run inside a loop of
+> at most 3 rounds; unsettled findings go back to the orchestrator to validate.
+> Merge teardown deletes the PR's `archive/*` backups.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -432,6 +434,16 @@ installed hooks so that at hook-run time they resolve:
   under the agent sandbox the primary checkout is a read-only bind while the
   worktree is the writable one, so primary-anchored state would fail there. No
   `mkdir` is needed — prek creates `PREK_HOME` itself.
+
+The local-only `codeql-refresh` declaration uses the same installer and shared
+config rewrite for `post-merge` and `post-checkout`. Its worker detaches and
+refreshes only databases already up in that checkout; file checkouts do nothing.
+It reads the current checkout's lifecycle code/config and logs under that
+checkout's database state. Refresh cannot fail Git. If the launch config is
+missing, these two advisory hooks still run a migration-mode `.legacy` hook
+(such as branchless) before returning success; commit hooks keep their existing
+missing-config failure. No hook redirects `core.hooksPath` or edits a branchless
+marker block.
 
 The rewrite task takes a lock in the shared hooks directory and publishes each
 complete hook with a same-filesystem rename after preserving its mode. Two shell

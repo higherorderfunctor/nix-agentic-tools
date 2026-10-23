@@ -92,6 +92,23 @@ in {
       grep -Fq "missing: $root/base/.pre-commit-config.yaml" base.out
       grep -Fq "devenv shell true\" in $root/base" base.out
 
+      # Advisory post hooks preserve the installed branchless migration hook
+      # when the launch checkout has not materialized its prek config.
+      cp "$hooks_dir/pre-commit" "$hooks_dir/post-checkout"
+      cp "$hooks_dir/pre-commit" "$hooks_dir/post-merge"
+      for hook in post-checkout post-merge; do
+        cat > "$hooks_dir/$hook.legacy" <<'LEGACY'
+      #!${pkgs.bash}/bin/bash
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      printf '%s\n' "$*" > "$LEGACY_CAPTURE"
+      LEGACY
+        chmod 0755 "$hooks_dir/$hook.legacy"
+        export LEGACY_CAPTURE="$PWD/$hook.capture"
+        ( cd worktree; DEVENV_ROOT="$root/base" "$hooks_dir/$hook" old new 1 )
+        grep -qx 'old new 1' "$LEGACY_CAPTURE"
+      done
+
       mkdir -p "$out"
       touch "$out/ok"
     '';

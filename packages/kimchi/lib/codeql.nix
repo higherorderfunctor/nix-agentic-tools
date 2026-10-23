@@ -79,7 +79,7 @@
 
   # `kimchi-codeql-create-database <dir> [<tree>]` copies <tree>, by default
   # `source`, to <dir>/source and creates <dir>/db from it. The database
-  # derivation and the codeql:kimchi-db devenv task both run it, so the two
+  # derivation and the codeql:kimchi:up devenv task both run it, so the two
   # hold the same database; a check runs it over a fixture tree laid out like
   # `source`, so the fixture is extracted the same way.
   #

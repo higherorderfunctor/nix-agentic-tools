@@ -86,7 +86,7 @@ mutant costs a database build each.
 ### Running it without Nix
 
 ```bash
-devenv tasks run codeql:kimchi-db        # once per pin
+devenv tasks run codeql:kimchi:up        # once per pin
 state=.devenv/state/codeql/kimchi
 for q in EnvironmentReads LaunchOverwrites; do
   "$state/engine/bin/codeql" query run --database="$state/db" \

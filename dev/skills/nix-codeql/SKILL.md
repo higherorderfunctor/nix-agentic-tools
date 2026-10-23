@@ -11,10 +11,35 @@ questions across this repo's `.nix` files. It does not evaluate Nix, resolve
 imports or `with`, or parse embedded Bash. An unresolved expression is unknown;
 read the source before calling it a defect.
 
-Run `devenv tasks run codeql:nix-db` from the repo's devenv shell. The task
-snapshots `git archive HEAD` into `.devenv/state/codeql/nix/source` and skips a
-matching commit and tool stamp. Dirty edits are absent. Rerun after committing
-or pulling. The database and engine stay under `.devenv/state/codeql/nix/`.
+Run `devenv tasks run codeql:nix:up` from the checkout to create or refresh a
+stale database. `codeql:nix:refresh` forces replacement; `codeql:nix:down`
+removes it. `codeql:status` prints generations, stamp ages, allocated sizes,
+shared-base worktree references and totals; `codeql:gc` prunes unused shared
+bases and orphan generations. Successful `up` and `refresh` also prune,
+including when `up` reuses the database. State lives under
+`<checkout>/.devenv/state/codeql/nix/`: `db` links to a complete generation,
+`stamp` records its inputs on one line, and `engine` links the query engine.
+Resolve `db` once per query request, and finish queries before replacing a
+generation. CodeQL queries sharing a generation must serialize because they
+share its writable result cache.
+
+The pinned extractor lacks overlay support, so the database holds
+`git archive HEAD`; dirty changes are absent. `up` checks the commit, merge-base
+and tool paths. A shared warmed merge-base snapshot is copied with `cp -a` when
+HEAD matches it. If a future extractor declares overlay support, each refresh
+uses a fresh base copy plus the whole working diff, including untracked Nix
+files. After a merge or branch checkout, an already active database refreshes in
+the background; inspect `refresh.log` after a failure. Other changes need an
+explicit `up`. No shell entry creates a database. Pruning retains the current
+generation and unpublished generations younger than five minutes, and uses the
+builder and shared-base locks. Shared bases survive only for exact current keys
+from live worktrees' published stamps, plus the key just used. Missing
+directories, missing or legacy stamps, unborn checkouts and unrelated histories
+do not retain bases; interrupted `base.*` builds are removed under the shared
+lock. A missing `origin/main` or another Git failure remains an error.
+Generation publication fits intermediate query caches to 512 MB; source and
+relations are outside that limit, and subsequent queries need
+`--max-disk-cache=512` too.
 
 Read [SCHEMA.md](SCHEMA.md) for the class and field summary. Import
 `codeql.nix.Nix`, and prefix generated classes with `NIX::`; only common classes
