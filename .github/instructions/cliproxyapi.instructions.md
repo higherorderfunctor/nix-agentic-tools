@@ -110,7 +110,8 @@ before publication.
 > keys from independent internal secrets and filters each client key's exact
 > model set after credential and client selection, in calls and Responses
 > websocket messages; Claude pickers consume the same set when a client list is
-> configured. Restart triggers remain shared; CPA diagnostics reach the journal.
+> configured. The CPA bump golden inventories source contracts before accepting
+> a release. Restart triggers remain shared; CPA diagnostics reach the journal.
 
 **cpa-gate is NOT a security boundary.** A harness that runs under the same uid
 as the gate can read the policy file, which holds every client key and every
@@ -335,6 +336,20 @@ install check needs a version that a local path lacks.
   control.
 - Go tests run in the package check phase, including a real Caddy copy of
   listings and a test that no log or error carries a key.
+- `cliproxyapi-gate-bump`: `go/ast` inventories CPA's route registrations,
+  carrier reads and order, executor model/fallback/tool setters, source-wide
+  `SetRawBytes` calls whose path expression names `tools`, hosted-tool helpers
+  and their callers, cloak policy guards and prefix. Reviewed contracts live in
+  `checks/fixtures/gate-bump-golden.json`; changes fail with the affected
+  category, file and function. Source literals are omitted from write
+  diagnostics. Comment/layout controls pass; added route, carrier and tool write
+  controls fail, including a prefix constant changed to a variable with the same
+  initializer. Drift failures name the golden and require reviewing CPA source
+  and gate coverage before updating it. The same Go tests run in CPA's package
+  check phase. Forced switch paths must remain in the extracted config; the
+  existing `cliproxyapi-extracted` check regenerates both config and embedded
+  catalog, so a bump cannot retain stale catalog facts. Review the source change
+  before updating the golden; never accept a new contract only to clear CI.
 - `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
 - `cliproxyapi-gate-validate`: the real binary validates the rendered Caddyfile
   with a good policy, and refuses a shared key, a missing file and an empty
