@@ -1,0 +1,14 @@
+[
+  (import ./target.nix)
+  (builtins.import ./target.nix)
+  (with { import = _: 113; }; import ./target.nix)
+  (let import = _: 127; in import ./target.nix)
+  (let builtins = { import = _: 131; }; in builtins.import ./target.nix)
+  (import ./missing.nix)
+  (let path = ./target.nix; in import path)
+  (let callerOnly = 137; in import ./isolated.nix)
+  (import ./sub/../target.nix)
+  (import ./function.nix { value = 151; })
+  (import ../external.nix)
+  ((import: import ./target.nix) (_: 163))
+]

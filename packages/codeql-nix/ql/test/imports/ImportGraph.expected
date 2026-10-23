@@ -1,0 +1,10 @@
+| imports.nix | 2 | 4 | resolved | target.nix |  |
+| imports.nix | 3 | 4 | resolved | target.nix |  |
+| imports.nix | 4 | 31 | resolved | target.nix |  |
+| imports.nix | 7 | 4 | unavailable |  | missing-input |
+| imports.nix | 8 | 32 | unavailable |  | dynamic-path |
+| imports.nix | 9 | 29 | resolved | isolated.nix |  |
+| imports.nix | 10 | 4 | resolved | target.nix |  |
+| imports.nix | 11 | 4 | resolved | function.nix |  |
+| imports.nix | 12 | 4 | unavailable |  | missing-input |
+| nested/relative.nix | 1 | 1 | resolved | target.nix |  |

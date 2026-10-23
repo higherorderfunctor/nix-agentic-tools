@@ -134,7 +134,8 @@
         export CODEQL_NIX_TEST_LOCK="$TMPDIR/codeql.lock"
         export CODEQL_NIX_TEST_SCRATCH="$TMPDIR"
         python3 ${owner}/checks/run-domain-tests.py \
-          ${owner}/checks/fixtures/implicit-scope/test_implicit.py
+          ${owner}/checks/fixtures/implicit-scope/test_implicit.py \
+          ${owner}/checks/fixtures/imports/test_imports.py
         mkdir "$out"
         printf 'S2 driver suite; 28 inherited raw/diagnostic preflight cases; Quality, Coordinates, Empty, Features and Ambiguous QL tests; exact archived bytes passed\n' > "$out/evidence"
       '';

@@ -14,6 +14,7 @@
         "installed-extractor"
         "integration-gate"
         "lexical-scope"
+        "literal-imports"
         "metadata-library"
         "module-adapter"
         "owner-layout"
