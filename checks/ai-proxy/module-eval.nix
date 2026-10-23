@@ -350,7 +350,7 @@ in {
         in
           if proxy == null
           then null
-          else removeAttrs proxy ["credentials"];
+          else removeAttrs proxy ["credentials" "models"];
         root = {
           key = redact.file "/run/secrets/ai-proxy-key";
           url = "http://127.0.0.1:8317";

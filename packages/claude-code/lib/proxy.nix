@@ -63,14 +63,21 @@
         else resolvedProxy.credentials
       );
 
-  picker = resolvedProxy:
+  picker = listDefinition: resolvedProxy: let
+    # A selected client list owns both arrays; native HM rows must not widen
+    # S(K). The launcher needs plain JSON, while module leaves need mkForce.
+    ownedList = values:
+      if gated resolvedProxy
+      then listDefinition values
+      else values;
+  in
     {
       modelPicker =
-        {options = pickerRows resolvedProxy;}
+        {options = ownedList (pickerRows resolvedProxy);}
         // lib.optionalAttrs (gated resolvedProxy) {replaceBuiltInOptions = true;};
     }
     // lib.optionalAttrs (gated resolvedProxy) {
-      availableModels = resolvedProxy.models;
+      availableModels = ownedList resolvedProxy.models;
       availableModelsMatch = "exact";
     };
 
@@ -94,7 +101,7 @@ in {
   }: let
     rows = pickerRows resolvedProxy;
     # toFile: the rows hold no store paths, and evaluation can read it back.
-    pickerFile = builtins.toFile "claude-proxy-model-picker.json" (builtins.toJSON (picker resolvedProxy));
+    pickerFile = builtins.toFile "claude-proxy-model-picker.json" (builtins.toJSON (picker lib.id resolvedProxy));
   in
     lib.ai.mkLauncher pkgs {
       exe = "claude";
@@ -122,7 +129,7 @@ in {
         ai.claude.native.settings = render resolvedProxy;
       })
       (lib.mkIf (backend == "hm" && pickerRows resolvedProxy != []) {
-        ai.claude.native.settings = picker resolvedProxy;
+        ai.claude.native.settings = picker lib.mkForce resolvedProxy;
       })
     ];
 }

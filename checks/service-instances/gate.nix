@@ -222,7 +222,7 @@
       selected = input: (lib.head (builtins.fromJSON (evaluate backend input).config.ai.services.cpa-gate-main.files.policy.content).entries).models;
       refuses = fragment: input:
         lib.any (item: !item.assertion && lib.hasInfix fragment item.message) (evaluate backend input).config.assertions;
-      withHarness = instance:
+      withHarness = instance: native:
         (
           if backend == "hm"
           then harness.evalHm
@@ -231,6 +231,7 @@
           ai = {
             claude = {
               enable = true;
+              native.settings = native;
               proxy = {
                 instance = "main";
                 clientKey = "one";
@@ -276,8 +277,13 @@
         // {
           clientKeys = (limited {models = ["m"];}).clientKeys // {two = base.clientKeys.one // {key._redact.file = "/run/secrets/two";};};
         };
+      nativeOutside = {
+        availableModels = ["outside"];
+        modelPicker.options = [{model = "outside";}];
+      };
+      nativeControl = harness.claudeSettings (withHarness enabled nativeOutside);
       results = map (input: let
-        result = withHarness input;
+        result = withHarness input nativeOutside;
         picker = pickerFor result;
       in
         accepts backend input
@@ -293,10 +299,17 @@
         results
         ++ [
           (selected enabled == ["m" "n"])
-          ((withHarness enabled).config.ai.claude.normalized.proxy.models == null)
+          (nativeControl.availableModels == ["outside"])
+          (lib.sort builtins.lessThan (map (row: row.model) nativeControl.modelPicker.options)
+            == (
+              if backend == "hm"
+              then ["m" "n" "outside"]
+              else ["outside"]
+            ))
+          ((withHarness enabled {}).config.ai.claude.normalized.proxy.models == null)
           (accepts backend mixed && selected mixed == ["m" "n" "p"])
           (accepts backend oauthClient && selected oauthClient == [oauthModel])
-          ((pickerFor (withHarness oauthClient)).availableModels == [oauthModel])
+          ((pickerFor (withHarness oauthClient {})).availableModels == [oauthModel])
           (accepts backend independent)
           (map (entry: entry.models) (builtins.fromJSON (evaluate backend independent).config.ai.services.cpa-gate-main.files.policy.content).entries == [["m"] ["m" "n"]])
           (refuses "XOR" (limited {

@@ -73,8 +73,10 @@ credential rows instead of any user picker rows.
 When the selected key configures `models` or `excludedModels`, the resolved
 proxy also carries the final gate model set. The same picker lowering uses that
 set for its rows, including OAuth models, sets `replaceBuiltInOptions = true`
-and writes `availableModels` with `availableModelsMatch = "exact"`. Home Manager
-uses the existing user settings delivery; devenv includes these leaves in its
+and writes `availableModels` with `availableModelsMatch = "exact"`. On Home
+Manager, these two lists override competing native rows so they cannot widen the
+client set; without a client list, native rows still merge. Home Manager uses
+the existing user settings delivery; devenv includes these leaves in its
 existing `--settings` file. No client list keeps the previous lowering.
 
 A row for a non-Anthropic id such as `glm-5.3` is listed and selectable in
