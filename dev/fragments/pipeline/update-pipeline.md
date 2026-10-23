@@ -1,9 +1,10 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-21 — updates run only as CI's per-target matrix,
+> **Last verified:** 2026-10-23 — updates run only as CI's per-target matrix,
 > and package lanes never build; fixture flake locks under
 > `checks/<concern>/flake.lock` are a third target kind, `update-lock.sh`; input
-> verification skips the CodeQL engines.
+> verification skips CodeQL engines and the customized Nix command, with three
+> exact exceptions for engine-free Nix assets.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -34,9 +35,10 @@ branch. Input verification reduces evaluator workers when the core-derived count
 would violate the 60% memory budget. If no viable evaluator can start, that
 setup failure holds the input back instead of being classified as an executed,
 ordinary red build. Before each verifier attempt, the updater enumerates
-`ciPackages` minus the CodeQL engines (`EXCLUDED_PREFIXES`, through
-`ci-packages.py update-plan`) and builds only that set via `--select`. The
-deliberately built `EXCLUDED` members, such as the Kiro canary, stay in. The
+`ciPackages` minus the CodeQL engines and customized Nix command
+(`EXCLUDED_PREFIXES` with the three exact `PUBLISHABLE_CODEQL` exceptions,
+through `ci-packages.py update-plan`) and builds only that set via `--select`.
+The deliberately built `EXCLUDED` members, such as the Kiro canary, stay in. The
 engines stay out because the CodeQL smoke check proves them, and an engine
 missing from every substituter would be fetched again from upstream on every
 input bump. The pinned producer must then report exactly one evaluation per

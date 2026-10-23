@@ -650,12 +650,13 @@ jobs:
           shopt -s inherit_errexit 2>/dev/null || :
           nix eval --raw .#.ciPackages.x86_64-linux --apply 'packages:
             builtins.concatStringsSep "" (map (name: packages.${name}.drvPath + "\n")
-              (builtins.filter (name: builtins.substring 0 7 name == "codeql-") (builtins.attrNames packages)))' \
+              (builtins.filter (name: builtins.substring 0 7 name == "codeql-"
+                && packages.${name} ? customizePackage && !(packages.${name} ? unwrapped)) (builtins.attrNames packages)))' \
             > "$RUNNER_TEMP/codeql-engines"
           engines=()
           while read -r drv; do engines+=("$drv"); done < "$RUNNER_TEMP/codeql-engines"
           if [ "${#engines[@]}" -eq 0 ]; then
-            echo "::error::ciPackages names no codeql-* engine, so there is nothing to assert" >&2
+            echo "::error::ciPackages names no uncustomized CodeQL engine, so there is nothing to assert" >&2
             exit 1
           fi
           nix-store --query --requisites "${engines[@]}" > "$RUNNER_TEMP/codeql-requisites"
@@ -691,6 +692,9 @@ jobs:
           while read -r drv; do
             case "${drv##*/}" in *codeql*.drv) drvs+=("$drv") ;; esac
           done < "$RUNNER_TEMP/codeql-kimchi-requisites"
+          # This command links the bare engine, so publishing its closure would
+          # publish the CLI too. Its pure nixql-* assets remain publishable.
+          drvs+=("$(nix eval --raw .#.ciPackages.x86_64-linux.codeql-nix.drvPath)")
           nix-store --query --outputs "${drvs[@]}" | sort -u > "$RUNNER_TEMP/codeql-paths"
           paths=()
           while read -r path; do paths+=("$path"); done < "$RUNNER_TEMP/codeql-paths"

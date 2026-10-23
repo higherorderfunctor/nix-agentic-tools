@@ -119,6 +119,11 @@ shopt -s inherit_errexit 2>/dev/null || :
 nix() {
   case "$MODE" in empty) return ;; esac
   case "$*" in
+    *codeql-nix.drvPath*)
+      [ "$MODE" != no-nix-command ] || return 1
+      printf '%s' /nix/store/j-codeql-bare-customized-1.drv
+      return
+      ;;
     *codeql.database.drvPath*)
       [ "$MODE" != nodb ] || return 1
       printf '%s' /nix/store/f-kimchi-codeql-database-1.drv
@@ -144,6 +149,7 @@ nix-store() {
       printf '%s\n' /nix/store/a-codeql-bare-1.drv /nix/store/b-codeql-full-1.drv \
         /nix/store/c-codeql-linux64.zip.drv /nix/store/e-glibc-1.drv
       [ "$MODE" = missing ] || printf '%s\n' /nix/store/d-codeql-bundle-linux64.tar.zst.drv
+      if [ "$MODE" = extra ]; then printf '%s\n' /nix/store/z-codeql-unexpected.drv; fi
       ;;
     --outputs:*) shift 2; for drv in "$@"; do printf '%s\n' "${drv%.drv}"; done ;;
   esac
@@ -163,7 +169,9 @@ export -f curl nix nix-store
             for mode, http_code, published, success, queried in (
                 ("empty", "404", "", False, False),
                 ("missing", "404", "", False, False),
+                ("extra", "404", "", False, False),
                 ("nodb", "404", "", False, False),
+                ("no-nix-command", "404", "", False, False),
                 ("no-check", "404", "", False, False),
                 ("no-fixture", "404", "", False, False),
                 ("no-customized", "404", "", False, False),
@@ -172,6 +180,7 @@ export -f curl nix nix-store
                 # The fixture database or the customized engine alone published.
                 ("complete", "404", "h", False, True),
                 ("complete", "404", "i", False, True),
+                ("complete", "404", "j", False, True),
             ):
                 with self.subTest(mode=mode, http_code=http_code, published=published):
                     queries.unlink(missing_ok=True)
@@ -184,13 +193,14 @@ export -f curl nix nix-store
                     self.assertEqual(queries.exists(), queried, result.stdout + result.stderr)
                     if success:
                         # Four engine derivations, the release and fixture
-                        # databases, the check and the customized engine; the
+                        # databases, the check and both customized engines; the
                         # engine the check needs again is asked once.
-                        self.assertEqual(len(queries.read_text().splitlines()), 8)
+                        self.assertEqual(len(queries.read_text().splitlines()), 9)
 
 class CoverageTest(unittest.TestCase):
     def setUp(self):
-        self.names = ["alpha", "beta", "codeql-javascript", "codeql-new-engine", "delta", "epsilon", "gamma", "new-package", "kiro-cli-rollout-canary"]
+        self.assets = {"codeql-nix-extractor", "codeql-nix-library", "codeql-nix-queries"}
+        self.names = ["alpha", "beta", "codeql-javascript", "codeql-new-engine", "codeql-nix", "codeql-nix-unknown", "delta", "epsilon", "gamma", "new-package", "kiro-cli-rollout-canary"] + sorted(self.assets)
         self.plans = [ci.partition(self.names, i, 5) for i in range(5)]
 
     def test_added_package_is_covered_and_unpublishable_excluded(self):
@@ -198,15 +208,16 @@ class CoverageTest(unittest.TestCase):
         names = [n for p in self.plans for n in p["packages"]]
         self.assertEqual(names.count("new-package"), 1)
         self.assertNotIn("kiro-cli-rollout-canary", names)
-        # Every engine, including one added later, by prefix.
-        self.assertFalse([n for n in names if n.startswith("codeql-")])
+        # Future engines and unknown codeql-* exports stay excluded; only
+        # the exact three engine-free Nix assets may pass.
+        self.assertEqual({n for n in names if n.startswith("codeql-")}, self.assets)
 
     def test_update_lanes_build_every_package_but_the_engines(self):
         packages = ci.update_packages(self.names)
         self.assertIn("kiro-cli-rollout-canary", packages)
-        self.assertFalse([n for n in packages if n.startswith("codeql-")])
+        self.assertEqual({n for n in packages if n.startswith("codeql-")}, self.assets)
         with self.assertRaises(ValueError):
-            ci.update_packages(["codeql-javascript"])
+            ci.update_packages(["codeql-javascript", "codeql-nix"])
 
     def test_missing_duplicate_or_different_source_shards_fail(self):
         changed = copy.deepcopy(self.plans)

@@ -16,10 +16,10 @@
 in {
   checks = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
     # Every engine's drvPath, with its context discarded so nothing is built.
-    # The flat `codeql-*` names must be exactly the sources.json entries: a
+    # The uncustomized engine names must be the sources.json entries: a
     # recipe directory without an asset, or an asset without a recipe, fails.
     codeql-engines-eval = let
-      found = builtins.filter (lib.hasPrefix "codeql-") (builtins.attrNames packages);
+      found = builtins.filter (name: lib.hasPrefix "codeql-" name && packages.${name} ? customizePackage && !(packages.${name} ? unwrapped)) (builtins.attrNames packages);
       drvPaths = map (name: "${name} ${builtins.unsafeDiscardStringContext packages.${name}.drvPath}") engines;
     in
       assert lib.assertMsg (found == engines) "codeql-engines-eval: flat engines ${toString found} differ from sources.json's ${toString engines}";
