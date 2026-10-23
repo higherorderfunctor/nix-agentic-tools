@@ -25,7 +25,7 @@ type wrappedWriter struct{ http.ResponseWriter }
 
 func (w wrappedWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
-func websocketFixture(t *testing.T) (string, <-chan string) {
+func websocketFixture(t *testing.T, hostedTypes ...string) (string, <-chan string) {
 	t.Helper()
 	received := make(chan string, 20)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +70,9 @@ func websocketFixture(t *testing.T) (string, <-chan string) {
 	// Even a literal whitespace policy entry must not create CPA's trimmed alias.
 	for _, e := range g.keys {
 		e.models[" m "] = true
+		for _, kind := range hostedTypes {
+			e.hostedTools[kind] = true
+		}
 	}
 	front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next := caddyhttp.HandlerFunc(func(http.ResponseWriter, *http.Request) error { t.Error("websocket reached reverse proxy"); return nil })
@@ -230,13 +233,21 @@ func TestWebsocketRefusalsCloseBeforeForwarding(t *testing.T) {
 		{"trailing", `{"model":"m"}{}`, websocket.TextMessage},
 		{"trim-alias", `{"model":" m "}`, websocket.TextMessage},
 	}
+	var hostedTypes []string
+	for _, c := range nonCanonicalHostedTypes {
+		hostedTypes = append(hostedTypes, c.kind)
+		cases = append(cases, struct {
+			name, body string
+			kind       int
+		}{c.name, hostedTypeBody(c.field, c.kind), websocket.TextMessage})
+	}
 	for _, test := range cases {
 		for _, later := range []bool{false, true} {
 			if later && test.name == "missing-model" {
 				continue
 			}
 			t.Run(fmt.Sprintf("%s/later=%t", test.name, later), func(t *testing.T) {
-				front, received := websocketFixture(t)
+				front, received := websocketFixture(t, hostedTypes...)
 				conn := dialWebsocket(t, front+"/v1/responses?key="+responsesKey)
 				if later {
 					_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"model":"m"}`))

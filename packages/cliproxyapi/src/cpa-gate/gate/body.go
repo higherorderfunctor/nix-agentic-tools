@@ -432,7 +432,9 @@ func checkTools(tools gjson.Result, e *entry) bool {
 			return true
 		}
 		kind := typeValue.String()
-		ok = typeValue.Type == gjson.String && (kind == "function" || kind == "custom" || e.hostedTools[kind])
+		// CPA trims declarations and folds Claude hosted types before classification.
+		ok = typeValue.Type == gjson.String && kind == strings.TrimSpace(kind) && kind == strings.ToLower(kind) &&
+			(kind == "function" || kind == "custom" || e.hostedTools[kind])
 		return ok
 	})
 	return ok
@@ -449,6 +451,11 @@ func checkInputCalls(input gjson.Result, e *entry) bool {
 			return true
 		}
 		kind := typeValue.String()
+		// CPA trims history types: "web_search_call " would miss the suffix below.
+		if kind != strings.TrimSpace(kind) {
+			ok = false
+			return false
+		}
 		if !strings.HasSuffix(kind, "_call") && !strings.HasSuffix(kind, "_call_output") {
 			return true
 		}
