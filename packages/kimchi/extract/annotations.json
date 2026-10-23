@@ -409,7 +409,7 @@
       "sites": 1
     },
     "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js#fromEnvSigningName[VarRef]": {
-      "reason": "AWS constructs the bearer-token key from the signingName supplied by the service client",
+      "reason": "evaluator limitation: the key is a template over the factory argument's signingName; the pinned caller passes \"bedrock\", so the name is AWS_BEARER_TOKEN_BEDROCK, which another site already lists",
       "sites": 2
     },
     "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/chunks/bedrock-converse-stream.js#getProviderEnvValue[VarRef]": {
@@ -485,7 +485,7 @@
       "sites": 1
     },
     "kimchi/src/oauth-config.ts#nonEmptyEnv[VarRef]": {
-      "reason": "OAuth client overrides include a key constructed from the runtime region identifier",
+      "reason": "evaluator limitation: the key is a template over the region id, upper-cased; REGION_OAUTH_DEFAULTS limits it to us and eu, so the names KIMCHI_OAUTH_CLIENT_ID_US and KIMCHI_OAUTH_CLIENT_ID_EU are fixed in source but missing from the fact",
       "sites": 1
     }
   },

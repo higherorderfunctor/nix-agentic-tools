@@ -166,9 +166,8 @@ the database reads its npm dist, which is built from that repository.
 > **Last verified:** 2026-10-23 — fixed names resolve through CommonJS property
 > assignments and destructured reexports, literal callback arrays and object
 > tables, and declared, arrow and function-expression key helpers. Unresolved
-> computed reads fail extraction unless their genuinely dynamic site is
-> reviewed; stale site rows and changed occurrence counts fail the same
-> transform.
+> computed reads fail extraction unless their site is reviewed; stale site rows
+> and changed occurrence counts fail the same transform.
 
 `extracted.json`'s `environment` surface is one fact the CodeQL database
 produces. `extract/environment.nix` runs the two-query pack
@@ -245,11 +244,10 @@ literal or constant call arguments at that parameter index. This includes
 arrow bindings and function-expression bindings share this rule. Parameter
 forwarding through known helpers is followed to its call arguments, including
 jiti’s boolean-to-JSON reader. A helper site resolves completely only when all
-terminal call arguments resolve. `nonEmptyEnv` also receives the dynamic
-region-specific template at `src/oauth-config.ts:85`, so its literal calls
-contribute names while its computed read remains unresolved. Uninitialized
-bundled bindings assigned string literals also resolve, including
-`AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
+terminal call arguments resolve. `nonEmptyEnv` also receives a region template
+at `src/oauth-config.ts:85`, so its literal calls contribute names while that
+read remains unresolved. Uninitialized bundled bindings assigned string literals
+also resolve, including `AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
 `bedrock-converse-stream.js:24`.
 
 A computed environment read that resolves to no name and has no existing refusal
@@ -272,7 +270,11 @@ review. Moving lines or changing a chunk hash needs no edit; changing the
 function or key kind requires review. These are site reviews, not package-wide
 exceptions.
 
-Only genuinely dynamic keys belong in the review list. Fixed names resolve
+A review row is either a genuinely dynamic key or an evaluator limitation whose
+reason names the fixed names it leaves out. Two rows are limitations: the region
+template in `oauth-config.ts` (`KIMCHI_OAUTH_CLIENT_ID_US` and `_EU`, missing
+from the fact) and the AWS `fromEnvSigningName` template
+(`AWS_BEARER_TOKEN_BEDROCK`, listed through another site). Fixed names resolve
 through CommonJS property assignments and the existing unique by-name constant
 fallback using a destructured property's exported name. That fallback also
 follows bundled literal assignments. Literal arrays passed through element
