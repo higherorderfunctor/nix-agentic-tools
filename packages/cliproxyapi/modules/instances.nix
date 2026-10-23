@@ -16,6 +16,27 @@ backend: {
   inherit (import ../lib/default.nix {inherit lib;}) cliproxyapi;
   providersLib = cliproxyapi.providers;
   exact = import ../lib/exact-models.nix {inherit lib;};
+  gate = import ../lib/gate.nix {inherit lib pkgs;};
+  redact = import ../../../lib/redact {inherit lib;};
+  caddy = import ../../../lib/ai/caddy.nix {inherit lib pkgs;};
+  strictShellApplication = import ../../../lib/strict-shell-application.nix;
+  access = instance: {
+    api-keys = lib.mapAttrsToList (name: client:
+      if instance.gate.enable
+      then gate.internalKey instance name
+      else client.key)
+    instance.clientKeys;
+    key-allowlist =
+      lib.mapAttrsToList (name: client: {
+        api-key =
+          if instance.gate.enable
+          then gate.internalKey instance name
+          else client.key;
+        credentials = lib.concatMap (choice: lib.toList ((providersLib.route instance "clientKeys.${name}.routes" choice).rule or [])) client.routes;
+      })
+      instance.clientKeys;
+  };
+  renderAccess = access: cliproxyapi.render {inherit access;};
   # A named client key also written by hand could widen its allowlist rules.
   handWritten = name: instance: let
     clients = lib.mapAttrsToList (clientName: client: client // {option = "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}";}) instance.clientKeys;
@@ -76,24 +97,30 @@ in {
               then exact.narrow instance
               else instance
             )));
-            access = lib.mkIf (instance.clientKeys != {}) {
-              api-keys = map (client: client.key) (builtins.attrValues instance.clientKeys);
-              key-allowlist =
-                lib.mapAttrsToList (clientName: client: {
-                  api-key = client.key;
-                  credentials = lib.concatMap (choice: lib.toList ((providersLib.route instance "clientKeys.${clientName}.routes" choice).rule or [])) client.routes;
-                })
-                instance.clientKeys;
-            };
+            access = lib.mkIf (instance.clientKeys != {}) (access instance);
             # Without this the daemon downloads its control panel from GitHub at
             # start and every 3 hours after.
             management.disable-auto-update-panel = lib.mkDefault true;
             oauth.auth-dir = "${instance.stateDir}/auth";
             server = {
-              host = lib.mkDefault "127.0.0.1";
-              inherit (instance) port;
+              host =
+                if instance.gate.enable
+                then "127.0.0.1"
+                else lib.mkDefault "127.0.0.1";
+              port =
+                if instance.gate.enable
+                then instance.gate.internalPort
+                else instance.port;
             };
           }
+          (lib.mkIf instance.gate.enable {
+            observability.logs = {
+              debug = false;
+              logging-to-file = false;
+              request-log = false;
+            };
+            server.max-request-body-bytes = 33554432;
+          })
           (lib.mkIf instance.exactModels (exact.settings // {oauth = exact.settings.oauth // {excluded-models = exact.exclusions instance;};}))
         ];
       preStart = instance:
@@ -128,6 +155,30 @@ in {
             precedence.
           '';
         };
+        gate = lib.mkOption {
+          type = lib.types.submodule {
+            options = {
+              enable = lib.mkEnableOption "the front gate (requires exactModels; NOT a security boundary)";
+              healthPort = lib.mkOption {
+                type = lib.types.port;
+                default = 28317;
+                description = "Claimed loopback port for the gate's listing health.";
+              };
+              host = lib.mkOption {
+                type = lib.types.strMatching "[A-Za-z0-9.:]+";
+                default = "127.0.0.1";
+                description = "Gate bind address; CPA itself is fixed to IPv4 loopback.";
+              };
+              internalPort = lib.mkOption {
+                type = lib.types.port;
+                default = 18317;
+                description = "Claimed loopback CPA port; instance.port becomes the gate port.";
+              };
+            };
+          };
+          default = {};
+          description = "Optional front gate with split client/internal keys and exact model filtering.";
+        };
       };
       owner = "cliproxyapi";
       packagePath = "generic.cliproxyapi";
@@ -137,6 +188,47 @@ in {
       variable = "CPA_CONFIG";
     })
   ];
+
+  config.ai.cliproxyapi.services = lib.mkMerge (lib.mapAttrsToList (name: instance: let
+    policy = gate.policy instance;
+    rendered = cliproxyapi.render instance.settings;
+    # Both units restart for either template or any file-backed credential,
+    # including the client files CPA no longer reads itself.
+    restartOnChange = lib.unique (
+      ["${pkgs.writeText "cpa-gate-revision" (builtins.toJSON [policy.content rendered.content])}"]
+      ++ lib.concatMap redact.filePaths (builtins.attrValues (policy.secrets // rendered.secrets))
+    );
+    gateName = "cpa-gate-${name}";
+    run = strictShellApplication pkgs {
+      name = gateName;
+      text = caddy.runCaddy {
+        name = gateName;
+        caddy = config.ai.internal.packages.generic.cpa-gate;
+        config = pkgs.writeText "${gateName}.Caddyfile" (gate.caddyfile {
+          inherit (instance.gate) healthPort host;
+          inherit (instance) port;
+          upstreamPort = instance.gate.internalPort;
+        });
+      };
+    };
+  in
+    lib.mkIf instance.gate.enable {
+      "cliproxyapi-${name}" = {
+        inherit restartOnChange;
+        ports.main = lib.mkForce instance.gate.internalPort;
+      };
+      ${gateName} = {
+        inherit (instance) enable;
+        inherit restartOnChange;
+        command = [(lib.getExe run)];
+        files.policy = policy;
+        ports = {
+          health = instance.gate.healthPort;
+          main = instance.port;
+        };
+      };
+    })
+  config.ai.cliproxyapi.instances);
 
   # Plugin executors choose credentials outside access.key-allowlist, and the
   # plugin host hands any plugin every auth file through host.auth.get, so
@@ -164,7 +256,17 @@ in {
       refusal = where: "${where} has a rule with kind = \"oauth\" and base-urls, which can never match: base-urls compare an API-key credential's base URL and never match an OAuth login. Use kind = \"apikey\" or drop base-urls.";
       offending = lib.filter (entry: unmatchable entry != []) entries;
     in
-      lib.optionals instance.enable (lib.optionals instance.exactModels (map (message: {
+      lib.optionals instance.enable (lib.optionals instance.gate.enable (map (message: {
+            assertion = false;
+            inherit message;
+          }) (gate.problems name instance)
+          ++ [
+            {
+              assertion = renderAccess instance.settings.access == renderAccess (access instance);
+              message = "ai.cliproxyapi.instances.${name}: gate.enable owns access keys and allowlist through named clientKeys; remove raw access entries.";
+            }
+          ])
+        ++ lib.optionals instance.exactModels (map (message: {
           assertion = false;
           inherit message;
         }) (exact.problems name instance))
