@@ -39,3 +39,11 @@ export function dynamicKey(
 ) {
   return env[key];
 }
+
+unknownForward(process.env);
+function unknownForward(env: Record<string, string | undefined>) {
+  const { KNOWN: known, ...rest } = env;
+  return unknownConsumer(rest);
+}
+
+for (const unknownListKey of externalNames()) void process.env[unknownListKey];

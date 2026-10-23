@@ -144,19 +144,13 @@ if (process.argv[4] === "pack") {
           version,
         );
         // Check shipped archive bytes, not just the directory used to create them.
-        // --force prevents patch from silently flipping pristine inputs.
+        // Match pnpm context whitespace while requiring every reverse hunk;
+        // --check leaves archive bytes untouched and rejects pristine inputs.
         const result = spawnSync(
-          configuration.patchCommand,
-          [
-            "--force",
-            "--dry-run",
-            "--fuzz=0",
-            "--reverse",
-            "-p1",
-            "--directory",
-            path.join(unpacked, "package"),
-          ],
+          configuration.gitCommand,
+          ["apply", "--check", "--ignore-space-change", "--reverse"],
           {
+            cwd: path.join(unpacked, "package"),
             encoding: "utf8",
             input: fs.readFileSync(
               path.join(configuration.patchedSource, patch),

@@ -1,32 +1,42 @@
 {
-  "version": "1.17.2",
+  "version": "1.19.1",
   "extraction": {
     "kimchiSource": {
-      "hash": "sha256-neaGHSmAdLyvGxYM4Q+kl1v6n/aCNmn7AH194k1GLTA=",
-      "url": "https://github.com/getkimchi/kimchi/archive/refs/tags/v1.17.2.tar.gz"
+      "hash": "sha256-iU536dT696epi25laTRUPX+cCUGoh2V5Y61P7+iDhRA=",
+      "url": "https://github.com/getkimchi/kimchi/archive/refs/tags/v1.19.1.tar.gz"
     },
     "piAgentCorePackage": {
-      "hash": "sha256-jL8Ea5JqgwJ1qDSVLT+nfNMUiG6CpglKmoNwSvLK/r0=",
-      "url": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-0.85.1.tgz",
-      "version": "0.85.1"
+      "hash": "sha256-ysVosz0AfYCaH/1o87QiCjys0DRQDZJ2i6m4ygSNS8c=",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-1.3.0.tgz",
+      "version": "1.3.0"
     },
     "piAiPackage": {
-      "hash": "sha256-KzewhtP1DRFDIOrJ4wN9bKwG3EioQW7eTsipK5AJ2z8=",
-      "url": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-0.85.1.tgz",
-      "version": "0.85.1"
+      "hash": "sha256-F0LX07nx6psV2pWY9dV6Po2SyVAnDp5b47UIt2OYYec=",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-1.3.0.tgz",
+      "version": "1.3.0"
+    },
+    "piMcpAdapterPackage": {
+      "hash": "sha256-zsWgLws0Tt/7hjAXRiQRDr7Y+LWnfNv0WAA72y0x4JY=",
+      "url": "https://registry.npmjs.org/pi-mcp-adapter/-/pi-mcp-adapter-5.3.1.tgz",
+      "version": "5.3.1"
     },
     "piPackage": {
-      "hash": "sha256-5Nv8jh83a+gxIBMbgaXDndMqbiyRZ0uETGwAFlI+83U=",
-      "url": "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-0.85.1.tgz",
-      "version": "0.85.1"
+      "hash": "sha256-2F2lof504Ro4OHz78wkhaacmCzjPNePb6sv4+A8jfso=",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.3.0.tgz",
+      "version": "1.3.0"
     },
     "piTuiPackage": {
-      "hash": "sha256-4j4pfgUr+kK5v7WKMzsE13uNXXofeq73Tt3j55wTcW0=",
-      "url": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-0.85.1.tgz",
-      "version": "0.85.1"
+      "hash": "sha256-qtba6Q0aQ2CvC1LXeV9/tW4+NwAiLMviQLuR8R/lzvY=",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-1.3.0.tgz",
+      "version": "1.3.0"
+    },
+    "typeboxPackage": {
+      "hash": "sha256-jSS8N0rICvkZKQxKDLzR4yO6Fh5nQU2+/NfWCpdx2gg=",
+      "url": "https://registry.npmjs.org/typebox/-/typebox-1.3.27.tgz",
+      "version": "1.3.27"
     }
   },
   "goFloor": "1.25.5",
   "vendorHash": "sha256-m9D9IP6kY/aOPENuSFU2o9dDaPM3kxZilIqycilfsoA=",
-  "pnpmDepsHash": "sha256-aK4zBiss0NP/8MrHvlwG4lkaefHGEWY4M+MwBYd3GGU="
+  "pnpmDepsHash": "sha256-NzJ8yk2m8fOCpVeb6h2butDoUf5qmWB9ISSHtew/zvI="
 }

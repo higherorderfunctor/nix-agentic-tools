@@ -8,9 +8,9 @@ diff --git i/src/cli.ts w/src/cli.ts
 index 43f2bce..72ec5c2 100644
 --- i/src/cli.ts
 +++ w/src/cli.ts
-@@ -887,8 +887,10 @@ try {
+@@ -907,8 +907,10 @@ try {
  				inputHistoryExtension,
- 				reportBugExtension,
+ 				bugReportDestinationExtension,
  				tagsExtension,
 -				teleportExtension,
 -				remoteRunExtension,

@@ -1,11 +1,9 @@
 # External workflows
 
-> **Last verified:** 2026-10-16 — every launcher call refuses target-package
-> configuration and filters pnpm environment names without case sensitivity.
-> Project dependencies use archives packed after fixup; packed PI retains every
-> Kimchi/NAT patch hunk. Extension links stage in `_generatedFiles` and reach
-> both backends through the files layers; configured packages use project
-> precedence and live outside auto-discovery.
+> **Last verified:** 2026-10-22 (commit d5f613ea) — the identity hunk is rebased
+> onto pi 1.3.0; pnpm's bounded hunk-position search and packed-archive reverse
+> checks use the released patch context; the Linux clipboard binding links
+> libxcb.
 
 `pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
 in `workflows-sources.json`, independently of Kimchi's workflows dependency pin.
@@ -21,13 +19,13 @@ compiled distribution metadata.
 Every managed project dependency uses a `file:/nix/store/...tgz` spec. The
 framework archive comes from this extension's installed output; TypeScript
 7.0.2, Vitest 4.1.10 and `@types/node` 22.20.1 point at its copied runtime
-graph. PI and pi-tui 0.85.1 and typebox 1.3.7 come from the `toolchain`
-passthru. That derivation materializes Kimchi's frozen offline pnpm graph
-without building Kimchi's binary. It copies the packages pnpm materializes from
-Kimchi's patched source, including PI's upstream patches and NAT's package
-identity fix. The pristine `extractionSources` tarballs are
-declaration-extraction inputs, not workflow toolchain replacements. There is no
-separately maintained PI or typebox version pin.
+graph. PI and pi-tui 1.3.0 and typebox 1.3.7 come from the `toolchain` passthru.
+That derivation materializes Kimchi's frozen offline pnpm graph without building
+Kimchi's binary. It copies the packages pnpm materializes from Kimchi's patched
+source, including PI's upstream patches and NAT's package identity fix. The
+pristine `extractionSources` tarballs are declaration-extraction inputs, not
+workflow toolchain replacements. There is no separately maintained PI or typebox
+version pin.
 
 `install-runtime.mjs` copies each physical package once, retains its dependency
 links for direct store use, and rewrites the copied manifests' runtime
@@ -55,23 +53,28 @@ The installed package includes `package.json` with `pi.extensions`, `src/`,
 `dist/`, `bin/`, docs and examples. The installer checks extension entries exist
 and copied dependency links remain in the output. The final package adds store
 links to its PI toolchain. Metadata formatting uses `BIOME_BINARY` to select
-Nixpkgs' Biome. Linux fixup uses `autoPatchelfHook` and the compiler runtime for
-Vitest's Rolldown and Lightning CSS bindings; Darwin selects native Mach-O
-dependencies. TypeScript's native compiler needs no Linux ELF fixup.
+Nixpkgs' Biome. Packed upstream patches are verified in reverse with Git using
+the same whitespace matching as CodeQL staging; every hunk must apply. The host
+PI toolchain also links Linux clipboard's X11 native binding against `libxcb`.
+Linux fixup uses `autoPatchelfHook` and the compiler runtime for Vitest's
+Rolldown and Lightning CSS bindings; Darwin selects native Mach-O dependencies.
+TypeScript's native compiler needs no Linux ELF fixup.
 
-The package always applies `step-thinking.patch`; there is one installed
-variant. `createAgentStep({ thinking: "high", ... })` accepts PI's native
-thinking levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`).
-Each background or statically isolated worker gets an explicit `--thinking`
-argument, including repair and resume calls. Foreground steps set thinking after
-model selection and restore that model's initial thinking level on disposal.
-Omission leaves native session/default behavior unchanged. PI still clamps
-levels to model capabilities; this controls the client's requested reasoning
-level, not gateway enforcement.
+`pi-agent-settled.patch` supplies pi 1.3's required `aborted: false` on the
+upstream successful-settlement test fixture. The package always applies
+`step-thinking.patch`; there is one installed variant.
+`createAgentStep({ thinking: "high", ... })` accepts PI's native thinking levels
+(`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). Each background or
+statically isolated worker gets an explicit `--thinking` argument, including
+repair and resume calls. Foreground steps set thinking after model selection and
+restore that model's initial thinking level on disposal. Omission leaves native
+session/default behavior unchanged. PI still clamps levels to model
+capabilities; this controls the client's requested reasoning level, not gateway
+enforcement.
 
 The supported host baseline is PI >=0.85.1, whose public setter does not persist
 defaults. Earlier setters write global preferences and are unsupported. The
-packaged host and verification toolchain use PI 0.85.1. The build runs generated
+packaged host and verification toolchain use PI 1.3.0. The build runs generated
 API document checks, TypeScript checks and focused thinking regressions without
 inference calls. The opt-in docs skill links the installed package, patched
 source and generated authoring reference.
@@ -254,6 +257,10 @@ throughout the lockfile, including peer references. Both pnpm consumers use that
 same source. Pnpm applies the fix wherever it materializes PI; it does not
 replace registry tarballs or re-resolve dependencies. A missing old hash fails
 the source preparation, and an incompatible identity hunk fails installation.
+Pnpm searches at most 20 lines around each hunk's recorded position. When a pi
+bump moves the identity method farther, regenerate the NAT hunk coordinates
+against the upstream-patched package. A GNU patch dry-run can succeed outside
+that window, so the real pnpm materialization remains the verification.
 
 CI builds both packages on Linux and Darwin through package discovery. Checks:
 

@@ -71,7 +71,9 @@
       inherit aggregate extractedLib lib pkgs;
     }).userScopeHarnessKeys;
   userScopeOnlyHarnessSettingValues = {
+    cacheWarming = "idle";
     defaultProjectTrust = "always";
+    deviceId = "5bd7b9de-6b01-47e3-ae85-c59ad958dd40";
     fermentV2.autoResume = true;
     httpProxy = "http://proxy.invalid:3128";
     lastTerminalWarnings.kitty = "0.35.0";

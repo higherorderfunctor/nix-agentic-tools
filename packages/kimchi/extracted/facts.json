@@ -14,11 +14,6 @@
     "systems": ["x86_64-linux"],
     "type": "object"
   },
-  "harness.definitions.<name>": {
-    "source": "static",
-    "systems": ["x86_64-linux"],
-    "type": "object"
-  },
   "harness.keys.<name>": {
     "source": "static",
     "systems": ["x86_64-linux"],

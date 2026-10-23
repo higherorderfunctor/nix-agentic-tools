@@ -14,7 +14,7 @@ in {
     # `runQueries` and the one-query pack under ../ql/smoke. The query counts
     # each file's process.env reads by name; the rows must include a read in
     # Kimchi's own source, one in a minified pi bundle chunk, and the read of
-    # KIMCHI_WHEEL_SCROLL_LINES that only Kimchi's pi-tui patch adds. So the
+    # KIMCHI_MANAGES_MCP_PROJECT_TRUST that Kimchi's adapter patch adds. So the
     # source root, the minified-file flag and the patch step each hold.
     kimchi-codeql-database = let
       results = codeql.runQueries {
@@ -40,7 +40,7 @@ in {
         }
         has "in Kimchi's own source" '.[0] | startswith("kimchi/src/")'
         has "in a minified pi bundle chunk" '.[0] | startswith("\($pi)/pi-coding-agent/dist/bundle/chunks/")'
-        has "of KIMCHI_WHEEL_SCROLL_LINES in pi-tui, which Kimchi's patch adds" '(.[0] | startswith("\($pi)/pi-tui/")) and .[1] == "KIMCHI_WHEEL_SCROLL_LINES"'
+        has "of KIMCHI_MANAGES_MCP_PROJECT_TRUST in the patched MCP adapter" '(.[0] | startswith("kimchi/node_modules/pi-mcp-adapter/")) and .[1] == "KIMCHI_MANAGES_MCP_PROJECT_TRUST"'
         cp -R ${results} "$out"
         other="$(find "$out" ! -type d ! -name '*.json')"
         [ -z "$other" ] || fail "\$out holds more than JSON: $other"

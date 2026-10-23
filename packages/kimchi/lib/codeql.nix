@@ -2,7 +2,7 @@
 # evaluates a query pack against it. Three layers, so a query edit rebuilds
 # only its pack and its results, never the database: `source` and `database`
 # move with the pins, the engine and the flake's nixpkgs (stdenv, bash, jq,
-# coreutils, patch), each `runQueries` result with its pack. `createDatabase`
+# coreutils, git), each `runQueries` result with its pack. `createDatabase`
 # and `mkQueryRunner` are the same two steps as scripts, so a check can run
 # the same pack over a fixture tree. See ../docs/kimchi-codeql.md for the
 # source-root decision and the measurements.
@@ -14,27 +14,26 @@
   engine,
   # Kimchi's GitHub release source, as fetched for extraction.
   kimchi,
-  # pi's npm packages, as fetched for extraction.
-  pi,
+  # The npm packages carried for extraction (pi and its MCP adapter).
+  dependencies,
   pkgs,
   version,
 }: let
   inherit (pkgs) lib;
   meta = {inherit (engine.meta) platforms;};
-  # The pi packages land under `scope`, where Kimchi's imports resolve them.
+  # Dependencies land under node_modules, where Kimchi's imports resolve them.
   nodeModules = "kimchi/node_modules";
-  scope = "${nodeModules}/@earendil-works";
 
   # Kimchi's own TypeScript without tests and mocks, as extract.mjs reads it,
-  # and each pi package's dist under `scope`, with Kimchi's pnpm patches
+  # and each carried dependency under node_modules, with Kimchi's pnpm patches
   # applied the way the build's pnpm applies them. Kimchi's upstream
   # postinstall rewrite (scripts/patch-pi-ai-oauth.js, which replaces pi-ai's
-  # dist/auth/oauth/oauth-page.js) is not applied, as extract.mjs does not
+  # dist/utils/oauth-page.js) is not applied, as extract.mjs does not
   # apply it. Source maps are dropped: the extractor does not read them, and
   # they are a third of pi's bytes.
   source =
     pkgs.runCommand "kimchi-codeql-source-${version}" {
-      nativeBuildInputs = [pkgs.jq];
+      nativeBuildInputs = [pkgs.gitMinimal pkgs.jq];
       inherit meta;
     } ''
       set -euETo pipefail
@@ -43,37 +42,40 @@
       cp -R --no-preserve=mode ${kimchi}/src ${kimchi}/package.json ${kimchi}/tsconfig.json "$out/kimchi/" # bare-commands: ok (runCommand builder PATH)
       find "$out/kimchi/src" -name __mocks__ -type d -prune -exec rm -rf {} +
       find "$out/kimchi/src" -name '*.test.ts' -type f -delete
-      for tree in ${lib.escapeShellArgs (map toString pi)}; do
+      for tree in ${lib.escapeShellArgs (map toString dependencies)}; do
         dest="$out/${nodeModules}/$(jq -er .name "$tree/package.json")"
         mkdir -p "$dest" # bare-commands: ok (runCommand builder PATH)
         cp -R --no-preserve=mode "$tree/dist" "$tree/package.json" "$dest/" # bare-commands: ok (runCommand builder PATH)
+        # pi-mcp-adapter exports root TypeScript modules, which import its
+        # other root sources; docs, examples and skills are not runtime code.
+        find "$tree" -maxdepth 1 -type f \( -name '*.ts' -o -name '*.js' -o -name '*.cjs' -o -name '*.mjs' \) \
+          -exec cp --no-preserve=mode {} "$dest/" \;
       done
-      # Every pi patch must meet the package at the version it names: a patch
-      # for a package or version not carried here fails rather than leaving
-      # the database without it.
-      jq -r '.pnpm.patchedDependencies | to_entries[] | select(.key | startswith("@earendil-works/pi-")) | "\(.key)\t\(.value)"' \
+      # Carried packages' patches must meet the exact version they name.
+      # Missing pi packages fail; other uncarried packages may remain absent
+      # only when their patch adds no environment reads. A patch is a diff,
+      # not a program a parser can read, so that last check is a word match.
+      jq -r '.pnpm.patchedDependencies | to_entries[] | "\(.key)\t\(.value)"' \
         ${kimchi}/package.json > patches
-      [ -s patches ] || { echo "kimchi-codeql-source: Kimchi patches no pi package" >&2; exit 1; }
       while IFS=$'\t' read -r key file; do
         dest="$out/${nodeModules}/''${key%@*}"
-        [ -f "$dest/package.json" ] || { echo "kimchi-codeql-source: $key is patched but not carried" >&2; exit 1; }
+        if [ ! -f "$dest/package.json" ]; then
+          case "$key" in
+            @earendil-works/pi-*) echo "kimchi-codeql-source: $key is patched but not carried" >&2; exit 1 ;;
+          esac
+          if grep -Eq '^\+.*\benv\b' ${kimchi}/"$file"; then
+            echo "kimchi-codeql-source: $file adds a line naming env to a package this tree does not carry; carry the package so the environment query reads it" >&2
+            exit 1
+          fi
+          continue
+        fi
         carried="$(jq -er .version "$dest/package.json")"
         [ "$carried" = "''${key##*@}" ] || { echo "kimchi-codeql-source: $key is patched, but $carried is carried" >&2; exit 1; }
-        patch -d "$dest" -p1 --fuzz=0 --forward --batch --no-backup-if-mismatch --silent < ${kimchi}/"$file"
+        # pnpm accepts missing EOF markers and unequal leading/trailing
+        # context counts. GNU patch --fuzz=0 rejects those pi 1.3.0 hunks.
+        # Match every context line with Git, allowing whitespace changes.
+        git -C "$dest" apply --ignore-space-change ${kimchi}/"$file"
       done < patches
-      # Kimchi's other patches touch packages this tree does not carry (the
-      # MCP SDK and client, pi-mcp-adapter, playwright-core). A query reads
-      # none of their added lines, and a patch is a diff, not a program: no
-      # parser reads its added lines on their own, so a word match is the
-      # only check. Refuse an added line that names env, with the fix.
-      jq -r '.pnpm.patchedDependencies | to_entries[] | select(.key | startswith("@earendil-works/pi-") | not) | .value' \
-        ${kimchi}/package.json > other-patches
-      while IFS= read -r file; do
-        if grep -Eq '^\+.*\benv\b' ${kimchi}/"$file"; then
-          echo "kimchi-codeql-source: $file adds a line naming env to a package this tree does not carry; carry the package so the environment query reads it" >&2
-          exit 1
-        fi
-      done < other-patches
       find "$out" -name '*.map' -type f -delete
     '';
 
@@ -103,7 +105,7 @@
       rm -rf "$1/source" "$1/db" # bare-commands: ok (runtimeInputs PATH)
       cp -R --no-preserve=mode "''${2:-${source}}" "$1/source" # bare-commands: ok (runtimeInputs PATH)
       export CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true
-      export LGTM_INDEX_FILTERS="include:${scope}"
+      export LGTM_INDEX_FILTERS="include:${nodeModules}"
       exec ${engine}/bin/codeql database create "$1/db" \
         --language=javascript \
         --build-mode=none \

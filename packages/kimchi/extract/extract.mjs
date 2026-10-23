@@ -30,6 +30,7 @@ function parseArguments(argv) {
     "pi-ai-package",
     "pi-package",
     "pi-tui-package",
+    "typebox-package",
     "typescript",
   ]) {
     if (!result[name]) fail(`missing --${name}`);
@@ -94,6 +95,12 @@ function constantInitializer(identifier, checker, ts) {
 }
 
 function literalValue(node, ts, checker, seen = new Set()) {
+  // pi's defaults are exported as a readonly object with singleton property
+  // types; ask the checker for SETTINGS_DEFAULTS.defaultProjectTrust's value.
+  if (ts.isPropertyAccessExpression(node)) {
+    const type = checker.getTypeAtLocation(node);
+    if (type.isStringLiteral?.()) return type.value;
+  }
   if (ts.isStringLiteralLike(node) || ts.isNumericLiteral(node))
     return node.text;
   if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
@@ -312,6 +319,10 @@ function descriptorForType(type, node, checker, ts, options = {}) {
     }
   } else if (material.length > 1) {
     descriptor.type = "union";
+    if (options.deep)
+      descriptor.alternatives = material.map((member) =>
+        descriptorForType(member, node, checker, ts, options),
+      );
     if (literals.length > 0) {
       descriptor.enum = literals.map(
         (member) =>
@@ -1142,65 +1153,36 @@ function extractDefaultProjectTrust(sourceFile, checker, ts) {
   return fallback;
 }
 
-// The interfaces a declaration's properties are typed with, transitively and
-// by the checker's own resolution, keyed by the name walkType looks them up by.
-// Resolving by name instead picked whichever same-named interface loaded first
-// (pi 0.85.1 declares CompactionSettings twice, with different optionality).
-function referencedInterfaces(root, checker, ts) {
-  const found = new Map();
-  const queue = [root];
-  while (queue.length) {
-    const declaration = queue.pop();
-    for (const member of declaration.members) {
-      if (!ts.isPropertySignature(member) || !member.type) continue;
-      const type = checker.getNonNullableType(
-        checker.getTypeFromTypeNode(member.type),
-      );
-      if (checker.isArrayType(type)) continue;
-      const referenced = (type.aliasSymbol ? [] : [type.symbol])
-        .flatMap((symbol) => symbol?.declarations ?? [])
-        .filter(ts.isInterfaceDeclaration);
-      for (const target of referenced) {
-        const name = target.name.text;
-        const previous = found.get(name);
-        if (previous && previous !== target)
-          fail(
-            `two different interfaces named ${name} type ${root.name.text}'s settings (${previous.getSourceFile().fileName}, ${target.getSourceFile().fileName})`,
-          );
-        if (!previous) {
-          found.set(name, target);
-          queue.push(target);
-        }
-      }
-    }
-  }
-  return found;
-}
-
 // Which scope pi reads each Settings key from. SettingsManager deep-merges the
 // project file over the global one into `this.settings`; a key read through
 // that merge honors a project harness settings.json. A key read only through
 // `this.globalSettings` or `getGlobalSettings()` (project trust, the HTTP
 // proxy) ignores it. A key the extractor sees no read of stops the extraction
 // rather than defaulting either way.
-function piSettingsScopes(names, piSources, ts) {
+function piSettingsScopes(names, piSources, ignored, ts) {
   const merged = new Set();
   const global = new Set();
   const isThisMember = (node, member) =>
     ts.isPropertyAccessExpression(node) &&
     node.expression.kind === ts.SyntaxKind.ThisKeyword &&
     node.name.text === member;
+  const callsMethod = (node, name) =>
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === name;
   for (const sourceFile of piSources) {
     function visit(node) {
       if (ts.isPropertyAccessExpression(node) && !isWriteOnly(node, ts)) {
         const object = unwrapExpression(node.expression, ts);
         const name = node.name.text;
-        if (isThisMember(object, "settings")) merged.add(name);
+        if (
+          isThisMember(object, "settings") ||
+          callsMethod(object, "getSettings")
+        )
+          merged.add(name);
         if (
           isThisMember(object, "globalSettings") ||
-          (ts.isCallExpression(object) &&
-            ts.isPropertyAccessExpression(object.expression) &&
-            object.expression.name.text === "getGlobalSettings")
+          callsMethod(object, "getGlobalSettings")
         )
           global.add(name);
       }
@@ -1208,12 +1190,21 @@ function piSettingsScopes(names, piSources, ts) {
     }
     visit(sourceFile);
   }
-  const unread = names.filter((name) => !merged.has(name) && !global.has(name));
+  const unread = names.filter(
+    (name) => !merged.has(name) && !global.has(name) && !ignored.has(name),
+  );
   if (unread.length)
     fail(
       `pi reads Settings keys ${JSON.stringify(unread.sort())} in no way the extractor recognizes, so their scope is unknown`,
     );
-  return new Map(names.map((name) => [name, merged.has(name)]));
+  // Explicitly ignored metadata keeps its raw key and unknown scope. Reconcile
+  // checks the annotation and omits the key before any option is delivered.
+  return new Map(
+    names.map((name) => [
+      name,
+      merged.has(name) ? true : global.has(name) ? false : null,
+    ]),
+  );
 }
 
 // Every key Kimchi passes to config/settings.ts's harness helpers
@@ -1333,25 +1324,20 @@ function extractHarness(
   kimchiSources,
   analysisContext,
   configTsHarnessReads,
+  harnessAnnotations,
   checker,
   ts,
 ) {
-  // pi's Settings, as its own settings-manager declares it.
-  const settings = checker
-    .getSymbolAtLocation(settingsDeclarationSource)
-    ?.exports?.get("Settings")
-    ?.declarations?.find(ts.isInterfaceDeclaration);
-  if (!settings)
-    fail(
-      `${settingsDeclarationSource.fileName} no longer exports a Settings interface`,
-    );
-  const baseKeys = membersOfDeclaration(settings, checker, ts);
-  baseKeys.modelThinkingLevels = membersOfDeclaration(
-    settings,
+  // Follow Settings through settings-manager's imports/re-exports and its
+  // inherited TypeBox schema, using the same checker renderer for all keys.
+  const settings = declarationInScope(
+    settingsDeclarationSource,
+    "Settings",
+    ts.isInterfaceDeclaration,
     checker,
     ts,
-    true,
-  ).modelThinkingLevels;
+  );
+  const baseKeys = membersOfDeclaration(settings, checker, ts, true);
   const defaultProjectTrust = extractDefaultProjectTrust(
     settingsManagerSource,
     checker,
@@ -1360,11 +1346,6 @@ function extractHarness(
   if (!baseKeys.defaultProjectTrust?.enum?.includes(defaultProjectTrust))
     fail("pi default project trust is outside DefaultProjectTrust");
   baseKeys.defaultProjectTrust.default = defaultProjectTrust;
-  const definitions = {};
-  const referenced = referencedInterfaces(settings, checker, ts);
-  for (const name of [...referenced.keys()].sort())
-    definitions[name] = membersOfDeclaration(referenced.get(name), checker, ts);
-
   const ferment = requireDeclaration(
     declarations,
     "FermentV2Settings",
@@ -1459,7 +1440,17 @@ function extractHarness(
       `Kimchi harness additions now overlap pi Settings: ${JSON.stringify(overlap.sort())}`,
     );
   const keys = {};
-  const piProject = piSettingsScopes(Object.keys(baseKeys), piSources, ts);
+  const ignored = new Set(
+    Object.entries(harnessAnnotations)
+      .filter(([, row]) => row.ignored)
+      .map(([name]) => name),
+  );
+  const piProject = piSettingsScopes(
+    Object.keys(baseKeys),
+    piSources,
+    ignored,
+    ts,
+  );
   for (const [name, descriptor] of Object.entries(baseKeys))
     keys[name] = { source: "pi", ...descriptor, project: piProject.get(name) };
   for (const [name, descriptor] of Object.entries(baseKeys)) {
@@ -1521,7 +1512,6 @@ function extractHarness(
     };
   }
   return {
-    definitions: sortObject(definitions),
     keys: sortObject(keys),
   };
 }
@@ -1703,7 +1693,18 @@ async function main() {
     "@earendil-works/pi-agent-core": resolve(args["pi-agent-core-package"]),
     "@earendil-works/pi-ai": resolve(args["pi-ai-package"]),
     "@earendil-works/pi-tui": resolve(args["pi-tui-package"]),
+    typebox: resolve(args["typebox-package"]),
   };
+  const declarationPaths = Object.fromEntries(
+    await Promise.all(
+      Object.entries(piTypePackages).map(async ([name, root]) => {
+        const metadata = JSON.parse(
+          await readFile(join(root, "package.json"), "utf8"),
+        );
+        return [name, [join(root, metadata.types)]];
+      }),
+    ),
+  );
   const kimchiPaths = await filesUnder(join(kimchiRoot, "src"), {
     excludedDirectories: new Set(["__mocks__", "node_modules"]),
     file: (path) => path.endsWith(".ts") && !path.endsWith(".test.ts"),
@@ -1722,12 +1723,7 @@ async function main() {
     module: ts.ModuleKind.NodeNext,
     moduleResolution: ts.ModuleResolutionKind.NodeNext,
     noEmit: true,
-    paths: Object.fromEntries(
-      Object.entries(piTypePackages).map(([name, root]) => [
-        name,
-        [join(root, "dist/index.d.ts")],
-      ]),
-    ),
+    paths: declarationPaths,
     skipLibCheck: true,
     target: ts.ScriptTarget.ESNext,
   };
@@ -1872,11 +1868,12 @@ async function main() {
       ),
       { ...context, checker: analysisChecker },
       configTsReads.harness,
+      annotations.harness ?? {},
       checker,
       ts,
     ),
     virtualPackages: virtualPackages(
-      requireSource(join(piRoot, "dist/core/extensions/loader.js")),
+      requireSource(join(piRoot, "dist/core/extensions/virtual-modules.js")),
       ts,
     ),
   };

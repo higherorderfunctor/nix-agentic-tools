@@ -1,11 +1,11 @@
 ## Kimchi network fact
 
-> **Last verified:** 2026-10-22 — Kimchi 1.17.2; `network` is measured on
-> x86_64-linux by `ql/network` with the `ql/models/{sdk,undici}` packs through
-> `runQueries`; a modeled request is an invocation of its row's own callee and
-> takes its library from that row; a host constant reaches a `hostname` by value
-> flow; the fixture's minified chunk is one the extractor skips without the
-> flag.
+> **Last verified:** 2026-10-22 — Kimchi 1.19.1 with pi-mcp-adapter carried;
+> `network` is measured on x86_64-linux by `ql/network` with the
+> `ql/models/{sdk,undici}` packs through `runQueries`; a modeled request is an
+> invocation of its row's own callee and takes its library from that row; a host
+> constant reaches a `hostname` by value flow; the fixture's minified chunk is
+> one the extractor skips without the flag.
 >
 > **Settled — do not relitigate.** Each was measured on the 2.27.3 bundle and
 > rejected:
@@ -35,10 +35,11 @@ with `--ram=8192` (53.8 s).
  unattributed: [{readBy, file, line, value, host}]}
 ```
 
-- **`readBy`** is `kimchi` or `pi`. **`file`** and **`origin`** are relative to
-  Kimchi's tree (`src/...`) or to its `node_modules` (`@earendil-works/...`).
-  **`line`** only: a minified chunk puts many call sites on one line, and they
-  share a row per library.
+- **`readBy`** is `kimchi` or `pi` (the harness runtime and its carried
+  extensions, including pi-mcp-adapter). **`file`** and **`origin`** are
+  relative to Kimchi's tree (`src/...`) or to its `node_modules`
+  (`@earendil-works/...`). **`line`** only: a minified chunk puts many call
+  sites on one line, and they share a row per library.
 - **`library`**: `fetch`, `node-http`, `websocket`, `axios`, `undici`,
   `sdk:<package>` for another modeled package, or `sdk:<class>` for a
   `new C({baseURL})` matched by option name, because a bundle inlines the SDK

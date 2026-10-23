@@ -41,14 +41,18 @@
   };
   piAgentCorePackage = fetchExtraction extraction.piAgentCorePackage;
   piAiPackage = fetchExtraction extraction.piAiPackage;
+  piMcpAdapterPackage = fetchExtraction extraction.piMcpAdapterPackage;
   piPackage = fetchExtraction extraction.piPackage;
   piTuiPackage = fetchExtraction extraction.piTuiPackage;
+  typeboxPackage = fetchExtraction extraction.typeboxPackage;
   extractionSources = {
     kimchi = kimchiSource;
     pi = piPackage;
     piAgentCore = piAgentCorePackage;
     piAi = piAiPackage;
+    piMcpAdapter = piMcpAdapterPackage;
     piTui = piTuiPackage;
+    typebox = typeboxPackage;
   };
   externalizeExtensions = import ../../../lib/externalizeExtensions.nix {inherit externalizedExtensions lib;};
 
@@ -73,7 +77,8 @@
   codeql = import ../../../lib/codeql.nix {
     engine = pkgs.ai.devTools.codeql.codeql-javascript;
     inherit (extractionSources) kimchi;
-    pi = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi"]);
+    # TypeBox 1.3.27 supplies pi declarations to extract.mjs; Kimchi runs 1.3.7.
+    dependencies = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi" "typebox"]);
     inherit pkgs;
     inherit (sources) version;
   };
@@ -106,6 +111,7 @@
         --pi-ai-package ${piAiPackage} \
         --pi-package ${piPackage} \
         --pi-tui-package ${piTuiPackage} \
+        --typebox-package ${typeboxPackage} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js \
         | ${pkgs.jq}/bin/jq -S ${lib.concatStrings (lib.mapAttrsToList (name: fact: "--slurpfile ${name} ${fact} ") codeqlFacts)}'. + ($ARGS.named | map_values(.[0]))' > "$out"
     '';
@@ -123,9 +129,24 @@
     pi_version=$(${pkgs.jq}/bin/jq -er \
       '.dependencies["@earendil-works/pi-coding-agent"] | strings | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
       "$kimchi_source_path/package.json")
-    pi_package_url="https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-$pi_version.tgz"
-    pi_package_json=$(${pkgs.nix}/bin/nix store prefetch-file --json --unpack "$pi_package_url")
-    pi_package_hash=$(${pkgs.jq}/bin/jq -er '.hash' <<< "$pi_package_json")
+    prefetch_package() {
+      local package_name="$1"
+      local package_version="$2"
+      local variable_prefix="$3"
+      local package_url="https://registry.npmjs.org/$package_name/-/''${package_name##*/}-$package_version.tgz"
+      local package_json
+      local package_hash
+      package_json=$(${pkgs.nix}/bin/nix store prefetch-file --json --unpack "$package_url")
+      package_hash=$(${pkgs.jq}/bin/jq -er '.hash' <<< "$package_json")
+      printf -v "''${variable_prefix}_hash" '%s' "$package_hash"
+      printf -v "''${variable_prefix}_url" '%s' "$package_url"
+      printf -v "''${variable_prefix}_version" '%s' "$package_version"
+    }
+    prefetch_package @earendil-works/pi-coding-agent "$pi_version" pi_package
+    pi_mcp_adapter_version=$(${pkgs.jq}/bin/jq -er \
+      '.dependencies["pi-mcp-adapter"] | strings | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+      "$kimchi_source_path/package.json")
+    prefetch_package pi-mcp-adapter "$pi_mcp_adapter_version" pi_mcp_adapter
 
     # pi's declaration packages at the versions Kimchi's lockfile resolves
     # pi's dependencies to, which is what the source build installs.
@@ -138,24 +159,17 @@
       local dependency_name="$1"
       local variable_prefix="$2"
       local dependency_version
-      local dependency_url
-      local dependency_json
-      local dependency_hash
       dependency_version=$(${pkgs.jq}/bin/jq -er \
         --arg reference "@earendil-works/pi-coding-agent@$pi_reference" \
-        --arg name "@earendil-works/$dependency_name" \
+        --arg name "$dependency_name" \
         '.snapshots[$reference].dependencies[$name] | strings | sub("\\(.*$"; "") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
         <<< "$kimchi_lock_json")
-      dependency_url="https://registry.npmjs.org/@earendil-works/$dependency_name/-/$dependency_name-$dependency_version.tgz"
-      dependency_json=$(${pkgs.nix}/bin/nix store prefetch-file --json --unpack "$dependency_url")
-      dependency_hash=$(${pkgs.jq}/bin/jq -er '.hash' <<< "$dependency_json")
-      printf -v "''${variable_prefix}_hash" '%s' "$dependency_hash"
-      printf -v "''${variable_prefix}_url" '%s' "$dependency_url"
-      printf -v "''${variable_prefix}_version" '%s' "$dependency_version"
+      prefetch_package "$dependency_name" "$dependency_version" "$variable_prefix"
     }
-    prefetch_pi_dependency pi-agent-core pi_agent_core
-    prefetch_pi_dependency pi-ai pi_ai
-    prefetch_pi_dependency pi-tui pi_tui
+    prefetch_pi_dependency @earendil-works/pi-agent-core pi_agent_core
+    prefetch_pi_dependency @earendil-works/pi-ai pi_ai
+    prefetch_pi_dependency @earendil-works/pi-tui pi_tui
+    prefetch_pi_dependency typebox typebox
 
     extraction_tmp=$(${pkgs.coreutils}/bin/mktemp)
     ${pkgs.jq}/bin/jq \
@@ -167,18 +181,26 @@
       --arg pi_ai_hash "$pi_ai_hash" \
       --arg pi_ai_url "$pi_ai_url" \
       --arg pi_ai_version "$pi_ai_version" \
+      --arg pi_mcp_adapter_hash "$pi_mcp_adapter_hash" \
+      --arg pi_mcp_adapter_url "$pi_mcp_adapter_url" \
+      --arg pi_mcp_adapter_version "$pi_mcp_adapter_version" \
       --arg ph "$pi_package_hash" \
       --arg pu "$pi_package_url" \
       --arg pv "$pi_version" \
       --arg pth "$pi_tui_hash" \
       --arg ptu "$pi_tui_url" \
       --arg ptv "$pi_tui_version" \
+      --arg th "$typebox_hash" \
+      --arg tu "$typebox_url" \
+      --arg tv "$typebox_version" \
       '. + {extraction: {
         kimchiSource: {hash: $kh, url: $ku},
         piAgentCorePackage: {hash: $pi_agent_core_hash, url: $pi_agent_core_url, version: $pi_agent_core_version},
         piAiPackage: {hash: $pi_ai_hash, url: $pi_ai_url, version: $pi_ai_version},
+        piMcpAdapterPackage: {hash: $pi_mcp_adapter_hash, url: $pi_mcp_adapter_url, version: $pi_mcp_adapter_version},
         piPackage: {hash: $ph, url: $pu, version: $pv},
-        piTuiPackage: {hash: $pth, url: $ptu, version: $ptv}
+        piTuiPackage: {hash: $pth, url: $ptu, version: $ptv},
+        typeboxPackage: {hash: $th, url: $tu, version: $tv}
       }}' \
       ${sourcesFile} > "$extraction_tmp"
     ${pkgs.coreutils}/bin/mv "$extraction_tmp" ${sourcesFile}

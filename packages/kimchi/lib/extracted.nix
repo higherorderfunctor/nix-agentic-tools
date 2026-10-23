@@ -38,7 +38,6 @@
 }: let
   inherit (lib) types;
   json = (pkgs.formats.json {}).type;
-  inherit (extractedLib {inherit pkgs;}) children;
 
   # Kimchi 1.1.37 reads each modelRoles value as a provider/model string, and
   # for delegable roles also a non-empty list of them. Anything else is
@@ -53,11 +52,9 @@
 
   surfaces = {
     harnessSettings = {
-      definitions = children aggregate "harness.definitions.<name>";
       keys = rules.results.harness.entries;
     };
     settings = {
-      definitions = {};
       keys = rules.results.config.entries;
     };
   };
@@ -118,14 +115,14 @@
   };
 
   # node → { type; untyped = [path]; }
-  walkType = definitions: path: node: let
+  walkType = path: node: let
     t = node.type or null;
     leaf = type: {
       inherit type;
       untyped = [];
     };
     fromProperties = properties: let
-      children = lib.mapAttrs (name: walkOption definitions "${path}.${name}") properties;
+      children = lib.mapAttrs (name: walkOption "${path}.${name}") properties;
     in {
       type = types.submodule {options = lib.mapAttrs (_: c: c.option) children;};
       untyped = lib.concatMap (c: c.untyped) (builtins.attrValues children);
@@ -137,6 +134,13 @@
     then leaf (types.enum node.enum)
     else if scalarTypes ? ${toString t}
     then leaf scalarTypes.${t}
+    else if t == "union" && node ? alternatives
+    then let
+      alternatives = map (walkType path) node.alternatives;
+    in {
+      type = types.oneOf (map (alternative: alternative.type) alternatives);
+      untyped = lib.unique (lib.concatMap (alternative: alternative.untyped) alternatives);
+    }
     else if t == "array"
     then
       # Elements stay untyped unless they are scalars: aiCommon.filterNulls
@@ -155,13 +159,11 @@
     then fromProperties node.properties
     else if t == "object" && node ? additionalProperties
     then let
-      value = walkType definitions "${path}.*" node.additionalProperties;
+      value = walkType "${path}.*" node.additionalProperties;
     in {
       type = types.attrsOf value.type;
       inherit (value) untyped;
     }
-    else if t == "object" && definitions ? ${node.typeExpression or ""}
-    then fromProperties definitions.${node.typeExpression}
     else if t == "object"
     then leaf json
     else {
@@ -172,8 +174,8 @@
     };
 
   # path → node → { option; untyped; }
-  walkOption = definitions: path: node: let
-    walked = walkType definitions path node;
+  walkOption = path: node: let
+    walked = walkType path node;
     optional = node.optional or false;
     name = lib.last (lib.splitString "." path);
     described = node.description or "Kimchi `${name}` (`${node.typeExpression or node.type}`).";
@@ -200,7 +202,7 @@
     excludedReason = key:
       keys.${key}.excluded or (derivedExclusion keys.${key});
     kept = lib.filterAttrs (key: _: excludedReason key == null) keys;
-    walked = lib.mapAttrs (key: walkOption surface.definitions "${name}.${key}") kept;
+    walked = lib.mapAttrs (key: walkOption "${name}.${key}") kept;
   in {
     options = lib.mapAttrs (_: w: w.option) walked;
     excluded = lib.mapAttrs (key: _: excludedReason key) (lib.filterAttrs (key: _: excludedReason key != null) keys);
@@ -216,7 +218,7 @@
     step = node: segment:
       if node == null
       then null
-      else node.properties.${segment} or (surface.definitions.${node.typeExpression or ""} or {}).${segment} or null;
+      else node.properties.${segment} or null;
   in
     surface
     != null

@@ -158,6 +158,11 @@
       && sorted (builtins.attrNames withIgnoredRows.settingsOptions)
       == keptKeys withIgnoredRows.rules.results.config.entries withIgnoredRows.report.excluded.settings;
 
+    # JSON Schema metadata has no runtime settings reader; its explicit ignored
+    # annotation removes it before the unknown raw scope reaches option delivery.
+    schema-metadata-is-not-an-option =
+      !(real.rules.results.harness.entries ? "$schema");
+
     added-key-appears =
       fixture.harnessSettingsOptions ? probeAdded
       && accepts fixture.harnessSettingsOptions {probeAdded = true;}
@@ -221,6 +226,25 @@
     inert-keys-follow-the-sidecar =
       lib.all (key: real.report.excluded.settings ? ${key} && !(real.settingsOptions ? ${key})) ["maxToolResultChars" "mcpSearch" "mcpSearchLimit"]
       && withConsumedInertKey.settingsOptions ? mcpSearchLimit;
+
+    scalar-unions-follow-the-sidecar = lib.all (entry:
+      accepts real.harnessSettingsOptions {${entry.name} = entry.sentinel;}
+      && accepts real.harnessSettingsOptions {${entry.name} = 25;}
+      && !(accepts real.harnessSettingsOptions {${entry.name} = "probe";})
+      && !(accepts real.harnessSettingsOptions {${entry.name} = true;})) [
+      {
+        name = "fullscreenWheelScrollLines";
+        sentinel = "auto";
+      }
+      {
+        name = "httpIdleTimeoutMs";
+        sentinel = "disabled";
+      }
+      {
+        name = "websocketConnectTimeoutMs";
+        sentinel = "disabled";
+      }
+    ];
 
     every-type-is-mapped =
       real.report.untyped
