@@ -1,8 +1,8 @@
 # CLIProxyAPI front gate (cpa-gate)
 
 > **Last verified:** 2026-10-22 — the gate checks call bodies, filters five CPA
-> listing shapes and detail responses, and reports listing health; websockets
-> remain refused, and no module option enables it.
+> listing shapes and detail responses, reports listing health, and checks
+> Responses websocket messages; no module option enables it.
 
 **cpa-gate is NOT a security boundary, and nothing wires it in yet.** A harness
 that runs under the same uid as the gate can read the policy file, which holds
@@ -92,8 +92,20 @@ data, trailing values and nesting beyond 128 levels. Only schemas at
 `tools[].input_schema`, `tools[].parameters`, `tools[].function.parameters`,
 `text.format.schema`, `response_format.json_schema.schema`, and
 `output_format.schema`, plus client tool arguments at their structural
-positions, are exempt from model checks. Websocket routes remain refused with
-`"reason": "pending"`.
+positions, are exempt from model checks.
+
+The two Responses websocket routes terminate both connections with
+gorilla/websocket v1.5.3 and no compression. Each client text message is
+reassembled up to 32 MiB and checked with the same strict gjson v1.18.0 reader.
+The first needs a model; later messages may inherit it. Every supplied model is
+checked, including interrupt messages. Top-level model values with surrounding
+whitespace are refused even if literally in the set: CPA trims them. Accepted
+bytes, upstream text/binary messages and both directions of ping/pong/close
+controls relay unchanged. Application messages with invalid JSON/UTF-8, excess
+size, binary data or disallowed models close the client with code 1008 and
+`request refused`, then close the upstream connection. Gorilla closes transport
+protocol errors itself. A service restart ends hijacked sessions by exiting the
+process.
 
 Listings are parsed by wire shape, never by request header or user agent. Only
 exact allowed IDs survive, `first_id`/`last_id` are recomputed, and an object
@@ -113,8 +125,9 @@ request carrying a client credential. Logs hold counts only.
 
 - **401**, every authentication failure: `{"error":"Invalid API key"}`, CPA's
   own body for an unknown key (`sdk/access/errors.go`).
-- **404**, every route, body, listing, detail or pending websocket refusal: no
-  body, as CPA's gin `NoRoute` answers.
+- **404**, every route, body, listing, detail or websocket handshake refusal: no
+  body, as CPA's gin `NoRoute` answers. Message refusals use the fixed websocket
+  close above.
 
 The handler writes refusals itself and returns nil. A returned error would make
 Caddy log the whole request. Its own line holds the entry name (`-` before

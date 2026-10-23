@@ -97,7 +97,7 @@ var (
 )
 
 // ServeHTTP authenticates, admits checked calls and filters listings.
-// Websocket frames remain refused until their separate check is present.
+// Responses websocket messages use the same strict reader as call bodies.
 func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
@@ -133,7 +133,7 @@ func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 	if rt.class == classListing {
 		return g.serveListing(w, r, next, e, rt.detail)
 	}
-	return g.refuse(w, notFound, e.name, rt.class, "pending")
+	return g.serveWebsocket(w, r, e)
 }
 
 // authenticate returns the entry whose client key the request carries in

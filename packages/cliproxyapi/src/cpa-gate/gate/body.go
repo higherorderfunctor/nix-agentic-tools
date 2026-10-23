@@ -97,15 +97,20 @@ func decodeWire(wired []byte, encoding string) ([]byte, error) {
 // validBody checks the syntax and names before relying on gjson's first-name
 // lookup. CPA 8.0.38 reads its model with gjson v1.18.0 GetBytes.
 func validBody(body []byte, e *entry) bool {
+	return validMessage(body, e, true)
+}
+
+// A later websocket request may inherit its model from the checked first one.
+func validMessage(body []byte, e *entry, requireModel bool) bool {
 	if !utf8.Valid(body) || !gjson.ValidBytes(body) {
 		return false
 	}
 	s := strictScanner{body: body, text: string(body)}
-	if !s.value(nil, false, 0) || !s.done() || len(body) == 0 || body[firstNonSpace(body)] != '{' || !s.hasModel || !e.models[s.model] {
+	if !s.value(nil, false, 0) || !s.done() || len(body) == 0 || body[firstNonSpace(body)] != '{' || (requireModel && !s.hasModel) {
 		return false
 	}
 	model := gjson.GetBytes(body, "model")
-	if model.Type != gjson.String || model.String() != s.model {
+	if s.hasModel && (model.Type != gjson.String || model.String() != s.model || !e.models[s.model]) {
 		return false
 	}
 	return checkNode(gjson.ParseBytes(body), nil, e)
