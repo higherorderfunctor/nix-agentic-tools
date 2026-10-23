@@ -3,7 +3,7 @@
 > **Last verified:** 2026-10-23 — Step 0 retains 23 metadata relations and
 > explicit owner check imports; document and check inventories live in the owner
 > registry and checks entry point. S1 adds combined-schema generation and
-> standalone raw location tests.
+> standalone raw location tests; E1 adds the isolated projection check.
 
 ## Purpose and fit
 
@@ -46,6 +46,13 @@ These witnesses prevent empty or failed fixture output from looking like clean
 analysis. They validate the fixture contract, not live extraction health or
 future evaluator completeness.
 
+`codeql-nix-eval-isolation` adds the Linux-only E1 supervisor fixture through
+the same domain runner. Its fake producers and real minimal Nix projections
+check serialized requests, budgets, refusal paths and validated TRAP handoff.
+See [evaluation-isolation.md](evaluation-isolation.md) for admission rules,
+runtime limits and the exact cases. This check supplies no module adapter or
+CodeQL database import.
+
 ## Pack boundaries
 
 Each pack has its own `qlpack.yml` at the reserved interface:
@@ -70,8 +77,9 @@ remain disposable evidence.
 Reserve a distinct `ql/test/<domain>/` for each domain's source, `.ql` and
 reviewed `.expected` fixtures, and a distinct `checks/fixtures/<domain>/` when
 Python or other contract fixtures are needed. Keep those paths disjoint from the
-existing `abi`, `bootstrap`, `contracts` and `protocol` fixtures. A directory
-reservation does not implement a later capability or make it a passing test.
+existing `abi`, `bootstrap`, `contracts`, `eval-isolation` and `protocol`
+fixtures. A directory reservation does not implement a later capability or make
+it a passing test.
 
 Add an owner-local `checks/<domain>.nix` and explicitly import it from
 `checks.nix`. For Python contracts, invoke `checks/run-domain-tests.py` with the
