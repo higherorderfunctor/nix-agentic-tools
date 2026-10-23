@@ -30,7 +30,6 @@
       "unforced",
       "unsupported"
     ],
-    "nx_observations.subjectKind": ["definition", "option"],
     "nx_option_metadata.field": ["isDefined"],
     "nx_origin_positions.convention": ["utf8-byte-1-based"],
     "nx_origins.kind": ["external", "source", "synthetic", "unknown"],
@@ -127,8 +126,16 @@
       "columns": "file:file rootKey:text relativePath:text contentHash:text sourceKind:text",
       "key": [0]
     },
+    "nx_observation_definitions": {
+      "columns": "observation:observation definition:definition",
+      "key": [0]
+    },
+    "nx_observation_options": {
+      "columns": "observation:observation option:option",
+      "key": [0]
+    },
     "nx_observations": {
-      "columns": "observation:observation request:request subjectKind:text subjectKey:text stage:text state:text",
+      "columns": "observation:observation request:request stage:text state:text",
       "key": [0]
     },
     "nx_option_declarations": {

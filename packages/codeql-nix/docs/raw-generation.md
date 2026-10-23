@@ -1,6 +1,6 @@
 # Raw syntax generation
 
-> **Last verified:** 2026-10-23 — S1 combines the 23 Step 0 metadata relations
+> **Last verified:** 2026-10-23 — S1 combines the 25 Step 0 metadata relations
 > with the full kit-generated private syntax and checks their exact inventory;
 > standalone location tests retain exact archived bytes and missing/corrupt
 > archive refusals. S2 adds the authenticated source driver and companion raw
@@ -36,7 +36,7 @@ F1 `schema/evaluation.dbscheme` bytes to the generated schema. Its outputs are:
 
 The inventory reads declaration forms after removing comments; it is not a
 general QL parser. Empty class/table inventories fail. The manifest records
-generated class names and combined-schema table names, including the 23 Step 0
+generated class names and combined-schema table names, including the 25 Step 0
 F1 relations, so both AST churn and handwritten-schema drift remain visible. The
 inventory requires the `nx_` tables to match F1 exactly; an internally
 consistent manifest cannot retain deferred metadata tables. Keep every private

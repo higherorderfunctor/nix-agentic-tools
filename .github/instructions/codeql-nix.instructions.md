@@ -7,9 +7,9 @@ applyTo: "packages/codeql-nix/**"
 
 # Handwritten database contract
 
-> **Last verified:** 2026-10-23 — F1 retains the 23 Step 0 metadata relations,
-> root contexts and reference validation rules; runtime extraction remains a
-> later slice.
+> **Last verified:** 2026-10-23 — X1 adds typed observation subjects to the 25
+> Step 0 relations; F1 validates their identity and scope, while E2a remains the
+> metadata producer slice.
 
 ## Purpose and ownership
 
@@ -17,15 +17,13 @@ applyTo: "packages/codeql-nix/**"
 primary keys, enums and serialization encodings. `schema/abi.py` supplies
 reference encoders and validates unordered fact collections. Its `dbscheme()`
 renders the committed `schema/evaluation.dbscheme`; the ABI check rejects
-divergence. All 23 handwritten relations are independent of generated AST entity
+divergence. All 25 handwritten relations are independent of generated AST entity
 types, so later syntax and evaluation producers can contribute to one database
 without manufacturing raw kit labels.
 
-F0's disposable bootstrap proves the integration prerequisites described in
-[integration-gate.md](integration-gate.md). F1 defines the shared ABI; it does
-not implement a target manifest, projection transport, evaluator, production
-extractor or QL source bridge. Those consumers must preserve this contract
-rather than infer semantics from a missing row.
+F0 proves the prerequisites in [integration-gate.md](integration-gate.md). F1
+defines the shared ABI; later producers and QL consumers preserve it rather than
+infer semantics from missing rows.
 
 ## Durable identity
 
@@ -84,8 +82,7 @@ Every text column is limited to **1,048,576 UTF-8 bytes**, measured before TRAP
 quote doubling. JSON payloads and path arrays are checked after JSON encoding,
 including escaping expansion. Invalid UTF-8 and oversized fields raise
 `ValueError`; no truncation or chunk protocol exists. Global key framing itself
-is exempt, but a key repeated in a text column, such as an observation subject,
-still obeys the ceiling.
+is exempt; keys repeated in text columns still obey the ceiling.
 
 A later producer must reject an oversized file/projection transaction and report
 `text-field-too-large` using representable enclosing identities. It must publish
@@ -97,9 +94,20 @@ the pinned kit's separate preflight evidence.
 ## Scope, admission and completeness
 
 Primary keys are unique per relation, definition ordinals are unique per option,
-foreign entities must exist with the declared type, and observations use a valid
-option/definition subject. Requests belong to their context's target. Option and
-definition subjects must belong to the request context.
+foreign entities must exist with the declared type. `nx_observations` contains
+only observation, request, stage and state. Every observation in every state has
+exactly one subject row in total: `nx_observation_options(observation, option)`
+or `nx_observation_definitions(observation, definition)`. Both columns are typed
+entity references; text subject kind/key columns are removed. Missing,
+duplicate, wrong-type, dangling and simultaneous option/definition links are
+invalid.
+
+Requests belong to their context's target. The linked option, or a linked
+definition's parent option, must belong to that exact context and hence target.
+A request path need not equal its subject's option path except for the priority
+witness above. Consumers must join typed subjects, rather than infer identity
+from request paths or metadata presence. A definition observation identifies
+only its linked definition, not every sibling definition of its option.
 
 `nx_target_inputs` admits a file to the source snapshot of its target's run. For
 origins used by declarations or definitions, an `nx_origin_files` link must have
@@ -126,15 +134,15 @@ and a graph covering every relation. `test_abi.py` checks identity,
 enum/reference/scope rules, priority witnesses, refusal and UTF-8/JSON-expansion
 boundaries. `checks/abi.nix` runs these tests, checks schema projection
 equality, compiles against the standalone handwritten schema and imports/checks
-typed golden TRAP. This does not prove later producer behavior or the combined
-production schema.
+typed golden TRAP. This does not prove production extraction.
 
-Change the contract first, update reference validation and independent golden
-expectations, regenerate the schema through `dbscheme()`, then format the
-affected files and run `checks.x86_64-linux.codeql-nix-abi`. Preserve
-typed-schema import coverage as well as rejection tests. An ABI change requires
-full database regeneration; version one promises no in-place upgrade or
-migration path. Revisit this note whenever those obligations change.
+Change the contract first, update validation and independent ABI/F2/supervisor
+fixtures, regenerate `evaluation.dbscheme` through `dbscheme()` and the combined
+schema through S1, then format affected files. Run the owner ABI, contracts, raw
+inventory and evaluation-isolation checks through CI. Preserve typed-schema
+import coverage, scope rejection tests and adversarial subject-link controls. An
+ABI change requires full database regeneration; version one promises no in-place
+upgrade or migration path.
 
 ## Deferred consumers
 
@@ -229,13 +237,16 @@ process group. Run diagnostics retain at most 4096 UTF-8 bytes of a message.
 
 Accepted output must be one F2 envelope with exactly the supplied request
 result. Producers can emit option, requested metadata, declaration, origin,
-origin-position and observation rows; they cannot overwrite supervisor facts.
-Every option must belong to the selected context and exact literal path. Every
-observation must name that request and option at `pre-apply-metadata`. Metadata
-rows must name an emitted option and the requested facet; priority additionally
-permits its `isDefined` witness. Origins must be used by emitted declarations,
-and positions must name those origins. Source-file authentication and source
-origin links need E2a's admitted syntax inputs.
+origin-position, observation and typed observation-option link rows; they cannot
+overwrite supervisor facts. Every option must belong to the selected context and
+exact literal path. Every observation must name that request at
+`pre-apply-metadata` and have its typed `nx_observation_options` link to an
+emitted option. This option-only projection policy rejects definition links; F1
+independently validates the complete graph and exactly one subject link per
+observation. Metadata rows must name an emitted option and the requested facet;
+priority additionally permits its `isDefined` witness. Origins must be used by
+emitted declarations, and positions must name those origins. Source-file
+authentication and source origin links need E2a's admitted syntax inputs.
 
 A complete request requires a positive observed count and an `observed` option
 witness for the selected facet. `isDefined` and `priority` also require their
@@ -467,7 +478,7 @@ prerequisites.
 
 # Nix CodeQL owner and test entry points
 
-> **Last verified:** 2026-10-23 — Step 0 retains 23 metadata relations and
+> **Last verified:** 2026-10-23 — Step 0 retains 25 metadata relations and
 > explicit owner check imports; document and check inventories live in the owner
 > registry and checks entry point. S1 adds combined-schema generation and
 > standalone raw location tests; E1 adds the isolated metadata projection check;
@@ -507,7 +518,7 @@ suites and early `SystemExit` fail the aggregate. It never searches sibling
 directories for tests; a passing suite cannot hide an empty later suite.
 
 The ABI sentinel validates the golden graph and compares its relation inventory
-with an independently spelled set of all 23 Step 0 relations. The health
+with an independently spelled set of all 25 Step 0 relations. The health
 sentinel requires runs, targets, syntax results and request results, completed
 discovery, successful target/syntax statuses and positive request work counts.
 These witnesses prevent empty or failed fixture output from looking like clean
@@ -630,9 +641,9 @@ path and supplies the kit structural path. Fields escape `%` as `%25` and `|` as
 bytes and the independent line map; changing an anchor byte span cannot inherit
 the original coordinates. Both metadata columns are exact UTF-8 tuple text and
 are checked against F1's 1,048,576-byte ceiling before publication. These
-entries use the existing generated schema table; neither the 23-relation
-handwritten ABI nor the combined schema changes. They are not evaluation facts
-or authenticated evaluator origins. As with every extractor relation, these are
+entries use the existing generated schema table; S2 adds no handwritten ABI
+relation or combined-schema table. They are not evaluation facts or
+authenticated evaluator origins. As with every extractor relation, these are
 trusted producer evidence; fabricating a file admission record is outside the QL
 consumer's archive-authentication boundary. The driver tests establish that
 boundary from actual bytes.
@@ -755,12 +766,16 @@ new production validator.
 The observation envelope is
 `{ "protocolVersion": 1, "facts": [["nx_relation", [arguments]], ...] }`.
 Mapping to F1 tables is identity: retain relation names, positional arguments
-and values without renaming, coercion or defaults. The schema checks the
-envelope and string/array tuple shape. Then the complete unordered fact
-collection **must** pass `schema/abi.py`'s `validate`; envelope acceptance alone
-is insufficient. F1 owns relation names, arity, types, identity framing,
-canonical encodings, references, uniqueness and scope. Empty facts are
-representable but cannot serve as a passing extraction oracle.
+and values without renaming, coercion or defaults. Each observation carries
+exactly one typed subject row through `nx_observation_options` or
+`nx_observation_definitions`; text subject fields are removed. The link is
+mandatory for every observation state and must remain in its request context and
+target, as enforced by F1. The schema checks the envelope and string/array tuple
+shape. Then the complete unordered fact collection **must** pass
+`schema/abi.py`'s `validate`; envelope acceptance alone is insufficient. F1 owns
+relation names, arity, types, identity framing, canonical encodings, references,
+uniqueness and scope. Empty facts are representable but cannot serve as a
+passing extraction oracle.
 
 ## States and exact metadata
 
@@ -789,7 +804,7 @@ python packages/codeql-nix/checks/fixtures/protocol/test_protocol.py
 
 The tests check required descriptors, nested source roots and input identities,
 retained metadata facets, rejection of deferred controls, literal paths and
-budgets, all 23 relation mappings, status families and pre-target failures,
+budgets, all 25 relation mappings, status families and pre-target failures,
 priorities, and UTF-8/JSON-expansion boundaries. They use independent fixtures
 and F1 validation without invoking Nix evaluation or the CodeQL engine. F3 must
 integrate this standalone entry point into the owner's checks with nonempty

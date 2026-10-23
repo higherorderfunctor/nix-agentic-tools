@@ -153,9 +153,14 @@ def validate(rows):
         json_path(segments)
     priority_witness = CONTRACT["priority"]["optionWitness"]
     observed_priorities = set()
-    for _, req, kind, subject, stage, state in tables["nx_observations"]:
+    subjects = defaultdict(list)
+    for kind in ("definition", "option"):
+        for observation, subject in tables[f"nx_observation_{kind}s"]:
+            subjects[observation].append((kind, subject))
+    for observation, req, stage, state in tables["nx_observations"]:
+        require(len(subjects[observation]) == 1, "observation requires exactly one typed subject")
+        kind, subject = subjects[observation][0]
         ctx = request[req][2]
-        require(subject in owners[kind], "invalid observation subject")
         opt = subject if kind == "option" else owners["definition"][subject][1]
         require(option[opt][1] == ctx, "observation subject context mismatch")
         require(state != "observed" or result.get(req, [None])[0] in ("complete", "partial"), "observation from unsuccessful projection")

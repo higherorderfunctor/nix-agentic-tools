@@ -516,7 +516,9 @@ nx_diagnostic_requests(int diagnostic: @nx_diagnostic ref, int request: @nx_requ
 nx_diagnostic_targets(int diagnostic: @nx_diagnostic ref, int target: @nx_target ref);
 nx_diagnostics(unique int diagnostic: @nx_diagnostic, int run: @nx_run ref, string code: string ref, string message: string ref);
 nx_files(unique int file: @nx_file, string rootKey: string ref, string relativePath: string ref, string contentHash: string ref, string sourceKind: string ref);
-nx_observations(unique int observation: @nx_observation, int request: @nx_request ref, string subjectKind: string ref, string subjectKey: string ref, string stage: string ref, string state: string ref);
+nx_observation_definitions(int observation: @nx_observation ref, int definition: @nx_definition ref);
+nx_observation_options(int observation: @nx_observation ref, int option: @nx_option ref);
+nx_observations(unique int observation: @nx_observation, int request: @nx_request ref, string stage: string ref, string state: string ref);
 nx_option_declarations(int option: @nx_option ref, int ordinal: int ref, int origin: @nx_origin ref);
 nx_option_metadata(int option: @nx_option ref, string field: string ref, string scalarJson: string ref);
 nx_option_priority(int option: @nx_option ref, string priorityDecimal: string ref);

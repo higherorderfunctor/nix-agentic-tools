@@ -245,7 +245,8 @@ let selected = EXPRESSION; i = job.identities;
     key = namespace: "nixql:v1:${namespace}:${toString (builtins.stringLength i.request)}:${i.request}";
 in { protocolVersion = 1; facts = [
   [ "nx_request_results" [ i.request "complete" "" 1 ] ]
-  [ "nx_observations" [ (key "observation") i.request "option" (key "option") "pre-apply-metadata" "observed" ] ]
+  [ "nx_observations" [ (key "observation") i.request "pre-apply-metadata" "observed" ] ]
+  [ "nx_observation_options" [ (key "observation") (key "option") ] ]
   [ "nx_options" [ (key "option") i.context (builtins.toJSON job.request.path) ] ]
   [ "nx_option_metadata" [ (key "option") "isDefined" (if selected then "true" else "false") ] ]
 ]; }

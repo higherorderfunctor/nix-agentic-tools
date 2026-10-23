@@ -93,12 +93,16 @@ new production validator.
 The observation envelope is
 `{ "protocolVersion": 1, "facts": [["nx_relation", [arguments]], ...] }`.
 Mapping to F1 tables is identity: retain relation names, positional arguments
-and values without renaming, coercion or defaults. The schema checks the
-envelope and string/array tuple shape. Then the complete unordered fact
-collection **must** pass `schema/abi.py`'s `validate`; envelope acceptance alone
-is insufficient. F1 owns relation names, arity, types, identity framing,
-canonical encodings, references, uniqueness and scope. Empty facts are
-representable but cannot serve as a passing extraction oracle.
+and values without renaming, coercion or defaults. Each observation carries
+exactly one typed subject row through `nx_observation_options` or
+`nx_observation_definitions`; text subject fields are removed. The link is
+mandatory for every observation state and must remain in its request context and
+target, as enforced by F1. The schema checks the envelope and string/array tuple
+shape. Then the complete unordered fact collection **must** pass
+`schema/abi.py`'s `validate`; envelope acceptance alone is insufficient. F1 owns
+relation names, arity, types, identity framing, canonical encodings, references,
+uniqueness and scope. Empty facts are representable but cannot serve as a
+passing extraction oracle.
 
 ## States and exact metadata
 
@@ -127,7 +131,7 @@ python packages/codeql-nix/checks/fixtures/protocol/test_protocol.py
 
 The tests check required descriptors, nested source roots and input identities,
 retained metadata facets, rejection of deferred controls, literal paths and
-budgets, all 23 relation mappings, status families and pre-target failures,
+budgets, all 25 relation mappings, status families and pre-target failures,
 priorities, and UTF-8/JSON-expansion boundaries. They use independent fixtures
 and F1 validation without invoking Nix evaluation or the CodeQL engine. F3 must
 integrate this standalone entry point into the owner's checks with nonempty

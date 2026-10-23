@@ -9,9 +9,10 @@
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       python3 ${owner}/checks/run-domain-tests.py \
-        ${owner}/checks/fixtures/protocol/test_protocol.py \
         ${owner}/checks/fixtures/contracts/test_domain_entrypoint.py \
-        ${owner}/checks/fixtures/contracts/test_sentinels.py
+        ${owner}/checks/fixtures/contracts/test_sentinels.py \
+        ${owner}/checks/fixtures/observation-links/test_observation_links.py \
+        ${owner}/checks/fixtures/protocol/test_protocol.py
       mkdir "$out"
       printf 'Protocol, domain entry point and nonempty ABI/health suites passed\n' > "$out/evidence"
     '';

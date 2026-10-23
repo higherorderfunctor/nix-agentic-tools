@@ -23,11 +23,11 @@ BAD_PRIORITIES = [
 # One-byte labels keep fixture identities independently readable.
 I = {label: f"nixql:v1:{namespace}:1:{label}" for label, namespace in [
     ("a", "anchor"), ("c", "context"), ("d", "definition"), ("e", "diagnostic"),
-    ("f", "file"), ("i", "observation"), ("j", "context"), ("o", "option"),
+    ("f", "file"), ("i", "observation"), ("j", "context"), ("k", "observation"), ("o", "option"),
     ("p", "origin"), ("q", "request"), ("r", "run"), ("t", "target"),
 ]}
 
-# All 23 Step 0 handwritten relations; priority needs no value serialization.
+# All 25 Step 0 handwritten relations; priority needs no value serialization.
 PRIORITY_REQUEST = "nixql:v1:request:1:z"
 ROOT = "nixql:v1:root:7:project9:content-a"
 I["f"] = "nixql:v1:file:34:nixql:v1:root:7:project9:content-a11:fixture.nix9:content-a"
@@ -43,7 +43,10 @@ GRAPH = [
     ["nx_diagnostic_targets", [I["e"], I["t"]]],
     ["nx_diagnostics", [I["e"], I["r"], "notice", "fixture"]],
     ["nx_files", [I["f"], ROOT, "fixture.nix", "content-a", "project"]],
-    ["nx_observations", [I["i"], PRIORITY_REQUEST, "option", I["o"], "pre-apply-metadata", "observed"]],
+    ["nx_observation_definitions", [I["k"], I["d"]]],
+    ["nx_observation_options", [I["i"], I["o"]]],
+    ["nx_observations", [I["i"], PRIORITY_REQUEST, "pre-apply-metadata", "observed"]],
+    ["nx_observations", [I["k"], I["q"], "pre-apply-metadata", "observed"]],
     ["nx_option_declarations", [I["o"], 0, I["p"]]],
     ["nx_option_metadata", [I["o"], "isDefined", "true"]],
     ["nx_option_priority", [I["o"], "9223372036854775807"]],
