@@ -1,0 +1,7 @@
+[
+  (with { import = 97; }; import)
+  (with { builtins = 101; }; builtins)
+  (let import = 103; in with { import = 107; }; import)
+  (let builtins = 109; in builtins)
+  (s: with s; import)
+]

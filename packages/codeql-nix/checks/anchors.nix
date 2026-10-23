@@ -49,6 +49,13 @@
       strictShell = import ../../../lib/strict-shell-application.nix pkgs;
     in
       pkgs.runCommand "codeql-nix-anchors" {
+        CODEQL_NIX_TEST_BARE_COMMAND = "${engine}/bin/codeql";
+        CODEQL_NIX_TEST_COMMAND = "${self.ciPackages.${pkgs.stdenv.hostPlatform.system}.codeql-nix}/bin/codeql";
+        CODEQL_NIX_TEST_EXTRACTOR = packaging.extractor;
+        CODEQL_NIX_TEST_LIBRARY = packaging.library;
+        CODEQL_NIX_TEST_NIX = "${pkgs.nix}/bin/nix";
+        CODEQL_NIX_TEST_NIXPKGS = pkgs.path;
+        CODEQL_NIX_TEST_OWNER = owner;
         nativeBuildInputs = [engine pkgs.nix pkgs.python3 pkgs.util-linux];
       } ''
         set -euETo pipefail
@@ -99,7 +106,7 @@
           --search-path=${installed}:${packaging.library} \
           --threads=4 --ram=6000 tests/ast-ambiguous
         echo 'A0 Ast, Candidates, Ambiguous and table reconstruction with body/segment mutants passed'
-        for suite in lexical lexical-dynamic lexical-extension lexical-merged lexical-siblings; do
+        for suite in implicit-scope lexical lexical-dynamic lexical-extension lexical-merged lexical-siblings; do
           mkdir "tests/$suite"
           cp ${owner}/ql/test/"$suite"/* "tests/$suite/"
           chmod -R u+w "tests/$suite"
@@ -115,6 +122,19 @@
           ${owner}/checks/fixtures/lexical/test_lexical.py \
           ${owner}/checks/fixtures/lexical/test_merged.py
         echo 'N1 NameBindings frozen positive, negative, duplicate and absent-model rows passed'
+        mkdir tests/implicit-absent
+        cp ${owner}/ql/test/implicit-builtins/builtins.nix.in tests/implicit-absent/builtins.nix
+        cp ${owner}/ql/test/implicit-builtins/NameBindings.ql tests/implicit-absent/
+        cp ${owner}/ql/test/implicit-builtins/Unavailable.expected tests/implicit-absent/NameBindings.expected
+        chmod -R u+w tests/implicit-absent
+        flock "$TMPDIR/codeql.lock" codeql test run \
+          --search-path=${installed}:${packaging.library} \
+          --threads=4 --ram=6000 tests/implicit-absent
+        echo 'N2 absent builtin model NameBindings rows passed'
+        export CODEQL_NIX_TEST_LOCK="$TMPDIR/codeql.lock"
+        export CODEQL_NIX_TEST_SCRATCH="$TMPDIR"
+        python3 ${owner}/checks/run-domain-tests.py \
+          ${owner}/checks/fixtures/implicit-scope/test_implicit.py
         mkdir "$out"
         printf 'S2 driver suite; 28 inherited raw/diagnostic preflight cases; Quality, Coordinates, Empty, Features and Ambiguous QL tests; exact archived bytes passed\n' > "$out/evidence"
       '';

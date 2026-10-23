@@ -1,0 +1,28 @@
+[
+  (with { x = 11; }; x)
+  (with { x = 11; }; with { x = 13; }; x)
+  (with { x = 11; }; with { y = 13; }; x)
+  (let x = 17; in with { x = 19; }; x)
+  (with { x = 19; }; let x = 17; in x)
+  (with { x = 23; }; with { y = x; }; y)
+  (let x = 29; in (rec { inherit x; y = x; }).y)
+  (let x = 31; in (let inherit x; in x))
+  (rec { source = { x = 37; }; inherit (source) x; y = x; }).y
+  (let source = { x = 41; }; in (let inherit (source) x; in x))
+  (let x = 43; in { inherit x; }.x)
+  (let x = 47; in (rec { inherit "x"; y = x; }).y)
+  ((s: with { x = 53; }; with s; x) {})
+  ((s: with s; with { x = 59; }; x) {})
+  ((s: with s; missing) {})
+  ((s: let x = 61; in with s; x) {})
+  (with { x = 67; }; with { x = 71; y = x; }; y)
+  (with { x = 73; }; (with x; 79))
+  (let x = 83; in (rec { source = { x = x; }; inherit (source) y; }).source.x)
+  (rec { inherit (source) x; source = { x = 89; }; y = x; }).y
+  (with { x = 151; }; with { ${"other"} = 157; }; x)
+  (with { x = 163; ${"other"} = 167; }; x)
+  (let x = 173; in (rec { inherit x; ${"other"} = 179; y = x; }).y)
+  (rec { inherit ({ x = 181; }) x; ${"other"} = 191; y = x; }).y
+  (let x = 193; in (rec { ${"other"} = 197; inner = rec { inherit x; y = x; }; }).inner.y)
+  (let x = 211; in { ${"a"} = rec { inherit x; y = x; }; }.a.y)
+]
