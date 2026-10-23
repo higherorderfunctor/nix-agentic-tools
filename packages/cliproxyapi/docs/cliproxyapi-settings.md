@@ -9,7 +9,8 @@
 > loopback, turns off the unprompted fetches the pinned CPA has a switch for,
 > types `server.tls.key` as a secret file, and derives named client keys'
 > `access.api-keys` and `access.key-allowlist` entries from named upstream
-> routes.
+> routes. Built-in `vendor = "z-ai"` defaults upstream API-key models and APIs
+> from pinned official documentation.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -37,6 +38,32 @@ once on the Instance. Harnesses select
 `proxy = {instance = "main"; clientKey = "claude-personal";}`. Shape, a
 four-client example, OAuth filename selection and devenv secret references are
 in `dev/fragments/ai-proxy/ai-proxy.md`.
+
+For the built-in z.ai vendor, the upstream credential needs only its secret:
+
+```nix
+ai.cliproxyapi.instances.main.credentials.zai-api-personal = {
+  vendor = "z-ai";
+  apiKey.key = redact.file "/run/secrets/zai-api-key";
+};
+```
+
+`apiKey.apis` defaults to Anthropic-compatible and OpenAI chat-compatible
+endpoints, and `apiKey.models` to z.ai's published general API chat catalog.
+Override either endpoint's `base-url`, set an API to `null`, or replace `models`
+with the subset your upstream credential permits. Check the key classification
+and entitlements in z.ai's
+[API Key Management Guide](https://docs.z.ai/devpack/notice/api-key-management):
+new Standard/Coding Plan keys determine billing across supported endpoints;
+older Compatible keys retain endpoint-dependent rules. Standard usage can
+consume account balance or usage bundles. The defaults describe the general API,
+not a guarantee of account access. Client keys still choose this credential and
+its API through `routes`; selecting `api = "chat"` lets CPA translate a Codex
+CLI Responses request to chat.
+
+The measured Claude Code tier mapping and timeout remain extraction data. The
+existing per-client-key model list carries model IDs for picker rows, without
+vendor or tier intent; it cannot safely supply Claude Code environment defaults.
 
 ## Unprompted network calls
 

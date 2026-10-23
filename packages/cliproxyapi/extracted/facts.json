@@ -3,5 +3,10 @@
     "source": "static",
     "systems": ["x86_64-linux"],
     "type": "object"
+  },
+  "zAi": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
   }
 }

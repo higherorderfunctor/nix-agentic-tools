@@ -82,8 +82,11 @@ class Upstream(http.server.BaseHTTPRequestHandler):
             body, kind = response_events(), "text/event-stream"
         elif self.path.startswith("/v1/messages"):
             body, kind = json.dumps(message()).encode(), "application/json"
-        else:
+        elif self.path.split("?")[0].endswith("/chat/completions"):
             body, kind = json.dumps(chat_completion()).encode(), "application/json"
+        else:
+            self.send_error(404, "stand-in upstream only serves documented API paths")
+            return
         self.send_response(200)
         self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(body)))

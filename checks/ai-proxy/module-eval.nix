@@ -122,6 +122,85 @@
   instanceChange = change: {cliproxyapi.instances.clients = change;};
 in {
   checks = {
+    module-ai-proxy-z-ai-credential = mkTest "ai-proxy-z-ai-credential" (let
+      facts = import ../../lib/extracted/facts.nix {inherit lib;};
+      vendor = facts.get (facts.load {dir = ../../packages/cliproxyapi/extracted;}).aggregate "zAi";
+      problems = lib.concatMap (backend: let
+        ai = instanceChange {
+          credentials.zai = lib.mkForce {
+            vendor = "z-ai";
+            apiKey.key = apiKey.key;
+          };
+          clientKeys.work.routes = lib.mkForce [
+            {
+              credential = "zai";
+              api = "chat";
+            }
+          ];
+        };
+        result = evaluate backend ai;
+        settings = rendered result;
+        overridden = evaluate backend (lib.recursiveUpdate ai (instanceChange {
+          clientKeys.personal.routes = lib.mkForce [(route "personal")];
+          credentials.zai = lib.mkForce {
+            vendor = "z-ai";
+            apiKey = {
+              apis = {
+                anthropic = null;
+                chat.base-url = "https://chat.example/v4";
+              };
+              key = clientKey "override";
+              models = ["custom-model"];
+            };
+          };
+        }));
+        block = family: lib.findFirst (entry: entry.name == "zai") null settings.api-keys.${family};
+        checks = {
+          "accepted" = failedMessages result == [];
+          "both API blocks" = (block "claude").base-url == vendor.apis.anthropic.base-url && (block "openai-compatibility").base-url == vendor.apis.chat.base-url;
+          "catalog defaults" = (block "claude").models == map (name: {inherit name;}) vendor.models && (block "openai-compatibility").models == (block "claude").models;
+          "chat client route" =
+            (lib.last settings.access.key-allowlist).credentials
+            == [
+              {
+                base-urls = [vendor.apis.chat.base-url];
+                kind = "apikey";
+                provider = "openai-compatible-zai";
+              }
+            ];
+          "overrides" =
+            failedMessages overridden
+            == []
+            && overridden.config.ai.cliproxyapi.instances.clients.credentials.zai.apiKey
+            == {
+              apis = {
+                anthropic = null;
+                chat.base-url = "https://chat.example/v4";
+                responses = null;
+              };
+              key = clientKey "override";
+              models = ["custom-model"];
+            };
+          "picker catalog retained" =
+            result.config.ai.claude.normalized.proxy.credentials
+            == [
+              {
+                name = "personal";
+                models = [];
+              }
+              {
+                name = "zai";
+                inherit (vendor) models;
+              }
+            ];
+          "tier mapping retained as measured data" = builtins.attrNames vendor.claudeModels == ["haiku" "opus" "sonnet"] && lib.all (model: lib.elem model vendor.models) (builtins.attrValues vendor.claudeModels);
+        };
+      in
+        map (name: "${backend}: ${name}") (builtins.attrNames (lib.filterAttrs (_: ok: !ok) checks))) ["hm" "devenv"];
+    in
+      if problems == []
+      then true
+      else throw (lib.concatStringsSep "\n" problems));
     module-ai-proxy-instance-clients = mkTest "ai-proxy-instance-clients" (let
       problems = lib.concatMap (backend: let
         result = evaluate backend {};

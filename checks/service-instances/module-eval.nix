@@ -816,7 +816,7 @@ in {
             };
             cliproxyapi.instances.main = {
               credentials = {
-                other.apiKey = provider "other" 28428;
+                other.apiKey = provider "other" 28428 // {apis.chat.base-url = "${claudeBaseURL 28428}/v1";};
                 zai.apiKey = provider "zai" 28427;
               };
               clientKeys = {
@@ -834,7 +834,7 @@ in {
                   routes = [
                     {
                       credential = "other";
-                      api = "responses";
+                      api = "chat";
                     }
                   ];
                 };
@@ -852,8 +852,9 @@ in {
             request 200 other responses glm-shared key-b
             request 503 auth_not_found anthropic other-model key-a
             request 503 auth_not_found responses zai-model key-b
+            echo "ok: Codex CLI Responses reached chat-only upstream credential; unauthorized model refused"
           '';
-          upstreams = ["zai:28427:/v1/messages?beta=true" "other:28428:/v1/responses"];
+          upstreams = ["zai:28427:/v1/messages?beta=true" "other:28428:/v1/chat/completions"];
           verify = config: ''
             test "$(${pkgs.bash}/bin/bash -c ${lib.escapeShellArg (claudeSettings {inherit config;}).apiKeyHelper})" = key-a
             test "$(${config.ai.codex.files.".codex/config.toml".content.value.model_providers.ai-proxy.auth.command})" = key-b

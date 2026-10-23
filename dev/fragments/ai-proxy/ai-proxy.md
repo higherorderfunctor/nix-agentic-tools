@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-22 — instances own named upstream credentials and
 > client keys; harnesses select `instance` + `clientKey`. Claude offers routed
 > API-key models in its picker; Codex discovers CPA models without profiles.
-> Both consume the shared redact client-key helper.
+> Both consume the shared redact client-key helper. Named API-key credentials
+> can select the built-in z.ai vendor defaults.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -189,6 +190,9 @@ asks. Values remain outside generated store files and evaluation output.
 
 `module-ai-proxy-instance-clients` checks generated blocks, named routes, exact
 OAuth IDs, rules and refusals on both backends.
+`module-ai-proxy-z-ai-credential` checks vendor defaults and overrides on both
+backends, including client routing and the preserved model list.
 `module-service-instances-runtime-providers` sends Anthropic and Responses
-requests through the packaged CPA. The other proxy checks cover selection, key
-references and runtime delivery.
+requests through the packaged CPA, including a Codex CLI client key routed to a
+chat-only upstream credential and an unauthorized-model negative control. The
+other proxy checks cover selection, key references and runtime delivery.
