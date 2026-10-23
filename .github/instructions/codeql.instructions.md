@@ -7,10 +7,12 @@ applyTo: "packages/codeql/**"
 
 ## CodeQL engines
 
-> **Last verified:** 2026-10-21 (commit 044e6939) — eleven engines at 2.27.3
-> from one `mkEngine` factory; the javascript engine wraps its launcher with a
-> Node; CI builds javascript and evaluates the rest; the update input lanes
-> build none. Packs and `customizePackage`: customize.md.
+> **Last verified:** 2026-10-23 — eleven engines at 2.27.3 from one `mkEngine`
+> factory; the javascript engine wraps its launcher with a Node; CI builds
+> javascript and evaluates the rest; the update input lanes build none. Engine
+> selection uses `customizePackage` without `unwrapped`; the customized Nix
+> command stays private while its three pure assets are publishable. Packs and
+> `customizePackage`: customize.md.
 
 ### What a bundle is
 
@@ -71,10 +73,16 @@ public publication:
 
 - `pushFilter: kiro-cli|codeql` on every credentialed cachix-action step;
 - `dev/scripts/ci-packages.py` excludes every `codeql-` name from the package
-  shards, by prefix, so a new engine is excluded without an edit;
-- the `test` job's tripwire asks the cache for every engine and every source
-  asset and fails unless each answers 404
-  (`dev/scripts/assert-not-published.sh`).
+  shards and input-update builds, by prefix, so a new engine is excluded without
+  an edit. The only exceptions are `codeql-nix-extractor`, `codeql-nix-library`
+  and `codeql-nix-queries`: their `nixql-*` outputs have no engine in their
+  derivation closures and remain publishable. The customized `codeql-nix`
+  command keeps the prefix exclusion because its runtime closure includes the
+  bare engine;
+- the `test` job's tripwire selects uncustomized engines by their existing
+  `customizePackage` and absent `unwrapped` attributes, asks the cache for every
+  engine, source asset and the customized Nix command, and fails unless each
+  answers 404 (`dev/scripts/assert-not-published.sh`).
 
 The private Hestia check cache in this repository's GitHub Actions cache MAY
 hold an engine: a check builds one, and that is CI-internal storage, not
@@ -95,7 +103,7 @@ and `v3.x` releases interleave with the bundle tags.
 CI builds ONE engine. `codeql-javascript-smoke` builds javascript and runs
 `codeql version` (must equal the pinned version) and `codeql resolve languages`
 (must list javascript). `codeql-engines-eval` evaluates every engine's drvPath
-without building, and requires the flat `codeql-*` names to equal the
+without building, and requires the uncustomized engine names to equal the
 `sources.json` entries.
 
 Building all eleven fetches 2.2 GB and unpacks and patches 5 GB, and none of it
@@ -105,9 +113,9 @@ proves every call site and pin.
 
 The update pipeline's input lanes skip the engines for the same reason:
 `verify_all_packages` builds every other `ciPackages` entry through
-`ci-packages.py update-plan`, which drops the `codeql-` prefix from both the
-expected set and the `--select`. An update PR still runs the smoke check in
-`ci.yml`.
+`ci-packages.py update-plan`, which applies the same prefix exclusion and three
+pure-asset exceptions to both the expected set and the `--select`. An update PR
+still runs the smoke check in `ci.yml`.
 
 <!-- Fragment: packages/codeql/docs/customize.md -->
 

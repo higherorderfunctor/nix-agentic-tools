@@ -12,7 +12,7 @@ from artifacts import downloaded
 # early cache-writing job; patched Kiro has jobs without cache uploads. The
 # CodeQL engines' terms forbid distributing them, and CI builds one of them
 # through a check: excluded by prefix, so a new engine can never reach a
-# cache-writing shard.
+# cache-writing shard. Only the three engine-free Nix assets are exceptions.
 EXCLUDED = {
     "ci-hestia",
     "kiro-cli-rollout-canary",
@@ -20,6 +20,11 @@ EXCLUDED = {
     "repo-readme",
 }
 EXCLUDED_PREFIXES = ("codeql-",)
+PUBLISHABLE_CODEQL = {"codeql-nix-extractor", "codeql-nix-library", "codeql-nix-queries"}
+
+
+def excluded_codeql(name):
+    return name.startswith(EXCLUDED_PREFIXES) and name not in PUBLISHABLE_CODEQL
 
 
 def checked_names(names):
@@ -39,7 +44,7 @@ def partition(names, index, count):
     checked_names(names)
     if not 0 <= index < count:
         raise ValueError("invalid shard index/count")
-    universe = sorted(name for name in set(names) - EXCLUDED if not name.startswith(EXCLUDED_PREFIXES))
+    universe = sorted(name for name in set(names) - EXCLUDED if not excluded_codeql(name))
     selected = universe[index::count]
     if not selected:
         raise ValueError("empty package shard")
@@ -51,7 +56,7 @@ def partition(names, index, count):
 # runtime proof is the CodeQL smoke check, and an absent engine would be
 # fetched from upstream on every input bump.
 def update_packages(names):
-    packages = sorted(name for name in checked_names(names) if not name.startswith(EXCLUDED_PREFIXES))
+    packages = sorted(name for name in checked_names(names) if not excluded_codeql(name))
     if not packages:
         raise ValueError("empty update package set")
     return packages
