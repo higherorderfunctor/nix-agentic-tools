@@ -64,6 +64,11 @@
         example = ["glm-5.3"];
         description = "Models served on each API.";
       };
+      priority = mkOption {
+        type = types.nullOr types.int;
+        default = null;
+        description = "CPA credential priority on every served API. Higher values win among available credentials, subject to CPA transport preference and session affinity; unset uses CPA's default of 0. Negative values permit fallback behind default-priority OAuth logins.";
+      };
     };
   };
 
@@ -73,12 +78,13 @@
   blocks = name: provider:
     lib.mapAttrs' (api: value:
       lib.nameValuePair apis.${api}.family [
-        {
-          inherit name;
-          inherit (value) base-url;
-          keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
-          models = map (model: {name = model;}) provider.models;
-        }
+        ({
+            inherit name;
+            inherit (value) base-url;
+            keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
+            models = map (model: {name = model;}) provider.models;
+          }
+          // lib.optionalAttrs (provider.priority != null) {inherit (provider) priority;})
       ])
     (served provider);
 
@@ -97,6 +103,8 @@
       };
       oauth = mkOption {
         type = types.nullOr (types.submodule {
+          # OAuth priority belongs to CPA login-file metadata; declaring
+          # oauth.priority here would accept a value no config field can apply.
           options = {
             account = mkOption {
               type = redact.types.redacted;
