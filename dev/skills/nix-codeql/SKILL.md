@@ -40,9 +40,18 @@ select b.getLocation().getFile().getRelativePath(),
   b.getLocation().getStartLine(), b.getAttrpath().toString()
 ```
 
-Run this skill's `scripts/nixql <path-to-query.ql>` from the devenv shell. It
-prints CSV and preserves the log and BQRS in a fresh `query.*` directory under
-the state directory. Sibling `.qll` imports and the query's manifest are kept.
+Run `nix run .#codeql-query -- run nix <path-to-query.ql>`. The same command
+accepts a database path in place of `nix`, or `-e '<QL text>'` in place of the
+query file. It prints decoded JSON sorted by the first column; `--sort-key 0,1`
+after `run` selects other columns. Sibling `.qll` imports and the query's
+manifest are kept. Inline queries select the database language's visible `*-all`
+library automatically.
+
+The command uses the optional `ai.codeql.queryDaemon.enable` service when it is
+running and falls back to `codeql query run` when its socket is absent. The
+daemon keeps one warm evaluator per database, releases idle evaluators after
+five minutes, and follows a replaced live `db` symlink on each request. It does
+not rebuild or refresh databases. Use the lifecycle task before querying edits.
 The configured engine supplies the extractor and `jamiemagee/nix-all`; no pack
 download is needed. The shipped classification query is
 `packages/codeql/ql/nix/StrictHeader.ql`; it reports `ok`, `missing` and
