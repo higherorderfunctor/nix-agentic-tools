@@ -1,7 +1,7 @@
 # Nix CodeQL owner and test entry points
 
-> **Last verified:** 2026-10-23 — F3 registers the owner and explicit contract
-> checks; the language packs remain a skeleton.
+> **Last verified:** 2026-10-23 — E1 adds the isolated projection check beside
+> the explicit F3 entry points; the language packs remain a skeleton.
 
 ## Purpose and fit
 
@@ -9,13 +9,14 @@
 manifests. Its `registry.nix` contributes the `codeql-nix` scoped architecture
 category through the existing owner registry, including this note and the
 [database](database-contract.md), [integration](integration-gate.md) and
-[target](target-contract.md) contracts. No root owner allowlist or separate
-discovery mechanism is needed.
+[target](target-contract.md) contracts and the
+[evaluation isolation](evaluation-isolation.md) boundary. No root owner
+allowlist or separate discovery mechanism is needed.
 
-`checks.nix` explicitly imports `checks/abi.nix`, `checks/bootstrap.nix` and
-`checks/contracts.nix`. Supporting files are not recursively discovered as
-checks. This keeps ownership local and lets a new domain add a deliberate check
-import without changing the root flake.
+`checks.nix` explicitly imports `checks/abi.nix`, `checks/bootstrap.nix`,
+`checks/contracts.nix` and `checks/eval-isolation.nix`. Supporting files are not
+recursively discovered as checks. This keeps ownership local and lets a new
+domain add a deliberate check import without changing the root flake.
 
 ## Checks and nonempty evidence
 
@@ -57,6 +58,13 @@ witnesses prevent empty or failed fixture output from looking like clean
 analysis. They validate the fixture contract, not live extraction health or
 future evaluator completeness.
 
+`codeql-nix-eval-isolation` adds the Linux-only E1 supervisor fixture through
+the same domain runner. Its fake producers and real minimal Nix projections
+check serialized requests, budgets, refusal paths and validated TRAP handoff.
+See [evaluation-isolation.md](evaluation-isolation.md) for admission rules,
+runtime limits and the exact cases. This check supplies no module adapter or
+CodeQL database import.
+
 ## Pack boundaries
 
 Each pack has its own `qlpack.yml` at the reserved interface:
@@ -80,8 +88,9 @@ evidence.
 Reserve a distinct `ql/test/<domain>/` for each domain's source, `.ql` and
 reviewed `.expected` fixtures, and a distinct `checks/fixtures/<domain>/` when
 Python or other contract fixtures are needed. Keep those paths disjoint from the
-existing `abi`, `bootstrap`, `contracts` and `protocol` fixtures. A directory
-reservation does not implement a later capability or make it a passing test.
+existing `abi`, `bootstrap`, `contracts`, `eval-isolation` and `protocol`
+fixtures. A directory reservation does not implement a later capability or make
+it a passing test.
 
 Add an owner-local `checks/<domain>.nix` and explicitly import it from
 `checks.nix`. For Python contracts, invoke `checks/run-domain-tests.py` with the

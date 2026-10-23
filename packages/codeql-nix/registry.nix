@@ -8,6 +8,7 @@
         inherit name;
       }) [
         "database-contract"
+        "evaluation-isolation"
         "integration-gate"
         "owner-layout"
         "target-contract"
