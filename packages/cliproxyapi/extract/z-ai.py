@@ -16,19 +16,46 @@ from markdown_it import MarkdownIt
 def extract(claude, overview, quick_start):
     parser = MarkdownIt("default")
     models = []
-    # Only table rows linking the chat API are chat models; image/agent rows
-    # and model names mentioned elsewhere must not become picker entries.
+    # Catalog sections classify the tables before their rows are validated:
+    # one changed chat reference must not silently remove a non-tier model.
+    chat_sections = {"Featured Models", "Text Models"}
+    excluded_sections = {"Agents", "Built-in Tools", "Image Generation Models"}
+    section = None
+    heading = False
+    table = False
+    header = False
     row = []
-    in_row = False
+    references = []
     for token in parser.parse(overview):
-        if token.type == "tr_open":
-            row, in_row = [], True
-        elif token.type == "tr_close":
-            if any("/api-reference/llm/chat-completion" in cell for cell in row):
+        if token.type == "heading_open":
+            heading = True
+        elif heading and token.type == "inline":
+            section, heading = token.content, False
+        elif token.type == "table_open":
+            table, header = section not in excluded_sections, True
+            if table and section not in chat_sections:
+                raise ValueError(f"unclassified z.ai catalog table section: {section}")
+        elif token.type == "table_close":
+            table = False
+        elif table and token.type == "tr_open":
+            row, references = [], []
+        elif table and token.type == "tr_close":
+            if header:
+                if row[0] != "Model" or "Resource" not in row:
+                    raise ValueError("z.ai chat model table header changed shape")
+                header = False
+            else:
+                if references != ["/api-reference/llm/chat-completion.md"]:
+                    raise ValueError(f"unclassified z.ai chat model reference: {row[0]}")
                 models.append(row[0].lower())
-            in_row = False
-        elif in_row and token.type == "inline":
+        elif table and token.type == "inline":
             row.append(token.content)
+            references.extend(
+                child.attrGet("href")
+                for child in token.children
+                if child.type == "link_open"
+                and child.attrGet("href").startswith("/api-reference/")
+            )
     if not models or len(models) != len(set(models)) or any(
         not re.fullmatch(r"glm-[a-z0-9.-]+", model) for model in models
     ):
@@ -36,6 +63,7 @@ def extract(claude, overview, quick_start):
 
     tokens = parser.parse(claude)
     defaults = {}
+    anthropic_urls = []
     mapping = {}
     in_defaults = False
     for token in tokens:
@@ -54,16 +82,22 @@ def extract(claude, overview, quick_start):
                 mapping[match[1].lower()] = match[2].lower()
             elif in_defaults and mapping:
                 in_defaults = False
-        elif token.type == "fence" and token.info.startswith("json"):
-            env = json.loads(token.content).get("env", {})
+        elif token.type == "fence" and '"ANTHROPIC_BASE_URL"' in token.content:
+            # The manual JSON example is fenced as bash, with leading shell
+            # comments. Decode its JSON object without executing those comments.
+            document, _ = json.JSONDecoder().raw_decode(token.content[token.content.index("{"):])
+            env = document.get("env", {})
             if "ANTHROPIC_BASE_URL" in env:
-                defaults = env
-                break
+                anthropic_urls.append(env["ANTHROPIC_BASE_URL"])
+                if not defaults:
+                    defaults = env
     if set(mapping) != {"haiku", "opus", "sonnet"}:
         raise ValueError("z.ai must publish all three Claude Code default tiers")
     if not set(mapping.values()) <= set(models):
         raise ValueError("z.ai default tier names a model absent from its chat catalog")
-    anthropic = defaults["ANTHROPIC_BASE_URL"]
+    if len(set(anthropic_urls)) != 1 or not anthropic_urls[0].startswith("https://api.z.ai/"):
+        raise ValueError("z.ai documented Anthropic base URLs missing or ambiguous")
+    anthropic = anthropic_urls[0]
     urls = []
     for token in parser.parse(quick_start):
         if token.type == "fence" and token.info.startswith("python") and "base_url" in token.content:
@@ -74,7 +108,7 @@ def extract(claude, overview, quick_start):
             for node in ast.walk(ast.parse(token.content)):
                 if isinstance(node, ast.keyword) and node.arg == "base_url":
                     urls.append(ast.literal_eval(node.value).rstrip("/"))
-    if len(set(urls)) != 1 or not anthropic.startswith("https://api.z.ai/"):
+    if len(set(urls)) != 1:
         raise ValueError("z.ai documented API base URLs missing or ambiguous")
     return {
         "apis": {

@@ -51,11 +51,15 @@ ai.cliproxyapi.instances.main.credentials.zai-api-personal = {
 `apiKey.apis` defaults to Anthropic-compatible and OpenAI chat-compatible
 endpoints, and `apiKey.models` to z.ai's published general API chat catalog.
 Override either endpoint's `base-url`, set an API to `null`, or replace `models`
-with the subset your upstream credential permits. The standard chat API uses
-pay-as-you-go billing; a Coding Plan has its own endpoint and model entitlement.
-The defaults describe the general API, not a guarantee of account access. Client
-keys still choose this credential and its API through `routes`; selecting
-`api = "chat"` lets CPA translate a Codex CLI Responses request to chat.
+with the subset your upstream credential permits. Check the key classification
+and entitlements in z.ai's
+[API Key Management Guide](https://docs.z.ai/devpack/notice/api-key-management):
+new Standard/Coding Plan keys determine billing across supported endpoints;
+older Compatible keys retain endpoint-dependent rules. Standard usage can
+consume account balance or usage bundles. The defaults describe the general API,
+not a guarantee of account access. Client keys still choose this credential and
+its API through `routes`; selecting `api = "chat"` lets CPA translate a Codex
+CLI Responses request to chat.
 
 The measured Claude Code tier mapping and timeout remain extraction data. The
 existing per-client-key model list carries model IDs for picker rows, without
