@@ -1,0 +1,18 @@
+[
+  (let x = 11; y = x; in y)
+  (let x = 11; in let x = 13; y = x; in y)
+  (rec { x = 17; y = x; }.y)
+  (let x = 19; in { x = 23; y = x; }.y)
+  ((x: x) 29)
+  ((x: y: x + y) 31 37)
+  (({ x ? y, y ? 41 }: x) {})
+  ((args@{ x ? 43 }: [ args x ]) {})
+  (({ x ? args.y, ... }@args: x) { y = 47; })
+  (let x = 53; in rec { x = 59; y = x; }.y)
+  (let a.b = 61; in a.b)
+  (({ x }: x.y) { x.y = 67; })
+  (let builtins = 71; in builtins)
+  (let import = x: x; in import 73)
+  (let x = 79; y = 83; in x)
+  (let f = x: g x; g = x: x; in f 89)
+]

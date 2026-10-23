@@ -1,0 +1,11 @@
+| negative.nix | 2 | 25 | b | 0 |
+| negative.nix | 3 | 25 | d | 0 |
+| negative.nix | 4 | 31 | b | 0 |
+| negative.nix | 5 | 33 | c | 0 |
+| valid.nix | 5 | 39 | c | 0 |
+| valid.nix | 6 | 44 | c | 0 |
+| valid.nix | 14 | 43 | c | 0 |
+| valid.nix | 16 | 52 | c | 0 |
+| valid.nix | 17 | 46 | c | 0 |
+| valid.nix | 18 | 57 | c | 0 |
+| valid.nix | 22 | 48 | c | 0 |
