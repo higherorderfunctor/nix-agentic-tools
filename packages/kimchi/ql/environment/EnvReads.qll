@@ -145,7 +145,7 @@ ForOfStmt iterationOf(VarAccess v) { result.getAnIterationVariable() = v.getVari
 
 /** Values of literal arrays, aliases, and their for-of bindings, including tuple columns. */
 Expr iterationValue(Expr e) {
-  not e instanceof VarAccess and result = e
+  not e instanceof VarAccess and not e instanceof SeqExpr and not e instanceof ParExpr and result = e
   or
   result = iterationValue(declaratorOf(e).getInit())
   or
@@ -166,6 +166,10 @@ Expr iterationValue(Expr e) {
       )
     )
   )
+  or
+  result = iterationValue(e.(SeqExpr).getLastOperand())
+  or
+  result = iterationValue(e.(ParExpr).getExpression())
 }
 
 /** Expressions whose definitions determine a literal iteration's values. */
@@ -175,6 +179,14 @@ Expr iterationDependency(Expr e) {
   result = iterationOf(e).getIterationDomain()
   or
   result = e.(ArrayExpr).getAnElement()
+  or
+  result = e.(SeqExpr).getLastOperand()
+  or
+  result = e.(ParExpr).getExpression()
+  or
+  result = e.(IndexExpr).getBase()
+  or
+  result = e.(LogicalOrExpr).getAnOperand()
 }
 
 /** Dense literal arrays with no spread have statically fixed element positions. */
@@ -183,8 +195,8 @@ predicate fixedArray(ArrayExpr array) {
 }
 
 /** An iteration source is closed only when every traversed loop has literal array values. */
-predicate closedIteration(VarAccess key) {
-  exists(iterationOf(key)) and
+predicate closedIteration(Expr key) {
+  exists(VarAccess v | v = iterationDependency*(key) | exists(iterationOf(v))) and
   exists(iterationValue(key)) and
   forall(VarAccess v | v = iterationDependency*(key) and exists(iterationOf(v)) |
     exists(iterationValue(iterationOf(v).getIterationDomain())) and
@@ -205,12 +217,17 @@ predicate closedIteration(VarAccess key) {
       )
     )
   ) and
-  // Every use of an array binding must be one of the definitions or loop
-  // domains followed above. Other uses could mutate it or let it escape.
+  // Array uses are traced definitions, loop domains or literal column reads,
+  // including std-env's returned tuple metadata. Other uses can let it escape.
   forall(VarAccess v, VarAccess use |
     v = iterationDependency*(key) and exists(iterationValue(v).(ArrayExpr)) and
     use.getVariable() = v.getVariable() |
     use = iterationDependency*(key)
+    or
+    exists(IndexExpr access |
+      access.getBase() = use and exists(access.getIndex().(NumberLiteral).getIntValue()) and
+      not access = any(Assignment assignment).getLhs()
+    )
   ) and
   // Scalar binding reassignment also makes the set of values open.
   not exists(VarAccess v, VarAccess use |
@@ -246,6 +263,47 @@ predicate resolvedIteration(VarAccess key) {
   closedIteration(key) and
   forall(Expr value | value = iterationValue(key) |
     exists(constValue(value)) or stringGuarded(key) and functionValue(value)
+  )
+}
+
+/** A tuple column or fallback, evaluated for one row of the literal table. */
+string tupleKey(Expr key, Variable binding, ArrayExpr tuple) {
+  // Restrict the recursive relation to actual read keys and their table rows.
+  exists(DataFlow::PropRead read, Expr root, VarAccess use |
+    read = envReadSource().getAPropertyRead() and root = read.getPropertyNameExpr() and
+    key.getParent*() = root and use = iterationDependency*(root) and
+    exists(iterationOf(use)) and use.getVariable() = binding and tuple = iterationValue(use)
+  ) and
+  (
+    result = constValue(key)
+    or
+    exists(IndexExpr access |
+      access = key and access.getBase().(VarAccess).getVariable() = binding and
+      exists(int column | column = access.getIndex().(NumberLiteral).getIntValue() |
+        result = constValue(tuple.getElement(column))
+        or
+        not exists(tuple.getElement(column)) and result = ""
+      )
+    )
+    or
+    exists(LogicalOrExpr choice | choice = key |
+      result = tupleKey(choice.getLeftOperand(), binding, tuple) and result != ""
+      or
+      tupleKey(choice.getLeftOperand(), binding, tuple) = "" and
+      result = tupleKey(choice.getRightOperand(), binding, tuple)
+    )
+  )
+}
+
+/** std-env indexes a for-of tuple with `row[1] || row[0]`. */
+string indexedIterationName(Expr key) {
+  exists(VarAccess binding |
+    binding = iterationDependency*(key) and exists(iterationOf(binding)) and
+    closedIteration(key) and
+    forall(Expr row | row = iterationValue(binding) |
+      exists(tupleKey(key, binding.getVariable(), row.(ArrayExpr)))
+    ) and
+    result = tupleKey(key, binding.getVariable(), iterationValue(binding))
   )
 }
 
@@ -305,6 +363,8 @@ string readName(DataFlow::PropRead r) {
     or
     not exists(r.getPropertyName()) and result = constValue(r.getPropertyNameExpr())
     or
+    result = indexedIterationName(r.getPropertyNameExpr())
+    or
     resolvedIteration(r.getPropertyNameExpr()) and
     result = constValue(iterationValue(r.getPropertyNameExpr()))
   )
@@ -321,19 +381,9 @@ predicate envRead(DataFlow::Node site, string name) {
   )
 }
 
-/** Shapes the TypeScript extractor that produced the committed fact did not read, kept out so the two agree byte for byte: `const { X } = process.env` (a property pattern), `import { env } from "node:process"` (a named import of env). */
-predicate tsIncompatible(DataFlow::Node site) {
-  exists(DataFlow::PropRead r | r = site |
-    not r.asExpr() instanceof PropAccess
-    or
-    r.getBase().getALocalSource().getAstNode() instanceof ImportSpecifier
-  )
-}
-
-/** A read the fact lists: a named read, in a shape the fact's producer reads. */
+/** A named environment read in a carried runtime. */
 predicate listedRead(DataFlow::Node site, string name) {
   envRead(site, name) and
-  not tsIncompatible(site) and
   exists(runtimeOf(site.getFile()))
 }
 
@@ -361,28 +411,5 @@ predicate readFailure(string message, string where_) {
     not appNameShape(d, _) and
     message = "pi APP_NAME is no longer piConfig.name || \"<default>\"" and
     where_ = d.getFile().getRelativePath() + ":" + d.getLocation().getStartLine()
-  )
-  or
-  // `const { env: { X } } = process` anywhere: the environment taken apart by
-  // a nested pattern, whose names the fact's producer could not list
-  exists(DataFlow::PropRead r, PropertyPattern pp |
-    r = envObject() and
-    pp = r.getAstNode() and
-    not pp.getValuePattern() instanceof VarDecl and
-    exists(runtimeOf(pp.getFile())) and
-    message = "takes process.env apart by destructuring, so the names it reads cannot be listed" and
-    where_ = pp.getFile().getRelativePath() + ":" + pp.getLocation().getStartLine()
-  )
-  or
-  // `.env` on a local binding named process: CodeQL would correctly ignore
-  // it, but the fact's producer cannot tell what it holds and fails
-  exists(PropAccess pa, VarAccess v |
-    pa.getPropertyName() = "env" and
-    v = pa.getBase() and
-    v.getName() = "process" and
-    not pa = envObject().asExpr() and
-    exists(runtimeOf(pa.getFile())) and
-    message = "takes env from a local binding named process, which cannot be identified as the environment" and
-    where_ = pa.getFile().getRelativePath() + ":" + pa.getLocation().getStartLine()
   )
 }

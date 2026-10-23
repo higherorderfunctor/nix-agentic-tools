@@ -1,10 +1,8 @@
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-23 (commit d5f613ea) — `environment.variables`
-> includes the carried pi-mcp-adapter; the reads fixture verifies its patched
-> project-trust variable is attributed to the pi runtime; literal iteration
-> tables resolve environment names, named reads follow known helper parameters,
-> and launch analysis follows known helpers and rest copies.
+> **Last verified:** 2026-10-22 — environment facts include destructuring and
+> named process imports; std-env CI-provider tuple keys resolve per row with
+> their `||` fallback.
 
 `extracted.json`'s `environment` surface is one fact the CodeQL database
 produces. `extract/environment.nix` runs the two-query pack
@@ -57,26 +55,44 @@ which would accept `if (c) { await 0 } else { process.env.X = "1" }`.
 Either query emits `fail` rows instead of guessing; the transform fails on any,
 naming each, and the `extracted` build fails with it.
 
-### Two shapes kept out on purpose
+### Reads beyond the former TypeScript extractor
 
-The extractor at 1.17.2 did not read `const { X } = process.env` or a read
-through `import { env } from "node:process"`. The database finds both: seven
-names, `GIT_*` from `src/extensions/work-attribution/scope.ts`, `HOMEDRIVE` and
-`HOMEPATH`, and `AWS_EXECUTION_ENV` from the bundled AWS SDK. `tsIncompatible`
-in `EnvReads.qll` drops them so the committed fact is unchanged. They are real
-reads; deleting that predicate adds them, and `rules.nix` reconciles unannotated
-non-secret names without a row. That is a data decision, not a bug fix.
+Destructuring `process.env` and a named `env` import from `node:process` count
+as real reads. Kimchi 1.19.1's `src/extensions/work-attribution/scope.ts:35`
+reads `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` through
+an object pattern; the carried pi bundle also reads `HOMEDRIVE`, `HOMEPATH` and
+`AWS_EXECUTION_ENV`. The former `tsIncompatible` filter dropped those names
+solely to match the deleted TypeScript extractor. No compatibility filter
+remains.
 
-The database reads `process["env"]`, `(process.env as T).X`,
-`require("process").env` and aliases of `process` itself. It does not read the
-namespace binding of `import d, * as ns from "node:process"`. It reads pi-ai,
-pi-tui and pi-agent-core whole.
+The bundled std-env CI-provider table indexes a for-of tuple with
+`row[1] || row[0]`. The query resolves literal numeric tuple columns and
+evaluates the fallback separately for each row: `CIRCLECI` is the key for
+`["CIRCLE", "CIRCLECI"]`, while `["GITHUB_ACTIONS"]` uses `GITHUB_ACTIONS`. A
+comma expression around the literal table contributes its final operand. Other
+literal-index uses of a tuple, including its returned metadata, do not make the
+table escape.
+
+Measured on the pinned Kimchi 1.19.1 database after this resolution, 63 computed
+environment-read sites still have no resolved name and emit no refusal. These
+include dynamic helper parameters and SDK constants initialized by assignments.
+This measurement counts sites, including separate reads of a name also resolved
+elsewhere. No general computed-key refusal is added.
+
+The database also recognizes bracket `env`, asserted environments,
+`require("process").env`, and process aliases. Refusals tied only to the former
+extractor's inability to distinguish a shadowed `process` or read nested
+destructuring have been removed. The overwrite analysis still establishes writes
+only through `process.env` spelled out.
 
 ### Annotations
 
 `extract/annotations.json`'s `environment` and `environmentIgnored` are not an
 input of the transform. `rules.nix` applies them downstream, against
-`environment.variables.<name>`, as it always did.
+`environment.variables.<name>`, as it always did. Ordinary new names need no
+annotation. The std-env table's `INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN` matches
+the shared secret classifier, so its required `controls` row records that
+std-env tests its presence for CI-provider detection.
 
 ### The guard
 
@@ -86,20 +102,20 @@ and extracted by `kimchi-codeql-create-database <dir> <tree>`. `reads` holds
 seven read shapes absent from the pinned tree in one Kimchi file: bracket `env`,
 an asserted environment, a process alias, bracket `globalThis.process`, literal
 `require("process")`, a namespace process import, and `+=`; concatenation
-remains unevaluated. The pinned release's byte identity covers its actual read
-shapes, including pi's APP_NAME and bundled imports. The reads fixture also
-holds the adapter's `KIMCHI_MANAGES_MCP_PROJECT_TRUST` read outside the
-@earendil-works scope, attributed to `pi`. `overwrites` holds the launch-order
-mix; `fail-shapes`, `fail-order` and `fail-sources` retain every refusal
-assertion, with helper declarations merged into their case. The reads fixture
-also checks a nested literal table with string/function alternatives and an
-aliased environment passed through two helpers, alongside unrelated objects that
-must add no names; fail-shapes refuses unknown and mixed elements, missing tuple
-columns, mutation, spreads, sparse arrays and rest copies passed to unknown
-functions. The overwrites fixture checks reads through helper forwarding,
-aliases and rest copies before writes. A new shape goes into one of these trees,
-not into a mutant of the real source: a real-tree mutant costs a database build
-each.
+remains unevaluated. The release query covers its actual read shapes, including
+pi's APP_NAME and bundled imports. The reads fixture also holds the adapter's
+`KIMCHI_MANAGES_MCP_PROJECT_TRUST` read outside the @earendil-works scope,
+attributed to `pi`. `overwrites` holds the launch-order mix; `fail-shapes`,
+`fail-order` and `fail-sources` exercise the retained refusal classes, with
+helper declarations merged into their case. The reads fixture also checks a
+nested literal table with string/function alternatives and an aliased
+environment passed through two helpers, alongside unrelated objects that must
+add no names; fail-shapes refuses an unresolved iteration key and rest copies
+passed to unknown functions. The positive reads fixture copies std-env's 58-row
+provider table and checks its 58 environment keys. The overwrites fixture checks
+reads through helper forwarding, aliases and rest copies before writes. A new
+shape goes into one of these trees, not into a mutant of the real source: a
+real-tree mutant costs a database build each.
 
 ### Running it without Nix
 

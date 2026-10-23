@@ -1,5 +1,47 @@
 {
   "variables": {
+    "CIRCLECI": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "GITHUB_ACTIONS": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "GIT_COMMON_DIR": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "GIT_DIR": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "GIT_INDEX_FILE": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "GIT_WORK_TREE": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
     "ITERATED_ONE": {
       "consumerOverridable": true,
       "readBy": [

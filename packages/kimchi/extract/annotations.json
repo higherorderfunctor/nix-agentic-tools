@@ -40,6 +40,9 @@
     "GLAB_TOKEN": {
       "controls": "GitLab token for pull-request status lookups on the GITLAB_HOST/GL_HOST/GITLAB_URI host (default gitlab.com) when GITLAB_TOKEN is unset; preferred over GITLAB_ACCESS_TOKEN, config.json gitTokens and glab credentials"
     },
+    "INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN": {
+      "controls": "std-env checks whether the Azure Static Web Apps API token is present to identify its CI provider; this detection does not use the value as a credential"
+    },
     "JS_DEBUG_PATH": {
       "controls": "js-debug DAP server script used by the debugger extension"
     },
