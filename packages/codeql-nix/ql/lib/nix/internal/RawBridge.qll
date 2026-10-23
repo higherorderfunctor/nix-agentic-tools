@@ -1,3 +1,4 @@
+// cspell:ignore Attrpath forall
 /** Authenticated source anchors; generated class names stay behind this module. */
 import codeql.Locations
 private import nix.internal.generated.Ast as Generated
@@ -106,8 +107,73 @@ module RawBridge {
       or this.getCandidateCount() > 1 and result = "ambiguous"
     }
 
+    @nix_ast_node getUniqueNode() {
+      this.getCandidateCount() = 1 and result = this.getACandidate()
+    }
+
     Location getRawLocation() {
       this.getCandidateCount() = 1 and result = this.getACandidate().getLocation()
     }
   }
+
+  /** Raw syntax with exactly one authenticated source association. */
+  class Node extends @nix_ast_node {
+    Node() { exists(Anchor anchor | this = anchor.getUniqueNode()) }
+    string toString() { result = this.getKind() }
+    string getKind() { result = this.(Generated::Nix::AstNode).getAPrimaryQlClass() }
+    Location getLocation() {
+      exists(Anchor anchor | this = anchor.getUniqueNode() | result = anchor.getRawLocation())
+    }
+    string getRelativePath() {
+      exists(Anchor anchor | this = anchor.getUniqueNode() | result = anchor.getRelativePath())
+    }
+  }
+
+  private Generated::Nix::AstNode expression(Generated::Nix::AstNode node) {
+    node instanceof Generated::Nix::VariableExpression and
+    result = node.(Generated::Nix::VariableExpression).getName()
+    or not node instanceof Generated::Nix::VariableExpression and result = node
+  }
+
+  private string literal(Generated::Nix::AstNode node) {
+    result = node.(Generated::Nix::Identifier).getValue()
+    or
+    exists(Generated::Nix::StringExpression text |
+      text = node and
+      forall(Generated::Nix::AstNode child | child = text.getAChild() |
+        child instanceof Generated::Nix::StringFragment
+      ) and
+      result = concat(int i, Generated::Nix::StringFragment fragment |
+        fragment = text.getChild(i) | fragment.getValue(), "" order by i)
+    )
+  }
+
+  predicate literalBinding(Node node) {
+    exists(Anchor value |
+      value.getUniqueNode() = node.(Generated::Nix::Binding).getExpression() and
+      value.getStartByte() < value.getEndByte()
+    ) and
+    exists(Generated::Nix::Attrpath path |
+      path = node.(Generated::Nix::Binding).getAttrpath() and
+      exists(path.getAnAttr()) and
+      forall(Generated::Nix::AstNode segment | segment = path.getAnAttr() |
+        exists(literal(segment)))
+    )
+  }
+  string segment(Node node, int index) {
+    literalBinding(node) and
+    result = literal(node.(Generated::Nix::Binding).getAttrpath().getAttr(index))
+  }
+  Node value(Node node) { result = expression(node.(Generated::Nix::Binding).getExpression()) }
+  string name(Node node) { result = node.(Generated::Nix::Identifier).getValue() }
+  Node body(Node node) {
+    result = expression(node.(Generated::Nix::FunctionExpression).getBody())
+    or result = expression(node.(Generated::Nix::LetExpression).getBody())
+  }
+  Node parameter(Node node) { result = node.(Generated::Nix::FunctionExpression).getUniversal() }
+  Node binding(Node node) {
+    result = node.(Generated::Nix::AttrsetExpression).getChild().getABinding()
+    or result = node.(Generated::Nix::LetExpression).getChild().getABinding()
+  }
+
 }

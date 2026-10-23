@@ -48,7 +48,7 @@
       strictShell = import ../../../lib/strict-shell-application.nix pkgs;
     in
       pkgs.runCommand "codeql-nix-anchors" {
-        nativeBuildInputs = [engine pkgs.python3 pkgs.util-linux];
+        nativeBuildInputs = [engine pkgs.nix pkgs.python3 pkgs.util-linux];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -89,6 +89,24 @@
         NIXQL_TEST_DUPLICATE_RAW=1 flock "$TMPDIR/codeql.lock" codeql test run \
           --search-path=${installed}:${packaging.library} \
           --threads=4 --ram=6000 tests/ambiguous
+        cp -r ${owner}/ql/test/step0 tests/
+        chmod -R u+w tests/step0
+        for template in tests/step0/*.nix.in; do
+          cp "$template" "''${template%.in}"
+        done
+        flock "$TMPDIR/codeql.lock" codeql test run \
+          --search-path=${installed}:${packaging.library} \
+          --threads=4 --ram=6000 tests/step0
+        python3 ${owner}/checks/fixtures/step0/reconstruct.py \
+          tests/step0/Ast.expected tests/step0/forms.nix
+        mkdir tests/ast-ambiguous
+        cp tests/step0/*.nix tests/ast-ambiguous/
+        cp tests/step0/Candidates.ql tests/ast-ambiguous/Ambiguous.ql
+        cp tests/step0/Ambiguous.expected tests/ast-ambiguous/
+        NIXQL_TEST_DUPLICATE_RAW=1 flock "$TMPDIR/codeql.lock" codeql test run \
+          --search-path=${installed}:${packaging.library} \
+          --threads=4 --ram=6000 tests/ast-ambiguous
+        echo 'A0 Ast, Candidates, Ambiguous and table reconstruction with body/segment mutants passed'
         mkdir "$out"
         printf 'S2 driver suite; 28 inherited raw/diagnostic preflight cases; Quality, Coordinates, Empty, Features and Ambiguous QL tests; exact archived bytes passed\n' > "$out/evidence"
       '';
