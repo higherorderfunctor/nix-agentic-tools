@@ -130,9 +130,10 @@ divergence. All 25 handwritten relations are independent of generated AST entity
 types, so later syntax and evaluation producers can contribute to one database
 without manufacturing raw kit labels.
 
-F0 proves the prerequisites in [integration-gate.md](integration-gate.md). F1
-defines the shared ABI; later producers and QL consumers preserve it rather than
-infer semantics from missing rows.
+The [integration gate](integration-gate.md) records production lookup, text and
+coordinate proofs after bootstrap retirement. F1 defines the shared ABI; later
+producers and QL consumers preserve it rather than infer semantics from missing
+rows.
 
 ## Durable identity
 
@@ -197,8 +198,9 @@ A later producer must reject an oversized file/projection transaction and report
 `text-field-too-large` using representable enclosing identities. It must publish
 no clipped facts or successful observations from that transaction. F1 validates
 facts supplied to it; it does not implement atomic publication, automatically
-manufacture failure rows or preflight the generated syntax writer. F0 documents
-the pinned kit's separate preflight evidence.
+manufacture failure rows or preflight the generated syntax writer. The
+[integration gate](integration-gate.md) documents production syntax preflight
+and its owner-check evidence.
 
 ## Scope, admission and completeness
 
@@ -442,7 +444,8 @@ value serializer.
 > **Last verified:** 2026-10-23 — P2a installs one coordinator for database
 > creation and query tests, preserving authenticated partial work; Q0 adds a
 > separate installed lifecycle check; M3 adds the generated model fingerprint to
-> the existing run identity.
+> the existing run identity. R0 adds production raw-coordinate and
+> missing-product lookup controls.
 
 ## Terms
 
@@ -562,14 +565,17 @@ phase and bounded diagnostic. Absent metadata never establishes success.
 
 `checks.nix` imports `checks/installed.nix`, exposing the Linux-only
 `checks.x86_64-linux.codeql-nix-installed`. Its explicit nonempty runner
-executes six installed-path tests and four separate review-regression tests
-before writing `$out/evidence`. The installed tests cover offline language/pack
-lookup, identical schema bytes, database creation with syntax and real module
-metadata under one run, an explicit target file, query-test extraction,
-discovery refusals and stale input pins. Direct Nix evaluation independently
-checks priority changing from `100` to `50`. Q0 adds the query-level comparison
-and failure cases in its separate [Step 0 check](step0-query.md); that check
-must pass before claiming the installed Q0 acceptance contract.
+executes six installed-path tests, two R0 integration tests and four separate
+review-regression tests before writing `$out/evidence`. The installed tests
+cover offline language/pack lookup, identical schema bytes, database creation
+with syntax and real module metadata under one run, an explicit target file,
+query-test extraction, discovery refusals and stale input pins. Direct Nix
+evaluation independently checks priority changing from `100` to `50`. Q0 adds
+the query-level comparison and failure cases in its separate
+[Step 0 check](step0-query.md); that check must pass before claiming the
+installed Q0 acceptance contract. The [integration gate](integration-gate.md)
+describes R0's independent raw-coordinate rows and missing extractor/library
+controls.
 
 The regression suite uses deterministic pin controls for a transient dependency
 change during discovery, preservation of completed requests beside failed
@@ -593,144 +599,110 @@ and its registry entry when these obligations change.
 
 # Nix language integration gate
 
-> **Last verified:** 2026-10-23 — F0 shares pinned kit inputs and the canonical
-> location adapter with S1; its bootstrap proof remains test-only.
+> **Last verified:** 2026-10-23 — R0 retires F0 after installed Step 0
+> acceptance, promotes its pinned Rust syntax writer into production and
+> preserves lookup, exact-text and coordinate proofs in owner checks.
 
-## Purpose and boundary
+## Purpose and fit
 
-F0 is a disposable fixture in `checks/fixtures/bootstrap/`, exposed by
-`checks/bootstrap.nix` as `checks.x86_64-linux.codeql-nix-bootstrap`. It settles
-whether the shared tree-sitter kit, a handwritten relation and the existing
-CodeQL engine can form one queryable database. It is not the production
-extractor or an implementation of Nix evaluation: its second producer reads
-`targets.tsv`.
+The integration gate now exercises the
+[installed extractor](installed-extractor.md) and its separate library,
+replacing the disposable syntax/TSV join. Installed
+[Step 0 acceptance](step0-query.md) supplies real module metadata and
+independent Nix oracles. F0's bootstrap relation, TSV producer, packs, duplicate
+queries and check are removed; production checks own their surviving proof
+obligations.
 
-The check uses `packages/codeql`'s existing JavaScript engine bundle. It builds
-Rust with `rustPlatform.buildRustPackage` and vendored dependencies, generates
-the syntax schema and `Ast.qll`, then appends `nx_bootstrap_targets`. No second
-engine factory, discovery framework or configuration wrapper is introduced. The
-result contains only an evidence file; the engine and trial databases remain
-build inputs and temporary artifacts.
+`lib/kit.nix` builds the shared Rust implementation from `src/`.
+`src/Cargo.toml` and `src/Cargo.lock` preserve the existing vendoring identity;
+the Cargo package name `nixql-bootstrap` remains solely to keep pinned
+dependency resolution unchanged. The library crate is `nixql_syntax`, called by
+`src/anchors.rs` and the raw writer. `src/generate.rs` uses the same inputs for
+schema generation. Production assembly continues through `lib/packaging.nix` and
+the existing CodeQL owner's engine customization.
 
 ## Compatibility pins
 
-- CodeQL CLI: `2.27.3`, checked against the existing owner's `sources.json` and
-  asserted at execution.
+- CodeQL CLI: `2.27.3`, asserted by production packaging.
 - Grammar: `nix-community/tree-sitter-nix` commit
   `38a15330421d20f3a4d380759f9634d39ba3d8ec`; crate `0.3.0`.
-- Kit: `github/codeql` tag `codeql-cli/v2.27.3`, commit
-  `a1575b98a8cc19bcfa7bb6cb41be688cb3dae65c`; crate `codeql-extractor` `0.2.0`.
-- Parser runtime: `tree-sitter` `0.26.13` in the committed `Cargo.lock`.
+- Kit: `github/codeql` commit `a1575b98a8cc19bcfa7bb6cb41be688cb3dae65c` from
+  `codeql-cli/v2.27.3`; crate `codeql-extractor` `0.2.0`.
+- Parser runtime: `tree-sitter` `0.26.13` in the committed Cargo lock.
 
-The fixed-output source hashes and Cargo vendor hash live in `lib/kit.nix`,
-shared by F0 and S1; the bootstrap fixture's `Cargo.lock` fixes transitive
-dependencies. Changing the CLI requires a kit compatibility audit rather than
-silently keeping this proof valid.
+Fixed-output source hashes and the Cargo vendor hash remain in `lib/kit.nix`. An
+engine, grammar or kit update requires re-auditing compatibility and all
+selected string-emission paths; moving the source does not refresh that audit
+automatically.
 
-## Installed interfaces and join
+## Production lookup and coordinate proof
 
-The installed extractor has `codeql-extractor.yml`, `nix.dbscheme`, its
-same-basename statistics file and `tools/{autobuild,index-files,qltest}.sh`. The
-descriptor selects `column_kind: utf8`, build mode `none` and the legacy test
-hook. The separate library has its own manifest, generated schema, statistics,
-generated syntax and handwritten QL.
+`checks/installed.nix` registers `checks/fixtures/installed/test_r0.py` through
+the existing nonempty domain runner in
+`checks.x86_64-linux.codeql-nix-installed`. The coordinate case creates a
+database through the installed coordinator and queries the production generated
+syntax and location adapter. Its six independent expected rows preserve
+identical `41` tokens in distinct files, a recovered parse and exact
+integer-token spans.
 
-`index-files.sh` receives a file-list path and emits syntax TRAP plus source
-archives. The test hook indexes `.nix` files in the current fixture directory,
-then separately launches the target producer into the same TRAP directory. Both
-producers publish completed files by rename before the CLI imports the database.
+The coordinate fixture contains CRLF, a tab and UTF-8 `é` before `73`. One-based
+inclusive byte columns place `73` at line 2, columns 27–28 and `97` at line 3,
+columns 10–11. The recovered file retains `41` at line 3, columns 10–11. These
+rows establish those spans and file identities; the separate
+[anchor check](source-identity.md) retains empty-span, ambiguity and broader
+source-association coverage.
 
-`ql/lib/codeql/Locations.qll` is the canonical `overlay[local]` language
-interface, copied into F0 by `checks/bootstrap.nix` and shared with S1: `File`
-exposes absolute and source-root-relative paths; `Location` exposes its file and
-start/end line/column. The generated syntax imports that interface.
-Same-basename statistics belong beside the library schema as well as beside the
-extractor schema.
+The negative lookup case invokes the bare engine with an empty search path. It
+requires extractor resolution to fail with a diagnostic naming `nix`, and query
+compilation to fail naming the missing production library
+`nix-agentic-tools/nix-all`. The customized command supplies these products
+itself, so it cannot serve as the missing-product control. These checks prove
+local missing-product refusal, without claiming a general network fallback
+policy.
 
-`Bootstrap.qll` joins the handwritten target to a generated token through the
-shared `@file` identity and exact token text, then returns its location. It does
-not reconstruct a raw node label from coordinates. `Raw.ql` requires six
-integer-token rows, including identical `41` text in two different files and a
-recovered parse. `Join.ql` requires only `selected/41` and `coordinate/73`;
-wrong-text, absent-file and unselected-file controls cannot join.
+## Exact text before kit clipping
 
-## Coordinates: measured and remaining
+`src/syntax.rs` checks converted token text and normalized file/folder paths
+before the pinned kit can clip tuple strings beyond 1,048,576 UTF-8 bytes. The
+selected extraction path emits source text through token values; grammar product
+tables carry labels and integers. Diagnostic messages also contain paths, so a
+bound over the selected kit templates and grammar/schema names first establishes
+whether direct extraction is safe.
 
-The six golden rows verify one-based, inclusive byte columns for integer tokens.
-`coordinates.nix.in` becomes CRLF during the check; its second line contains a
-tab and UTF-8 `é` before `73`. That token occupies columns 27–28, rather than
-decoded-character columns 26–27. The third-line `97` occupies 10–11. A missing
-right-hand side in `recovered.nix.in` still permits the subsequent `41` at line
-3, columns 10–11.
+When the bound cannot guarantee safety, the writer performs private extraction
+at a short virtual path, decodes its diagnostic strings and restores the actual
+diagnostic path before checking their byte lengths. Only then may real
+extraction publish TRAP by rename. This applies to ordinary and recovered trees.
+Alternate kit extraction paths and emission changes require a fresh audit.
 
-These assertions establish this file/location interface and these token spans.
-They do not establish a unique syntax anchor, Nix evaluator position conversion
-or complete coordinate coverage. S2 still needs the companion anchor bridge and
-tests for empty spans, identical/ambiguous spans, multiline end-at-line-start
-conversion, comments, interpolation and paths. The pinned kit's
-`extractor/mod.rs:955–1022` handles empty ranges and ends at a new line; that
-source behavior is not independently asserted by these golden rows.
+`src/preflight.rs` exposes `nixql-preflight` over this same production function.
+It reads source bytes and a synthetic logical path without creating or archiving
+a file at that path. Oversized arguments return exit 2, bounded
+`text-field-too-large` stderr and no completed TRAP.
 
-## Exact text before the kit can clip it
+`checks.x86_64-linux.codeql-nix-anchors` runs
+`checks/fixtures/installed/test_preflight.py` against that production binary.
+Its 28 cases cover six token/path categories at 1,048,575, 1,048,576 and
+1,048,577 bytes, plus ten parse-error and ordinary-tree diagnostic cases.
+Accepted strings must round-trip through decoded real TRAP tuples; oversized
+fields must refuse publication. The retired TSV producer's three derived-path
+cases disappear with that producer; production evaluation retains its own
+transaction validation.
 
-The pinned kit's `trap.rs:177–187` clips a string argument beyond 1,048,576
-UTF-8 bytes before doubling quotes. `src/lib.rs` therefore checks converted
-token text and normalized file/folder paths before real extraction. The selected
-simple extraction path emits source text only through token values; grammar
-product tables carry labels and integers. Empty-file and diagnostic-tag strings
-are constants. The unused alternate parser path, YAML, database metadata and
-overlays are outside this fixture's producers; the CLI supplies the source-root
-prefix.
+## Changing this gate
 
-Raw TRAP diagnostic messages also contain the source path. A source-derived
-bound covers the selected tuple diagnostic templates and grammar/schema names.
-The kit's location-correction internal errors go only to its logger, not to the
-`diagnostics` tuple. When that bound cannot guarantee a safe message, extraction
-first applies path preflight and checks the diagnostic bound for a short virtual
-path before invoking the kit privately at that path. This guarantees the dry
-output has not been clipped. It then checks the actual decoded diagnostic
-arguments with the real path restored before real extraction. This applies to
-ordinary trees as well as recovered trees. The second producer checks each TSV
-field and every normalized derived absolute file/folder path before publishing
-its transaction.
+Keep integration proofs in the existing installed and anchor checks, with
+expected rows independent of extractor output. Change shared Rust code under
+`src/`, preserving the Cargo lock and vendoring pins unless intentionally
+updating dependencies. Update consumers through `lib/kit.nix` and
+`lib/packaging.nix`; keep one production writer and the existing packs.
 
-The shared `syntax` function serves the installed extractor and
-`bootstrap-probe`. The latter reads a synthetic absolute path from a UTF-8 file
-and never creates or archives a file at that path. In probe mode, oversized
-syntax fields return exit 2 with bounded `text-field-too-large` stderr and no
-completed TRAP; oversized evaluation paths fail without publishing even an
-earlier valid target.
-
-`test-preflight.py` checks 18 token/path cases: attribute keys, quote-heavy
-comments, virtual file paths, source path fragments, ASCII strings and multibyte
-strings, each at 1,048,575, 1,048,576 and 1,048,577 bytes. Accepted arguments
-must round-trip through decoded real TRAP tuples; oversized arguments must
-visibly refuse. Ten more cases cover parse-error and ordinary-tree type-mismatch
-diagnostics, including safe near-limit messages and oversized messages/paths.
-Three evaluation cases independently size the derived absolute path at the same
-boundaries, with every input TSV field individually within the limit. These 31
-cases support the audited emission paths; they do not replace re-auditing the
-selected schema and kit when either pin changes.
-
-## Offline verification and maintenance
-
-The Nix sandbox successfully resolves the installed extractor and runs
-`codeql test run` against the separate local library: `Raw.ql` and `Join.ql`
-both pass. With an empty search path, extractor lookup fails with no extractor
-named `nix`; query compilation fails because `nix-agentic-tools/nix-bootstrap`
-is not local and no dependency lock is present. The check requires both
-failures. It does not attempt a dependency download or prove a general network
-fallback policy. Rust compilation uses the Nix-vendored Cargo inputs offline;
-initial admission of missing inputs is a separate operation.
-
-Change this gate through its owner-local check and fixture, keeping
-hand-authored expected rows independent of extractor output. Run the bootstrap
-check after changing pins, schema assembly, installed entry points, path
-handling or preflight. Re-audit all tuple-string emission sites, diagnostic
-templates and UTF-8 conversion before claiming the changed kit preserves exact
-text. Keep production schema/identity, adapters, anchors and evaluation status
-machinery in their later slices; this fixture proves only their integration
-prerequisites.
+After changing pins, selected kit emission paths, preflight or location
+handling, re-audit exact text and run the affected installed, anchor,
+raw-inventory and Step 0 owner checks through CI. Format changed files with
+`treefmt` and regenerate scoped instruction projections after changing these
+architecture notes. A passing raw coordinate query alone does not replace
+installed module-query or authenticated source evidence.
 
 <!-- Fragment: packages/codeql-nix/docs/metadata-library.md -->
 
@@ -817,7 +789,8 @@ refusals; format edits and regenerate through `generate:all`.
 > registry and checks entry point. S1 adds combined-schema generation and
 > standalone raw location tests; E1 adds the isolated metadata projection check;
 > S2 registers source and anchor acceptance; Q0 adds the installed query check;
-> M3 adds generated builtin model acceptance.
+> M3 adds generated builtin model acceptance; R0 replaces disposable bootstrap
+> evidence with production lookup, coordinate and preflight checks.
 
 ## Purpose and fit
 
@@ -834,12 +807,14 @@ into this document.
 
 ## Checks and nonempty evidence
 
-The bootstrap proves its disposable syntax/target integration fixture. The ABI
-check validates the handwritten schema and independent typed golden TRAP. The
-contracts check runs explicitly selected Python suites, including the
-manifest/observation boundary, runner behavior and ABI/health sentinels. These
-fixture checks do not establish production extraction. Read their imports and
-commands through `checks.nix` for the current check and suite inventory.
+The installed check proves production lookup and raw coordinates alongside the
+installed lifecycle; the anchor check exercises shared production text
+preflight. The ABI check validates the handwritten schema and independent typed
+golden TRAP. The contracts check runs explicitly selected Python suites,
+including the manifest/observation boundary, runner behavior and ABI/health
+sentinels. The ABI and contracts fixtures alone do not establish production
+extraction. Read their imports and commands through `checks.nix` for the current
+check and suite inventory.
 
 A check must fail when a selected suite fails and publish its evidence only
 after every selected suite passes. Register transport tests in an owner check so
@@ -894,15 +869,16 @@ file/location traversal. S2 adds the syntax driver and private
 `codeql-nix-anchors` through F3 driver contracts, raw preflight and QL/archive
 assertions. The installed extractor, public metadata API and
 [Step 0 queries](step0-query.md) now have separate owner checks; Q0 acceptance
-requires its installed lifecycle check to pass. The bootstrap's separate fixture
-packs remain disposable evidence.
+requires its installed lifecycle check to pass. R0 removes the disposable
+bootstrap packs and check; [integration-gate.md](integration-gate.md) records
+their production replacement.
 
 ## Adding a domain
 
 Reserve a distinct `ql/test/<domain>/` for each domain's source, `.ql` and
 reviewed `.expected` fixtures, and a distinct `checks/fixtures/<domain>/` when
 Python or other contract fixtures are needed. Keep those paths disjoint from the
-existing `abi`, `bootstrap`, `contracts`, `eval-isolation` and `protocol`
+existing `abi`, `contracts`, `eval-isolation`, `installed` and `protocol`
 fixtures. A directory reservation does not implement a later capability or make
 it a passing test.
 
@@ -916,11 +892,10 @@ output from the implementation.
 
 Keep shared pack manifests and the ABI coordinated instead of letting domains
 rewrite them independently. Change F1 first when relation semantics change;
-update F2's independent transport fixtures when that boundary changes.
-Production extractor installation needs its own checks before this note can
-claim that capability. Format changed files with `treefmt`, run the affected
-checks through CI and update this note when ownership or entry-point obligations
-change.
+update F2's independent transport fixtures when that boundary changes. Keep
+production extraction acceptance in its installed and Step 0 checks. Format
+changed files with `treefmt`, run the affected checks through CI and update this
+note when ownership or entry-point obligations change.
 
 <!-- Fragment: packages/codeql-nix/docs/source-identity.md -->
 
@@ -928,6 +903,7 @@ change.
 
 > **Last verified:** 2026-10-23 — S2 authenticates archived source bytes and
 > transports the companion anchor index through the existing kit metadata table.
+> R0 moves its shared syntax writer and preflight into production `src/`.
 
 `lib/packaging.nix` exposes
 `syntaxDriver/bin/nixql-syntax MANIFEST_JSON OUTPUT_DIRECTORY`. The manifest
@@ -995,11 +971,12 @@ trusted producer evidence; fabricating a file admission record is outside the QL
 consumer's archive-authentication boundary. The driver tests establish that
 boundary from actual bytes.
 
-The raw writer reuses F0's audited token, path and diagnostic preflight before
-calling the kit; added metadata and handwritten facts receive their own
-preflight. An oversized field refuses the entire file transaction with
-`text-field-too-large`, without raw nodes or anchors from that file. Re-audit
-the raw writer when the grammar, kit or selected emission paths change.
+The raw writer calls the shared production token, path and diagnostic preflight
+in `src/syntax.rs` before calling the kit; added metadata and handwritten facts
+receive their own preflight. An oversized field refuses the entire file
+transaction with `text-field-too-large`, without raw nodes or anchors from that
+file. Re-audit the raw writer when the grammar, kit or selected emission paths
+change.
 
 `checks.x86_64-linux.codeql-nix-anchors` registers the driver suite through F3,
 inherited raw preflight cases and independent QL/archive acceptance. Keep
@@ -1031,8 +1008,8 @@ requests. `schema/observation-protocol.json` carries the resulting F1 facts.
 Both use JSON Schema Draft 2020-12. These contracts let future producers and QL
 consumers share fixtures before evaluation exists. The
 [database contract](database-contract.md) remains authoritative for relation
-semantics; the [integration gate](integration-gate.md) establishes only the
-earlier bootstrap prerequisites.
+semantics; the [integration gate](integration-gate.md) records the production
+replacement for the retired bootstrap proof.
 
 ## Explicit targets
 

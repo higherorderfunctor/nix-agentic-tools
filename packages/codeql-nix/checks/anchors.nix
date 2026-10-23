@@ -56,19 +56,8 @@
         export NIXQL_SYNTAX_DRIVER=${packaging.syntaxDriver}/bin/nixql-syntax
         python3 ${owner}/checks/run-domain-tests.py \
           ${owner}/checks/fixtures/anchors/test_driver.py
-        python3 - ${owner}/checks/fixtures/bootstrap/test-preflight.py \
-          ${packaging.syntaxFixture}/bin/bootstrap-probe "$TMPDIR/preflight" <<'PY'
-        import importlib.util
-        from pathlib import Path
-        import sys
-
-        spec = importlib.util.spec_from_file_location("preflight", sys.argv[1])
-        preflight = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(preflight)
-        scratch = Path(sys.argv[3])
-        scratch.mkdir()
-        preflight.syntax_cases(Path(sys.argv[2]), scratch)
-        PY
+        python3 ${owner}/checks/fixtures/installed/test_preflight.py \
+          --probe ${packaging.syntax}/bin/nixql-preflight --scratch "$TMPDIR/preflight"
         export HOME="$TMPDIR/home"
         mkdir -p "$HOME" tests/ambiguous
         cp ${owner}/ql/test/qlpack.yml tests/

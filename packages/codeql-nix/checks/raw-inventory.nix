@@ -19,7 +19,7 @@
       index = strictShell {
         name = "index-files.sh";
         text = ''
-          exec ${packaging.syntaxFixture}/bin/bootstrap syntax "$1"
+          exec ${packaging.syntax}/bin/nixql-index-raw "$1"
         '';
       };
       installed = pkgs.runCommand "nixql-raw-inventory-extractor" {} ''
