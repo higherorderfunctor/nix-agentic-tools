@@ -489,6 +489,7 @@ sysprompt
 taplo
 tengu
 testapp
+testproj
 tidwall
 timespec
 tmpfs
