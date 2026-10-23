@@ -7,7 +7,7 @@ applyTo: "packages/kimchi/checks/fixtures/codeql-environment/**,packages/kimchi/
 
 ## Kimchi CodeQL database
 
-> **Last verified:** 2026-10-22 — dependency patches use
+> **Last verified:** 2026-10-23 — dependency patches use
 > `git apply --ignore-space-change`; the database carries pi-mcp-adapter's root
 > TypeScript and dist, including its patched project-trust environment read.
 
@@ -58,18 +58,13 @@ kimchi/node_modules/pi-mcp-adapter/{package.json,dist/,<root JS/TS modules>}
   postinstall rewrite: `scripts/patch-pi-ai-oauth.js` replaces pi-ai's
   `dist/utils/oauth-page.js`, and `extract.mjs` does not apply it.
 - **pi's four packages sit under `kimchi/node_modules`**, where Kimchi's imports
-  resolve them. Measured on 1.17.2: 506 of Kimchi's 508 `@earendil-works/*`
-  import declarations resolve to a pi module in the database. The TypeScript
-  extractor scanned only pi-coding-agent's dist, saw the other three as
-  `index.d.ts` types and read patch `+` lines; the database holds all four
-  `dist/` trees, patched. On 1.17.0 the environment fact is the same either way.
+  resolve them. The database holds all four `dist/` trees, patched.
 - **Kimchi's own `node_modules` (its pnpm store) is not in it.** That is every
   third-party dependency except pi-mcp-adapter and what pi's bundle inlines
   (below). The adapter exports root TypeScript modules, so its root JS/TS files
   are carried with its dist. Its docs, examples and skills are not code the
   runtime loads and are not copied.
-- **Source maps are dropped:** 13.5 MB on pi 0.85.1 that the extractor never
-  reads.
+- **Source maps are dropped:** the extractor never reads them.
 - **The extractor skips `node_modules` by default.**
   `LGTM_INDEX_FILTERS=include:kimchi/node_modules` brings pi back in: without it
   the database held none of pi's files. The value is a directory: an include
@@ -79,11 +74,10 @@ kimchi/node_modules/pi-mcp-adapter/{package.json,dist/,<root JS/TS modules>}
 
 `pi-coding-agent/dist/bundle/` is pi's minified standalone CLI, which Kimchi
 never loads. It is carried for the environment reads of pi's bundled third-party
-dependencies (AWS SDK, Google auth, undici, ws) at pi's build-time versions: 48
-of the 237 variables in the 1.17.2 environment fact are named in its chunks and
-nowhere else in pi, Kimchi or its patches. It also holds unpatched copies of
-patched pi-ai, pi-tui and pi-coding-agent code, so a query scopes or labels its
-`dist/bundle` rows. The extractor skips a file it judges minified: without
+dependencies (AWS SDK, Google auth, undici, ws) at pi's build-time versions. It
+also holds unpatched copies of patched pi-ai, pi-tui and pi-coding-agent code,
+so a query scopes or labels its `dist/bundle` rows. The extractor skips a file
+it judges minified: without
 `CODEQL_EXTRACTOR_JAVASCRIPT_ALLOW_MINIFIED_FILES=true` it skipped 46 files: 42
 chunks, the three `dist/bundle` entry files (`cli.js`, `index.js`,
 `rpc-entry.js`) and the vendored `marked.min.js`. The flag grows the 2.27.3
@@ -169,7 +163,7 @@ the database reads its npm dist, which is built from that repository.
 
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-22 (commit d5f613ea) — `environment.variables`
+> **Last verified:** 2026-10-23 (commit d5f613ea) — `environment.variables`
 > includes the carried pi-mcp-adapter; the reads fixture verifies its patched
 > project-trust variable is attributed to the pi runtime; literal iteration
 > tables resolve environment names, named reads follow known helper parameters,
@@ -236,14 +230,10 @@ in `EnvReads.qll` drops them so the committed fact is unchanged. They are real
 reads; deleting that predicate adds them, and `rules.nix` reconciles unannotated
 non-secret names without a row. That is a data decision, not a bug fix.
 
-The database also reads four shapes the extractor missed that 1.17.2 does not
-use (`process["env"]`, `(process.env as T).X`, `require("process").env` and an
-alias of `process` itself), misses one it read (the namespace binding of
-`import d, * as ns from "node:process"`, a statement 1.17.2 does not contain:
-measured when biome merged two fixture imports into one), and reads pi-ai,
-pi-tui and pi-agent-core whole where the extractor saw their `.d.ts` and
-Kimchi's patch lines. On 1.17.2 both make no difference; a later release may
-gain a correct name from them.
+The database reads `process["env"]`, `(process.env as T).X`,
+`require("process").env` and aliases of `process` itself. It does not read the
+namespace binding of `import d, * as ns from "node:process"`. It reads pi-ai,
+pi-tui and pi-agent-core whole.
 
 ### Annotations
 

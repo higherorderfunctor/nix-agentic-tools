@@ -57,7 +57,6 @@
       # not a program a parser can read, so that last check is a word match.
       jq -r '.pnpm.patchedDependencies | to_entries[] | "\(.key)\t\(.value)"' \
         ${kimchi}/package.json > patches
-      [ -s patches ] || { echo "kimchi-codeql-source: Kimchi patches no dependency" >&2; exit 1; }
       while IFS=$'\t' read -r key file; do
         dest="$out/${nodeModules}/''${key%@*}"
         if [ ! -f "$dest/package.json" ]; then

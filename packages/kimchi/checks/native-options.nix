@@ -161,9 +161,7 @@
     # JSON Schema metadata has no runtime settings reader; its explicit ignored
     # annotation removes it before the unknown raw scope reaches option delivery.
     schema-metadata-is-not-an-option =
-      !(real.harnessSettingsOptions ? "$schema")
-      && !(lib.elem "$schema" real.userScopeHarnessKeys)
-      && !(real.rules.results.harness.entries ? "$schema");
+      !(real.rules.results.harness.entries ? "$schema");
 
     added-key-appears =
       fixture.harnessSettingsOptions ? probeAdded

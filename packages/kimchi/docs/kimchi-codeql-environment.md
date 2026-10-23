@@ -1,6 +1,6 @@
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-22 (commit d5f613ea) — `environment.variables`
+> **Last verified:** 2026-10-23 (commit d5f613ea) — `environment.variables`
 > includes the carried pi-mcp-adapter; the reads fixture verifies its patched
 > project-trust variable is attributed to the pi runtime; literal iteration
 > tables resolve environment names, named reads follow known helper parameters,
@@ -67,14 +67,10 @@ in `EnvReads.qll` drops them so the committed fact is unchanged. They are real
 reads; deleting that predicate adds them, and `rules.nix` reconciles unannotated
 non-secret names without a row. That is a data decision, not a bug fix.
 
-The database also reads four shapes the extractor missed that 1.17.2 does not
-use (`process["env"]`, `(process.env as T).X`, `require("process").env` and an
-alias of `process` itself), misses one it read (the namespace binding of
-`import d, * as ns from "node:process"`, a statement 1.17.2 does not contain:
-measured when biome merged two fixture imports into one), and reads pi-ai,
-pi-tui and pi-agent-core whole where the extractor saw their `.d.ts` and
-Kimchi's patch lines. On 1.17.2 both make no difference; a later release may
-gain a correct name from them.
+The database reads `process["env"]`, `(process.env as T).X`,
+`require("process").env` and aliases of `process` itself. It does not read the
+namespace binding of `import d, * as ns from "node:process"`. It reads pi-ai,
+pi-tui and pi-agent-core whole.
 
 ### Annotations
 

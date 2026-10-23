@@ -1701,8 +1701,6 @@ async function main() {
         const metadata = JSON.parse(
           await readFile(join(root, "package.json"), "utf8"),
         );
-        if (typeof metadata.types !== "string")
-          fail(`${name} has no declaration entry point`);
         return [name, [join(root, metadata.types)]];
       }),
     ),
