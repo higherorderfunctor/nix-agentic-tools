@@ -3,7 +3,8 @@
 # The auth package proves the predicate on every selection path; the access
 # package proves query-parameter keys through the real middleware and that every
 # config load refuses entries sharing a client key; the watcher package proves a
-# hot reload that meets them keeps the running config. The auth
+# hot reload that meets them keeps the running config. HTTP handler tests cover
+# routed catalogs and pagination, with fake registry credentials only. The auth
 # package also gets key_allowlist_loops_test.go, which fails when a range over
 # Manager.auths has no predicate call in its own body; other shapes still need
 # review on a CPA bump.
@@ -29,6 +30,7 @@ in {
     }) {
       "internal/access/config_access" = {};
       "internal/watcher" = {};
+      "sdk/api/handlers" = {};
       "sdk/cliproxy/auth"."key_allowlist_loops_test.go" = ./key_allowlist_loops_test.go;
     });
 }

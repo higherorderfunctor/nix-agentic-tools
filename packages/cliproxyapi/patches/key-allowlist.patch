@@ -476,6 +476,287 @@ index 0000000..c6771d7
 +	w.reloadConfigIfChanged()
 +	assertState(2, "key-c")
 +}
+diff --git a/sdk/api/handlers/handlers_interceptors.go b/sdk/api/handlers/handlers_interceptors.go
+index b7aa2a5..670d553 100644
+--- a/sdk/api/handlers/handlers_interceptors.go
++++ b/sdk/api/handlers/handlers_interceptors.go
+@@ -691,6 +691,17 @@ func (h *BaseAPIHandler) WriteModelListResponse(c *gin.Context, sourceFormat str
+ 		}
+ 	}
+ 
++	if allows := h.AuthManager.ModelListingFilter(c.Request.Context()); allows != nil {
++		filtered, errFilter := filterModelListing(body, sourceFormat, allows)
++		if errFilter != nil {
++			lifecycle.complete(pluginapi.RequestCompletionFailed, http.StatusBadGateway, errFilter)
++			c.JSON(http.StatusBadGateway, gin.H{"error": gin.H{"message": "Invalid model catalog", "type": "api_error"}})
++			return
++		}
++		body = filtered
++		c.Writer.Header().Del("Content-Length")
++	}
++
+ 	if modelID, detail := c.Get(ModelDetailIDContextKey); detail {
+ 		c.Writer.Header().Del("Content-Length")
+ 		var catalog struct {
+diff --git a/sdk/api/handlers/key_allowlist_models.go b/sdk/api/handlers/key_allowlist_models.go
+new file mode 100644
+index 0000000..7ba133d
+--- /dev/null
++++ b/sdk/api/handlers/key_allowlist_models.go
+@@ -0,0 +1,62 @@
++package handlers
++
++import (
++	"encoding/json"
++	"fmt"
++
++	claudemodels "github.com/router-for-me/CLIProxyAPI/v8/internal/client/claude/models"
++)
++
++// filterModelListing keeps wire IDs and metadata intact, checking the route ID
++// selection receives. Claude's listing cloaking is reversed by its request handler.
++// Unknown envelopes or missing/non-string IDs must fail closed under an allowlist.
++func filterModelListing(body []byte, sourceFormat string, allows func(string) bool) ([]byte, error) {
++	var catalog map[string]json.RawMessage
++	if err := json.Unmarshal(body, &catalog); err != nil {
++		return nil, err
++	}
++	field, idField := "data", "id"
++	_, data := catalog["data"]
++	_, models := catalog["models"]
++	if data == models {
++		return nil, fmt.Errorf("expected one model array")
++	}
++	if models {
++		field, idField = "models", "slug"
++	}
++	var entries []json.RawMessage
++	if err := json.Unmarshal(catalog[field], &entries); err != nil {
++		return nil, err
++	}
++	kept := make([]json.RawMessage, 0, len(entries))
++	first, last := "", ""
++	for _, entry := range entries {
++		var model map[string]json.RawMessage
++		if err := json.Unmarshal(entry, &model); err != nil {
++			return nil, err
++		}
++		var id string
++		if err := json.Unmarshal(model[idField], &id); err != nil || id == "" {
++			return nil, fmt.Errorf("missing model %s", idField)
++		}
++		routeID := id
++		if sourceFormat == "claude" {
++			routeID = claudemodels.ResolveClaudeModelIDPrefix(id)
++		}
++		if !allows(routeID) {
++			continue
++		}
++		kept = append(kept, entry)
++		if first == "" {
++			first = id
++		}
++		last = id
++	}
++	catalog[field], _ = json.Marshal(kept)
++	for field, id := range map[string]string{"first_id": first, "last_id": last} {
++		if _, exists := catalog[field]; exists {
++			catalog[field], _ = json.Marshal(id)
++		}
++	}
++	return json.Marshal(catalog)
++}
+diff --git a/sdk/api/handlers/key_allowlist_models_test.go b/sdk/api/handlers/key_allowlist_models_test.go
+new file mode 100644
+index 0000000..cc91257
+--- /dev/null
++++ b/sdk/api/handlers/key_allowlist_models_test.go
+@@ -0,0 +1,185 @@
++package handlers_test
++
++import (
++	"context"
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"reflect"
++	"sort"
++	"testing"
++
++	"github.com/gin-gonic/gin"
++	claudemodels "github.com/router-for-me/CLIProxyAPI/v8/internal/client/claude/models"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/claude"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/openai"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
++)
++
++const listingCodex = "gpt-listing-codex"
++const listingClaude = "claude-opus-5-5"
++
++func listingFixture(t *testing.T) (*auth.Manager, *handlers.BaseAPIHandler, []config.KeyAllowlist) {
++	t.Helper()
++	manager := auth.NewManager(nil, &auth.RoundRobinSelector{}, nil)
++	rules := []config.KeyAllowlist{
++		{APIKey: "personal-codex", Credentials: []config.KeyAllowlistCredential{
++			{Provider: "codex", Kind: "oauth"},
++			{Provider: "claude", Kind: "apikey", BaseURLs: []string{"https://api.anthropic.com"}},
++		}},
++		{APIKey: "codex-only", Credentials: []config.KeyAllowlistCredential{{Provider: "codex", Kind: "oauth"}}},
++		{APIKey: "personal-claude", Credentials: []config.KeyAllowlistCredential{{Provider: "claude", Kind: "oauth"}}},
++	}
++	manager.SetConfig(&config.Config{SDKConfig: config.SDKConfig{KeyAllowlist: rules}})
++	fixtures := []struct {
++		credential *auth.Auth
++		model      string
++	}{
++		{&auth.Auth{ID: "listing-codex", Provider: "codex", Attributes: map[string]string{auth.AttributeAuthKind: auth.AuthKindOAuth}}, listingCodex},
++		{&auth.Auth{ID: "listing-api", Provider: "claude", Attributes: map[string]string{auth.AttributeAPIKey: "fake", auth.AttributeSource: "config:claude[0]", "base_url": "https://api.anthropic.com", "priority": "-1"}}, listingClaude},
++		{&auth.Auth{ID: "listing-oauth", Provider: "claude", Attributes: map[string]string{auth.AttributeAuthKind: auth.AuthKindOAuth}}, "claude-listing-oauth"},
++		{&auth.Auth{ID: "listing-other-url", Provider: "claude", Attributes: map[string]string{auth.AttributeAPIKey: "fake", auth.AttributeSource: "config:claude[1]", "base_url": "https://other.invalid"}}, "claude-listing-other-url"},
++		{&auth.Auth{ID: "listing-gemini", Provider: "gemini", Attributes: map[string]string{auth.AttributeAuthKind: auth.AuthKindOAuth}}, "gemini-listing-other"},
++		{&auth.Auth{ID: "listing-disabled", Provider: "codex", Disabled: true, Attributes: map[string]string{auth.AttributeAuthKind: auth.AuthKindOAuth}}, "gpt-listing-disabled"},
++	}
++	reg := registry.GetGlobalRegistry()
++	for _, fixture := range fixtures {
++		credential := fixture.credential
++		reg.RegisterClient(credential.ID, credential.Provider, []*registry.ModelInfo{{ID: fixture.model, DisplayName: fixture.model}})
++		t.Cleanup(func() { reg.UnregisterClient(credential.ID) })
++		if _, err := manager.Register(context.Background(), credential); err != nil {
++			t.Fatal(err)
++		}
++	}
++	return manager, handlers.NewBaseAPIHandlers(&config.SDKConfig{}, manager), rules
++}
++
++func listingRequest(t *testing.T, base *handlers.BaseAPIHandler, endpoint, key string) map[string]any {
++	t.Helper()
++	writer := httptest.NewRecorder()
++	ctx, _ := gin.CreateTestContext(writer)
++	ctx.Request = httptest.NewRequest(http.MethodGet, endpoint, nil).WithContext(usage.WithAPIKey(context.Background(), key))
++	if endpoint == "/claude/models" {
++		claude.NewClaudeCodeAPIHandler(base).ClaudeModels(ctx)
++	} else {
++		openai.NewOpenAIAPIHandler(base).OpenAIModels(ctx)
++	}
++	if writer.Code != http.StatusOK {
++		t.Fatalf("%s status=%d body=%s", endpoint, writer.Code, writer.Body.String())
++	}
++	var catalog map[string]any
++	if err := json.Unmarshal(writer.Body.Bytes(), &catalog); err != nil {
++		t.Fatal(err)
++	}
++	return catalog
++}
++
++func listingIDs(catalog map[string]any) []string {
++	field, id := "data", "id"
++	if _, ok := catalog["models"]; ok {
++		field, id = "models", "slug"
++	}
++	ids := []string{}
++	for _, entry := range catalog[field].([]any) {
++		ids = append(ids, entry.(map[string]any)[id].(string))
++	}
++	sort.Strings(ids)
++	return ids
++}
++
++func TestKeyAllowlistModelCatalogs(t *testing.T) {
++	manager, base, rules := listingFixture(t)
++	endpoints := []string{"/v1/models?client_version=0.134.0", "/v1/models", "/claude/models"}
++	for _, endpoint := range endpoints {
++		t.Run(endpoint, func(t *testing.T) {
++			for _, tc := range []struct {
++				key  string
++				want []string
++			}{
++				{"personal-codex", []string{listingClaude, listingCodex}},
++				{"personal-claude", []string{"claude-listing-oauth"}},
++				{"codex-only", []string{listingCodex}},
++				{"", []string{}}, {"unknown-key", []string{}},
++			} {
++				t.Run(tc.key, func(t *testing.T) {
++					catalog := listingRequest(t, base, endpoint, tc.key)
++					want := append([]string{}, tc.want...)
++					if endpoint == "/claude/models" {
++						for i, id := range want {
++							want[i] = claudemodels.EnsureClaudeModelIDPrefix(id)
++						}
++						entries := catalog["data"].([]any)
++						first, last := "", ""
++						if len(entries) > 0 {
++							first = entries[0].(map[string]any)["id"].(string)
++							last = entries[len(entries)-1].(map[string]any)["id"].(string)
++						}
++						if catalog["first_id"] != first || catalog["last_id"] != last {
++							t.Fatalf("pagination leaks removed IDs: %v", catalog)
++						}
++					}
++					sort.Strings(want)
++					if got := listingIDs(catalog); !reflect.DeepEqual(got, want) {
++						t.Fatalf("key %q IDs=%v want=%v", tc.key, got, want)
++					}
++				})
++			}
++		})
++	}
++	// Hot reload takes effect through the Manager's same atomic config pointer;
++	// the HTTP handler is deliberately not rebuilt.
++	manager.SetConfig(&config.Config{SDKConfig: config.SDKConfig{KeyAllowlist: rules[1:]}})
++	if got := listingIDs(listingRequest(t, base, endpoints[0], "personal-codex")); len(got) != 0 {
++		t.Errorf("revoked key retains models: %v", got)
++	}
++	manager.SetConfig(&config.Config{SDKConfig: config.SDKConfig{KeyAllowlist: []config.KeyAllowlist{{APIKey: "personal-codex", Credentials: rules[1].Credentials}}}})
++	if got := listingIDs(listingRequest(t, base, endpoints[0], "personal-codex")); !reflect.DeepEqual(got, []string{listingCodex}) {
++		t.Errorf("narrowed key models=%v", got)
++	}
++	manager.SetConfig(&config.Config{SDKConfig: config.SDKConfig{KeyAllowlist: rules}})
++	if got := listingIDs(listingRequest(t, base, endpoints[0], "personal-codex")); !reflect.DeepEqual(got, []string{listingClaude, listingCodex}) {
++		t.Errorf("widened key models=%v", got)
++	}
++	for _, entries := range [][]config.KeyAllowlist{nil, {}} {
++		manager.SetConfig(&config.Config{SDKConfig: config.SDKConfig{KeyAllowlist: entries}})
++		for _, endpoint := range endpoints {
++			// Native listing includes all six registry models, including the disabled
++			// credential's model: no allowlist must leave that native behavior intact.
++			if got := listingIDs(listingRequest(t, base, endpoint, "")); len(got) != 6 {
++				t.Fatalf("unrestricted %s models=%v", endpoint, got)
++			}
++		}
++	}
++}
++
++func TestKeyAllowlistUnknownCatalogFailsClosed(t *testing.T) {
++	_, base, _ := listingFixture(t)
++	for _, body := range []string{`{"items":[{"id":"gpt-listing-codex"}]}`, `{"models":[{"id":"gpt-listing-codex"}]}`, `{"data":[{}]}`, `{"data":[],"models":[]}`} {
++		t.Run(body, func(t *testing.T) {
++			writer := httptest.NewRecorder()
++			ctx, _ := gin.CreateTestContext(writer)
++			ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil).WithContext(usage.WithAPIKey(context.Background(), "personal-codex"))
++			base.WriteModelListResponse(ctx, "openai", []byte(body))
++			if writer.Code != http.StatusBadGateway {
++				t.Fatalf("unknown catalog passed: status=%d body=%s", writer.Code, writer.Body.String())
++			}
++		})
++	}
++}
++
++func TestKeyAllowlistUnconfiguredCatalogIsUnchanged(t *testing.T) {
++	manager, base, _ := listingFixture(t)
++	manager.SetConfig(&config.Config{})
++	body := `{"unknown_envelope":[{"id":"native-model"}]}`
++	writer := httptest.NewRecorder()
++	ctx, _ := gin.CreateTestContext(writer)
++	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
++	base.WriteModelListResponse(ctx, "openai", []byte(body))
++	if writer.Code != http.StatusOK || writer.Body.String() != body {
++		t.Fatalf("unconfigured catalog changed: status=%d body=%s", writer.Code, writer.Body.String())
++	}
++}
 diff --git a/sdk/cliproxy/auth/conductor.go b/sdk/cliproxy/auth/conductor.go
 index 3baead9..94d51f5 100644
 --- a/sdk/cliproxy/auth/conductor.go
@@ -498,7 +779,7 @@ index 3baead9..94d51f5 100644
  }
  
 diff --git a/sdk/cliproxy/auth/conductor_cooldown.go b/sdk/cliproxy/auth/conductor_cooldown.go
-index e17090c..ec39215 100644
+index 2bed6ce..a856619 100644
 --- a/sdk/cliproxy/auth/conductor_cooldown.go
 +++ b/sdk/cliproxy/auth/conductor_cooldown.go
 @@ -161,6 +161,7 @@ func (m *Manager) setConfigSnapshotLocked(cfg *internalconfig.Config) bool {
@@ -657,10 +938,10 @@ index d942147..0c7f9f0 100644
  	wait, found := manager.closestCooldownWaitWithAttempted([]string{"openai-compatibility"}, model, 0, eligibility, "", 5, http.StatusTooManyRequests, attempted)
 diff --git a/sdk/cliproxy/auth/key_allowlist.go b/sdk/cliproxy/auth/key_allowlist.go
 new file mode 100644
-index 0000000..6acea1e
+index 0000000..9387f80
 --- /dev/null
 +++ b/sdk/cliproxy/auth/key_allowlist.go
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,131 @@
 +package auth
 +
 +import (
@@ -670,6 +951,8 @@ index 0000000..6acea1e
 +	"sync/atomic"
 +
 +	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
++	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 +	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
 +	log "github.com/sirupsen/logrus"
 +)
@@ -760,6 +1043,35 @@ index 0000000..6acea1e
 +func accountListed(accounts []string, auth *Auth) bool {
 +	_, email := auth.AccountInfo()
 +	return email != "" && slices.ContainsFunc(accounts, func(account string) bool { return strings.TrimSpace(account) == email })
++}
++
++// ModelListingFilter captures selection's eligibility rules for a catalog request.
++// A nil filter preserves native listings when no allowlist is configured. Model
++// IDs are public route IDs, including aliases, just as in credential selection.
++func (m *Manager) ModelListingFilter(ctx context.Context) func(string) bool {
++	if m == nil {
++		return nil
++	}
++	eligibility := authSelectionEligibilityForRequest(ctx, cliproxyexecutor.Options{}, &m.keyAllowlist)
++	if eligibility.keyAllowlist == nil {
++		return nil
++	}
++	return func(model string) bool {
++		if strings.TrimSpace(model) == "" {
++			return false
++		}
++		m.mu.RLock()
++		defer m.mu.RUnlock()
++		for _, auth := range m.auths {
++			if auth == nil || auth.Disabled || auth.Status == StatusDisabled || !eligibility.allows(auth) {
++				continue
++			}
++			if m.authSupportsRouteModel(registry.GetGlobalRegistry(), auth, model) {
++				return true
++			}
++		}
++		return false
++	}
 +}
 diff --git a/sdk/cliproxy/auth/key_allowlist_test.go b/sdk/cliproxy/auth/key_allowlist_test.go
 new file mode 100644

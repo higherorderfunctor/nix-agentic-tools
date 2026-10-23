@@ -1,11 +1,11 @@
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-10-23 — the patch applies to CPA 8.0.40 with no fuzz;
+> **Last verified:** 2026-10-23 — the patch applies to CPA 8.0.41 with no fuzz;
 > loading rejects duplicate client keys and startup exits 1 on refusal. Hot
 > reload can briefly serve a retired config credential under newly widened
 > rules, so rotation that also widens access requires a restart or an `ids`
 > rule. Named instance client routes derive secret OAuth account rules or API
-> base-URL rules.
+> base-URL rules. Model catalogs use selection's eligibility predicate.
 
 ## Why selection lives in CPA
 
@@ -21,9 +21,9 @@ CPA's access middleware records the authenticated key for headers, `?key=`, and
 `?auth_token=`. The patch uses that recorded principal in candidate selection.
 Missing or unknown keys select nothing while the allowlist is set; an absent or
 empty allowlist leaves native selection unchanged. A configured key whose
-eligible credentials are unavailable gets `auth_not_found`. Model listings still
-expose all models. With no upstream credential serving a requested model, CPA
-returns `400 unknown provider for model <name>`. Log in with
+eligible credentials are unavailable gets `auth_not_found`. With no upstream
+credential serving a requested model, CPA returns
+`400 unknown provider for model <name>`. Log in with
 `cliproxyapi -config <file with auth-dir> -claude-login -no-browser` (or
 `-codex-login`), or through Manager Plus; CPA watches login files and new
 matching accounts become eligible when registered, without restarting the
@@ -67,6 +67,44 @@ attribute; the instance module refuses that combination. A listed URL absent
 from the configured groups is accepted but selects nothing. Key-less OpenAI
 compatibility groups have no matching kind and cannot be reached while the
 allowlist is set.
+
+## Model listings
+
+Codex's `GET /v1/models?client_version=...` already builds its picker from all
+registered providers through CPA's OpenAI model registry projection. It includes
+registered Claude API-key models, and Responses requests can select the Claude
+executor, which translates them to Anthropic Messages. No extra catalog or
+invented model metadata is needed.
+
+With an allowlist, the shared model-response writer retains a model only when an
+enabled credential passes selection's `authSelectionEligibility.allows` and its
+existing route-model support check. The rules come from the Manager's current
+atomic snapshot, including on hot reload. A missing or unknown client key gets
+an empty catalog. An absent or empty allowlist preserves the native response,
+byte for byte when it was already serialized.
+
+For example, a `personal-codex` route granting Codex OAuth plus Anthropic
+API-key credentials at `https://api.anthropic.com` lists both their registered
+models, including a configured `claude-opus-5-5`. A Codex-only key does not list
+that Claude API-key model. A `personal-claude` route granting only Claude OAuth
+lists only those OAuth models. A credential's scheduling priority, including
+`-1`, does not remove its models from this eligibility check.
+
+The hook handles Codex `models[].slug` and OpenAI/Anthropic `data[].id`;
+Anthropic `first_id` and `last_id` are recomputed after filtering. It preserves
+wire IDs and existing builder metadata. Eligibility checks public route IDs,
+including aliases, using selection's own route-model lookup. For Anthropic's
+cloaked IDs, the hook applies the same existing inverse mapping as the request
+handler before checking eligibility, and returns the original wire ID. Unknown
+envelopes and missing or non-string IDs fail closed with HTTP 502. Gemini's
+`models[].name` entries are deferred and receive that refusal when an allowlist
+is configured. An empty or null `data` or `models` array safely becomes an empty
+catalog without inspecting entry IDs.
+
+This changes listing visibility only; credential selection remains the
+enforcement boundary. The unused Caddy front gate was removed because it was
+never wired in and cannot supply CPA's shared credential-eligibility decision.
+The shared Caddy helpers remain in use by the MCP proxy.
 
 ## Duplicate keys and load paths
 
