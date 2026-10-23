@@ -78,6 +78,11 @@ public publication:
   asset and fails unless each answers 404
   (`dev/scripts/assert-not-published.sh`).
 
+The tripwire excludes the local MIT `codeql-query` client from its `codeql-*`
+roots: it has no separate source asset. Engines and the extractor retain their
+two-derivations-per-root check, and the separate Kimchi database and
+customized-engine checks remain required.
+
 The private Hestia check cache in this repository's GitHub Actions cache MAY
 hold an engine: a check builds one, and that is CI-internal storage, not
 distribution. Only public publication is forbidden. The public `packages` output
