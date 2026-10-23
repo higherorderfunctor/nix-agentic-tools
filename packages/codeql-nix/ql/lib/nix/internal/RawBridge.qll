@@ -191,12 +191,18 @@ module RawBridge {
   }
   private Generated::Nix::BindingSet bindingSet(Node node) {
     result = node.(Generated::Nix::AttrsetExpression).getChild()
+    or result = node.(Generated::Nix::LetAttrsetExpression).getChild()
     or result = node.(Generated::Nix::LetExpression).getChild()
     or result = node.(Generated::Nix::RecAttrsetExpression).getChild()
   }
   Node container(Node node) { node = bindingSet(result).getABinding() }
+  private Generated::Nix::StringExpression literalKey(Generated::Nix::AstNode node) {
+    result = node.(Generated::Nix::Interpolation).getExpression() and exists(literal(result))
+  }
   Node pathToken(Node node, int index) {
-    result = node.(Generated::Nix::Binding).getAttrpath().getAttr(index)
+    exists(Generated::Nix::AstNode segment |
+      segment = node.(Generated::Nix::Binding).getAttrpath().getAttr(index) and
+      (result = literalKey(segment) or not exists(literalKey(segment)) and result = segment))
   }
   string binderName(Node binder) { result = literal(binder) }
   Node unparenthesized(Node node) {

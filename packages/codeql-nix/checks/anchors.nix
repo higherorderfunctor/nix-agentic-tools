@@ -110,7 +110,7 @@
           --search-path=${installed}:${packaging.library} \
           --threads=4 --ram=6000 tests/ast-ambiguous
         echo 'A0 Ast, Candidates, Ambiguous and table reconstruction with body/segment mutants passed'
-        for suite in lexical lexical-dynamic lexical-extension lexical-merged lexical-siblings; do
+        for suite in lexical lexical-dynamic lexical-extension lexical-gap lexical-merged lexical-siblings; do
           mkdir "tests/$suite"
           cp ${owner}/ql/test/"$suite"/* "tests/$suite/"
           chmod -R u+w "tests/$suite"

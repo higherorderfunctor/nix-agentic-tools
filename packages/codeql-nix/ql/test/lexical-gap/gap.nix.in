@@ -1,0 +1,14 @@
+[
+  (let a=rec{probe=b;}; a.${"b"}=7; in a.probe)
+  (let b=99; a=rec{inner=rec{b=3;probe=b;};}; a.${"other"}={}; in a.inner.probe)
+  (let b=99; k="inner"; a.${k}={}; a=rec{inner=rec{b=3;probe=b;};}; in a.inner.probe)
+  (let b=99; k="inner"; a=rec{inner=rec{b=3;probe=b;};}; a.${k}={}; in a.inner.probe)
+  (let b=99; suffix="ner"; a.${"in${suffix}"}={}; a=rec{inner=rec{b=3;probe=b;};}; in a.inner.probe)
+  (let b=99; a.${"in" + "ner"}={}; a=rec{inner=rec{b=3;probe=b;};}; in a.inner.probe)
+  (let b=99; a.${"inner"}={}; a=rec{inner=rec{b=3;probe=b;};}; in a.inner.probe)
+  (let b=99; a.inner={}; a=rec{inner=rec{b=3;probe=b;};}; in a.inner.probe)
+  (let{x=1;body=x;})
+  (let x=9; in let{x=1;body=x;})
+  (let x="a"; in (rec{x="b";${x}=1;}).b)
+  (let x="a"; in (rec{x="b";${x}=1;}).a)
+]

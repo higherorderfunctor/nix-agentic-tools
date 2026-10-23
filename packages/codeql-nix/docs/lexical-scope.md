@@ -1,7 +1,9 @@
 # Explicit lexical scope
 
 > **Last verified:** 2026-10-23 — N1 resolves explicit names and reserves
-> extension interfaces for inheritance, implicit names and runtime primitives.
+> extension interfaces for inheritance, implicit names and runtime primitives;
+> literal interpolation keys, prefix uncertainty and legacy let scopes are
+> explicit.
 
 A binding introduces a name; an occurrence uses one. Lexical scope determines
 which binding an occurrence can see from its position in source. A frame is one
@@ -12,17 +14,22 @@ is CodeQL's query language; this meaning layer supplies resolution to
 The layer reuses [authenticated syntax](source-identity.md): authentication
 checks source bytes against their recorded identity. Only the private bridge
 reads generated syntax. `StaticScopes.qll` composes static attributes;
-`Bindings.qll` exposes resolution. Static means an identifier or plain quoted
-name, without computed parts.
+`Bindings.qll` exposes resolution. Static means an identifier, a plain quoted
+name or an interpolation whose expression is a plain string without
+interpolation, such as `${"x"}`. Its string expression supplies the declaration
+location. Other interpolations remain computed; the layer does not evaluate
+them.
 
 `let` and recursive sets (`rec`) expose their static names simultaneously,
-including inside their own values. Ordinary sets do not expose sibling names.
-Functions expose identifier arguments, named arguments and the whole-argument
-name written with `@`; argument defaults can see sibling arguments. An ellipsis
-accepts extra arguments without inventing names. Dotted paths build nested sets;
-a component becomes lexical only in an applicable recursive frame. Computed
-attribute names introduce no lexical binding. Known path prefixes still
-determine scope inside computed keys and their values.
+including inside their own values. Legacy `let { ...; body = ...; }` also
+creates a recursive frame and returns its `body` value; it is not a mergeable
+literal set. Its declarations shadow outer names. Ordinary sets do not expose
+sibling names. Functions expose identifier arguments, named arguments and the
+whole-argument name written with `@`; argument defaults can see sibling
+arguments. An ellipsis accepts extra arguments without inventing names. Dotted
+paths build nested sets; a component becomes lexical only in an applicable
+recursive frame. Computed attribute names introduce no lexical binding. Known
+path prefixes still determine scope inside computed keys and their values.
 
 Static definitions compose at the same attribute path, including nested paths
 and parenthesized sets. A terminal value is a value other than a literal set.
@@ -52,26 +59,22 @@ An unknown frame is an internal lookup boundary, not a public `Binding` or an
 enumerated candidate for every possible name. `StaticScopes.qll` also places
 boundaries where computed paths or set contributions may change recursion. Depth
 ranks each semantic frame, rather than its composition root: twice the number of
-enclosing frames, with possible inserted boundaries between ranks. A known
-deeper recursive binding stays definite despite ancestor uncertainty; the
-same-frame static-name guard also prevents moving an ancestor boundary onto that
-binding. Direct computed keys are evaluated outside their own recursive set.
-Values have no general exemption: in
-`let c=99; a=rec { b=c; }; a.${"c"}=c; in a.b`, the computed sibling can capture
-both uses of `c`; Nix encounters recursion. The layer keeps the outer `c` as
-may, with no must target.
+enclosing frames, with possible inserted boundaries between ranks. A computed
+contribution at a strict prefix of a recursive frame path makes lookup through
+that frame uncertain, even when that frame declares the queried name. This
+boundary applies in either source order. A disjoint static key such as
+`${"other"}` does not create it. Direct computed keys are evaluated outside
+their own recursive set; values have no general exemption.
 
-This is the approved frame abstraction with unknown names, not full Nix semantic
-equivalence. Matching computed keys contributed first can change which recursive
-frame exists. For example, Nix evaluates
-`let b=99; a.${"inner"}={}; a=rec{inner=rec{b=3;probe=b;};}; in a.inner.probe`
-to `99`: the earlier ordinary set suppresses the inner recursive frame. Using
-`a.${"inner"}.x=7;` as the first contribution also yields `99`; using
-`a.${"inner"}=rec{};` yields `3`. The resolver does not distinguish those key
-values from other computed names when retaining a known deeper frame. Its
-definite results have no general soundness guarantee across these matching,
-reverse-order ordinary-set or nested-path contributions. The public API makes no
-lossless mapping claim for the internal unknown-frame boundary.
+When an ordinary first contribution suppresses a later recursive frame, a name
+declared in that suppressed frame conservatively leaves its outward candidate as
+may, never must. This rule is independent of spelling: both `a.${"inner"}={}`
+and `a.inner={}` before `a=rec{inner=rec{b=3;probe=b;};}` suppress the inner
+recursive frame. With outer `b=99`, Nix returns `99`; the resolver retains that
+outer binding as may. A lookup for a name not declared in the suppressed frame
+keeps the ordinary static first-creation behavior. This conservative boundary
+records the overlap at a declared name rather than inventing a binding for a
+frame that does not exist.
 
 `Bindings::Binding` enumerates actual lexical declarations, including unused
 ones, and provider identities. A provider contributes semantic facts through a

@@ -18,6 +18,21 @@ class DynamicScopeTests(unittest.TestCase):
             "--extra-experimental-features", "nix-command", "eval", "--json", "--expr", expression],
             capture_output=True, text=True, timeout=30)
 
+    def test_static_interpolation_prefix_uncertainty_and_legacy_let(self):
+        fixture = FIXTURE.parent / "lexical-gap/gap.nix.in"
+        expected = [7, 3, "dynamic attribute", "dynamic attribute", "dynamic attribute", "dynamic attribute", 99, 99, 1, 1, 1, "attribute 'a' missing"]
+        expressions = fixture.read_text().splitlines()[1:-1]
+        self.assertEqual(len(expressions), len(expected))
+        for line, (expression, value) in enumerate(zip(expressions, expected), 2):
+            result = self.evaluate(expression)
+            if isinstance(value, str):
+                self.assertNotEqual(result.returncode, 0, f"line {line}")
+                self.assertIn(value, result.stderr)
+            else:
+                self.assertEqual(result.returncode, 0, f"line {line}: {result.stderr}")
+                self.assertEqual(json.loads(result.stdout), value, f"line {line}")
+        print("N1 gap oracle: 12 static/computed/prefix/legacy-let/key-scope witnesses passed", flush=True)
+
     def test_structural_suffix_matrix_and_capture_controls(self):
         result = self.evaluate((FIXTURE / "valid.nix.in").read_text())
         self.assertEqual(result.returncode, 0, result.stderr)

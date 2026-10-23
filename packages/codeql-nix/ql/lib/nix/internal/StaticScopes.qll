@@ -24,7 +24,7 @@ module StaticScopes {
       mergedInto(node, binding) and placement(RawBridge::container(binding), root, parentPrefix) and
       prefix = parentPrefix + path(binding, last(binding)))
     or
-    (RawBridge::setExpression(node) or node.getKind() = "LetExpression") and
+    (RawBridge::setExpression(node) or node.getKind() in ["LetAttrsetExpression", "LetExpression"]) and
     not mergedInto(node, _) and root = node and prefix = ""
   }
   /** Each static path component contributes a set prefix or a terminal value. */
@@ -49,7 +49,7 @@ module StaticScopes {
   }
   /** A merged set takes its recursion flag from its first creation, even an implicit prefix. */
   predicate frame(RawBridge::Node frame, RawBridge::Node root, string prefix) {
-    frame.getKind() in ["FunctionExpression", "LetExpression"] and root = frame and prefix = ""
+    frame.getKind() in ["FunctionExpression", "LetAttrsetExpression", "LetExpression"] and root = frame and prefix = ""
     or placement(frame, root, prefix) and frame.getKind() = "RecAttrsetExpression" and
       (frame = root or exists(RawBridge::Node token, RawBridge::Node binding, int i |
         first(root, prefix, token, binding, i) and i = last(binding) and
@@ -90,10 +90,6 @@ module StaticScopes {
       placement(RawBridge::container(binding), root, enclosing) and
       (i = 0 and prefix = enclosing or i > 0 and prefix = enclosing + path(binding, i - 1)))
   }
-  private predicate computedSet(RawBridge::Node binding) {
-    exists(int i | unknown(binding, i) |
-      i < last(binding) or RawBridge::setExpression(RawBridge::bindingValue(binding)))
-  }
   /** Semantic frame nesting survives merged contributions at different syntax depths. */
   private int nodeDepth(RawBridge::Node node) {
     exists(int enclosing |
@@ -118,18 +114,26 @@ module StaticScopes {
           StaticScopes::frame(frame, root, _) and contains(frame, use) and result = depth(frame)))))
     or exists(RawBridge::Node binding, RawBridge::Node root, string prefix, string enclosing |
       computedPrefix(binding, root, prefix) and context(use, root, enclosing) and
-      (computedSet(binding) and enclosing != prefix and enclosing.indexOf(prefix) = 0 and
+      (enclosing != prefix and enclosing.indexOf(prefix) = 0 and
         (result = nodeDepth(root) or exists(RawBridge::Node frame |
-          StaticScopes::frame(frame, root, enclosing) and not bindsName(frame, use) and result = depth(frame)))
+          StaticScopes::frame(frame, root, enclosing) and result = depth(frame)))
        or enclosing = prefix and exists(RawBridge::Node frame |
          placement(frame, root, prefix) and
-         frame.getKind() in ["LetExpression", "RecAttrsetExpression"] and
+         frame.getKind() in ["LetAttrsetExpression", "LetExpression", "RecAttrsetExpression"] and
          (StaticScopes::frame(frame, root, prefix) or below(frame, use) and
            exists(RawBridge::Node token, int i | first(root, prefix, token, binding, i))) and
          // A direct computed key is evaluated outside its own recursive set.
          not (frame = RawBridge::container(binding) and
            exists(int i | below(RawBridge::pathToken(binding, i), use))) and
          not bindsName(frame, use) and result = nodeDepth(frame))))
+    // A declared name in a suppressed rec frame retains only its outward candidate.
+    or exists(RawBridge::Node frame, RawBridge::Node root, RawBridge::Node binding,
+      string prefix, string enclosing |
+      frame.getKind() = "RecAttrsetExpression" and placement(frame, root, prefix) and
+      not StaticScopes::frame(frame, root, prefix) and context(use, root, enclosing) and
+      enclosing.indexOf(prefix) = 0 and RawBridge::container(binding) = frame and
+      RawBridge::binderName(RawBridge::pathToken(binding, 0)) = RawBridge::binderName(use) and
+      result = nodeDepth(frame))
   }
 
   predicate binder(RawBridge::Node frame, RawBridge::Node token) {
