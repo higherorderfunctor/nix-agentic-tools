@@ -10,12 +10,14 @@ import subprocess
 import sys
 import tempfile
 
-
-def load_abi(path):
-    spec = importlib.util.spec_from_file_location("nixql_abi", path)
+def load_module(path):
+    spec = importlib.util.spec_from_file_location("nixql_" + path.stem, path)
     abi = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(abi)
     return abi
+
+
+RunIdentity = load_module(Path(__file__).with_name("extract.py")).RunIdentity
 
 
 def quote(value):
@@ -62,27 +64,22 @@ def atomic(path, data):
     pending.replace(path)
 
 
-def main():
-    binary, schema, combined_schema, pins_path, manifest_path, output_path = sys.argv[1:]
-    abi = load_abi(Path(schema) / "abi.py")
-    manifest = json.loads(Path(manifest_path).read_text())
+def extract(binary, schema, combined_schema, pins_path, manifest, output_path, identity=None, trap_dir=None, archive_dir=None):
+    abi = load_module(Path(schema) / "abi.py")
     output = Path(output_path)
     output.mkdir(parents=True, exist_ok=True)
-    trap = Path(os.environ.get("CODEQL_EXTRACTOR_NIX_TRAP_DIR", output / "trap"))
-    archive = Path(os.environ.get("CODEQL_EXTRACTOR_NIX_SOURCE_ARCHIVE_DIR", output / "archive"))
+    trap = Path(trap_dir or os.environ.get("CODEQL_EXTRACTOR_NIX_TRAP_DIR", output / "trap"))
+    archive = Path(archive_dir or os.environ.get("CODEQL_EXTRACTOR_NIX_SOURCE_ARCHIVE_DIR", output / "archive"))
     trap.mkdir(parents=True, exist_ok=True)
     facts = []
     status_facts = []
     seen = set()
     failed = False
-    schema_hash = hashlib.sha256(Path(combined_schema).read_bytes()).hexdigest()
-    extractor_hash = hashlib.sha256(Path(binary).read_bytes() + Path(__file__).read_bytes()).hexdigest()
-    snapshot = sorted((root["logicalName"], root["rootContentIdentity"],
-                       sorted((entry["path"], entry["contentHash"]) for entry in root["files"]))
-                      for root in manifest["roots"])
-    snapshot_hash = hashlib.sha256(abi.canonical(snapshot).encode()).hexdigest()
-    run = abi.key("run", [schema_hash, extractor_hash, snapshot_hash])
-    run_row = ["nx_runs", [run, schema_hash, extractor_hash, json.loads(Path(pins_path).read_text())["grammar"], "not-requested", snapshot_hash]]
+    coordinated = identity is not None
+    identity = identity or RunIdentity.syntax(abi, binary, combined_schema, pins_path, manifest)
+    identity.check_syntax(abi, manifest)
+    run_row = identity.row
+    run, _, _, _, _, snapshot_hash = run_row[1]
     for root in manifest["roots"]:
         root_key = abi.key("root", [root["logicalName"], root["rootContentIdentity"]])
         for entry in root["files"]:
@@ -148,11 +145,16 @@ def main():
                 status_facts.append(diagnostic_row)
     enclosing = [run_row, ["nx_phases", [run, "syntax", "failed" if failed else "complete", "file-refusal" if failed else "all-selected-files"]]]
     facts.extend(enclosing)
-    status_facts.extend(enclosing)
+    status_facts.extend(row for row in enclosing if not coordinated or row[0] != "nx_runs")
     abi.validate(facts)
     atomic(trap / f"identities-{snapshot_hash}.trap", trap_facts(abi, status_facts).encode())
     atomic(output / "facts.json", (abi.canonical({"protocolVersion": 1, "facts": facts}) + "\n").encode())
-    return int(failed)
+    return int(failed), {"protocolVersion": 1, "facts": facts}
+
+
+def main():
+    binary, schema, combined_schema, pins_path, manifest_path, output_path = sys.argv[1:]
+    return extract(binary, schema, combined_schema, pins_path, json.loads(Path(manifest_path).read_text()), output_path)[0]
 
 
 if __name__ == "__main__":

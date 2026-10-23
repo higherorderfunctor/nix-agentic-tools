@@ -9,6 +9,7 @@
       }) [
         "database-contract"
         "evaluation-isolation"
+        "installed-extractor"
         "integration-gate"
         "module-adapter"
         "owner-layout"

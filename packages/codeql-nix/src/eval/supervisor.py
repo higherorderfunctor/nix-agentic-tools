@@ -14,11 +14,14 @@ import resource
 import selectors
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 from urllib.parse import quote
 
 from protocol import abi, envelope, trap, validate
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from extract import RunIdentity
 
 
 class ExtractionFailed(RuntimeError):
@@ -97,7 +100,7 @@ def nix_string(value):
     return json.dumps(value, ensure_ascii=False).replace("${", "\\${")
 
 
-def nix_command(nix, binding, job, request, directory, deadline, env):
+def nix_command(nix, binding, job, request, directory, deadline, env, invocation=None):
     expression = Path(binding["expression"]).resolve(strict=True)
     roots = [Path(root["path"]).resolve(strict=True) for root in job["target"]["sourceRoots"]]
     root = next((root for root in roots if expression.is_relative_to(root)), None)
@@ -114,6 +117,8 @@ def nix_command(nix, binding, job, request, directory, deadline, env):
     for admitted in roots + [job_root]:
         hash_value = execute(base + ["hash", "path", str(admitted)], {}, request,
                              directory, deadline, env).strip()
+        if str(admitted) in job.get("sourcePins", {}):
+            abi.require(hash_value == job["sourcePins"][str(admitted)], "mixed-source-snapshot")
         # Match Nix's URL spelling exactly; only this pinned local URI is admitted.
         uris.append("path:" + quote(str(admitted), safe="/") + "?narHash=" + quote(hash_value, safe="/"))
         trees.append("builtins.fetchTree { type = \"path\"; path = " + nix_string(str(admitted)) +
@@ -121,7 +126,9 @@ def nix_command(nix, binding, job, request, directory, deadline, env):
     selected = trees[roots.index(root)]
     relative = "/" + expression.relative_to(root).as_posix()
     job_source = "builtins.readFile ((" + trees[-1] + ").outPath + \"/job.json\")"
-    projection = "(import ((" + selected + ").outPath + " + nix_string(relative) + ")) { job = builtins.fromJSON (" + job_source + "); }"
+    imported = "(import ((" + selected + ").outPath + " + nix_string(relative) + "))"
+    projection = (invocation(imported, trees[:-1]) if invocation else
+                  imported + " { job = builtins.fromJSON (" + job_source + "); }")
     return base + ["eval", "--json", "--offline", "--option", "restrict-eval", "true",
                    "--option", "pure-eval", "true", "--option", "allowed-uris", " ".join(uris),
                    "--option", "allow-import-from-derivation", "false",
@@ -224,15 +231,15 @@ def publish(directory, name, facts):
             os.unlink(temporary)
 
 
-def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=None, strict=False, nix="nix"):
+def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=None, strict=False, nix="nix", identity=None):
     directory = Path(trap_dir)
     directory.mkdir(parents=True, exist_ok=True)
-    # An invocation's run is unique; request fingerprints below remain source/policy based.
-    run = abi.key("run", [str(time.time_ns())])
-    schema_hash = hashlib.sha256((Path(__file__).resolve().parents[2] / "schema/contract.json").read_bytes()).hexdigest()
-    extractor_hash = hashlib.sha256(Path(__file__).read_bytes() + Path(__file__).with_name("protocol.py").read_bytes()).hexdigest()
-    facts = [["nx_runs", [run, schema_hash, extractor_hash, "not-requested", "not-requested", "not-admitted"]],
-             ["nx_phases", [run, "syntax", "not-requested", "evaluation supervisor only"]]]
+    coordinated = identity is not None
+    identity = identity or RunIdentity.evaluation(abi, __file__)
+    run = identity.row[1][0]
+    facts = [identity.row]
+    if not coordinated:
+        facts.append(["nx_phases", [run, "syntax", "not-requested", "evaluation supervisor only"]])
     source_files = list(source_files)
     abi.require(all(row[0] == "nx_files" for row in source_files), "source admission requires S2 file rows")
     abi.validate(source_files)
@@ -261,7 +268,10 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
         incomplete = True
     else:
         fingerprints = [target["fingerprint"] for target in manifest["targets"].values()]
-        facts[0][1][-2:] = ["not-requested", digest(sorted(pin["sourceSnapshotHash"] for pin in fingerprints))]
+        if coordinated:
+            identity.check_targets(abi, manifest)
+        else:
+            facts[0][1][-2:] = ["not-requested", digest(sorted(pin["sourceSnapshotHash"] for pin in fingerprints))]
         facts.append(["nx_phases", [run, "discovery", "complete", ""]])
         for name, target in manifest["targets"].items():
             fingerprint = target["fingerprint"]
@@ -289,6 +299,8 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                     job = {"identities": {"context": context, "request": req, "run": run, "target": identity},
                            "moduleArguments": bindings[args["moduleArgumentsRef"]], "request": request,
                            "specialArguments": bindings[args["specialArgumentsRef"]], "target": target}
+                    if coordinated:
+                        job["sourcePins"] = {root["path"]: root["rootContentIdentity"] for root in target["sourceRoots"]}
                     abi.canonical(job)
                     deadline = time.monotonic() + request["maxSeconds"]
                     with tempfile.TemporaryDirectory(prefix="nixql-e1-") as temporary:
@@ -330,7 +342,7 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                 incomplete = True
         facts.append(["nx_phases", [run, "evaluation", "partial" if incomplete else "complete", "incomplete requests" if incomplete else ""]])
     packet = envelope(facts)
-    publish(directory, digest([run, "supervisor"]), [row for row in facts if id(row) not in published])
+    publish(directory, digest([run, "supervisor"]), [row for row in facts if id(row) not in published and (not coordinated or row[0] != "nx_runs")])
     if strict and incomplete:
         raise ExtractionFailed(packet)
     return packet
