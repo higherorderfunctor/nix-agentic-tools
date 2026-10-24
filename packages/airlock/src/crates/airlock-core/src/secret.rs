@@ -2,16 +2,22 @@
 use std::path::Path;
 use std::{fmt, path::PathBuf};
 
+use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 
 use crate::error::{SecretError, SecretFileError};
 
 pub struct Secret {
-    #[cfg_attr(not(test), allow(dead_code))]
     value: Zeroizing<String>,
 }
 
 impl Secret {
+    /// Compares a presented token without exposing the stored value.
+    #[must_use]
+    pub fn matches(&self, candidate: &[u8]) -> bool {
+        bool::from(self.value.as_bytes().ct_eq(candidate))
+    }
+
     #[cfg(test)]
     fn expose(&self) -> &str {
         &self.value

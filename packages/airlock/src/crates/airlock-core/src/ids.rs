@@ -125,7 +125,13 @@ impl TryFrom<String> for HostName {
             return Err(HostNameError::InvalidHostName { value });
         }
 
-        if value.split('.').all(|label| label.parse::<u8>().is_ok()) {
+        // Resolvers also accept integer, shortened, octal, and hexadecimal IPv4 spellings.
+        if value.split('.').all(|label| {
+            label.bytes().all(|byte| byte.is_ascii_digit())
+                || label.strip_prefix("0x").is_some_and(|digits| {
+                    !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_hexdigit())
+                })
+        }) {
             return Err(HostNameError::IpAddress { value });
         }
 
@@ -200,6 +206,9 @@ mod tests {
             "api_1.example",
             "api.example:443",
             "127.0.0.1",
+            "2130706433",
+            "0x7f000001",
+            "0177.0.0.1",
             &"a".repeat(254),
         ] {
             assert!(

@@ -1,10 +1,13 @@
 use std::{fs, io, path::PathBuf, process::ExitCode};
 
 use airlock_core::config::{Config, RawConfig};
+use airlock_gateway::Gateway;
 use clap::{Parser, Subcommand};
+use tokio::signal::unix::{SignalKind, signal};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
-#[command(version, about = "Validate airlock gateway configuration")]
+#[command(version, about = "airlock credential gateway")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -16,40 +19,68 @@ enum Command {
         #[arg(long)]
         config: PathBuf,
     },
+    Serve {
+        #[arg(long)]
+        config: PathBuf,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]
-enum CheckConfigError {
+enum Error {
     #[error(transparent)]
-    Config(airlock_core::error::ConfigErrors),
+    Config(#[from] airlock_core::error::ConfigErrors),
     #[error(transparent)]
-    Io(io::Error),
+    Gateway(#[from] airlock_gateway::Error),
     #[error(transparent)]
-    Json(serde_json::Error),
+    Io(#[from] io::Error),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
 }
 
-fn run() -> Result<(), CheckConfigError> {
+async fn run() -> Result<(), Error> {
     let cli = Cli::parse();
-    let Command::CheckConfig { config } = cli.command;
-    let source = fs::read_to_string(config).map_err(CheckConfigError::Io)?;
-    let raw = serde_json::from_str::<RawConfig>(&source).map_err(CheckConfigError::Json)?;
-
-    // Paths are validated without loading secrets: the Nix check renders config at eval time, before secret files exist.
-    Config::try_from(raw).map_err(CheckConfigError::Config)?;
-    println!("ok");
+    let (Command::CheckConfig { config } | Command::Serve { config }) = &cli.command;
+    let source = fs::read_to_string(config)?;
+    let raw = serde_json::from_str::<RawConfig>(&source)?;
+    // check-config validates paths without loading secrets; secret files may not exist yet.
+    let config = Config::try_from(raw)?;
+    match cli.command {
+        Command::CheckConfig { .. } => println!("ok"),
+        Command::Serve { .. } => {
+            tracing_subscriber::fmt()
+                .json()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+                )
+                .with_writer(io::stderr)
+                .init();
+            let mut interrupt = signal(SignalKind::interrupt())?;
+            let mut terminate = signal(SignalKind::terminate())?;
+            Gateway::bind(config)
+                .await?
+                .serve(async move {
+                    tokio::select! {
+                        _ = interrupt.recv() => {},
+                        _ = terminate.recv() => {},
+                    }
+                })
+                .await?;
+        }
+    }
     Ok(())
 }
 
-fn main() -> ExitCode {
-    match run() {
+#[tokio::main]
+async fn main() -> ExitCode {
+    match run().await {
         Ok(()) => ExitCode::SUCCESS,
-        Err(CheckConfigError::Config(errors)) => {
+        Err(Error::Config(errors)) => {
             for error in &errors.0 {
                 eprintln!("{error}");
             }
             ExitCode::FAILURE
         }
-        Err(error @ (CheckConfigError::Io(_) | CheckConfigError::Json(_))) => {
+        Err(error) => {
             eprintln!("{error}");
             ExitCode::FAILURE
         }

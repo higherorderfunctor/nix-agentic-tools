@@ -225,6 +225,7 @@ grokbuild
 headlessly
 heredocs
 herestring
+hexdigit
 higherorderfunctor
 hitl
 hookblock
