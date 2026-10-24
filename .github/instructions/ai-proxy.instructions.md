@@ -11,7 +11,9 @@ applyTo: "checks/ai-proxy/**,lib/ai/proxy/**,packages/chatgpt-codex/lib/proxy.ni
 > a secret account email; native CPA account rules match logins, including ones
 > added while the service runs. The existing rendered-file launcher lifts
 > accounts into secret placeholders on both backends. Named API-key credentials
-> can select the built-in z.ai vendor defaults and an optional priority.
+> can select the built-in z.ai vendor, which defaults chat to the Coding Plan
+> endpoint and keeps the general endpoint one override away, and accept an
+> optional priority.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -118,6 +120,10 @@ can select `api`; omitting it selects a credential's sole API, and a multi-API
 credential requires it. OAuth routes omit `api`. Unknown credentials and
 unserved APIs fail evaluation. Generated API-key rules use the selected API's
 provider, `kind = "apikey"`, and exact `base-urls`.
+
+The built-in z-ai vendor defaults chat to the extracted Coding Plan endpoint and
+Anthropic to its extracted endpoint, and `apiKey.apis.chat.base-url` selects the
+general endpoint.
 
 CPA trims base URLs with Go's `strings.TrimSpace`, which Nix cannot reproduce
 for every Unicode space. Provider URLs are printable ASCII, hand-written URLs in
@@ -228,7 +234,8 @@ asks. Values remain outside generated store files and evaluation output.
 OAuth account placeholders, rules and refusals on both backends. The native
 allowlist check covers account matching and hot-added logins.
 `module-ai-proxy-z-ai-credential` checks vendor defaults and overrides on both
-backends, including client routing and the preserved model list.
+backends, including the coding-default positive control, the general-endpoint
+override control, client routing and the preserved model list.
 `module-service-instances-runtime-providers` sends Anthropic and Responses
 requests through the packaged CPA, including a Codex CLI client key routed to a
 chat-only upstream credential and an unauthorized-model negative control. The
