@@ -1,0 +1,17 @@
+[package]
+name = "airlock"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+airlock-core.workspace = true
+airlock-gateway.workspace = true
+clap = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

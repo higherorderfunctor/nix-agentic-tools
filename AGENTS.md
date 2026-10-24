@@ -104,6 +104,11 @@ for it. When several entries match, their guidance composes.
     - `packages/stacked-workflows/modules/**`
   - Read:
     - [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
+- **`airlock`**
+  - Match:
+    - `packages/airlock/**`
+  - Read:
+    - [`packages/airlock/docs/airlock.md`](packages/airlock/docs/airlock.md)
 - **`beads`**
   - Match:
     - `packages/beads/**`
@@ -1630,9 +1635,10 @@ the merged `flake.nix` / `devenv.yaml`.
 
 ## Linting
 
-> **Last verified:** 2026-10-08 — local and CI cspell hooks tolerate batches
+> **Last verified:** 2026-10-24 — local and CI cspell hooks tolerate batches
 > excluded entirely by ignorePaths while still failing spelling errors; the
-> separate shellcheck backend retains its empty-corpus guard. Full lineage:
+> separate shellcheck backend retains its empty-corpus guard; rustfmt is a
+> repository-only formatter. Full lineage:
 > `git show f7189d05:dev/fragments/monorepo/linting.md`.
 
 `nix flake check` is the authoritative CI gate. Local hooks provide earlier
@@ -1679,6 +1685,9 @@ Formatters and linters remain separate — treefmt formats and lints nothing.
 - **JS/TS/JSX/JSON/CSS:** biome
 - **Markdown/YAML and friends:** prettier (`proseWrap = "always"`)
 - **Nix:** alejandra
+- **Rust:** rustfmt (`*.rs`) from the locked toolchain that builds the Rust
+  packages; repository-only, in `treefmt.nix`, because the exported module's
+  formatters are inputs of every consumer's generated tree
 - **Shell:** shfmt (`*.sh`, `*.bash` — extension globs only, so it never sees an
   extensionless script, shell embedded in a `.nix` string, or a heredoc body)
 - **TOML:** taplo
