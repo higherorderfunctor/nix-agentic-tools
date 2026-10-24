@@ -6,6 +6,56 @@
       "minimum": 0,
       "type": "integer"
     },
+    "contextStep": {
+      "additionalProperties": false,
+      "description": "One concrete instance step: select option from the parent context's rich options, then follow its valueMeta. submodule uses an empty key, attribute the exact attribute name, index canonical nonnegative decimal text.",
+      "oneOf": [
+        {
+          "properties": {
+            "memberKey": {
+              "const": ""
+            },
+            "memberKind": {
+              "const": "submodule"
+            }
+          }
+        },
+        {
+          "properties": {
+            "memberKind": {
+              "const": "attribute"
+            }
+          }
+        },
+        {
+          "properties": {
+            "memberKey": {
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            "memberKind": {
+              "const": "index"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "memberKey": {
+          "$ref": "#/$defs/text"
+        },
+        "memberKind": {
+          "enum": ["attribute", "index", "submodule"]
+        },
+        "option": {
+          "format": "nixql-path",
+          "items": {
+            "$ref": "#/$defs/text"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["memberKey", "memberKind", "option"],
+      "type": "object"
+    },
     "descriptor": {
       "additionalProperties": false,
       "properties": {
@@ -151,6 +201,13 @@
     "request": {
       "description": "Every metadata request is explicit. Paths are literal segments, never dot-split. No default traversal or value request is implied.",
       "properties": {
+        "contextPath": {
+          "description": "Optional concrete instance steps from the root context; absent or empty means the root context. The request path is relative to the final selected context.",
+          "items": {
+            "$ref": "#/$defs/contextStep"
+          },
+          "type": "array"
+        },
         "domain": {
           "const": "option-metadata"
         },

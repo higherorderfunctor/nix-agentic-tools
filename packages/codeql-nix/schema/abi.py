@@ -85,6 +85,20 @@ def json_path(value, indices=False):
     return result
 
 
+def context_steps(value):
+    """Concrete instance steps; key order and member key encodings are canonical."""
+    steps = decoded(value)
+    require(isinstance(steps, list) and all(isinstance(step, dict) and
+            list(step) == ["option", "memberKind", "memberKey"] for step in steps), "invalid context instance path")
+    for step in steps:
+        path(step["option"])
+        kind, member = step["memberKind"], text(step["memberKey"])
+        require(kind in CONTRACT["enums"]["nx_context_parents.memberKind"], "invalid enum")
+        require(kind == "attribute" or (kind == "submodule" and member == "") or
+                (kind == "index" and re.fullmatch(r"0|[1-9][0-9]*", member)), "invalid member key")
+    return steps
+
+
 def library_formal(anchors, function, formal):
     """The bounded source shape accepted for an authenticated lib argument."""
     fn, argument = anchors[function], anchors[formal]
@@ -163,8 +177,17 @@ def validate(rows):
         fn = owners["anchor"][function]
         require(any(t == target[0] and f == fn[1] for t, f, _ in tables["nx_target_inputs"]),
                 "library binding source not admitted")
-    for _, _, _, instance in tables["nx_contexts"]:
-        require(json_path(instance) == [], "non-root context instance")
+    parents = one("context_parents")
+    for ctx, _, kind, instance in tables["nx_contexts"]:
+        # Each concrete path extends its parent's by one step, so chains end at a root.
+        require((kind == "root") == (context_steps(instance) == []) and (kind == "root") != (ctx in parents),
+                "context instance path or parent mismatch")
+    for child, parent, opt, kind, member in tables["nx_context_parents"]:
+        require(context[child][1] == context[parent][1], "context parent target mismatch")
+        require(option[opt][1] == parent, "context parent option outside parent context")
+        step = {"option": json_path(option[opt][2]), "memberKind": kind, "memberKey": member}
+        require(context_steps(context[child][3]) == context_steps(context[parent][3]) + [step],
+                "context step mismatch")
     for _, _, segments in tables["nx_options"]:
         json_path(segments)
     for _, line, column, _ in tables["nx_origin_positions"]:

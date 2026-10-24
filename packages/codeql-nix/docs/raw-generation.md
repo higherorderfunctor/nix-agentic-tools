@@ -1,11 +1,11 @@
 # Raw syntax generation
 
-> **Last verified:** 2026-10-23 — M3p restores definition order in S1's combined
-> schema; the inventory check covers handwritten metadata and full kit-generated
-> private syntax; standalone location tests retain exact archived bytes and
-> missing/corrupt archive refusals. S2 adds the authenticated source driver and
-> companion raw bridge; M3 keeps builtin model generation and its byte
-> comparisons separate from syntax generation. R0 promotes shared Rust into
+> **Last verified:** 2026-10-23 — M3n restores concrete context parents in S1's
+> combined schema; the inventory check covers handwritten metadata and full
+> kit-generated private syntax; standalone location tests retain exact archived
+> bytes and missing/corrupt archive refusals. S2 adds the authenticated source
+> driver and companion raw bridge; M3 keeps builtin model generation and its
+> byte comparisons separate from syntax generation. R0 promotes shared Rust into
 > production `src/`.
 
 ## Purpose and fit
@@ -41,7 +41,7 @@ F1 `schema/evaluation.dbscheme` bytes to the generated schema. Its outputs are:
 
 The inventory reads declaration forms after removing comments; it is not a
 general QL parser. Empty class/table inventories fail. The manifest records
-generated class names and combined-schema table names, including the 27 retained
+generated class names and combined-schema table names, including the 28 retained
 F1 relations, so both AST churn and handwritten-schema drift remain visible. The
 inventory requires the `nx_` tables to match F1 exactly; an internally
 consistent manifest cannot retain deferred metadata tables. Keep every private

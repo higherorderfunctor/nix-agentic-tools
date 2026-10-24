@@ -27,7 +27,56 @@
   key = namespace: parts:
     "nixql:v1:${namespace}:" + effectiveLib.concatMapStrings (part: "${toString (builtins.stringLength part)}:${part}") parts;
   optionKey = key "option" [identities.context (builtins.toJSON request.path) identities.request];
-  option = effectiveLib.attrByPath request.path null result.options;
+  steps = request.contextPath or [];
+  # Follow only the requested member's pre-apply valueMeta configuration.
+  traverse = current: step: let
+    parent = effectiveLib.attrByPath step.option null current.options;
+    meta = parent.valueMeta or {};
+    attribute = step.memberKind == "attribute";
+    index = builtins.fromJSON step.memberKey;
+    members =
+      if attribute
+      then meta.attrs or null
+      else meta.list or null;
+    shaped =
+      if attribute
+      then builtins.isAttrs members
+      else builtins.isList members;
+    # Index text is unbounded; compare canonical digits before any integer conversion.
+    length = toString (builtins.length members);
+    keyLength = builtins.stringLength step.memberKey;
+    present =
+      if attribute
+      then builtins.hasAttr step.memberKey members
+      else keyLength < builtins.stringLength length || (keyLength == builtins.stringLength length && step.memberKey < length);
+    instance =
+      if step.memberKind == "submodule"
+      then meta
+      else if attribute
+      then members.${step.memberKey}
+      else builtins.elemAt members index;
+  in
+    if current.reason != null
+    then current
+    else if parent == null || !effectiveLib.isOption parent
+    then current // {reason = "option-unavailable";}
+    else if step.memberKind != "submodule" && !shaped
+    then current // {reason = "nested-metadata-unavailable";}
+    else if step.memberKind != "submodule" && !present
+    then current // {reason = "instance-unavailable";}
+    else if !(builtins.isAttrs instance && instance ? configuration)
+    then current // {reason = "nested-metadata-unavailable";}
+    else {
+      inherit (instance.configuration) options;
+      reason = null;
+    };
+  traversed =
+    builtins.foldl' traverse {
+      inherit (result) options;
+      reason = null;
+    }
+    steps;
+  option = effectiveLib.attrByPath request.path null traversed.options;
   exists = option != null && effectiveLib.isOption option;
   selected = builtins.elem request.facet ["definitions" "selection"];
   definitions = option.definitionsWithLocations;
@@ -46,9 +95,14 @@
     (row "nx_observations" [identity identities.request "pre-apply-metadata" "observed"])
     (row "nx_observation_${kind}s" [identity subject])
   ];
-  count = 1 + builtins.length labels;
+  # Each step adds its child context and parent traversal option.
+  count = 1 + builtins.length labels + 2 * builtins.length steps;
   outcome =
-    if !exists || (request.facet == "priority" && !option.isDefined)
+    if traversed.reason == "nested-metadata-unavailable"
+    then ["unsupported" traversed.reason 0]
+    else if traversed.reason != null
+    then ["failed" traversed.reason 0]
+    else if !exists || (request.facet == "priority" && !option.isDefined)
     then ["failed" "option-unavailable" 0]
     else if request.facet == "selection" && request.maxDepth == 0 && labels != []
     then ["failed" "depth-limit" 0]

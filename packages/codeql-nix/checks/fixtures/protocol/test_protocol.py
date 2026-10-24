@@ -187,7 +187,7 @@ class ProtocolTests(unittest.TestCase):
         before = deepcopy(packet)
         self.observations(packet)
         self.assertEqual(packet, before)
-        self.assertEqual(len({name for name, _ in packet["facts"]}), 27)
+        self.assertEqual(len({name for name, _ in packet["facts"]}), 28)
         for candidate in (
             {}, {"protocolVersion": 1}, {"facts": []},
             {"protocolVersion": 2, "facts": []},

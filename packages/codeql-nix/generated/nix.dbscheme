@@ -510,6 +510,7 @@ nix_ast_node_parent(
 
 nx_anchors(unique int anchor: @nx_anchor, int file: @nx_file ref, int startByte: int ref, int endByte: int ref, string nodeKind: string ref, string childPath: string ref);
 nx_capabilities(int target: @nx_target ref, string capability: string ref, string state: string ref, string reason: string ref);
+nx_context_parents(int context: @nx_context ref, int parent: @nx_context ref, int option: @nx_option ref, string memberKind: string ref, string memberKey: string ref);
 nx_contexts(unique int context: @nx_context, int target: @nx_target ref, string kind: string ref, string instancePathJson: string ref);
 nx_definition_order(int definition: @nx_definition ref, string priorityDecimal: string ref);
 nx_definitions(unique int definition: @nx_definition, int option: @nx_option ref, int ordinal: int ref, int origin: @nx_origin ref);

@@ -15,8 +15,9 @@ spec = importlib.util.spec_from_file_location("abi", MODULE)
 abi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(abi)
 LIMIT = 1048576
-M3P_TABLES = {
-    "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definition_order", "nx_definitions",
+M3N_TABLES = {
+    "nx_anchors", "nx_capabilities", "nx_context_parents", "nx_contexts",
+    "nx_definition_order", "nx_definitions",
     "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files", "nx_module_lib_bindings",
     "nx_observation_definitions", "nx_observation_options", "nx_observations",
     "nx_option_declarations", "nx_option_metadata",
@@ -91,8 +92,8 @@ class AbiTests(unittest.TestCase):
         self.assertEqual(GRAPH, before)
         abi.validate(BINDING_GRAPH)
         tables = {name for name, _ in BINDING_GRAPH}
-        self.assertEqual(tables, M3P_TABLES)
-        self.assertEqual(set(abi.COLUMNS), M3P_TABLES)
+        self.assertEqual(tables, M3N_TABLES)
+        self.assertEqual(set(abi.COLUMNS), M3N_TABLES)
         schema = MODULE.with_name("evaluation.dbscheme").read_text()
         self.assertEqual(set(re.findall(r"(?m)^(nx_\w+)\s*\(", schema)), tables)
 
@@ -149,7 +150,7 @@ class AbiTests(unittest.TestCase):
         self.rejects("nx_option_metadata", 1, "description")
         self.rejects("nx_option_priority", 1, "-0")
         self.rejects("nx_option_priority", 1, "9223372036854775808")
-        self.rejects("nx_contexts", 2, "concrete-submodule")
+        self.rejects("nx_contexts", 2, "schema")
         self.rejects("nx_contexts", 3, '["nested"]')
         self.rejects("nx_contexts", 3, '[0]')
 
@@ -188,7 +189,7 @@ class AbiTests(unittest.TestCase):
         self.rejects("nx_observations", 3, "failed")
         rows = [deepcopy(item) for item in GRAPH if item[0] in {
             "nx_contexts", "nx_phases", "nx_request_results", "nx_requests", "nx_runs", "nx_targets"}]
-        rows = [item for item in rows if not (item[0] == "nx_contexts" and item[1][0] == I["j"])]
+        rows = [item for item in rows if not (item[0] == "nx_contexts" and item[1][0] in {I["j"], I["n"]})]
         row(rows, "nx_request_results")[1:4] = ["unsupported", "text-field-too-large", 0]
         abi.validate(rows)
         # A failed discovery can be represented before any target exists.
@@ -201,7 +202,8 @@ class AbiTests(unittest.TestCase):
             return [deepcopy(item) for item in GRAPH if item[0] in {
                 "nx_contexts", "nx_options", "nx_option_metadata", "nx_option_priority",
                 "nx_requests", "nx_request_results", "nx_observation_options", "nx_observations", "nx_runs", "nx_targets"
-            } and (item[0] != "nx_observations" or item[1][0] == I["i"])]
+            } and (item[0] != "nx_contexts" or item[1][0] != I["n"])
+            and (item[0] != "nx_observations" or item[1][0] == I["i"])]
 
         for state in ("complete", "partial"):
             rows = priority_rows()

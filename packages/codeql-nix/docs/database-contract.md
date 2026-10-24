@@ -1,8 +1,7 @@
 # Handwritten database contract
 
-> **Last verified:** 2026-10-23 — M3p restores optional definition-order
-> priority alongside typed observation subjects; F1 validates identity, scope
-> and exact signed priority text.
+> **Last verified:** 2026-10-23 — M3n restores concrete context parents; F1
+> validates exact instance steps, target scope and typed observation subjects.
 
 ## Purpose and ownership
 
@@ -10,7 +9,7 @@
 primary keys, enums and serialization encodings. `schema/abi.py` supplies
 reference encoders and validates unordered fact collections. Its `dbscheme()`
 renders the committed `schema/evaluation.dbscheme`; the ABI check rejects
-divergence. All 27 handwritten relations are independent of generated AST entity
+divergence. All 28 handwritten relations are independent of generated AST entity
 types, so later syntax and evaluation producers can contribute to one database
 without manufacturing raw kit labels.
 
@@ -47,11 +46,17 @@ accepting a well-framed target key is not evidence that its fingerprint was
 computed correctly.
 
 Option/request paths are compact canonical JSON arrays of exact string segments:
-`["a.b"]` differs from `["a","b"]`. Contexts are root-only with instance path
-`[]`; structural child paths contain nonnegative integer indexes. Canonical JSON
-uses UTF-8 text, no optional whitespace and no ASCII-only escaping. Source paths
-must be nonempty, relative and free of `..` segments; this lexical check does
-not resolve symlinks or authenticate filesystem contents.
+`["a.b"]` differs from `["a","b"]`. Root contexts have instance path `[]`.
+Concrete contexts carry canonical step arrays: each step has `option`,
+`memberKind` and `memberKey`. Direct submodules use an empty key, attributes an
+exact string key, and indexes canonical nonnegative decimal text.
+`nx_context_parents` requires a same-target parent, a traversal option in that
+parent and an exact one-step path extension. Each concrete context has one
+parent; roots have none. Exact prefix lengths exclude cycles. Structural child
+paths contain nonnegative integer indexes. Canonical JSON uses UTF-8 text, no
+optional whitespace and no ASCII-only escaping. Source paths must be nonempty,
+relative and free of `..` segments; this lexical check does not resolve symlinks
+or authenticate filesystem contents.
 
 ## Priority and exact text
 
@@ -151,10 +156,10 @@ upgrade or migration path.
 
 ## Deferred consumers
 
-Remaining increment 3 cuts restore context-parent/module graph tables, nested
-contexts and their scope validators and native Boolean encoding. Increment 4
-restores value/scalar/member/string-context tables, encodings, value
-observations and their validators. Additional option metadata fields return with
-their named consuming query; schema contexts are dropped because increment 3
-selects concrete instances only. The diagnostic-origin relation is permanently
-dropped. These surfaces have no Step 0 producer or consumer.
+Remaining increment 3 cuts restore module graph tables and native Boolean
+encoding. Concrete nested contexts and their parent validators are present;
+schema contexts remain excluded. Increment 4 restores
+value/scalar/member/string-context tables, encodings, value observations and
+their validators. Additional option metadata fields return with their named
+consuming query. The diagnostic-origin relation is permanently dropped. These
+surfaces have no Step 0 producer or consumer.

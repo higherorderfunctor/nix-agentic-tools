@@ -10,9 +10,10 @@ sys.path.insert(0, str(OWNER / "checks/fixtures/abi"))
 import abi
 from golden import BINDING_GRAPH
 
-# M3p relation inventory, independently spelled rather than generated.
+# M3n relation inventory, independently spelled rather than generated.
 RELATIONS = {
-    "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definition_order", "nx_definitions",
+    "nx_anchors", "nx_capabilities", "nx_context_parents", "nx_contexts",
+    "nx_definition_order", "nx_definitions",
     "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files",
     "nx_module_lib_bindings",
     "nx_observation_definitions", "nx_observation_options", "nx_observations",

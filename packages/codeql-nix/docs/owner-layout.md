@@ -1,6 +1,6 @@
 # Nix CodeQL owner and test entry points
 
-> **Last verified:** 2026-10-23 — M3p retains 27 metadata relations and explicit
+> **Last verified:** 2026-10-23 — M3n retains 28 metadata relations and explicit
 > owner check imports; document and check inventories live in the owner registry
 > and checks entry point. S1 adds combined-schema generation and standalone raw
 > location tests; E1 adds the isolated metadata projection check; S2 registers
@@ -44,7 +44,7 @@ suites and early `SystemExit` fail the aggregate. It never searches sibling
 directories for tests; a passing suite cannot hide an empty later suite.
 
 The ABI sentinel validates the golden graph and compares its relation inventory
-with an independently spelled set of all 27 retained relations. The health
+with an independently spelled set of all 28 retained relations. The health
 sentinel requires runs, targets, syntax results and request results, completed
 discovery, successful target/syntax statuses and positive request work counts.
 These witnesses prevent empty or failed fixture output from looking like clean

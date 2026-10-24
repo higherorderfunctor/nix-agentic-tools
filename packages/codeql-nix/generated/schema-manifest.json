@@ -50,7 +50,7 @@
     "grammar": "38a15330421d20f3a4d380759f9634d39ba3d8ec",
     "kit": "a1575b98a8cc19bcfa7bb6cb41be688cb3dae65c"
   },
-  "schemaSha256": "6998028fb7da0e7486dcccbd7defa3f48f0e8666aa748e3894df297910ae2cb5",
+  "schemaSha256": "2f7d0c96fec7bb02132c65781b0f741eb6ef44554cc55d1740fc67c5d06207cb",
   "tables": [
     "containerparent",
     "databaseMetadata",
@@ -113,6 +113,7 @@
     "nix_with_expression_def",
     "nx_anchors",
     "nx_capabilities",
+    "nx_context_parents",
     "nx_contexts",
     "nx_definition_order",
     "nx_definitions",

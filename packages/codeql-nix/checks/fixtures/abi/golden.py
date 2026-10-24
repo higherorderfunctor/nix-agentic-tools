@@ -25,8 +25,9 @@ BAD_PRIORITIES = [
 # One-byte labels keep fixture identities independently readable.
 I = {label: f"nixql:v1:{namespace}:1:{label}" for label, namespace in [
     ("a", "anchor"), ("c", "context"), ("d", "definition"), ("e", "diagnostic"),
-    ("f", "file"), ("i", "observation"), ("j", "context"), ("k", "observation"), ("o", "option"),
-    ("p", "origin"), ("q", "request"), ("r", "run"), ("t", "target"),
+    ("f", "file"), ("i", "observation"), ("j", "context"), ("k", "observation"),
+    ("n", "context"), ("o", "option"), ("p", "origin"), ("q", "request"),
+    ("r", "run"), ("s", "option"), ("t", "target"),
 ]}
 
 # Step 0 relations; order needs the M3p same-request selection witness below.
@@ -38,8 +39,11 @@ I["a"] = "nixql:v1:anchor:76:" + I["f"] + "1:01:010:identifier2:[]"
 GRAPH = [
     ["nx_anchors", [I["a"], I["f"], 0, 0, "identifier", "[]"]],
     ["nx_capabilities", [I["t"], "metadata", "supported", ""]],
+    ["nx_context_parents", [I["n"], I["c"], I["s"], "attribute", "a.b"]],
     ["nx_contexts", [I["c"], I["t"], "root", "[]"]],
     ["nx_contexts", [I["j"], I["t"], "root", "[]"]],
+    ["nx_contexts", [I["n"], I["t"], "concrete-submodule",
+                      '[{"option":["services"],"memberKind":"attribute","memberKey":"a.b"}]']],
     ["nx_definitions", [I["d"], I["o"], 0, I["p"]]],
     ["nx_diagnostic_requests", [I["e"], I["q"]]],
     ["nx_diagnostic_targets", [I["e"], I["t"]]],
@@ -53,6 +57,7 @@ GRAPH = [
     ["nx_option_metadata", [I["o"], "isDefined", "true"]],
     ["nx_option_priority", [I["o"], "9223372036854775807"]],
     ["nx_options", [I["o"], I["c"], '["a.b"]']],
+    ["nx_options", [I["s"], I["c"], '["services"]']],
     ["nx_origin_files", [I["p"], I["f"]]],
     ["nx_origin_positions", [I["p"], 1, 1, "utf8-byte-1-based"]],
     ["nx_origins", [I["p"], "fixture.nix", "source"]],

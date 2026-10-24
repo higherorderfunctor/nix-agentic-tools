@@ -137,7 +137,25 @@ def nix_command(nix, binding, job, request, directory, deadline, env, invocation
                    "--expr", projection]
 
 
-def projection_rows(packet, job, outer):
+def context_chain(steps, parent, req, target, max_bytes):
+    """Request-qualified concrete contexts and traversal options for budget-checked steps."""
+    rows, size = [], 0
+    for depth, step in enumerate(steps, 1):
+        kind, member = step["memberKind"], step["memberKey"]
+        option = abi.key("option", [parent, abi.path(step["option"]), req])
+        child = abi.key("context", [req, parent, option, kind, member])
+        # Identities grow with depth: stop once their bytes alone exceed the request output budget.
+        size += len(option.encode()) + len(child.encode())
+        if size > max_bytes:
+            raise Refusal("byte-limit", "context chain identities exceed the request byte limit")
+        rows += [["nx_contexts", [child, target, "concrete-submodule", abi.canonical(steps[:depth])]],
+                 ["nx_context_parents", [child, parent, option, kind, member]],
+                 ["nx_options", [option, parent, abi.path(step["option"])]]]
+        parent = child
+    return rows, parent
+
+
+def projection_rows(packet, job, outer, chain=(), request_row=None):
     validate(packet, "observation-protocol.json")
     facts = packet["facts"]
     permitted = {"nx_definition_order", "nx_definitions", "nx_module_lib_bindings", "nx_observation_definitions", "nx_observation_options", "nx_observations", "nx_option_declarations", "nx_option_metadata",
@@ -183,6 +201,10 @@ def projection_rows(packet, job, outer):
     referenced = {args[-1] for relation, args in facts if relation in ("nx_definitions", "nx_option_declarations")}
     if origins != referenced or any(args[0] not in origins for relation, args in facts if relation == "nx_origin_positions"):
         raise ValueError("projection contains detached or foreign origins")
+    if chain and results[0][1] == "complete":
+        # Only a successful traversal publishes its chain; the request moves to the final context.
+        request_row[2] = job["identities"]["context"]
+        facts = facts + list(chain)
     envelope(outer + facts)
     if results[0][1] not in ("complete", "partial") and any(relation in allowed for relation, _ in facts):
         raise ValueError("unsuccessful transaction contains successful metadata")
@@ -205,7 +227,7 @@ def projection_rows(packet, job, outer):
             raise Refusal("projection-incomplete", "selection lacks a witness for whether the option is defined or its priority")
         if request["maxDepth"] == 0 and definitions:
             raise Refusal("depth-limit", "selection definitions exceed root-only depth")
-    records = sum(relation in ("nx_options", "nx_definitions", "nx_option_declarations") for relation, _ in facts)
+    records = sum(relation in ("nx_contexts", "nx_options", "nx_definitions", "nx_option_declarations") for relation, _ in facts)
     if max(records, len(observations), results[0][3]) > request["maxNodes"]:
         raise Refusal("node-limit", "projection node limit exceeded")
     return facts, results[0][1]
@@ -362,21 +384,35 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                               else "unsupported" if module_model else "unavailable")
             if any(request["facet"] == "selection" for request in target["requests"]):
                 facts.append(["nx_capabilities", [identity, "module-properties", property_state, "exact-pin module metadata"]])
-            states = []
+            states, nested = [], set()
             for ordinal, request in enumerate(target["requests"]):
                 req = abi.key("request", [identity, context, abi.canonical(request), str(ordinal)])
-                facts.append(["nx_requests", [req, identity, context, request["domain"], abi.path(request["path"]), request["facet"],
-                              *[request[key] for key in ("maxDepth", "maxNodes", "maxBytes", "maxSeconds", "maxMemoryMiB")]]])
+                request_row = [req, identity, context, request["domain"], abi.path(request["path"]), request["facet"],
+                               *[request[key] for key in ("maxDepth", "maxNodes", "maxBytes", "maxSeconds", "maxMemoryMiB")]]
+                facts.append(["nx_requests", request_row])
+                steps = [{"option": step["option"], "memberKind": step["memberKind"], "memberKey": step["memberKey"]}
+                         for step in request.get("contextPath", [])]
+                chain, final_context = (), context
+                if steps:
+                    nested.add(req)
+                located = " for contextPath " + abi.canonical(steps) if steps else ""
                 try:
                     if source_error is not None:
                         raise source_error
                     if request["facet"] == "selection" and property_state != "supported":
                         raise Refusal("module-properties-unavailable", "exact-pin property metadata unavailable", "unsupported")
-                    if request["facet"] != "selection" and request["maxDepth"] != 0:
+                    # Child identities embed their parents, so refuse over-budget chains before building any.
+                    if len(steps) > request["maxDepth"]:
+                        raise Refusal("depth-limit", "context steps exceed the depth limit")
+                    if steps and 2 * len(steps) + 1 > request["maxNodes"]:
+                        raise Refusal("node-limit", "context chain and final option exceed the node limit")
+                    if steps:
+                        chain, final_context = context_chain(steps, context, req, identity, request["maxBytes"])
+                    if request["facet"] != "selection" and not steps and request["maxDepth"] != 0:
                         raise Refusal("request-unsupported", "only root metadata projections are supported", "blocked")
                     args = target["argumentDescription"]
                     binding = bindings[target["evaluation"]["reference"]]
-                    job = {"identities": {"context": context, "model": identity_object.row[1][4], "request": req, "run": run, "target": identity},
+                    job = {"identities": {"context": final_context, "model": identity_object.row[1][4], "request": req, "run": run, "target": identity},
                            "moduleArguments": bindings[args["moduleArgumentsRef"]], "request": request,
                            "specialArguments": bindings[args["specialArgumentsRef"]], "target": target}
                     job["moduleModel"] = module_model
@@ -397,7 +433,7 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                         else:
                             raise Refusal("binding-unsupported", "binding must explicitly select a producer", "blocked")
                         result = json.loads(execute(argv, job, request, scratch, deadline, env))
-                        produced, state = projection_rows(result, job, facts)
+                        produced, state = projection_rows(result, job, facts, chain, request_row)
                         links = source_links(produced, sources, source_mappings,
                                              scratch / "store" if "expression" in binding else None)
                         if time.monotonic() >= deadline:
@@ -408,16 +444,22 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                     facts.extend(produced)
                     published.update(map(id, produced))
                     if state != "complete":
-                        diagnostic("projection-incomplete", "producer returned " + state, identity, req)
+                        diagnostic("projection-incomplete", "producer returned " + state + located, identity, req)
                 except Exception as error:
+                    request_row[2] = context
                     state = getattr(error, "state", "blocked" if isinstance(error, (KeyError, FileNotFoundError)) else "failed")
                     code = getattr(error, "code", "projection-invalid")
                     # F2 exact-text formats delegate to F1; retain its refusal code.
                     if str(getattr(error, "cause", error)) == "text-field-too-large":
                         code = "text-field-too-large"
                     facts.append(["nx_request_results", [req, state, code, 0]])
-                    diagnostic(code, str(error), identity, req)
+                    diagnostic(code, str(error) + located, identity, req)
                 states.append(state)
+            if nested:
+                unavailable = any(relation == "nx_request_results" and args[0] in nested and
+                                  args[2] == "nested-metadata-unavailable" for relation, args in facts)
+                facts.append(["nx_capabilities", [identity, "nested-metadata", "unavailable" if unavailable else "supported",
+                                                  "valueMeta configuration traversal"]])
             if any(state != "complete" for state in states):
                 target_row[-1] = "partial" if any(state in ("complete", "partial") for state in states) else ("blocked" if all(state == "blocked" for state in states) else "failed")
                 incomplete = True

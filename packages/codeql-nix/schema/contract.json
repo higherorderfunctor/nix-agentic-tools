@@ -20,7 +20,8 @@
       "unavailable",
       "unsupported"
     ],
-    "nx_contexts.kind": ["root"],
+    "nx_context_parents.memberKind": ["attribute", "index", "submodule"],
+    "nx_contexts.kind": ["concrete-submodule", "root"],
     "nx_files.sourceKind": ["dependency", "generated", "project"],
     "nx_observations.stage": ["pre-apply-metadata"],
     "nx_observations.state": [
@@ -101,6 +102,10 @@
     "nx_capabilities": {
       "columns": "target:target capability:text state:text reason:text",
       "key": [0, 1]
+    },
+    "nx_context_parents": {
+      "columns": "context:context parent:context option:option memberKind:text memberKey:text",
+      "key": [0]
     },
     "nx_contexts": {
       "columns": "context:context target:target kind:text instancePathJson:text",
