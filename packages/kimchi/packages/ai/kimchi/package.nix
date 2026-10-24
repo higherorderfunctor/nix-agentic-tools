@@ -310,6 +310,10 @@ in
     dontPatchELF = true;
     dontStrip = true;
     env.HUSKY = "0";
+    # Node sizes its default heap from host memory. From 1.21.0 the build's
+    # `tsc --noEmit` step exceeds that default on the 7 GB macOS runners, so
+    # pin the heap Linux hosts already get by default.
+    env.NODE_OPTIONS = "--max-old-space-size=4096";
 
     buildPhase = ''
       runHook preBuild
