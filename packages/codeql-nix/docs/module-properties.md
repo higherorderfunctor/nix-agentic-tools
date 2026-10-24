@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-23 — M3p adds selection metadata, authenticated
 > library formals and source property structure through the existing adapter,
-> model bundle and database contract.
+> model bundle and database contract; M3r reuses its helper identity for literal
+> source rename and alias paths.
 
 ## What it answers
 
@@ -66,10 +67,11 @@ consumer.
 
 `models/modules/properties.nix` probes helpers and constants from the pinned
 library. `models/modules/generate.py` records source export/binding evidence,
-helper argument counts, property kinds and priorities. Its module fingerprint
-and the builtin model fingerprint form one shared bundle identity.
-`lib/packaging.nix` installs `models/modules.json` and its mechanical QL
-projection as `nix/internal/generated/Modules.qll`.
+helper argument counts, property kinds and priorities, plus the rename argument
+roles described in [renames.md](renames.md). Its module fingerprint and the
+builtin model fingerprint form one shared bundle identity. `lib/packaging.nix`
+installs `models/modules.json` and its mechanical QL projection as
+`nix/internal/generated/Modules.qll`.
 
 `Modules::authenticatedLibraryFormal` gates bindings against that generated
 bundle. Lexical resolution follows accesses and local aliases from the supplied
