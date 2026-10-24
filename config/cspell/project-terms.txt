@@ -424,6 +424,7 @@ revertibility
 revset
 revsets
 revwalk
+riscv
 rodata
 rollouts
 rootfs

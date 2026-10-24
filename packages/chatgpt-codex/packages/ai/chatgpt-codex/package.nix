@@ -1,7 +1,8 @@
 # ChatGPT Codex CLI uses nixpkgs' source build and complete package at $out.
 # nixpkgs builds the CLI, code-mode host and voice host with matching commit
 # stamps, and supplies store-linked rg, bwrap and the GStreamer runtime.
-# This recipe pins the source and cargo hashes and uses the locked Rust toolchain.
+# This recipe pins the source, cargo and rusty_v8 hashes and uses the locked
+# Rust toolchain.
 {
   extractedLib,
   packageLib,
@@ -16,6 +17,41 @@
   sourcesFile = repoPath ../../../sources.json;
   rustPlatform = vu.mkRustPlatform {inherit pkgs;};
   packageRoot = (import ../../../lib/packageLayout.nix).root;
+
+  # rusty_v8 release assets: the static V8 library and its prebuilt binding,
+  # both matching the `v8` crate version in codex's Cargo.lock. The updater
+  # pins them in sources.librustyV8 on every bump, so a codex release that
+  # moves the crate does not compile against nixpkgs' older pin. It is pinned
+  # even when nixpkgs' pin matches, so a nixpkgs bump cannot move it under an
+  # unchanged codex. Systems are the ones nixpkgs' own librusty_v8 pin covers.
+  rustyV8 = {
+    assets = {
+      archive = target: "librusty_v8_release_${target}.a.gz";
+      srcBinding = target: "src_binding_release_${target}.rs";
+    };
+    pin = sources.librustyV8 or null;
+    systems = ["aarch64-darwin" "aarch64-linux" "riscv64-linux" "x86_64-linux"];
+    url = version: asset: "https://github.com/denoland/rusty_v8/releases/download/v${version}/${asset}";
+  };
+  fetchRustyV8 = name: key:
+    pkgs.fetchurl {
+      name = "${name}-${rustyV8.pin.version}";
+      url = rustyV8.url rustyV8.pin.version (rustyV8.assets.${key} stdenv.hostPlatform.rust.rustcTarget);
+      hash = rustyV8.pin.${key}.${stdenv.hostPlatform.system};
+      # As nixpkgs' fetchers: allowNonSource = false still refuses the blob.
+      meta.sourceProvenance = [lib.sourceTypes.binaryNativeCode];
+    };
+  # Prefetches every asset for each system into the JSON object "$rustyV8".
+  prefetchRustyV8 = lib.concatMapStrings (system:
+    lib.concatMapStrings (key: ''
+      hash=$(
+        ${pkgs.nix}/bin/nix store prefetch-file --json --hash-type sha256 \
+          "${rustyV8.url "\${v8}" (rustyV8.assets.${key} (lib.systems.elaborate system).rust.rustcTarget)}" \
+          | ${pkgs.jq}/bin/jq -r .hash
+      )
+      rustyV8=$(${pkgs.jq}/bin/jq --arg h "$hash" '.${key}."${system}" = $h' <<<"$rustyV8")
+    '') (builtins.attrNames rustyV8.assets))
+  rustyV8.systems;
 
   # The updater resolves the release commit, then fixes source and vendor hashes.
   # Fake hashes let the fixer evaluate each candidate before those downloads.
@@ -34,7 +70,11 @@
     ];
   };
 in
-  (pkgs.codex.override {inherit rustPlatform;}).overrideAttrs (finalAttrs: prev: {
+  (pkgs.codex.override ({inherit rustPlatform;}
+    // lib.optionalAttrs (rustyV8.pin != null) {
+      librusty_v8 = fetchRustyV8 "librusty_v8" "archive";
+      librusty_v8_src_binding = fetchRustyV8 "src_binding" "srcBinding";
+    })).overrideAttrs (finalAttrs: prev: {
     pname = "chatgpt-codex";
     # nixpkgs uses buildCommit for src, STABLE_GIT_COMMIT and CODEX_BUILD_COMMIT.
     inherit (sources) buildCommit version;
@@ -94,9 +134,9 @@ in
             repo = "openai/codex";
             tagPrefix = "rust-v";
           };
-          # Resolve the source commit and hashes, then regenerate the
-          # committed sidecar from the freshly-bumped binary in the SAME
-          # update/chatgpt-codex PR (no intra-PR drift).
+          # Resolve the source commit, rusty_v8 pin and hashes, then
+          # regenerate the committed sidecar from the freshly-bumped binary in
+          # the SAME update/chatgpt-codex PR (no intra-PR drift).
           extraExtract = ''
             buildCommit=$(
               ${pkgs.git}/bin/git ls-remote --exit-code https://github.com/openai/codex \
@@ -107,9 +147,19 @@ in
               echo "chatgpt-codex: no commit for rust-v$latest" >&2
               exit 1
             fi
+            v8=$(
+              ${pkgs.curl}/bin/curl -fsSL "https://raw.githubusercontent.com/openai/codex/$buildCommit/codex-rs/Cargo.lock" \
+                | ${pkgs.gnused}/bin/sed -n '/^name = "v8"$/{n;s/^version = "\(.*\)"$/\1/p;}'
+            )
+            if [[ ! "$v8" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "chatgpt-codex: no single v8 crate version in Cargo.lock at $buildCommit" >&2
+              exit 1
+            fi
+            rustyV8=$(${pkgs.jq}/bin/jq -n --arg v "$v8" '{version: $v}')
+            ${prefetchRustyV8}
             tmp=$(${pkgs.coreutils}/bin/mktemp)
-            ${pkgs.jq}/bin/jq --arg commit "$buildCommit" '. + {buildCommit: $commit}' \
-              "${sourcesFile}" > "$tmp"
+            ${pkgs.jq}/bin/jq --arg commit "$buildCommit" --argjson v8 "$rustyV8" \
+              '. + {buildCommit: $commit, librustyV8: $v8}' "${sourcesFile}" > "$tmp"
             ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
             ${fixVendorHash}
             ${(extractedLib {inherit pkgs;}).regenCommand {name = "chatgpt-codex";}}

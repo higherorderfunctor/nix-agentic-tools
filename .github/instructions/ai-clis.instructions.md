@@ -100,13 +100,14 @@ repository files (`AGENTS.md`, `.github/instructions/`, `.github/agents/`,
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-21 — updates are dispatched as the CI `Update`
+> **Last verified:** 2026-10-24 — updates are dispatched as the CI `Update`
 > workflow. Codex adopts nixpkgs' output-root layout, source-built voice and
-> store-linked runtime; Kiro parses embedded rollout JSON, preserving state
-> fields; copies must agree. The byte-preserving patcher remains strict. The
-> devenv update lane realizes the patched Kiro through the repo shell, so it
-> does not push. The same pushFilter also excludes the CodeQL engines, which the
-> input lanes do not build.
+> store-linked runtime, and its updater pins rusty_v8 to the vendored `v8`
+> crate; Kiro parses embedded rollout JSON, preserving state fields; copies must
+> agree. The byte-preserving patcher remains strict. The devenv update lane
+> realizes the patched Kiro through the repo shell, so it does not push. The
+> same pushFilter also excludes the CodeQL engines, which the input lanes do not
+> build.
 
 ### Overview
 
@@ -186,14 +187,20 @@ These packages pin versions in their recipe or release `sources.json` sidecar.
 Each uses an update strategy managed by `config.update.targets` (see owner
 `registry.nix`):
 
-- `chatgpt-codex` — `sources.json` {buildCommit, cargoHash, srcHash, version} +
-  `mkUpdateScript`; version via `ghLatestVersionCmd` with `tagPrefix = "rust-v"`
-  (openai/codex cuts several tag series, so the prefix is load-bearing). The
-  script resolves `buildCommit` from the `rust-v<version>` tag (dereferencing
-  annotated tags), then `passthru.fixVendorHash` restores the source and cargo
-  vendor hashes the rewrite dropped. Not automated: the V8 library comes from
-  nixpkgs' `librusty_v8` pin, so a codex bump that moves the `v8` crate fails to
-  build until nixpkgs catches up or we pin `librusty_v8` ourselves
+- `chatgpt-codex` — `sources.json` {buildCommit, cargoHash, librustyV8, srcHash,
+  version} + `mkUpdateScript`; version via `ghLatestVersionCmd` with
+  `tagPrefix = "rust-v"` (openai/codex cuts several tag series, so the prefix is
+  load-bearing). The script resolves `buildCommit` from the `rust-v<version>`
+  tag (dereferencing annotated tags), reads the `v8` crate version from
+  `codex-rs/Cargo.lock` at that commit and prefetches the matching rusty_v8
+  archive and prebuilt binding per system into `librustyV8`, then
+  `passthru.fixVendorHash` restores the source and cargo vendor hashes the
+  rewrite dropped. The recipe overrides nixpkgs' `librusty_v8` and
+  `librusty_v8_src_binding` from `librustyV8`, falling back to them only while
+  the key is absent. The pin is written even when nixpkgs' pin matches: nixpkgs
+  bumps codex and its V8 together, so following its pin would break our
+  unchanged codex on the next nixpkgs input bump (the binding's symbol names
+  change with the crate, failing rustc with E0425 in crate `v8`)
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   GitHub release and prefetches per-platform binaries
 - `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release
