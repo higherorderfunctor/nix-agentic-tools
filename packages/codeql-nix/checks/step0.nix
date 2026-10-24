@@ -33,6 +33,9 @@ in {
     codeql-nix-properties =
       installedSuite "codeql-nix-properties" ["inc3/properties/test_properties.py"]
       "M3p properties with real-Nix mutations";
+    codeql-nix-renames =
+      installedSuite "codeql-nix-renames" ["inc3/renames/test_renames.py"]
+      "M3r renames with direct oracles";
     codeql-nix-step0 =
       installedSuite "codeql-nix-step0" ["step0/test_q0.py"]
       "Q0 installed queries, independent priority flip, equal retention, unselected throw and selected failure qltest";

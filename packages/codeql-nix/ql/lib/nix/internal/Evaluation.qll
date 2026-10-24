@@ -26,9 +26,13 @@ module Evaluation {
   }
 
   bindingset[text]
-  private string quoted(string text) {
-    result = "\"" + concat(int i | i in [0 .. text.length() - 1] |
-      escaped(text.charAt(i)), "" order by i) + "\""
+  string quoted(string text) {
+    // Slice whole code points: charAt cannot return an isolated surrogate.
+    result = "\"" + concat(int i, int width |
+      i in [0 .. text.length() - 1] and
+      (text.codePointAt(i) <= 65535 and width = 1
+       or text.codePointAt(i) > 65535 and width = 2) |
+      escaped(text.substring(i, i + width)), "" order by i) + "\""
   }
 
   string pathJson(Ast::Binding binding) {

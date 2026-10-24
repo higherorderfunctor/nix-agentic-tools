@@ -1,0 +1,1 @@
+{lib,...}: { _file="rename.nix"; imports=[ (lib.mkRenamedOptionModule ["old"] ["new"]) ]; }

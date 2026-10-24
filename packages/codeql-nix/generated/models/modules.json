@@ -1,5 +1,5 @@
 {
-  "bundleHash": "sha256:b4c818374d8f3d9790a32f2b013f520803d0ffa041d04847ac4b629c63ddfbea",
+  "bundleHash": "sha256:68e19b347707113f2e6f2886421a9774b5be4a5e8fff4a1abef800bcb8d178a3",
   "constantEvidence": {
     "ordinaryOverridePriority": [
       {
@@ -13,7 +13,7 @@
   "constants": {
     "ordinaryOverridePriority": "100"
   },
-  "generatorVersion": "1",
+  "generatorVersion": "2",
   "helpers": [
     {
       "argumentSpecJson": "{\"arity\":1,\"content\":0}",
@@ -42,6 +42,34 @@
       "kind": "order",
       "name": "mkAfter",
       "priority": "1500"
+    },
+    {
+      "argumentSpecJson": "{\"arity\":2,\"from\":0,\"to\":1}",
+      "arity": 2,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 520,
+          "lineText": "        mkAliasOptionModule"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2484,
+          "lineText": "    mkAliasOptionModule"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 2079,
+          "lineText": "  mkAliasOptionModule ="
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:8dc96144cbf483f80c66dd9199f6e8ad0f3935177331176e0321cab1db561cce",
+      "kind": "alias",
+      "name": "mkAliasOptionModule",
+      "priority": null
     },
     {
       "argumentSpecJson": "{\"arity\":1,\"content\":0}",
@@ -238,8 +266,36 @@
       "kind": "override",
       "name": "mkOverride",
       "priority": null
+    },
+    {
+      "argumentSpecJson": "{\"arity\":2,\"from\":0,\"to\":1}",
+      "arity": 2,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 516,
+          "lineText": "        mkRenamedOptionModule"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2502,
+          "lineText": "    mkRenamedOptionModule"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 1914,
+          "lineText": "  mkRenamedOptionModule ="
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:f633bad268c65ba0d0fbcb468ef52cb8c43ffed5d493b1431a386d7ea353d65b",
+      "kind": "rename",
+      "name": "mkRenamedOptionModule",
+      "priority": null
     }
   ],
   "libHash": "sha256-IoNisKcGbUjdd45qCqywGMCYmZ5EnkxezvLII0FWwNA=",
-  "modelVersion": "sha256:8149f9d03638fccc76b57ae9177580299a95ced50196d8e155a97027efd7e766"
+  "modelVersion": "sha256:90edc74ab6860dcec794eadc1ad5679d9481d35129b18f02f9bd0466bfbc34db"
 }

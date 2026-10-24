@@ -358,10 +358,13 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
             except Exception as error:
                 source_error = error
             module_model = getattr(identity_object, "module_model", None)
-            property_state = ("supported" if module_model and fingerprint["libVersion"] == module_model["libHash"]
-                              else "unsupported" if module_model else "unavailable")
+            helper_state = ("supported" if module_model and fingerprint["libVersion"] == module_model["libHash"]
+                            else "unsupported" if module_model else "unavailable")
+            capabilities = ["rename-models"]
             if any(request["facet"] == "selection" for request in target["requests"]):
-                facts.append(["nx_capabilities", [identity, "module-properties", property_state, "exact-pin module metadata"]])
+                capabilities.insert(0, "module-properties")
+            for capability in capabilities:
+                facts.append(["nx_capabilities", [identity, capability, helper_state, "exact-pin module helper models"]])
             states = []
             for ordinal, request in enumerate(target["requests"]):
                 req = abi.key("request", [identity, context, abi.canonical(request), str(ordinal)])
@@ -370,7 +373,7 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                 try:
                     if source_error is not None:
                         raise source_error
-                    if request["facet"] == "selection" and property_state != "supported":
+                    if request["facet"] == "selection" and helper_state != "supported":
                         raise Refusal("module-properties-unavailable", "exact-pin property metadata unavailable", "unsupported")
                     if request["facet"] != "selection" and request["maxDepth"] != 0:
                         raise Refusal("request-unsupported", "only root metadata projections are supported", "blocked")
