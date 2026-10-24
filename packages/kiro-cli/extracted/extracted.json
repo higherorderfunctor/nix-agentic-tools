@@ -41,14 +41,17 @@
     "managed_settings",
     "memory",
     "memory_controls",
+    "model_fallback_auto_refusal",
     "remote_changelog",
     "remote_sandbox",
     "session_dashboard",
+    "standalone_public",
     "standalone_toolbox",
     "tangent",
     "test",
     "test_internal_only",
     "test_nightly_only",
+    "trust_classifier_enforce",
     "trust_classifier_shadow",
     "tui",
     "v3_prompt",
@@ -71,9 +74,11 @@
     },
     "memory": { "patchable": true, "unmatchedSites": 0 },
     "memory_controls": { "patchable": true, "unmatchedSites": 0 },
+    "model_fallback_auto_refusal": { "patchable": true, "unmatchedSites": 0 },
     "remote_changelog": { "patchable": true, "unmatchedSites": 0 },
     "remote_sandbox": { "patchable": true, "unmatchedSites": 0 },
     "session_dashboard": { "patchable": true, "unmatchedSites": 0 },
+    "standalone_public": { "patchable": true, "unmatchedSites": 0 },
     "standalone_toolbox": {
       "patchable": false,
       "unmatchedSites": {
@@ -84,6 +89,7 @@
     "test": { "patchable": true, "unmatchedSites": 0 },
     "test_internal_only": { "patchable": true, "unmatchedSites": 0 },
     "test_nightly_only": { "patchable": true, "unmatchedSites": 0 },
+    "trust_classifier_enforce": { "patchable": true, "unmatchedSites": 0 },
     "trust_classifier_shadow": { "patchable": true, "unmatchedSites": 0 },
     "tui": { "patchable": true, "unmatchedSites": 0 },
     "v3_prompt": {
@@ -118,14 +124,24 @@
     },
     "memory": { "segment": "all", "treatment_percent": 100 },
     "memory_controls": { "segment": "all", "treatment_percent": 100 },
+    "model_fallback_auto_refusal": {
+      "segment": "internal",
+      "treatment_percent": 100
+    },
     "remote_changelog": { "channel": "stable", "treatment_percent": 100 },
     "remote_sandbox": { "segment": "all", "treatment_percent": 100 },
     "session_dashboard": { "segment": "all", "treatment_percent": 100 },
-    "standalone_toolbox": { "segment": "all", "treatment_percent": 0 },
+    "standalone_public": { "treatment_percent": 0 },
+    "standalone_toolbox": { "segment": "all", "treatment_percent": 5 },
     "tangent": { "segment": "all", "treatment_percent": 100 },
     "test": { "treatment_percent": 100 },
     "test_internal_only": { "segment": "internal", "treatment_percent": 100 },
     "test_nightly_only": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 100
+    },
+    "trust_classifier_enforce": {
       "channel": "nightly",
       "segment": "internal",
       "treatment_percent": 100
@@ -139,7 +155,7 @@
     "v3_prompt": {
       "internal_treatment_percent": 100,
       "segment": "all",
-      "treatment_percent": 25
+      "treatment_percent": 50
     },
     "voice": { "segment": "all", "treatment_percent": 100 },
     "workflows": { "segment": "all", "treatment_percent": 100 }
@@ -171,6 +187,7 @@
     "chat.keybindings.toggleInterruptBehavior",
     "chat.keybindings.toggleSessionDashboard",
     "chat.modelDefaults",
+    "chat.modelPicker.hiddenModels",
     "chat.modelPicker.lastUsed",
     "chat.modelPicker.sortBy",
     "chat.notificationMethod",
@@ -212,6 +229,7 @@
     "chat.verbosity.lite",
     "chat.verbosity.tui",
     "chat.workflow.continueInterrupted",
+    "chat.workflowLaunch",
     "chat.workflowMonitor.mouseEnabled",
     "memory.mode",
     "memory.reflection"
