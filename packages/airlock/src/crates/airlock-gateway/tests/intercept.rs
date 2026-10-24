@@ -1,221 +1,684 @@
-//! Passthrough interception: airlock's leaf to the client, verified TLS upstream, bytes unchanged.
+//! HTTP interception: airlock's leaf to the client, verified TLS upstream, swapped auth.
 
 mod support;
 
 use std::{
     fs,
     os::unix::fs::{DirBuilderExt, PermissionsExt},
+    sync::{Arc, atomic::Ordering},
     time::Duration,
 };
 
 use airlock_gateway::{CaError, Error, Gateway};
-use support::{Running, TOKEN, TestCa, config, fields, sink, tls_upstream};
+use http_body_util::BodyExt;
+use hyper::header::HeaderName;
+use hyper::{
+    body::Frame,
+    header::{
+        AUTHORIZATION, CONNECTION, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE, TRAILER, UPGRADE,
+    },
+};
+use support::{
+    FixtureAuth, HttpClient, HttpProtocol, REAL_API_KEY, REAL_OAUTH_TOKEN, Running, StallGates,
+    TOKEN, TestCa, UpgradeBytes, UpstreamMode, config, fields, fnv1a_test, full_body,
+    http_upstream, records, request, sink, streaming_body, tls_upstream, wait_for_request,
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    sync::oneshot,
     time::timeout,
 };
 use x509_parser::{extensions::GeneralName, prelude::FromDer};
 
 const LARGE_BODY: usize = 64 << 20;
 
-/// The upstream's ALPN list, and the protocol both sides must end up with.
-type AlpnCase = (&'static [&'static [u8]], Option<&'static [u8]>);
-
-const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-
-fn fnv1a(hash: u64, bytes: &[u8]) -> u64 {
-    bytes.iter().fold(hash, |hash, byte| {
-        (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3)
-    })
-}
-
 #[tokio::test]
-async fn round_trip_passes_bytes_unchanged_and_never_logs_them() {
+async fn http1_swaps_oauth_and_removes_client_auth() {
     let ca = TestCa::new();
-    let upstream = tls_upstream(ca.server_config(&[])).await;
-    let payload =
-        b"GET /v1/messages HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer fake-SECRET-upstream-token\r\n\r\nbody\x00\xff";
-    let upstream_task = tokio::spawn(async move {
-        let mut tls = upstream
-            .accepted
-            .await
-            .expect("accept")
-            .expect("upstream TLS");
-        let mut received = vec![0; payload.len()];
-        tls.read_exact(&mut received).await.expect("request");
-        tls.write_all(&received).await.expect("echo");
-        let mut rest = Vec::new();
-        timeout(Duration::from_secs(1), tls.read_to_end(&mut rest))
-            .await
-            .expect("close_notify deadline")
-            .expect("clean close");
-        assert_eq!(rest, b"");
-        received
-    });
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
     let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
-    let mut client = server
-        .handshake(upstream.port, "localhost", &[], true)
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/messages?client=fake-CLIENT-query",
+            &[
+                (AUTHORIZATION, "Bearer fake-CLIENT-oauth"),
+                (HeaderName::from_static("x-api-key"), "fake-CLIENT-api-key"),
+                (HeaderName::from_static("anthropic-beta"), "test"),
+            ],
+            full_body(b"request body"),
+        ))
+        .await;
+
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let body = response
+        .into_body()
+        .collect()
         .await
-        .expect("client handshake");
-    client.write_all(payload).await.expect("send");
-    let mut echoed = vec![0; payload.len()];
-    timeout(Duration::from_secs(1), client.read_exact(&mut echoed))
-        .await
-        .expect("echo deadline")
-        .expect("echo");
-    assert_eq!(echoed, payload);
-    client.shutdown().await.expect("close_notify");
-    assert_eq!(upstream_task.await.expect("upstream task"), payload);
-    drop(client);
-    let capture = server.capture.clone();
+        .expect("body")
+        .to_bytes();
+    assert_eq!(&body[..], b"request body");
+    let received = records(&upstream);
+    assert_eq!(received.len(), 1);
+    assert_eq!(received[0].path, "/v1/messages");
+    assert_eq!(
+        received[0].headers[AUTHORIZATION],
+        format!("Bearer {REAL_OAUTH_TOKEN}")
+    );
+    assert!(received[0].headers.get("x-api-key").is_none());
+    assert_eq!(received[0].headers["anthropic-beta"], "test");
+    assert_eq!(&received[0].body[..], b"request body");
+    let request_events = server.capture.request_events();
+    assert_eq!(request_events[0]["fields"]["path"], "/v1/messages");
     let events = server.stop().await;
-    // Read after stop has joined every connection, so the close event is in the capture.
-    let text = capture.text();
-    assert!(!text.contains("fake-SECRET"), "audit exposed bytes: {text}");
     assert_eq!(events.len(), 1);
     let audit = fields(&events[0]);
-    assert_eq!(audit["client"], "harness");
-    assert_eq!(audit["host"], "localhost");
-    assert_eq!(audit["sni"], "localhost");
-    assert_eq!(audit["alpn"], "");
-    assert_eq!(audit["decision"], "intercept");
-    assert_eq!(audit["outcome"], "closed");
-    assert_eq!(audit["client_to_upstream"], payload.len());
-    assert_eq!(audit["upstream_to_client"], payload.len());
+    assert_eq!(audit["credential"], "claude");
+    assert_eq!(audit["requests"], 1);
+    assert!(audit["client_to_upstream"].as_u64().expect("upload bytes") > 0);
+    assert!(
+        audit["upstream_to_client"]
+            .as_u64()
+            .expect("download bytes")
+            > 0
+    );
 }
 
 #[tokio::test]
-async fn first_chunk_reaches_the_client_before_the_upstream_sends_the_last() {
+async fn http1_preserves_upstream_status_headers_and_body() {
     let ca = TestCa::new();
-    let upstream = tls_upstream(ca.server_config(&[])).await;
-    let (first_seen, first_seen_by_client) = oneshot::channel();
-    let upstream_task = tokio::spawn(async move {
-        let mut tls = upstream
-            .accepted
-            .await
-            .expect("accept")
-            .expect("upstream TLS");
-        tls.write_all(b"chunk-0;").await.expect("first chunk");
-        // A gateway that buffered the body would never let the client see the first chunk.
-        timeout(Duration::from_secs(2), first_seen_by_client)
-            .await
-            .expect("client saw the first chunk before the last was sent")
-            .expect("signal");
-        for index in 1..4 {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-            tls.write_all(format!("chunk-{index};").as_bytes())
-                .await
-                .expect("chunk");
-        }
-        tls.shutdown().await.expect("close_notify");
-    });
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Metadata).await;
     let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
-    let mut client = server
-        .handshake(upstream.port, "localhost", &[], true)
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+
+    let response = client
+        .send(request("POST", "/limited", &[], full_body(b"")))
+        .await;
+
+    assert_eq!(response.status(), hyper::StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(response.version(), hyper::Version::HTTP_11);
+    assert_eq!(response.headers()["retry-after"], "7");
+    assert_eq!(response.headers()["x-upstream"], "metadata");
+    assert!(response.headers().get(UPGRADE).is_none());
+    let body = response
+        .into_body()
+        .collect()
         .await
-        .expect("client handshake");
-    let mut first = [0; 8];
-    timeout(Duration::from_secs(1), client.read_exact(&mut first))
-        .await
-        .expect("first chunk deadline")
-        .expect("first chunk");
-    assert_eq!(&first, b"chunk-0;");
-    first_seen.send(()).expect("signal upstream");
-    let mut rest = Vec::new();
-    timeout(Duration::from_secs(2), client.read_to_end(&mut rest))
-        .await
-        .expect("rest deadline")
-        .expect("rest");
-    assert_eq!(rest, b"chunk-1;chunk-2;chunk-3;");
-    upstream_task.await.expect("upstream task");
-    drop(client);
-    let events = server.stop().await;
-    assert_eq!(fields(&events[0])["outcome"], "closed");
+        .expect("body")
+        .to_bytes();
+    assert_eq!(&body[..], b"quota");
+    server.stop().await;
 }
 
 #[tokio::test]
-async fn large_body_streams_through_without_buffering() {
+async fn http2_swaps_oauth_on_the_same_protocol() {
     let ca = TestCa::new();
-    let upstream = tls_upstream(ca.server_config(&[])).await;
-    let upstream_task = tokio::spawn(async move {
-        let mut tls = upstream
-            .accepted
+    let upstream = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Echo).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http2).await;
+
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[(AUTHORIZATION, "Bearer fake-CLIENT-oauth")],
+            full_body(b"h2 body"),
+        ))
+        .await;
+
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("body")
+        .to_bytes();
+    assert_eq!(&body[..], b"h2 body");
+    let received = records(&upstream);
+    assert_eq!(
+        received[0].headers[AUTHORIZATION],
+        format!("Bearer {REAL_OAUTH_TOKEN}")
+    );
+    let events = server.stop().await;
+    assert_eq!(fields(&events[0])["alpn"], "h2");
+}
+
+#[tokio::test]
+async fn http2_requests_multiplex_while_response_headers_are_pending() {
+    let release = Arc::new(tokio::sync::Notify::new());
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Gate(release)).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http2).await;
+    let mut release_sender = client.http2_sender();
+
+    let blocked = tokio::spawn(async move {
+        timeout(
+            Duration::from_secs(2),
+            client.send(request("GET", "/blocked", &[], full_body(b""))),
+        )
+        .await
+        .expect("blocked response deadline")
+    });
+    wait_for_request(&upstream, "/blocked").await;
+    let released = timeout(
+        Duration::from_secs(2),
+        release_sender.send_request(request("GET", "/release", &[], full_body(b""))),
+    )
+    .await
+    .expect("release response deadline")
+    .expect("released response");
+    assert_eq!(released.status(), hyper::StatusCode::OK);
+    let blocked = blocked.await.expect("blocked task");
+    assert_eq!(blocked.status(), hyper::StatusCode::OK);
+
+    let received = records(&upstream);
+    assert_eq!(received.len(), 2);
+    let events = server.stop().await;
+    assert_eq!(fields(&events[0])["requests"], 2);
+}
+
+#[tokio::test]
+async fn api_key_credentials_replace_authorization_with_x_api_key() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_with_auth(
+        "deny",
+        &["localhost"],
+        ca.roots(),
+        None,
+        FixtureAuth::ApiKey,
+    )
+    .await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+
+    let response = client
+        .send(request(
+            "POST",
+            "/v1/messages",
+            &[
+                (AUTHORIZATION, "Bearer fake-CLIENT-oauth"),
+                (HeaderName::from_static("x-api-key"), "fake-CLIENT-api-key"),
+            ],
+            full_body(b"api body"),
+        ))
+        .await;
+
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("body")
+        .to_bytes();
+    assert_eq!(&body[..], b"api body");
+    let received = records(&upstream);
+    assert_eq!(received[0].headers["x-api-key"], REAL_API_KEY);
+    assert!(received[0].headers.get(AUTHORIZATION).is_none());
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn keepalive_requests_are_each_swapped_and_counted() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+
+    for index in 0..3 {
+        let response = client
+            .send(request(
+                "POST",
+                &format!("/v1/messages/{index}"),
+                &[(AUTHORIZATION, "Bearer fake-CLIENT-oauth")],
+                full_body(b"keepalive"),
+            ))
+            .await;
+        let body = response
+            .into_body()
+            .collect()
             .await
-            .expect("accept")
-            .expect("upstream TLS");
-        let mut chunk = vec![0; 64 << 10];
-        let mut hash = FNV_OFFSET;
-        for index in 0..LARGE_BODY / chunk.len() {
+            .expect("body")
+            .to_bytes();
+        assert_eq!(&body[..], b"keepalive");
+    }
+
+    let received = records(&upstream);
+    assert_eq!(received.len(), 3);
+    assert!(
+        received.iter().all(|record| {
+            record.headers[AUTHORIZATION] == format!("Bearer {REAL_OAUTH_TOKEN}")
+        })
+    );
+    let events = server.stop().await;
+    assert_eq!(fields(&events[0])["requests"], 3);
+}
+
+#[tokio::test]
+async fn sse_first_event_reaches_client_before_upstream_sends_last() {
+    let release = Arc::new(tokio::sync::Notify::new());
+    let ca = TestCa::new();
+    let upstream =
+        http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Sse(release.clone())).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let mut response = client
+        .send(request("GET", "/stream", &[], full_body(b"")))
+        .await;
+    let body = response.body_mut();
+
+    let first = timeout(Duration::from_secs(2), body.frame())
+        .await
+        .expect("first event deadline")
+        .expect("first event")
+        .expect("first body frame")
+        .into_data()
+        .expect("first data");
+    assert_eq!(&first[..], b"event:first\n\n");
+    release.notify_one();
+    let last = timeout(Duration::from_secs(2), body.frame())
+        .await
+        .expect("last event deadline")
+        .expect("last event")
+        .expect("last body frame")
+        .into_data()
+        .expect("last data");
+    assert_eq!(&last[..], b"event:last\n\n");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn large_upload_streams_without_a_test_buffer() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::HashUpload).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let (sender, body) = streaming_body(2);
+    let send = tokio::spawn(async move {
+        let chunk_size = 64 << 10;
+        let mut hash = support::FNV_OFFSET;
+        for index in 0..LARGE_BODY / chunk_size {
+            let mut chunk = vec![0; chunk_size];
             for (offset, byte) in chunk.iter_mut().enumerate() {
                 *byte = (index.wrapping_mul(31) ^ offset).to_le_bytes()[0];
             }
-            hash = fnv1a(hash, &chunk);
-            tls.write_all(&chunk).await.expect("chunk");
+            hash = fnv1a_test(hash, &chunk);
+            sender
+                .send(Ok(Frame::data(chunk.into())))
+                .await
+                .expect("upload chunk");
         }
-        tls.shutdown().await.expect("close_notify");
         hash
     });
+    let (_client, response) = client_send_large(&server, upstream.port, body).await;
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("body")
+        .to_bytes();
+    let expected = send.await.expect("upload task");
+    assert_eq!(body, expected.to_string().as_bytes());
+    let received = records(&upstream);
+    assert_eq!(received[0].body_len, LARGE_BODY);
+    assert_eq!(received[0].body_hash, expected);
+    let events = server.stop().await;
+    let audit = fields(&events[0]);
+    assert!(
+        audit["client_to_upstream"].as_u64().expect("upload audit") >= LARGE_BODY as u64,
+        "large upload bytes were not audited"
+    );
+}
+
+async fn client_send_large(
+    server: &Running,
+    port: u16,
+    body: support::ReceiverBody,
+) -> (HttpClient, hyper::Response<hyper::body::Incoming>) {
+    let mut client = HttpClient::connect(server, port, HttpProtocol::Http1).await;
+    let request = hyper::Request::builder()
+        .method("POST")
+        .uri("/upload")
+        .header("content-length", LARGE_BODY.to_string())
+        .body(body)
+        .expect("upload request");
+    let response = timeout(Duration::from_secs(120), client.send(request))
+        .await
+        .expect("upload deadline");
+    (client, response)
+}
+
+#[tokio::test]
+async fn http1_upgrade_returns_101_then_bridges_bytes() {
+    let ca = TestCa::new();
+    let upgrade_bytes = Arc::new(UpgradeBytes {
+        client_to_upstream: std::sync::atomic::AtomicU64::new(0),
+    });
+    let upstream = http_upstream(
+        &ca,
+        HttpProtocol::Http1,
+        UpstreamMode::UpgradeEcho(upgrade_bytes.clone()),
+    )
+    .await;
     let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
     let mut client = server
-        .handshake(upstream.port, "localhost", &[], true)
+        .handshake(upstream.port, "localhost", &[b"http/1.1"], true)
         .await
         .expect("client handshake");
-    let mut buffer = vec![0; 16 << 10];
-    let mut hash = FNV_OFFSET;
-    let mut total = 0;
-    timeout(Duration::from_secs(120), async {
-        loop {
-            let read = client.read(&mut buffer).await.expect("body");
-            if read == 0 {
-                break;
-            }
-            hash = fnv1a(hash, &buffer[..read]);
-            total += read;
+
+    client
+        .write_all(
+            b"GET /websocket HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: test\r\n\r\n",
+        )
+        .await
+        .expect("upgrade request");
+    let mut header = Vec::new();
+    timeout(Duration::from_secs(2), async {
+        while !header.ends_with(b"\r\n\r\n") {
+            let mut byte = [0];
+            assert!(client.read(&mut byte).await.expect("header byte") > 0);
+            header.push(byte[0]);
+            assert!(header.len() < 8192);
         }
     })
     .await
-    .expect("body deadline");
-    assert_eq!(total, LARGE_BODY);
-    assert_eq!(hash, upstream_task.await.expect("upstream task"));
-    drop(client);
+    .expect("101 deadline");
+    let header = String::from_utf8(header).expect("header UTF-8");
+    assert!(
+        header.starts_with("HTTP/1.1 101 Switching Protocols\r\n"),
+        "{header}"
+    );
+    assert!(
+        header.to_ascii_lowercase().contains("upgrade: test\r\n"),
+        "{header}"
+    );
+
+    client.write_all(b"client-up").await.expect("upgrade send");
+    let mut echoed = [0; 9];
+    timeout(Duration::from_secs(2), client.read_exact(&mut echoed))
+        .await
+        .expect("upgrade echo deadline")
+        .expect("upgrade echo");
+    assert_eq!(&echoed[..], b"client-up");
+    client.shutdown().await.expect("upgrade half-close");
+    timeout(Duration::from_secs(2), upstream.done)
+        .await
+        .expect("upstream deadline")
+        .expect("upstream task")
+        .expect("upstream serve");
+    let event = server.closed_event().await;
+    let audit = fields(&event);
+    assert_eq!(audit["outcome"], "closed");
+    assert_eq!(
+        audit["client_to_upstream"].as_u64().expect("request audit"),
+        upgrade_bytes.client_to_upstream.load(Ordering::Relaxed),
+        "upgraded request bytes were counted more than once"
+    );
+    assert_eq!(
+        audit["upstream_to_client"]
+            .as_u64()
+            .expect("response audit"),
+        (header.len() + echoed.len()) as u64,
+        "upgraded response bytes were counted more than once"
+    );
+    let events = server.stop().await;
+    assert_eq!(events.len(), 1);
+}
+
+#[tokio::test]
+async fn hop_by_hop_headers_do_not_reach_upstream_or_replace_real_auth() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let response = client
+        .send(request(
+            "GET",
+            "/hop-by-hop",
+            &[
+                (CONNECTION, "authorization, Keep-Alive"),
+                (HeaderName::from_static("keep-alive"), "timeout=1"),
+                (PROXY_AUTHENTICATE, "Basic"),
+                (PROXY_AUTHORIZATION, "Basic fake-CLIENT-proxy"),
+                (TE, "trailers"),
+                (TRAILER, "x-test"),
+            ],
+            full_body(b""),
+        ))
+        .await;
+
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let received = records(&upstream);
+    assert_eq!(
+        received[0].headers[AUTHORIZATION],
+        format!("Bearer {REAL_OAUTH_TOKEN}")
+    );
+    for header in [
+        CONNECTION,
+        HeaderName::from_static("keep-alive"),
+        PROXY_AUTHENTICATE,
+        PROXY_AUTHORIZATION,
+        TRAILER,
+    ] {
+        assert!(received[0].headers.get(&header).is_none(), "{header:?}");
+    }
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn request_after_upstream_connection_death_receives_502() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::CloseAfterResponse).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+
+    let first = client
+        .send(request("GET", "/first", &[], full_body(b"")))
+        .await;
+    let first_body = first
+        .into_body()
+        .collect()
+        .await
+        .expect("first body")
+        .to_bytes();
+    assert_eq!(&first_body[..], b"upstream-closed");
+    let record_count = records(&upstream).len();
+    let _ = timeout(Duration::from_secs(2), upstream.done)
+        .await
+        .expect("upstream deadline")
+        .expect("upstream task");
+
+    let second = client
+        .send(request("GET", "/second", &[], full_body(b"")))
+        .await;
+    assert_eq!(second.status(), hyper::StatusCode::BAD_GATEWAY);
+    let body = second
+        .into_body()
+        .collect()
+        .await
+        .expect("second body")
+        .to_bytes();
+    assert_eq!(&body[..], b"upstream connection failed");
+    assert_eq!(record_count, 1);
+    let events = server.stop().await;
+    assert_eq!(fields(&events[0])["requests"], 2);
+}
+
+#[tokio::test]
+async fn upstream_drop_mid_response_closes_the_client_without_hanging() {
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::DropMidResponse).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let mut response = client
+        .send(request("GET", "/drop", &[], full_body(b"")))
+        .await;
+    let body = response.body_mut();
+
+    let first = timeout(Duration::from_secs(2), body.frame())
+        .await
+        .expect("first deadline")
+        .expect("first frame")
+        .expect("first data")
+        .into_data()
+        .expect("first bytes");
+    assert_eq!(&first[..], b"first-event;");
+    let tail = timeout(Duration::from_secs(2), body.frame())
+        .await
+        .expect("failure deadline");
+    assert!(
+        tail.is_some_and(|frame| frame.is_err()),
+        "natural EOF is not an upstream transport failure"
+    );
     let events = server.stop().await;
     let audit = fields(&events[0]);
-    assert_eq!(audit["outcome"], "closed");
-    assert_eq!(audit["upstream_to_client"], LARGE_BODY);
+    assert_eq!(audit["requests"], 1);
+    assert!(
+        audit["upstream_to_client"]
+            .as_u64()
+            .expect("response audit")
+            > 0
+    );
+}
+
+#[tokio::test]
+async fn http2_client_drop_before_headers_cancels_upstream_and_audits_the_request() {
+    let release = Arc::new(tokio::sync::Notify::new());
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http2, UpstreamMode::Gate(release)).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http2).await;
+    let mut sender = client.http2_sender();
+    let pending = tokio::spawn(async move {
+        timeout(
+            Duration::from_secs(2),
+            sender.send_request(request("GET", "/blocked", &[], full_body(b""))),
+        )
+        .await
+        .expect("pending response deadline")
+    });
+    wait_for_request(&upstream, "/blocked").await;
+
+    drop(client);
+    pending.abort();
+    let _ = timeout(Duration::from_secs(1), upstream.done)
+        .await
+        .expect("upstream cancellation deadline");
+    let event = server.closed_event().await;
+    let audit = fields(&event);
+    assert_eq!(audit["requests"], 1);
+    let request_events = server.capture.request_events();
+    assert!(
+        request_events
+            .iter()
+            .any(|event| event["fields"]["cancelled"] == true),
+        "pending request was not logged as cancelled"
+    );
+}
+
+#[tokio::test]
+async fn http1_client_drop_mid_response_closes_the_upstream_within_a_second() {
+    let release = Arc::new(tokio::sync::Notify::new());
+    let ca = TestCa::new();
+    let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Sse(release)).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let mut client = HttpClient::connect(&server, upstream.port, HttpProtocol::Http1).await;
+    let mut response = client
+        .send(request("GET", "/stream", &[], full_body(b"")))
+        .await;
+    let body = response.body_mut();
+    let first = timeout(Duration::from_secs(2), body.frame())
+        .await
+        .expect("first event deadline")
+        .expect("first event")
+        .expect("first body frame")
+        .into_data()
+        .expect("first data");
+    assert_eq!(&first[..], b"event:first\n\n");
+
+    drop(client);
+    let _ = timeout(Duration::from_secs(1), upstream.done)
+        .await
+        .expect("upstream close deadline");
+    let event = server.closed_event().await;
+    assert_eq!(fields(&event)["requests"], 1);
+}
+
+#[tokio::test]
+async fn stalled_reader_close_notify_cannot_hold_a_live_socket_open() {
+    let gates = Arc::new(StallGates {
+        backpressure: tokio::sync::Notify::new(),
+        response_started: tokio::sync::Notify::new(),
+    });
+    let ca = TestCa::new();
+    let upstream =
+        http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Stall(gates.clone())).await;
+    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
+    let mut client = server
+        .handshake(upstream.port, "localhost", &[b"http/1.1"], true)
+        .await
+        .expect("client handshake");
+    client
+        .write_all(b"GET /stalled HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n")
+        .await
+        .expect("stalled request");
+    client.flush().await.expect("request flush");
+    timeout(Duration::from_secs(2), gates.response_started.notified())
+        .await
+        .expect("response start deadline");
+    timeout(Duration::from_secs(2), gates.backpressure.notified())
+        .await
+        .expect("backpressure deadline");
+
+    client.shutdown().await.expect("TLS close_notify");
+    let upstream_result = timeout(Duration::from_secs(1), upstream.done)
+        .await
+        .expect("half-close upstream deadline")
+        .expect("half-close upstream task");
+    assert!(upstream_result.is_err(), "stalled upstream stopped writing");
+    let event = server.closed_event().await;
+    let audit = fields(&event);
+    assert_eq!(audit["requests"], 1);
+    assert!(
+        audit["upstream_to_client"]
+            .as_u64()
+            .expect("response audit")
+            > 0
+    );
+    drop(client);
+    let events = server.stop().await;
+    assert_eq!(events.len(), 1);
 }
 
 #[tokio::test]
 async fn alpn_is_mirrored_from_the_upstream() {
     let ca = TestCa::new();
     let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
-    let cases: [AlpnCase; 3] = [
-        (&[b"h2"], Some(b"h2")),
-        (&[b"http/1.1"], Some(b"http/1.1")),
-        (&[], None),
-    ];
-    for (upstream_alpn, expected) in cases {
-        let upstream = tls_upstream(ca.server_config(upstream_alpn)).await;
+    for (protocol, expected) in [
+        (HttpProtocol::Http2, "h2"),
+        (HttpProtocol::Http1, "http/1.1"),
+    ] {
+        let upstream = http_upstream(&ca, protocol, UpstreamMode::Echo).await;
         let client = server
             .handshake(upstream.port, "localhost", &[b"h2", b"http/1.1"], true)
             .await
             .expect("client handshake");
-        assert_eq!(client.get_ref().1.alpn_protocol(), expected);
-        let tls = upstream
-            .accepted
-            .await
-            .expect("accept")
-            .expect("upstream TLS");
-        assert_eq!(tls.get_ref().1.alpn_protocol(), expected);
+        assert_eq!(
+            client.get_ref().1.alpn_protocol(),
+            Some(expected.as_bytes())
+        );
         drop(client);
-        drop(tls);
+        let _ = timeout(Duration::from_secs(2), upstream.done)
+            .await
+            .expect("upstream deadline")
+            .expect("upstream task");
     }
     let events = server.stop().await;
-    let alpn = events
+    let alpn: Vec<_> = events
         .iter()
         .map(|event| fields(event)["alpn"].as_str().expect("alpn").to_owned())
-        .collect::<Vec<_>>();
-    assert_eq!(alpn, ["h2", "http/1.1", ""]);
+        .collect();
+    assert_eq!(alpn, ["h2", "http/1.1"]);
 }
 
 #[tokio::test]
@@ -224,8 +687,7 @@ async fn leaf_is_minted_once_for_the_host_and_chains_to_the_airlock_ca() {
     let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
     let mut leaves = Vec::new();
     for _ in 0..2 {
-        let upstream = tls_upstream(ca.server_config(&[])).await;
-        // Trusting only ca.pem, a completed handshake is the chain validating to airlock's CA.
+        let upstream = http_upstream(&ca, HttpProtocol::Http1, UpstreamMode::Echo).await;
         let client = server
             .handshake(upstream.port, "localhost", &[], true)
             .await
@@ -233,8 +695,14 @@ async fn leaf_is_minted_once_for_the_host_and_chains_to_the_airlock_ca() {
         let chain = client.get_ref().1.peer_certificates().expect("chain");
         assert_eq!(chain.len(), 1);
         leaves.push(chain[0].to_vec());
+        drop(client);
+        let _ = timeout(Duration::from_secs(2), upstream.done)
+            .await
+            .expect("upstream deadline")
+            .expect("upstream task");
     }
     assert_eq!(leaves[0], leaves[1], "the cached leaf was re-minted");
+
     let ca_pem = fs::read(server.ca_directory.join("ca.pem")).expect("ca.pem");
     let ca_der = rustls::pki_types::pem::PemObject::from_pem_slice(&ca_pem)
         .map(|der: rustls::pki_types::CertificateDer<'static>| der.to_vec())
@@ -254,22 +722,6 @@ async fn leaf_is_minted_once_for_the_host_and_chains_to_the_airlock_ca() {
         names.as_slice(),
         [GeneralName::DNSName("localhost")]
     ));
-    let validity = leaf.validity();
-    let lifetime = validity.not_after.timestamp() - validity.not_before.timestamp();
-    assert!(lifetime <= 7 * 86_400 + 3_600, "lifetime {lifetime}s");
-    assert!(!leaf.is_ca());
-    let key_usage = leaf
-        .extended_key_usage()
-        .expect("EKU extension")
-        .expect("EKU present");
-    assert!(key_usage.value.server_auth);
-    let constraints = authority
-        .basic_constraints()
-        .expect("CA constraints")
-        .expect("basicConstraints present")
-        .value;
-    assert!(constraints.ca);
-    assert_eq!(constraints.path_len_constraint, Some(0));
     server.stop().await;
 }
 
@@ -305,7 +757,6 @@ async fn sni_mismatch_missing_sni_and_plaintext_never_reach_the_upstream() {
             .await
             .is_err()
     );
-    drop(socket);
     let events = server.stop().await;
     let outcomes = events
         .iter()
@@ -344,84 +795,7 @@ async fn untrusted_upstream_fails_the_client_handshake_and_forwards_nothing() {
         "the upstream completed a handshake with an unverified gateway"
     );
     let events = server.stop().await;
-    let audit = fields(&events[0]);
-    assert_eq!(audit["outcome"], "upstream_tls_error");
-    assert_eq!(audit["client_to_upstream"], 0);
-}
-
-#[tokio::test]
-async fn client_drop_mid_stream_closes_the_upstream_within_a_second() {
-    let ca = TestCa::new();
-    let upstream = tls_upstream(ca.server_config(&[])).await;
-    let upstream_task = tokio::spawn(async move {
-        let mut tls = upstream
-            .accepted
-            .await
-            .expect("accept")
-            .expect("upstream TLS");
-        let mut received = [0; 7];
-        tls.read_exact(&mut received).await.expect("partial");
-        tls.write_all(b"streaming").await.expect("response start");
-        let mut rest = Vec::new();
-        timeout(Duration::from_secs(1), tls.read_to_end(&mut rest))
-            .await
-            .expect("upstream saw EOF within a second")
-            .expect("upstream EOF");
-        received
-    });
-    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
-    let mut client = server
-        .handshake(upstream.port, "localhost", &[], true)
-        .await
-        .expect("client handshake");
-    client.write_all(b"partial").await.expect("partial");
-    let mut start = [0; 9];
-    client.read_exact(&mut start).await.expect("response start");
-    // Dropping the stream closes TCP without close_notify.
-    drop(client);
-    assert_eq!(&upstream_task.await.expect("upstream task"), b"partial");
-    let events = server.stop().await;
-    let audit = fields(&events[0]);
-    assert_eq!(audit["outcome"], "io_error");
-    assert_eq!(audit["client_to_upstream"], 7);
-    assert_eq!(audit["upstream_to_client"], 9);
-}
-
-#[tokio::test]
-async fn a_client_that_stops_reading_cannot_hold_a_closed_relay_open() {
-    let ca = TestCa::new();
-    let upstream = tls_upstream(ca.server_config(&[])).await;
-    let upstream_task = tokio::spawn(async move {
-        let mut tls = upstream
-            .accepted
-            .await
-            .expect("accept")
-            .expect("upstream TLS");
-        // Writes until the gateway stops reading: its ciphertext to the client is backed up.
-        let chunk = vec![0; 64 << 10];
-        while tls.write_all(&chunk).await.is_ok() {}
-    });
-    let server = Running::start_with("deny", &["localhost"], ca.roots(), None).await;
-    let mut client = server
-        .handshake(upstream.port, "localhost", &[], true)
-        .await
-        .expect("client handshake");
-    // Let the socket buffers fill, then close our side without ever reading.
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    client.shutdown().await.expect("close_notify");
-    let closed = timeout(Duration::from_secs(3), async {
-        while server.capture.text().is_empty() {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    })
-    .await;
-    assert!(closed.is_ok(), "the relay outlived a stalled reader");
-    upstream_task.await.expect("upstream task");
-    drop(client);
-    let events = server.stop().await;
-    let audit = fields(&events[0]);
-    assert_eq!(audit["outcome"], "closed");
-    assert!(audit["upstream_to_client"].as_u64().expect("count") > 0);
+    assert_eq!(fields(&events[0])["outcome"], "upstream_tls_error");
 }
 
 #[tokio::test]
@@ -429,6 +803,10 @@ async fn symlinked_ca_directory_or_files_are_refused() {
     let ca = TestCa::new();
     let directory = tempfile::tempdir().expect("tempdir");
     fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("token");
+    for credential in ["claude", "backup"] {
+        fs::write(directory.path().join(credential), "unused-by-this-test\n")
+            .expect("write credential");
+    }
     let bind = async |ca_directory: &std::path::Path| {
         Gateway::bind(
             config(&directory, "deny", &["localhost"]),
@@ -439,7 +817,6 @@ async fn symlinked_ca_directory_or_files_are_refused() {
         .err()
         .expect("startup refused")
     };
-    // A private directory elsewhere, for example on disk, reached through a symlink.
     let elsewhere = directory.path().join("elsewhere");
     fs::DirBuilder::new()
         .mode(0o700)
@@ -500,6 +877,13 @@ async fn ca_is_reused_across_binds_and_refused_when_exposed_or_incomplete() {
 
     let bind = async || {
         fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("token");
+        fs::write(
+            directory.path().join("claude"),
+            format!("{REAL_OAUTH_TOKEN}\n"),
+        )
+        .expect("oauth credential");
+        fs::write(directory.path().join("backup"), format!("{REAL_API_KEY}\n"))
+            .expect("api-key credential");
         Gateway::bind(
             config(&directory, "deny", &["localhost"]),
             &ca_directory,

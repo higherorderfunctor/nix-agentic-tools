@@ -291,6 +291,9 @@ async fn forced_shutdown_retains_counts_and_closes_both_peers() {
 async fn startup_reports_all_empty_and_missing_client_token_files() {
     let directory = tempfile::tempdir().expect("tempdir");
     std::fs::write(directory.path().join("token"), "\n").expect("empty token");
+    for credential in ["claude", "backup"] {
+        std::fs::write(directory.path().join(credential), "fake-REAL-oauth\n").expect("credential");
+    }
     let initial = config(&directory, "tunnel", &[]);
     assert!(matches!(
         Gateway::bind(initial, &directory.path().join("ca"), TestCa::new().roots()).await,
@@ -301,7 +304,7 @@ async fn startup_reports_all_empty_and_missing_client_token_files() {
             "empty": {"grants": [{"credentials": ["claude"], "upstream": "anthropic"}], "token_file": directory.path().join("token")},
             "missing": {"grants": [{"credentials": ["claude"], "upstream": "anthropic"}], "token_file": directory.path().join("missing")}
         },
-        "credentials": {"claude": {"auth": {"file": "/unused", "type": "oauth_bearer"}, "upstream": "anthropic"}},
+        "credentials": {"claude": {"auth": {"file": directory.path().join("claude"), "type": "oauth_bearer"}, "upstream": "anthropic"}},
         "listen": "127.0.0.1:0", "state_dir": directory.path(), "upstreams": {"anthropic": {"intercept": [], "provider": "anthropic"}}
     });
     let raw: RawConfig = serde_json::from_value(raw).expect("raw");
@@ -324,6 +327,85 @@ async fn startup_reports_all_empty_and_missing_client_token_files() {
         message.contains(directory.path().join("missing").to_str().expect("path")),
         "{message}"
     );
+}
+
+#[tokio::test]
+async fn startup_reports_each_granted_credential_file_error() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    std::fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("token");
+    std::fs::write(directory.path().join("empty"), "\n").expect("empty credential");
+    let empty = directory.path().join("empty");
+    let missing = directory.path().join("missing");
+    let raw = json!({
+        "clients": {
+            "harness": {
+                "grants": [{
+                    "credentials": ["empty", "missing"],
+                    "upstream": "anthropic"
+                }],
+                "token_file": directory.path().join("token")
+            }
+        },
+        "credentials": {
+            "empty": {"auth": {"file": empty, "type": "oauth_bearer"}, "upstream": "anthropic"},
+            "missing": {"auth": {"file": missing, "type": "oauth_bearer"}, "upstream": "anthropic"}
+        },
+        "listen": "127.0.0.1:0",
+        "state_dir": directory.path(),
+        "upstreams": {"anthropic": {"intercept": [], "provider": "anthropic"}}
+    });
+    let raw: RawConfig = serde_json::from_value(raw).expect("raw");
+    let Err(Error::Secrets(errors)) = Gateway::bind(
+        Config::try_from(raw).expect("config"),
+        &directory.path().join("ca"),
+        TestCa::new().roots(),
+    )
+    .await
+    else {
+        panic!("startup accepted broken granted credentials");
+    };
+    assert_eq!(errors.0.len(), 2);
+    let message = errors.to_string();
+    assert!(
+        message.contains(empty.to_str().expect("empty path")),
+        "{message}"
+    );
+    assert!(
+        message.contains(missing.to_str().expect("missing path")),
+        "{message}"
+    );
+}
+
+#[tokio::test]
+async fn startup_does_not_load_credentials_without_grants() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    std::fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("token");
+    std::fs::write(directory.path().join("granted"), "fake-REAL-oauth\n").expect("granted");
+    let raw = json!({
+        "clients": {
+            "harness": {
+                "grants": [{"credentials": ["granted"], "upstream": "anthropic"}],
+                "token_file": directory.path().join("token")
+            }
+        },
+        "credentials": {
+            "granted": {"auth": {"file": directory.path().join("granted"), "type": "oauth_bearer"}, "upstream": "anthropic"},
+            "unused": {"auth": {"file": directory.path().join("unused"), "type": "oauth_bearer"}, "upstream": "anthropic"}
+        },
+        "listen": "127.0.0.1:0",
+        "state_dir": directory.path(),
+        "upstreams": {"anthropic": {"intercept": [], "provider": "anthropic"}}
+    });
+    let raw: RawConfig = serde_json::from_value(raw).expect("raw");
+    let gateway = Gateway::bind(
+        Config::try_from(raw).expect("config"),
+        &directory.path().join("ca"),
+        TestCa::new().roots(),
+    )
+    .await
+    .expect("unused credential is not loaded");
+    assert!(!directory.path().join("unused").exists());
+    drop(gateway);
 }
 
 #[tokio::test]
@@ -373,6 +455,9 @@ async fn upstream_reset_retains_successful_write_counts() {
 async fn startup_refuses_an_empty_upstream_root_store() {
     let directory = tempfile::tempdir().expect("tempdir");
     std::fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("write token");
+    for credential in ["claude", "backup"] {
+        std::fs::write(directory.path().join(credential), "fake-REAL-oauth\n").expect("credential");
+    }
     let result = Gateway::bind(
         config(&directory, "tunnel", &[]),
         &directory.path().join("ca"),
