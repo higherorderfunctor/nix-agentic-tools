@@ -9,8 +9,9 @@ applyTo: "checks/ai-proxy/**,lib/ai/proxy/**,packages/chatgpt-codex/lib/proxy.ni
 
 > **Last verified:** 2026-10-23 — API-key model entries accept `{name; alias;}`;
 > the alias is the client-visible name everywhere (CPA config, key-allowlist
-> listing, `normalized.proxy.credentials`, Claude picker rows); duplicate
-> client-visible names fail evaluation.
+> listing, `normalized.proxy.credentials`, Claude picker rows, which name the
+> upstream model an aliased row serves); duplicate client-visible names and
+> colliding routing keys fail evaluation.
 
 `ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
 only the proxy's client key, never an upstream credential. The proxy holds the
@@ -128,9 +129,11 @@ API-key credential names use letters, digits, `.`, `_` and `-`, starting with a
 letter or digit, so Go and Nix normalize their compatibility-provider identities
 alike.
 
-`normalized.proxy.credentials` is `[{name; models;}]` in client route order,
-with client-visible model names (the alias when set). Claude turns declared
-API-key models into `/model` picker rows; Codex discovers CPA's catalog without
+`normalized.proxy.credentials` is `[{aliases; name; models;}]` in client route
+order, with client-visible model names (the alias when set) and each alias
+mapped to its upstream name in `aliases`. Claude turns declared API-key models
+into `/model` picker rows, each labeled with its credential and, for an aliased
+row, the upstream model it serves; Codex discovers CPA's catalog without
 per-credential `-p` profiles (`ai-proxy-runtimes.md`). Route list order is
 preserved in generated rules and picker rows; it does not define CPA priority or
 fallback. `apiKey.priority` is an optional integer, omitted from CPA config when
@@ -149,15 +152,16 @@ routing order/fallback and account prefixes are deferred.
 
 ### Fallback to a different model
 
-Route a client key to both `claude-oauth-personal` and `zai-api-personal`; while
-the OAuth login cools down, CPA sends the same request to z.ai:
+Route a client key to both `claude-oauth-personal` and `zai-api-personal`; a
+failed request is retried on the z.ai credential, and later requests skip the
+login while it cools down:
 
 ```nix
 ai.cliproxyapi.instances.main.credentials.zai-api-personal.apiKey = {
   apis.anthropic.base-url = "https://api.z.ai/api/anthropic";
   key = secret "zai-api-personal";
   models = [{name = "glm-5.3"; alias = "claude-opus-5-5";}];
-  priority = -1;
+  priority = -2;
 };
 ```
 
@@ -166,16 +170,37 @@ ai.cliproxyapi.instances.main.credentials.zai-api-personal.apiKey = {
   `sdk/cliproxy/auth/conductor_models.go:669-696`).
 - The substitution is silent: the harness still believes it talks to the aliased
   model.
-- Fallback happens only while the higher-priority credential cools down: a 429
-  cools it unless cooling is disabled for that credential
-  (`sdk/cliproxy/auth/conductor_cooldown.go:1087-1097`), and transient errors
+- The aliased credential must sit strictly below every credential that serves
+  the real model under that name: equal priorities split requests within the
+  tier by `routing.strategy`, mixing the real model and GLM. This example uses
+  `-2`, below the `-1` the overlapping subscription recipe above gives the real
+  model's API key.
+- Within one request, CPA retries the same request on the next credential that
+  supports the route model
+  (`sdk/cliproxy/auth/conductor_selection.go:1029-1041`) after any upstream
+  failure that is not request-invalid, whether or not the failure cools the
+  first credential, until `routing.retry.max-retry-credentials` is reached
+  (`sdk/cliproxy/auth/conductor_execution.go:483-690`). That is the
+  non-streaming path; once streaming output has reached the client, no
+  same-request retry is claimed here.
+- Later requests skip the login while it cools down, and any error that cools
+  the credential for that model does, not only 429: a 429 cools it unless
+  cooling is disabled for that credential
+  (`sdk/cliproxy/auth/conductor_cooldown.go:1087-1097`), transient errors
   (408/5xx) cool it only when
   `routing.cooldown.transient-error-cooldown-seconds` is not negative, -1
-  disabling it (`sdk/cliproxy/auth/conductor_cooldown.go:109-123, 1220-1222`).
+  disabling it (`sdk/cliproxy/auth/conductor_cooldown.go:109-123, 1220-1222`), a
+  model-support error or 404 cools it for 12 hours
+  (`sdk/cliproxy/auth/conductor_cooldown.go:1041-1049, 1078-1086`), and
+  401/402/403 cool it for 30 minutes
+  (`sdk/cliproxy/auth/conductor_cooldown.go:1071-1077`).
 - The target API must accept the request shape the harness sends (fields, tools,
   thinking), or the fallback request fails.
-- Duplicate client-visible names in one credential fail evaluation; CPA keeps
-  only the first (`sdk/cliproxy/service_models.go:921-926`).
+- Duplicate client-visible names in one credential fail evaluation, and so does
+  an alias that collides with a routing key an earlier aliased entry claims (its
+  alias or name, with or without a trailing `(...)` suffix); CPA keeps the first
+  (`sdk/cliproxy/service_models.go:924-929`;
+  `sdk/cliproxy/auth/conductor_models.go:676-696`).
 
 A named client key also listed by hand in `access.api-keys`, or given a
 hand-written `access.key-allowlist` entry, is refused: a second owner could
@@ -262,7 +287,8 @@ allowlist check covers account matching and hot-added logins.
 `module-ai-proxy-z-ai-credential` checks vendor defaults and overrides on both
 backends, including client routing and the preserved model list.
 `module-ai-proxy-model-alias` checks the alias rendered, plain names unchanged,
-the picker showing the alias and duplicates refused on both backends.
+the picker showing the alias, and duplicates, empty or padded names and
+colliding routing keys refused on both backends.
 `module-service-instances-runtime-providers` sends Anthropic and Responses
 requests through the packaged CPA, including a Codex CLI client key routed to a
 chat-only upstream credential and an unauthorized-model negative control. The
