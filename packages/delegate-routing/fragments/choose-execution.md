@@ -10,9 +10,8 @@ non-interactive and reports to an orchestrator, not a person.
 To give another runtime a multi-step job, hand the whole job to one delegate
 there that can run its own subagents (the table's "Runs own subagents" column).
 That delegate is a lane orchestrator: it splits the job into parts itself and
-runs them. It is not one worker handed a PR-sized job. If that column says
-unknown, probe it in the launcher you plan to use before relying on it. If no
-runtime can, orchestrate from this session:
+runs them. If that column says unknown, probe it in the launcher you plan to use
+before relying on it. If no runtime can, orchestrate from this session:
 
 1. Use this session's workflow tool, if it has one.
 2. Otherwise run the steps yourself: launch each external worker, wait for it,

@@ -21,8 +21,7 @@ expose the same surface.
 `source`. Names become headings. The package ships the always-on "Load
 delegate-routing" stub and five enabled entries: "Follow the user's request",
 "Size the work", "Decompose the work", "Choose execution" and "Validate the
-result". "Decompose the work" splits the work into reviewable parts before
-execution; "Validate the result" is always-on too. The "Orchestrator session"
+result". "Validate the result" is always-on too. The "Orchestrator session"
 catalog entry ships disabled. Policy belongs in these entries rather than
 renderer string literals.
 
