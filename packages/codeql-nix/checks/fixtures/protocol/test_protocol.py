@@ -128,7 +128,7 @@ class ProtocolTests(unittest.TestCase):
             self.rejected_manifest(packet)
 
     def test_metadata_requests_and_deferred_surfaces(self):
-        for facet in ("declarations", "isDefined", "priority"):
+        for facet in ("declarations", "isDefined", "priority", "selection"):
             packet = deepcopy(MANIFEST)
             descriptor(packet)["requests"][0]["facet"] = facet
             self.manifest(packet)
@@ -183,11 +183,11 @@ class ProtocolTests(unittest.TestCase):
                 self.rejected_manifest(packet)
 
     def test_envelope_and_identity_mapping_cover_all_f1_relations(self):
-        packet = {"protocolVersion": 1, "facts": deepcopy(golden.GRAPH)}
+        packet = {"protocolVersion": 1, "facts": deepcopy(golden.BINDING_GRAPH)}
         before = deepcopy(packet)
         self.observations(packet)
         self.assertEqual(packet, before)
-        self.assertEqual(len({name for name, _ in packet["facts"]}), 25)
+        self.assertEqual(len({name for name, _ in packet["facts"]}), 27)
         for candidate in (
             {}, {"protocolVersion": 1}, {"facts": []},
             {"protocolVersion": 2, "facts": []},
@@ -199,6 +199,21 @@ class ProtocolTests(unittest.TestCase):
             self.rejected_observations(candidate)
         packet["facts"].append(deepcopy(packet["facts"][0]))
         self.rejected_observations(packet)  # F1 primary-key validation is mandatory.
+
+    def test_retained_order_wire_preserves_exact_decimal_and_typed_reference(self):
+        base = {"protocolVersion": 1, "facts": [row for row in deepcopy(golden.BINDING_GRAPH)
+                if row[0] != "nx_definition_order"]}
+        for priority in golden.PRIORITIES:
+            packet = deepcopy(base)
+            packet["facts"].append(["nx_definition_order", [golden.I["d"], priority]])
+            self.observations(packet)
+            self.assertEqual(packet["facts"][-1][1], [golden.I["d"], priority])
+        for arguments in ([golden.I["d"]], [golden.I["d"], "500", "extra"],
+                          [golden.I["o"], "500"], ["nixql:v1:definition:1:x", "500"],
+                          *([golden.I["d"], value] for value in golden.BAD_PRIORITIES)):
+            packet = deepcopy(base)
+            packet["facts"].append(["nx_definition_order", arguments])
+            self.rejected_observations(packet)
 
     def test_every_status_and_pre_target_failure(self):
         for state in ("blocked", "complete", "failed", "partial", "skipped", "unsupported"):

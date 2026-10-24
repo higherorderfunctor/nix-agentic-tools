@@ -1,0 +1,3 @@
+| P | [] | ["demo","items"] | 0 | before.nix | 100 | "500" |
+| P | [] | ["demo","items"] | 1 | normal.nix | 100 | null |
+| P | [] | ["demo","items"] | 2 | after.nix | 100 | "1500" |

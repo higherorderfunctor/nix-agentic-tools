@@ -89,7 +89,7 @@
     "minimum": "-9223372036854775808",
     "optionWitness": {
       "domain": "option-metadata",
-      "facet": "priority",
+      "facets": ["priority", "selection"],
       "stage": "pre-apply-metadata"
     }
   },
@@ -104,6 +104,10 @@
     },
     "nx_contexts": {
       "columns": "context:context target:target kind:text instancePathJson:text",
+      "key": [0]
+    },
+    "nx_definition_order": {
+      "columns": "definition:definition priorityDecimal:text",
       "key": [0]
     },
     "nx_definitions": {
@@ -125,6 +129,10 @@
     "nx_files": {
       "columns": "file:file rootKey:text relativePath:text contentHash:text sourceKind:text",
       "key": [0]
+    },
+    "nx_module_lib_bindings": {
+      "columns": "request:request functionAnchor:anchor formalAnchor:anchor libHash:text modelHash:text",
+      "key": [0, 1, 2]
     },
     "nx_observation_definitions": {
       "columns": "observation:observation definition:definition",

@@ -42,8 +42,8 @@ identify admitted runtime handles or arguments; they do not serialize functions
 or secrets wholesale. The argument-description hash records the admitted
 description. `modelVersion` accepts the same exact-text identity form as the
 other fingerprint fields. The installed coordinator requires a requested model
-to match its run's generated model fingerprint, otherwise returning
-`unsupported-model`. Legacy `not-requested` remains accepted. See
+to match its run's generated builtin/module bundle fingerprint, otherwise
+returning `unsupported-model`. Legacy `not-requested` remains accepted. See
 [builtin-models.md](builtin-models.md) for model generation and compatibility.
 
 Input identities map exact input names to identity strings. Each source root has
@@ -63,8 +63,12 @@ implicit traversal or value request. The metadata baseline explicitly selects a
 prefix.
 
 Every request uses the `option-metadata` domain and `metadata` observation mode.
-Facets: `declarations`, `definitions`, `isDefined`, `priority`. Objects are
-closed to unknown fields; target and input maps permit explicit names.
+Facets: `declarations`, `definitions`, `isDefined`, `priority`, `selection`.
+Selection emits retained inputs, whether the option is defined, winning override
+priority and explicit order under one request. Its capability is
+`module-properties`; unsupported helper pins retain independently requested Step
+0 metadata. Objects are closed to unknown fields; target and input maps permit
+explicit names.
 
 Deferred surfaces return with their consuming queries: increment 3 restores
 module graph requests and metadata enumeration; increment 4 restores
@@ -134,7 +138,7 @@ python packages/codeql-nix/checks/fixtures/protocol/test_protocol.py
 
 The tests check required descriptors, nested source roots and input identities,
 retained metadata facets, rejection of deferred controls, literal paths and
-budgets, all 25 relation mappings, status families and pre-target failures,
+budgets, all 27 relation mappings, status families and pre-target failures,
 priorities, and UTF-8/JSON-expansion boundaries. They use independent fixtures
 and F1 validation without invoking Nix evaluation or the CodeQL engine. F3 must
 integrate this standalone entry point into the owner's checks with nonempty

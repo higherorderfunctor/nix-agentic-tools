@@ -66,23 +66,31 @@ preserves generated QL bytes. The library installs `models/builtins.json` and
 
 Queries import `nix.internal.BuiltinModels`.
 `builtinIdentity(namespace, name, identity)` exposes identities only when the
-database's `nx_runs` model fingerprint matches the installed model.
+database's `nx_runs` model fingerprint matches the installed builtin/module
+bundle, and that bundle's builtin fingerprint matches this model.
 `runtimeIdentity`, `runtimeSourceHash` and `modelFingerprint` describe the
-bundle; `supportsRuntime` checks exactly its runtime/source pair within the
-fixed policy above. It does not test arbitrary runtime settings. A different
-policy changes the complete model fingerprint; a missing or mismatched model
-cannot establish builtin resolution.
+builtin model; `bundleIdentity` is the common bundle fingerprint this library
+accepts as a run's model identity, and
+[N2's runtime-globals frame](implicit-scope.md) requires exactly that of the run
+before generated globals become definite targets; `supportsRuntime` checks
+exactly its runtime/source pair within the fixed policy above. It does not test
+arbitrary runtime settings. A different policy changes the complete model
+fingerprint; a missing or mismatched model cannot establish builtin resolution.
 
-The existing [shared run identity](installed-extractor.md) carries this
-fingerprint. [Target admission](target-contract.md) rejects an explicitly
-requested different model. Legacy `not-requested` targets remain valid. Lexical
-binding resolution and shadowing belong to the name resolver; import edges
-belong to the later import domain. This module supplies identities for those
-consumers without resolving source names itself. [N2](implicit-scope.md) wires
-generated globals into the outer explicit frame. `globalBindingIdentity` exposes
-raw global inventory only to reserve recognized spellings when fingerprints are
-absent or incompatible; this does not establish compatible resolution.
-`builtinIdentity` retains its fingerprint gate.
+The existing [shared run identity](installed-extractor.md) carries the common
+bundle fingerprint: SHA-256 of canonical sorted compact JSON mapping `builtins`
+and `modules` to their respective model fingerprints. The generated module model
+records `bundleHash`; changing either model changes the run identity.
+Builtin-only JSON generation and its own `modelVersion` remain independent.
+[Target admission](target-contract.md) rejects an explicitly requested different
+model. Legacy `not-requested` targets remain valid. Lexical binding resolution
+and shadowing belong to the name resolver; import edges belong to the later
+import domain. This module supplies identities for those consumers without
+resolving source names itself. [N2](implicit-scope.md) wires generated globals
+into the outer explicit frame. `globalBindingIdentity` exposes raw global
+inventory only to reserve recognized spellings when fingerprints are absent or
+incompatible; this does not establish compatible resolution. `builtinIdentity`
+retains its fingerprint gate.
 
 ## Verification and changes
 

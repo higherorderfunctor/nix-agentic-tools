@@ -17,6 +17,7 @@ def digest(value):
 class RunIdentity:
     def __init__(self, row):
         self.row = row
+        self.module_model = None
 
     @staticmethod
     def snapshot(abi, manifest):
@@ -35,8 +36,10 @@ class RunIdentity:
         snapshot = cls.snapshot(abi, manifest)
         versions = json.loads(Path(pins).read_text())
         model = versions.get("model", "not-requested")
-        return cls(["nx_runs", [abi.key("run", [schema_hash, extractor, model, snapshot]), schema_hash,
-                    extractor, versions["grammar"], model, snapshot]])
+        identity = cls(["nx_runs", [abi.key("run", [schema_hash, extractor, model, snapshot]), schema_hash,
+                        extractor, versions["grammar"], model, snapshot]])
+        identity.module_model = versions.get("moduleModel")
+        return identity
 
     @classmethod
     def evaluation(cls, abi, supervisor):
@@ -188,7 +191,8 @@ def main():
             for _, (file, _, relative, _, _) in source_files:
                 mappings.setdefault(copied_project + "/" + relative, []).append(file)
             evaluation = supervise(manifest, bindings, staged_trap, source_files=source_files,
-                                   source_mappings=mappings, nix=nix, identity=identity)
+                                   source_mappings=mappings, source_anchors=[row for row in facts if row[0] == "nx_anchors"],
+                                   nix=nix, identity=identity)
             facts += identity.accept(abi, evaluation)
             unique = list({abi.canonical(row): row for row in [identity.row] + facts}.values())
             envelope(unique)

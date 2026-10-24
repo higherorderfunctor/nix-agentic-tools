@@ -1,14 +1,20 @@
 {
   lib,
+  library ? null,
+  moduleBindings ? [],
   modules,
   moduleArguments,
   specialArguments,
 }: let
+  effectiveLib =
+    if library == null
+    then lib
+    else import ((builtins.fetchTree (library // {type = "path";})).outPath + "/lib");
   # Reuse pinned normalization; sanitize only metadata-demanded labels lazily.
   sanitize = value:
     if builtins.isAttrs value
     then
-      lib.mapAttrs (name: child:
+      effectiveLib.mapAttrs (name: child:
         if value._type or "" == "definition" && name == "file"
         then builtins.unsafeDiscardStringContext child
         else sanitize child)
@@ -26,14 +32,14 @@
       if isPath
       then toString module
       else key;
-    applied = lib.applyModuleArgsIfFunction effectiveKey loaded args;
+    applied = effectiveLib.applyModuleArgsIfFunction effectiveKey loaded args;
     file =
       if builtins.isPath module
       then builtins.appendContext (toString module) (builtins.getContext "${module}")
       else if isPath
       then module
       else parent;
-    normalized = lib.unifyModuleSyntax file effectiveKey applied;
+    normalized = effectiveLib.unifyModuleSyntax file effectiveKey applied;
     label =
       if applied ? _file
       then builtins.unsafeDiscardStringContext normalized._file
@@ -43,10 +49,23 @@
     // {
       _file = label;
       config = sanitize normalized.config;
-      imports = lib.imap0 (i: child: wrap label "${normalized.key}:anon-${toString i}" child) normalized.imports;
+      imports = effectiveLib.imap0 (i: child: wrap label "${normalized.key}:anon-${toString i}" child) normalized.imports;
     };
-in
-  lib.evalModules {
+  evaluated = effectiveLib.evalModules {
     modules = map (module: wrap "" (toString module) module) modules ++ [{_module.args = moduleArguments;}];
     specialArgs = specialArguments;
+  };
+in
+  evaluated
+  // {
+    nixqlLibrary = effectiveLib;
+    # Root file invocations are covered; imported/computed functions stay unknown.
+    nixqlModuleBindings = effectiveLib.unique (map (binding: {inherit (binding) functionAnchor formalAnchor;}) (effectiveLib.concatMap (module:
+      effectiveLib.optionals (library
+        != null
+        && !(specialArguments ? lib)
+        && (builtins.isPath module || builtins.isString module)
+        && builtins.isFunction (import module))
+      (builtins.filter (binding: binding.path == toString module) moduleBindings))
+    modules));
   }

@@ -56,6 +56,8 @@ def trap(facts):
                 encoded.append(labels[value])
             elif kind == "text":
                 encoded.append('"' + value.replace('"', '""') + '"')
+            elif kind == "bool":
+                encoded.append("1" if value else "0")
             else:
                 encoded.append(str(value))
         output.append(f'{relation}({", ".join(encoded)})\n')

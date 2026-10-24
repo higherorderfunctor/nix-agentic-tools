@@ -1,0 +1,245 @@
+{
+  "bundleHash": "sha256:b4c818374d8f3d9790a32f2b013f520803d0ffa041d04847ac4b629c63ddfbea",
+  "constantEvidence": {
+    "ordinaryOverridePriority": [
+      {
+        "column": 3,
+        "file": "lib/modules.nix",
+        "line": 1651,
+        "lineText": "  defaultOverridePriority = 100;"
+      }
+    ]
+  },
+  "constants": {
+    "ordinaryOverridePriority": "100"
+  },
+  "generatorVersion": "1",
+  "helpers": [
+    {
+      "argumentSpecJson": "{\"arity\":1,\"content\":0}",
+      "arity": 1,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 511,
+          "lineText": "        mkAfter"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2479,
+          "lineText": "    mkAfter"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 1772,
+          "lineText": "  mkAfter = mkOrder 1500;"
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:aedfab29533a9f6a75be2547e31ee552b9a44eb1748d5179e7a0eabc879c67f8",
+      "kind": "order",
+      "name": "mkAfter",
+      "priority": "1500"
+    },
+    {
+      "argumentSpecJson": "{\"arity\":1,\"content\":0}",
+      "arity": 1,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 510,
+          "lineText": "        mkBefore"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2487,
+          "lineText": "    mkBefore"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 1770,
+          "lineText": "  mkBefore = mkOrder 500;"
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:5b8c1556706731fe5a13e70ae63ddd915c4c5061bc31d1ce782f3a08f425c8a0",
+      "kind": "order",
+      "name": "mkBefore",
+      "priority": "500"
+    },
+    {
+      "argumentSpecJson": "{\"arity\":1,\"content\":0}",
+      "arity": 1,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 504,
+          "lineText": "        mkDefault"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2489,
+          "lineText": "    mkDefault"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 1649,
+          "lineText": "  mkDefault = mkOverride 1000;"
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:1c097d9ac6646ee0f279fa5fffdcaa46b233cb785b10df004377b312038c94aa",
+      "kind": "override",
+      "name": "mkDefault",
+      "priority": "1000"
+    },
+    {
+      "argumentSpecJson": "{\"arity\":1,\"content\":0}",
+      "arity": 1,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 506,
+          "lineText": "        mkForce"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2493,
+          "lineText": "    mkForce"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 1662,
+          "lineText": "  mkForce = mkOverride 50;"
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:de683cbf03895e77f550344b115eef3c4787d29a2a47fc90b8f01b165c13258e",
+      "kind": "override",
+      "name": "mkForce",
+      "priority": "50"
+    },
+    {
+      "argumentSpecJson": "{\"arity\":2,\"content\":1}",
+      "arity": 2,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 498,
+          "lineText": "        mkIf"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2494,
+          "lineText": "    mkIf"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 1579,
+          "lineText": "  mkIf = condition: content: {"
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:d6d69ac79925550f1993826d9a9ca95c6bb1bf1d865b02afcc5c757d839789d0",
+      "kind": "if",
+      "name": "mkIf",
+      "priority": null
+    },
+    {
+      "argumentSpecJson": "{\"arity\":1,\"content\":0}",
+      "arity": 1,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 501,
+          "lineText": "        mkMerge"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2496,
+          "lineText": "    mkMerge"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 1588,
+          "lineText": "  mkMerge = contents: {"
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:37fa83acab42f1440713fbfd58457a0ccbc2cad0f55d9d87bacc740f057e36cd",
+      "kind": "merge",
+      "name": "mkMerge",
+      "priority": null
+    },
+    {
+      "argumentSpecJson": "{\"arity\":2,\"content\":1}",
+      "arity": 2,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 509,
+          "lineText": "        mkOrder"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2499,
+          "lineText": "    mkOrder"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 1671,
+          "lineText": "  mkOrder = priority: content: {"
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:5c6a0b5b4a96d2a38b621a36b13fb3dca430fc99c342ddcc219aa8a4b8bd5203",
+      "kind": "order",
+      "name": "mkOrder",
+      "priority": null
+    },
+    {
+      "argumentSpecJson": "{\"arity\":2,\"content\":1}",
+      "arity": 2,
+      "evidence": [
+        {
+          "column": 9,
+          "file": "lib/default.nix",
+          "line": 502,
+          "lineText": "        mkOverride"
+        },
+        {
+          "column": 5,
+          "file": "lib/modules.nix",
+          "line": 2500,
+          "lineText": "    mkOverride"
+        },
+        {
+          "column": 3,
+          "file": "lib/modules.nix",
+          "line": 1636,
+          "lineText": "  mkOverride = priority: content: {"
+        }
+      ],
+      "exportIdentity": "module-helper:sha256:a4bb1e1fef0bf8ec4afeb0fefdcc42c76238719a6cef9f87aed2ad6963b08058",
+      "kind": "override",
+      "name": "mkOverride",
+      "priority": null
+    }
+  ],
+  "libHash": "sha256-IoNisKcGbUjdd45qCqywGMCYmZ5EnkxezvLII0FWwNA=",
+  "modelVersion": "sha256:8149f9d03638fccc76b57ae9177580299a95ced50196d8e155a97027efd7e766"
+}

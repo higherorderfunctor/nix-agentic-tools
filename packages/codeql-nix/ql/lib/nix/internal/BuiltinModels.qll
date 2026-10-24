@@ -1,11 +1,18 @@
 /** Versioned opaque builtin identities; lexical scope resolution belongs to N1. */
 private import nix.internal.generated.Builtins as Model
+private import nix.internal.generated.Modules as Bundle
+
+/** The bundle fingerprint this library accepts as a run's model identity. */
+predicate bundleIdentity(string bundle) {
+  exists(string version |
+    Model::modelFingerprint(version) and Bundle::builtinFingerprint(version) and
+    Bundle::bundleFingerprint(bundle)
+  )
+}
 
 predicate builtinIdentity(string namespace, string name, string identity) {
-  exists(string version |
-    Model::modelFingerprint(version) and nx_runs(_, _, _, _, version, _) and
-    Model::identity(namespace, name, identity)
-  )
+  exists(string bundle | bundleIdentity(bundle) and nx_runs(_, _, _, _, bundle, _)) and
+  Model::identity(namespace, name, identity)
 }
 
 predicate runtimeIdentity(string identity) { Model::runtimeIdentity(identity) }

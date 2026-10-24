@@ -1,8 +1,8 @@
 # Handwritten database contract
 
-> **Last verified:** 2026-10-23 — X1 adds typed observation subjects to the 25
-> Step 0 relations; F1 validates their identity and scope, while E2a remains the
-> metadata producer slice.
+> **Last verified:** 2026-10-23 — M3p restores optional definition-order
+> priority alongside typed observation subjects; F1 validates identity, scope
+> and exact signed priority text.
 
 ## Purpose and ownership
 
@@ -10,7 +10,7 @@
 primary keys, enums and serialization encodings. `schema/abi.py` supplies
 reference encoders and validates unordered fact collections. Its `dbscheme()`
 renders the committed `schema/evaluation.dbscheme`; the ABI check rejects
-divergence. All 25 handwritten relations are independent of generated AST entity
+divergence. All 27 handwritten relations are independent of generated AST entity
 types, so later syntax and evaluation producers can contribute to one database
 without manufacturing raw kit labels.
 
@@ -67,10 +67,20 @@ valid. Consumers must retain decimal precision rather than narrow priorities to
 a native QL integer. `priority-domain-unsupported` identifies an unsupported
 range. An option priority also requires same-option `isDefined = true` metadata
 and an observed `pre-apply-metadata` witness from an `option-metadata` request
-with facet `priority`, the exact option path and context, and a `complete` or
-`partial` result. Step 0 observations use only the `pre-apply-metadata` stage
-and requests use only the `option-metadata` domain. The sole option metadata
-field is `isDefined`.
+with facet `priority` or `selection`, the exact option path and context, and a
+`complete` or `partial` result. Step 0 observations use only the
+`pre-apply-metadata` stage and requests use only the `option-metadata` domain.
+The sole option metadata field is `isDefined`.
+
+`nx_definition_order` optionally associates a retained definition with order
+priority in the same exact decimal domain. It is separate from winning override
+priority; absence establishes no default order. The retained definition and
+parent option need observed witnesses under the same successful request.
+`nx_module_lib_bindings` links successful selection requests to admitted
+function/formal anchors, with library and model hashes matching their target and
+run. The formal must belong structurally to that top-level function; the adapter
+establishes the actual invocation and supplied library. See
+[module-properties.md](module-properties.md) for its producer and consumer.
 
 Every text column is limited to **1,048,576 UTF-8 bytes**, measured before TRAP
 quote doubling. JSON payloads and path arrays are checked after JSON encoding,
@@ -141,11 +151,10 @@ upgrade or migration path.
 
 ## Deferred consumers
 
-Increment 3 restores context-parent/module graph tables, definition-order
-priorities, nested contexts and their scope validators and native Boolean
-encoding. Increment 4 restores value/scalar/member/string-context tables,
-encodings, value observations and their validators. Additional option metadata
-fields return with their named consuming query; schema contexts are dropped
-because increment 3 selects concrete instances only. The diagnostic-origin
-relation is permanently dropped. These surfaces have no Step 0 producer or
-consumer.
+Remaining increment 3 cuts restore context-parent/module graph tables, nested
+contexts and their scope validators and native Boolean encoding. Increment 4
+restores value/scalar/member/string-context tables, encodings, value
+observations and their validators. Additional option metadata fields return with
+their named consuming query; schema contexts are dropped because increment 3
+selects concrete instances only. The diagnostic-origin relation is permanently
+dropped. These surfaces have no Step 0 producer or consumer.

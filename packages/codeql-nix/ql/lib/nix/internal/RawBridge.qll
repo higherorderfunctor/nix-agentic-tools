@@ -267,4 +267,22 @@ module RawBridge {
       result = concat(int i, Generated::Nix::PathFragment fragment |
         fragment = path.getChild(i) | fragment.getValue(), "" order by i))
   }
+  /** A single lexical assignment's value, for proven local helper aliases. */
+  Node declarationValue(Node declaration) {
+    exists(Generated::Nix::Binding binding |
+      binding.getAttrpath().getAttr(0) = declaration and
+      not exists(binding.getAttrpath().getAttr(1)) and result = expression(unparenthesized(binding.getExpression())))
+  }
+  Node listElement(Node list, int index) {
+    result = list.(Generated::Nix::ListExpression).getElement(index)
+  }
+  string integerText(Node node) {
+    result = node.(Generated::Nix::IntegerExpression).getValue() and
+    result.regexpMatch("0|[1-9][0-9]*")
+    or exists(Generated::Nix::UnaryExpression unary, string magnitude |
+      unary = unparenthesized(node) and unary.getOperator() = "-" and
+      magnitude = unary.getArgument().(Generated::Nix::IntegerExpression).getValue() and
+      magnitude.regexpMatch("[1-9][0-9]*") and result = "-" + magnitude)
+  }
+
 }

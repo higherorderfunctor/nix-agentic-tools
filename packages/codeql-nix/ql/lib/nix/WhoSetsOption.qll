@@ -11,20 +11,6 @@ module WhoSetsOption {
     nx_requests(_, target, _, "option-metadata", pathJson, _, _, _, _, _, _)
   }
 
-  /** Facets have separate option identities; join witnessed priority by target and exact path. */
-  bindingset[target, pathJson]
-  private string priority(Targets::Target target, string pathJson) {
-    exists(Modules::ObservedOption option |
-      option.getTarget() = target and option.getPathJson() = pathJson and
-      result = option.getPriorityText()
-    )
-    or
-    not exists(Modules::ObservedOption option |
-      option.getTarget() = target and option.getPathJson() = pathJson and
-      exists(option.getPriorityText())
-    ) and result = "unknown"
-  }
-
   bindingset[origin]
   private string file(Origin::Origin origin) {
     result = origin.getRelativePath()
@@ -69,7 +55,7 @@ module WhoSetsOption {
       pathJson = definition.getOption().getPathJson() and requested(configuration, pathJson) and
       target = configuration.getName() and origin = definition.getOrigin() and
       kind = "selected" and file = file(origin) and point(origin, line, column) and
-      priorityText = priority(configuration, pathJson) and selected = "true" and
+      priorityText = Modules::priorityText(configuration, pathJson) and selected = "true" and
       associationQuality = origin.getAssociationQuality(configuration, pathJson)
     )
     or
