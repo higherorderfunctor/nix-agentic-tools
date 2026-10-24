@@ -11,7 +11,9 @@ applyTo: "packages/delegate-routing/**"
 > Workflow `agent()` takes full ids; Kiro workflow step sessions skip the
 > per-turn reminder. Five enabled routing entries, with "Decompose the work"
 > ordered between "Size the work" and "Choose execution"; parallel writers
-> follow the disjoint-files rule in both entries.
+> follow the disjoint-files rule in both entries. Adjudicated review separates
+> producers and evaluators, reviews the accumulated change and bounds the loop
+> at 3 rounds.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -37,12 +39,17 @@ renderer string literals.
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.
 The package ships one enabled workflow, "Work and review", with the steps
-Rubric, Subtractive, Work, Review, Prosecute, Defend, Judge and Loop chained by
-`after`. Review is one reviewer; Prosecute, Defend and Judge replace it for a
-change to a shared abstraction. The Subtractive step adds the subtraction
-standard to the rubric. Loop sends validated findings back to the worker for at
-most 3 rounds. Add, replace, disable or reorder a step by key. A workflow can
-have introductory text or only steps; an enabled step needs content.
+Rubric, Subtractive, Work, Review, Find, Refute, Adjudicate and Loop chained by
+`after`. Review is one independent reviewer; adjudicated review (Find, Refute
+and Adjudicate) replaces it for a change to a shared abstraction. The refuter is
+neither worker nor finder and tests findings with evidence. The Subtractive step
+targets the smallest change that meets the goal and requires evidence before
+removing a guard. Producers and evaluators remain separate; Work splits
+diagnosis from fix for a failing check, test or bug. Loop records HEAD before
+the first write and reviews the accumulated change each round, stopping when
+none is upheld, at most 3 rounds per task. Add, replace, disable or reorder a
+step by key. A workflow can have introductory text or only steps; an enabled
+step needs content.
 
 Entries with `always = true` render through the existing per-runtime `ai.rules`
 fan-out. Other entries render in the generated skill. A workflow's `always`
