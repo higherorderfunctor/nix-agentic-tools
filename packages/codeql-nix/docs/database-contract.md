@@ -1,8 +1,9 @@
 # Handwritten database contract
 
-> **Last verified:** 2026-10-23 — M3p restores optional definition-order
-> priority alongside typed observation subjects; F1 validates identity, scope
-> and exact signed priority text.
+> **Last verified:** 2026-10-23 — M3g adds the module-graph closure: a module
+> entity, five relation tables and native Booleans; F1 validates occurrence-tree
+> structure, single-position occurrences, typed witnesses, observed counts,
+> incomplete-closure atomicity and module-origin admission.
 
 ## Purpose and ownership
 
@@ -10,7 +11,7 @@
 primary keys, enums and serialization encodings. `schema/abi.py` supplies
 reference encoders and validates unordered fact collections. Its `dbscheme()`
 renders the committed `schema/evaluation.dbscheme`; the ABI check rejects
-divergence. All 27 handwritten relations are independent of generated AST entity
+divergence. All 32 handwritten relations are independent of generated AST entity
 types, so later syntax and evaluation producers can contribute to one database
 without manufacturing raw kit labels.
 
@@ -68,9 +69,9 @@ a native QL integer. `priority-domain-unsupported` identifies an unsupported
 range. An option priority also requires same-option `isDefined = true` metadata
 and an observed `pre-apply-metadata` witness from an `option-metadata` request
 with facet `priority` or `selection`, the exact option path and context, and a
-`complete` or `partial` result. Step 0 observations use only the
-`pre-apply-metadata` stage and requests use only the `option-metadata` domain.
-The sole option metadata field is `isDefined`.
+`complete` or `partial` result. Step 0 itself used only the `pre-apply-metadata`
+stage and the `option-metadata` domain. The sole option metadata field is
+`isDefined`.
 
 `nx_definition_order` optionally associates a retained definition with order
 priority in the same exact decimal domain. It is separate from winning override
@@ -101,11 +102,14 @@ and its owner-check evidence.
 Primary keys are unique per relation, definition ordinals are unique per option,
 foreign entities must exist with the declared type. `nx_observations` contains
 only observation, request, stage and state. Every observation in every state has
-exactly one subject row in total: `nx_observation_options(observation, option)`
-or `nx_observation_definitions(observation, definition)`. Both columns are typed
+exactly one subject row in total: `nx_observation_options(observation, option)`,
+`nx_observation_definitions(observation, definition)`,
+`nx_observation_contexts(observation, context)` or
+`nx_observation_modules(observation, module)`. All subject columns are typed
 entity references; text subject kind/key columns are removed. Missing,
-duplicate, wrong-type, dangling and simultaneous option/definition links are
-invalid.
+duplicate, wrong-type, dangling and simultaneous links of different kinds are
+invalid. Context and module subjects must belong to their request's context and
+to that context's single `module-graph`/`closure` request.
 
 Requests belong to their context's target. The linked option, or a linked
 definition's parent option, must belong to that exact context and hence target.
@@ -115,16 +119,21 @@ from request paths or metadata presence. A definition observation identifies
 only its linked definition, not every sibling definition of its option.
 
 `nx_target_inputs` admits a file to the source snapshot of its target's run. For
-origins used by declarations or definitions, an `nx_origin_files` link must have
-admission for every referencing run's snapshot. Admission is supplied evidence:
-F1 neither hashes source bytes nor authenticates labels, roots or symlink
-policy. Diagnostics link directly to requests and targets; no diagnostic-origin
-relation is retained. File-level links do not establish expression-to-value
-edges or unique syntax associations.
+origins used by declarations, definitions or modules, an `nx_origin_files` link
+must have admission for every referencing run's snapshot. Admission is supplied
+evidence: F1 neither hashes source bytes nor authenticates labels, roots or
+symlink policy. Diagnostics link directly to requests and targets; no
+diagnostic-origin relation is retained. File-level links do not establish
+expression-to-value edges or unique syntax associations.
 
 Every `observed` observation requires its own `complete` or `partial` request
-result. Missing rows mean unknown. Completed definitions require positive work
-and contiguous ordinals for the request's same-path/context observed options.
+result, `complete` only when the request's domain is `module-graph`. A
+`module-graph` request that is not `complete` publishes no module rows for its
+context, and a complete closure carries exactly one context witness plus exactly
+one module witness per occurrence. Each module occurrence occupies exactly one
+root or child position. Missing rows mean unknown. Completed definitions require
+positive work and contiguous ordinals for the request's same-path/context
+observed options.
 
 A complete request cannot carry a timeout/text refusal reason or a linked
 diagnostic with either code. Failed discovery can be represented before any
@@ -151,10 +160,10 @@ upgrade or migration path.
 
 ## Deferred consumers
 
-Remaining increment 3 cuts restore context-parent/module graph tables, nested
-contexts and their scope validators and native Boolean encoding. Increment 4
-restores value/scalar/member/string-context tables, encodings, value
-observations and their validators. Additional option metadata fields return with
-their named consuming query; schema contexts are dropped because increment 3
-selects concrete instances only. The diagnostic-origin relation is permanently
-dropped. These surfaces have no Step 0 producer or consumer.
+Remaining increment 3 cuts restore context-parent tables, nested contexts and
+their scope validators. Increment 4 restores value/scalar/member/string-context
+tables, encodings, value observations and their validators. Additional option
+metadata fields return with their named consuming query; schema contexts are
+dropped because increment 3 selects concrete instances only. The
+diagnostic-origin relation is permanently dropped. These surfaces have no Step 0
+producer or consumer.

@@ -96,6 +96,29 @@ BINDING_GRAPH += [
     ["nx_module_lib_bindings", [I["q"], FUNCTION, FORMAL, "lib", "model-bundle"]],
 ]
 
+# Independent M3g closure witness over the second context: one module-graph
+# request, its context witness, and a rooted two-occurrence import tree.
+GRAPH_REQUEST = "nixql:v1:request:1:g"
+MODULES = {label: f"nixql:v1:module:1:{label}" for label in "mn"}
+GRAPH_ORIGINS = {label: f"nixql:v1:origin:1:{label}" for label in "wx"}
+GRAPH_WITNESSES = {label: f"nixql:v1:observation:1:{label}" for label in "uvy"}
+BINDING_GRAPH += [
+    ["nx_module_imports", [MODULES["m"], 0, MODULES["n"]]],
+    ["nx_module_roots", [I["j"], 0, MODULES["m"]]],
+    ["nx_modules", [MODULES["m"], I["j"], "root", GRAPH_ORIGINS["w"], False]],
+    ["nx_modules", [MODULES["n"], I["j"], "child", GRAPH_ORIGINS["x"], False]],
+    ["nx_observation_contexts", [GRAPH_WITNESSES["y"], I["j"]]],
+    ["nx_observation_modules", [GRAPH_WITNESSES["u"], MODULES["m"]]],
+    ["nx_observation_modules", [GRAPH_WITNESSES["v"], MODULES["n"]]],
+    ["nx_observations", [GRAPH_WITNESSES["u"], GRAPH_REQUEST, "pre-apply-metadata", "observed"]],
+    ["nx_observations", [GRAPH_WITNESSES["v"], GRAPH_REQUEST, "pre-apply-metadata", "observed"]],
+    ["nx_observations", [GRAPH_WITNESSES["y"], GRAPH_REQUEST, "pre-apply-metadata", "observed"]],
+    ["nx_origins", [GRAPH_ORIGINS["w"], "root.nix", "synthetic"]],
+    ["nx_origins", [GRAPH_ORIGINS["x"], "child.nix", "synthetic"]],
+    ["nx_request_results", [GRAPH_REQUEST, "complete", "", 3]],
+    ["nx_requests", [GRAPH_REQUEST, I["t"], I["j"], "module-graph", "[]", "closure", 1, 4, 1048576, 5, 64]],
+]
+
 # A second independently well-shaped literal function supplies the foreign-formal
 # negative: an admitted lib formal is not interchangeable across functions.
 def anchor_key(start, end, kind, child_path):

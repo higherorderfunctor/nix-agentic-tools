@@ -1,0 +1,4 @@
+| G | [] | [0] | root | root.nix | false |
+| G | [] | [0,0] | child | child.nix | true |
+| G | [] | [0,1] | child | child.nix | true |
+| G | [] | [1] | :anon-2 | <unknown-file> | false |

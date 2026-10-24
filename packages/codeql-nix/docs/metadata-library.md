@@ -1,13 +1,15 @@
 # Observed metadata library
 
 > **Last verified:** 2026-10-23 — M3p adds optional retained order to L0
-> metadata; source properties remain separate from observed selection.
+> metadata; M3g adds the observed module occurrence; source properties remain
+> separate from observed selection.
 
 - QL is the language for querying a CodeQL database.
 - A target is an explicitly named configuration.
 - A context is a target's root instance.
 - A request selects an option path, metadata facet and work limits.
-- An observation records an outcome for one typed option or definition.
+- An observation records an outcome for one typed option, definition, context or
+  module.
 - Selected means retained for type merging, without proving a value's cause.
 - An origin is an evaluator label with an optional admitted file or point.
 - An anchor identifies syntax by file, byte range, kind and child path.
@@ -17,22 +19,25 @@
 - TRAP is the fact format imported into a CodeQL database.
 
 `Targets.qll`, `Modules.qll` and `Origin.qll` expose only `Target`,
-`RequestResult`, `ObservedOption`, `SelectedDefinition`, `Origin` and the
-separate `PropertyApplication`/`PropertyGroup` structural views. Private
-`internal/Evaluation.qll` shares observation witnesses and path encoding over
-the [existing tables](database-contract.md). Request results retain failures.
+`RequestResult`, `ObservedOption`, `SelectedDefinition`, `ModuleOccurrence`,
+`Origin` and the separate `PropertyApplication`/`PropertyGroup` structural
+views. Private `internal/Evaluation.qll` shares observation witnesses and path
+encoding over the [existing tables](database-contract.md). Request results
+retain failures.
 
 Observed options require their typed subject link and an observed outcome from a
 complete or partial request. Selected definitions require their own such link
 and an observed parent option in the same request; paths and siblings cannot
-supply it. Paths retain exact segments and target identity. Missing priority
-stays absent; failed or missing observations establish neither selection nor a
-losing definition. `SelectedDefinition.getOrderPriorityText()` reads optional
-retained order independently of override priority; absent order stays absent.
-The [module properties query](module-properties.md) returns retained selection
-rows only. Structural wrappers use authenticated library formals and generated
-helper identities; they can describe inactive source without observed guard
-truth.
+supply it. A complete module-graph closure instead observes its context and
+every occurrence exactly once, never an option or definition; see
+[module-graph.md](module-graph.md). Paths retain exact segments and target
+identity. Missing priority stays absent; failed or missing observations
+establish neither selection nor a losing definition.
+`SelectedDefinition.getOrderPriorityText()` reads optional retained order
+independently of override priority; absent order stays absent. The
+[module properties query](module-properties.md) returns retained selection rows
+only. Structural wrappers use authenticated library formals and generated helper
+identities; they can describe inactive source without observed guard truth.
 
 Origins expose optional file paths and reported UTF-8 byte points. Candidates
 reuse [authenticated anchors](source-identity.md), require target admission and

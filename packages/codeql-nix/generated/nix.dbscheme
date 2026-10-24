@@ -517,8 +517,13 @@ nx_diagnostic_requests(int diagnostic: @nx_diagnostic ref, int request: @nx_requ
 nx_diagnostic_targets(int diagnostic: @nx_diagnostic ref, int target: @nx_target ref);
 nx_diagnostics(unique int diagnostic: @nx_diagnostic, int run: @nx_run ref, string code: string ref, string message: string ref);
 nx_files(unique int file: @nx_file, string rootKey: string ref, string relativePath: string ref, string contentHash: string ref, string sourceKind: string ref);
+nx_module_imports(int parent: @nx_module ref, int ordinal: int ref, int child: @nx_module ref);
 nx_module_lib_bindings(int request: @nx_request ref, int functionAnchor: @nx_anchor ref, int formalAnchor: @nx_anchor ref, string libHash: string ref, string modelHash: string ref);
+nx_module_roots(int context: @nx_context ref, int ordinal: int ref, int module: @nx_module ref);
+nx_modules(unique int module: @nx_module, int context: @nx_context ref, string moduleKey: string ref, int origin: @nx_origin ref, int disabled: int ref);
+nx_observation_contexts(int observation: @nx_observation ref, int context: @nx_context ref);
 nx_observation_definitions(int observation: @nx_observation ref, int definition: @nx_definition ref);
+nx_observation_modules(int observation: @nx_observation ref, int module: @nx_module ref);
 nx_observation_options(int observation: @nx_observation ref, int option: @nx_option ref);
 nx_observations(unique int observation: @nx_observation, int request: @nx_request ref, string stage: string ref, string state: string ref);
 nx_option_declarations(int option: @nx_option ref, int ordinal: int ref, int origin: @nx_origin ref);
