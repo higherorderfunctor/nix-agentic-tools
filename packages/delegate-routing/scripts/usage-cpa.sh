@@ -1,5 +1,4 @@
 # shellcheck shell=bash
-set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage'
 readonly delegate_usage_claude_beta='oauth-2025-04-20'
