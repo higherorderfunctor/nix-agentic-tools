@@ -15,7 +15,7 @@
     Workflow = {
       kind = "workflow";
       modes = ["interactive" "headless"];
-      notes = "`agent(prompt, {model, effort})` per node accepts full model ids, including ones the Agent enum lacks (for example models served through a proxy); a single node is the way to pin one delegate. For a non-Claude model pass `agentType: 'general-purpose'` (the default node type comes up without file or shell tools on non-Claude models) and start the brief with a preflight that returns BLOCKED when Bash is missing";
+      notes = "`agent(prompt, {model, effort})` per node accepts full model ids, including ones the Agent enum lacks (for example models served through a proxy); a single node is the way to pin one delegate. For a non-Claude model pass `agentType: 'general-purpose'` (the default node type comes up without file or shell tools on non-Claude models) and start the brief with a preflight that returns BLOCKED when Bash is missing. That agent type does not always bring the tools either: a writer that comes back BLOCKED goes to an orchestrator in a runtime that spawns that model natively, such as a Codex orchestrator, rather than another workflow node";
       pinsEffort = true;
       pinsModel = true;
       # docs/delegates/tools.md Claude `Workflow` fn 14: nodes lack Agent/Workflow (claude:wf_allowed)
