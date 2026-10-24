@@ -134,6 +134,7 @@ for it. When several entries match, their guidance composes.
   - Match:
     - `packages/codeql-nix/**`
   - Read:
+    - [`packages/codeql-nix/docs/all-definitions.md`](packages/codeql-nix/docs/all-definitions.md)
     - [`packages/codeql-nix/docs/builtin-models.md`](packages/codeql-nix/docs/builtin-models.md)
     - [`packages/codeql-nix/docs/database-contract.md`](packages/codeql-nix/docs/database-contract.md)
     - [`packages/codeql-nix/docs/evaluation-isolation.md`](packages/codeql-nix/docs/evaluation-isolation.md)

@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-23 — M3g adds the module-graph closure: a module
 > entity, five relation tables and native Booleans; F1 validates occurrence-tree
 > structure, single-position occurrences, typed witnesses, observed counts,
-> incomplete-closure atomicity and module-origin admission.
+> incomplete-closure atomicity and module-origin admission; M3d adds four
+> candidate relations with authenticated correspondence.
 
 ## Purpose and ownership
 
@@ -11,7 +12,7 @@
 primary keys, enums and serialization encodings. `schema/abi.py` supplies
 reference encoders and validates unordered fact collections. Its `dbscheme()`
 renders the committed `schema/evaluation.dbscheme`; the ABI check rejects
-divergence. All 32 handwritten relations are independent of generated AST entity
+divergence. All 36 handwritten relations are independent of generated AST entity
 types, so later syntax and evaluation producers can contribute to one database
 without manufacturing raw kit labels.
 
@@ -42,10 +43,11 @@ The frozen semantic components are:
   must survive in the identities built on that fingerprint.
 
 The validator reconstructs file and anchor keys and checks their components.
-Other entity keys are checked for namespace and framing, not reconstructed from
-their semantic inputs. The component list freezes the producer obligation;
-accepting a well-framed target key is not evidence that its fingerprint was
-computed correctly.
+Candidate keys additionally check request, option, anchor and merge-group
+components against their witnesses and wrapper chain. Other entity keys are
+checked for namespace and framing, not reconstructed from their semantic inputs.
+The component list freezes the producer obligation; accepting a well-framed
+target key is not evidence that its fingerprint was computed correctly.
 
 Option/request paths are compact canonical JSON arrays of exact string segments:
 `["a.b"]` differs from `["a","b"]`. Contexts are root-only with instance path
@@ -68,20 +70,20 @@ valid. Consumers must retain decimal precision rather than narrow priorities to
 a native QL integer. `priority-domain-unsupported` identifies an unsupported
 range. An option priority also requires same-option `isDefined = true` metadata
 and an observed `pre-apply-metadata` witness from an `option-metadata` request
-with facet `priority` or `selection`, the exact option path and context, and a
-`complete` or `partial` result. Step 0 itself used only the `pre-apply-metadata`
-stage and the `option-metadata` domain. The sole option metadata field is
-`isDefined`.
+with facet `all-definitions`, `priority` or `selection`, the exact option path
+and context, and a `complete` or `partial` result. Step 0 itself used only the
+`pre-apply-metadata` stage and the `option-metadata` domain. The sole option
+metadata field is `isDefined`.
 
 `nx_definition_order` optionally associates a retained definition with order
 priority in the same exact decimal domain. It is separate from winning override
 priority; absence establishes no default order. The retained definition and
 parent option need observed witnesses under the same successful request.
-`nx_module_lib_bindings` links successful selection requests to admitted
-function/formal anchors, with library and model hashes matching their target and
-run. The formal must belong structurally to that top-level function; the adapter
-establishes the actual invocation and supplied library. See
-[module-properties.md](module-properties.md) for its producer and consumer.
+`nx_module_lib_bindings` links successful selection and all-definitions requests
+to admitted function/formal anchors, with library and model hashes matching
+their target and run. The formal must belong structurally to that top-level
+function; the adapter establishes the actual invocation and supplied library.
+See [module-properties.md](module-properties.md) for its producer and consumer.
 
 Every text column is limited to **1,048,576 UTF-8 bytes**, measured before TRAP
 quote doubling. JSON payloads and path arrays are checked after JSON encoding,
@@ -104,9 +106,10 @@ foreign entities must exist with the declared type. `nx_observations` contains
 only observation, request, stage and state. Every observation in every state has
 exactly one subject row in total: `nx_observation_options(observation, option)`,
 `nx_observation_definitions(observation, definition)`,
-`nx_observation_contexts(observation, context)` or
-`nx_observation_modules(observation, module)`. All subject columns are typed
-entity references; text subject kind/key columns are removed. Missing,
+`nx_observation_contexts(observation, context)`,
+`nx_observation_modules(observation, module)` or
+`nx_observation_candidates(observation, candidate)`. All subject columns are
+typed entity references; text subject kind/key columns are removed. Missing,
 duplicate, wrong-type, dangling and simultaneous links of different kinds are
 invalid. Context and module subjects must belong to their request's context and
 to that context's single `module-graph`/`closure` request.
@@ -134,6 +137,12 @@ one module witness per occurrence. Each module occurrence occupies exactly one
 root or child position. Missing rows mean unknown. Completed definitions require
 positive work and contiguous ordinals for the request's same-path/context
 observed options.
+
+The [bounded inventory](all-definitions.md) adds distinct candidate records,
+optional effective priorities and unambiguous retained correspondences. F1
+requires same-request option/candidate/definition witnesses and exact observed
+counts on complete or partial inventory transactions; inactive or unknown
+candidates do not manufacture retained rows.
 
 A complete request cannot carry a timeout/text refusal reason or a linked
 diagnostic with either code. Failed discovery can be represented before any

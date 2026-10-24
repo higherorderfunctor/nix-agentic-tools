@@ -31,6 +31,9 @@
     '';
 in {
   checks = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+    codeql-nix-all-definitions =
+      installedSuite "codeql-nix-all-definitions" ["inc3/all-definitions/test_installed_all_definitions.py"]
+      "M3d all-definitions with direct oracles";
     codeql-nix-graph =
       installedSuite "codeql-nix-graph" ["inc3/graph/test_graph.py"]
       "M3g module-graph installed qltest";

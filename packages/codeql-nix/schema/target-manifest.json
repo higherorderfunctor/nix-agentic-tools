@@ -150,7 +150,15 @@
     },
     "request": {
       "description": "Every metadata request is explicit. Paths are literal segments, never dot-split. No default traversal or value request is implied. A module-graph request selects the closure facet over an empty path.",
-      "else": { "properties": { "facet": { "not": { "const": "closure" } } } },
+      "else": {
+        "properties": {
+          "facet": {
+            "not": {
+              "const": "closure"
+            }
+          }
+        }
+      },
       "if": {
         "properties": {
           "domain": {
@@ -164,6 +172,7 @@
         },
         "facet": {
           "enum": [
+            "all-definitions",
             "closure",
             "declarations",
             "definitions",
