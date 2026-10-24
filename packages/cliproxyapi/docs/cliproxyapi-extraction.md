@@ -1,6 +1,6 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-23 — CPA 8.0.41 custom YAML decoders are probed
+> **Last verified:** 2026-10-24 — CPA 8.0.41 custom YAML decoders are probed
 > through yaml.v3; z.ai documentation uses the shared `webDocsLib.mkSnapshot`
 > updater, validates candidate pages, and refreshes the same owner facts after
 > pinning changed content.
@@ -52,16 +52,19 @@ roots accepted by `v8AllowedRoots()` but absent from the structs, including
 `config-version`, take their key and type from the canonical template.
 
 An upstream key family becomes `api-keys.<family>[]` groups holding `name` and
-`keys`; `base-url` and `sharedKeyFields` also appear at group level. OpenAI
-compatibility keeps its group struct with `api-key-entries` renamed to `keys`.
-The v8 group loader does not read `auth-index`, so those fields are omitted.
+`keys`; `isV8GroupKeyField` supplies the group fields to both CPA's loader and
+the extractor, including Claude's provider-specific `tool-aliases` map. This
+keeps accepted group fields in the generated settings type without another field
+list. OpenAI compatibility keeps its group struct with `api-key-entries` renamed
+to `keys`. The v8 group loader does not read `auth-index`, so those fields are
+omitted.
 
 ## Measured data
 
 The package's `passthru.extracted` is `lib/extracted`'s `goTestExtract`: it
-copies `package.src`, the `applyPatches` tree, so the facts include what
-`patches/key-allowlist.patch` adds to the config schema. It also copies the
-package's `goModules`, installs the extractor test beside the shared
+copies `package.src`, the `applyPatches` tree, so the facts include what the
+carried allowlist and tool-shim patches add to the config schema. It also copies
+the package's `goModules`, installs the extractor test beside the shared
 `lib/extracted/go/nat_shared_test.go` (node types, the field walk, the output)
 and runs it with the package's Go toolchain. `GOPROXY=off`,
 `GOFLAGS=-mod=vendor` and `GOTOOLCHAIN=local` keep extraction offline. The

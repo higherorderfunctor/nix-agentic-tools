@@ -1,6 +1,6 @@
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-23 — OAuth upstream credentials require vendor and
+> **Last verified:** 2026-10-24 — OAuth upstream credentials require vendor and
 > a secret account email; native CPA account rules match logins, including ones
 > added while the service runs. The existing rendered-file launcher lifts
 > accounts into secret placeholders on both backends. Named API-key credentials
@@ -137,6 +137,13 @@ For Codex and xAI WebSocket requests, CPA can prefer a WebSocket-capable
 credential even at a lower priority than an HTTP-only credential. Existing
 session affinity can keep using a bound credential after a higher-priority one
 recovers. Per-client routing order/fallback and account prefixes are deferred.
+
+Built-in `vendor = "z-ai"` defaults
+`apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` for Anthropic and
+`apiKey.codexShellArgCleanup = true` for chat-to-Responses shell calls,
+repairing measured tool-name and empty-justification failures. Explicit
+`toolAliases = {};` and `codexShellArgCleanup = false;` disable those defaults;
+other vendors omit both settings unless requested.
 
 A named client key also listed by hand in `access.api-keys`, or given a
 hand-written `access.key-allowlist` entry, is refused: a second owner could

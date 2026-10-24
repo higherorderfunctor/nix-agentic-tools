@@ -140,6 +140,19 @@ in {
         };
         result = evaluate backend ai;
         settings = rendered result;
+        shimOverride = overrides:
+          evaluate backend (lib.recursiveUpdate ai (instanceChange {
+            credentials.zai = lib.mkForce {
+              vendor = "z-ai";
+              apiKey = {inherit (apiKey) key;} // overrides;
+            };
+          }));
+        customized = shimOverride {toolAliases.ToolSearch = "SearchProxy";};
+        disabled = shimOverride {
+          codexShellArgCleanup = false;
+          toolAliases = {};
+        };
+        plain = rendered (evaluate backend {});
         overridden = evaluate backend (lib.recursiveUpdate ai (instanceChange {
           clientKeys.personal.routes = lib.mkForce [(route "personal")];
           credentials.zai = lib.mkForce {
@@ -168,6 +181,15 @@ in {
                 provider = "openai-compatible-zai";
               }
             ];
+          "custom alias overrides default" =
+            failedMessages customized
+            == []
+            && (lib.findFirst (entry: entry.name == "zai") null (rendered customized).api-keys.claude).tool-aliases == {ToolSearch = "SearchProxy";};
+          "empty map and false override defaults" =
+            failedMessages disabled
+            == []
+            && lib.all (entry: !(entry ? tool-aliases)) (rendered disabled).api-keys.claude
+            && lib.all (entry: !(entry ? codex-shell-arg-cleanup)) (rendered disabled).api-keys.openai-compatibility;
           "overrides" =
             failedMessages overridden
             == []
@@ -178,9 +200,11 @@ in {
                 chat.base-url = "https://chat.example/v4";
                 responses = null;
               };
+              codexShellArgCleanup = true;
               key = clientKey "override";
               models = ["custom-model"];
               priority = null;
+              toolAliases.ToolSearch = "ToolSearch_";
             };
           "picker catalog retained" =
             result.config.ai.claude.normalized.proxy.credentials
@@ -194,6 +218,10 @@ in {
                 inherit (vendor) models;
               }
             ];
+          "plain shims omitted" =
+            lib.all (entry: !(entry ? tool-aliases)) plain.api-keys.claude
+            && lib.all (entry: !(entry ? codex-shell-arg-cleanup)) plain.api-keys.openai-compatibility;
+          "shims rendered" = (block "claude").tool-aliases == {ToolSearch = "ToolSearch_";} && (block "openai-compatibility").codex-shell-arg-cleanup;
           "tier mapping retained as measured data" = builtins.attrNames vendor.claudeModels == ["haiku" "opus" "sonnet"] && lib.all (model: lib.elem model vendor.models) (builtins.attrValues vendor.claudeModels);
         };
       in
@@ -331,6 +359,44 @@ in {
           });
           "neither credential kind" = refused backend "credentials.empty: declare exactly one" (instanceChange {credentials.empty = {};});
           "both credential kinds" = refused backend "credentials.personal: declare exactly one" (instanceChange {credentials.personal = {inherit apiKey;};});
+          "alias duplicate targets" = refused backend "tool-aliases requires" (instanceChange {
+            credentials.zai.apiKey.toolAliases = {
+              A = "Z";
+              B = "Z";
+            };
+          });
+          "alias source collision" = refused backend "tool-aliases requires" (instanceChange {
+            credentials.zai.apiKey.toolAliases = {
+              A = "B";
+              B = "C";
+            };
+          });
+          "alias source too long" = refused backend "tool-aliases requires" (instanceChange {credentials.zai.apiKey.toolAliases.${lib.concatStrings (lib.replicate 65 "x")} = "A";});
+          "alias target too long" = refused backend "tool-aliases requires" (instanceChange {credentials.zai.apiKey.toolAliases.A = lib.concatStrings (lib.replicate 65 "x");});
+          "raw alias collision" = refused backend "tool-aliases requires" (instanceChange {
+            settings.api-keys.claude = [
+              {
+                tool-aliases = {
+                  A = "Z";
+                  B = "Z";
+                };
+              }
+            ];
+          });
+          "raw key alias collision" = refused backend "tool-aliases requires" (instanceChange {
+            settings.api-keys.claude = [
+              {
+                keys = [
+                  {
+                    tool-aliases = {
+                      A = "Z";
+                      B = "Z";
+                    };
+                  }
+                ];
+              }
+            ];
+          });
           "shared URL" = refused backend "also the base URL of another" (instanceChange {credentials.duplicate.apiKey = apiKey;});
           "shared raw URL" = refused backend "also the base URL of another" (instanceChange {
             settings.api-keys.claude = [

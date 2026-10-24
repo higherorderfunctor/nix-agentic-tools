@@ -229,6 +229,11 @@
       "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
       "type": "int"
     },
+    "api-keys.claude[].keys[].tool-aliases": {
+      "description": "ToolAliases maps client tool names to upstream names for this credential.",
+      "type": "map"
+    },
+    "api-keys.claude[].keys[].tool-aliases.<name>": { "type": "string" },
     "api-keys.claude[].keys[].weight": {
       "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
       "type": "int"
@@ -333,6 +338,11 @@
       "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
       "type": "int"
     },
+    "api-keys.claude[].tool-aliases": {
+      "description": "ToolAliases maps client tool names to upstream names for this credential.",
+      "type": "map"
+    },
+    "api-keys.claude[].tool-aliases.<name>": { "type": "string" },
     "api-keys.codex": {
       "description": "Codex defines a list of Codex API key configurations as specified in the YAML configuration file.",
       "type": "list"
@@ -1379,6 +1389,10 @@
     "api-keys.openai-compatibility[].base-url": {
       "description": "BaseURL is the base URL for the external OpenAI-compatible API endpoint.",
       "type": "string"
+    },
+    "api-keys.openai-compatibility[].codex-shell-arg-cleanup": {
+      "description": "CodexShellArgCleanup removes redundant approval arguments from Codex shell calls translated from chat completions.",
+      "type": "bool"
     },
     "api-keys.openai-compatibility[].disable-cooling": {
       "description": "DisableCooling overrides the global cooling policy for this provider when set.\nTrue disables auth/model cooldowns; false explicitly enables them.",
