@@ -6,6 +6,7 @@ Boehm
 callees
 CFFIXED
 chatcmpl
+ciphertext
 cliproxy
 CLOUDSDK
 codemode
@@ -31,9 +32,15 @@ ONLN
 OPENROUTER
 PATHEXT
 Patchelf
+pathlen
 pluginhost
 pnpmfile
 qll
+ramfs
+rcgen
+rustix
+rustls
+statfs
 SYSTEMONE
 TERMUX
 TYPESAFE
