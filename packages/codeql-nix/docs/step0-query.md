@@ -62,9 +62,12 @@ promise that every possible option was explored.
 `checks.nix` imports `checks/step0.nix`, exposing the Linux check
 `checks.x86_64-linux.codeql-nix-step0`. It runs
 `checks/fixtures/step0/test_q0.py` through the existing nonempty domain runner
-and writes its evidence only after the selected suite succeeds. The suite reuses
-the [installed extractor](installed-extractor.md) harness: installed products,
-`database create --language=nix`, both production queries and
+and writes its evidence only after the selected suite succeeds. Every installed
+suite is a separate derivation from the same `installedSuite` helper, so CI
+builds them in parallel instead of serially within one 60-minute leg; a new
+suite adds one entry there rather than joining an existing derivation. The suite
+reuses the [installed extractor](installed-extractor.md) harness: installed
+products, `database create --language=nix`, both production queries and
 `codeql test run ql/test/step0`.
 
 The fixture declares integer option `demo.answer` in `options.nix`.

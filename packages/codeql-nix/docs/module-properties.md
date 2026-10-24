@@ -81,10 +81,11 @@ a second module evaluator or a property fact table.
 
 ## Verification and changes
 
-`codeql-nix-step0`, through `checks/step0.nix`, registers
-`checks/fixtures/inc3/properties/test_properties.py`. The suite invokes the
-installed query, reviewed `ql/test/inc3/properties/ModuleSelection.expected`
-rows and direct upstream `oracle.nix` metadata/value witnesses. It covers guard
+`codeql-nix-properties`, through `checks/step0.nix`, runs
+`checks/fixtures/inc3/properties/test_properties.py` as its own derivation so CI
+builds it beside the other installed suites. The suite invokes the installed
+query, reviewed `ql/test/inc3/properties/ModuleSelection.expected` rows and
+direct upstream `oracle.nix` metadata/value witnesses. It covers guard
 mutations, repeated merge occurrences, order swaps, override filtering, missing
 order and signed endpoints. Separate fixtures exercise aliases, shadowing,
 special arguments, the actual injected library, unsupported function shapes,
