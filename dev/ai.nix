@@ -114,7 +114,7 @@ in {
               effort = "token-hungry thinking; keep the default effort";
               match = "glm-*-flash";
               tier = "mid";
-              useFor = "code to a spec; the writer in a writer-judge loop with glm; image or document input";
+              useFor = "code to a spec; the worker in adjudicated review with glm; image or document input";
             };
           };
         };

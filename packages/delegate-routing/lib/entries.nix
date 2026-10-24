@@ -59,16 +59,16 @@ in {
         source = ../fragments/review-one-reviewer.md;
       }
       {
-        name = "Prosecute";
-        source = ../fragments/review-prosecute.md;
+        name = "Find";
+        source = ../fragments/review-find.md;
       }
       {
-        name = "Defend";
-        source = ../fragments/review-defend.md;
+        name = "Refute";
+        source = ../fragments/review-refute.md;
       }
       {
-        name = "Judge";
-        source = ../fragments/review-judge.md;
+        name = "Adjudicate";
+        source = ../fragments/review-adjudicate.md;
       }
       {
         name = "Loop";
