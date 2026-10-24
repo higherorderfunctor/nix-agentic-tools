@@ -236,7 +236,14 @@ in {
           "API-key priority on every served API" = lib.all (priority: map (block: block.priority) (priorityBlocks priority) == [priority priority priority]) [(-1) 0 3];
           "unset API-key priority omitted" = lib.all (block: !(block ? priority)) (lib.concatLists (builtins.attrValues settings.api-keys));
           "null API-key priority omitted" = lib.all (block: !(block ? priority)) (priorityBlocks null);
-          "OAuth rejects priority" = rejectsType (instanceChange {credentials.work.oauth.priority = -1;});
+          "OAuth priority overrides survive render" =
+            lib.all (priority:
+              (lib.last (rendered (evaluate backend (instanceChange {credentials.work.oauth = {inherit priority;};}))).oauth.credential-overrides).priority == priority) [(-1) 0 3];
+          "OAuth null fields omitted" = lib.all (entry: !(entry ? priority) && !(entry ? weight)) settings.oauth.credential-overrides;
+          "OAuth priority rejects strings" = rejectsType (instanceChange {credentials.work.oauth.priority = "high";});
+          "OAuth weight refuses scheduler overflow" = rejectsType (instanceChange {credentials.work.oauth.weight = 1000001;});
+          "OAuth disabled rejects strings" = rejectsType (instanceChange {credentials.work.oauth.disabled = "false";});
+          "OAuth headers require redact references" = rejectsType (instanceChange {credentials.work.oauth.headers.Authorization = "literal";});
           "fixture accepted" = failedMessages result == [];
           "named keys" = settings.access.api-keys == map clientKey ["personal" "work"];
           "OAuth exact accounts, API exact URL, route order" =

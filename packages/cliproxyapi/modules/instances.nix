@@ -80,7 +80,10 @@ in {
         # Without this the daemon downloads its control panel from GitHub at
         # start and every 3 hours after.
         management.disable-auto-update-panel = lib.mkDefault true;
-        oauth.auth-dir = "${instance.stateDir}/auth";
+        oauth = {
+          auth-dir = "${instance.stateDir}/auth";
+          credential-overrides = providersLib.oauthOverrides instance;
+        };
         server = {
           host = lib.mkDefault "127.0.0.1";
           inherit (instance) port;
