@@ -15,11 +15,13 @@ check's reasoning, evidence or severity. Independently checks the draft for what
 would make the issue wrong. Returns concede, or rebut with its own evidence.
 
 **Judge:** handles rebutted issues, high-severity concessions and a small sample
-of low-severity concessions to check for lazy agreement. Gets both checks'
-outcomes and evidence, without their reasoning, proposed severity, round number,
-writer's notes or recurrence count. Returns accepted with final severity,
-rejected, or unresolved with the open question; names which point it set aside
-and why. The orchestrator validates unresolved questions.
+of concessions below high severity to check for lazy agreement. Gets both
+checks' outcomes and evidence, without their reasoning, proposed severity, round
+number, writer's notes or recurrence count. Returns accepted with final
+severity, rejected, or unresolved with the open question; names which point it
+set aside and why. The orchestrator validates unresolved questions. A conceded
+issue the judge does not sample is accepted at the first check's proposed
+severity.
 
 Use neutral briefs: never say what an earlier role concluded or that an issue
 already survived a check. Pass outcomes and evidence, not arguments. An issue or

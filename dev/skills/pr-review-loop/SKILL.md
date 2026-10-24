@@ -248,3 +248,6 @@ Subtractive rubric, single-reviewer path and three blind checks. Keep reviewers
 read-only: forbid mutating git commands because sibling worktrees hold live
 edits. Record dismissed findings by title and count, and their dispositions in
 the PR body.
+
+Findings are unbounded, so bound the contest before adding lenses: a 94-line
+docs PR once produced 28 findings and a 59-agent run.

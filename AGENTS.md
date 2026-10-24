@@ -1274,11 +1274,20 @@ never left draft, or `git diff --stat <last-reviewed-sha>...HEAD` shows a change
 that would earn a re-request under the test above — a new file or mechanism, or
 an approach rewritten rather than corrected.
 
-Dispatch a reviewer that did not write the diff, from a different vendor. Give
-it the requirements and diff; the PR body is an argument, not evidence. Report
+**You cannot review your own diff.** The reasoning that wrote the code is the
+reasoning evaluating it, so reading it back produces agreement. Dispatch a
+reviewer that did not write the diff, from a different vendor. Give it the
+requirements and diff; the PR body is an argument, not evidence. Report
 dismissed findings as well as fixes.
 
+github.com Copilot fails here often enough that separate-agent review is the
+common case, not a fallback for one outage.
+
 ### Escalating past one reviewer: three blind checks
+
+**Settled — do not relitigate:** never trigger escalation on a change's
+"complexity": that word routed the decision before, and two agents reached
+opposite answers.
 
 Use all three checks when either trigger holds:
 
