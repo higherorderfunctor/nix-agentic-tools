@@ -7,8 +7,9 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-16 — Kiro workflow step sessions skip the per-turn
-> reminder; root sessions and the other runtimes retain their reminder output.
+> **Last verified:** 2026-10-23 — five enabled routing entries, with "Decompose
+> the work" ordered between "Size the work" and "Choose execution"; parallel
+> writers follow the disjoint-files rule in both entries.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -25,10 +26,12 @@ expose the same surface.
 
 `routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or
 `source`. Names become headings. The package ships the always-on "Load
-delegate-routing" stub and four enabled entries: "Follow the user's request",
-"Size the work", "Choose execution" and "Validate the result". "Validate the
-result" is always-on too. The "Orchestrator session" catalog entry ships
-disabled. Policy belongs in these entries rather than renderer string literals.
+delegate-routing" stub and five enabled entries: "Follow the user's request",
+"Size the work", "Decompose the work", "Choose execution" and "Validate the
+result". "Decompose the work" splits the work into reviewable parts before
+execution; "Validate the result" is always-on too. The "Orchestrator session"
+catalog entry ships disabled. Policy belongs in these entries rather than
+renderer string literals.
 
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.

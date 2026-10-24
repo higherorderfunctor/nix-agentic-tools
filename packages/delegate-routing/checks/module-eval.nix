@@ -718,11 +718,11 @@
       );
     "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
       builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
-      == ["Choose execution" "Follow the user's request" "Load delegate-routing" "Size the work" "Validate the result"]
+      == ["Choose execution" "Decompose the work" "Follow the user's request" "Load delegate-routing" "Size the work" "Validate the result"]
       && !routingDefaults."Orchestrator session".enable
       && routingDefaults."Load delegate-routing".always
       && routingDefaults."Validate the result".always
-      && ordered claude ["Follow the user's request" "Size the work" "Choose execution"]
+      && ordered claude ["Follow the user's request" "Size the work" "Decompose the work" "Choose execution"]
       && lib.hasInfix "## Routing" claude
       && hasLoadInstruction stub
       && lib.hasInfix "### Validate the result" stub
