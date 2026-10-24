@@ -313,8 +313,8 @@ change, then run the module assertions and Go check in CI.
 > a secret file, and derives named client keys' `access.api-keys` and
 > `access.key-allowlist` entries from named upstream routes. Built-in
 > `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
-> official documentation. Named API-key credentials accept an optional integer
-> priority, omitted when unset.
+> official documentation, chat to z.ai's Coding Plan endpoint. Named API-key
+> credentials accept an optional integer priority, omitted when unset.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -355,18 +355,18 @@ ai.cliproxyapi.instances.main.credentials.zai-api-personal = {
 };
 ```
 
-`apiKey.apis` defaults to Anthropic-compatible and OpenAI chat-compatible
-endpoints, and `apiKey.models` to z.ai's published general API chat catalog.
-Override either endpoint's `base-url`, set an API to `null`, or replace `models`
-with the subset your upstream credential permits. Check the key classification
-and entitlements in z.ai's
-[API Key Management Guide](https://docs.z.ai/devpack/notice/api-key-management):
-new Standard/Coding Plan keys determine billing across supported endpoints;
-older Compatible keys retain endpoint-dependent rules. Standard usage can
-consume account balance or usage bundles. The defaults describe the general API,
-not a guarantee of account access. Client keys still choose this credential and
-its API through `routes`; selecting `api = "chat"` lets CPA translate a Codex
-CLI Responses request to chat.
+`apiKey.apis` defaults chat to z.ai's Coding Plan endpoint and Anthropic to its
+own endpoint, and `apiKey.models` to z.ai's published general API chat catalog;
+the `vendor` option description carries the endpoint URLs and the
+`apiKey.apis.chat.base-url` line that selects the general endpoint. Override
+either endpoint's `base-url` or set an API to `null`. Replace `models` with the
+subset your upstream credential permits. Billing depends on the key type; check
+the key classification and entitlements in z.ai's
+[API Key Management Guide](https://docs.z.ai/devpack/notice/api-key-management).
+The defaults describe the Coding Plan endpoint, not a guarantee of account
+access. Client keys still choose this credential and its API through `routes`;
+selecting `api = "chat"` lets CPA translate a Codex CLI Responses request to
+chat.
 
 The measured Claude Code tier mapping and timeout remain extraction data. The
 existing per-client-key model list carries model IDs for picker rows, without
