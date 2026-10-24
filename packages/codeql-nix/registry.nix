@@ -19,6 +19,7 @@
         "module-adapter"
         "module-properties"
         "owner-layout"
+        "renames"
         "source-identity"
         "target-contract"
       ];

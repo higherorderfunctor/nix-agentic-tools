@@ -3,10 +3,7 @@
 Reuse P2a's installed lifecycle harness; load_tests selects only Q0 methods.
 """
 
-import csv
-import io
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -28,12 +25,7 @@ class Step0Tests(test_installed.InstalledTests):
             path.chmod(path.stat().st_mode | 0o200)
 
     def query_product(self, database, name):
-        bqrs = self.scratch / (name + ".bqrs")
-        self.run_codeql("query", "run", Path(os.environ["CODEQL_NIX_TEST_QUERIES"]) / (name + ".ql"),
-                        "--database=" + str(database), "--output=" + str(bqrs))
-        result = self.run_codeql("bqrs", "decode", bqrs, "--format=csv", "--no-titles")
-        bqrs.unlink()
-        return list(csv.reader(io.StringIO(result.stdout)))
+        return self.installed_query(database, name)
 
     def oracle(self, case, success=True):
         arguments = {"case": case, "nixpkgs": self.inputs["nixpkgs"]["path"], "source": str(self.root)}

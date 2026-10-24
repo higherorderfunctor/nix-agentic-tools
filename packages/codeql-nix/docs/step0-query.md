@@ -52,10 +52,12 @@ priorities are not narrowed to QL integers. Synthetic evaluator labels cannot
 supply authenticated source files.
 
 `ql/queries/ExtractionHealth.ql` reports recorded phases, per-target request
-outcomes with observed counts, and diagnostics capped at 4096 characters. Read
-health alongside the answer: a failed request and an absent definition are
-different results. Recorded health is evidence about explicit work, not a
-promise that every possible option was explored.
+outcomes with observed counts, rename-model capability and authenticated
+module-function binding coverage, and diagnostics capped at 4096 characters.
+Missing capability evidence is unavailable; positive binding coverage is
+partial, never exhaustive. Read health alongside the answer: a failed request
+and an absent definition are different results. Recorded health is evidence
+about explicit work, not a promise that every possible option was explored.
 
 ## Installed proof
 

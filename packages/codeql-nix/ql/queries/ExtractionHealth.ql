@@ -1,9 +1,10 @@
 /**
  * @name Extraction health
- * @description Recorded phase and request outcomes, observation counts and bounded diagnostics.
+ * @description Recorded phase, request, capability and binding outcomes, counts and bounded diagnostics.
  * @kind table
  * @id nix/extraction-health
  */
+import nix.Modules
 import nix.Targets
 
 private predicate row(string kind, string target, string pathJson, string facet,
@@ -18,6 +19,29 @@ private predicate row(string kind, string target, string pathJson, string facet,
     state = request.getState() and reason = request.getReason() and
     countText = request.getObservedCount().toString()
   )
+  or
+  exists(Targets::Target selected |
+    target = selected.getName() and pathJson = "" and countText = "" and
+    kind = "capability" and facet = "rename-models" and
+    (nx_capabilities(selected, facet, state, reason)
+     or not nx_capabilities(selected, facet, _, _) and
+       state = "unavailable" and reason = "rename helper model availability was not recorded"))
+  or
+  exists(Targets::Target selected, int bindings |
+    target = selected.getName() and pathJson = "" and kind = "binding" and
+    facet = "module-library-bindings" and
+    bindings = count(@nx_anchor functionAnchor, @nx_anchor formalAnchor |
+      exists(@nx_request request |
+        nx_requests(request, selected, _, _, _, _, _, _, _, _, _) and
+        Modules::authenticatedLibraryFormal(request, functionAnchor, formalAnchor))) and
+    countText = bindings.toString() and
+    (bindings = 0 and state = "unavailable" and reason = "no authenticated module functions"
+     or bindings > 0 and state = "partial" and reason = "authenticated functions; coverage is not exhaustive"))
+  or
+  nx_runs(_, _, _, _, _, _) and not exists(Targets::Target selected) and
+    target = "" and pathJson = "" and state = "unavailable" and reason = "no selected targets" and
+    (kind = "binding" and facet = "module-library-bindings" and countText = "0"
+     or kind = "capability" and facet = "rename-models" and countText = "")
   or
   exists(string message |
     nx_diagnostics(_, _, state, message) and kind = "diagnostic" and
