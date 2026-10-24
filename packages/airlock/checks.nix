@@ -1,6 +1,8 @@
 {pkgs, ...}: let
   package = pkgs.ai.generic.airlock;
 in {
+  imports = [./checks/airlock-instances.nix];
+
   # nixpkgs' buildRustPackage has no clippy hook, so reuse the package's
   # offline vendored-dependency setup and run clippy instead of the build.
   checks.airlock-clippy = package.overrideAttrs {

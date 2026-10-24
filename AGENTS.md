@@ -104,6 +104,11 @@ for it. When several entries match, their guidance composes.
     - `packages/stacked-workflows/modules/**`
   - Read:
     - [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
+- **`airlock`**
+  - Match:
+    - `packages/airlock/**`
+  - Read:
+    - [`packages/airlock/docs/airlock.md`](packages/airlock/docs/airlock.md)
 - **`beads`**
   - Match:
     - `packages/beads/**`
