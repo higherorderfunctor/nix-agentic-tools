@@ -27,7 +27,6 @@ usage_cpa_request() {
 header = "Authorization: Bearer $delegate_usage_cpa_key"
 EOF_CPA
   ); then
-    unset delegate_usage_cpa_key
     usage_cpa_error 'management request failed'
   fi
   unset delegate_usage_cpa_key
@@ -59,9 +58,7 @@ usage_cpa() {
   files=$(usage_cpa_request GET auth-files) || exit 1
   if ! accounts=$(jq -ce --arg vendor "$vendor" '
     .files | if type != "array" then error("files") else
-      map(select(.provider == $vendor and .account_type == "oauth" and .disabled != true)) |
-      if all(.[]; (.auth_index | type == "string" and length > 0))
-      then . else error("auth_index") end end' <<<"$files" 2>/dev/null); then
+      map(select(.provider == $vendor and .account_type == "oauth" and .disabled != true)) end' <<<"$files" 2>/dev/null); then
     usage_cpa_error 'invalid auth-files response'
   fi
   if [[ $accounts == '[]' ]]; then
