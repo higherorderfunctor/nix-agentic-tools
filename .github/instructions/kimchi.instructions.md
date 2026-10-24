@@ -7,11 +7,12 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-22 (commit d5f613ea) — pi 1.3 settings follow
-> reexports and inherited TypeBox properties through lock-pinned declaration
-> entrypoints; scope follows settings accessors, with unread JSON Schema
-> metadata explicitly ignored. The sidecar carries CodeQL environment and
-> network facts on x86_64-linux.
+> **Last verified:** 2026-10-24 (commit 3879761a) — config guards include the
+> helpers readConfigExtras hands `parsed.<key>` to, and a `delete` target is not
+> a read; pi 1.3 settings follow reexports and inherited TypeBox properties
+> through lock-pinned declaration entrypoints; scope follows settings accessors,
+> with unread JSON Schema metadata explicitly ignored. The sidecar carries
+> CodeQL environment and network facts on x86_64-linux.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -217,15 +218,19 @@ names follow Kimchi's `piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not
 pi's `PI_` default). The extractor uses the TypeScript compiler's checker for
 declared keys and types and syntax tree queries for environment access sites,
 while config queries cross-check compiler types against top-level, nested, and
-array-element runtime validation guards. Added lines from pi patch files are
-synthesized as source files and bound in isolated TypeScript programs before
-alias resolution; using the main program's checker on those foreign nodes can
-crash inside the compiler. A declaration is never taken by bare name when a
-reference can pick it: config.ts's functions and interfaces resolve in
-config.ts's own scope (Kimchi 1.1.37 has a second `loadConfig`), pi's `Settings`
-comes from `settings-manager.d.ts`'s exports, and each Settings member carries
-its recursively resolved type inline. The Kimchi harness schemas still looked up
-by name must match exactly one declaration among the modules reachable from
+array-element runtime validation guards. Those guards include the ones inside a
+helper that readConfigExtras passes `parsed.<key>` to, such as
+`parseOnboardingConfig`, with `parsed` identified by its checker symbol. A
+`delete raw.key` on a parsed object removes a key and is not counted as a read
+of it. Added lines from pi patch files are synthesized as source files and bound
+in isolated TypeScript programs before alias resolution; using the main
+program's checker on those foreign nodes can crash inside the compiler. A
+declaration is never taken by bare name when a reference can pick it:
+config.ts's functions and interfaces resolve in config.ts's own scope (Kimchi
+1.1.37 has a second `loadConfig`), pi's `Settings` comes from
+`settings-manager.d.ts`'s exports, and each Settings member carries its
+recursively resolved type inline. The Kimchi harness schemas still looked up by
+name must match exactly one declaration among the modules reachable from
 `src/entry.ts`, so the dead `model-catalog/model-metadata.ts` is ignored, and a
 second live `ModelCustomMetadataSchema` stops the extraction instead of
 narrowing the option. Same-named constants back a constant only where the
