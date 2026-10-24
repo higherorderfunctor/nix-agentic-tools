@@ -48,6 +48,7 @@ in {
   module = {
     arguments ? _: "",
     backend,
+    claimProxyInstance ? false,
     defaultPort,
     derived,
     directories ? _: [],
@@ -132,33 +133,39 @@ in {
       '';
     };
 
-    config.ai.${owner}.services = lib.mapAttrs' (name: instance: let
-      rendered = render instance.settings;
-      state = map lib.escapeShellArg ([instance.stateDir] ++ directories instance);
-      # The tool resolves relative paths (CLIProxyAPI's `.env` and `logs/`)
-      # against its working directory, so it runs in its own state.
-      run = strictShellApplication pkgs {
-        name = "${owner}-${name}";
-        text = ''
-          ${pkgs.coreutils}/bin/mkdir -p ${toString state}
-          ${pkgs.coreutils}/bin/chmod 0700 ${toString state}
-          cd ${lib.escapeShellArg instance.stateDir}
-          ${preStart instance}
-          exec ${lib.getExe instance.package} ${arguments instance}
-        '';
-      };
-    in
-      lib.nameValuePair "${owner}-${name}" {
-        command = [(lib.getExe run)];
-        inherit (instance) enable;
-        # Manager Plus's render also returns the environment it reads.
-        environment = rendered.environment or {};
-        files.config = {
-          inherit (rendered) content secrets;
-          inherit variable;
+    config.ai.${owner} = {
+      services = lib.mapAttrs' (name: instance: let
+        rendered = render instance.settings;
+        state = map lib.escapeShellArg ([instance.stateDir] ++ directories instance);
+        # The tool resolves relative paths (CLIProxyAPI's `.env` and `logs/`)
+        # against its working directory, so it runs in its own state.
+        run = strictShellApplication pkgs {
+          name = "${owner}-${name}";
+          text = ''
+            ${pkgs.coreutils}/bin/mkdir -p ${toString state}
+            ${pkgs.coreutils}/bin/chmod 0700 ${toString state}
+            cd ${lib.escapeShellArg instance.stateDir}
+            ${preStart instance}
+            exec ${lib.getExe instance.package} ${arguments instance}
+          '';
         };
-        ports.main = instance.port;
-      })
-    instances;
+      in
+        lib.nameValuePair "${owner}-${name}" {
+          command = [(lib.getExe run)];
+          inherit (instance) enable;
+          # Manager Plus's render also returns the environment it reads.
+          environment = rendered.environment or {};
+          files.config = {
+            inherit (rendered) content secrets;
+            inherit variable;
+          };
+          ports.main = instance.port;
+        })
+      instances;
+
+      # Proxy instance names are shared by both proxy owners. The generic
+      # claims registry diagnoses collisions, including disabled instances.
+      claims = lib.mkIf claimProxyInstance {proxy-instance = builtins.attrNames instances;};
+    };
   };
 }

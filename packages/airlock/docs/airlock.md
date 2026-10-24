@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-24 — `airlock serve` tunnels, denies, or
 > intercepts: the client's TLS ends at a leaf from airlock's tmpfs CA, verified
 > TLS reopens to the real host, and an intercepted HTTP request has its
-> credential swapped before it streams upstream.
+> credential swapped before it streams upstream. Claude selects airlock through
+> `ai.claude.proxy`, with the CA bundled into its jail.
 
 ## Scope
 
@@ -114,6 +115,26 @@ Every client token and credential file is `redact.types.secretFile`. The
 launcher writes each value to a 0600 file in its runtime directory and fills the
 config's placeholder with that path; airlock-core requires the path to be
 absolute and reads it at start.
+
+## Harness selection
+
+Claude selects an airlock instance through the existing proxy fields,
+`ai.claude.proxy = { instance = "<airlock instance>"; clientKey = "<client>"; }`.
+CPA and airlock instance names share one claims group, so a name resolves to one
+owner, and that owner decides the transport. Only Claude supports airlock; any
+other runtime selecting it fails evaluation. On Linux the jail is required;
+config-only and non-Linux surfaces warn and get no launcher.
+
+At launch the harness reads its client's `token_file` from the service-rendered
+config, exports a percent-encoded `HTTPS_PROXY`, and clears every other proxy
+variable. It holds a fake OAuth token, and its route overlay blanks the CPA base
+URL and `apiKeyHelper`. Only the managed settings scope loads (user on Home
+Manager, project on devenv), so no other scope can override the route; managed
+admin policy is outside this contract. The jail gets system roots plus the
+current `ca.pem` as one read-only bundle over
+`/etc/ssl/certs/ca-certificates.crt` through an unlinked descriptor, rebuilt per
+launch. A missing token, config, roots or CA fails the launch: no wait, no CPA
+or direct fallback.
 
 ## Settled — do not relitigate
 
