@@ -10,10 +10,11 @@ applyTo: "**/*.md,checks/markdown/doubled-words-fixtures.nix,checks/markdown/dou
 `treefmt` owns markdown wrapping. Prettier runs with `proseWrap = "always"`,
 defined once in `lib/markdown/prose-style.nix` and read by the exported treefmt
 module in `lib/treefmt-module.nix` (`treefmtModules.default`). The repository's
-`treefmt.nix` imports that module and adds only repository-specific roots and
-exclusions. Prettier reflows every paragraph to 80 columns on format. **Do not
-hand-wrap prose** — the line breaks you author are discarded, and hand-wrapping
-is what created the defect below.
+`treefmt.nix` imports that module and adds only repository-specific roots,
+formatters for languages `ai.*` never generates (rustfmt) and exclusions.
+Prettier reflows every paragraph to 80 columns on format. **Do not hand-wrap
+prose** — the line breaks you author are discarded, and hand-wrapping is what
+created the defect below.
 
 Generated `ai.*` Markdown is formatted in its store tree alongside JSON, TOML
 and YAML. The exported `treefmtModules.default` is always the base, and the

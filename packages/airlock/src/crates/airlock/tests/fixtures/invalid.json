@@ -1,0 +1,30 @@
+{
+  "clients": {
+    "harness": {
+      "grants": [
+        {
+          "credentials": ["claude"],
+          "upstream": "anthropic"
+        }
+      ],
+      "token_file": "/run/airlock/harness-token"
+    }
+  },
+  "credentials": {
+    "claude": {
+      "auth": {
+        "file": "/run/airlock/claude-token",
+        "type": "oauth_bearer"
+      },
+      "upstream": "anthropic"
+    }
+  },
+  "listen": "192.0.2.1:8080",
+  "state_dir": "state",
+  "upstreams": {
+    "anthropic": {
+      "intercept": ["api.anthropic.com"],
+      "provider": "anthropic"
+    }
+  }
+}
