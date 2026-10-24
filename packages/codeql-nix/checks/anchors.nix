@@ -56,7 +56,8 @@
         CODEQL_NIX_TEST_NIX = "${pkgs.nix}/bin/nix";
         CODEQL_NIX_TEST_NIXPKGS = pkgs.path;
         CODEQL_NIX_TEST_OWNER = owner;
-        nativeBuildInputs = [engine pkgs.nix pkgs.python3 pkgs.util-linux];
+        CODEQL_NIX_TEST_QUERIES = packaging.queries;
+        nativeBuildInputs = [engine pkgs.nix (pkgs.python3.withPackages (ps: [ps.jsonschema])) pkgs.util-linux];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -135,7 +136,8 @@
         export CODEQL_NIX_TEST_SCRATCH="$TMPDIR"
         python3 ${owner}/checks/run-domain-tests.py \
           ${owner}/checks/fixtures/implicit-scope/test_implicit.py \
-          ${owner}/checks/fixtures/imports/test_imports.py
+          ${owner}/checks/fixtures/imports/test_imports.py \
+          ${owner}/checks/fixtures/inc49/i2b/test_i2b.py
         mkdir "$out"
         printf 'S2 driver suite; 28 inherited raw/diagnostic preflight cases; Quality, Coordinates, Empty, Features and Ambiguous QL tests; exact archived bytes passed\n' > "$out/evidence"
       '';

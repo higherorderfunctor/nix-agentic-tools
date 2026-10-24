@@ -22,7 +22,7 @@ class RunIdentity:
     @staticmethod
     def snapshot(abi, manifest):
         roots = sorted((root["logicalName"], root["rootContentIdentity"],
-                        sorted((entry["path"], entry["contentHash"]) for entry in root["files"]))
+                        sorted((entry["path"], entry["contentHash"]) for entry in root["files"] if "importTarget" not in entry))
                        for root in manifest["roots"])
         return digest(abi.canonical(roots).encode())
 
@@ -64,6 +64,61 @@ class RunIdentity:
         abi.require([row for row in packet["facts"] if row[0] == "nx_runs"] == [self.row],
                     "mixed-source-snapshot")
         return [row for row in packet["facts"] if row[0] != "nx_runs"]
+
+
+def select(base, relative):
+    """Nix import of an existing candidate within one immutable admitted tree."""
+    real = (base / relative).resolve()
+    if not os.path.lexists(base / relative):
+        return None
+    if real.is_relative_to(base) and real.is_dir():
+        real = (real / "default.nix").resolve()
+        if real.is_relative_to(base) and not os.path.lexists(real):
+            return "missing-input", None
+    if not real.is_relative_to(base) or not real.is_file() or not os.access(real, os.R_OK):
+        return "source-not-admitted", None
+    return "", real.relative_to(base).as_posix()
+
+
+def import_paths(abi, targets, roots, facts):
+    """Per-target literal directory and <name/suffix> candidates, independent of callee identity."""
+    files = {args[0]: args for name, args in facts if name == "nx_files"}
+    rows, extra = {}, set()
+    for name, target in targets.items():
+        keys = {abi.key("root", [r["logicalName"], r["rootContentIdentity"]]): r["logicalName"] for r in target["sourceRoots"]}
+        rows[name] = []
+        for anchor, file, start, end, kind, _ in [args for relation, args in facts if relation == "nx_anchors"]:
+            key, relative = files[file][1:3]
+            if kind not in ("path_expression", "spath_expression") or key not in keys:
+                continue
+            text = (roots[key][1] / relative).read_bytes()[start:end].decode()
+            if kind == "spath_expression":
+                found, root, lookup, kind = ("search-path-unmapped", None), None, text[1:-1], "search"
+                for entry in target.get("searchPath", []):
+                    prefix = entry["prefix"]
+                    if prefix and lookup != prefix and not lookup.startswith(prefix + "/"):
+                        continue
+                    root = next((k for k in keys if keys[k] == entry["rootLogicalName"] and k in roots), None)
+                    abi.require(root is not None, "search root not admitted")
+                    hit = select(roots[root][1], os.path.join(entry["relativePath"], lookup[len(prefix):].lstrip("/")))
+                    found = hit or ("missing-input", None)
+                    if hit:
+                        break
+            else:
+                # Canonical source directory (RawBridge sourcePath), contained in the immutable tree.
+                source = (roots[key][1] / relative).resolve()
+                if not source.is_relative_to(roots[key][1]):
+                    continue
+                path = Path(os.path.normpath(Path(roots[key][0]) / source.parent.relative_to(roots[key][1]) / text))
+                root = next((k for k in [key, *keys] if k in roots and path.is_relative_to(roots[k][0])), None)
+                if "${" in text or root is None or not (roots[root][1] / path.relative_to(roots[root][0])).is_dir():
+                    continue
+                found, kind = select(roots[root][1], path.relative_to(roots[root][0])), "directory"
+            selected = found[1] and (root, found[1])
+            extra.add(selected)
+            rows[name].append((anchor, kind, "resolved" if selected else "unavailable", found[0], selected))
+    known = {(args[1], args[2]): args[0] for args in files.values()}
+    return rows, extra - set(known) - {None}, known
 
 
 def copy_source(source, destination, excluded):
@@ -176,12 +231,24 @@ def main():
         for target in manifest["targets"].values():
             target["fingerprint"]["sourceSnapshotHash"] = identity.row[1][-1]
         with tempfile.TemporaryDirectory(prefix="nixql-extraction-") as temporary:
-            staged = Path(temporary)
-            staged_trap, staged_archive = staged / "trap", staged / "archive"
-            code, syntax_packet = syntax.extract(binary, schema, combined, pins, syntax_manifest,
-                                                 staged, identity, staged_trap, staged_archive)
-            facts = identity.accept(abi, syntax_packet)
-            abi.require(code == 0, "syntax-extraction-failed")
+            # Immutable trees: the private project copy and hash-pinned inputs.
+            selection = {abi.key("root", [entry["logicalName"], entry["rootContentIdentity"]]): entry for entry in syntax_manifest["roots"]}
+            physical = {key: (entry["path"], (root if entry["sourceKind"] == "project" else Path(entry["path"])).resolve())
+                        for key, entry in selection.items()}
+            extra = True
+            while extra:
+                # Selected import targets join the selection; syntax authenticates
+                # their bytes before supervise emits any link.
+                staged = Path(tempfile.mkdtemp(dir=temporary))
+                staged_trap, staged_archive = staged / "trap", staged / "archive"
+                code, syntax_packet = syntax.extract(binary, schema, combined, pins, syntax_manifest,
+                                                     staged, identity, staged_trap, staged_archive)
+                facts = identity.accept(abi, syntax_packet)
+                abi.require(code == 0, "syntax-extraction-failed")
+                candidates, extra, known = import_paths(abi, manifest["targets"], physical, facts)
+                for key, relative in extra:
+                    selection[key]["files"].append({"path": relative, "importTarget": True, "contentHash": digest(
+                        (physical[key][1] / relative).read_bytes())})
             source_files = [row for row in facts if row[0] == "nx_files"]
             phase = "evaluation"
             # fetchTree uses the same content-addressed source spelling in every
@@ -192,7 +259,8 @@ def main():
                 mappings.setdefault(copied_project + "/" + relative, []).append(file)
             evaluation = supervise(manifest, bindings, staged_trap, source_files=source_files,
                                    source_mappings=mappings, source_anchors=[row for row in facts if row[0] == "nx_anchors"],
-                                   nix=nix, identity=identity)
+                                   nix=nix, identity=identity, import_paths={name: [
+                                       row[:4] + (row[4] and known[row[4]],) for row in rows] for name, rows in candidates.items()})
             facts += identity.accept(abi, evaluation)
             unique = list({abi.canonical(row): row for row in [identity.row] + facts}.values())
             envelope(unique)

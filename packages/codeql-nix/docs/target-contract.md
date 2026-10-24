@@ -1,8 +1,8 @@
 # Target and observation contract
 
-> **Last verified:** 2026-10-23 — F2 retains the metadata manifest and fact
-> envelope for Step 0; M3 activates exact-text model identities; M3g adds the
-> `module-graph` request domain.
+> **Last verified:** 2026-10-24 — I2b adds optional `searchPath`. F2 retains the
+> metadata manifest and fact envelope for Step 0; M3 activates exact-text model
+> identities; M3g adds the `module-graph` request domain.
 
 ## Purpose and fit
 
@@ -46,13 +46,16 @@ to match its run's generated builtin/module bundle fingerprint, otherwise
 returning `unsupported-model`. Legacy `not-requested` remains accepted. See
 [builtin-models.md](builtin-models.md) for model generation and compatibility.
 
-Input identities map exact input names to identity strings. Each source root has
-`logicalName`, `path` and `rootContentIdentity`. Logical name and content
-identity supply F1 root identity; checkout path is mapping data. The fingerprint
-fields combine with `adapterVersion`, the argument-description hash and `system`
-to supply F1 evaluation-fingerprint components. Validation checks their
-representation, not their derivation, source admission, hash authenticity or
-runtime-reference resolution.
+Optional `searchPath`, default `[]`, orders `<name>` mappings to
+`{prefix, rootLogicalName, relativePath}`; paths stay inside a target root, and
+the ordered list joins the target's input hash. Input identities map exact input
+names to identity strings. Each source root has `logicalName`, `path` and
+`rootContentIdentity`. Logical name and content identity supply F1 root
+identity; checkout path is mapping data. The fingerprint fields combine with
+`adapterVersion`, the argument-description hash and `system` to supply F1
+evaluation-fingerprint components. Validation checks their representation, not
+their derivation, source admission, hash authenticity or runtime-reference
+resolution.
 
 ## Requests and authorization
 

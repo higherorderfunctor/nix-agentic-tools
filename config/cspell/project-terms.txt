@@ -463,6 +463,7 @@ sourcehut
 sourcepath
 sourcepos
 sparfenyuk
+spath
 srcs
 sshsign
 starlark

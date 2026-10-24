@@ -517,6 +517,8 @@ nx_diagnostic_requests(int diagnostic: @nx_diagnostic ref, int request: @nx_requ
 nx_diagnostic_targets(int diagnostic: @nx_diagnostic ref, int target: @nx_target ref);
 nx_diagnostics(unique int diagnostic: @nx_diagnostic, int run: @nx_run ref, string code: string ref, string message: string ref);
 nx_files(unique int file: @nx_file, string rootKey: string ref, string relativePath: string ref, string contentHash: string ref, string sourceKind: string ref);
+nx_import_path_candidates(int target: @nx_target ref, int anchor: @nx_anchor ref, string kind: string ref, string status: string ref, string reason: string ref);
+nx_import_path_targets(int target: @nx_target ref, int anchor: @nx_anchor ref, int file: @nx_file ref);
 nx_module_imports(int parent: @nx_module ref, int ordinal: int ref, int child: @nx_module ref);
 nx_module_lib_bindings(int request: @nx_request ref, int functionAnchor: @nx_anchor ref, int formalAnchor: @nx_anchor ref, string libHash: string ref, string modelHash: string ref);
 nx_module_roots(int context: @nx_context ref, int ordinal: int ref, int module: @nx_module ref);

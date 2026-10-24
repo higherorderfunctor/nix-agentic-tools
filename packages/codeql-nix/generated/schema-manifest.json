@@ -50,7 +50,7 @@
     "grammar": "38a15330421d20f3a4d380759f9634d39ba3d8ec",
     "kit": "a1575b98a8cc19bcfa7bb6cb41be688cb3dae65c"
   },
-  "schemaSha256": "48a15bf7a517a858d4045db869ef0eb3fe94ddceafe8ae9a676526576cebbacc",
+  "schemaSha256": "33ab380c0dc4e668dab6515918014ba526fa07fd513661ed1689761d38aa8c70",
   "tables": [
     "containerparent",
     "databaseMetadata",
@@ -120,6 +120,8 @@
     "nx_diagnostic_targets",
     "nx_diagnostics",
     "nx_files",
+    "nx_import_path_candidates",
+    "nx_import_path_targets",
     "nx_module_imports",
     "nx_module_lib_bindings",
     "nx_module_roots",

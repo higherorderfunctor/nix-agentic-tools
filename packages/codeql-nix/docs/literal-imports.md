@@ -1,7 +1,7 @@
 # Literal file imports
 
-> **Last verified:** 2026-10-23 — I2a connects proven builtin import calls to
-> admitted literal files through the authenticated source map.
+> **Last verified:** 2026-10-23 — I2b adds target-qualified directory and search
+> candidates; I2a retains source-only literal-file resolution.
 
 An import site is a call whose function resolves definitely to Nix's builtin
 `import`. An import edge links that site to an admitted source file.
@@ -61,7 +61,8 @@ targets. `getStatus(source)` is `resolved` when a target exists and
 distinguishes:
 
 - `dynamic-path`: the argument has no supported literal path, including
-  interpolated paths, strings, variables and search paths.
+  interpolated paths, strings, variables and search paths in this source-only
+  API.
 - `missing-input`: a literal path has no matching admitted target, including
   missing files and files or roots outside the admitted set.
 
@@ -69,11 +70,30 @@ distinguishes:
 column, status, target path and reason. An unresolved target is an empty string.
 Shadowed calls produce no site row.
 
-Directory imports, implicit `default.nix` selection, search-path lookup and
-`NIX_PATH` mappings have no resolution semantics in this slice. Neither dynamic
-values nor filesystem existence alone justify a target. Generated syntax access
-stays inside `RawBridge.qll`; the import layer reuses existing source relations
-and adds no evaluation tables.
+## Target-qualified directories and search paths
+
+The coordinator resolves literal directories and `<name/suffix>` in immutable
+trees, authenticating selected bytes before linking them. Ordered target
+`searchPath` mappings join input identity; see
+[target-contract.md](target-contract.md). Ambient `NIX_PATH` supplies no
+mappings.
+
+Lookup skips nonexistent candidates. An existing directory selects
+`default.nix`; a missing default stops lookup with `missing-input`. Unmatched
+mappings yield `search-path-unmapped`; unsafe or unreadable selected candidates
+yield `source-not-admitted`, without fallthrough.
+
+`nx_import_path_candidates` records target/argument-anchor answers independently
+of callee identity; `nx_import_path_targets` links resolved candidates only. The
+existing ABI validator requires source and selected-file admission to that
+target. Target-qualified `StaticImportSite` overloads consume these through
+`RawBridge`; absent a candidate, they restrict literal-file lookup to target
+admission. Source-only methods retain I2a semantics.
+
+`DirectoryImports.ql`, installed in `source.qls`, reports
+`(target, sourceFile, line, column, kind, status, targetFile, reason)`. Kind is
+`directory` or `search`; unavailable targets are empty. Definite builtin-call
+resolution excludes shadowed calls.
 
 ## Verification and changes
 
@@ -92,10 +112,15 @@ basename decoy, interpolation and files outside the admitted set. Its separate
 Nix witness arrays expose the values that static admission deliberately leaves
 unknown.
 
+The same runner registers `inc49/i2b/test_i2b.py`: two installed variants
+compare frozen query rows and dependency identities; Nix, ABI and supervisor
+controls check lookup, admission and identity. Installed acceptance requires CI.
+
 When changing resolution, update reviewed expected rows, exact identity
 assertions and independent Nix witnesses together. Preserve definite builtin
 identity, source correlation and the admission boundary. Extend literal
-recognition through the private bridge. Directory or search-path support needs
-its own verified evaluator rules and consuming tests. Format changed files with
+recognition through the private bridge. Keep producer candidate selection
+independent of builtin recognition, and update descriptor identity, ABI
+validation and target-qualified consumers together. Format changed files with
 `treefmt`, run the owner check through CI and update this note when these
 obligations change.

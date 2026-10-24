@@ -125,6 +125,12 @@ def anchor_key(start, end, kind, child_path):
     parts = [I["f"], str(start), str(end), kind, child_path]
     return "nixql:v1:anchor:" + "".join(str(len(part.encode())) + ":" + part for part in parts)
 
+IMPORT_PATH = anchor_key(40, 45, "path_expression", "[2]")
+BINDING_GRAPH += [
+    ["nx_anchors", [IMPORT_PATH, I["f"], 40, 45, "path_expression", "[2]"]],
+    ["nx_import_path_candidates", [I["t"], IMPORT_PATH, "directory", "resolved", ""]],
+    ["nx_import_path_targets", [I["t"], IMPORT_PATH, I["f"]]],
+]
 FOREIGN_FUNCTION = anchor_key(20, 39, "function_expression", "[1]")
 FOREIGN_FORMAL = anchor_key(22, 25, "identifier", "[1,0,0,0]")
 FOREIGN_ANCHORS = [

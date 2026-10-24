@@ -342,7 +342,7 @@ def publish(directory, name, facts):
             os.unlink(temporary)
 
 
-def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=None, source_anchors=(), strict=False, nix="nix", identity=None):
+def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=None, source_anchors=(), strict=False, nix="nix", identity=None, import_paths=None):
     directory = Path(trap_dir)
     directory.mkdir(parents=True, exist_ok=True)
     coordinated = identity is not None
@@ -406,7 +406,8 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                 context = abi.key("context", [identity, "root"])
                 target_row = [identity, run, name, target["adapter"], target["system"],
                               fingerprint["evaluatorVersion"], fingerprint["libVersion"],
-                              digest(target["inputIdentities"]), fingerprint["policyHash"], "complete"]
+                              digest([target["inputIdentities"], target["searchPath"]] if "searchPath" in target else target["inputIdentities"]),
+                              fingerprint["policyHash"], "complete"]
                 facts.extend([["nx_targets", target_row], ["nx_contexts", [context, identity, "root", "[]"]],
                               ["nx_capabilities", [identity, "projection-transport", "supported", "bounded F2 producer"]],
                               ["nx_capabilities", [identity, "module-adapter", "supported", "evalModules metadata"]]])
@@ -414,6 +415,9 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                 try:
                     sources = admitted_sources(source_files, target)
                     admissions = [["nx_target_inputs", [identity, file, "root"]] for file in sources]
+                    for anchor, kind, status, reason, selected in (import_paths or {}).get(name, []):
+                        admissions += [["nx_import_path_candidates", [identity, anchor, kind, status, reason]]]
+                        admissions += [["nx_import_path_targets", [identity, anchor, selected]]] if selected else []
                     envelope(facts + admissions)
                     facts.extend(admissions)
                 except Exception as error:

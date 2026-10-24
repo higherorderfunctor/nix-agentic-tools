@@ -1,9 +1,7 @@
 # Handwritten database contract
 
-> **Last verified:** 2026-10-23 — M3g adds the module-graph closure: a module
-> entity, five relation tables and native Booleans; F1 validates occurrence-tree
-> structure, single-position occurrences, typed witnesses, observed counts,
-> incomplete-closure atomicity and module-origin admission.
+> **Last verified:** 2026-10-24 — I2b adds target-qualified import-path
+> candidates and links; M3g's module-graph closure validation is unchanged.
 
 ## Purpose and ownership
 
@@ -125,6 +123,11 @@ evidence: F1 neither hashes source bytes nor authenticates labels, roots or
 symlink policy. Diagnostics link directly to requests and targets; no
 diagnostic-origin relation is retained. File-level links do not establish
 expression-to-value edges or unique syntax associations.
+
+`nx_import_path_candidates` keys a literal directory or `<name>` argument anchor
+per target; `nx_import_path_targets` links its resolved file. F1 requires both
+files admitted to that target, and a link exactly when the status is `resolved`
+and the reason empty.
 
 Every `observed` observation requires its own `complete` or `partial` request
 result, `complete` only when the request's domain is `module-graph`. A
