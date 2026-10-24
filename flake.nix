@@ -100,9 +100,8 @@
       };
     repoDocsFor = system:
       import ./dev/repo-docs.nix {
-        inherit lib;
+        inherit inputs lib;
         pkgs = pkgsFor system;
-        inherit (inputs) treefmt-nix;
       };
     repository = import ./lib/facets/repository.nix {
       inherit inputs;
@@ -290,6 +289,6 @@
 
     formatter =
       forAllSystems (system:
-        (inputs.treefmt-nix.lib.evalModule (pkgsFor system) (import ./treefmt.nix)).config.build.wrapper);
+        (inputs.treefmt-nix.lib.evalModule (pkgsFor system) (import ./treefmt.nix {inherit inputs;})).config.build.wrapper);
   };
 }

@@ -1,9 +1,12 @@
 # Repository treefmt config. It imports the exported treefmt module, then adds the
-# repository root and path-specific exclusions. Consumers: devenv.nix's treefmt
-# module, the flake `formatter`, and checks/repository/formatting.nix. The
-# exported module is also the default `ai.formatter`, so generated files use the
-# same formatter programs and style without the repository-only exclusions.
-{
+# repository root, repository-only formatters and path-specific exclusions.
+# Takes the flake inputs for the locked Rust toolchain. Consumers: devenv.nix's
+# treefmt module, the flake `formatter`, dev/repo-docs.nix,
+# checks/markdown/generated-files.nix and checks/repository/formatting.nix. The
+# exported module is also the default `ai.formatter`, so generated files use
+# the same formatter programs and style without the repository-only formatters
+# and exclusions.
+{inputs}: {pkgs, ...}: {
   imports = [./lib/treefmt-module.nix];
 
   # Use flake.nix as the tree-root marker so `nix fmt` works in git
@@ -13,6 +16,17 @@
   # `nix fmt` from per-input worktrees (see update-input.sh Phase 2.5),
   # so this default must be overridden.
   projectRootFile = "flake.nix";
+
+  # Rust: *.rs. Here rather than in the exported module: `ai.*` never
+  # generates Rust, and the exported module's formatters are build inputs of
+  # every consumer's generated tree, which rustfmt would grow by over a GiB
+  # (nixpkgs' rustfmt closure: 1.7 GiB). The package is the locked toolchain's
+  # rustfmt, the one that builds and lints the Rust packages, not nixpkgs'
+  # release-lagged rustfmt.
+  programs.rustfmt = {
+    enable = true;
+    package = ((import ./lib/toolchains.nix {inherit inputs;}).mkRustPlatform {inherit pkgs;}).rust.rustc;
+  };
 
   settings.global.excludes = [
     "*.lock"

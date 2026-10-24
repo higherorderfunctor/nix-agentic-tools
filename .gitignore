@@ -2,6 +2,8 @@
 result
 result-*
 result-docs
+# cargo's output when run in the airlock workspace without CARGO_TARGET_DIR
+/packages/airlock/src/target/
 
 # Bytecode from running the markdown scanners by hand. Running a scanner as
 # __main__ caches nothing; the .pyc comes from the sibling module each one
