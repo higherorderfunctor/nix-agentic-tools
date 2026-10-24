@@ -6,6 +6,7 @@
     "definition",
     "diagnostic",
     "file",
+    "module",
     "observation",
     "option",
     "origin",
@@ -48,7 +49,7 @@
       "skipped",
       "unsupported"
     ],
-    "nx_requests.domain": ["option-metadata"],
+    "nx_requests.domain": ["module-graph", "option-metadata"],
     "nx_syntax_results.state": ["complete", "excluded", "failed", "recovered"],
     "nx_target_inputs.role": ["adapter", "input", "lock", "manifest", "root"],
     "nx_targets.state": [
@@ -130,12 +131,32 @@
       "columns": "file:file rootKey:text relativePath:text contentHash:text sourceKind:text",
       "key": [0]
     },
+    "nx_module_imports": {
+      "columns": "parent:module ordinal:int child:module",
+      "key": [0, 1]
+    },
     "nx_module_lib_bindings": {
       "columns": "request:request functionAnchor:anchor formalAnchor:anchor libHash:text modelHash:text",
       "key": [0, 1, 2]
     },
+    "nx_module_roots": {
+      "columns": "context:context ordinal:int module:module",
+      "key": [0, 1]
+    },
+    "nx_modules": {
+      "columns": "module:module context:context moduleKey:text origin:origin disabled:bool",
+      "key": [0]
+    },
+    "nx_observation_contexts": {
+      "columns": "observation:observation context:context",
+      "key": [0]
+    },
     "nx_observation_definitions": {
       "columns": "observation:observation definition:definition",
+      "key": [0]
+    },
+    "nx_observation_modules": {
+      "columns": "observation:observation module:module",
       "key": [0]
     },
     "nx_observation_options": {

@@ -73,23 +73,28 @@ preserves generated QL bytes. The library installs `models/builtins.json` and
 
 Queries import `nix.internal.BuiltinModels`.
 `builtinIdentity(namespace, name, identity)` exposes identities only when the
-database's `nx_runs` model fingerprint matches the installed model.
+database's `nx_runs` model fingerprint matches the installed builtin/module
+bundle, and that bundle's builtin fingerprint matches this model.
 `runtimeIdentity`, `runtimeSourceHash` and `modelFingerprint` describe the
-bundle; `supportsRuntime` checks exactly its runtime/source pair within the
-fixed policy above. It does not test arbitrary runtime settings. A different
+builtin model; `supportsRuntime` checks exactly its runtime/source pair within
+the fixed policy above. It does not test arbitrary runtime settings. A different
 policy changes the complete model fingerprint; a missing or mismatched model
 cannot establish builtin resolution.
 
-The existing [shared run identity](installed-extractor.md) carries this
-fingerprint. [Target admission](target-contract.md) rejects an explicitly
-requested different model. Legacy `not-requested` targets remain valid. Lexical
-binding resolution and shadowing belong to the name resolver; import edges
-belong to the later import domain. This module supplies identities for those
-consumers without resolving source names itself. [N2](implicit-scope.md) wires
-generated globals into the outer explicit frame. `globalBindingIdentity` exposes
-raw global inventory only to reserve recognized spellings when fingerprints are
-absent or incompatible; this does not establish compatible resolution.
-`builtinIdentity` retains its fingerprint gate.
+The existing [shared run identity](installed-extractor.md) carries the common
+bundle fingerprint: SHA-256 of canonical sorted compact JSON mapping `builtins`
+and `modules` to their respective model fingerprints. The generated module model
+records `bundleHash`; changing either model changes the run identity.
+Builtin-only JSON generation and its own `modelVersion` remain independent.
+[Target admission](target-contract.md) rejects an explicitly requested different
+model. Legacy `not-requested` targets remain valid. Lexical binding resolution
+and shadowing belong to the name resolver; import edges belong to the later
+import domain. This module supplies identities for those consumers without
+resolving source names itself. [N2](implicit-scope.md) wires generated globals
+into the outer explicit frame. `globalBindingIdentity` exposes raw global
+inventory only to reserve recognized spellings when fingerprints are absent or
+incompatible; this does not establish compatible resolution. `builtinIdentity`
+retains its fingerprint gate.
 
 ## Verification and changes
 
@@ -120,9 +125,10 @@ when these obligations change.
 
 # Handwritten database contract
 
-> **Last verified:** 2026-10-23 — X1 adds typed observation subjects to the 25
-> Step 0 relations; F1 validates their identity and scope, while E2a remains the
-> metadata producer slice.
+> **Last verified:** 2026-10-23 — M3g adds the module-graph closure: a module
+> entity, five relation tables and native Booleans; F1 validates occurrence-tree
+> structure, single-position occurrences, typed witnesses, observed counts,
+> incomplete-closure atomicity and module-origin admission.
 
 ## Purpose and ownership
 
@@ -130,7 +136,7 @@ when these obligations change.
 primary keys, enums and serialization encodings. `schema/abi.py` supplies
 reference encoders and validates unordered fact collections. Its `dbscheme()`
 renders the committed `schema/evaluation.dbscheme`; the ABI check rejects
-divergence. All 25 handwritten relations are independent of generated AST entity
+divergence. All 32 handwritten relations are independent of generated AST entity
 types, so later syntax and evaluation producers can contribute to one database
 without manufacturing raw kit labels.
 
@@ -187,10 +193,20 @@ valid. Consumers must retain decimal precision rather than narrow priorities to
 a native QL integer. `priority-domain-unsupported` identifies an unsupported
 range. An option priority also requires same-option `isDefined = true` metadata
 and an observed `pre-apply-metadata` witness from an `option-metadata` request
-with facet `priority`, the exact option path and context, and a `complete` or
-`partial` result. Step 0 observations use only the `pre-apply-metadata` stage
-and requests use only the `option-metadata` domain. The sole option metadata
-field is `isDefined`.
+with facet `priority` or `selection`, the exact option path and context, and a
+`complete` or `partial` result. Step 0 itself used only the `pre-apply-metadata`
+stage and the `option-metadata` domain. The sole option metadata field is
+`isDefined`.
+
+`nx_definition_order` optionally associates a retained definition with order
+priority in the same exact decimal domain. It is separate from winning override
+priority; absence establishes no default order. The retained definition and
+parent option need observed witnesses under the same successful request.
+`nx_module_lib_bindings` links successful selection requests to admitted
+function/formal anchors, with library and model hashes matching their target and
+run. The formal must belong structurally to that top-level function; the adapter
+establishes the actual invocation and supplied library. See
+[module-properties.md](module-properties.md) for its producer and consumer.
 
 Every text column is limited to **1,048,576 UTF-8 bytes**, measured before TRAP
 quote doubling. JSON payloads and path arrays are checked after JSON encoding,
@@ -211,11 +227,14 @@ and its owner-check evidence.
 Primary keys are unique per relation, definition ordinals are unique per option,
 foreign entities must exist with the declared type. `nx_observations` contains
 only observation, request, stage and state. Every observation in every state has
-exactly one subject row in total: `nx_observation_options(observation, option)`
-or `nx_observation_definitions(observation, definition)`. Both columns are typed
+exactly one subject row in total: `nx_observation_options(observation, option)`,
+`nx_observation_definitions(observation, definition)`,
+`nx_observation_contexts(observation, context)` or
+`nx_observation_modules(observation, module)`. All subject columns are typed
 entity references; text subject kind/key columns are removed. Missing,
-duplicate, wrong-type, dangling and simultaneous option/definition links are
-invalid.
+duplicate, wrong-type, dangling and simultaneous links of different kinds are
+invalid. Context and module subjects must belong to their request's context and
+to that context's single `module-graph`/`closure` request.
 
 Requests belong to their context's target. The linked option, or a linked
 definition's parent option, must belong to that exact context and hence target.
@@ -225,16 +244,21 @@ from request paths or metadata presence. A definition observation identifies
 only its linked definition, not every sibling definition of its option.
 
 `nx_target_inputs` admits a file to the source snapshot of its target's run. For
-origins used by declarations or definitions, an `nx_origin_files` link must have
-admission for every referencing run's snapshot. Admission is supplied evidence:
-F1 neither hashes source bytes nor authenticates labels, roots or symlink
-policy. Diagnostics link directly to requests and targets; no diagnostic-origin
-relation is retained. File-level links do not establish expression-to-value
-edges or unique syntax associations.
+origins used by declarations, definitions or modules, an `nx_origin_files` link
+must have admission for every referencing run's snapshot. Admission is supplied
+evidence: F1 neither hashes source bytes nor authenticates labels, roots or
+symlink policy. Diagnostics link directly to requests and targets; no
+diagnostic-origin relation is retained. File-level links do not establish
+expression-to-value edges or unique syntax associations.
 
 Every `observed` observation requires its own `complete` or `partial` request
-result. Missing rows mean unknown. Completed definitions require positive work
-and contiguous ordinals for the request's same-path/context observed options.
+result, `complete` only when the request's domain is `module-graph`. A
+`module-graph` request that is not `complete` publishes no module rows for its
+context, and a complete closure carries exactly one context witness plus exactly
+one module witness per occurrence. Each module occurrence occupies exactly one
+root or child position. Missing rows mean unknown. Completed definitions require
+positive work and contiguous ordinals for the request's same-path/context
+observed options.
 
 A complete request cannot carry a timeout/text refusal reason or a linked
 diagnostic with either code. Failed discovery can be represented before any
@@ -261,14 +285,13 @@ upgrade or migration path.
 
 ## Deferred consumers
 
-Increment 3 restores context-parent/module graph tables, definition-order
-priorities, nested contexts and their scope validators and native Boolean
-encoding. Increment 4 restores value/scalar/member/string-context tables,
-encodings, value observations and their validators. Additional option metadata
-fields return with their named consuming query; schema contexts are dropped
-because increment 3 selects concrete instances only. The diagnostic-origin
-relation is permanently dropped. These surfaces have no Step 0 producer or
-consumer.
+Remaining increment 3 cuts restore context-parent tables, nested contexts and
+their scope validators. Increment 4 restores value/scalar/member/string-context
+tables, encodings, value observations and their validators. Additional option
+metadata fields return with their named consuming query; schema contexts are
+dropped because increment 3 selects concrete instances only. The
+diagnostic-origin relation is permanently dropped. These surfaces have no Step 0
+producer or consumer.
 
 <!-- Fragment: packages/codeql-nix/docs/evaluation-isolation.md -->
 
@@ -278,7 +301,8 @@ consumer.
 
 > **Last verified:** 2026-10-23 — E1 implements the serialized projection
 > boundary; E2a adds [module metadata](module-adapter.md); M3 shares the fixed
-> builtin export policy with model generation.
+> builtin export policy with model generation; M3g adds the module-graph closure
+> domain with supervisor-owned depth and node budgets.
 
 ## Purpose and fit
 
@@ -288,7 +312,14 @@ at a time for each selected request. Failure in one request leaves completed
 projections available. It does not discover flake outputs, enter a devenv shell
 or select an adapter from its label. E2a reports module-adapter support. The F2
 `option-metadata` domain supports `declarations`, `definitions`, `isDefined` and
-`priority` facets at root depth (`maxDepth = 0`) in `metadata` mode.
+`priority` facets at root depth (`maxDepth = 0`) in `metadata` mode. The
+`module-graph` domain supports the `closure` facet over a whole-root context:
+the supervisor recomputes import-tree depth and observed nodes from returned
+edges, refuses atomically before publication when either budget is exceeded or
+the returned closure is incomplete, and rejects a manifest admitting two graph
+requests for one context, or a graph request outside the closure facet and empty
+path, during discovery before any request runs, while structure, subject scope
+and counts stay F1's to validate.
 
 `src/eval/protocol.py` enables all three F2 custom formats and delegates exact
 text, identity and fact validation to F1's `schema/abi.py`. Its TRAP renderer
@@ -351,25 +382,27 @@ dumps. Both output pipes are drained, with their combined bytes bounded by
 exceed that size in aggregate. Timeout or excess output kills and reaps the
 process group. Run diagnostics retain at most 4096 UTF-8 bytes of a message.
 
-Accepted output must be one F2 envelope with exactly its request result. Options
-and observations must match the selected context, path and request; metadata
-must match the requested facet. Every observation has exactly one typed subject
-link, validated by F1; the supervisor accepts option subjects for emitted
-options and definition subjects for emitted definitions. A complete projection
-observes each emitted option and definition exactly once. Origins belong to
-emitted definitions or declarations, and positions belong to those origins.
-Producers cannot emit supervisor facts. [E2a](module-adapter.md) authenticates
-caller-admitted source links.
+Accepted output must be one F2 envelope with exactly its request result. For
+option metadata, options and observations must match the selected context, path
+and request; metadata must match the requested facet. Every observation has
+exactly one typed subject link, validated by F1. The supervisor accepts option
+and definition subjects for option metadata, and context and module subjects for
+graph closure. A complete projection observes each emitted option and
+definition, or the context and each module occurrence, exactly once. Origins
+belong to emitted definitions, declarations or modules, and positions belong to
+those origins. Producers cannot emit supervisor facts. [E2a](module-adapter.md)
+authenticates caller-admitted source links.
 
-A complete request requires a positive observed count and an `observed` option
-witness for the selected facet. `isDefined` and `priority` also require their
-respective metadata rows; declarations may be empty with an observed option. F1
-independently requires each priority's same-option `isDefined = true` and
-priority-request observation. A result-only envelope, unforced observation or
-missing metadata cannot establish success. The complete graph passes F1
-validation before publication. `maxNodes` bounds option, definition,
-declaration, observation and reported counts. Child limits exclude JSON/F1
-validation and publication; the supervisor has no aggregate memory ceiling.
+A complete option-metadata request requires a positive observed count and an
+`observed` option witness for the selected facet. `isDefined` and `priority`
+also require their respective metadata rows; declarations may be empty with an
+observed option. F1 independently requires each priority's same-option
+`isDefined = true` and priority-request observation. A result-only envelope,
+unforced observation or missing metadata cannot establish success. The complete
+graph passes F1 validation before publication. `maxNodes` bounds option,
+definition, declaration, observation and reported counts. Child limits exclude
+JSON/F1 validation and publication; the supervisor has no aggregate memory
+ceiling.
 
 Each validated projection is written to a temporary file, flushed and renamed to
 a completed `.trap` file. An invalid transaction publishes no metadata.
@@ -641,13 +674,13 @@ installed run snapshot.
 
 `RunIdentity` in `src/extract.py` owns the shared identity. It hashes the
 installed combined schema, producer implementation bytes, admitted root
-identities and selected file digests. The generated builtin model fingerprint
-from the packaging pins supplies `nx_runs.modelHash` and participates in the run
-key; installed packaging always supplies the actual model. Legacy fixture pins
-without a model retain `not-requested`. An explicitly requested target model
-must match the run. Named dependency pins participate even though their syntax
-is not selected. Only project-root `*.nix` files are selected for syntax
-extraction.
+identities and selected file digests. The generated builtin/module bundle
+fingerprint from the packaging pins supplies `nx_runs.modelHash` and
+participates in the run key; installed packaging always supplies the actual
+model. Legacy fixture pins without a model retain `not-requested`. An explicitly
+requested target model must match the run. Named dependency pins participate
+even though their syntax is not selected. Only project-root `*.nix` files are
+selected for syntax extraction.
 
 The coordinator passes that identity to [syntax extraction](source-identity.md)
 and the [evaluation supervisor](evaluation-isolation.md). Syntax checks its
@@ -659,7 +692,7 @@ syntax module loads the neighboring coordinator by file path, preserving
 callers' module search paths when imported as a standalone driver.
 
 Syntax and evaluation write into temporary staging directories. Authenticated
-file rows and copied-path mappings connect evaluation origins through the
+file/anchor rows and copied-path mappings connect evaluation origins through the
 existing [module adapter](module-adapter.md). The supervisor admits
 authenticated selected files by exact target root name and content identity
 before evaluation, preserving candidates after failed work. Copied-path mappings
@@ -1072,13 +1105,16 @@ obligations change.
 
 # Observed metadata library
 
-> **Last verified:** 2026-10-23 — L0 reads existing metadata and syntax facts.
+> **Last verified:** 2026-10-23 — M3p adds optional retained order to L0
+> metadata; M3g adds the observed module occurrence; source properties remain
+> separate from observed selection.
 
 - QL is the language for querying a CodeQL database.
 - A target is an explicitly named configuration.
 - A context is a target's root instance.
 - A request selects an option path, metadata facet and work limits.
-- An observation records an outcome for one typed option or definition.
+- An observation records an outcome for one typed option, definition, context or
+  module.
 - Selected means retained for type merging, without proving a value's cause.
 - An origin is an evaluator label with an optional admitted file or point.
 - An anchor identifies syntax by file, byte range, kind and child path.
@@ -1088,16 +1124,25 @@ obligations change.
 - TRAP is the fact format imported into a CodeQL database.
 
 `Targets.qll`, `Modules.qll` and `Origin.qll` expose only `Target`,
-`RequestResult`, `ObservedOption`, `SelectedDefinition` and `Origin`. Private
-`internal/Evaluation.qll` shares observation witnesses and path encoding over
-the [existing tables](database-contract.md). Request results retain failures.
+`RequestResult`, `ObservedOption`, `SelectedDefinition`, `ModuleOccurrence`,
+`Origin` and the separate `PropertyApplication`/`PropertyGroup` structural
+views. Private `internal/Evaluation.qll` shares observation witnesses and path
+encoding over the [existing tables](database-contract.md). Request results
+retain failures.
 
 Observed options require their typed subject link and an observed outcome from a
 complete or partial request. Selected definitions require their own such link
-and an observed parent option; request paths and siblings cannot supply it.
-Paths retain exact segments and target identity. Missing priority stays absent;
-failed or missing observations establish neither selection nor a losing
-definition.
+and an observed parent option in the same request; paths and siblings cannot
+supply it. A complete module-graph closure instead observes its context and
+every occurrence exactly once, never an option or definition; see
+[module-graph.md](module-graph.md). Paths retain exact segments and target
+identity. Missing priority stays absent; failed or missing observations
+establish neither selection nor a losing definition.
+`SelectedDefinition.getOrderPriorityText()` reads optional retained order
+independently of override priority; absent order stays absent. The
+[module properties query](module-properties.md) returns retained selection rows
+only. Structural wrappers use authenticated library formals and generated helper
+identities; they can describe inactive source without observed guard truth.
 
 Origins expose optional file paths and reported UTF-8 byte points. Candidates
 reuse [authenticated anchors](source-identity.md), require target admission and
@@ -1115,9 +1160,9 @@ together; format changes and run `codeql-nix-metadata` through CI.
 
 # Module metadata adapter
 
-> **Last verified:** 2026-10-23 — E2a emits root option metadata with X1 typed
-> observation subjects; native paths retain provenance and selected syntax
-> admission is independent of retained origins.
+> **Last verified:** 2026-10-23 — M3g walks the adapter's module graph into
+> observed occurrence rows with exact framed identities, import-tree edges and
+> native disabling Booleans; metadata semantics are unchanged.
 
 An adapter obtains configuration plus option metadata: a rich result.
 `src/eval/nix/adapters/evalModules.nix` takes pinned `lib`, module paths and
@@ -1128,8 +1173,23 @@ definitions survive. Every emitted option and retained definition has its own
 observation and exactly one typed `nx_observation_options` or
 `nx_observation_definitions` link; definition observations identify their
 sibling ordinal through the definition entity, never through request text.
-`definitions` adds contiguous ordinals beside `declarations`, `isDefined` and
-`priority`; priority includes `isDefined`. The
+`definitions` preserves retained ordinals beside `declarations`, `isDefined` and
+`priority`; priority includes `isDefined`. The `selection` facet emits these
+retained definitions, whether the option is defined, winning override priority
+and explicit order together. It counts option plus definitions, and depth zero
+permits only an undefined root option. Order comes from a retained definition's
+own `priority` field, stays separate from override priority and remains absent
+when upstream omits it. The `module-graph` domain requests the `closure` facet
+of a whole-root context: the producer walks the adapter's evaluation graph into
+one `nx_modules` occurrence per module, keyed by request, context and zero-based
+import-tree path, with `nx_module_roots`/`nx_module_imports` edges, per-node
+synthetic or sourced origins, per-occurrence disabling and one observation per
+occurrence plus the context witness. Duplicate keys stay distinct occurrences;
+the appended argument-support module is reported like any anonymous root. A
+runtime rich result without `graph` yields a `graph-unavailable` refusal rather
+than an evaluation crash; failed budgets or disabled-import throws yield a
+failed request with no graph rows. See
+[module-properties.md](module-properties.md) for query semantics. The
 [supervisor](evaluation-isolation.md) keeps limits and publication. Callers
 supply [S2](source-identity.md) file rows and copy mappings; original and copied
 bytes must match before linking. Implicit native module paths retain Nix string
@@ -1138,23 +1198,250 @@ labels, explicit `_file` and explicit definition labels prove no source
 identity. The supervisor admits selected authenticated syntax files by exact
 target root name and content identity before requests run; unselected files and
 failed requests retain this admission. Origin-file links still require trusted
-labels plus matching original and copied bytes. Missing rows mean unknown.
-Re-audit lazy label normalization before value consumers. Change these producers
-together, preserving F1 validation and F2 authorization. Run
-`checks.x86_64-linux.codeql-nix-modules` for direct Nix comparisons and
+labels plus matching original and copied bytes. Missing rows mean unknown. An
+optional pinned `library` descriptor makes this adapter import the actual
+library handle; caller-supplied `lib` remains the legacy route without binding
+claims. The supervisor supplies independently authenticated top-level function
+and `lib` formal candidates, and successful selection transactions may bind
+direct root file invocations. `specialArguments.lib` suppresses these bindings;
+computed, forwarded and uncovered functions remain unknown. Library/target/model
+pins must match. Re-audit lazy label normalization before value consumers.
+Change these producers together, preserving F1 validation and F2 authorization.
+Run `checks.x86_64-linux.codeql-nix-modules` for direct Nix comparisons and
 refusals; format edits and regenerate through `generate:all`.
+
+<!-- Fragment: packages/codeql-nix/docs/module-graph.md -->
+
+# Observed module graph
+
+> **Last verified:** 2026-10-23 — M3g observes the rich evalModules graph,
+> preserving occurrence order, direct disabled flags and atomic completion.
+
+## What and why
+
+`ql/queries/DisabledModules.ql` reports every observed module occurrence,
+including false disabled flags. Its exact columns are
+`(target:text, contextPathJson:text, occurrencePathJson:text, moduleKey:text, originLabel:text, disabled:bool)`.
+`Modules::ModuleOccurrence` exposes the reported key, origin, context, target
+and Boolean flag; it derives occurrence path JSON from ordered root/import
+edges. These are evaluation observations, separate from syntax import edges and
+source `disabledModules` expressions. They establish no
+declaration-to-disabled-module causal relation.
+
+The producer walks the actual pinned library's rich result `.graph`, whose
+collection comes from upstream `collectModules`; it does not reconstruct import
+resolution or disabled-key matching. Every exposed root and descendant is
+included, even the adapter's appended `{ _module.args = moduleArguments; }`
+support root. Internal roots omitted upstream are outside this observation. The
+adapter retains its existing authentication and argument injection.
+
+Identity is framed `key("module", [requestID, contextID, occurrencePathJson])`.
+The path starts with a zero-based root ordinal, then zero-based import ordinals.
+Repeated keys and labels remain distinct occurrences. Root/import list order is
+upstream order. `disabled` copies upstream direct membership in its disabled-key
+set: a disabled parent's child can be false. It does not describe effective
+contributions or final merging. Support-module key collisions retain upstream
+behavior; no key is reserved or repaired by the extractor.
+
+Fixture G reports root `[0]` (`root`, `root.nix`, false), children `[0,0]` and
+`[0,1]` (both `child`, `child.nix`, true), and support root `[1]` (`:anon-2`,
+`<unknown-file>`, false). Removing disabling preserves both child occurrences
+with false flags; disabling `root` makes only the root true. Giving the second
+child key `other` leaves only the first child disabled. These positions and
+support labels are fixture facts, not universal anonymous-key defaults.
+
+## Contract and limits
+
+A request uses domain `module-graph`, facet `closure`, mode `metadata` and
+`path=[]`, in the root context only. Capability is `module-graph`. The manifest
+schema refuses a graph request with any other facet or a nonempty path before
+target admission or execution; discovery rejects multiple graph requests for one
+context before running producers; F1 independently enforces request shape and
+uniqueness on imported facts. Nested contexts are outside this cut. The
+supervisor advertises the graph capability as supported; a rich result without
+`.graph` returns state `failed`, reason `graph-unavailable`. This names runtime
+field absence using the existing result enum; it does not establish support for
+every possible library pin.
+
+`nx_modules` holds key, origin and native Boolean flag per occurrence;
+`nx_module_roots` and `nx_module_imports` retain contiguous ordinals. Every
+occurrence has exactly one root-or-child position and is reachable from roots. A
+complete transaction has exactly one observed context witness through
+`nx_observation_contexts`, plus one per occurrence through
+`nx_observation_modules`, all belonging to that context's closure request. A
+context holding module rows must carry that closure request, so these witness
+and count checks cannot be skipped by omitting the request. Each observation has
+exactly one typed subject. A context witness creates no option observation;
+graph requests emit no retained definitions.
+
+`maxNodes` counts the context witness plus every occurrence. Depth counts edges
+from a root; `maxDepth=0` permits root leaves. A finite empty exposed graph is
+complete with `observedCount=1`; its proof uses independent synthetic protocol
+facts because the real adapter appends a support root. Missing rows alone never
+prove an empty complete graph or a false flag.
+
+The producer refuses node/depth excess before serialization, preserving
+`node-limit`/`depth-limit` instead of a later byte refusal. The supervisor
+rechecks graph budgets and applies existing byte, time and memory isolation.
+Incomplete closure publishes status/diagnostics without successful observations
+or module rows. An imported throw, even below a disabled module, can fail
+collection; it must not become empty completion. Cyclic or unbounded import
+expansion fails or times out. See
+[evaluation-isolation.md](evaluation-isolation.md).
+
+Boolean columns accept only JSON true/false, rejecting integers and strings. The
+physical dbscheme uses integer references; TRAP writes `0`/`1` and QL compares
+with `1` to expose Booleans. Origins retain reported labels; linking an origin
+to source bytes still requires target admission and authentication. See
+[database-contract.md](database-contract.md).
+
+## How to change and verify
+
+Keep the existing authorities together: `schema/contract.json` and
+`schema/abi.py` define and validate relations; `src/eval/protocol.py` renders
+TRAP; `src/eval/nix/modules.nix` emits occurrences; the supervisor authorizes
+publication. Update generated schema projections with their existing generator,
+then the thin `ql/lib/nix/Modules.qll` and query. Do not change the adapter's
+support module to simplify graph expectations. Regenerate instructions through
+`devenv tasks run --mode before generate:all` after changing this registered
+note. See [module-adapter.md](module-adapter.md).
+
+`checks/fixtures/inc3/graph/oracle.nix` independently invokes `lib.evalModules`
+and `lib.modules.collectModules` on original modules with the identical explicit
+support module. It imports no extractor or serializer. Installed tests compare
+both oracles with query rows, covering repeated keys, root order, path/relative
+disabling, support-key collisions, disabled import throws and target isolation.
+
+The existing owner entry `checks.nix` wires Linux `codeql-nix-modules` to
+protocol/regression/ownership tests, including typed witnesses, empty
+completion, forgeries, uniqueness, budget refusal, malformed-manifest discovery
+refusal and module-row closure ownership. Its runner prints
+`test_graph_protocol.py: 7 tests, 7 executed`,
+`test_graph_regressions.py: 14 tests, 14 executed` and
+`test_graph_ownership.py: 9 tests, 9 executed`. The x86_64-linux
+`codeql-nix-step0` check runs installed qltests against reviewed expected rows;
+find `test_graph.py: 9 tests, 9 executed` and its evidence suffix
+`M3g module-graph installed qltest passed`. `codeql-nix-abi` imports native
+Booleans through the real schema; `codeql-nix-contracts` covers protocol
+sentinels. These are CI entry points and expected log markers, not a claim that
+CI has run for this worktree.
+
+<!-- Fragment: packages/codeql-nix/docs/module-properties.md -->
+
+# Module properties and retained inputs
+
+> **Last verified:** 2026-10-23 — M3p adds selection metadata, authenticated
+> library formals and source property structure through the existing adapter,
+> model bundle and database contract.
+
+## What it answers
+
+`ql/queries/ModuleSelection.ql` reports retained inputs for successful
+`option-metadata` requests with facet `selection`. Its columns are target,
+context path JSON, option path JSON, selected ordinal, origin label, override
+priority and order priority JSON. Paths preserve exact segments. Order is a JSON
+string containing signed decimal text, or `null` when upstream supplies no order
+field. Ordinals preserve distinct occurrences, including repeated labels.
+
+Selected means retained before type merging and option `apply`. It does not
+identify the sole cause of the final value, describe discarded definitions or
+explain a custom type's merge. Override priority chooses retained inputs; order
+priority sorts those inputs. They remain separate numbers. An origin label can
+be synthetic; source association never establishes expression causation.
+
+`Modules::PropertyApplication` separately describes supported source wrappers:
+`if`, `merge`, `order` and `override`. It exposes content, condition syntax,
+known priority text and the enclosing property. `Modules::PropertyGroup` retains
+each literal merge element and its zero-based index. These structures can exist
+in inactive code. They establish no observed condition truth and are not rows in
+the retained-input query. Unsupported expressions supply no inferred argument or
+helper identity.
+
+## How it fits
+
+`src/eval/nix/modules.nix` extends the existing adapter with `selection`. It
+reads `definitionsWithLocations`, `isDefined` and `highestPrio`, without reading
+merged values or `apply`. Only an explicit retained record's `priority` field
+supplies `nx_definition_order`; no default order is invented. Selection emits an
+observed option and individually observed definitions. A complete undefined
+option has its option witness and no definitions or winning priority. Node
+limits count the option plus definitions; root-only depth cannot admit child
+definitions. Refusals publish no successful selection transaction. The older
+`definitions` facet keeps its existing behavior.
+
+`schema/contract.json` owns both new relations. `nx_definition_order` uses the
+existing signed-decimal domain and requires an observed definition.
+`nx_module_lib_bindings` links a request to source function/formal anchors and
+library/model hashes. F1 validation checks successful request scope, source
+admission, structural ownership and target/run fingerprints. The existing
+protocol and supervisor carry and validate these facts.
+
+The optional `library` descriptor makes the existing evalModules adapter import
+the hash-pinned library root and use that handle for evaluation and injection.
+Without it, the legacy caller library remains usable but establishes no binding.
+The caller checks the descriptor against the target library hash, common model
+bundle and admitted root identity before passing binding candidates. The
+supervisor derives candidates from authenticated source bytes and the S2 anchor
+tree: a top-level literal function with a formal named `lib`.
+
+The adapter currently covers direct root module-file invocations. It matches
+those paths to admitted candidates and suppresses bindings when
+`specialArguments.lib` is present. Functions returned by expressions or reached
+through another module, and other functions without source anchors, remain
+unknown. Missing bindings never prove a function did not execute or used a
+different library. Completion covers option metadata, not exhaustive function
+coverage. The current producer emits bindings on successful `selection`
+requests; the ABI also reserves their use by the later `all-definitions`
+consumer.
+
+`models/modules/properties.nix` probes helpers and constants from the pinned
+library. `models/modules/generate.py` records source export/binding evidence,
+helper argument counts, property kinds and priorities. Its module fingerprint
+and the builtin model fingerprint form one shared bundle identity.
+`lib/packaging.nix` installs `models/modules.json` and its mechanical QL
+projection as `nix/internal/generated/Modules.qll`.
+
+`Modules::authenticatedLibraryFormal` gates bindings against that generated
+bundle. Lexical resolution follows accesses and local aliases from the supplied
+formal to modeled exports; local shadowing does not qualify. The single
+generated `ModuleModels::helper` predicate binds export identity, kind and
+argument specification to both hashes. Source wrappers reuse authenticated AST
+nodes; observed selection reuses typed metadata observations. Neither path adds
+a second module evaluator or a property fact table.
+
+## Verification and changes
+
+`codeql-nix-step0`, through `checks/step0.nix`, registers
+`checks/fixtures/inc3/properties/test_properties.py`. The suite invokes the
+installed query, reviewed `ql/test/inc3/properties/ModuleSelection.expected`
+rows and direct upstream `oracle.nix` metadata/value witnesses. It covers guard
+mutations, repeated merge occurrences, order swaps, override filtering, missing
+order and signed endpoints. Separate fixtures exercise aliases, shadowing,
+special arguments, the actual injected library, unsupported function shapes,
+budget refusals and structural wrapper/group expectations. These are registered
+checks, not evidence that a particular run passed. ABI and protocol fixtures
+cover relation validation and transport through existing owner checks.
+
+Change helper probes and the shared QL consumer together. Preserve exact pins,
+complete application arity, lexical resolution and explicit unknown boundaries.
+Extend the existing adapter, contract, transport and supervisor for new
+metadata; regenerate schema/model projections with their generators. Keep query
+rows independent of structural wrappers and keep real Nix witnesses independent
+of the extractor. Format changes with `treefmt`, run affected owner checks
+through CI and update this note when recognition or observation boundaries
+change.
 
 <!-- Fragment: packages/codeql-nix/docs/owner-layout.md -->
 
 # Nix CodeQL owner and test entry points
 
-> **Last verified:** 2026-10-23 — Step 0 retains 25 metadata relations and
-> explicit owner check imports; document and check inventories live in the owner
-> registry and checks entry point. S1 adds combined-schema generation and
-> standalone raw location tests; E1 adds the isolated metadata projection check;
-> S2 registers source and anchor acceptance; Q0 adds the installed query check;
-> M3 adds generated builtin model acceptance; R0 replaces disposable bootstrap
-> evidence with production lookup, coordinate and preflight checks.
+> **Last verified:** 2026-10-23 — M3g retains 32 metadata relations and explicit
+> owner check imports; document and check inventories live in the owner registry
+> and checks entry point. S1 adds combined-schema generation and standalone raw
+> location tests; E1 adds the isolated metadata projection check; S2 registers
+> source and anchor acceptance; Q0 adds the installed query check; M3 adds
+> generated builtin model acceptance; R0 replaces disposable bootstrap evidence
+> with production lookup, coordinate and preflight checks.
 
 ## Purpose and fit
 
@@ -1192,7 +1479,7 @@ suites and early `SystemExit` fail the aggregate. It never searches sibling
 directories for tests; a passing suite cannot hide an empty later suite.
 
 The ABI sentinel validates the golden graph and compares its relation inventory
-with an independently spelled set of all 25 Step 0 relations. The health
+with an independently spelled set of all 32 retained relations. The health
 sentinel requires runs, targets, syntax results and request results, completed
 discovery, successful target/syntax statuses and positive request work counts.
 These witnesses prevent empty or failed fixture output from looking like clean
@@ -1367,8 +1654,8 @@ alone cannot establish that admitted bytes match the source snapshot.
 # Target and observation contract
 
 > **Last verified:** 2026-10-23 — F2 retains the metadata manifest and fact
-> envelope for Step 0; M3 activates exact-text model identities without adding
-> request domains.
+> envelope for Step 0; M3 activates exact-text model identities; M3g adds the
+> `module-graph` request domain.
 
 ## Purpose and fit
 
@@ -1408,8 +1695,8 @@ identify admitted runtime handles or arguments; they do not serialize functions
 or secrets wholesale. The argument-description hash records the admitted
 description. `modelVersion` accepts the same exact-text identity form as the
 other fingerprint fields. The installed coordinator requires a requested model
-to match its run's generated model fingerprint, otherwise returning
-`unsupported-model`. Legacy `not-requested` remains accepted. See
+to match its run's generated builtin/module bundle fingerprint, otherwise
+returning `unsupported-model`. Legacy `not-requested` remains accepted. See
 [builtin-models.md](builtin-models.md) for model generation and compatibility.
 
 Input identities map exact input names to identity strings. Each source root has
@@ -1428,17 +1715,26 @@ and `maxSeconds`. `["a.b"]` and `["a", "b"]` remain distinct. There is no
 implicit traversal or value request. The metadata baseline explicitly selects a
 prefix.
 
-Every request uses the `option-metadata` domain and `metadata` observation mode.
-Facets: `declarations`, `definitions`, `isDefined`, `priority`. Objects are
-closed to unknown fields; target and input maps permit explicit names.
+Every request uses the `metadata` observation mode with the `option-metadata` or
+`module-graph` domain. `option-metadata` facets: `declarations`, `definitions`,
+`isDefined`, `priority`, `selection`. Selection emits retained inputs, whether
+the option is defined, winning override priority and explicit order under one
+request. Its capability is `module-properties`; unsupported helper pins retain
+independently requested Step 0 metadata. The `module-graph` domain selects the
+`closure` facet of a whole-root context; its capability is `module-graph`, the
+schema admits only `closure` with an empty path, a context admits at most one
+graph request, and an incomplete closure publishes status and diagnostics only.
+Objects are closed to unknown fields; target and input maps permit explicit
+names.
 
 Deferred surfaces return with their consuming queries: increment 3 restores
-module graph requests and metadata enumeration; increment 4 restores
-selected-value/member/string-context modes and scalar fixtures; increment 5
-restores framework adapters, config-only handles and schema requests. Other
-metadata facets return with the increment 3 module queries that consume them.
-The `reusable` cache control returns in increment 8. Explicit input, argument,
-root, system and fingerprint identities remain required now.
+metadata enumeration and the remaining context-parent tables; increment 4
+restores selected-value/member/string-context modes and scalar fixtures;
+increment 5 restores framework adapters, config-only handles and schema
+requests. Module graph requests are restored with the `DisabledModules` query.
+Other metadata facets return with the module queries that consume them. The
+`reusable` cache control returns in increment 8. Explicit input, argument, root,
+system and fingerprint identities remain required now.
 
 ## Mandatory validation layers
 
@@ -1463,15 +1759,16 @@ The observation envelope is
 `{ "protocolVersion": 1, "facts": [["nx_relation", [arguments]], ...] }`.
 Mapping to F1 tables is identity: retain relation names, positional arguments
 and values without renaming, coercion or defaults. Each observation carries
-exactly one typed subject row through `nx_observation_options` or
-`nx_observation_definitions`; text subject fields are removed. The link is
-mandatory for every observation state and must remain in its request context and
-target, as enforced by F1. The schema checks the envelope and string/array tuple
-shape. Then the complete unordered fact collection **must** pass
-`schema/abi.py`'s `validate`; envelope acceptance alone is insufficient. F1 owns
-relation names, arity, types, identity framing, canonical encodings, references,
-uniqueness and scope. Empty facts are representable but cannot serve as a
-passing extraction oracle.
+exactly one typed subject row through `nx_observation_options`,
+`nx_observation_definitions`, `nx_observation_contexts` or
+`nx_observation_modules`; text subject fields are removed. The link is mandatory
+for every observation state and must remain in its request context and target,
+as enforced by F1. The schema checks the envelope and string/array tuple shape.
+Then the complete unordered fact collection **must** pass `schema/abi.py`'s
+`validate`; envelope acceptance alone is insufficient. F1 owns relation names,
+arity, types, identity framing, canonical encodings, references, uniqueness and
+scope. Empty facts are representable but cannot serve as a passing extraction
+oracle.
 
 ## States and exact metadata
 
@@ -1500,7 +1797,7 @@ python packages/codeql-nix/checks/fixtures/protocol/test_protocol.py
 
 The tests check required descriptors, nested source roots and input identities,
 retained metadata facets, rejection of deferred controls, literal paths and
-budgets, all 25 relation mappings, status families and pre-target failures,
+budgets, all 32 relation mappings, status families and pre-target failures,
 priorities, and UTF-8/JSON-expansion boundaries. They use independent fixtures
 and F1 validation without invoking Nix evaluation or the CodeQL engine. F3 must
 integrate this standalone entry point into the owner's checks with nonempty

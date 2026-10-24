@@ -27,6 +27,39 @@ module Modules {
     string toString() { result = this.getTarget().getName() + ":" + this.getPathJson() }
   }
 
+  /** An observed module-graph occurrence; import-tree position comes from authenticated edges. */
+  class ModuleOccurrence extends @nx_module {
+    ModuleOccurrence() {
+      exists(@nx_observation observation |
+        Evaluation::observed(observation) and nx_observation_modules(observation, this)
+      )
+    }
+    Targets::Target getTarget() {
+      exists(@nx_context context |
+        nx_modules(this, context, _, _, _) and nx_contexts(context, result, _, _))
+    }
+    @nx_context getContext() { nx_modules(this, result, _, _, _) }
+    string getContextPathJson() { nx_contexts(this.getContext(), _, _, result) }
+    string getModuleKey() { nx_modules(this, _, result, _, _) }
+    Origin::Origin getOrigin() { nx_modules(this, _, _, result, _) }
+    boolean isDisabled() {
+      if nx_modules(this, _, _, _, 1) then result = true else result = false
+    }
+    string getOccurrencePathJson() {
+      exists(int ordinal |
+        nx_module_roots(this.getContext(), ordinal, this) and
+        result = "[" + ordinal.toString() + "]")
+      or
+      exists(ModuleOccurrence parent, int ordinal, string parentPath |
+        nx_module_imports(parent, ordinal, this) and parentPath = parent.getOccurrencePathJson() and
+        result = parentPath.substring(0, parentPath.length() - 1) + "," + ordinal.toString() + "]")
+    }
+    string toString() {
+      result = this.getTarget().getName() + ":" + this.getContextPathJson() + ":" +
+        this.getOccurrencePathJson() + ":" + this.getModuleKey()
+    }
+  }
+
   /** Facet-specific identities share witnessed priority only within one target and exact path. */
   bindingset[target, pathJson]
   string priorityText(Targets::Target target, string pathJson) {

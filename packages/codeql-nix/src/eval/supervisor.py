@@ -9,6 +9,7 @@ Real expressions run in pure/restricted Nix against hash-pinned admitted roots.
 import hashlib
 import json
 import os
+from collections import defaultdict
 from pathlib import Path
 import resource
 import selectors
@@ -137,18 +138,67 @@ def nix_command(nix, binding, job, request, directory, deadline, env, invocation
                    "--expr", projection]
 
 
+def graph_rows(facts, job, results, outer):
+    """Module-graph projections: budgets and locality are ours, structure is F1's."""
+    request = job["request"]
+    context = job["identities"]["context"]
+    modules = {args[0]: args for relation, args in facts if relation == "nx_modules"}
+    origins = {args[0] for relation, args in facts if relation == "nx_origins"}
+    observations = [args for relation, args in facts if relation == "nx_observations"]
+    links = {kind: {args[0]: args[1] for relation, args in facts if relation == f"nx_observation_{kind}s"}
+             for kind in ("context", "module")}
+    for args in modules.values():
+        if args[1] != context or args[3] not in origins:
+            raise ValueError("projection module escapes the selected context")
+    for observation, req, stage, _ in observations:
+        local = links["context"].get(observation) == context or links["module"].get(observation) in modules
+        if req != job["identities"]["request"] or not local or stage != "pre-apply-metadata":
+            raise ValueError("projection observation escapes the selected request")
+    if origins != {args[3] for args in modules.values()}:
+        raise ValueError("projection contains detached or foreign origins")
+    children = defaultdict(list)
+    for relation, args in facts:
+        if relation == "nx_module_imports":
+            children[args[0]].append(args[2])
+    frontier = [(args[2], 0) for relation, args in facts if relation == "nx_module_roots"]
+    depth = 0
+    seen = set()
+    while frontier:
+        module, level = frontier.pop()
+        depth = max(depth, level)
+        if module in seen:
+            continue
+        seen.add(module)
+        frontier.extend((child, level + 1) for child in children[module])
+    if depth > request["maxDepth"]:
+        raise Refusal("depth-limit", "module graph exceeds requested depth")
+    envelope(outer + facts)
+    if results[0][1] != "complete" and (modules or any(row[3] == "observed" for row in observations)):
+        raise ValueError("unsuccessful transaction contains successful metadata")
+    if max(len(modules), len(observations), results[0][3]) > request["maxNodes"]:
+        raise Refusal("node-limit", "projection node limit exceeded")
+    return facts, results[0][1]
+
+
 def projection_rows(packet, job, outer):
     validate(packet, "observation-protocol.json")
     facts = packet["facts"]
-    permitted = {"nx_definition_order", "nx_definitions", "nx_module_lib_bindings", "nx_observation_definitions", "nx_observation_options", "nx_observations", "nx_option_declarations", "nx_option_metadata",
-                 "nx_option_priority", "nx_options", "nx_origin_positions",
-                 "nx_origins", "nx_request_results"}
+    request = job["request"]
+    graph = request.get("domain") == "module-graph"
+    permitted = ({"nx_module_imports", "nx_module_roots", "nx_modules", "nx_observation_contexts",
+                  "nx_observation_modules", "nx_observations", "nx_origins", "nx_request_results"}
+                 if graph else
+                 {"nx_definition_order", "nx_definitions", "nx_module_lib_bindings", "nx_observation_definitions", "nx_observation_options", "nx_observations", "nx_option_declarations", "nx_option_metadata",
+                  "nx_option_priority", "nx_options", "nx_origin_positions",
+                  "nx_origins", "nx_request_results"})
     if any(relation not in permitted for relation, _ in facts):
         raise ValueError("producer attempted to overwrite supervisor-owned facts")
-    identity, request = job["identities"]["request"], job["request"]
+    identity = job["identities"]["request"]
     results = [args for relation, args in facts if relation == "nx_request_results"]
     if len(results) != 1 or results[0][0] != identity:
         raise ValueError("projection must return exactly its supplied request result")
+    if graph:
+        return graph_rows(facts, job, results, outer)
     allowed = {"nx_definitions": ("definitions", "selection"), "nx_option_declarations": ("declarations",),
                "nx_option_metadata": ("isDefined", "priority", "selection"), "nx_option_priority": ("priority", "selection")}
     options = {args[0] for relation, args in facts if relation == "nx_options"}
@@ -330,98 +380,113 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                       ["nx_phases", [run, "evaluation", "failed", "discovery failed"]]])
         incomplete = True
     else:
-        fingerprints = [target["fingerprint"] for target in manifest["targets"].values()]
-        if coordinated:
-            identity.check_targets(abi, manifest)
+        duplicate_graph = any(
+            sum(request["domain"] == "module-graph" and request["facet"] == "closure" and not request["path"]
+                for request in target["requests"]) > 1
+            for target in manifest["targets"].values())
+        if duplicate_graph:
+            # Two graph requests would publish conflicting roots for one context.
+            diagnostic("duplicate-graph-request", "context admits at most one module-graph request")
+            facts.extend([["nx_phases", [run, "discovery", "failed", "duplicate-graph-request"]],
+                          ["nx_phases", [run, "evaluation", "failed", "discovery failed"]]])
+            incomplete = True
         else:
-            facts[0][1][-2:] = ["not-requested", digest(sorted(pin["sourceSnapshotHash"] for pin in fingerprints))]
-        facts.append(["nx_phases", [run, "discovery", "complete", ""]])
-        for name, target in manifest["targets"].items():
-            fingerprint = target["fingerprint"]
-            components = [fingerprint["evaluatorVersion"], fingerprint["libVersion"], target["adapterVersion"],
-                          fingerprint["modelVersion"], target["argumentDescription"]["hash"],
-                          fingerprint["sourceSnapshotHash"], fingerprint["policyHash"], target["system"]]
-            identity = abi.key("target", components + [name])
-            context = abi.key("context", [identity, "root"])
-            target_row = [identity, run, name, target["adapter"], target["system"],
-                          fingerprint["evaluatorVersion"], fingerprint["libVersion"],
-                          digest(target["inputIdentities"]), fingerprint["policyHash"], "complete"]
-            facts.extend([["nx_targets", target_row], ["nx_contexts", [context, identity, "root", "[]"]],
-                          ["nx_capabilities", [identity, "projection-transport", "supported", "bounded F2 producer"]],
-                          ["nx_capabilities", [identity, "module-adapter", "supported", "evalModules metadata"]]])
-            source_error = None
-            try:
-                sources = admitted_sources(source_files, target)
-                admissions = [["nx_target_inputs", [identity, file, "root"]] for file in sources]
-                envelope(facts + admissions)
-                facts.extend(admissions)
-            except Exception as error:
-                source_error = error
-            module_model = getattr(identity_object, "module_model", None)
-            property_state = ("supported" if module_model and fingerprint["libVersion"] == module_model["libHash"]
-                              else "unsupported" if module_model else "unavailable")
-            if any(request["facet"] == "selection" for request in target["requests"]):
-                facts.append(["nx_capabilities", [identity, "module-properties", property_state, "exact-pin module metadata"]])
-            states = []
-            for ordinal, request in enumerate(target["requests"]):
-                req = abi.key("request", [identity, context, abi.canonical(request), str(ordinal)])
-                facts.append(["nx_requests", [req, identity, context, request["domain"], abi.path(request["path"]), request["facet"],
-                              *[request[key] for key in ("maxDepth", "maxNodes", "maxBytes", "maxSeconds", "maxMemoryMiB")]]])
+            fingerprints = [target["fingerprint"] for target in manifest["targets"].values()]
+            if coordinated:
+                identity.check_targets(abi, manifest)
+            else:
+                facts[0][1][-2:] = ["not-requested", digest(sorted(pin["sourceSnapshotHash"] for pin in fingerprints))]
+            facts.append(["nx_phases", [run, "discovery", "complete", ""]])
+            for name, target in manifest["targets"].items():
+                fingerprint = target["fingerprint"]
+                components = [fingerprint["evaluatorVersion"], fingerprint["libVersion"], target["adapterVersion"],
+                              fingerprint["modelVersion"], target["argumentDescription"]["hash"],
+                              fingerprint["sourceSnapshotHash"], fingerprint["policyHash"], target["system"]]
+                identity = abi.key("target", components + [name])
+                context = abi.key("context", [identity, "root"])
+                target_row = [identity, run, name, target["adapter"], target["system"],
+                              fingerprint["evaluatorVersion"], fingerprint["libVersion"],
+                              digest(target["inputIdentities"]), fingerprint["policyHash"], "complete"]
+                facts.extend([["nx_targets", target_row], ["nx_contexts", [context, identity, "root", "[]"]],
+                              ["nx_capabilities", [identity, "projection-transport", "supported", "bounded F2 producer"]],
+                              ["nx_capabilities", [identity, "module-adapter", "supported", "evalModules metadata"]]])
+                source_error = None
                 try:
-                    if source_error is not None:
-                        raise source_error
-                    if request["facet"] == "selection" and property_state != "supported":
-                        raise Refusal("module-properties-unavailable", "exact-pin property metadata unavailable", "unsupported")
-                    if request["facet"] != "selection" and request["maxDepth"] != 0:
-                        raise Refusal("request-unsupported", "only root metadata projections are supported", "blocked")
-                    args = target["argumentDescription"]
-                    binding = bindings[target["evaluation"]["reference"]]
-                    job = {"identities": {"context": context, "model": identity_object.row[1][4], "request": req, "run": run, "target": identity},
-                           "moduleArguments": bindings[args["moduleArgumentsRef"]], "request": request,
-                           "specialArguments": bindings[args["specialArgumentsRef"]], "target": target}
-                    job["moduleModel"] = module_model
-                    job["moduleBindings"] = library_bindings(source_anchors, sources, source_mappings)
-                    if coordinated:
-                        job["sourcePins"] = {root["path"]: root["rootContentIdentity"] for root in target["sourceRoots"]}
-                    abi.canonical(job)
-                    deadline = time.monotonic() + request["maxSeconds"]
-                    with tempfile.TemporaryDirectory(prefix="nixql-e1-") as temporary:
-                        scratch = Path(temporary)
-                        env = {"HOME": temporary, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
-                               "NIX_CONF_DIR": temporary, "NIX_USER_CONF_FILES": "", "PATH": os.defpath,
-                               "TMPDIR": temporary, "XDG_CACHE_HOME": temporary, "XDG_CONFIG_HOME": temporary}
-                        if set(binding) == {"command"}:
-                            argv = binding["command"]
-                        elif set(binding) == {"expression"}:
-                            argv = nix_command(nix, binding, job, request, scratch, deadline, env)
-                        else:
-                            raise Refusal("binding-unsupported", "binding must explicitly select a producer", "blocked")
-                        result = json.loads(execute(argv, job, request, scratch, deadline, env))
-                        produced, state = projection_rows(result, job, facts)
-                        links = source_links(produced, sources, source_mappings,
-                                             scratch / "store" if "expression" in binding else None)
-                        if time.monotonic() >= deadline:
-                            raise Refusal("timeout", "source authentication time-limit exceeded")
-                    produced.extend(links)
-                    envelope(facts + produced)
-                    publish(directory, digest([run, req]), produced)
-                    facts.extend(produced)
-                    published.update(map(id, produced))
-                    if state != "complete":
-                        diagnostic("projection-incomplete", "producer returned " + state, identity, req)
+                    sources = admitted_sources(source_files, target)
+                    admissions = [["nx_target_inputs", [identity, file, "root"]] for file in sources]
+                    envelope(facts + admissions)
+                    facts.extend(admissions)
                 except Exception as error:
-                    state = getattr(error, "state", "blocked" if isinstance(error, (KeyError, FileNotFoundError)) else "failed")
-                    code = getattr(error, "code", "projection-invalid")
-                    # F2 exact-text formats delegate to F1; retain its refusal code.
-                    if str(getattr(error, "cause", error)) == "text-field-too-large":
-                        code = "text-field-too-large"
-                    facts.append(["nx_request_results", [req, state, code, 0]])
-                    diagnostic(code, str(error), identity, req)
-                states.append(state)
-            if any(state != "complete" for state in states):
-                target_row[-1] = "partial" if any(state in ("complete", "partial") for state in states) else ("blocked" if all(state == "blocked" for state in states) else "failed")
-                incomplete = True
-        facts.append(["nx_phases", [run, "evaluation", "partial" if incomplete else "complete", "incomplete requests" if incomplete else ""]])
+                    source_error = error
+                module_model = getattr(identity_object, "module_model", None)
+                property_state = ("supported" if module_model and fingerprint["libVersion"] == module_model["libHash"]
+                                  else "unsupported" if module_model else "unavailable")
+                if any(request["facet"] == "selection" for request in target["requests"]):
+                    facts.append(["nx_capabilities", [identity, "module-properties", property_state, "exact-pin module metadata"]])
+                if any(request["domain"] == "module-graph" for request in target["requests"]):
+                    facts.append(["nx_capabilities", [identity, "module-graph", "supported", ""]])
+                states = []
+                for ordinal, request in enumerate(target["requests"]):
+                    req = abi.key("request", [identity, context, abi.canonical(request), str(ordinal)])
+                    facts.append(["nx_requests", [req, identity, context, request["domain"], abi.path(request["path"]), request["facet"],
+                                  *[request[key] for key in ("maxDepth", "maxNodes", "maxBytes", "maxSeconds", "maxMemoryMiB")]]])
+                    try:
+                        if source_error is not None:
+                            raise source_error
+                        if request["facet"] == "selection" and property_state != "supported":
+                            raise Refusal("module-properties-unavailable", "exact-pin property metadata unavailable", "unsupported")
+                        # F2 rejects a non-closure or non-root module-graph request before
+                        # its nx_requests row exists; appending one here would poison F1.
+                        if request["domain"] != "module-graph" and request["facet"] != "selection" and request["maxDepth"] != 0:
+                            raise Refusal("request-unsupported", "only root metadata projections are supported", "blocked")
+                        args = target["argumentDescription"]
+                        binding = bindings[target["evaluation"]["reference"]]
+                        job = {"identities": {"context": context, "model": identity_object.row[1][4], "request": req, "run": run, "target": identity},
+                               "moduleArguments": bindings[args["moduleArgumentsRef"]], "request": request,
+                               "specialArguments": bindings[args["specialArgumentsRef"]], "target": target}
+                        job["moduleModel"] = module_model
+                        job["moduleBindings"] = library_bindings(source_anchors, sources, source_mappings)
+                        if coordinated:
+                            job["sourcePins"] = {root["path"]: root["rootContentIdentity"] for root in target["sourceRoots"]}
+                        abi.canonical(job)
+                        deadline = time.monotonic() + request["maxSeconds"]
+                        with tempfile.TemporaryDirectory(prefix="nixql-e1-") as temporary:
+                            scratch = Path(temporary)
+                            env = {"HOME": temporary, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
+                                   "NIX_CONF_DIR": temporary, "NIX_USER_CONF_FILES": "", "PATH": os.defpath,
+                                   "TMPDIR": temporary, "XDG_CACHE_HOME": temporary, "XDG_CONFIG_HOME": temporary}
+                            if set(binding) == {"command"}:
+                                argv = binding["command"]
+                            elif set(binding) == {"expression"}:
+                                argv = nix_command(nix, binding, job, request, scratch, deadline, env)
+                            else:
+                                raise Refusal("binding-unsupported", "binding must explicitly select a producer", "blocked")
+                            result = json.loads(execute(argv, job, request, scratch, deadline, env))
+                            produced, state = projection_rows(result, job, facts)
+                            links = source_links(produced, sources, source_mappings,
+                                                 scratch / "store" if "expression" in binding else None)
+                            if time.monotonic() >= deadline:
+                                raise Refusal("timeout", "source authentication time-limit exceeded")
+                        produced.extend(links)
+                        envelope(facts + produced)
+                        publish(directory, digest([run, req]), produced)
+                        facts.extend(produced)
+                        published.update(map(id, produced))
+                        if state != "complete":
+                            diagnostic("projection-incomplete", "producer returned " + state, identity, req)
+                    except Exception as error:
+                        state = getattr(error, "state", "blocked" if isinstance(error, (KeyError, FileNotFoundError)) else "failed")
+                        code = getattr(error, "code", "projection-invalid")
+                        # F2 exact-text formats delegate to F1; retain its refusal code.
+                        if str(getattr(error, "cause", error)) == "text-field-too-large":
+                            code = "text-field-too-large"
+                        facts.append(["nx_request_results", [req, state, code, 0]])
+                        diagnostic(code, str(error), identity, req)
+                    states.append(state)
+                if any(state != "complete" for state in states):
+                    target_row[-1] = "partial" if any(state in ("complete", "partial") for state in states) else ("blocked" if all(state == "blocked" for state in states) else "failed")
+                    incomplete = True
+            facts.append(["nx_phases", [run, "evaluation", "partial" if incomplete else "complete", "incomplete requests" if incomplete else ""]])
     packet = envelope(facts)
     publish(directory, digest([run, "supervisor"]), [row for row in facts if id(row) not in published and (not coordinated or row[0] != "nx_runs")])
     if strict and incomplete:

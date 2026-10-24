@@ -139,6 +139,7 @@ def validate(rows):
         return {row[0]: row[1:] for row in tables["nx_" + table]}
 
     context = owners["context"]
+    module = owners["module"]
     option = owners["option"]
     request = owners["request"]
     result = one("request_results")
@@ -174,29 +175,96 @@ def validate(rows):
         require(not isinstance(decoded(payload), (dict, list)), "metadata is not scalar")
         if field == "isDefined" and payload == "true":
             defined_options.add(opt)
-    for req, target, ctx, _, segments, *_ in tables["nx_requests"]:
+    graph_requests = defaultdict(int)
+    for req, target, ctx, domain, segments, facet, *_ in tables["nx_requests"]:
         require(context[ctx][1] == target, "request target/context mismatch")
         json_path(segments)
+        if domain == "module-graph":
+            require(facet == "closure", "module-graph requires the closure facet")
+            require(segments == "[]", "non-root module-graph path")
+            graph_requests[ctx] += 1
+    require(max(graph_requests.values(), default=1) <= 1,
+            "context admits at most one module-graph request")
     priority_witness = CONTRACT["priority"]["optionWitness"]
     observed_priorities = set()
     subjects = defaultdict(list)
-    for kind in ("definition", "option"):
+    for kind in ("context", "definition", "module", "option"):
         for observation, subject in tables[f"nx_observation_{kind}s"]:
             subjects[observation].append((kind, subject))
     for observation, req, stage, state in tables["nx_observations"]:
         require(len(subjects[observation]) == 1, "observation requires exactly one typed subject")
         kind, subject = subjects[observation][0]
-        ctx = request[req][2]
-        opt = subject if kind == "option" else owners["definition"][subject][1]
-        require(option[opt][1] == ctx, "observation subject context mismatch")
-        require(state != "observed" or result.get(req, [None])[0] in ("complete", "partial"), "observation from unsuccessful projection")
+        subject_request = request.get(req)
+        require(subject_request is not None, "observation request is missing")
+        ctx = subject_request[2]
+        if kind == "context":
+            require(subject == ctx, "observation subject context mismatch")
+        elif kind == "module":
+            require(module[subject][1] == ctx, "observation subject context mismatch")
+        else:
+            opt = subject if kind == "option" else owners["definition"][subject][1]
+            require(option[opt][1] == ctx, "observation subject context mismatch")
+        if kind in ("context", "module"):
+            require(subject_request[3] == "module-graph" and subject_request[5] == "closure",
+                    "graph witness requires its context's closure request")
+        successful = ("complete",) if subject_request[3] == "module-graph" else ("complete", "partial")
+        require(state != "observed" or result.get(req, [None])[0] in successful,
+                "observation from unsuccessful projection")
         if (kind == "option" and state == "observed" and stage == priority_witness["stage"]
-                and request[req][3] == priority_witness["domain"]
-                and request[req][4] == option[subject][2] and request[req][5] in priority_witness["facets"]):
+                and subject_request[3] == priority_witness["domain"]
+                and subject_request[4] == option[subject][2] and subject_request[5] in priority_witness["facets"]):
             observed_priorities.add(subject)
     witnessed = {(req, kind, subject) for observation, req, _, state in tables["nx_observations"]
                  if state == "observed" and result.get(req, [None])[0] in ("complete", "partial")
                  for kind, subject in subjects[observation]}
+    root_ordinals = defaultdict(list)
+    root_modules = set()
+    for context_key, ordinal, mod in tables["nx_module_roots"]:
+        require(module[mod][1] == context_key, "root module context mismatch")
+        require(mod not in root_modules, "module occupies multiple root positions")
+        root_ordinals[context_key].append(ordinal)
+        root_modules.add(mod)
+    for ordinals in root_ordinals.values():
+        require(sorted(ordinals) == list(range(len(ordinals))), "noncontiguous module root ordinals")
+    import_ordinals = defaultdict(list)
+    parents = defaultdict(list)
+    children = defaultdict(set)
+    for parent, ordinal, mod in tables["nx_module_imports"]:
+        require(module[parent][1] == module[mod][1], "module import crosses contexts")
+        import_ordinals[parent].append(ordinal)
+        parents[mod].append(parent)
+        children[parent].add(mod)
+    for ordinals in import_ordinals.values():
+        require(sorted(ordinals) == list(range(len(ordinals))), "noncontiguous module import ordinals")
+    for mod in module:
+        require(len(parents[mod]) == (0 if mod in root_modules else 1),
+                "module occurrence requires exactly one parent unless rooted")
+    reachable = set(root_modules)
+    stack = list(root_modules)
+    while stack:
+        for mod in children[stack.pop()]:
+            if mod not in reachable:
+                reachable.add(mod)
+                stack.append(mod)
+    require(reachable == set(module), "module occurrence is not reachable from its roots")
+    require(all(ctx in graph_requests for _, ctx, *_ in tables["nx_modules"]),
+            "module rows lack their context's module-graph request")
+    for req, _, ctx, domain, *_ in tables["nx_requests"]:
+        if domain != "module-graph":
+            continue
+        context_modules = {mod for mod, context_key, *_ in tables["nx_modules"] if context_key == ctx}
+        if result.get(req, [None])[0] != "complete":
+            require(not context_modules, "incomplete module-graph publishes graph rows")
+            continue
+        observed_here = [(kind, subject) for observation, observed_req, _, state in tables["nx_observations"]
+                         if observed_req == req and state == "observed"
+                         for kind, subject in subjects[observation]]
+        context_witnesses = [subject for kind, subject in observed_here if kind == "context"]
+        module_witnesses = [subject for kind, subject in observed_here if kind == "module"]
+        require(context_witnesses == [ctx], "complete module-graph lacks exactly one context witness")
+        require(len(module_witnesses) == len(set(module_witnesses)) and set(module_witnesses) == context_modules,
+                "complete module-graph lacks exactly one observed witness per module")
+        require(result[req][2] == 1 + len(context_modules), "module-graph observed count mismatch")
     for definition, _ in tables["nx_definition_order"]:
         parent = owners["definition"][definition][1]
         require(any(kind == "definition" and subject == definition and
@@ -235,6 +303,8 @@ def validate(rows):
                 require(ordinals == set(range(len(ordinals))), "noncontiguous definition ordinals")
     for opt, _, origin in [row[1:] for row in tables["nx_definitions"]] + tables["nx_option_declarations"]:
         origin_targets[origin].add(owners["target"][context[option[opt][1]][1]][1])
+    for _, ctx, _, origin, _ in tables["nx_modules"]:
+        origin_targets[origin].add(owners["target"][context[ctx][1]][1])
     admitted = defaultdict(set)
     for target, file, _ in tables["nx_target_inputs"]:
         admitted[file].add(owners["run"][owners["target"][target][1]][5])

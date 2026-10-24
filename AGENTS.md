@@ -144,6 +144,8 @@ for it. When several entries match, their guidance composes.
     - [`packages/codeql-nix/docs/literal-imports.md`](packages/codeql-nix/docs/literal-imports.md)
     - [`packages/codeql-nix/docs/metadata-library.md`](packages/codeql-nix/docs/metadata-library.md)
     - [`packages/codeql-nix/docs/module-adapter.md`](packages/codeql-nix/docs/module-adapter.md)
+    - [`packages/codeql-nix/docs/module-graph.md`](packages/codeql-nix/docs/module-graph.md)
+    - [`packages/codeql-nix/docs/module-properties.md`](packages/codeql-nix/docs/module-properties.md)
     - [`packages/codeql-nix/docs/owner-layout.md`](packages/codeql-nix/docs/owner-layout.md)
     - [`packages/codeql-nix/docs/source-identity.md`](packages/codeql-nix/docs/source-identity.md)
     - [`packages/codeql-nix/docs/target-contract.md`](packages/codeql-nix/docs/target-contract.md)

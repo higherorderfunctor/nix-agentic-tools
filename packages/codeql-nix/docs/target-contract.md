@@ -1,8 +1,8 @@
 # Target and observation contract
 
 > **Last verified:** 2026-10-23 — F2 retains the metadata manifest and fact
-> envelope for Step 0; M3 activates exact-text model identities without adding
-> request domains.
+> envelope for Step 0; M3 activates exact-text model identities; M3g adds the
+> `module-graph` request domain.
 
 ## Purpose and fit
 
@@ -62,21 +62,26 @@ and `maxSeconds`. `["a.b"]` and `["a", "b"]` remain distinct. There is no
 implicit traversal or value request. The metadata baseline explicitly selects a
 prefix.
 
-Every request uses the `option-metadata` domain and `metadata` observation mode.
-Facets: `declarations`, `definitions`, `isDefined`, `priority`, `selection`.
-Selection emits retained inputs, whether the option is defined, winning override
-priority and explicit order under one request. Its capability is
-`module-properties`; unsupported helper pins retain independently requested Step
-0 metadata. Objects are closed to unknown fields; target and input maps permit
-explicit names.
+Every request uses the `metadata` observation mode with the `option-metadata` or
+`module-graph` domain. `option-metadata` facets: `declarations`, `definitions`,
+`isDefined`, `priority`, `selection`. Selection emits retained inputs, whether
+the option is defined, winning override priority and explicit order under one
+request. Its capability is `module-properties`; unsupported helper pins retain
+independently requested Step 0 metadata. The `module-graph` domain selects the
+`closure` facet of a whole-root context; its capability is `module-graph`, the
+schema admits only `closure` with an empty path, a context admits at most one
+graph request, and an incomplete closure publishes status and diagnostics only.
+Objects are closed to unknown fields; target and input maps permit explicit
+names.
 
 Deferred surfaces return with their consuming queries: increment 3 restores
-module graph requests and metadata enumeration; increment 4 restores
-selected-value/member/string-context modes and scalar fixtures; increment 5
-restores framework adapters, config-only handles and schema requests. Other
-metadata facets return with the increment 3 module queries that consume them.
-The `reusable` cache control returns in increment 8. Explicit input, argument,
-root, system and fingerprint identities remain required now.
+metadata enumeration and the remaining context-parent tables; increment 4
+restores selected-value/member/string-context modes and scalar fixtures;
+increment 5 restores framework adapters, config-only handles and schema
+requests. Module graph requests are restored with the `DisabledModules` query.
+Other metadata facets return with the module queries that consume them. The
+`reusable` cache control returns in increment 8. Explicit input, argument, root,
+system and fingerprint identities remain required now.
 
 ## Mandatory validation layers
 
@@ -101,15 +106,16 @@ The observation envelope is
 `{ "protocolVersion": 1, "facts": [["nx_relation", [arguments]], ...] }`.
 Mapping to F1 tables is identity: retain relation names, positional arguments
 and values without renaming, coercion or defaults. Each observation carries
-exactly one typed subject row through `nx_observation_options` or
-`nx_observation_definitions`; text subject fields are removed. The link is
-mandatory for every observation state and must remain in its request context and
-target, as enforced by F1. The schema checks the envelope and string/array tuple
-shape. Then the complete unordered fact collection **must** pass
-`schema/abi.py`'s `validate`; envelope acceptance alone is insufficient. F1 owns
-relation names, arity, types, identity framing, canonical encodings, references,
-uniqueness and scope. Empty facts are representable but cannot serve as a
-passing extraction oracle.
+exactly one typed subject row through `nx_observation_options`,
+`nx_observation_definitions`, `nx_observation_contexts` or
+`nx_observation_modules`; text subject fields are removed. The link is mandatory
+for every observation state and must remain in its request context and target,
+as enforced by F1. The schema checks the envelope and string/array tuple shape.
+Then the complete unordered fact collection **must** pass `schema/abi.py`'s
+`validate`; envelope acceptance alone is insufficient. F1 owns relation names,
+arity, types, identity framing, canonical encodings, references, uniqueness and
+scope. Empty facts are representable but cannot serve as a passing extraction
+oracle.
 
 ## States and exact metadata
 
@@ -138,7 +144,7 @@ python packages/codeql-nix/checks/fixtures/protocol/test_protocol.py
 
 The tests check required descriptors, nested source roots and input identities,
 retained metadata facets, rejection of deferred controls, literal paths and
-budgets, all 27 relation mappings, status families and pre-target failures,
+budgets, all 32 relation mappings, status families and pre-target failures,
 priorities, and UTF-8/JSON-expansion boundaries. They use independent fixtures
 and F1 validation without invoking Nix evaluation or the CodeQL engine. F3 must
 integrate this standalone entry point into the owner's checks with nonempty
