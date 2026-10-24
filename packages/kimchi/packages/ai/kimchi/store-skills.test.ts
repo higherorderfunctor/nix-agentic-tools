@@ -1,4 +1,4 @@
-// cspell:ignore earendil
+// cspell:ignore earendil unstub
 import {
   chmodSync,
   mkdirSync,
@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadSkills } from "@earendil-works/pi-coding-agent";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveSkillPathsForDiscovery } from "./resolve-skill-roots.js";
 
 describe("immutable bundled skills", () => {
@@ -23,6 +23,7 @@ describe("immutable bundled skills", () => {
     bundled = join(root, "bundled");
   });
   afterEach(() => {
+    vi.unstubAllEnvs();
     for (const path of readOnlyDirs.splice(0)) chmodSync(path, 0o755);
     rmSync(root, { recursive: true, force: true });
   });
@@ -90,6 +91,22 @@ describe("immutable bundled skills", () => {
       "new-bundled",
       "overridden",
     ]);
+  });
+  it("hides resource-gated bundled skills without a temp copy", () => {
+    const agentDir = join(root, "agent");
+    mkdirSync(agentDir);
+    writeFileSync(
+      join(agentDir, "settings.json"),
+      JSON.stringify({ resources: { "skills.pptx": false } }),
+    );
+    vi.stubEnv("KIMCHI_CODING_AGENT_DIR", agentDir);
+    const kept = skill(bundled, "ungated");
+    const gated = skill(bundled, "gated");
+    writeFileSync(
+      join(gated, "SKILL.md"),
+      "---\nname: gated\ndescription: d\nrequires-resource: skills.pptx\n---\n",
+    );
+    expect(discover()).toEqual([kept]);
   });
   it("contributes nothing when every bundled skill is overridden", () => {
     skill(bundled, "overridden");
