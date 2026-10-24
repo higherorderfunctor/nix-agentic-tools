@@ -1,6 +1,21 @@
 {
-  "version": "0.163.0",
-  "buildCommit": "83086188ae0614bd882818ff1aa23f3194962012",
-  "srcHash": "sha256-Fa9dfiGJy+uqSF4A0EM6AQQhhjQdu+jfhKzqXid9PNA=",
-  "cargoHash": "sha256-TG1fDHQCRDDbk+G0NS/9NTouJupq0Zisi4LIJY4SgYw="
+  "version": "0.164.0",
+  "buildCommit": "6aaac694803004a63c6f393d153c96d22521a6b9",
+  "librustyV8": {
+    "version": "152.2.0",
+    "archive": {
+      "aarch64-darwin": "sha256-pKVIREStS18Q3HvtFBI23Z2+q/IAbRRSDxm5NdTbQic=",
+      "aarch64-linux": "sha256-xAGWu/GCUy5YP2W32vAZb9uzNU5vrFmzHQU5wg+THz0=",
+      "riscv64-linux": "sha256-h/uc4gRjDgiLpaQFlyIoggrFOoz0VfqUYnQM4GMPtxk=",
+      "x86_64-linux": "sha256-tmg+mvy3f72MssOs9F001SApqyFrMyUiyVF5wS8P7Tw="
+    },
+    "srcBinding": {
+      "aarch64-darwin": "sha256-udVlLrylFesr9MLuSmVRslZxF7Wqcg9DDSAyYW3X47U=",
+      "aarch64-linux": "sha256-Pk1f7Nvg+YpgF+adfKglGad/sDLF615M2+zdPi7FGdU=",
+      "riscv64-linux": "sha256-Pk1f7Nvg+YpgF+adfKglGad/sDLF615M2+zdPi7FGdU=",
+      "x86_64-linux": "sha256-Pk1f7Nvg+YpgF+adfKglGad/sDLF615M2+zdPi7FGdU="
+    }
+  },
+  "srcHash": "sha256-iib2+qQcGewC4Ga8cA80sInDJpzdSxDJP0y1DDOouI4=",
+  "cargoHash": "sha256-0N2mEGqEl2ZjWqlbraVCWP0eoITgwmT9uO/1w/1eJno="
 }

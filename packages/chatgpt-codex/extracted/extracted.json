@@ -66,8 +66,15 @@
       "codex app-server": {
         "flags": [
           { "names": ["--config", "-c"], "valueName": "key=value" },
+          { "names": ["--startup-sign-out"], "valueName": null },
           { "names": ["--enable"], "valueName": "FEATURE" },
+          { "names": ["--print-startup-config"], "valueName": null },
           { "names": ["--disable"], "valueName": "FEATURE" },
+          {
+            "names": ["--startup-client-info"],
+            "valueName": "STARTUP_CLIENT_INFO"
+          },
+          { "names": ["--cloud-skills-snapshot"], "valueName": "PATH" },
           { "names": ["--code-mode-host"], "valueName": "URL" },
           { "names": ["--strict-config"], "valueName": null },
           { "names": ["--listen"], "valueName": "URL" },
@@ -510,6 +517,7 @@
           { "names": ["--environment-id"], "valueName": "ID" },
           { "names": ["--name"], "valueName": "NAME" },
           { "names": ["--use-agent-identity-auth"], "valueName": null },
+          { "names": ["--executor-credential-stdin"], "valueName": null },
           { "names": ["--aws-sigv4"], "valueName": null },
           { "names": ["--aws-profile"], "valueName": "PROFILE" },
           { "names": ["--aws-region"], "valueName": "REGION" },
@@ -532,6 +540,7 @@
           { "names": ["--environment-id"], "valueName": "ID" },
           { "names": ["--name"], "valueName": "NAME" },
           { "names": ["--use-agent-identity-auth"], "valueName": null },
+          { "names": ["--executor-credential-stdin"], "valueName": null },
           { "names": ["--aws-sigv4"], "valueName": null },
           { "names": ["--aws-profile"], "valueName": "PROFILE" },
           { "names": ["--aws-region"], "valueName": "REGION" },
@@ -704,6 +713,15 @@
       "codex mcp remove": {
         "flags": [
           { "names": ["--config", "-c"], "valueName": "key=value" },
+          { "names": ["--enable"], "valueName": "FEATURE" },
+          { "names": ["--disable"], "valueName": "FEATURE" },
+          { "names": ["--help", "-h"], "valueName": null }
+        ]
+      },
+      "codex migrate-nfs-db": {
+        "flags": [
+          { "names": ["--config", "-c"], "valueName": "key=value" },
+          { "names": ["--staging-dir"], "valueName": "STAGING_DIR" },
           { "names": ["--enable"], "valueName": "FEATURE" },
           { "names": ["--disable"], "valueName": "FEATURE" },
           { "names": ["--help", "-h"], "valueName": null }
@@ -1059,6 +1077,10 @@
     { "maturity": "experimental", "name": "analytics_plan_history" },
     { "maturity": "stable", "name": "api_key_cyber_access_programs" },
     { "maturity": "stable", "name": "api_key_model_discovery" },
+    {
+      "maturity": "under development",
+      "name": "app_server_websocket_compression"
+    },
     { "maturity": "removed", "name": "apply_patch_freeform" },
     { "maturity": "removed", "name": "apply_patch_preserve_line_endings" },
     { "maturity": "under development", "name": "apply_patch_streaming_events" },
@@ -1071,7 +1093,7 @@
       "maturity": "under development",
       "name": "background_paginated_rollout_migration"
     },
-    { "maturity": "under development", "name": "bedrock_setup_wizard" },
+    { "maturity": "stable", "name": "bedrock_setup_wizard" },
     { "maturity": "stable", "name": "browser_annotation_api" },
     { "maturity": "stable", "name": "browser_use" },
     { "maturity": "stable", "name": "browser_use_external" },
@@ -1126,6 +1148,10 @@
       "maturity": "under development",
       "name": "executor_capability_discovery"
     },
+    {
+      "maturity": "under development",
+      "name": "executor_capability_discovery_v2"
+    },
     { "maturity": "removed", "name": "experimental_windows_sandbox" },
     { "maturity": "under development", "name": "external_agent_memory_import" },
     { "maturity": "removed", "name": "external_migration" },
@@ -1170,7 +1196,7 @@
     { "maturity": "stable", "name": "in_app_local_automation" },
     { "maturity": "stable", "name": "in_app_updates" },
     { "maturity": "stable", "name": "in_app_voice" },
-    { "maturity": "under development", "name": "incremental_tools" },
+    { "maturity": "stable", "name": "incremental_tools" },
     { "maturity": "under development", "name": "instant_interrupt" },
     { "maturity": "removed", "name": "item_ids" },
     { "maturity": "removed", "name": "js_repl" },
@@ -1182,10 +1208,8 @@
     { "maturity": "removed", "name": "local_thread_store_shared_compression" },
     { "maturity": "experimental", "name": "login_shell_package_path" },
     { "maturity": "under development", "name": "mcp_2026_07_28" },
-    {
-      "maturity": "under development",
-      "name": "mcp_oauth_refresh_coordination"
-    },
+    { "maturity": "stable", "name": "mcp_oauth_refresh_coordination" },
+    { "maturity": "under development", "name": "mcp_tool_list_changed" },
     { "maturity": "stable", "name": "memories" },
     { "maturity": "stable", "name": "mentions_v2" },
     { "maturity": "under development", "name": "model_catalog_in_context" },
@@ -1193,6 +1217,7 @@
     { "maturity": "removed", "name": "multi_agent_mode" },
     { "maturity": "stable", "name": "multi_agent_v2" },
     { "maturity": "under development", "name": "multi_agent_v2_dynamic_tools" },
+    { "maturity": "under development", "name": "multi_env_copy_file" },
     { "maturity": "experimental", "name": "network_proxy" },
     { "maturity": "under development", "name": "non_prefixed_mcp_tool_names" },
     { "maturity": "under development", "name": "nonfatal_clock_read_errors" },
@@ -1209,7 +1234,7 @@
     { "maturity": "under development", "name": "prefer_mxc" },
     { "maturity": "experimental", "name": "prevent_idle_sleep" },
     { "maturity": "under development", "name": "psp" },
-    { "maturity": "stable", "name": "realtime_conversation" },
+    { "maturity": "removed", "name": "realtime_conversation" },
     { "maturity": "under development", "name": "reasoning_effort_override" },
     { "maturity": "stable", "name": "recommended_plugins" },
     { "maturity": "removed", "name": "remote_compaction_v2" },
@@ -1228,6 +1253,7 @@
     },
     { "maturity": "under development", "name": "retain_client_tool_outputs" },
     { "maturity": "under development", "name": "rollout_budget" },
+    { "maturity": "under development", "name": "runtime_agent_instances" },
     { "maturity": "under development", "name": "runtime_metrics" },
     { "maturity": "removed", "name": "search_tool" },
     { "maturity": "stable", "name": "secret_auth_storage" },
@@ -1243,7 +1269,7 @@
     { "maturity": "under development", "name": "skip_host_skill_discovery" },
     { "maturity": "stable", "name": "sleep_tool" },
     { "maturity": "removed", "name": "sqlite" },
-    { "maturity": "under development", "name": "stable_environment_tools" },
+    { "maturity": "removed", "name": "stable_environment_tools" },
     { "maturity": "under development", "name": "standalone_web_search" },
     { "maturity": "removed", "name": "steer" },
     { "maturity": "under development", "name": "step_model_switching" },
@@ -1251,6 +1277,7 @@
       "maturity": "under development",
       "name": "subagent_default_context_limits"
     },
+    { "maturity": "under development", "name": "subagent_thread_environments" },
     { "maturity": "stable", "name": "system_proxy_fallback" },
     { "maturity": "removed", "name": "terminal_resize_reflow" },
     {
@@ -1262,7 +1289,7 @@
     { "maturity": "removed", "name": "tool_search" },
     { "maturity": "removed", "name": "tool_search_always_defer_mcp_tools" },
     { "maturity": "stable", "name": "tool_suggest" },
-    { "maturity": "deprecated", "name": "transcript_v2" },
+    { "maturity": "removed", "name": "transcript_v2" },
     { "maturity": "removed", "name": "tui_app_server" },
     { "maturity": "stable", "name": "ultrafast_mode" },
     { "maturity": "removed", "name": "unavailable_dummy_tools" },
@@ -1277,12 +1304,13 @@
     { "maturity": "removed", "name": "use_linux_sandbox_bwrap" },
     { "maturity": "under development", "name": "use_xaa" },
     { "maturity": "stable", "name": "view_image" },
+    { "maturity": "under development", "name": "wake_on_agent_messages" },
     { "maturity": "deprecated", "name": "web_search_cached" },
     { "maturity": "deprecated", "name": "web_search_request" },
     { "maturity": "under development", "name": "windows_sandbox_service" },
     { "maturity": "stable", "name": "workspace_dependencies" },
     { "maturity": "removed", "name": "workspace_owner_usage_nudge" },
-    { "maturity": "stable", "name": "worktrees" },
+    { "maturity": "removed", "name": "worktrees" },
     { "maturity": "stable", "name": "write_stdin_approval" }
   ],
   "models": [
