@@ -559,6 +559,8 @@ in
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       isHm = backend == "hm";
       nativeSettings = aiCommon.filterNulls cfg.native.settings;
+      proxyEnvironmentNames = ["ALL_PROXY" "HTTP_PROXY" "HTTPS_PROXY" "NO_PROXY" "all_proxy" "http_proxy" "https_proxy" "no_proxy"];
+      conflictingProxyEnvironment = builtins.filter (name: builtins.hasAttr name (nativeSettings.env or {})) proxyEnvironmentNames;
       # The typed event map (the one renderer Kimchi's hooks.json also uses)
       # and the legacy `native.settings.hooks` escape hatch, joined per event
       # HERE: a document's `content.value` merges leaf-wise, so two
@@ -613,6 +615,10 @@ in
             {
               assertion = !(lib.attrByPath upstreamEnable false config);
               message = "ai.claude.enable and ${lib.concatStringsSep "." upstreamEnable} cannot both be on: each writes Claude's files, and they cannot share them. Disable one of the two.";
+            }
+            {
+              assertion = resolvedProxy == null || (resolvedProxy.owner or "cliproxyapi") != "airlock" || conflictingProxyEnvironment == [];
+              message = "ai.claude.proxy selects airlock; native.settings.env must not set proxy variables: ${lib.concatStringsSep ", " conflictingProxyEnvironment}. The managed launcher supplies HTTPS_PROXY from the selected client token.";
             }
           ];
         }

@@ -7,15 +7,18 @@ applyTo: "checks/ai-proxy/**,lib/ai/proxy/**,packages/chatgpt-codex/lib/proxy.ni
 
 ## ai.proxy: local CLIProxyAPI for AI harnesses
 
-> **Last verified:** 2026-10-24 — OAuth upstream credentials require vendor and
-> a secret account email; native CPA account rules match logins, including ones
-> added while the service runs. The existing rendered-file launcher lifts
-> accounts into secret placeholders on both backends. Named API-key credentials
-> can select the built-in z.ai vendor defaults and an optional priority.
+> **Last verified:** 2026-10-24 — Claude can opt into a named airlock client;
+> CPA and airlock instance names share one claim group. OAuth upstream
+> credentials require vendor and a secret account email; native CPA account
+> rules match logins, including ones added while the service runs. The existing
+> rendered-file launcher lifts accounts into secret placeholders on both
+> backends. Named API-key credentials can select the built-in z.ai vendor
+> defaults and an optional priority.
 
-`ai.proxy` points a harness at a locally hosted CLIProxyAPI so the harness holds
-only the proxy's client key, never an upstream credential. The proxy holds the
-logins. `ai.mcpServers.<name>.proxy` (lib/ai/mcpProxy.nix) is an unrelated MCP
+`ai.proxy` selects a named CPA or airlock instance. CPA remains the default
+transport; Claude alone can opt into airlock in this release. The harness holds
+only its selected client's credential, never an upstream credential.
+`ai.mcpServers.<name>.proxy` (lib/ai/mcpProxy.nix) is an unrelated MCP
 credential proxy.
 
 ### Shape
@@ -40,12 +43,16 @@ A selection is `url` + `key` for a proxy configured by hand, or `instance` +
 `ai.cliproxyapi.instances` entry (`packages/cliproxyapi/modules/instances.nix`)
 and resolves through `packages/ai-module/lib/instances.nix`'s `select` to
 `http://127.0.0.1:<port>`; `url` and `instance` are mutually exclusive.
-`clientKey` names that instance's `clientKeys` entry. Missing or disabled
-instances, unknown client keys, and incomplete selections fail as assertions at
-either scope, outside the runtime enable gate. An external selection without a
-key is rejected because the harness would send its own login token, if any, to
-the proxy. The instances are read as `config.ai.cliproxyapi.instances or {}`,
-since an evaluation without the owner module (the factory harness) has none.
+`clientKey` names that CPA instance's `clientKeys` entry. For airlock it names
+`settings.clients.<id>`, and the launcher reads the service-rendered
+`token_file` path at start. CPA and airlock claim instance names in one
+`ai.claims.proxy-instance` group, so the name determines the owner. An external
+`url` plus `key` still selects CPA. Missing or disabled instances, unknown
+client keys, and incomplete selections fail as assertions at either scope,
+outside the runtime enable gate. An external selection without a key is rejected
+because the harness would send its own login token, if any, to the proxy. The
+instances are read as `config.ai.cliproxyapi.instances or {}`, since an
+evaluation without the owner module (the factory harness) has none.
 
 A per-runtime selection that selects anything (a `url` or an `instance`)
 replaces the root selection WHOLE. Fields never mix across levels: a runtime
@@ -144,13 +151,6 @@ For Codex and xAI WebSocket requests, CPA can prefer a WebSocket-capable
 credential even at a lower priority than an HTTP-only credential. Existing
 session affinity can keep using a bound credential after a higher-priority one
 recovers. Per-client routing order/fallback and account prefixes are deferred.
-
-Built-in `vendor = "z-ai"` defaults
-`apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` for Anthropic and
-`apiKey.codexShellArgCleanup = true` for chat-to-Responses shell calls,
-repairing measured tool-name and empty-justification failures. Explicit
-`toolAliases = {};` and `codexShellArgCleanup = false;` disable those defaults;
-other vendors omit both settings unless requested.
 
 A named client key also listed by hand in `access.api-keys`, or given a
 hand-written `access.key-allowlist` entry, is refused: a second owner could

@@ -15,7 +15,7 @@
       type = types.nullOr types.str;
       default = null;
       example = "main";
-      description = "An `ai.cliproxyapi.instances` entry, selected with `clientKey`.";
+      description = "An `ai.cliproxyapi.instances` or `ai.airlock.instances` entry, selected with `clientKey`.";
     };
     key = mkOption {
       type = types.nullOr redact.types.redacted;
@@ -33,17 +33,33 @@
     if isSelected runtime
     then runtime
     else root;
-  instanceSelection = instances: path: selection:
+  ownerOf = instances: name:
+    if name != null && builtins.hasAttr name instances.cliproxyapi
+    then "cliproxyapi"
+    else if name != null && builtins.hasAttr name instances.airlock
+    then "airlock"
+    else "cliproxyapi";
+  instanceSelection = instances: path: selection: let
+    owner = ownerOf instances selection.instance;
+  in
     instancesLib.select {
-      inherit instances;
+      instances = instances.${owner};
       name = selection.instance;
       option = "${lib.showOption path}.instance";
-      owner = "cliproxyapi";
+      inherit owner;
     };
   problems = instances: path: selection: let
     name = lib.showOption path;
     has = field: selection.${field} != null;
-    instance = instances.${selection.instance} or null;
+    owner = ownerOf instances selection.instance;
+    instance =
+      if selection.instance == null
+      then null
+      else instances.${owner}.${selection.instance} or null;
+    clients =
+      if owner == "airlock"
+      then instance.settings.clients or {}
+      else instance.clientKeys or {};
   in
     lib.optional (has "url" && has "instance") "${name}.url and ${name}.instance both select a proxy; set one."
     ++ lib.optional (has "url" && !has "key") "${name}.url needs `key`: without one the Harness may send its own login token to CPA."
@@ -52,8 +68,12 @@
     ++ lib.optional (has "clientKey" && !has "instance") "${name}.clientKey is set without `instance`."
     ++ lib.optionals (has "url") (lib.optional (builtins.match urlPattern selection.url == null) "${name}.url must be ${urlDescription}; got `${selection.url}`.")
     ++ lib.optionals (has "instance") (lib.toList ((instanceSelection instances path selection).problem or []))
-    ++ lib.optional (has "instance" && has "clientKey" && instance != null && !(builtins.hasAttr selection.clientKey instance.clientKeys))
-    "${name}.clientKey names `${selection.clientKey}`, which is not an `ai.cliproxyapi.instances.${selection.instance}.clientKeys` entry.";
+    ++ lib.optional (has "instance" && has "clientKey" && instance != null && !(builtins.hasAttr selection.clientKey clients))
+    "${name}.clientKey names `${selection.clientKey}`, which is not an `ai.${owner}.instances.${selection.instance}.${
+      if owner == "airlock"
+      then "settings.clients"
+      else "clientKeys"
+    }` entry.";
   resolve = {
     instances,
     root,
@@ -64,11 +84,22 @@
       if selection.instance == null
       then null
       else instanceSelection instances [] selection;
-    instance = instances.${selection.instance} or null;
+    owner = ownerOf instances selection.instance;
+    instance =
+      if selection.instance == null
+      then null
+      else instances.${owner}.${selection.instance} or null;
     client =
       if instance == null || selection.clientKey == null
       then null
-      else instance.clientKeys.${selection.clientKey} or null;
+      else
+        (
+          if owner == "airlock"
+          then instance.settings.clients
+          else instance.clientKeys
+        ).${
+          selection.clientKey
+        } or null;
   in
     if !isSelected selection
     then null
@@ -79,6 +110,15 @@
     }
     else if selected ? problem || client == null
     then null
+    else if owner == "airlock"
+    then {
+      inherit owner;
+      inherit (selected) url;
+      client = selection.clientKey;
+      inherit (selection) instance;
+      inherit (instance) port;
+      credentials = [];
+    }
     else {
       inherit (client) key;
       inherit (selected) url;
@@ -97,7 +137,7 @@ in {
   rootOption = mkOption {
     type = types.submodule {options = selectionOptions;};
     default = {};
-    description = "Point a Harness (Claude Code or Codex CLI) at CPA with `instance` + `clientKey`, or external `url` + `key`. A per-Harness selection replaces this whole selection. Instance routes select named upstream credentials; no Harness publishes keys or rules.";
+    description = "Point a Harness at a named CPA or airlock instance with `instance` + `clientKey`, or at an external CPA origin with `url` + `key`. A per-Harness selection replaces this whole selection. Only Claude supports airlock in this release.";
   };
   runtimeOptions = selectionOptions;
   resolvedType = types.nullOr (types.submodule {
@@ -112,9 +152,25 @@ in {
         default = [];
         description = "Named upstream credentials in client route order, with declared API-key models.";
       };
+      client = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+      };
+      instance = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+      };
       key = mkOption {
-        type = redact.types.redacted;
-        description = "The selected client key.";
+        type = types.nullOr redact.types.redacted;
+        default = null;
+      };
+      owner = mkOption {
+        type = types.enum ["airlock" "cliproxyapi"];
+        default = "cliproxyapi";
+      };
+      port = mkOption {
+        type = types.nullOr types.port;
+        default = null;
       };
       url = mkOption {
         type = types.strMatching urlPattern;

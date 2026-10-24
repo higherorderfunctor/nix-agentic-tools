@@ -72,6 +72,7 @@ in {
     ((import ../../ai-module/lib/instances.nix {inherit lib;}).module {
       arguments = _: ''serve --config "$AIRLOCK_CONFIG"'';
       inherit backend settingsType;
+      claimProxyInstance = true;
       defaultPort = 8318;
       derived = {instance, ...}: {
         listen = "127.0.0.1:${toString instance.port}";
