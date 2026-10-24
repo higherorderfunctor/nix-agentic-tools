@@ -75,12 +75,18 @@ function syntaxName(node, ts) {
   return undefined;
 }
 
+// The symbol `node` refers to, through any import alias.
+function symbolAt(node, checker, ts) {
+  const symbol = checker.getSymbolAtLocation(node);
+  return symbol && symbol.flags & ts.SymbolFlags.Alias
+    ? checker.getAliasedSymbol(symbol)
+    : symbol;
+}
+
 // The initializer of the constant `identifier` names, resolved through the
 // checker (so a same-named constant elsewhere can never stand in for it).
 function constantInitializer(identifier, checker, ts) {
-  let symbol = checker.getSymbolAtLocation(identifier);
-  if (symbol && symbol.flags & ts.SymbolFlags.Alias)
-    symbol = checker.getAliasedSymbol(symbol);
+  const symbol = symbolAt(identifier, checker, ts);
   const initializers = (symbol?.declarations ?? [])
     .filter(
       (declaration) =>
@@ -405,12 +411,7 @@ function discoverConfigKeys(sourceFile, checker, ts) {
     const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
     return `config.ts:${line + 1}`;
   };
-  const symbolOf = (node) => {
-    let symbol = checker.getSymbolAtLocation(node);
-    if (symbol && symbol.flags & ts.SymbolFlags.Alias)
-      symbol = checker.getAliasedSymbol(symbol);
-    return symbol;
-  };
+  const symbolOf = (node) => symbolAt(node, checker, ts);
   const callSites = new Map();
   function indexCalls(node) {
     if (ts.isCallExpression(node)) {
@@ -580,6 +581,8 @@ function discoverConfigKeys(sourceFile, checker, ts) {
   identify(sourceFile);
   const found = { config: new Set(), harness: new Set() };
   function visit(node) {
+    // `delete raw.key` removes a key; it reads nothing.
+    if (ts.isDeleteExpression(node)) return;
     let name;
     if (
       ts.isPropertyAccessExpression(node) &&
@@ -1006,9 +1009,52 @@ function extractConfig(
   const extrasValidation = runtimeValidationKinds(readExtras, ts, {
     parsed: [],
   });
+  // readConfigExtras hands some keys to a validating helper, such as
+  // parseOnboardingConfig(parsed.onboarding): the helper's guards on that
+  // parameter are guards on the key.
+  const parsedSymbols = new Set();
+  (function bindings(node) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "parsed"
+    )
+      parsedSymbols.add(symbolAt(node.name, checker, ts));
+    ts.forEachChild(node, bindings);
+  })(readExtras);
+  if (parsedSymbols.size !== 1)
+    fail(
+      `readConfigExtras no longer binds exactly one parsed (found ${parsedSymbols.size})`,
+    );
+  (function followHelpers(node) {
+    if (ts.isCallExpression(node)) {
+      node.arguments.forEach((argument, index) => {
+        argument = unwrapExpression(argument, ts);
+        if (
+          !ts.isPropertyAccessExpression(argument) ||
+          !parsedSymbols.has(symbolAt(argument.expression, checker, ts))
+        )
+          return;
+        const helper = symbolAt(
+          node.expression,
+          checker,
+          ts,
+        )?.declarations?.find(ts.isFunctionDeclaration);
+        const parameter = helper?.parameters[index]?.name;
+        if (!helper?.body || !parameter || !ts.isIdentifier(parameter)) return;
+        const kinds = runtimeValidationKinds(helper, ts, {
+          [parameter.text]: [argument.name.text],
+        });
+        for (const [key, found] of kinds) {
+          if (!extrasValidation.has(key)) extrasValidation.set(key, new Set());
+          for (const kind of found) extrasValidation.get(key).add(kind);
+        }
+      });
+    }
+    ts.forEachChild(node, followHelpers);
+  })(readExtras);
   for (const [name, descriptor] of Object.entries(extras)) {
-    if (["migrationState", "onboarding", "preferences"].includes(name))
-      continue;
+    if (name === "migrationState") continue;
     validateRuntimeDescriptor(name, descriptor, extrasValidation);
   }
   for (const [alias, row] of aliases) {
@@ -1019,17 +1065,15 @@ function extractConfig(
       );
     }
   }
-  for (const [name, functionName, root] of [
-    ["onboarding", "parseOnboardingConfig", "value"],
-    ["preferences", "parsePreferencesConfig", "value"],
-    ["telemetry", "readTelemetryConfig", "parsed"],
-  ]) {
-    const parser = configDeclaration(functionName, ts.isFunctionDeclaration);
-    const validation = runtimeValidationKinds(parser, ts, {
-      [root]: name === "telemetry" ? [] : [name],
-    });
-    validateRuntimeDescriptor(name, keys[name], validation);
-  }
+  validateRuntimeDescriptor(
+    "telemetry",
+    keys.telemetry,
+    runtimeValidationKinds(
+      configDeclaration("readTelemetryConfig", ts.isFunctionDeclaration),
+      ts,
+      { parsed: [] },
+    ),
+  );
   if (discovered.has("harness")) {
     fail(
       "config.json exposes a top-level 'harness' key; this collides with the reserved harness settings namespace",
@@ -1245,9 +1289,7 @@ function settingsHelperKeys(settingsSource, kimchiSources, context) {
     if (sourceFile === settingsSource) continue;
     function visit(node) {
       if (ts.isCallExpression(node)) {
-        let symbol = checker.getSymbolAtLocation(node.expression);
-        if (symbol && symbol.flags & ts.SymbolFlags.Alias)
-          symbol = checker.getAliasedSymbol(symbol);
+        const symbol = symbolAt(node.expression, checker, ts);
         if (
           symbol?.declarations?.some((declaration) => helpers.has(declaration))
         ) {
@@ -1543,10 +1585,8 @@ function stringConstant(expression, context, seen = new Set()) {
   if (!ts.isIdentifier(expression)) return undefined;
   const fromDeclaration = (declaration) =>
     stringConstant(declaration.initializer, context, seen);
-  let symbol = checker.getSymbolAtLocation(expression);
+  const symbol = symbolAt(expression, checker, ts);
   if (symbol) {
-    if (symbol.flags & ts.SymbolFlags.Alias)
-      symbol = checker.getAliasedSymbol(symbol);
     if (seen.has(symbol)) return undefined;
     seen.add(symbol);
     for (const declaration of symbol.declarations ?? []) {
