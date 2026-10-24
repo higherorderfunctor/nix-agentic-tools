@@ -78,14 +78,14 @@
       if selected == null || selected ? problem
       then null
       else instances.${selection.instance}.settings.management.secret-key;
-    files =
+    managementKeyFiles =
       if redact.isReference key
       then redact.filePaths key
       else [];
     prefix = "DELEGATE_USAGE_CPA_${lib.toUpper runtime}";
   in
-    lib.optionalAttrs (files != []) {
-      "${prefix}_MANAGEMENT_KEY_FILE" = lib.mkDefault (lib.head files);
+    lib.optionalAttrs (managementKeyFiles != []) {
+      "${prefix}_MANAGEMENT_KEY_FILE" = lib.mkDefault (lib.head managementKeyFiles);
       "${prefix}_URL" = lib.mkDefault selected.url;
     };
   usageEnvironment = runtime:
