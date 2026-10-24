@@ -1,0 +1,1 @@
+{lib,...}: { _file="nested.nix"; demo.items=lib.mkIf true (lib.mkMerge [ (lib.mkOverride 50 (lib.mkOrder 700 ["left"])) (lib.mkIf false (lib.mkAfter ["right"])) ]); }
