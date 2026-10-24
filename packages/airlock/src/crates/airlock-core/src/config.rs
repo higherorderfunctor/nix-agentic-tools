@@ -102,6 +102,17 @@ pub struct RawGrant {
 }
 
 impl Config {
+    #[must_use]
+    pub fn listen(&self) -> SocketAddr {
+        self.listen
+    }
+
+    pub fn client_token_files(&self) -> impl Iterator<Item = (&ClientId, &SecretFile)> {
+        self.clients
+            .iter()
+            .map(|(client, config)| (client, &config.token_file))
+    }
+
     pub(crate) fn client_grants(&self) -> impl Iterator<Item = (&ClientId, &[Grant])> {
         self.clients
             .iter()
