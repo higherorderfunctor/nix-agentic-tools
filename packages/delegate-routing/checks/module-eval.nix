@@ -174,6 +174,12 @@
         programs.delegate-routing.runtimes.claude.models = [{families = ["x"];}];
       };
     };
+    # Derivation-backed like a packaged usage helper: its store path carries
+    # string context, which the pool grouping key must discard to render.
+    exampleUsage = pkgs.writeShellScriptBin "example-usage" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+    '';
     usageFamilies = skill {
       ai = {
         programs.delegate-routing.families.example = let
@@ -181,7 +187,7 @@
             match = "example-*";
             tier = "strong";
             usage = {
-              command = "/bin/example-usage";
+              command = lib.getExe exampleUsage;
               kind = "usage";
               notes = "FAMILY USAGE NOTE";
             };
@@ -565,8 +571,8 @@
       }) "family names must be unique across vendors"
     );
     "module-delegate-routing-${name}-family-usage" = mkTest "delegate-routing-${name}-family-usage" (
-      lib.hasInfix "**x, y (usage):** `/bin/example-usage`; FAMILY USAGE NOTE" usageFamilies
-      && !(lib.hasInfix "(usage):** `/bin/example-usage`" claude)
+      lib.hasInfix "**x, y (usage):** `${lib.getExe exampleUsage}`; FAMILY USAGE NOTE" usageFamilies
+      && !(lib.hasInfix "(usage):** `${lib.getExe exampleUsage}`" claude)
       && lib.hasInfix "**m (usage):** `/bin/manual-usage`" manualFamilyUsage
       && failsWith badFamilyUsage "a family usage node must have kind"
     );
