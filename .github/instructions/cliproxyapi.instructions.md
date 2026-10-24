@@ -127,190 +127,16 @@ The package exposes `passthru.extracted`. Its update script calls the shared
 floor and vendor hash, so a release bump carries its new configuration shape
 before publication.
 
-<!-- Fragment: packages/cliproxyapi/docs/cliproxyapi-front-gate.md -->
-
-# CLIProxyAPI front gate (cpa-gate)
-
-> **Last verified:** 2026-10-23 — the gate refuses non-canonical tool types,
-> checks call bodies, filters five CPA listing shapes and detail responses,
-> reports listing health, and checks Responses websocket messages; no module
-> option enables it.
-
-**cpa-gate is NOT a security boundary, and nothing wires it in yet.** A harness
-that runs under the same uid as the gate can read the policy file, which holds
-every client key and every internal key, and can read CLIProxyAPI's own config
-and logins. It becomes a boundary only once each harness has its own VM or uid.
-
-## What it is
-
-A Caddy HTTP handler, `http.handlers.cpa_gate`, meant to sit in front of
-CLIProxyAPI (CPA). It admits a request only when it carries exactly one known
-client key on an allowed route, and replaces that key with the entry's internal
-key, so CPA applies its key allowlist to the principal the gate chose. The Go
-module is `src/cpa-gate` (module path `cpagate`, never fetched); the binary is
-Caddy's own `main` plus one import.
-
-`lib/gate.nix` renders the Caddyfile from shared pieces. Only the listing paths
-have a downstream `reverse_proxy`; a second loopback site serves
-`cpa_gate_health`.
-
-## Policy file
-
-`CPA_GATE_POLICY` carries the policy file's **path**, never a key. The `*`
-matcher is required: Caddy takes a first argument that starts with `/` as a path
-matcher. A key in a Caddyfile `{$VAR}` would be spliced in before parsing, an
-unset one becomes an empty string, and the adapted config holds the value in
-clear. The file is JSON:
-
-```json
-{
-  "entries": [
-    {
-      "name": "codex",
-      "key": "<client key>",
-      "internal": "<internal key>",
-      "apis": ["responses"],
-      "models": ["gpt-6-sol"],
-      "hostedTools": {}
-    }
-  ]
-}
-```
-
-`Provision` fails on an empty `entries` list (health would report OK while
-serving nothing), empty or duplicate entry names (health is keyed by name),
-empty keys, `apis` or `models`, unknown API routes or policy fields, duplicate
-client keys, a client key equal to an internal key, and trailing JSON. Errors
-name entries and fields, never values; entry names are public metadata, since
-`/-/health` returns every one to any loopback caller without a credential.
-Client keys remain in memory only as SHA-256 digests, scanned with constant-time
-comparisons. Each `hostedTools` type declares implied models inside its entry's
-set; an empty map denies every hosted tool.
-
-## Requests
-
-1. **Authentication.** CPA reads a key from `Authorization`, `X-Goog-Api-Key`,
-   `X-Api-Key`, `?key=` and `?auth_token=`
-   (`internal/access/config_access/provider.go`). The gate counts every value of
-   all five: exactly one is allowed, so two carriers, a repeated header and a
-   repeated query key are refused. `Authorization` must be `Bearer <key>`, with
-   the scheme in any case, one separator space, and then the exact configured
-   key. An unparsable query is refused here too.
-2. **Route.** Method and path match the table in `gate/routes.go` exactly, and
-   the path must carry no escaping Go would not produce (`RawPath` empty). So
-   `//`, dot segments, a trailing slash, case variants and `%2F` miss. The
-   entry's `apis` must admit the route, and the query may hold only the route's
-   own keys, once each, besides the carriers.
-3. **Rewrite.** On every route but the two websocket ones, `Connection` and
-   `Upgrade` are deleted, because `reverse_proxy` relays an upgrade on any
-   route. Then all five carriers go and `Authorization: Bearer <internal>` is
-   set.
-
-| `apis`      | Routes                                                                                                               | Query                        |
-| ----------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| any         | `GET /v1/models`, `GET /v1/models/{id}`                                                                              | `client_version` on the list |
-| `anthropic` | `POST /v1/messages`, `POST /v1/messages/count_tokens`                                                                | `beta`                       |
-| `chat`      | `POST /v1/chat/completions`                                                                                          | none                         |
-| `gemini`    | `GET /v1beta/models`, `GET /v1beta/models/{name}`                                                                    | none                         |
-| `responses` | `POST` `responses` and `responses/compact`, `GET responses` (websocket), each under `/v1/` and `/backend-api/codex/` | none                         |
-
-Calls forward after a strict body check. The gate caps wire and decoded bodies
-at 32 MiB, accepts JSON with absent/`identity`/`gzip`/`zstd` encoding, and
-forwards the exact decoded bytes with `Content-Encoding` removed. It checks the
-top-level `model` with CPA's gjson version, every model-like name at any depth,
-and hosted tools against `hostedTools`. Tool declaration types must be lowercase
-and have no surrounding whitespace, even when the policy grants the raw
-spelling. Top-level `input[].type` values must have no surrounding whitespace
-before call suffix checks: CPA trims them when interpreting hosted history.
-Canonical dated and preview tool types still require their exact policy grants.
-The gate refuses duplicate or escaped directive names, invalid UTF-8, lone
-surrogates, non-ASCII names outside client data, trailing values and nesting
-beyond 128 levels. Only schemas at `tools[].input_schema`, `tools[].parameters`,
-`tools[].function.parameters`, `text.format.schema`,
-`response_format.json_schema.schema`, and `output_format.schema`, plus client
-tool arguments at their structural positions, are exempt from model checks.
-
-The two Responses websocket routes terminate both connections with
-gorilla/websocket v1.5.3 and no compression. Each client text message is
-reassembled up to 32 MiB and checked with the same strict gjson v1.18.0 reader.
-The first needs a model; later messages may inherit it. Every supplied model is
-checked, including interrupt messages. Top-level model values with surrounding
-whitespace are refused even if literally in the set: CPA trims them. Accepted
-bytes, upstream text/binary messages and both directions of ping/pong/close
-controls relay unchanged. Application messages with invalid JSON/UTF-8, excess
-size, binary data, non-canonical tool types or disallowed models close the
-client with code 1008 and `request refused`, then close the upstream connection.
-Gorilla closes transport protocol errors itself. A service restart ends hijacked
-sessions by exiting the process.
-
-Listings are parsed by wire shape, never by request header or user agent. Only
-exact allowed IDs survive, `first_id`/`last_id` are recomputed, and an object
-with a forbidden model directive becomes null (Codex's `upgrade.model`). A
-private writer buffers the response, so CPA's interim 1xx headers and trailers
-never reach the client. Everything else gets the empty 404: an unknown shape or
-envelope field, a paginated listing, non-200, an interrupted or oversized copy,
-and a disallowed or missing detail.
-
-`cpa_gate_health` serves `GET /-/health` on a separate loopback site. It starts
-failed, then probes each internal principal's `/v1/models` through serving's own
-decoder and interpreter, immediately and every 60 seconds. It reports each
-entry's `ok` and missing **count**, never model IDs or keys, and refuses any
-request carrying a client credential. Logs hold counts only.
-
-## Refusals and logs
-
-- **401**, every authentication failure: `{"error":"Invalid API key"}`, CPA's
-  own body for an unknown key (`sdk/access/errors.go`).
-- **404**, every route, body, listing, detail or websocket handshake refusal: no
-  body, as CPA's gin `NoRoute` answers. Message refusals use the fixed websocket
-  close above.
-
-The handler writes refusals itself and returns nil. A returned error would make
-Caddy log the whole request. Its own line holds the entry name (`-` before
-authentication), the route class, the status and the reason, never a key, a
-header or the URI.
-
-Caddy's error log copies the request before any handler runs
-(`modules/caddyhttp/server.go`). That copy holds the URI with its query and
-every header but the four Caddy redacts, so `?key=`, `X-Api-Key` and
-`X-Goog-Api-Key` would reach the journal on any 5xx. The global log block
-therefore deletes the whole `request>headers` map and `request>uri`.
-
-## Package and updates
-
-`packages/ai/generic/cpa-gate` builds `cmd/cpa-gate` with `buildGoModule` and
-nixpkgs' Caddy version and build tags. `gate.json` pins `goFloor` and
-`vendorHash`; nixpkgs and direct updates regenerate it, `go.mod` and `go.sum`,
-and `cliproxyapi-gate-pins` checks the version.
-
-**Settled, do not relitigate:** the package is not `caddy.withPlugins`.
-`withPlugins` takes a plugin only as `module@version`; it vendors everything
-into one fixed-output tree whose hash would move on every gate edit; and its
-install check needs a version that a local path lacks.
-
-## Checks
-
-- Go tests run in the package check phase, including a real Caddy copy of
-  listings and a test that no log or error carries a key.
-- `cliproxyapi-gate-pins`: the Caddy pin, with a wrong-pin control.
-- `cliproxyapi-gate-validate`: the real binary validates the rendered Caddyfile
-  with a good policy, and refuses a shared key, a missing file and an empty
-  path.
-- `cliproxyapi-gate-log` (Linux): a running gate, and a site beside it whose
-  upstream is down. A key in each carrier reaches neither log. Two controls each
-  keep one field and show its unredacted keys; Caddy also redacts Authorization
-  itself.
-
 <!-- Fragment: packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md -->
 
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-10-23 — the patch applies to CPA 8.0.40 with no fuzz;
+> **Last verified:** 2026-10-23 — the patch applies to CPA 8.0.41 with no fuzz;
 > loading rejects duplicate client keys and startup exits 1 on refusal. Hot
 > reload can briefly serve a retired config credential under newly widened
 > rules, so rotation that also widens access requires a restart or an `ids`
 > rule. Named instance client routes derive secret OAuth account rules or API
-> base-URL rules.
+> base-URL rules. Model catalogs use selection's eligibility predicate.
 
 ## Why selection lives in CPA
 
@@ -326,9 +152,9 @@ CPA's access middleware records the authenticated key for headers, `?key=`, and
 `?auth_token=`. The patch uses that recorded principal in candidate selection.
 Missing or unknown keys select nothing while the allowlist is set; an absent or
 empty allowlist leaves native selection unchanged. A configured key whose
-eligible credentials are unavailable gets `auth_not_found`. Model listings still
-expose all models. With no upstream credential serving a requested model, CPA
-returns `400 unknown provider for model <name>`. Log in with
+eligible credentials are unavailable gets `auth_not_found`. With no upstream
+credential serving a requested model, CPA returns
+`400 unknown provider for model <name>`. Log in with
 `cliproxyapi -config <file with auth-dir> -claude-login -no-browser` (or
 `-codex-login`), or through Manager Plus; CPA watches login files and new
 matching accounts become eligible when registered, without restarting the
@@ -372,6 +198,44 @@ attribute; the instance module refuses that combination. A listed URL absent
 from the configured groups is accepted but selects nothing. Key-less OpenAI
 compatibility groups have no matching kind and cannot be reached while the
 allowlist is set.
+
+## Model listings
+
+Codex's `GET /v1/models?client_version=...` already builds its picker from all
+registered providers through CPA's OpenAI model registry projection. It includes
+registered Claude API-key models, and Responses requests can select the Claude
+executor, which translates them to Anthropic Messages. No extra catalog or
+invented model metadata is needed.
+
+With an allowlist, the shared model-response writer retains a model only when an
+enabled credential passes selection's `authSelectionEligibility.allows` and its
+existing route-model support check. The rules come from the Manager's current
+atomic snapshot, including on hot reload. A missing or unknown client key gets
+an empty catalog. An absent or empty allowlist preserves the native response,
+byte for byte when it was already serialized.
+
+For example, a `personal-codex` route granting Codex OAuth plus Anthropic
+API-key credentials at `https://api.anthropic.com` lists both their registered
+models, including a configured `claude-opus-5-5`. A Codex-only key does not list
+that Claude API-key model. A `personal-claude` route granting only Claude OAuth
+lists only those OAuth models. A credential's scheduling priority, including
+`-1`, does not remove its models from this eligibility check.
+
+The hook handles Codex `models[].slug` and OpenAI/Anthropic `data[].id`;
+Anthropic `first_id` and `last_id` are recomputed after filtering. It preserves
+wire IDs and existing builder metadata. Eligibility checks public route IDs,
+including aliases, using selection's own route-model lookup. For Anthropic's
+cloaked IDs, the hook applies the same existing inverse mapping as the request
+handler before checking eligibility, and returns the original wire ID. Unknown
+envelopes and missing or non-string IDs fail closed with HTTP 502. Gemini's
+`models[].name` entries are deferred and receive that refusal when an allowlist
+is configured. An empty or null `data` or `models` array safely becomes an empty
+catalog without inspecting entry IDs.
+
+This changes listing visibility only; credential selection remains the
+enforcement boundary. The unused Caddy front gate was removed because it was
+never wired in and cannot supply CPA's shared credential-eligibility decision.
+The shared Caddy helpers remain in use by the MCP proxy.
 
 ## Duplicate keys and load paths
 

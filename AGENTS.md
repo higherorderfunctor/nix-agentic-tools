@@ -121,7 +121,6 @@ for it. When several entries match, their guidance composes.
     - `packages/cliproxyapi/**`
   - Read:
     - [`packages/cliproxyapi/docs/cliproxyapi-extraction.md`](packages/cliproxyapi/docs/cliproxyapi-extraction.md)
-    - [`packages/cliproxyapi/docs/cliproxyapi-front-gate.md`](packages/cliproxyapi/docs/cliproxyapi-front-gate.md)
     - [`packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md`](packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md)
     - [`packages/cliproxyapi/docs/cliproxyapi-settings.md`](packages/cliproxyapi/docs/cliproxyapi-settings.md)
 - **`codeql`**
