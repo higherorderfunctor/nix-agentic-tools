@@ -14,16 +14,16 @@
     description = "Before calling a subagent, spawning a delegate, or building a workflow, size the model and effort for the task and available runtime pools.";
     name = "delegate-routing";
   };
-  mkUsageScript = name: runtimeInputs:
+  mkUsageScript = name: runtimeInputs: parts:
     pkgs.writeShellApplication {
       inherit name runtimeInputs;
       bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
-      text = builtins.readFile ../../scripts/usage-cpa.sh + "\n" + builtins.readFile (../../scripts + "/${name}.sh");
+      text = lib.concatMapStringsSep "\n" builtins.readFile parts;
     };
   usageScripts = {
-    claude-usage = mkUsageScript "claude-usage" [pkgs.curl pkgs.jq];
-    codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3];
-    zai-usage = mkUsageScript "zai-usage" [pkgs.curl pkgs.jq];
+    claude-usage = mkUsageScript "claude-usage" [pkgs.curl pkgs.jq] [../../scripts/usage-cpa.sh ../../scripts/claude-usage.sh];
+    codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3] [../../scripts/usage-cpa.sh ../../scripts/codex-usage.sh];
+    zai-usage = mkUsageScript "zai-usage" [pkgs.curl pkgs.jq] [../../scripts/zai-usage.sh];
   };
   rawDefaults = import ../../lib/defaults.nix {
     inherit lib;
