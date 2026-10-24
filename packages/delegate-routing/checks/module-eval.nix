@@ -193,6 +193,25 @@
         programs.delegate-routing.runtimes.claude.models = [{families = ["x" "y"];}];
       };
     };
+    manualFamilyUsage = skill {
+      ai = {
+        kiro.cli.enable = true;
+        programs.delegate-routing = {
+          families.example.m = {
+            match = "example-m-*";
+            tier = "strong";
+            usage = {
+              command = "/bin/manual-usage";
+              kind = "usage";
+            };
+          };
+          runtimes = {
+            claude.manualExternalDelegates = ["kiro"];
+            kiro.models = [{families = ["m"];}];
+          };
+        };
+      };
+    };
     badFamilyUsage = change {
       ai.programs.delegate-routing.families.example.x = {
         match = "example-x-*";
@@ -548,6 +567,7 @@
     "module-delegate-routing-${name}-family-usage" = mkTest "delegate-routing-${name}-family-usage" (
       lib.hasInfix "**x, y (usage):** `/bin/example-usage`; FAMILY USAGE NOTE" usageFamilies
       && !(lib.hasInfix "(usage):** `/bin/example-usage`" claude)
+      && lib.hasInfix "**m (usage):** `/bin/manual-usage`" manualFamilyUsage
       && failsWith badFamilyUsage "a family usage node must have kind"
     );
     "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (

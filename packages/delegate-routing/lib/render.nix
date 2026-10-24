@@ -47,15 +47,16 @@
         ])
         members)}
     '';
+  # One information line: bold name with its kind, then the command and notes.
+  infoLine = name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(lib.optionalString (node.command != null) "`${node.command}`") node.notes])}";
   # Families sharing a pool declare the same node; render it once, named for them all.
+  # Includes families reached only through a manual-only delegate.
   familyUsage = let
-    withUsage = builtins.filter (family: (family.usage or null) != null && family.usage.enable) candidates;
+    reachable = lib.unique (candidates ++ lib.concatMap selected (lib.unique manualExternalDelegates));
+    withUsage = builtins.filter (family: (family.usage or null) != null && family.usage.enable) reachable;
     pools = builtins.attrValues (lib.groupBy (family: builtins.toJSON family.usage) withUsage);
   in
-    lib.concatMapStringsSep "\n\n" (members: let
-      inherit (builtins.head members) usage;
-    in "**${lib.concatMapStringsSep ", " (family: family.name) members} (usage):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") ["`${usage.command}`" usage.notes])}")
-    pools;
+    lib.concatMapStringsSep "\n\n" (members: infoLine (lib.concatMapStringsSep ", " (family: family.name) members) (builtins.head members).usage) pools;
   techniqueBlock = target: externalOnly: let
     nodes = lib.filterAttrs (_: node:
       node.enable
@@ -84,7 +85,7 @@
           ++ lib.optional hasCommand (command node))
         delegates))}
 
-      ${lib.concatStringsSep "\n\n" (lib.mapAttrsToList (name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(command node) node.notes])}") info)}
+      ${lib.concatStringsSep "\n\n" (lib.mapAttrsToList infoLine info)}
     '';
   manual = target: ''
     ### ${target}

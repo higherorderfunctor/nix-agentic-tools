@@ -20,7 +20,7 @@ unset delegate_usage_key
 
 # unit 3 is hours, unit 6 is weeks; the limit type differs between docs and the live API.
 jq -e '
-  def window: if .unit == 3 then "\(.number)h" elif .unit == 6 then "\(.number)w" else "unit\(.unit)x\(.number)" end;
+  def window: if .unit == 3 then "\(.number)h" else "\(.number)w" end;
   if .code != 200 then error("z.ai envelope code \(.code): \(.msg)") else . end
   | [.data.limits[]? | select(.unit == 3 or .unit == 6)
       | {key: window,
