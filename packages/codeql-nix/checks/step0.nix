@@ -27,9 +27,10 @@
         python3 ${owner}/checks/run-domain-tests.py \
           ${owner}/checks/fixtures/step0/test_q0.py \
           ${owner}/checks/fixtures/inc3/properties/test_properties.py \
+          ${owner}/checks/fixtures/inc3/graph/test_graph.py \
           ${owner}/checks/fixtures/inc3/renames/test_renames.py
         mkdir "$out"
-        printf 'Q0 installed queries, independent priority flip, equal retention, unselected throw, selected failure qltest, M3p properties with real-Nix mutations and M3r renames with direct oracles passed\n' > "$out/evidence"
+        printf 'Q0 installed queries, independent priority flip, equal retention, unselected throw, selected failure qltest, M3p properties with real-Nix mutations, M3g module-graph installed qltest and M3r renames with direct oracles passed\n' > "$out/evidence"
       '';
   };
 }
