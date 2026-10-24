@@ -1,11 +1,12 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-24 (commit 3879761a) — config guards include the
-> helpers readConfigExtras hands `parsed.<key>` to, and a `delete` target is not
-> a read; pi 1.3 settings follow reexports and inherited TypeBox properties
-> through lock-pinned declaration entrypoints; scope follows settings accessors,
-> with unread JSON Schema metadata explicitly ignored. The sidecar carries
-> CodeQL environment and network facts on x86_64-linux.
+> **Last verified:** 2026-10-24 (commit 14df0c3c) — bundled skills gated off by
+> `requires-resource` leave each visible skill as its own in-place root; config
+> guards include the helpers readConfigExtras hands `parsed.<key>` to, and a
+> `delete` target is not a read; pi 1.3 settings follow reexports and inherited
+> TypeBox properties through lock-pinned declaration entrypoints; scope follows
+> settings accessors, with unread JSON Schema metadata explicitly ignored. The
+> sidecar carries CodeQL environment and network facts on x86_64-linux.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -776,6 +777,14 @@ relative to SKILL.md, so no temporary copy or exit cleanup is needed. Upstream's
 copy preserved the store's 0555 directory modes, causing EACCES during recursive
 cleanup. Filtering still omits bundled names supplied by stronger roots and now
 recognizes symlinked skill directories, including broken-link tolerance.
+
+Upstream's `requires-resource` gating also routed the skill-root list through a
+cached temp copy whenever a resource toggle hid a bundled skill. The patch
+instead returns each visible bundled skill directory as its own root; a fully
+visible bundled dir is still one root. Pi's `loadSkillsFromDir` loads a
+directory holding SKILL.md as that one skill, and discovery treats such a root
+the same way. The upstream requires-resource tests that asserted the copy now
+assert the in-place paths; the build runs them and the disables-skills tests.
 
 Cross-harness duplicate discovery uses the same identity rule. Codex owns a
 project `.agents/skills` Layout A directory link while Kimchi uses Layout B leaf

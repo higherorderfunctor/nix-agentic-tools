@@ -256,8 +256,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-iU536dT696epi25laTRUPX+cCUGoh2V5Y61P7+iDhRA=",
-      "kimchiVersion": "1.19.1",
+      "kimchiSourceHash": "sha256-rsk3kwuKmLCY0YWrKIEyz2UOwE7QWwDy8i+VGmgrmPo=",
+      "kimchiVersion": "1.21.0",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -422,7 +422,7 @@
     },
     {
       "callSites": [
-        "src/extensions/pull-request-status/provider-api.ts:251",
+        "src/extensions/pull-request-status/provider-api.ts:265",
         "src/utils/http.ts:90"
       ],
       "files": [
@@ -597,7 +597,7 @@
         "src/sandbox/cloud/http.ts:21",
         "src/utils/http.ts:90"
       ],
-      "files": ["src/regions.ts"],
+      "files": ["src/oauth-config.ts", "src/regions.ts"],
       "value": "app.kimchi.dev"
     },
     {
@@ -1087,6 +1087,19 @@
         "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js"
       ],
       "value": "router.huggingface.co"
+    },
+    {
+      "callSites": [],
+      "files": [
+        "src/extensions/documents/editors/docx.ts",
+        "src/extensions/documents/editors/pptx.ts",
+        "src/extensions/documents/extractors/docx.ts",
+        "src/extensions/documents/extractors/xlsx.ts",
+        "src/extensions/documents/fixtures/builders.ts",
+        "src/extensions/documents/ooxml/xml.ts",
+        "src/extensions/documents/writers/template.ts"
+      ],
+      "value": "schemas.openxmlformats.org"
     },
     {
       "callSites": [],
@@ -3349,13 +3362,13 @@
         {
           "host": "login.eu.kimchi.dev",
           "kind": "url",
-          "origin": "src/oauth-config.ts:58",
+          "origin": "src/oauth-config.ts:62",
           "value": "https://login.eu.kimchi.dev/oauth/token"
         },
         {
           "host": "login.kimchi.dev",
           "kind": "url",
-          "origin": "src/oauth-config.ts:53",
+          "origin": "src/oauth-config.ts:57",
           "value": "https://login.kimchi.dev/oauth/token"
         }
       ]
@@ -3391,7 +3404,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:831",
+          "origin": "src/config.ts:835",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3418,7 +3431,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:831",
+          "origin": "src/config.ts:835",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3460,7 +3473,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:831",
+          "origin": "src/config.ts:835",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3526,13 +3539,13 @@
       "bundledModule": null,
       "file": "src/extensions/pull-request-status/provider-api.ts",
       "library": "fetch",
-      "line": 251,
+      "line": 265,
       "readBy": "kimchi",
       "targets": [
         {
           "host": "api.github.com",
           "kind": "url",
-          "origin": "src/extensions/pull-request-status/provider-api.ts:202",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:208",
           "value": "https://api.github.com"
         }
       ]
@@ -3592,7 +3605,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:936",
+          "origin": "src/config.ts:918",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3664,7 +3677,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:831",
+          "origin": "src/config.ts:835",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3745,7 +3758,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:936",
+          "origin": "src/config.ts:918",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3881,6 +3894,21 @@
     },
     {
       "bundledModule": null,
+      "file": "src/self-hosted-discovery.ts",
+      "library": "fetch",
+      "line": 91,
+      "readBy": "kimchi",
+      "targets": [
+        {
+          "host": null,
+          "kind": "dynamic",
+          "origin": "src/self-hosted-discovery.ts:91",
+          "value": "url"
+        }
+      ]
+    },
+    {
+      "bundledModule": null,
       "file": "src/utils/http.ts",
       "library": "fetch",
       "line": 90,
@@ -3889,13 +3917,13 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:831",
+          "origin": "src/config.ts:835",
           "value": "KIMCHI_BASE_URL"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:936",
+          "origin": "src/config.ts:918",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {

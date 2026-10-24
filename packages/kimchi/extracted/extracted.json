@@ -68,18 +68,9 @@
           "fieldWeights": {
             "optional": true,
             "properties": {
-              "description": {
-                "type": "number",
-                "typeExpression": "number"
-              },
-              "name": {
-                "type": "number",
-                "typeExpression": "number"
-              },
-              "schemaKey": {
-                "type": "number",
-                "typeExpression": "number"
-              }
+              "description": { "type": "number", "typeExpression": "number" },
+              "name": { "type": "number", "typeExpression": "number" },
+              "schemaKey": { "type": "number", "typeExpression": "number" }
             },
             "type": "object",
             "typeExpression": "{ name: number; description: number; schemaKey: number; }"
@@ -201,17 +192,19 @@
         "type": "enum",
         "typeExpression": "\"us\" | \"eu\" | \"self-hosted\""
       },
-      "selfHostedUrl": {
+      "selfHostedEndpoints": {
         "optional": true,
         "project": false,
-        "type": "string",
-        "typeExpression": "string"
+        "properties": {
+          "api": { "type": "string", "typeExpression": "string" },
+          "console": { "type": "string", "typeExpression": "string" },
+          "llm": { "type": "string", "typeExpression": "string" }
+        },
+        "type": "object",
+        "typeExpression": "SelfHostedEndpoints"
       },
       "skillPaths": {
-        "items": {
-          "type": "string",
-          "typeExpression": "string"
-        },
+        "items": { "type": "string", "typeExpression": "string" },
         "optional": true,
         "project": true,
         "type": "array",
@@ -1273,6 +1266,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_BROWSER": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_CLIPBOARD_FORCE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -1375,12 +1373,22 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_DOCUMENT_MAX_MB": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_E2E_COMPLETION_REMINDER_MS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
       },
       "KIMCHI_E2E_COST_REPORT_REFRESH_MS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_E2E_FAKE_BROWSER_OPEN": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -1566,6 +1574,11 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_PDF_FONT_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_PERMISSIONS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -1626,12 +1639,12 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
-      "KIMCHI_SELF_HOSTED_URL": {
+      "KIMCHI_SESSION_REVIEW": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
       },
-      "KIMCHI_SESSION_REVIEW": {
+      "KIMCHI_SOFFICE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -2073,8 +2086,9 @@
         "type": "string"
       },
       "PI_TELEMETRY": {
-        "consumerOverridable": true,
+        "consumerOverridable": false,
         "readBy": ["pi"],
+        "reason": "src/entry.ts assigns it on every launch before anything reads it",
         "type": "string"
       },
       "PI_TIMING": {
@@ -2114,12 +2128,12 @@
       },
       "ProgramFiles": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "ProgramFiles(x86)": {
         "consumerOverridable": true,
-        "readBy": ["pi"],
+        "readBy": ["kimchi", "pi"],
         "type": "string"
       },
       "RAILWAY_PROJECT_ID": {
@@ -2220,6 +2234,11 @@
       "SYSTEMONE_ENDPOINT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
+        "type": "string"
+      },
+      "SYSTEMROOT": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
         "type": "string"
       },
       "SYSTEM_TEAMFOUNDATIONCOLLECTIONURI": {
@@ -2631,10 +2650,7 @@
         "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\""
       },
       "defaultTools": {
-        "items": {
-          "type": "string",
-          "typeExpression": "string"
-        },
+        "items": { "type": "string", "typeExpression": "string" },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -2685,10 +2701,7 @@
         "typeExpression": "boolean"
       },
       "enabledModels": {
-        "items": {
-          "type": "string",
-          "typeExpression": "string"
-        },
+        "items": { "type": "string", "typeExpression": "string" },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -2696,10 +2709,7 @@
         "typeExpression": "string[]"
       },
       "extensions": {
-        "items": {
-          "type": "string",
-          "typeExpression": "string"
-        },
+        "items": { "type": "string", "typeExpression": "string" },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -2780,15 +2790,8 @@
       },
       "fullscreenWheelScrollLines": {
         "alternatives": [
-          {
-            "type": "number",
-            "typeExpression": "number"
-          },
-          {
-            "enum": ["auto"],
-            "type": "enum",
-            "typeExpression": "\"auto\""
-          }
+          { "type": "number", "typeExpression": "number" },
+          { "enum": ["auto"], "type": "enum", "typeExpression": "\"auto\"" }
         ],
         "enum": ["auto"],
         "optional": true,
@@ -2813,10 +2816,7 @@
       },
       "httpIdleTimeoutMs": {
         "alternatives": [
-          {
-            "type": "number",
-            "typeExpression": "number"
-          },
+          { "type": "number", "typeExpression": "number" },
           {
             "enum": ["disabled"],
             "type": "enum",
@@ -2934,15 +2934,9 @@
         "properties": {
           "builder": {
             "alternatives": [
+              { "type": "string", "typeExpression": "string" },
               {
-                "type": "string",
-                "typeExpression": "string"
-              },
-              {
-                "items": {
-                  "type": "string",
-                  "typeExpression": "string"
-                },
+                "items": { "type": "string", "typeExpression": "string" },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -2960,15 +2954,9 @@
           },
           "explorer": {
             "alternatives": [
+              { "type": "string", "typeExpression": "string" },
               {
-                "type": "string",
-                "typeExpression": "string"
-              },
-              {
-                "items": {
-                  "type": "string",
-                  "typeExpression": "string"
-                },
+                "items": { "type": "string", "typeExpression": "string" },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -2980,15 +2968,9 @@
           },
           "judge": {
             "alternatives": [
+              { "type": "string", "typeExpression": "string" },
               {
-                "type": "string",
-                "typeExpression": "string"
-              },
-              {
-                "items": {
-                  "type": "string",
-                  "typeExpression": "string"
-                },
+                "items": { "type": "string", "typeExpression": "string" },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -3006,15 +2988,9 @@
           },
           "planner": {
             "alternatives": [
+              { "type": "string", "typeExpression": "string" },
               {
-                "type": "string",
-                "typeExpression": "string"
-              },
-              {
-                "items": {
-                  "type": "string",
-                  "typeExpression": "string"
-                },
+                "items": { "type": "string", "typeExpression": "string" },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -3026,15 +3002,9 @@
           },
           "researcher": {
             "alternatives": [
+              { "type": "string", "typeExpression": "string" },
               {
-                "type": "string",
-                "typeExpression": "string"
-              },
-              {
-                "items": {
-                  "type": "string",
-                  "typeExpression": "string"
-                },
+                "items": { "type": "string", "typeExpression": "string" },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -3046,15 +3016,9 @@
           },
           "reviewer": {
             "alternatives": [
+              { "type": "string", "typeExpression": "string" },
               {
-                "type": "string",
-                "typeExpression": "string"
-              },
-              {
-                "items": {
-                  "type": "string",
-                  "typeExpression": "string"
-                },
+                "items": { "type": "string", "typeExpression": "string" },
                 "type": "array",
                 "typeExpression": "string[]"
               }
@@ -3089,10 +3053,7 @@
         "typeExpression": "boolean"
       },
       "npmCommand": {
-        "items": {
-          "type": "string",
-          "typeExpression": "string"
-        },
+        "items": { "type": "string", "typeExpression": "string" },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -3110,10 +3071,7 @@
       "packages": {
         "items": {
           "alternatives": [
-            {
-              "type": "string",
-              "typeExpression": "string"
-            },
+            { "type": "string", "typeExpression": "string" },
             {
               "properties": {
                 "autoload": {
@@ -3122,41 +3080,26 @@
                   "typeExpression": "boolean"
                 },
                 "extensions": {
-                  "items": {
-                    "type": "string",
-                    "typeExpression": "string"
-                  },
+                  "items": { "type": "string", "typeExpression": "string" },
                   "optional": true,
                   "type": "array",
                   "typeExpression": "string[]"
                 },
                 "prompts": {
-                  "items": {
-                    "type": "string",
-                    "typeExpression": "string"
-                  },
+                  "items": { "type": "string", "typeExpression": "string" },
                   "optional": true,
                   "type": "array",
                   "typeExpression": "string[]"
                 },
                 "skills": {
-                  "items": {
-                    "type": "string",
-                    "typeExpression": "string"
-                  },
+                  "items": { "type": "string", "typeExpression": "string" },
                   "optional": true,
                   "type": "array",
                   "typeExpression": "string[]"
                 },
-                "source": {
-                  "type": "string",
-                  "typeExpression": "string"
-                },
+                "source": { "type": "string", "typeExpression": "string" },
                 "themes": {
-                  "items": {
-                    "type": "string",
-                    "typeExpression": "string"
-                  },
+                  "items": { "type": "string", "typeExpression": "string" },
                   "optional": true,
                   "type": "array",
                   "typeExpression": "string[]"
@@ -3176,10 +3119,7 @@
         "typeExpression": "(string | { extensions?: string[]; skills?: string[]; prompts?: string[]; themes?: string[]; autoload?: boolean; source: string; })[]"
       },
       "prompts": {
-        "items": {
-          "type": "string",
-          "typeExpression": "string"
-        },
+        "items": { "type": "string", "typeExpression": "string" },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -3203,7 +3143,7 @@
         "project": false,
         "source": "kimchi",
         "type": "object",
-        "typeExpression": "{ [x: `extensions.${string}`]: boolean; [x: `hooks.${string}`]: boolean; [x: `tools.${string}`]: boolean; [x: `plugins.${string}`]: boolean; }"
+        "typeExpression": "{ [x: `extensions.${string}`]: boolean; [x: `skills.${string}`]: boolean; [x: `hooks.${string}`]: boolean; [x: `tools.${string}`]: boolean; [x: `plugins.${string}`]: boolean; }"
       },
       "retry": {
         "optional": true,
@@ -3307,10 +3247,7 @@
         "typeExpression": "boolean"
       },
       "skills": {
-        "items": {
-          "type": "string",
-          "typeExpression": "string"
-        },
+        "items": { "type": "string", "typeExpression": "string" },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -3445,10 +3382,7 @@
         "typeExpression": "string"
       },
       "themes": {
-        "items": {
-          "type": "string",
-          "typeExpression": "string"
-        },
+        "items": { "type": "string", "typeExpression": "string" },
         "optional": true,
         "project": true,
         "source": "pi",
@@ -3531,10 +3465,7 @@
       },
       "websocketConnectTimeoutMs": {
         "alternatives": [
-          {
-            "type": "number",
-            "typeExpression": "number"
-          },
+          { "type": "number", "typeExpression": "number" },
           {
             "enum": ["disabled"],
             "type": "enum",
@@ -3569,13 +3500,13 @@
           {
             "host": "login.eu.kimchi.dev",
             "kind": "url",
-            "origin": "src/oauth-config.ts:58",
+            "origin": "src/oauth-config.ts:62",
             "value": "https://login.eu.kimchi.dev/oauth/token"
           },
           {
             "host": "login.kimchi.dev",
             "kind": "url",
-            "origin": "src/oauth-config.ts:53",
+            "origin": "src/oauth-config.ts:57",
             "value": "https://login.kimchi.dev/oauth/token"
           }
         ]
@@ -3611,7 +3542,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:831",
+            "origin": "src/config.ts:835",
             "value": "KIMCHI_BASE_URL"
           },
           {
@@ -3638,7 +3569,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:831",
+            "origin": "src/config.ts:835",
             "value": "KIMCHI_BASE_URL"
           },
           {
@@ -3680,7 +3611,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:831",
+            "origin": "src/config.ts:835",
             "value": "KIMCHI_BASE_URL"
           },
           {
@@ -3746,13 +3677,13 @@
         "bundledModule": null,
         "file": "src/extensions/pull-request-status/provider-api.ts",
         "library": "fetch",
-        "line": 251,
+        "line": 265,
         "readBy": "kimchi",
         "targets": [
           {
             "host": "api.github.com",
             "kind": "url",
-            "origin": "src/extensions/pull-request-status/provider-api.ts:202",
+            "origin": "src/extensions/pull-request-status/provider-api.ts:208",
             "value": "https://api.github.com"
           }
         ]
@@ -3812,7 +3743,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:936",
+            "origin": "src/config.ts:918",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
@@ -3884,7 +3815,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:831",
+            "origin": "src/config.ts:835",
             "value": "KIMCHI_BASE_URL"
           },
           {
@@ -3965,7 +3896,7 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:936",
+            "origin": "src/config.ts:918",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
@@ -4101,6 +4032,21 @@
       },
       {
         "bundledModule": null,
+        "file": "src/self-hosted-discovery.ts",
+        "library": "fetch",
+        "line": 91,
+        "readBy": "kimchi",
+        "targets": [
+          {
+            "host": null,
+            "kind": "dynamic",
+            "origin": "src/self-hosted-discovery.ts:91",
+            "value": "url"
+          }
+        ]
+      },
+      {
+        "bundledModule": null,
         "file": "src/utils/http.ts",
         "library": "fetch",
         "line": 90,
@@ -4109,13 +4055,13 @@
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:831",
+            "origin": "src/config.ts:835",
             "value": "KIMCHI_BASE_URL"
           },
           {
             "host": null,
             "kind": "env",
-            "origin": "src/config.ts:936",
+            "origin": "src/config.ts:918",
             "value": "KIMCHI_REMOTE_ENDPOINT"
           },
           {
@@ -6206,9 +6152,170 @@
         "value": "https://github.com/getkimchi/kimchi/issues/new"
       },
       {
+        "file": "src/extensions/documents/editors/docx.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 520,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
+      },
+      {
+        "file": "src/extensions/documents/editors/pptx.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 239,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/drawingml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/extractors/docx.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 36,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/extractors/docx.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 37,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/drawingml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/extractors/docx.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 38,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+      },
+      {
+        "file": "src/extensions/documents/extractors/xlsx.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 31,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/extractors/xlsx.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 32,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+      },
+      {
+        "file": "src/extensions/documents/fixtures/builders.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 234,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/fixtures/builders.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 422,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/ooxml/xml.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 11,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/ooxml/xml.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 12,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/drawingml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/ooxml/xml.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 13,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/presentationml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/ooxml/xml.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 14,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+      },
+      {
+        "file": "src/extensions/documents/ooxml/xml.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 15,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/drawingml/2006/chart"
+      },
+      {
+        "file": "src/extensions/documents/ooxml/xml.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 16,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/ooxml/xml.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 17,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/package/2006/relationships"
+      },
+      {
+        "file": "src/extensions/documents/ooxml/xml.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 18,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/package/2006/content-types"
+      },
+      {
+        "file": "src/extensions/documents/writers/template.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 112,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/drawingml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/writers/template.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 113,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/presentationml/2006/main"
+      },
+      {
+        "file": "src/extensions/documents/writers/template.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 114,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+      },
+      {
+        "file": "src/extensions/documents/writers/template.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 324,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/package/2006/relationships"
+      },
+      {
+        "file": "src/extensions/documents/writers/template.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 326,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide"
+      },
+      {
+        "file": "src/extensions/documents/writers/template.ts",
+        "host": "schemas.openxmlformats.org",
+        "line": 334,
+        "readBy": "kimchi",
+        "value": "http://schemas.openxmlformats.org/package/2006/content-types"
+      },
+      {
         "file": "src/extensions/login/flow.ts",
         "host": "your-kimchi-host.example.com",
-        "line": 153,
+        "line": 164,
         "readBy": "kimchi",
         "value": "https://your-kimchi-host.example.com"
       },
@@ -6236,16 +6343,23 @@
       {
         "file": "src/oauth-config.ts",
         "host": "login.kimchi.dev",
-        "line": 52,
+        "line": 56,
         "readBy": "kimchi",
         "value": "https://login.kimchi.dev/authorize"
       },
       {
         "file": "src/oauth-config.ts",
         "host": "login.eu.kimchi.dev",
-        "line": 57,
+        "line": 61,
         "readBy": "kimchi",
         "value": "https://login.eu.kimchi.dev/authorize"
+      },
+      {
+        "file": "src/oauth-config.ts",
+        "host": "app.kimchi.dev",
+        "line": 95,
+        "readBy": "kimchi",
+        "value": "https://app.kimchi.dev"
       },
       {
         "file": "@earendil-works/pi-ai/dist/api/bedrock-converse-stream.js",
