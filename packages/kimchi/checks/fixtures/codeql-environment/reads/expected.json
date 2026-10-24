@@ -161,6 +161,20 @@
       ],
       "type": "string"
     },
+    "REGION_CLIENT_ID_EAST": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
+    "REGION_CLIENT_ID_WEST_COAST": {
+      "consumerOverridable": true,
+      "readBy": [
+        "kimchi"
+      ],
+      "type": "string"
+    },
     "S15_PROCESS_BRACKET_ENV": {
       "consumerOverridable": true,
       "readBy": [

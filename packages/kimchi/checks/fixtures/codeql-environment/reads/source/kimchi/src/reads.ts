@@ -87,3 +87,12 @@ void functionEnv("FUNCTION_EXPRESSION_KEY");
 function _booleanEnv(name, fallback) { return !!_jsonEnv(name, fallback); }
 function _jsonEnv(name, fallback) { return process.env[name] || fallback; }
 void _booleanEnv("JITI_FS_CACHE", true);
+
+// A rejected table lookup bounds the region key before normalization and interpolation.
+const REGION_DEFAULTS = { east: {}, "west-coast": {} };
+function regionEnvironment(region: { id: string }) {
+  const defaults = REGION_DEFAULTS[region.id];
+  if (!defaults) return undefined;
+  const regionTag = region.id.toUpperCase().replace(/-/g, "_");
+  return readKey(`REGION_CLIENT_ID_${regionTag}`);
+}

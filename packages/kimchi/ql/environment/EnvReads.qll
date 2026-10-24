@@ -86,6 +86,33 @@ predicate constantShaped(VarAccess v) {
 
 signature predicate fallbackSig(string name, string value);
 
+/** The same local value, including repeated reads of one property on the same object. */
+predicate sameKey(Expr left, Expr right) {
+  exists(DataFlow::SourceNode source |
+    source.flowsTo(DataFlow::valueNode(left)) and source.flowsTo(DataFlow::valueNode(right))
+  )
+  or
+  exists(PropAccess a, PropAccess b, DataFlow::SourceNode source |
+    a = left and b = right and a.getPropertyName() = b.getPropertyName() and
+    source.flowsTo(DataFlow::valueNode(a.getBase())) and
+    source.flowsTo(DataFlow::valueNode(b.getBase()))
+  )
+}
+
+/** A falsy table lookup returns before this use, restricting its key to the literal table's keys. */
+string guardedTableKey(Expr key) {
+  exists(IndexExpr lookup, ObjectExpr table, IfStmt branch, ConditionGuardNode guard |
+    table = DataFlow::valueNode(lookup.getBase()).getALocalSource().asExpr() and
+    sameKey(key, lookup.getIndex()) and
+    DataFlow::valueNode(lookup).(DataFlow::SourceNode).flowsTo(DataFlow::valueNode(branch.getCondition().(LogNotExpr).getOperand())) and
+    branch.getThen() instanceof ReturnStmt and
+    guard.getTest() = branch.getCondition().(LogNotExpr).getOperand() and guard.getOutcome() = true and
+    guard.dominates(key.getBasicBlock()) and
+    forall(Property property | property = table.getAProperty() | exists(property.getName())) and
+    result = table.getAProperty().getName()
+  )
+}
+
 /** The string an expression names a variable with: a literal, a template, a `.toUpperCase()` call, or an identifier followed to its constant. */
 module Eval<fallbackSig/2 fallback> {
   string declaratorValue(VariableDeclarator d) {
@@ -123,12 +150,25 @@ module Eval<fallbackSig/2 fallback> {
   string constValue(Expr e) {
     result = e.(StringLiteral).getValue()
     or
+    result = guardedTableKey(e)
+    or
     result = templatePrefix(e, e.(TemplateLiteral).getNumElement() - 1)
     or
     exists(MethodCallExpr m | m = e |
       m.getMethodName() = "toUpperCase" and
       m.getNumArgument() = 0 and
       result = constValue(m.getReceiver()).toUpperCase()
+    )
+    or
+    // Fold the global literal-text regex used to normalize table keys, not arbitrary regexes.
+    exists(MethodCallExpr m, RegExpLiteral pattern, string text, string replacement |
+      m = e and m.getMethodName() = "replace" and m.getNumArgument() = 2 and
+      pattern = m.getArgument(0) and
+      pattern.getFlags() = "g" and text = pattern.getRoot().getConstantValue() and text != "" and
+      replacement = m.getArgument(1).(StringLiteral).getValue() and
+      // Leave JavaScript's dollar replacement substitutions unresolved.
+      not replacement.matches("%$%") and
+      result = constValue(m.getReceiver()).replaceAll(text, replacement)
     )
     or
     result = identValue(e)

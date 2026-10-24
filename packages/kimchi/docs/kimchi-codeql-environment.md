@@ -1,10 +1,12 @@
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-23 — fixed names resolve through CommonJS property
+> **Last verified:** 2026-10-24 — fixed names resolve through CommonJS property
 > assignments and destructured reexports, literal callback arrays and object
-> tables, and declared, arrow and function-expression key helpers. Unresolved
-> computed reads fail extraction unless their site is reviewed; stale site rows
-> and changed occurrence counts fail the same transform.
+> tables, and declared, arrow and function-expression key helpers. Guarded
+> literal-table keys resolve through uppercase and literal-text regex
+> replacement. Unresolved computed reads fail extraction unless their site is
+> reviewed; stale site rows and changed occurrence counts fail the same
+> transform.
 
 `extracted.json`'s `environment` surface is one fact the CodeQL database
 produces. `extract/environment.nix` runs the two-query pack
@@ -82,9 +84,11 @@ arrow bindings and function-expression bindings share this rule. Parameter
 forwarding through known helpers is followed to its call arguments, including
 jiti’s boolean-to-JSON reader. A helper site resolves completely only when all
 terminal call arguments resolve. `nonEmptyEnv` also receives a region template
-at `src/oauth-config.ts:85`, so its literal calls contribute names while that
-read remains unresolved. Uninitialized bundled bindings assigned string literals
-also resolve, including `AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
+at `src/oauth-config.ts:85`: the preceding falsy-lookup return guard restricts
+`region.id` to the literal defaults table's keys, and uppercase plus global
+literal-text regex replacement produces one name per key. Uninitialized bundled
+bindings assigned string literals also resolve, including
+`AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
 `bedrock-converse-stream.js:24`.
 
 A computed environment read that resolves to no name and has no existing refusal
@@ -108,18 +112,19 @@ function or key kind requires review. These are site reviews, not package-wide
 exceptions.
 
 A review row is either a genuinely dynamic key or an evaluator limitation whose
-reason names the fixed names it leaves out. Two rows are limitations: the region
-template in `oauth-config.ts` (`KIMCHI_OAUTH_CLIENT_ID_US` and `_EU`, missing
-from the fact) and the AWS `fromEnvSigningName` template
-(`AWS_BEARER_TOKEN_BEDROCK`, listed through another site). Fixed names resolve
-through CommonJS property assignments and the existing unique by-name constant
-fallback using a destructured property's exported name. That fallback also
-follows bundled literal assignments. Literal arrays passed through element
-callbacks contribute their names when every element is a string literal. An
-object table indexed by a runtime key contributes all its values only when every
-property value is a string literal. These cover the pinned Google
-certificate-config constant, AWS profile reexport, PR-cost CI array, steer table
-and bug-report arrow helper without naming those constants in the query.
+reason names the fixed names it leaves out. The AWS `fromEnvSigningName`
+template remains a limitation (`AWS_BEARER_TOKEN_BEDROCK`, listed through
+another site). The guarded region template in `oauth-config.ts` resolves
+`KIMCHI_OAUTH_CLIENT_ID_US` and `KIMCHI_OAUTH_CLIENT_ID_EU` without a review
+row. Fixed names resolve through CommonJS property assignments and the existing
+unique by-name constant fallback using a destructured property's exported name.
+That fallback also follows bundled literal assignments. Literal arrays passed
+through element callbacks contribute their names when every element is a string
+literal. An object table indexed by a runtime key contributes all its values
+only when every property value is a string literal. These cover the pinned
+Google certificate-config constant, AWS profile reexport, PR-cost CI array,
+steer table and bug-report arrow helper without naming those constants in the
+query.
 
 The database also recognizes bracket `env`, asserted environments,
 `require("process").env`, and process aliases. The overwrite analysis
@@ -159,10 +164,11 @@ nor become stale rows in fixture transforms. The positive reads fixture uses two
 rows from std-env's provider table: `["GITHUB_ACTIONS"]` and
 `["CIRCLE", "CIRCLECI"]`, checking two environment keys. It also checks literal
 and constant helper arguments and a binding assigned a string literal before its
-computed read. The overwrites fixture checks reads through helper forwarding,
-aliases and rest copies before writes. A new shape goes into one of these trees,
-not into a mutant of the real source: a real-tree mutant costs a database build
-each.
+computed read. A guarded region table with a hyphenated key checks multiple
+values through uppercase, replacement and a helper's template argument. The
+overwrites fixture checks reads through helper forwarding, aliases and rest
+copies before writes. A new shape goes into one of these trees, not into a
+mutant of the real source: a real-tree mutant costs a database build each.
 
 ### Running it without Nix
 
