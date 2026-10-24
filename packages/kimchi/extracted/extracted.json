@@ -1520,6 +1520,16 @@
         "readBy": ["kimchi"],
         "type": "string"
       },
+      "KIMCHI_OAUTH_CLIENT_ID_EU": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_OAUTH_CLIENT_ID_US": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
       "KIMCHI_OAUTH_TEMPLATE_DIR": {
         "consumerOverridable": false,
         "readBy": ["kimchi", "pi"],

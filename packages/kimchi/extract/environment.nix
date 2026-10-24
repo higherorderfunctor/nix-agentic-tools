@@ -36,7 +36,7 @@
   };
 in {
   inherit queries results transform;
-  # The pinned release reads 428 variables. A surface far below that is a
+  # The pinned release reads 430 variables. A surface far below that is a
   # source root the extractor skipped, not a release that stopped reading.
   surface = pkgs.runCommand "kimchi-codeql-environment.json" {nativeBuildInputs = [pkgs.jq];} ''
     set -euETo pipefail
