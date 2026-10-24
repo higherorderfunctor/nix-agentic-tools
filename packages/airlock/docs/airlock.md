@@ -1,9 +1,9 @@
 # airlock
 
-> **Last verified:** 2026-10-24 (commit 3980d01a) — `airlock serve` tunnels,
-> denies, or intercepts as a passthrough: the client's TLS ends at a leaf from
-> airlock's tmpfs CA, verified TLS reopens to the real host, and the bytes pass
-> unchanged. No credential swap yet.
+> **Last verified:** 2026-10-24 — `airlock serve` tunnels, denies, or
+> intercepts: the client's TLS ends at a leaf from airlock's tmpfs CA, verified
+> TLS reopens to the real host, and an intercepted HTTP request has its
+> credential swapped before it streams upstream.
 
 ## Scope
 
@@ -24,7 +24,7 @@ connection goes through airlock, but only the hosts an upstream lists in
 `Proxy-Authorization: Basic`, so its proxy URL is
 `http://<client>:<token>@127.0.0.1:<port>`.
 
-Interception is a passthrough, in this order:
+Interception follows this order:
 
 - airlock reads the ClientHello and requires its SNI to equal the CONNECT host,
   else it closes (`sni_mismatch`, `sni_missing`, `not_tls`). Otherwise a client
@@ -33,10 +33,28 @@ Interception is a passthrough, in this order:
   verified against the system store (`SSL_CERT_FILE` is honoured). Only then
   does it finish the client's handshake, offering only the protocol the upstream
   chose, so ALPN matches end to end.
-- It copies the decrypted bytes both ways unchanged, record by record: no HTTP
-  parsing, no header edits, and nothing waits for a whole body. The audit event
-  adds `sni` and `alpn` and never carries decrypted bytes. On close it sends
-  `close_notify` both ways, waiting at most 1 s for a peer that stopped reading.
+- Startup loads client tokens and every distinct credential named by a grant
+  once, collecting every unreadable or empty file before serving. Credentials
+  with no grant stay on disk. A grant currently selects its first credential;
+  fallback to a later credential is future work.
+- Interception parses HTTP on the negotiated protocol, opens one verified
+  upstream connection of the same kind, and streams request and response bodies
+  as frames. It preserves method, path, query, status, version, headers, and
+  body bytes; HTTP/2 requests are given the absolute `https` URI that protocol
+  requires.
+- Before injection, every request drops client `Authorization` and `x-api-key`
+  values plus hop-by-hop fields named by `Connection`. An OAuth credential is
+  injected as a sensitive Authorization bearer header; an API key is injected as
+  a sensitive x-api-key header. Other request headers stay unchanged.
+- A valid HTTP/1 upgrade keeps `Upgrade` and `Connection: Upgrade`, forwards the
+  101, and then bridges the two upgraded byte streams. Other upgrades and
+  hop-by-hop fields are removed. An upstream send or handshake failure on an
+  applicable request becomes 502.
+- The CONNECT audit carries `sni`, `alpn`, the selected credential, and request
+  count, never body bytes or secrets. Its byte counters cover completed TLS
+  application writes, including HTTP framing, rather than body payload alone.
+  Normal connections retain bounded `close_notify` shutdown; an upgraded stream
+  is relayed until one peer closes.
 
 The CA lives in `$XDG_RUNTIME_DIR/airlock-<port>/` (0700): `ca.key`
 (PKCS#8, 0600) and `ca.pem` (0644), ECDSA P-256 with `pathlen:0` and no name
@@ -65,9 +83,9 @@ with a local CONNECT proxy intercepting TLS and a fake token, offline:
   `/v1/messages`. An intercepted host must pass every path through and swap the
   token wherever it appears; an allowlist of paths would break features.
 
-Credential swap is the next milestone: airlock will replace the token on
-intercepted hosts while the harness holds a fake `CLAUDE_CODE_OAUTH_TOKEN`.
-Today a grant's `credentials` are neither loaded nor used.
+The harness therefore holds only fake client credentials, such as a disposable
+`CLAUDE_CODE_OAUTH_TOKEN`; airlock reads the real provider credential from its
+runtime files when it binds and substitutes it on every intercepted request.
 
 ## Not a security boundary yet
 

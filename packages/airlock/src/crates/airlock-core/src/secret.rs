@@ -18,9 +18,17 @@ impl Secret {
         bool::from(self.value.as_bytes().ct_eq(candidate))
     }
 
+    /// Returns the loaded value for a caller that must transmit it.
+    ///
+    /// Callers must not debug, display, or log the returned string.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+
     #[cfg(test)]
     fn expose(&self) -> &str {
-        &self.value
+        self.as_str()
     }
 }
 

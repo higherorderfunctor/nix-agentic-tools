@@ -1,6 +1,10 @@
 #[cfg(test)]
 use std::path::Path;
-use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    net::SocketAddr,
+    path::PathBuf,
+};
 
 use serde::Deserialize;
 
@@ -117,6 +121,28 @@ impl Config {
         self.clients
             .iter()
             .map(|(client, config)| (client, config.grants.as_slice()))
+    }
+
+    /// Returns each distinct credential named by a grant, in id order.
+    ///
+    /// Credentials configured without a grant stay unloaded; `serve`, unlike `check-config`,
+    /// reads only what an authorized client can select.
+    pub fn granted_credentials(&self) -> impl Iterator<Item = (&CredentialId, &Auth)> {
+        let granted: BTreeSet<CredentialId> = self
+            .clients
+            .values()
+            .flat_map(|client| client.grants.iter())
+            .flat_map(|grant| match grant {
+                Grant::Upstream { credentials, .. } => credentials.as_slice().iter().cloned(),
+            })
+            .collect();
+        self.credentials
+            .iter()
+            .filter_map(move |(credential, config)| {
+                granted
+                    .contains(credential)
+                    .then_some((credential, &config.auth))
+            })
     }
 
     pub(crate) fn intercepted_hosts(&self) -> impl Iterator<Item = (&HostName, &UpstreamId)> {

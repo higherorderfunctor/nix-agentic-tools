@@ -13,7 +13,12 @@ airlock-gateway = { path = "crates/airlock-gateway" }
 base64 = "0.23.1"
 clap = { version = "4.6.7", features = ["derive"] }
 http-body-util = "0.1.5"
-hyper = { version = "1.12.0", features = ["http1", "server"] }
+hyper = { version = "1.12.0", features = [
+  "client",
+  "http1",
+  "http2",
+  "server",
+] }
 hyper-util = { version = "0.1.21", features = ["tokio"] }
 rcgen = { version = "0.14.10", default-features = false, features = [
   "pem",
