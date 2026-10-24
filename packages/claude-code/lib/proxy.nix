@@ -40,11 +40,16 @@
   };
 
   # One row per model of each routed upstream credential, in route order. Claude
-  # labels a row with its model id when it has no label.
+  # labels a row with its model id when it has no label. An aliased row names
+  # the upstream model the alias serves, since its credential is the fallback,
+  # not the model the harness picked.
   pickerRows = resolvedProxy:
     lib.concatMap (credential:
       map (model: {
-        description = "${credential.name} through CLIProxyAPI";
+        description =
+          if credential.aliases ? ${model}
+          then "${credential.name} (serves ${credential.aliases.${model}} as this model) through CLIProxyAPI"
+          else "${credential.name} through CLIProxyAPI";
         inherit model;
       })
       credential.models)

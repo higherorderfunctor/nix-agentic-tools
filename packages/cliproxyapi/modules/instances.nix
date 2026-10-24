@@ -56,16 +56,61 @@ backend: {
     # API-key names become CPA compatibility provider identities.
     ++ map (provider: "ai.cliproxyapi.instances.${name}.credentials.${provider}: an API-key credential name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
     (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames (providersLib.apiKeys instance)));
+  # CPA's ParseSuffix (internal/thinking/suffix.go:23-44): a model name may
+  # end in a "(...)" thinking suffix, and the name without it routes too. When
+  # it does, drop everything from the last "(".
+  parseSuffix = model: let
+    lastOpen =
+      lib.foldl'
+      (index: position:
+        if builtins.substring position 1 model == "("
+        then position
+        else index)
+      null
+      (lib.range 0 (builtins.stringLength model - 1));
+  in
+    if lib.hasSuffix ")" model && lastOpen != null
+    then builtins.substring 0 lastOpen model
+    else model;
   # CPA keeps only the first model per case-insensitive client-visible name
-  # and drops the rest (sdk/cliproxy/service_models.go:925-928); the alias
-  # routing table keeps the first entry per lowered key
-  # (sdk/cliproxy/auth/conductor_models.go:676-682).
+  # and drops the rest (sdk/cliproxy/service_models.go:924-929); its alias
+  # routing table also keeps the first entry per lowered key
+  # (sdk/cliproxy/auth/conductor_models.go:676-696), where an entry with both
+  # name and alias claims four keys, alias, ParseSuffix(alias), name and
+  # ParseSuffix(name), each routing to its name. A later aliased entry whose
+  # alias or ParseSuffix(alias) matches an earlier key routing to a different
+  # name lists its alias but routes requests to the earlier name, so refuse it.
   duplicateModels = name: instance:
     lib.concatLists (lib.mapAttrsToList (credential: apiKey: let
       visible = map lib.toLower (providersLib.visibleModels apiKey);
+      collisions =
+        lib.foldl'
+        ({
+          claimed,
+          problems,
+        }: entry: let
+          alias = lib.toLower entry.alias;
+          suffix = lib.toLower (parseSuffix entry.alias);
+          collision = lib.findFirst (key: claimed ? ${key} && claimed.${key} != entry.name) null (lib.unique [alias suffix]);
+          claims =
+            lib.filter (key: key != "" && !(claimed ? ${key}))
+            (lib.unique [alias suffix (lib.toLower entry.name) (lib.toLower (parseSuffix entry.name))]);
+        in {
+          claimed = claimed // builtins.listToAttrs (map (key: lib.nameValuePair key entry.name) claims);
+          problems =
+            problems
+            ++ lib.optional (collision != null)
+            "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models: the alias `${entry.alias}` claims the routing key `${collision}`, which an earlier entry already claims for `${claimed.${collision}}`; CPA keeps the first entry per lowered key, so a request for `${collision}` is sent upstream as `${claimed.${collision}}`, not `${entry.name}`. Give the alias a name no earlier aliased entry claims as its alias or name, with or without a trailing `(...)` suffix.";
+        })
+        {
+          claimed = {};
+          problems = [];
+        }
+        (lib.filter (model: model.alias != null) apiKey.models);
     in
-      map (model: "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models lists \`${model}\` to clients more than once; CPA compares these names case-insensitively and keeps only the first. Give each entry a distinct client-visible name (alias when set, else name).")
-      (lib.unique (lib.filter (model: lib.count (other: other == model) visible > 1) visible)))
+      map (model: "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models lists `${model}` to clients more than once; CPA compares these names case-insensitively and keeps only the first. Give each entry a distinct client-visible name (alias when set, else name).")
+      (lib.unique (lib.filter (model: lib.count (other: other == model) visible > 1) visible))
+      ++ collisions.problems)
     (providersLib.apiKeys instance));
 in {
   imports = [

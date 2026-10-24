@@ -83,11 +83,15 @@
     else {
       inherit (client) key;
       inherit (selected) url;
-      credentials = map (route: {
+      credentials = map (route: let
+        apiKey = instance.credentials.${route.credential}.apiKey;
+      in {
+        aliases =
+          if apiKey == null
+          then {}
+          else providersLib.visibleAliases apiKey;
         name = route.credential;
-        models = let
-          apiKey = instance.credentials.${route.credential}.apiKey or null;
-        in
+        models =
           if apiKey == null
           then []
           else providersLib.visibleModels apiKey;
@@ -111,12 +115,17 @@ in {
       credentials = mkOption {
         type = types.listOf (types.submodule {
           options = {
+            aliases = mkOption {
+              type = types.attrsOf types.str;
+              default = {};
+              description = "Client-visible alias of each aliased model, mapped to its upstream name.";
+            };
             models = mkOption {type = types.listOf types.str;};
             name = mkOption {type = types.str;};
           };
         });
         default = [];
-        description = "Named upstream credentials in client route order, with the client-visible name (alias when set) of each declared API-key model.";
+        description = "Named upstream credentials in client route order, with the client-visible name (alias when set) of each declared API-key model and each alias mapped to its upstream name.";
       };
       key = mkOption {
         type = redact.types.redacted;

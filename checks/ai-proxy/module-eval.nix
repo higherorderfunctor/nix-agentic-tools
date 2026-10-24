@@ -196,10 +196,12 @@ in {
             result.config.ai.claude.normalized.proxy.credentials
             == [
               {
+                aliases = {};
                 name = "personal";
                 models = [];
               }
               {
+                aliases = {};
                 name = "zai";
                 inherit (vendor) models;
               }
@@ -283,10 +285,12 @@ in {
             result.config.ai.claude.normalized.proxy.credentials
             == [
               {
+                aliases = {};
                 name = "personal";
                 models = [];
               }
               {
+                aliases = {};
                 name = "zai";
                 inherit (apiKey) models;
               }
@@ -403,9 +407,12 @@ in {
 
     # An `alias` rewrites the client-visible model name everywhere it reaches a
     # client: the rendered api-keys blocks, `normalized.proxy.credentials` and
-    # the /model picker. Two entries of one credential with the same visible
-    # name (compared case-insensitively) are refused, since CPA keeps only the
-    # first.
+    # the /model picker, whose aliased rows name the upstream model they serve.
+    # Refused, since CPA keeps only the first per lowered key: two entries with
+    # the same visible name, and an alias colliding with a routing key an
+    # earlier aliased entry claims (its alias or name, with or without a
+    # trailing `(...)` suffix). Empty or padded names are refused by the type,
+    # since CPA trims names before listing and routing them.
     module-ai-proxy-model-alias = mkTest "ai-proxy-model-alias" (let
       aliased = instanceChange {
         credentials.zai.apiKey.models = lib.mkForce [
@@ -432,12 +439,16 @@ in {
           alias = "claude-opus-5-5";
         }
       ];
-      rows =
-        map (model: {
-          inherit model;
+      rows = [
+        {
           description = "zai through CLIProxyAPI";
-        })
-        visibleNames;
+          model = "glm-5.3-flash";
+        }
+        {
+          description = "zai (serves glm-5.3 as this model) through CLIProxyAPI";
+          model = "claude-opus-5-5";
+        }
+      ];
       problems = lib.concatMap (backend: let
         result = evaluate backend aliased;
         settings = rendered result;
@@ -462,10 +473,12 @@ in {
             result.config.ai.claude.normalized.proxy.credentials
             == [
               {
+                aliases = {};
                 name = "personal";
                 models = [];
               }
               {
+                aliases = {claude-opus-5-5 = "glm-5.3";};
                 name = "zai";
                 models = visibleNames;
               }
@@ -482,6 +495,26 @@ in {
             "glm-5.3-flash"
           ]);
           "case-insensitive duplicate refused" = refused backend "lists `glm-5.3` to clients more than once" (zaiModels ["GLM-5.3" "glm-5.3"]);
+          "alias claiming an earlier name's key refused" = refused backend "claims the routing key `glm-5.3`" (zaiModels [
+            {
+              name = "glm-5.3";
+              alias = "claude-opus-5-5";
+            }
+            {
+              name = "glm-4";
+              alias = "glm-5.3";
+            }
+          ]);
+          "suffix-stripped alias collision refused" = refused backend "claims the routing key `claude-opus-5-5`" (zaiModels [
+            {
+              name = "glm-5.3";
+              alias = "claude-opus-5-5(high)";
+            }
+            {
+              name = "glm-4";
+              alias = "claude-opus-5-5";
+            }
+          ]);
           "distinct names accepted" =
             failedMessages (evaluate backend (zaiModels [
               {
@@ -491,12 +524,31 @@ in {
               "glm-5.3"
             ]))
             == [];
+          "alias to an earlier visible name accepted" =
+            failedMessages (evaluate backend (zaiModels [
+              {
+                name = "glm-5.3";
+                alias = "claude-opus-5-5";
+              }
+              {
+                name = "claude-opus-5-5";
+                alias = "glm-4";
+              }
+            ]))
+            == [];
           "alias type refuses whitespace" = rejectsType backend (zaiModels [
             {
               name = "glm-5.3";
               alias = " claude-opus-5-5";
             }
           ]);
+          "empty name refused" = rejectsType backend (zaiModels [
+            {
+              name = "";
+              alias = "claude-opus-5-5";
+            }
+          ]);
+          "padded name refused" = rejectsType backend (zaiModels ["glm-5.3 "]);
         };
       in
         map (name: "${backend}: ${name}") (builtins.attrNames (lib.filterAttrs (_: ok: !ok) checks))) ["hm" "devenv"];

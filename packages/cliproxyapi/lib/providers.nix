@@ -35,7 +35,11 @@
   # shared-URL check in ../modules/instances.nix compare the same string.
   baseUrlType = types.strMatching "https?://[!-~]+";
 
-  # Alias is printable ASCII without spaces, so CPA's TrimSpace is a no-op.
+  # Alias and name are printable ASCII without spaces, so CPA's TrimSpace is a
+  # no-op for both, and neither can be empty or padded: CPA lists an entry with
+  # an empty name under its alias but skips its routing entry, and trims names
+  # before comparing them (sdk/cliproxy/service_models.go:812-817,
+  # sdk/cliproxy/auth/conductor_models.go:686-688).
   modelType = types.coercedTo types.str (name: {inherit name;}) (types.submodule {
     options = {
       alias = mkOption {
@@ -44,7 +48,7 @@
         description = "Client-visible name CPA lists and routes for this model (`models[].alias`); a request for it is sent upstream as `name`. Unset lists `name`.";
       };
       name = mkOption {
-        type = types.str;
+        type = types.strMatching "[!-~]+";
         description = "Upstream model name.";
       };
     };
@@ -102,6 +106,14 @@
     then model.alias
     else model.name;
   visibleModels = apiKey: map modelName apiKey.models;
+
+  # Each aliased model's client-visible name mapped to its upstream name, for
+  # labels that name what a picker row really serves.
+  visibleAliases = apiKey:
+    builtins.listToAttrs (
+      map (model: lib.nameValuePair model.alias model.name)
+      (lib.filter (model: model.alias != null) apiKey.models)
+    );
 
   # One upstream credential's blocks: { <family> = [block]; }.
   blocks = name: provider:
@@ -223,6 +235,6 @@
     then {problem = "${path}: upstream credential `${choice.credential}` does not serve API `${api}`.";}
     else {rule = rule choice.credential credential.apiKey api;};
 in {
-  inherit apiKeys apis clientKeyType credentialType route rule served visibleModels;
+  inherit apiKeys apis clientKeyType credentialType route rule served visibleAliases visibleModels;
   lower = providers: lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList blocks providers);
 }
