@@ -204,7 +204,7 @@ class Source:
             return []
         overrides = [w['priority'] for w in chain if w['kind'] == 'override']
         priority = (overrides[0] if len(overrides) == 1 else self.default if not overrides else None) if supported else None
-        if active == 'unknown' and not overrides:
+        if (not safe_leaf or active == 'unknown') and not overrides:
             priority = None
         return [{'active': active, 'anchor': anchor[0], 'chain': list(chain),
                  'group': [w['index'] for w in chain if w['kind'] == 'merge'],

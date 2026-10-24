@@ -48,6 +48,7 @@ OWNER = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(OWNER / "src/eval"))
 import protocol
 import supervisor
+from definitions import Source
 from supervisor import supervise
 
 CANDIDATE_ROWS = ("nx_candidates", "nx_definition_candidate_priorities",
@@ -291,6 +292,38 @@ class AllDefinitionsAbiTests(unittest.TestCase):
         self.assert_rejected(broken)
 
 
+class AllDefinitionsSourceTests(unittest.TestCase):
+    def test_inactive_opaque_payload_requires_visible_override_priority(self):
+        model = json.loads((OWNER / "generated/models/modules.json").read_text())
+        for payload, kind in ((b'f 1', "apply_expression"),
+                              (b'throw "x"', "apply_expression"),
+                              (b'3', "integer_expression")):
+            node = ["payload", "file", 0, len(payload), kind, "[]"]
+            children = []
+            if kind == "apply_expression":
+                split = payload.index(b' ')
+                children = [
+                    ["callee", "file", 0, split, "variable_expression", "[0]"],
+                    ["argument", "file", split + 1, len(payload),
+                     "integer_expression" if payload == b'f 1' else "string_expression", "[1]"],
+                ]
+            for overrides, expected in (
+                ([], "100" if payload == b'3' else None),
+                (["10"], "10"),
+                (["-9223372036854775808"], "-9223372036854775808"),
+                ([None], None),
+            ):
+                with self.subTest(payload=payload, overrides=overrides):
+                    source = Source([node, *children], payload, model)
+                    chain = [{"kind": "if", "anchor": "guard", "truth": "false"}]
+                    chain += [{"kind": "override", "anchor": "override", "priority": p}
+                              for p in overrides]
+                    candidates = source.walk(node, [], {}, chain, ["binding", "file", 0])
+                    self.assertEqual(len(candidates), 1)
+                    self.assertEqual(candidates[0]["active"], "false")
+                    self.assertEqual(candidates[0]["priority"], expected)
+
+
 class AllDefinitionsSupervisorTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -384,6 +417,7 @@ class AllDefinitionsSupervisorTests(unittest.TestCase):
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(loader.loadTestsFromTestCase(cls)
                               for cls in (AllDefinitionsAbiTests,
+                                          AllDefinitionsSourceTests,
                                           AllDefinitionsSupervisorTests))
 
 
