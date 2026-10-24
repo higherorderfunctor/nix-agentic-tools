@@ -17,6 +17,7 @@
         "literal-imports"
         "metadata-library"
         "module-adapter"
+        "module-properties"
         "owner-layout"
         "source-identity"
         "target-contract"

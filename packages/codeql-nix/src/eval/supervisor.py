@@ -140,7 +140,7 @@ def nix_command(nix, binding, job, request, directory, deadline, env, invocation
 def projection_rows(packet, job, outer):
     validate(packet, "observation-protocol.json")
     facts = packet["facts"]
-    permitted = {"nx_definitions", "nx_observation_definitions", "nx_observation_options", "nx_observations", "nx_option_declarations", "nx_option_metadata",
+    permitted = {"nx_definition_order", "nx_definitions", "nx_module_lib_bindings", "nx_observation_definitions", "nx_observation_options", "nx_observations", "nx_option_declarations", "nx_option_metadata",
                  "nx_option_priority", "nx_options", "nx_origin_positions",
                  "nx_origins", "nx_request_results"}
     if any(relation not in permitted for relation, _ in facts):
@@ -149,8 +149,8 @@ def projection_rows(packet, job, outer):
     results = [args for relation, args in facts if relation == "nx_request_results"]
     if len(results) != 1 or results[0][0] != identity:
         raise ValueError("projection must return exactly its supplied request result")
-    allowed = {"nx_definitions": ("definitions",), "nx_option_declarations": ("declarations",), "nx_option_metadata": ("isDefined", "priority"),
-               "nx_option_priority": ("priority",)}
+    allowed = {"nx_definitions": ("definitions", "selection"), "nx_option_declarations": ("declarations",),
+               "nx_option_metadata": ("isDefined", "priority", "selection"), "nx_option_priority": ("priority", "selection")}
     options = {args[0] for relation, args in facts if relation == "nx_options"}
     for relation, args in facts:
         if relation == "nx_options" and args[1:] != [job["identities"]["context"], abi.path(request["path"])]:
@@ -159,10 +159,21 @@ def projection_rows(packet, job, outer):
             raise ValueError("projection metadata escapes the selected option")
         if relation in allowed and request["facet"] not in allowed[relation]:
             raise ValueError("projection emitted unrequested metadata")
+    definitions = {args[0] for relation, args in facts if relation == "nx_definitions"}
+    for relation, args in facts:
+        if relation == "nx_definition_order" and (request["facet"] != "selection" or args[0] not in definitions):
+            raise ValueError("projection order escapes selected definitions")
+    for relation, args in facts:
+        if relation == "nx_module_lib_bindings":
+            model = job.get("moduleModel")
+            if (request["facet"] != "selection" or results[0][1] != "complete" or args[0] != identity
+                    or model is None or args[3:] != [model["libHash"], model["bundleHash"]]
+                    or not any([candidate["functionAnchor"], candidate["formalAnchor"]] == args[1:3]
+                               for candidate in job.get("moduleBindings", []))):
+                raise ValueError("projection library binding lacks authenticated invocation")
     observations = [args for relation, args in facts if relation == "nx_observations"]
     subjects = {kind: {args[0]: args[1] for relation, args in facts if relation == f"nx_observation_{kind}s"}
                 for kind in ("definition", "option")}
-    definitions = {args[0] for relation, args in facts if relation == "nx_definitions"}
     for observation, req, stage, _ in observations:
         subject_is_local = (subjects["option"].get(observation) in options or
                             subjects["definition"].get(observation) in definitions)
@@ -187,6 +198,13 @@ def projection_rows(packet, job, outer):
         witnesses = {args[0] for name, args in facts if name == relation}
     if results[0][1] == "complete" and (not set(observed["option"]).intersection(witnesses) or results[0][3] == 0):
         raise Refusal("projection-incomplete", "complete metadata projection lacks an observed selected-option witness")
+    if request["facet"] == "selection" and results[0][1] == "complete":
+        metadata = {args[0]: args[2] for relation, args in facts if relation == "nx_option_metadata" and args[1] == "isDefined"}
+        priorities = {args[0] for relation, args in facts if relation == "nx_option_priority"}
+        if set(metadata) != options or any((metadata[option] == "true") != (option in priorities) for option in options):
+            raise Refusal("projection-incomplete", "selection lacks a witness for whether the option is defined or its priority")
+        if request["maxDepth"] == 0 and definitions:
+            raise Refusal("depth-limit", "selection definitions exceed root-only depth")
     records = sum(relation in ("nx_options", "nx_definitions", "nx_option_declarations") for relation, _ in facts)
     if max(records, len(observations), results[0][3]) > request["maxNodes"]:
         raise Refusal("node-limit", "projection node limit exceeded")
@@ -212,6 +230,28 @@ def admitted_sources(source_files, target):
         check_source(original, expected)
         sources[file] = (original, expected)
     return sources
+
+
+def library_bindings(anchor_rows, sources, mappings):
+    """Identify literal module function/formals from the already authenticated S2 tree."""
+    anchors = {row[1][0]: row[1] for row in anchor_rows}
+    candidates = []
+    paths = {(anchor[1], anchor[5]): anchor for anchor in anchors.values()}
+    for formal in anchors.values():
+        if formal[4] != "identifier" or formal[1] not in sources:
+            continue
+        data = sources[formal[1]][0].read_bytes()
+        if data[formal[2]:formal[3]] != b"lib":
+            continue
+        child = abi.json_path(formal[5], True)
+        function = paths.get((formal[1], abi.canonical(child[:1])))
+        if function is None or not abi.library_formal(anchors, function[0], formal[0]):
+            continue
+        for copied, files in mappings.items():
+            files = [files] if isinstance(files, str) else files
+            if files == [function[1]]:
+                candidates.append({"functionAnchor": function[0], "formalAnchor": formal[0], "path": copied})
+    return candidates
 
 
 def source_links(produced, sources, mappings, copy_root=None):
@@ -252,11 +292,12 @@ def publish(directory, name, facts):
             os.unlink(temporary)
 
 
-def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=None, strict=False, nix="nix", identity=None):
+def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=None, source_anchors=(), strict=False, nix="nix", identity=None):
     directory = Path(trap_dir)
     directory.mkdir(parents=True, exist_ok=True)
     coordinated = identity is not None
     identity = identity or RunIdentity.evaluation(abi, __file__)
+    identity_object = identity
     run = identity.row[1][0]
     facts = [identity.row]
     if not coordinated:
@@ -265,6 +306,7 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
     abi.require(all(row[0] == "nx_files" for row in source_files), "source admission requires S2 file rows")
     abi.validate(source_files)
     facts.extend(source_files)
+    facts.extend(source_anchors)
     source_mappings = source_mappings or {}
     incomplete = False
     published = set()
@@ -315,6 +357,11 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                 facts.extend(admissions)
             except Exception as error:
                 source_error = error
+            module_model = getattr(identity_object, "module_model", None)
+            property_state = ("supported" if module_model and fingerprint["libVersion"] == module_model["libHash"]
+                              else "unsupported" if module_model else "unavailable")
+            if any(request["facet"] == "selection" for request in target["requests"]):
+                facts.append(["nx_capabilities", [identity, "module-properties", property_state, "exact-pin module metadata"]])
             states = []
             for ordinal, request in enumerate(target["requests"]):
                 req = abi.key("request", [identity, context, abi.canonical(request), str(ordinal)])
@@ -323,13 +370,17 @@ def supervise(manifest, bindings, trap_dir, *, source_files=(), source_mappings=
                 try:
                     if source_error is not None:
                         raise source_error
-                    if request["maxDepth"] != 0:
+                    if request["facet"] == "selection" and property_state != "supported":
+                        raise Refusal("module-properties-unavailable", "exact-pin property metadata unavailable", "unsupported")
+                    if request["facet"] != "selection" and request["maxDepth"] != 0:
                         raise Refusal("request-unsupported", "only root metadata projections are supported", "blocked")
                     args = target["argumentDescription"]
                     binding = bindings[target["evaluation"]["reference"]]
-                    job = {"identities": {"context": context, "request": req, "run": run, "target": identity},
+                    job = {"identities": {"context": context, "model": identity_object.row[1][4], "request": req, "run": run, "target": identity},
                            "moduleArguments": bindings[args["moduleArgumentsRef"]], "request": request,
                            "specialArguments": bindings[args["specialArgumentsRef"]], "target": target}
+                    job["moduleModel"] = module_model
+                    job["moduleBindings"] = library_bindings(source_anchors, sources, source_mappings)
                     if coordinated:
                         job["sourcePins"] = {root["path"]: root["rootContentIdentity"] for root in target["sourceRoots"]}
                     abi.canonical(job)

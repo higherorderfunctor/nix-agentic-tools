@@ -22,6 +22,14 @@
         source = "${rawModels}/builtins.qll";
         type = "raw";
       };
+      "modules.json" = {
+        source = "${rawModels}/modules.json";
+        type = "json";
+      };
+      "modules.qll" = {
+        source = "${rawModels}/modules.qll";
+        type = "raw";
+      };
     };
     guards.parseCompare = true;
     name = "nixql-models";
@@ -32,14 +40,17 @@
     shopt -s inherit_errexit 2>/dev/null || :
     ${modelPython}/bin/python3 ${../models/builtins}/generate.py \
       --nix ${pkgs.nix}/bin/nix --source ${pkgs.nix.src} --output "$out"
+    ${pkgs.python3}/bin/python3 ${../models/modules}/generate.py \
+      --nix ${pkgs.nix}/bin/nix --library ${pkgs.path} \
+      --anchors ${kit.syntax}/bin/nixql-anchors --builtins "$out/builtins.json" --output "$out"
   '';
   treefmt = (inputs.treefmt-nix.lib.evalModule pkgs ../../../lib/treefmt-module.nix).config;
   # Runtime coordination reads the generated model fingerprint at build time.
   pins = pkgs.runCommand "nixql-generation-pins.json" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    ${pkgs.python3}/bin/python3 -c 'import json, sys; print(json.dumps(json.load(open(sys.argv[1])) | {"model": json.load(open(sys.argv[2]))["modelVersion"]}))' \
-      ${syntaxPins} ${models}/builtins.json > "$out"
+    ${pkgs.python3}/bin/python3 -c 'import json, sys; print(json.dumps(json.load(open(sys.argv[1])) | {"model": json.load(open(sys.argv[2]))["bundleHash"], "moduleModel": json.load(open(sys.argv[2]))}))' \
+      ${syntaxPins} ${models}/modules.json > "$out"
   '';
   python = pkgs.python3.withPackages (ps: [ps.jsonschema]);
   strictShell = import ../../../lib/strict-shell-application.nix pkgs;
@@ -106,7 +117,8 @@ in
       chmod -R u+w "$out" # bare-commands: ok
       cp -rL ${../.}/ql/lib/. "$out/" # bare-commands: ok
       mkdir -p "$out/models" "$out/nix/internal/generated" # bare-commands: ok
-      cp ${models}/builtins.json "$out/models/" # bare-commands: ok
+      cp ${models}/builtins.json ${models}/modules.json "$out/models/" # bare-commands: ok
+      cp ${models}/modules.qll "$out/nix/internal/generated/Modules.qll" # bare-commands: ok
       cp ${models}/builtins.qll "$out/nix/internal/generated/Builtins.qll" # bare-commands: ok
       printf '<dbstats><typesizes/><stats/></dbstats>\n' > "$out/nix.dbscheme.stats"
     '';

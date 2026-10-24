@@ -155,7 +155,13 @@
           "const": "option-metadata"
         },
         "facet": {
-          "enum": ["declarations", "definitions", "isDefined", "priority"]
+          "enum": [
+            "declarations",
+            "definitions",
+            "isDefined",
+            "priority",
+            "selection"
+          ]
         },
         "maxBytes": {
           "$ref": "#/$defs/budget"

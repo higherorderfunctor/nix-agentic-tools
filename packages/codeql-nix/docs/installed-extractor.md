@@ -81,13 +81,13 @@ installed run snapshot.
 
 `RunIdentity` in `src/extract.py` owns the shared identity. It hashes the
 installed combined schema, producer implementation bytes, admitted root
-identities and selected file digests. The generated builtin model fingerprint
-from the packaging pins supplies `nx_runs.modelHash` and participates in the run
-key; installed packaging always supplies the actual model. Legacy fixture pins
-without a model retain `not-requested`. An explicitly requested target model
-must match the run. Named dependency pins participate even though their syntax
-is not selected. Only project-root `*.nix` files are selected for syntax
-extraction.
+identities and selected file digests. The generated builtin/module bundle
+fingerprint from the packaging pins supplies `nx_runs.modelHash` and
+participates in the run key; installed packaging always supplies the actual
+model. Legacy fixture pins without a model retain `not-requested`. An explicitly
+requested target model must match the run. Named dependency pins participate
+even though their syntax is not selected. Only project-root `*.nix` files are
+selected for syntax extraction.
 
 The coordinator passes that identity to [syntax extraction](source-identity.md)
 and the [evaluation supervisor](evaluation-isolation.md). Syntax checks its
@@ -99,7 +99,7 @@ syntax module loads the neighboring coordinator by file path, preserving
 callers' module search paths when imported as a standalone driver.
 
 Syntax and evaluation write into temporary staging directories. Authenticated
-file rows and copied-path mappings connect evaluation origins through the
+file/anchor rows and copied-path mappings connect evaluation origins through the
 existing [module adapter](module-adapter.md). The supervisor admits
 authenticated selected files by exact target root name and content identity
 before evaluation, preserving candidates after failed work. Copied-path mappings

@@ -50,7 +50,7 @@
     "grammar": "38a15330421d20f3a4d380759f9634d39ba3d8ec",
     "kit": "a1575b98a8cc19bcfa7bb6cb41be688cb3dae65c"
   },
-  "schemaSha256": "4c1c24af8dee77f344a098c09d74a894f355c5726d83abcdce79ecbb422dbafd",
+  "schemaSha256": "6998028fb7da0e7486dcccbd7defa3f48f0e8666aa748e3894df297910ae2cb5",
   "tables": [
     "containerparent",
     "databaseMetadata",
@@ -114,11 +114,13 @@
     "nx_anchors",
     "nx_capabilities",
     "nx_contexts",
+    "nx_definition_order",
     "nx_definitions",
     "nx_diagnostic_requests",
     "nx_diagnostic_targets",
     "nx_diagnostics",
     "nx_files",
+    "nx_module_lib_bindings",
     "nx_observation_definitions",
     "nx_observation_options",
     "nx_observations",

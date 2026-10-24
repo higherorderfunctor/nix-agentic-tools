@@ -8,16 +8,16 @@ import re
 import sys
 import unittest
 
-from golden import BAD_PRIORITIES, GRAPH, I, KEYS, PATHS, PRIORITIES, PRIORITY_REQUEST, ROOT
+from golden import BAD_PRIORITIES, BINDING_GRAPH, BINDING_OPTION_OBSERVATION, FOREIGN_ANCHORS, FOREIGN_FORMAL, FOREIGN_FUNCTION, FUNCTION, GRAPH, I, KEYS, PATHS, PRIORITIES, PRIORITY_REQUEST, ROOT
 
 MODULE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[3] / "schema/abi.py"
 spec = importlib.util.spec_from_file_location("abi", MODULE)
 abi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(abi)
 LIMIT = 1048576
-STEP0_TABLES = {
-    "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definitions",
-    "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files",
+M3P_TABLES = {
+    "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definition_order", "nx_definitions",
+    "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files", "nx_module_lib_bindings",
     "nx_observation_definitions", "nx_observation_options", "nx_observations",
     "nx_option_declarations", "nx_option_metadata",
     "nx_option_priority", "nx_options", "nx_origin_files", "nx_origin_positions",
@@ -89,11 +89,24 @@ class AbiTests(unittest.TestCase):
         abi.validate(GRAPH)
         abi.validate(list(reversed(GRAPH)))
         self.assertEqual(GRAPH, before)
-        tables = {name for name, _ in GRAPH}
-        self.assertEqual(tables, STEP0_TABLES)
-        self.assertEqual(set(abi.COLUMNS), STEP0_TABLES)
+        abi.validate(BINDING_GRAPH)
+        tables = {name for name, _ in BINDING_GRAPH}
+        self.assertEqual(tables, M3P_TABLES)
+        self.assertEqual(set(abi.COLUMNS), M3P_TABLES)
         schema = MODULE.with_name("evaluation.dbscheme").read_text()
         self.assertEqual(set(re.findall(r"(?m)^(nx_\w+)\s*\(", schema)), tables)
+
+    def test_retained_order_is_optional_exact_decimal_and_references_definition(self):
+        absent = [row for row in deepcopy(BINDING_GRAPH) if row[0] != "nx_definition_order"]
+        abi.validate(absent)
+        for value in PRIORITIES:
+            abi.validate(absent + [["nx_definition_order", [I["d"], value]]])
+        for value in BAD_PRIORITIES:
+            with self.assertRaises(ValueError, msg=repr(value)):
+                abi.validate(absent + [["nx_definition_order", [I["d"], value]]])
+        for reference in (I["o"], "nixql:v1:definition:1:x"):
+            with self.assertRaises(ValueError, msg=reference):
+                abi.validate(absent + [["nx_definition_order", [reference, "500"]]])
 
     def test_arity_types_unique_keys_and_foreign_relations(self):
         for name, arguments in GRAPH:
@@ -235,6 +248,69 @@ class AbiTests(unittest.TestCase):
         rows = [deepcopy(item) for item in GRAPH if not (item[0] in {"nx_observation_options", "nx_observations"} and item[1][0] == I["i"])]
         with self.assertRaisesRegex(ValueError, "option priority lacks defined observation"):
             abi.validate(rows)  # Other metadata requests prove no priority.
+
+    def test_module_library_binding_scope_and_exact_hashes(self):
+        abi.validate(BINDING_GRAPH)
+        for column, value in ((0, "nixql:v1:request:7:missing"), (1, I["a"]),
+                              (2, I["a"]), (3, "wrong-lib"), (4, "wrong-model")):
+            rows = deepcopy(BINDING_GRAPH)
+            row(rows, "nx_module_lib_bindings")[column] = value
+            with self.subTest(column=column), self.assertRaises(ValueError):
+                abi.validate(rows)
+        for relation in ("nx_target_inputs", "nx_request_results"):
+            rows = [item for item in deepcopy(BINDING_GRAPH)
+                    if not (item[0] == relation and (relation == "nx_target_inputs" or item[1][0] == I["q"]))]
+            with self.subTest(relation=relation), self.assertRaises(ValueError):
+                abi.validate(rows)
+        for field, value in (("nx_request_results", "failed"), ("nx_requests", "definitions")):
+            rows = deepcopy(BINDING_GRAPH)
+            row(rows, field)[1 if field == "nx_request_results" else 5] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                abi.validate(rows)
+        rows = deepcopy(BINDING_GRAPH)
+        row(rows, "nx_module_lib_bindings")[2] = FUNCTION
+        with self.assertRaises(ValueError):
+            abi.validate(rows)  # A function is not its own lib formal.
+        rows = deepcopy(BINDING_GRAPH) + deepcopy(FOREIGN_ANCHORS)
+        rows.append(["nx_module_lib_bindings", [I["q"], FOREIGN_FUNCTION, FOREIGN_FORMAL, "lib", "model-bundle"]])
+        abi.validate(rows)  # The second function/formal pair is independently valid.
+        row(rows, "nx_module_lib_bindings")[2] = FOREIGN_FORMAL
+        with self.assertRaises(ValueError):
+            abi.validate(rows)  # A genuine admitted lib formal belongs to another function.
+        # Source admission is target-qualified, never borrowed from another target.
+        rows = deepcopy(BINDING_GRAPH)
+        other = "nixql:v1:target:1:2"
+        target = deepcopy(row(rows, "nx_targets"))
+        target[0] = other
+        rows.append(["nx_targets", target])
+        row(rows, "nx_target_inputs")[0] = other
+        with self.assertRaises(ValueError):
+            abi.validate(rows)
+
+    def test_order_requires_same_request_observed_selected_definition(self):
+        for mutation in ("missing", "unobserved", "other-request"):
+            rows = deepcopy(BINDING_GRAPH)
+            if mutation == "missing":
+                rows = [item for item in rows if not (item[0] == "nx_observation_definitions" and item[1][1] == I["d"])
+                        and not (item[0] == "nx_observations" and item[1][0] == I["k"])]
+            elif mutation == "unobserved":
+                row(rows, "nx_observations", 1)[3] = "unforced"
+            else:
+                rows = [item for item in rows if not (item[0] in
+                    {"nx_observations", "nx_observation_options"} and
+                    item[1][0] == BINDING_OPTION_OBSERVATION)]
+                # The remaining option witness belongs to the separate priority
+                # request, while the retained-definition witness still belongs
+                # to selection. Their shared option identity cannot join them.
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                abi.validate(rows)
+        abi.validate([item for item in deepcopy(BINDING_GRAPH) if item[0] != "nx_option_priority"])
+        # Order does not depend on a winning override-priority witness.
+        # Priority witness specifically accepts selection as well as priority.
+        rows = [item for item in deepcopy(BINDING_GRAPH)
+                if not (item[0] in {"nx_requests", "nx_request_results"} and item[1][0] == PRIORITY_REQUEST)
+                and not (item[0] in {"nx_observations", "nx_observation_options"} and item[1][0] == I["i"])]
+        abi.validate(rows)
 
     def test_exact_text_utf8_boundaries_and_escaping(self):
         for size in (LIMIT - 1, LIMIT, LIMIT + 1):

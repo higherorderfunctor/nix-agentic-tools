@@ -29,6 +29,11 @@ class BuiltinModelsTests(unittest.TestCase):
         cls.source = Path(os.environ["CODEQL_NIX_TEST_BUILTIN_SOURCE"])
         cls.asset = Path(os.environ["CODEQL_NIX_TEST_MODEL"])
         cls.model = json.loads(cls.asset.read_text())
+        cls.modules = json.loads((Path(os.environ["CODEQL_NIX_TEST_LIBRARY"]) / "models/modules.json").read_text())
+        payload = {"builtins": cls.model["modelVersion"], "modules": cls.modules["modelVersion"]}
+        cls.bundle_hash = "sha256:" + hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if cls.modules["bundleHash"] != cls.bundle_hash:
+            raise AssertionError("module/builtin bundle fingerprint does not match independent canonical hash")
 
     def nix_run(self, *args):
         # Independent policy oracle: do not import the generator's policy.
@@ -123,14 +128,14 @@ class BuiltinModelsTests(unittest.TestCase):
         examples = load("m3_examples", OWNER / "checks/fixtures/protocol/examples.py")
         import jsonschema
         manifest = deepcopy(examples.MANIFEST)
-        manifest["targets"]["host.workstation"]["fingerprint"]["modelVersion"] = self.model["modelVersion"]
+        manifest["targets"]["host.workstation"]["fingerprint"]["modelVersion"] = self.bundle_hash
         jsonschema.Draft202012Validator(json.loads((OWNER / "schema/target-manifest.json").read_text())).validate(manifest)
         abi = load("m3_abi", OWNER / "schema/abi.py")
         coordinator = load("m3_coordinator", OWNER / "src/extract.py")
         with tempfile.TemporaryDirectory() as temporary:
             pins = Path(temporary) / "pins.json"
             rows = []
-            for model in (self.model["modelVersion"], "sha256:" + "0" * 64):
+            for model in (self.bundle_hash, "sha256:" + "0" * 64):
                 pins.write_text(json.dumps({"grammar": "fixture-grammar", "model": model}))
                 row = coordinator.RunIdentity.syntax(abi, OWNER / "src/extract.py", OWNER / "generated/nix.dbscheme", pins, {"roots": []}).row
                 self.assertEqual(row[1][4], model)
@@ -139,14 +144,14 @@ class BuiltinModelsTests(unittest.TestCase):
             identity = coordinator.RunIdentity(rows[0])
             fingerprint = manifest["targets"]["host.workstation"]["fingerprint"]
             fingerprint["sourceSnapshotHash"] = identity.row[1][-1]
-            for requested in (self.model["modelVersion"], "not-requested"):
+            for requested in (self.bundle_hash, "not-requested"):
                 with self.subTest(requested=requested):
                     fingerprint["modelVersion"] = requested
                     identity.check_targets(abi, manifest)
             fingerprint["modelVersion"] = "sha256:" + "0" * 64
             with self.assertRaisesRegex(ValueError, "^unsupported-model$"):
                 identity.check_targets(abi, manifest)
-            fingerprint["modelVersion"] = self.model["modelVersion"]
+            fingerprint["modelVersion"] = self.bundle_hash
             fingerprint["sourceSnapshotHash"] = "sha256:" + "0" * 64
             with self.assertRaisesRegex(ValueError, "^mixed-source-snapshot$"):
                 identity.check_targets(abi, manifest)
@@ -160,7 +165,7 @@ class BuiltinModelsTests(unittest.TestCase):
         self.addCleanup(harness.doCleanups)
         harness.fixture()
         target = harness.root / ".nixql/targets.nix"
-        target.write_text(target.read_text().replace('"not-requested"', json.dumps(self.model["modelVersion"])))
+        target.write_text(target.read_text().replace('"not-requested"', json.dumps(self.bundle_hash)))
         shutil.copy(OWNER / "ql/test/qlpack.yml", harness.root / "qlpack.yml")
         for path in (OWNER / "ql/test/builtin-models").iterdir():
             shutil.copy(path, harness.root / path.name)

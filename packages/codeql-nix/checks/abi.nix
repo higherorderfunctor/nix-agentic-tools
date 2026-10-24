@@ -31,7 +31,7 @@
         from pathlib import Path
         import sys
         sys.path.insert(0, sys.argv[2])
-        from golden import GRAPH
+        from golden import BINDING_GRAPH as GRAPH
         spec = importlib.util.spec_from_file_location("abi", Path(sys.argv[1]) / "abi.py")
         abi = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(abi)
@@ -58,7 +58,7 @@
           "$TMPDIR/dataset" "$TMPDIR/golden.trap"
         flock "$TMPDIR/codeql.lock" codeql dataset check "$TMPDIR/dataset"
         mkdir "$out"
-        printf '25 relations; ABI behavioral tests and typed golden TRAP import passed\n' > "$out/evidence"
+        printf '27 relations; ABI behavioral tests and typed golden TRAP import passed\n' > "$out/evidence"
       '';
   };
 }

@@ -85,6 +85,20 @@ def json_path(value, indices=False):
     return result
 
 
+def library_formal(anchors, function, formal):
+    """The bounded source shape accepted for an authenticated lib argument."""
+    fn, argument = anchors[function], anchors[formal]
+    fn_path, arg_path = json_path(fn[5], True), json_path(argument[5], True)
+    if not (fn[1] == argument[1] and fn[4] == "function_expression" and
+            argument[4] == "identifier" and len(fn_path) == 1 and
+            len(arg_path) == len(fn_path) + 3 and arg_path[:len(fn_path)] == fn_path):
+        return False
+    paths = {(row[1], row[5]): row for row in anchors.values()}
+    chain = [paths.get((fn[1], canonical(arg_path[:length])))
+             for length in (len(arg_path) - 2, len(arg_path) - 1)]
+    return all(chain) and [row[4] for row in chain] == ["formals", "formal"]
+
+
 def validate(rows):
     require(isinstance(rows, list), "expected relation rows")
     tables = defaultdict(list)
@@ -98,6 +112,8 @@ def validate(rows):
         for (column, kind), value in zip(COLUMNS[table], arguments):
             if kind == "text":
                 text(value)
+            elif kind == "bool":
+                require(type(value) is bool, "invalid Boolean")
             elif kind == "int":
                 require(type(value) is int and 0 <= value <= 2147483647, "invalid native integer")
             else:
@@ -137,6 +153,16 @@ def validate(rows):
         child_indices = json_path(child, True)
         require(all(type(i) is int for i in child_indices), "invalid structural child path")
         require(anchor == key("anchor", [file, str(start), str(end), kind, child]), "anchor identity mismatch")
+    for req, function, formal, lib_hash, model_hash in tables["nx_module_lib_bindings"]:
+        target = owners["target"][request[req][1]]
+        require(result.get(req, [None])[0] == "complete" and request[req][5] in
+                ("selection", "all-definitions"), "library binding lacks successful request")
+        require(lib_hash == target[6] and model_hash == owners["run"][target[1]][4],
+                "library binding fingerprint mismatch")
+        require(library_formal(owners["anchor"], function, formal), "formal does not belong to function")
+        fn = owners["anchor"][function]
+        require(any(t == target[0] and f == fn[1] for t, f, _ in tables["nx_target_inputs"]),
+                "library binding source not admitted")
     for _, _, _, instance in tables["nx_contexts"]:
         require(json_path(instance) == [], "non-root context instance")
     for _, _, segments in tables["nx_options"]:
@@ -166,8 +192,17 @@ def validate(rows):
         require(state != "observed" or result.get(req, [None])[0] in ("complete", "partial"), "observation from unsuccessful projection")
         if (kind == "option" and state == "observed" and stage == priority_witness["stage"]
                 and request[req][3] == priority_witness["domain"]
-                and request[req][4] == option[subject][2] and request[req][5] == priority_witness["facet"]):
+                and request[req][4] == option[subject][2] and request[req][5] in priority_witness["facets"]):
             observed_priorities.add(subject)
+    witnessed = {(req, kind, subject) for observation, req, _, state in tables["nx_observations"]
+                 if state == "observed" and result.get(req, [None])[0] in ("complete", "partial")
+                 for kind, subject in subjects[observation]}
+    for definition, _ in tables["nx_definition_order"]:
+        parent = owners["definition"][definition][1]
+        require(any(kind == "definition" and subject == definition and
+                    (req, "option", parent) in witnessed and
+                    request[req][5] in ("definitions", "selection")
+                    for req, kind, subject in witnessed), "order lacks same-request retained observation")
     for opt, _ in tables["nx_option_priority"]:
         require(opt in defined_options and opt in observed_priorities, "option priority lacks defined observation")
     for req, state, reason, _ in tables["nx_request_results"]:
@@ -188,7 +223,7 @@ def validate(rows):
         require(ordinal not in definition_ordinals[opt], "duplicate definition ordinal")
         definition_ordinals[opt].add(ordinal)
     for req, _, ctx, _, segments, facet, *_ in tables["nx_requests"]:
-        if facet == "definitions" and result.get(req, [None])[0] == "complete":
+        if facet in ("definitions", "selection") and result.get(req, [None])[0] == "complete":
             selected = {opt for opt, context_key, path_json in tables["nx_options"] if (context_key, path_json) == (ctx, segments)}
             witnessed = {subject for observation, request_key, _, state in tables["nx_observations"]
                          if request_key == req and state == "observed"
@@ -219,7 +254,7 @@ def dbscheme():
                 fields.append(f"unique int {name}: @nx_{kind}")
             else:
                 native = "string" if kind == "text" else "int"
-                target = native if kind in ("int", "text") else f"@nx_{kind}"
+                target = native if kind in ("bool", "int", "text") else f"@nx_{kind}"
                 fields.append(f"{native} {name}: {target} ref")
         declarations.append(f"{table}({', '.join(fields)});")
     return "\n".join(declarations) + "\n"

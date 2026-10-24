@@ -146,7 +146,7 @@ class InstalledTests(unittest.TestCase):
           where nx_runs(r, schema, _, _, model, snapshot)
           select schema, model, snapshot''')
         self.assertEqual(identity[0][0], schema_hash)
-        self.assertEqual(identity[0][1], json.loads((self.library / "models/builtins.json").read_text())["modelVersion"])
+        self.assertEqual(identity[0][1], json.loads((self.library / "models/modules.json").read_text())["bundleHash"])
         self.assertNotIn(identity[0][2], ("", "not-admitted"))
         self.assertCountEqual(self.query(database, "Phases", '''from @nx_run r, string phase, string state
           where nx_phases(r, phase, state, _) select phase, state'''), [["discovery", "complete"], ["evaluation", "complete"], ["syntax", "complete"]])
