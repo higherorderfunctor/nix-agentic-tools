@@ -1,6 +1,6 @@
 # Bounded all-definition inventory
 
-> **Last verified:** 2026-10-23 — M3d adds source-backed candidates alongside
+> **Last verified:** 2026-10-24 — M3d adds source-backed candidates alongside
 > upstream retained metadata, using the existing authenticated adapter,
 > collection boundary and transactional protocol.
 
@@ -88,10 +88,9 @@ payloads may stay unforced. Dynamic guard truth stays unknown. Effective
 override priority is absent for unsupported nesting; source spelling alone
 cannot select an override.
 
-Known defect R3-LM1: an inactive opaque leaf without a visible override
-currently receives ordinary priority `100`; the contract requires absent
-priority. Safe literal leaves and visible override priorities remain valid. This
-cannot produce a losing row because the candidate is inactive.
+An inactive opaque leaf without a visible override has no effective priority.
+Safe literal leaves retain ordinary priority, and supported visible literal
+override headers retain their exact priority without forcing the payload.
 
 Selected false needs inactivity or a known worse effective override plus
 winning-priority witness. Selected true needs authenticated retained
