@@ -35,6 +35,25 @@
   # shared-URL check in ../modules/instances.nix compare the same string.
   baseUrlType = types.strMatching "https?://[!-~]+";
 
+  # Alias and name are printable ASCII without spaces, so CPA's TrimSpace is a
+  # no-op for both, and neither can be empty or padded: CPA lists an entry with
+  # an empty name under its alias but skips its routing entry, and trims names
+  # before comparing them (sdk/cliproxy/service_models.go:812-817,
+  # sdk/cliproxy/auth/conductor_models.go:686-688).
+  modelType = types.coercedTo types.str (name: {inherit name;}) (types.submodule {
+    options = {
+      alias = mkOption {
+        type = types.nullOr (types.strMatching "[!-~]+");
+        default = null;
+        description = "Client-visible name CPA lists and routes for this model (`models[].alias`); a request for it is sent upstream as `name`. Unset lists `name`.";
+      };
+      name = mkOption {
+        type = types.strMatching "[!-~]+";
+        description = "Upstream model name.";
+      };
+    };
+  });
+
   apiKeyType = types.submodule {
     options = {
       apis = mkOption {
@@ -60,9 +79,15 @@
         description = "The upstream key, as a redact reference.";
       };
       models = mkOption {
-        type = types.nonEmptyListOf types.str;
-        example = ["glm-5.3"];
-        description = "Models served on each API.";
+        type = types.nonEmptyListOf modelType;
+        example = [
+          "glm-5.3"
+          {
+            name = "glm-5.3";
+            alias = "claude-opus-5-5";
+          }
+        ];
+        description = "Models served on each API: a plain upstream name, or `{name; alias;}` to serve `name` under the client-visible `alias`.";
       };
       priority = mkOption {
         type = types.nullOr types.int;
@@ -74,6 +99,22 @@
 
   served = provider: lib.filterAttrs (_: value: value != null) provider.apis;
 
+  # Client-visible name: CPA lists alias when set, else name
+  # (sdk/cliproxy/service_models.go:813-816).
+  modelName = model:
+    if model.alias != null
+    then model.alias
+    else model.name;
+  visibleModels = apiKey: map modelName apiKey.models;
+
+  # Each aliased model's client-visible name mapped to its upstream name, for
+  # labels that name what a picker row really serves.
+  visibleAliases = apiKey:
+    builtins.listToAttrs (
+      map (model: lib.nameValuePair model.alias model.name)
+      (lib.filter (model: model.alias != null) apiKey.models)
+    );
+
   # One upstream credential's blocks: { <family> = [block]; }.
   blocks = name: provider:
     lib.mapAttrs' (api: value:
@@ -82,7 +123,12 @@
             inherit name;
             inherit (value) base-url;
             keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
-            models = map (model: {name = model;}) provider.models;
+            models =
+              map
+              (model:
+                {inherit (model) name;}
+                // lib.optionalAttrs (model.alias != null) {inherit (model) alias;})
+              provider.models;
           }
           // lib.optionalAttrs (provider.priority != null) {inherit (provider) priority;})
       ])
@@ -189,6 +235,6 @@
     then {problem = "${path}: upstream credential `${choice.credential}` does not serve API `${api}`.";}
     else {rule = rule choice.credential credential.apiKey api;};
 in {
-  inherit apiKeys apis clientKeyType credentialType route rule served;
+  inherit apiKeys apis clientKeyType credentialType modelName route rule served visibleAliases visibleModels;
   lower = providers: lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList blocks providers);
 }

@@ -3,6 +3,7 @@
   inherit (lib) mkOption types;
   redact = import ../../redact {inherit lib;};
   instancesLib = import ../../../packages/ai-module/lib/instances.nix {inherit lib;};
+  providersLib = import ../../../packages/cliproxyapi/lib/providers.nix {inherit lib;};
   urlPattern = "https?://([A-Za-z0-9.-]+|\\[[0-9A-Fa-f:.]+[]])(:[0-9]+)?";
   urlDescription = "the proxy origin only, `http://<host>:<port>`, with no path";
   selectionOptions = {
@@ -82,9 +83,18 @@
     else {
       inherit (client) key;
       inherit (selected) url;
-      credentials = map (route: {
+      credentials = map (route: let
+        apiKey = instance.credentials.${route.credential}.apiKey;
+      in {
+        aliases =
+          if apiKey == null
+          then {}
+          else providersLib.visibleAliases apiKey;
         name = route.credential;
-        models = instance.credentials.${route.credential}.apiKey.models or [];
+        models =
+          if apiKey == null
+          then []
+          else providersLib.visibleModels apiKey;
       }) (builtins.filter (route: builtins.hasAttr route.credential instance.credentials) client.routes);
     };
 in {
@@ -105,12 +115,17 @@ in {
       credentials = mkOption {
         type = types.listOf (types.submodule {
           options = {
+            aliases = mkOption {
+              type = types.attrsOf types.str;
+              default = {};
+              description = "Client-visible alias of each aliased model, mapped to its upstream name.";
+            };
             models = mkOption {type = types.listOf types.str;};
             name = mkOption {type = types.str;};
           };
         });
         default = [];
-        description = "Named upstream credentials in client route order, with declared API-key models.";
+        description = "Named upstream credentials in client route order, with the client-visible name (alias when set) of each declared API-key model and each alias mapped to its upstream name.";
       };
       key = mkOption {
         type = redact.types.redacted;

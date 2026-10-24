@@ -7,16 +7,17 @@ applyTo: "packages/chatgpt-codex/checks/chatgpt-codex-proxy.nix,packages/chatgpt
 
 ## ai.proxy runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-22 — Claude uses `redact.assign` and the shared
+> **Last verified:** 2026-10-23 — Claude uses `redact.assign` and the shared
 > reader through `apiKeyHelper` for file, command and concat references, and
 > clears inherited API keys, bearer tokens, custom headers and
 > Bedrock/Vertex/Foundry switches in settings, and suppresses the inherited
 > API-key descriptor before Claude starts. Codex uses command-backed provider
 > auth. Named client routes supply Claude `/model` picker rows (listed and
-> selectable for a non-Anthropic id in 2.1.306, read from the bundle); Codex
-> discovers CPA models without per-credential profiles. Both use the shared
-> client-key helper. Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport`
-> and warn through the generated warning cases.
+> selectable for a non-Anthropic id in 2.1.306, read from the bundle; an aliased
+> row's label names the upstream model it serves); Codex discovers CPA models
+> without per-credential profiles. Both use the shared client-key helper.
+> Kimchi, Kiro and Copilot omit `proxy` from `surfaceSupport` and warn through
+> the generated warning cases.
 
 ### Claude (packages/claude-code/lib/proxy.nix)
 
@@ -58,15 +59,17 @@ conflict.
 Each declared API-key model of each routed upstream credential
 (`normalized.proxy.credentials`) becomes one `modelPicker.options` row,
 `{model; description = "<credential> through CLIProxyAPI";}`, labelled with its
-id. `replaceBuiltInOptions` stays unset: Claude Code 2.1.306's picker builder
-returns the built-in lineup plus each new row unless that flag is `=== true`,
-and its schema says unset adds the rows after the built-ins. The same schema
-says `modelPicker` is honored only from managed, `--settings`/SDK and user
-settings, never a project checkout. So Home Manager writes the rows to user
-settings, where a consumer's own rows concatenate, and devenv's launcher adds
-`--settings <store file>` holding only `modelPicker`. Since the highest scope
-that defines `modelPicker` wins outright, that devenv session shows the
-credential rows instead of any user picker rows.
+id; an aliased row's description is
+`"<credential> (serves <name> as this model) through CLIProxyAPI"`, `<name>`
+being the upstream model the alias serves. `replaceBuiltInOptions` stays unset:
+Claude Code 2.1.306's picker builder returns the built-in lineup plus each new
+row unless that flag is `=== true`, and its schema says unset adds the rows
+after the built-ins. The same schema says `modelPicker` is honored only from
+managed, `--settings`/SDK and user settings, never a project checkout. So Home
+Manager writes the rows to user settings, where a consumer's own rows
+concatenate, and devenv's launcher adds `--settings <store file>` holding only
+`modelPicker`. Since the highest scope that defines `modelPicker` wins outright,
+that devenv session shows the credential rows instead of any user picker rows.
 
 A row for a non-Anthropic id such as `glm-5.3` is listed and selectable in
 2.1.306 (read from the bundle; the live TUI render was not observed). The row

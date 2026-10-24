@@ -11,7 +11,9 @@
 > `access.key-allowlist` entries from named upstream routes. Built-in
 > `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
 > official documentation. Named API-key credentials accept an optional integer
-> priority, omitted when unset.
+> priority, omitted when unset. Model entries may be `{name; alias;}`: CPA lists
+> and routes the alias and sends `name` upstream, and duplicate visible names
+> and listed names another entry's routing claim would reroute fail evaluation.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -55,8 +57,10 @@ ai.cliproxyapi.instances.main.credentials.zai-api-personal = {
 `apiKey.apis` defaults to Anthropic-compatible and OpenAI chat-compatible
 endpoints, and `apiKey.models` to z.ai's published general API chat catalog.
 Override either endpoint's `base-url`, set an API to `null`, or replace `models`
-with the subset your upstream credential permits. Check the key classification
-and entitlements in z.ai's
+with the subset your upstream credential permits. Entries may be
+`{name; alias;}`: CPA lists and routes the alias and sends `name` upstream;
+duplicate visible names and listed names another entry's routing claim would
+reroute fail evaluation. Check the key classification and entitlements in z.ai's
 [API Key Management Guide](https://docs.z.ai/devpack/notice/api-key-management):
 new Standard/Coding Plan keys determine billing across supported endpoints;
 older Compatible keys retain endpoint-dependent rules. Standard usage can
