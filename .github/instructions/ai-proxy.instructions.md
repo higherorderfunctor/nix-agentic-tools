@@ -179,8 +179,11 @@ ai.cliproxyapi.instances.main.credentials.zai-api-personal.apiKey = {
 - Within one request, CPA retries the same request on the next credential that
   supports the route model
   (`sdk/cliproxy/auth/conductor_selection.go:1029-1041`) after any upstream
-  failure that is not request-invalid, whether or not the failure cools the
-  first credential, until `routing.retry.max-retry-credentials` is reached
+  failure that is not request-invalid, a Responses-compact request fault, a
+  request-scoped stop or cancellation
+  (`sdk/cliproxy/auth/conductor_execution.go:631, 650-651, 659-660, 676-677, 685-686`),
+  whether or not the failure cools the first credential, until
+  `routing.retry.max-retry-credentials` is reached
   (`sdk/cliproxy/auth/conductor_execution.go:483-690`). A stream that fails
   before its first chunk moves to the next credential, except on request-invalid
   errors, request-scoped stops or cancellation
@@ -193,29 +196,37 @@ ai.cliproxyapi.instances.main.credentials.zai-api-personal.apiKey = {
   500, 502-504 and 520-526, the statuses the hint branch lists
   (`sdk/cliproxy/auth/conductor_cooldown.go:1220`); other statuses take the
   default branch (`:1223-1225`) — cool it only when
-  `routing.cooldown.transient-error-cooldown-seconds` is not negative, -1
-  disabling it (`sdk/cliproxy/auth/conductor_cooldown.go:108-123`), a
-  model-support error or 404 cools it for 12 hours
+  `routing.cooldown.transient-error-cooldown-seconds` is not negative, any
+  negative value disabling it
+  (`sdk/cliproxy/auth/conductor_cooldown.go:108-123`), a model-support error or
+  404 cools it for 12 hours
   (`sdk/cliproxy/auth/conductor_cooldown.go:1041-1049, 1078-1086`), and
   401/402/403 cool it for 30 minutes
   (`sdk/cliproxy/auth/conductor_cooldown.go:1071-1077`).
 - The target API must accept the request shape the harness sends (fields, tools,
   thinking), or the fallback request fails.
-- Duplicate client-visible names in one credential fail evaluation
-  (`sdk/cliproxy/service_models.go:924-929`), and so does a listed name CPA
-  would send to another entry's upstream model. On the claude and codex APIs an
-  aliased entry claims four lowered routing keys — alias, `ParseSuffix(alias)`,
-  name, `ParseSuffix(name)` — first claim wins, and a lookup tries the requested
-  key before its suffix-stripped base
+- Duplicate client-visible names in one credential fail evaluation, for the
+  reason the served family gives: on the claude and codex APIs CPA lists and
+  routes only the first (`sdk/cliproxy/service_models.go:924-929`), while on
+  openai-compatibility every duplicate stays listed and CPA rotates requests for
+  the shared name across their upstream models
+  (`sdk/cliproxy/service_models.go:853-885`;
+  `sdk/cliproxy/auth/conductor_models.go:347-352`), a pool this module refuses.
+  So does a listed name CPA would send to another entry's upstream model. On the
+  claude and codex APIs an aliased entry claims four lowered routing keys —
+  alias, `ParseSuffix(alias)`, name, `ParseSuffix(name)` — first claim wins, and
+  a lookup tries the requested key before its suffix-stripped base
   (`sdk/cliproxy/auth/conductor_models.go:20-46, 676-696`); on
   openai-compatibility every entry's alias is tried, the requested name and its
   base alike, before any name
   (`sdk/cliproxy/auth/oauth_model_alias.go:139-193`). The check simulates the
-  served family's resolution for every listed name:
+  served family's resolution for every listed name the duplicate refusal has not
+  already reported:
   `[{name = n1; alias = "x";} {name = n2; alias = "x(high)";}]` is clean, the
   exact key `x(high)` reaching n2 and `x` reaching n1, while the reverse order
-  is refused, and `[{name = a; alias = b;} {name = c; alias = a;}]` is clean on
-  a chat-only credential but refused on a claude one.
+  is refused on a claude or codex credential, and
+  `[{name = a; alias = b;} {name = c; alias = a;}]` is clean on a chat-only
+  credential but refused on a claude one.
 
 A named client key also listed by hand in `access.api-keys`, or given a
 hand-written `access.key-allowlist` entry, is refused: a second owner could
