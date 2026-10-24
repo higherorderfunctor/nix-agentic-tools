@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -50,6 +51,9 @@ class InstalledBoundaryTests(unittest.TestCase):
             case.extractor, case.library, case.command = root / "extractor", root / "library", command
             case.nix, case.inputs = Path(os.environ["CODEQL_NIX_TEST_NIX"]), {"nixpkgs": {"path": str(dependency), "narHash": hashed}}
             case.scratch, case.root, case.session, case.env = root, source, test_installed.Session(root / "session"), env
+            with mock.patch.dict(sys.modules, {"jsonschema": None}):
+                invocation, _, abi = case.installed_authority()
+            self.assertEqual(Path(invocation[4]) / "abi.py", Path(abi.__file__))
             expected = case.requested_run_identity(source / ".nixql/targets.nix", case.inputs)
             failures, state, commands = iter(("duplicate-run", "wrong-snapshot", "failed-phase")), {}, []
 

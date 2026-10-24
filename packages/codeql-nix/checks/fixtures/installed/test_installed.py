@@ -114,11 +114,11 @@ class InstalledTests(unittest.TestCase):
             extract_spec = importlib.util.spec_from_file_location("nixql_installed_extract", invocation[2])
             extract = importlib.util.module_from_spec(extract_spec)
             extract_spec.loader.exec_module(extract)
-            protocol_path = Path(invocation[2]).parent / "eval" / "protocol.py"
-            protocol_spec = importlib.util.spec_from_file_location("nixql_installed_protocol", protocol_path)
-            protocol = importlib.util.module_from_spec(protocol_spec)
-            protocol_spec.loader.exec_module(protocol)
-            self._installed_authority = (invocation, extract.RunIdentity, protocol.abi)
+            abi_path = Path(invocation[4]) / "abi.py"
+            abi_spec = importlib.util.spec_from_file_location("nixql_installed_abi", abi_path)
+            abi = importlib.util.module_from_spec(abi_spec)
+            abi_spec.loader.exec_module(abi)
+            self._installed_authority = (invocation, extract.RunIdentity, abi)
         return self._installed_authority
 
     def installed_identities(self, expected_run):
