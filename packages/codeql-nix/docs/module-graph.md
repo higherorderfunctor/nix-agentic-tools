@@ -108,7 +108,7 @@ refusal and module-row closure ownership. Its runner prints
 `test_graph_ownership.py: 9 tests, 9 executed`. The independent O2 regression
 prints `test_facet_admission.py: 1 tests, 1 executed`, proving option metadata
 cannot use `closure` before admission or execution. The x86_64-linux
-`codeql-nix-step0` check runs installed qltests against reviewed expected rows;
+`codeql-nix-graph` check runs installed qltests against reviewed expected rows;
 find `test_graph.py: 9 tests, 9 executed` and its evidence suffix
 `M3g module-graph installed qltest passed`. `codeql-nix-abi` imports native
 Booleans through the real schema; `codeql-nix-contracts` covers protocol
