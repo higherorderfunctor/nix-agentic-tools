@@ -108,8 +108,7 @@
       ++ lib.optional (selection.url != null)
       "${label} an external proxy URL does not declare a management-key file; set both DELEGATE_USAGE_CPA_URL and DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE explicitly for usage through CPA.";
   };
-  usageMetadata = runtime: map usageFor (usageVendors runtime);
-  usageEnvironment = runtime: lib.foldl' (environment: value: environment // value.environment) {} (usageMetadata runtime);
+  usageEnvironment = runtime: lib.foldl' (environment: value: environment // value.environment) {} (map usageFor (usageVendors runtime));
   usageWarnings =
     lib.concatMap (vendor: (usageFor vendor).warnings)
     (lib.unique (lib.concatMap usageVendors (lib.filter sourceEnabled supportedRuntimes)));
@@ -247,102 +246,100 @@ in {
     })
   ];
 
-  config = lib.mkMerge [
-    {
-      ai = lib.mkMerge [
-        (lib.genAttrs supportedRuntimes (runtime:
-          lib.mkIf (sourceEnabled runtime)
-          (lib.setAttrByPath (
-              if runtime == "claude"
-              then ["native" "settings" "env"]
-              else lib.drop 2 (optionPaths.pool runtime "environmentVariables")
-            )
-            (usageEnvironment runtime))))
-        {
-          programs.delegate-routing = {
-            families = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families;
-            routing = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.routing;
-            workflows = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.workflows;
+  config = {
+    ai = lib.mkMerge [
+      (lib.genAttrs supportedRuntimes (runtime:
+        lib.mkIf (sourceEnabled runtime)
+        (lib.setAttrByPath (
+            if runtime == "claude"
+            then ["native" "settings" "env"]
+            else lib.drop 2 (optionPaths.pool runtime "environmentVariables")
+          )
+          (usageEnvironment runtime))))
+      {
+        programs.delegate-routing = {
+          families = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families;
+          routing = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.routing;
+          workflows = lib.mapAttrsRecursive (_: lib.mkDefault) entryDefaults.workflows;
+        };
+      }
+      {
+        programs.delegate-routing.runtimes = lib.genAttrs supportedRuntimes (runtime: {
+          techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
+        });
+      }
+      # Guarded on the declaration: a consumer without the Kiro module has no
+      # ai.kiro.cli.v3 to set.
+      (lib.optionalAttrs kiroV3Declared {
+        kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null) {
+          tweaks = lib.mkIf config.ai.kiro.cli.workflows.enable {
+            relativeFileCheckPaths = lib.mkDefault true;
+            stripVendorWorktreeSteering = lib.mkDefault true;
           };
+          v3 = lib.mkDefault true;
+        };
+      })
+      (lib.genAttrs reminderRuntimes (runtime:
+        lib.mkIf (reminderHookEnabled runtime)
+        (reminder.hooks.${runtime} portable.reminder.text)))
+    ];
+    warnings =
+      usageWarnings
+      ++ map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}. Disable that runtime reminder or use devenv.")
+      (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes)
+      ++ lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
+        ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
+        skill's Kiro behavior is verified on the v3 engine only; sessions on
+        another engine may not delegate as the skill describes.
+      '';
+    assertions =
+      [
+        {
+          assertion = !(builtins.elem "kiro" reminderRuntimes && reminderHookEnabled "kiro") || config.ai.kiro.hooksDir == null;
+          message = "ai.programs.delegate-routing: the Kiro reminder cannot coexist with ai.kiro.hooksDir. Set runtimes.kiro.reminder.enable = false or move those hooks out of hooksDir.";
         }
         {
-          programs.delegate-routing.runtimes = lib.genAttrs supportedRuntimes (runtime: {
-            techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
-          });
+          assertion = !lib.any reminderHookEnabled reminderRuntimes || portable.reminder._sourceWins || portable.reminder.text != "";
+          message = "ai.programs.delegate-routing.reminder.text must be non-empty when a runtime reminder hook is enabled, unless a source supplies the content.";
         }
-        # Guarded on the declaration: a consumer without the Kiro module has no
-        # ai.kiro.cli.v3 to set.
-        (lib.optionalAttrs kiroV3Declared {
-          kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null) {
-            tweaks = lib.mkIf config.ai.kiro.cli.workflows.enable {
-              relativeFileCheckPaths = lib.mkDefault true;
-              stripVendorWorktreeSteering = lib.mkDefault true;
-            };
-            v3 = lib.mkDefault true;
-          };
+        {
+          assertion = lib.allUnique (map (family: family.name) flattenedFamilies);
+          message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";
+        }
+      ]
+      ++ lib.concatMap (runtime: let
+        path = "ai.programs.delegate-routing.runtimes.${runtime}";
+      in
+        lib.concatMap (list:
+          map (target: {
+            assertion = !(sourceEnabled runtime) || runtimeEnabled target;
+            message = "${path}.${list} includes `${target}`, but ai.${target}.enable is false. Enable it with ${lib.concatStringsSep "." (optionPaths.enable target)} = true.";
+          })
+          portable.runtimes.${runtime}.${list}) ["extraRuntimes" "manualExternalDelegates"]
+        ++ map (target: {
+          assertion = !(sourceEnabled runtime) || select portable.families models.${target} != [];
+          message = "ai.programs.delegate-routing.runtimes.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
         })
-        (lib.genAttrs reminderRuntimes (runtime:
-          lib.mkIf (reminderHookEnabled runtime)
-          (reminder.hooks.${runtime} portable.reminder.text)))
-      ];
-      warnings =
-        usageWarnings
-        ++ map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}. Disable that runtime reminder or use devenv.")
-        (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes)
-        ++ lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
-          ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
-          skill's Kiro behavior is verified on the v3 engine only; sessions on
-          another engine may not delegate as the skill describes.
-        '';
-      assertions =
-        [
-          {
-            assertion = !(builtins.elem "kiro" reminderRuntimes && reminderHookEnabled "kiro") || config.ai.kiro.hooksDir == null;
-            message = "ai.programs.delegate-routing: the Kiro reminder cannot coexist with ai.kiro.hooksDir. Set runtimes.kiro.reminder.enable = false or move those hooks out of hooksDir.";
-          }
-          {
-            assertion = !lib.any reminderHookEnabled reminderRuntimes || portable.reminder._sourceWins || portable.reminder.text != "";
-            message = "ai.programs.delegate-routing.reminder.text must be non-empty when a runtime reminder hook is enabled, unless a source supplies the content.";
-          }
-          {
-            assertion = lib.allUnique (map (family: family.name) flattenedFamilies);
-            message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";
-          }
-        ]
-        ++ lib.concatMap (runtime: let
-          path = "ai.programs.delegate-routing.runtimes.${runtime}";
-        in
-          lib.concatMap (list:
-            map (target: {
-              assertion = !(sourceEnabled runtime) || runtimeEnabled target;
-              message = "${path}.${list} includes `${target}`, but ai.${target}.enable is false. Enable it with ${lib.concatStringsSep "." (optionPaths.enable target)} = true.";
-            })
-            portable.runtimes.${runtime}.${list}) ["extraRuntimes" "manualExternalDelegates"]
-          ++ map (target: {
-            assertion = !(sourceEnabled runtime) || select portable.families models.${target} != [];
-            message = "ai.programs.delegate-routing.runtimes.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
-          })
-          (requiredTargets runtime)
-          ++ map (selector: {
-            assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
-            message = "${path}.models contains an empty selector; specify vendors, tiers or families.";
-          })
-          models.${runtime}
-          ++ lib.concatLists (lib.mapAttrsToList (name: node: let
-              delegate = builtins.elem node.kind delegateKinds;
-              techniquePath = "${path}.techniques.${lib.strings.escapeNixIdentifier name}";
-            in [
-              {
-                assertion = (node.pinsModel != null) == delegate && (node.pinsEffort != null) == delegate;
-                message = "${techniquePath}: pinsModel and pinsEffort must be non-null exactly for workflow, subagent and external techniques.";
-              }
-              {
-                assertion = node.kind != "external" || node.command != null;
-                message = "${techniquePath}.command is required for an external technique.";
-              }
-            ])
-            techniques.${runtime}))
-        supportedRuntimes;
-    }
-  ];
+        (requiredTargets runtime)
+        ++ map (selector: {
+          assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
+          message = "${path}.models contains an empty selector; specify vendors, tiers or families.";
+        })
+        models.${runtime}
+        ++ lib.concatLists (lib.mapAttrsToList (name: node: let
+            delegate = builtins.elem node.kind delegateKinds;
+            techniquePath = "${path}.techniques.${lib.strings.escapeNixIdentifier name}";
+          in [
+            {
+              assertion = (node.pinsModel != null) == delegate && (node.pinsEffort != null) == delegate;
+              message = "${techniquePath}: pinsModel and pinsEffort must be non-null exactly for workflow, subagent and external techniques.";
+            }
+            {
+              assertion = node.kind != "external" || node.command != null;
+              message = "${techniquePath}.command is required for an external technique.";
+            }
+          ])
+          techniques.${runtime}))
+      supportedRuntimes;
+  };
 }
