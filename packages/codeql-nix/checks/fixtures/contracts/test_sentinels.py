@@ -10,13 +10,15 @@ sys.path.insert(0, str(OWNER / "checks/fixtures/abi"))
 import abi
 from golden import BINDING_GRAPH
 
-# M3p relation inventory, independently spelled rather than generated.
+# Increment 3 relation inventory, independently spelled rather than generated.
 RELATIONS = {
-    "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definition_order", "nx_definitions",
+    "nx_anchors", "nx_capabilities", "nx_contexts",
+    "nx_candidates", "nx_definition_candidate_priorities", "nx_definition_order",
+    "nx_definition_selections", "nx_definitions",
     "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files",
     "nx_module_imports", "nx_module_lib_bindings", "nx_module_roots", "nx_modules",
-    "nx_observation_contexts", "nx_observation_definitions", "nx_observation_modules",
-    "nx_observation_options", "nx_observations",
+    "nx_observation_candidates", "nx_observation_contexts", "nx_observation_definitions",
+    "nx_observation_modules", "nx_observation_options", "nx_observations",
     "nx_option_declarations", "nx_option_metadata",
     "nx_option_priority", "nx_options", "nx_origin_files", "nx_origin_positions",
     "nx_origins", "nx_phases", "nx_request_results", "nx_requests", "nx_runs",

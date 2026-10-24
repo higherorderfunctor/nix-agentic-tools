@@ -95,6 +95,30 @@ module Modules {
     string toString() { result = this.getOption().toString() + ":" + this.getOrdinal().toString() }
   }
 
+  /** A bounded inventory record, distinct from an upstream retained definition. */
+  class DefinitionCandidate extends @nx_candidate {
+    DefinitionCandidate() {
+      exists(@nx_observation observation, ObservedOption option |
+        Evaluation::observed(observation) and nx_observation_candidates(observation, this) and
+        nx_candidates(this, option, _, _, _, _, _, _) and
+        nx_observations(observation, option.getRequest(), _, "observed"))
+    }
+    ObservedOption getOption() { nx_candidates(this, result, _, _, _, _, _, _) }
+    Origin::Origin getOrigin() { nx_candidates(this, _, _, result, _, _, _, _) }
+    RawBridge::Anchor getAnchor() { nx_candidates(this, _, _, _, result, _, _, _) }
+    int getOrdinal() { nx_candidates(this, _, result, _, _, _, _, _) }
+    string getActiveState() { nx_candidates(this, _, _, _, _, result, _, _) }
+    string getSelectedState() { nx_candidates(this, _, _, _, _, _, result, _) }
+    string getWrapperChainJson() { nx_candidates(this, _, _, _, _, _, _, result) }
+    string getPriorityText() { nx_definition_candidate_priorities(this, result) }
+    SelectedDefinition getASelectedDefinition() { nx_definition_selections(this, result) }
+    predicate isLosing() {
+      this.getActiveState() = "true" and this.getSelectedState() = "false" and
+      Evaluation::decimalLessThan(this.getOption().getPriorityText(), this.getPriorityText())
+    }
+    string toString() { result = this.getOption().toString() + ":candidate:" + this.getOrdinal().toString() }
+  }
+
   /** The adapter's invocation evidence, gated by the common generated bundle. */
   predicate authenticatedLibraryFormal(@nx_request request, RawBridge::Anchor functionAnchor,
     RawBridge::Anchor formalAnchor) {

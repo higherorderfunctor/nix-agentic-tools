@@ -68,6 +68,18 @@ GRAPH = [
 ]
 
 
+def semantic_key(namespace, parts):
+    return "nixql:v1:" + namespace + ":" + "".join(
+        str(len(part.encode("utf-8"))) + ":" + part for part in parts
+    )
+
+
+ALL_DEFINITIONS_REQUEST = "nixql:v1:request:1:d"
+CANDIDATE = semantic_key("candidate", [ALL_DEFINITIONS_REQUEST, I["o"], "fixture", I["a"], "[]"])
+ALL_OPTION_OBSERVATION = "nixql:v1:observation:1:A"
+ALL_DEFINITION_OBSERVATION = "nixql:v1:observation:1:B"
+CANDIDATE_OBSERVATION = "nixql:v1:observation:1:C"
+
 # Independent M3p invocation witness over admitted function/formal structure.
 # F1 validates supplied identity/structure; only the installed adapter tests
 # authenticate these claims against actual source bytes and the supplied lib.
@@ -94,6 +106,27 @@ BINDING_GRAPH += [
     ["nx_anchors", [FORMAL_NODE, I["f"], 2, 5, "formal", "[0,0,0]"]],
     ["nx_anchors", [FORMAL, I["f"], 2, 5, "identifier", "[0,0,0,0]"]],
     ["nx_module_lib_bindings", [I["q"], FUNCTION, FORMAL, "lib", "model-bundle"]],
+]
+
+# Independent M3d candidate witness: the same retained option/definition and one
+# selected candidate, each observed under its own successful all-definitions
+# request. The candidate identity is framed from the contract's five inputs.
+BINDING_GRAPH += [
+    ["nx_candidates", [CANDIDATE, I["o"], 0, I["p"], I["a"], "true", "true", "[]"]],
+    ["nx_definition_candidate_priorities", [CANDIDATE, "100"]],
+    ["nx_definition_selections", [CANDIDATE, I["d"]]],
+    ["nx_observation_candidates", [CANDIDATE_OBSERVATION, CANDIDATE]],
+    ["nx_observation_definitions", [ALL_DEFINITION_OBSERVATION, I["d"]]],
+    ["nx_observation_options", [ALL_OPTION_OBSERVATION, I["o"]]],
+    ["nx_observations", [ALL_OPTION_OBSERVATION, ALL_DEFINITIONS_REQUEST,
+                         "pre-apply-metadata", "observed"]],
+    ["nx_observations", [ALL_DEFINITION_OBSERVATION, ALL_DEFINITIONS_REQUEST,
+                         "pre-apply-metadata", "observed"]],
+    ["nx_observations", [CANDIDATE_OBSERVATION, ALL_DEFINITIONS_REQUEST,
+                         "pre-apply-metadata", "observed"]],
+    ["nx_request_results", [ALL_DEFINITIONS_REQUEST, "complete", "", 3]],
+    ["nx_requests", [ALL_DEFINITIONS_REQUEST, I["t"], I["c"], "option-metadata",
+                     '["a.b"]', "all-definitions", 0, 3, 1048576, 5, 64]],
 ]
 
 # Independent M3g closure witness over the second context: one module-graph

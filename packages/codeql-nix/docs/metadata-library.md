@@ -2,14 +2,15 @@
 
 > **Last verified:** 2026-10-23 — M3p adds optional retained order to L0
 > metadata; M3g adds the observed module occurrence; source properties remain
-> separate from observed selection.
+> separate from observed selection; M3d adds the bounded observed candidate
+> inventory.
 
 - QL is the language for querying a CodeQL database.
 - A target is an explicitly named configuration.
 - A context is a target's root instance.
 - A request selects an option path, metadata facet and work limits.
-- An observation records an outcome for one typed option, definition, context or
-  module.
+- An observation records an outcome for one typed option, retained definition,
+  context, module or definition candidate.
 - Selected means retained for type merging, without proving a value's cause.
 - An origin is an evaluator label with an optional admitted file or point.
 - An anchor identifies syntax by file, byte range, kind and child path.
@@ -19,11 +20,11 @@
 - TRAP is the fact format imported into a CodeQL database.
 
 `Targets.qll`, `Modules.qll` and `Origin.qll` expose only `Target`,
-`RequestResult`, `ObservedOption`, `SelectedDefinition`, `ModuleOccurrence`,
-`Origin` and the separate `PropertyApplication`/`PropertyGroup` structural
-views. Private `internal/Evaluation.qll` shares observation witnesses and path
-encoding over the [existing tables](database-contract.md). Request results
-retain failures.
+`RequestResult`, `ObservedOption`, `SelectedDefinition`, `DefinitionCandidate`,
+`ModuleOccurrence`, `Origin` and the separate
+`PropertyApplication`/`PropertyGroup` structural views. Private
+`internal/Evaluation.qll` shares observation witnesses and path encoding over
+the [existing tables](database-contract.md). Request results retain failures.
 
 Observed options require their typed subject link and an observed outcome from a
 complete or partial request. Selected definitions require their own such link
@@ -38,6 +39,13 @@ independently of override priority; absent order stays absent. The
 [module properties query](module-properties.md) returns retained selection rows
 only. Structural wrappers use authenticated library formals and generated helper
 identities; they can describe inactive source without observed guard truth.
+
+`DefinitionCandidate` exposes the bounded observed
+[all-definitions inventory](all-definitions.md), with independent
+active/selected states, source anchor, wrapper chain and optional effective
+override priority. It is distinct from an origin association candidate; only
+authenticated unambiguous retained correspondence links it to a selected
+definition.
 
 Origins expose optional file paths and reported UTF-8 byte points. Candidates
 reuse [authenticated anchors](source-identity.md), require target admission and

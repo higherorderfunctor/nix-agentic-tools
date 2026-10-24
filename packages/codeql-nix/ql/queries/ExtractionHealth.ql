@@ -38,6 +38,16 @@ private predicate row(string kind, string target, string pathJson, string facet,
     (bindings = 0 and state = "unavailable" and reason = "no authenticated module functions"
      or bindings > 0 and state = "partial" and reason = "authenticated functions; coverage is not exhaustive"))
   or
+  exists(Modules::DefinitionCandidate candidate |
+    kind = "candidate" and target = candidate.getOption().getTarget().getName() and
+    pathJson = candidate.getOption().getPathJson() and facet = "all-definitions" and
+    state = candidate.getSelectedState() and reason = "active=" + candidate.getActiveState() and
+    countText = candidate.getOrdinal().toString())
+  or
+  exists(Targets::Target selected |
+    target = selected.getName() and nx_capabilities(selected, "all-definitions", state, reason) and
+    kind = "capability" and pathJson = "" and facet = "all-definitions" and countText = "")
+  or
   nx_runs(_, _, _, _, _, _) and not exists(Targets::Target selected) and
     target = "" and pathJson = "" and state = "unavailable" and reason = "no selected targets" and
     (kind = "binding" and facet = "module-library-bindings" and countText = "0"

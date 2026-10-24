@@ -57,6 +57,7 @@ argjson
 argstr
 aristocratos
 arxanas
+attrpath
 attrset
 attrsets
 autobuild
@@ -229,6 +230,7 @@ hookscriptsdir
 hostable
 hostonly
 hotspots
+hpath
 httpcaddyfile
 huggingface
 idempotently
@@ -463,6 +465,7 @@ sourcehut
 sourcepath
 sourcepos
 sparfenyuk
+spath
 srcs
 sshsign
 starlark
@@ -518,6 +521,8 @@ ugrep
 uinput
 ultracode
 ultrareview
+unadmitted
+unanchorable
 unapprove
 unbuildable
 uncacheable
@@ -539,6 +544,7 @@ unresumable
 unscanned
 unsetenv
 unsets
+unshadowed
 unshares
 unstages
 unstarted

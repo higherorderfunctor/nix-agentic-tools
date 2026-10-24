@@ -156,7 +156,7 @@ def validate(rows):
         require(anchor == key("anchor", [file, str(start), str(end), kind, child]), "anchor identity mismatch")
     for req, function, formal, lib_hash, model_hash in tables["nx_module_lib_bindings"]:
         target = owners["target"][request[req][1]]
-        require(result.get(req, [None])[0] == "complete" and request[req][5] in
+        require(result.get(req, [None])[0] in ("complete", "partial") and request[req][5] in
                 ("selection", "all-definitions"), "library binding lacks successful request")
         require(lib_hash == target[6] and model_hash == owners["run"][target[1]][4],
                 "library binding fingerprint mismatch")
@@ -188,7 +188,7 @@ def validate(rows):
     priority_witness = CONTRACT["priority"]["optionWitness"]
     observed_priorities = set()
     subjects = defaultdict(list)
-    for kind in ("context", "definition", "module", "option"):
+    for kind in ("candidate", "context", "definition", "module", "option"):
         for observation, subject in tables[f"nx_observation_{kind}s"]:
             subjects[observation].append((kind, subject))
     for observation, req, stage, state in tables["nx_observations"]:
@@ -202,7 +202,7 @@ def validate(rows):
         elif kind == "module":
             require(module[subject][1] == ctx, "observation subject context mismatch")
         else:
-            opt = subject if kind == "option" else owners["definition"][subject][1]
+            opt = subject if kind == "option" else owners[kind][subject][1]
             require(option[opt][1] == ctx, "observation subject context mismatch")
         if kind in ("context", "module"):
             require(subject_request[3] == "module-graph" and subject_request[5] == "closure",
@@ -217,6 +217,83 @@ def validate(rows):
     witnessed = {(req, kind, subject) for observation, req, _, state in tables["nx_observations"]
                  if state == "observed" and result.get(req, [None])[0] in ("complete", "partial")
                  for kind, subject in subjects[observation]}
+    candidate_priorities = dict(tables["nx_definition_candidate_priorities"])
+    winning_priorities = dict(tables["nx_option_priority"])
+    candidate_requests = {}
+    candidate_ordinals = defaultdict(list)
+    for candidate, opt, ordinal, origin, anchor, active, selected, chain_json in tables["nx_candidates"]:
+        witnesses = [req for req, kind, subject in witnessed if kind == "candidate" and subject == candidate]
+        require(len(witnesses) == 1, "candidate requires exactly one successful request")
+        req = witnesses[0]
+        candidate_requests[candidate] = req
+        require(request[req][3:6] == ["option-metadata", option[opt][2], "all-definitions"] and
+                (req, "option", opt) in witnessed, "candidate lacks same-request option witness")
+        parts = key_parts(candidate, "candidate")
+        require(len(parts) == 5 and parts[0] == req and parts[1] == opt and parts[3] == anchor,
+                "candidate identity mismatch")
+        group = json_path(parts[4], True)
+        require(all(type(i) is int for i in group), "invalid candidate group path")
+        candidate_ordinals[opt].append(ordinal)
+        target = request[req][1]
+        source = owners["anchor"][anchor][1]
+        require(any(t == target and f == source for t, f, _ in tables["nx_target_inputs"]),
+                "candidate source not admitted")
+        require(origin not in origin_files or origin_files[origin] == [source], "candidate origin/anchor mismatch")
+        chain = decoded(chain_json)
+        require(isinstance(chain, list), "invalid wrapper chain")
+        for wrapper in chain:
+            require(isinstance(wrapper, dict), "invalid wrapper record")
+            kind = wrapper.get("kind")
+            require(isinstance(kind, str), "invalid wrapper kind")
+            field = {"if": "truth", "merge": "index", "order": "priority", "override": "priority"}.get(kind)
+            require(field is not None and set(wrapper) == {"kind", "anchor", field}, "invalid wrapper fields")
+            require(isinstance(wrapper["anchor"], str) and wrapper["anchor"] in owners["anchor"] and
+                    owners["anchor"][wrapper["anchor"]][1] == source, "wrapper anchor not in candidate source")
+            value = wrapper[field]
+            if field == "truth":
+                require(value in ("false", "true", "unknown"), "invalid wrapper truth")
+            elif field == "index":
+                require(type(value) is int and 0 <= value <= 2147483647, "invalid merge index")
+            elif value is not None:
+                priority(value)
+        require(group == [wrapper["index"] for wrapper in chain if wrapper["kind"] == "merge"],
+                "candidate group path disagrees with wrapper chain")
+        require(selected != "false" or active == "false" or
+                (active == "true" and candidate in candidate_priorities and opt in winning_priorities and
+                 int(candidate_priorities[candidate]) > int(winning_priorities[opt])),
+                "unselected active candidate lacks worse-priority witness")
+        require(active != "false" or selected == "false", "inactive candidate cannot be selected")
+        require(selected != "true" or active == "true", "selected candidate must be active")
+    for ordinals in candidate_ordinals.values():
+        require(sorted(ordinals) == list(range(len(ordinals))), "noncontiguous candidate ordinals")
+    linked = set()
+    retained_links = set()
+    for candidate, definition in tables["nx_definition_selections"]:
+        req = candidate_requests[candidate]
+        record = owners["candidate"][candidate]
+        require(record[6] == "true" and owners["definition"][definition][1] == record[1] and
+                (req, "definition", definition) in witnessed, "selection lacks same-request retained witness")
+        require(candidate not in linked and definition not in retained_links,
+                "selection correspondence is ambiguous")
+        linked.add(candidate)
+        retained_links.add(definition)
+    require(all(record[6] != "true" or candidate in linked for candidate, record in owners["candidate"].items()),
+            "selected candidate lacks retained correspondence")
+    for req, _, ctx, domain, segments, facet, *_ in tables["nx_requests"]:
+        if facet != "all-definitions":
+            continue
+        require(domain == "option-metadata", "all-definitions requires option metadata")
+        if result.get(req, [None])[0] not in ("complete", "partial"):
+            continue
+        observed = [(kind, subject) for observation, observed_req, _, state in tables["nx_observations"]
+                    if observed_req == req and state == "observed" for kind, subject in subjects[observation]]
+        opts = [subject for kind, subject in observed if kind == "option"]
+        require(len(opts) == 1 and option[opts[0]][1:3] == [ctx, segments], "inventory lacks option witness")
+        opt = opts[0]
+        expected = {("option", opt)} | {("definition", d) for d, record in owners["definition"].items() if record[1] == opt} | {
+            ("candidate", c) for c, record in owners["candidate"].items() if record[1] == opt}
+        require(len(observed) == len(expected) and set(observed) == expected and result[req][2] == len(expected),
+                "all-definitions observed count or subjects mismatch")
     root_ordinals = defaultdict(list)
     root_modules = set()
     for context_key, ordinal, mod in tables["nx_module_roots"]:
@@ -269,7 +346,7 @@ def validate(rows):
         parent = owners["definition"][definition][1]
         require(any(kind == "definition" and subject == definition and
                     (req, "option", parent) in witnessed and
-                    request[req][5] in ("definitions", "selection")
+                    request[req][5] in ("all-definitions", "definitions", "selection")
                     for req, kind, subject in witnessed), "order lacks same-request retained observation")
     for opt, _ in tables["nx_option_priority"]:
         require(opt in defined_options and opt in observed_priorities, "option priority lacks defined observation")
@@ -291,7 +368,7 @@ def validate(rows):
         require(ordinal not in definition_ordinals[opt], "duplicate definition ordinal")
         definition_ordinals[opt].add(ordinal)
     for req, _, ctx, _, segments, facet, *_ in tables["nx_requests"]:
-        if facet in ("definitions", "selection") and result.get(req, [None])[0] == "complete":
+        if facet in ("all-definitions", "definitions", "selection") and result.get(req, [None])[0] == "complete":
             selected = {opt for opt, context_key, path_json in tables["nx_options"] if (context_key, path_json) == (ctx, segments)}
             witnessed = {subject for observation, request_key, _, state in tables["nx_observations"]
                          if request_key == req and state == "observed"

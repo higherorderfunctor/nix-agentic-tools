@@ -15,12 +15,14 @@ spec = importlib.util.spec_from_file_location("abi", MODULE)
 abi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(abi)
 LIMIT = 1048576
-M3P_TABLES = {
-    "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definition_order", "nx_definitions",
+M3D_TABLES = {
+    "nx_anchors", "nx_capabilities", "nx_contexts",
+    "nx_candidates", "nx_definition_candidate_priorities", "nx_definition_order",
+    "nx_definition_selections", "nx_definitions",
     "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files",
     "nx_module_imports", "nx_module_lib_bindings", "nx_module_roots", "nx_modules",
-    "nx_observation_contexts", "nx_observation_definitions", "nx_observation_modules",
-    "nx_observation_options", "nx_observations",
+    "nx_observation_candidates", "nx_observation_contexts", "nx_observation_definitions",
+    "nx_observation_modules", "nx_observation_options", "nx_observations",
     "nx_option_declarations", "nx_option_metadata",
     "nx_option_priority", "nx_options", "nx_origin_files", "nx_origin_positions",
     "nx_origins", "nx_phases", "nx_request_results", "nx_requests", "nx_runs",
@@ -93,8 +95,8 @@ class AbiTests(unittest.TestCase):
         self.assertEqual(GRAPH, before)
         abi.validate(BINDING_GRAPH)
         tables = {name for name, _ in BINDING_GRAPH}
-        self.assertEqual(tables, M3P_TABLES)
-        self.assertEqual(set(abi.COLUMNS), M3P_TABLES)
+        self.assertEqual(tables, M3D_TABLES)
+        self.assertEqual(set(abi.COLUMNS), M3D_TABLES)
         schema = MODULE.with_name("evaluation.dbscheme").read_text()
         self.assertEqual(set(re.findall(r"(?m)^(nx_\w+)\s*\(", schema)), tables)
 
@@ -296,7 +298,13 @@ class AbiTests(unittest.TestCase):
                 rows = [item for item in rows if not (item[0] == "nx_observation_definitions" and item[1][1] == I["d"])
                         and not (item[0] == "nx_observations" and item[1][0] == I["k"])]
             elif mutation == "unobserved":
-                row(rows, "nx_observations", 1)[3] = "unforced"
+                retained_observations = {
+                    item[1][0] for item in rows
+                    if item[0] == "nx_observation_definitions" and item[1][1] == I["d"]
+                }
+                for observation in rows:
+                    if observation[0] == "nx_observations" and observation[1][0] in retained_observations:
+                        observation[1][3] = "unforced"
             else:
                 rows = [item for item in rows if not (item[0] in
                     {"nx_observations", "nx_observation_options"} and
