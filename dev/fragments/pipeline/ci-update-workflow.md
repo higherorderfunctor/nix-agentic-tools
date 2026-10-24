@@ -1,6 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-21 — the sweep is the only update entrypoint;
+> **Last verified:** 2026-10-24 — Darwin extraction waits for package shards to
+> publish their builds through Cachix; the sweep is the only update entrypoint;
 > package workers never build; `checks/<concern>/flake.lock` files are lock-kind
 > matrix rows; the `mirror-health` job reports the jail-nix mirror; ci.yml runs
 > the required KVM job `service-secret-ordering`, which builds a dev-only
@@ -281,8 +282,15 @@ unavailable base comparison schedules every HEAD owner; if HEAD derivation
 evaluation fails, the same output is retried for names only. `workflow_dispatch`
 runs all selected owners. An empty matrix skips the Darwin producer; both
 required build contexts accept that only when planning passed. The producer
-still regenerates and checks each selected owner's facts. The Kiro patch Scope
-gate does not gate it.
+waits for all package shards to finish, including Cachix upload finalization,
+before regenerating and checking each selected owner's facts. On authenticated
+runs it can substitute a cold release package already built by a Darwin shard,
+instead of racing that shard with its own 60-minute budget. Fork PRs lack the
+upload token, so they may still build the package locally. GitHub Actions cannot
+express a dependency on only the Darwin matrix legs; waiting for the whole
+package matrix can add extraction time after the slowest shard to both required
+build contexts. If a shard fails, the producer skips and the required build
+contexts fail. The Kiro patch Scope gate does not gate it.
 
 On a same-repository `update/*` branch, a changed `extracted.json` is committed
 with bot author and committer identities and pushed with the App token,

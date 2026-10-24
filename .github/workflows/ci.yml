@@ -190,7 +190,9 @@ jobs:
           python3 dev/scripts/ci-extracted-facts.py
 
   extracted-facts:
-    needs: plan-extracted-facts
+    # Wait for package shards to finish publishing to Cachix before the Darwin
+    # producer realizes the same release packages on its own runner.
+    needs: [build-packages, plan-extracted-facts]
     if: >-
       needs.plan-extracted-facts.outputs.planned == 'true' &&
       needs.plan-extracted-facts.outputs.matrix != '[]'
