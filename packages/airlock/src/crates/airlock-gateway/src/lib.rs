@@ -1,9 +1,13 @@
+mod ca;
+mod intercept;
+
 use std::{
     collections::BTreeMap,
     convert::Infallible,
     future::Future,
     io,
     net::SocketAddr,
+    path::Path,
     pin::Pin,
     sync::{
         Arc,
@@ -32,6 +36,7 @@ use hyper::{
     upgrade::OnUpgrade,
 };
 use hyper_util::rt::TokioIo;
+use rustls::RootCertStore;
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf},
     net::{TcpListener, TcpStream},
@@ -42,6 +47,11 @@ use tokio::{
 use tracing::instrument::WithSubscriber;
 use zeroize::Zeroizing;
 
+pub use crate::ca::{CaError, create_private_directory, private_directory};
+use crate::intercept::Interceptor;
+
+// A peer that stops reading can hold a closed relay open this long while close_notify flushes.
+const CLOSE_GRACE: Duration = Duration::from_secs(1);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
@@ -49,10 +59,16 @@ type Reply = Response<Full<Bytes>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error(transparent)]
+    Authority(#[from] CaError),
     #[error("gateway socket: {0}")]
     Io(#[from] io::Error),
+    #[error("no upstream root certificates could be loaded (check SSL_CERT_FILE)")]
+    NoUpstreamRoots,
     #[error(transparent)]
     Secrets(#[from] SecretErrors),
+    #[error("TLS configuration: {0}")]
+    Tls(#[from] rustls::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -75,16 +91,22 @@ pub struct Gateway {
 }
 
 struct State {
+    interceptor: Interceptor,
     policy: Policy,
     tokens: BTreeMap<ClientId, Secret>,
 }
 
 impl Gateway {
-    /// Loads every client token once and binds the configured loopback listener.
+    /// Loads every client token once, opens or creates the CA in `ca_directory`, and binds the
+    /// configured loopback listener. Intercepted upstreams are verified against `upstream_roots`.
     ///
     /// # Errors
-    /// Returns every token load error, or a socket bind error.
-    pub async fn bind(config: Config) -> Result<Self, Error> {
+    /// Returns every token load error, a CA error, an empty root store, or a socket bind error.
+    pub async fn bind(
+        config: Config,
+        ca_directory: &Path,
+        upstream_roots: RootCertStore,
+    ) -> Result<Self, Error> {
         let mut errors = Vec::new();
         let mut tokens = BTreeMap::new();
         for (client, file) in config.client_token_files() {
@@ -98,11 +120,13 @@ impl Gateway {
         if !errors.is_empty() {
             return Err(SecretErrors(errors).into());
         }
+        let interceptor = Interceptor::new(ca_directory, upstream_roots)?;
         let listener = TcpListener::bind(config.listen()).await?;
         Ok(Self {
             address: listener.local_addr()?,
             listener,
             state: Arc::new(State {
+                interceptor,
                 policy: Policy::from_config(&config),
                 tokens,
             }),
@@ -150,14 +174,20 @@ impl Gateway {
 
 struct PendingTunnel {
     audit: Audit,
+    route: Route,
     upgrade: OnUpgrade,
-    upstream: TcpStream,
+}
+
+enum Route {
+    Intercept(ConnectTarget),
+    Tunnel(TcpStream),
 }
 
 async fn connection(socket: TcpStream, state: Arc<State>) {
     // The HTTP connection owns the upgrade; the tunnel never runs in a detached task.
     let (sender, mut receiver) = mpsc::channel(1);
-    let service = service_fn(move |request| handle(request, state.clone(), sender.clone()));
+    let service_state = state.clone();
+    let service = service_fn(move |request| handle(request, service_state.clone(), sender.clone()));
     let result = http1::Builder::new()
         .serve_connection(TokioIo::new(socket), service)
         .with_upgrades()
@@ -167,9 +197,17 @@ async fn connection(socket: TcpStream, state: Arc<State>) {
             pending.audit.outcome = "upgrade_error";
             return;
         }
-        match pending.upgrade.await {
-            Ok(upgraded) => tunnel(TokioIo::new(upgraded), pending.upstream, pending.audit).await,
-            Err(_) => pending.audit.outcome = "upgrade_error",
+        match (pending.upgrade.await, pending.route) {
+            (Ok(upgraded), Route::Intercept(target)) => {
+                state
+                    .interceptor
+                    .run(TokioIo::new(upgraded), target, pending.audit)
+                    .await;
+            }
+            (Ok(upgraded), Route::Tunnel(upstream)) => {
+                relay(TokioIo::new(upgraded), upstream, pending.audit).await;
+            }
+            (Err(_), _) => pending.audit.outcome = "upgrade_error",
         }
     }
 }
@@ -237,13 +275,9 @@ async fn handle(
             Ok(response(StatusCode::FORBIDDEN, format!("{reason:?}")))
         }
         Decision::Intercept { .. } => {
-            // TLS interception belongs to M2.
+            // Passthrough only: the granted credentials are ignored until credential swap lands.
             audit.decision = "intercept";
-            audit.outcome = "not_implemented";
-            Ok(response(
-                StatusCode::NOT_IMPLEMENTED,
-                "TLS interception requires M2",
-            ))
+            Ok(establish(&mut request, &sender, audit, Route::Intercept(target)).await)
         }
         Decision::Tunnel => {
             audit.decision = "tunnel";
@@ -269,29 +303,37 @@ async fn handle(
                     ));
                 }
             };
-            let pending = PendingTunnel {
-                audit,
-                upgrade: hyper::upgrade::on(&mut request),
-                upstream,
-            };
-            if sender.send(pending).await.is_err() {
-                return Ok(response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "connection closed",
-                ));
-            }
-            let mut reply = response(StatusCode::OK, Bytes::new());
-            reply
-                .extensions_mut()
-                .insert(hyper::ext::ReasonPhrase::from_static(
-                    b"Connection Established",
-                ));
-            Ok(reply)
+            Ok(establish(&mut request, &sender, audit, Route::Tunnel(upstream)).await)
         }
     }
 }
 
+/// Hands the upgrade to the owning connection and answers `200 Connection Established`.
+async fn establish(
+    request: &mut Request<Incoming>,
+    sender: &mpsc::Sender<PendingTunnel>,
+    audit: Audit,
+    route: Route,
+) -> Reply {
+    let pending = PendingTunnel {
+        audit,
+        route,
+        upgrade: hyper::upgrade::on(request),
+    };
+    if sender.send(pending).await.is_err() {
+        return response(StatusCode::INTERNAL_SERVER_ERROR, "connection closed");
+    }
+    let mut reply = response(StatusCode::OK, Bytes::new());
+    reply
+        .extensions_mut()
+        .insert(hyper::ext::ReasonPhrase::from_static(
+            b"Connection Established",
+        ));
+    reply
+}
+
 struct Audit {
+    alpn: Option<String>,
     client: Option<ClientId>,
     client_to_upstream: Arc<AtomicU64>,
     decision: &'static str,
@@ -299,6 +341,7 @@ struct Audit {
     host: Option<airlock_core::ids::HostName>,
     outcome: &'static str,
     port: u16,
+    sni: Option<String>,
     started: Instant,
     upstream_to_client: Arc<AtomicU64>,
 }
@@ -306,6 +349,7 @@ struct Audit {
 impl Audit {
     fn new() -> Self {
         Self {
+            alpn: None,
             client: None,
             client_to_upstream: Arc::default(),
             decision: "deny",
@@ -313,6 +357,7 @@ impl Audit {
             host: None,
             outcome: "cancelled",
             port: 0,
+            sni: None,
             started: Instant::now(),
             upstream_to_client: Arc::default(),
         }
@@ -326,6 +371,8 @@ impl Drop for Audit {
                 client = self.client.as_ref().map_or("", AsRef::as_ref),
                 host = self.host.as_ref().map_or("", AsRef::as_ref),
                 port = self.port,
+                sni = self.sni.as_deref().unwrap_or_default(),
+                alpn = self.alpn.as_deref().unwrap_or_default(),
                 decision = self.decision,
                 client_to_upstream = self.client_to_upstream.load(Ordering::Relaxed),
                 upstream_to_client = self.upstream_to_client.load(Ordering::Relaxed),
@@ -383,7 +430,14 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for TunnelIo<T> {
     }
 }
 
-async fn tunnel(client: TokioIo<hyper::upgrade::Upgraded>, upstream: TcpStream, mut audit: Audit) {
+/// Copies bytes both ways until either side ends, then shuts both down (`close_notify` for TLS).
+///
+/// Shutdown flushes buffered ciphertext first, so it is bounded; on expiry both streams drop.
+async fn relay<C, U>(client: C, upstream: U, mut audit: Audit)
+where
+    C: AsyncRead + AsyncWrite + Unpin,
+    U: AsyncRead + AsyncWrite + Unpin,
+{
     let closed = Arc::new(Notify::new());
     let mut client = TunnelIo {
         closed: closed.clone(),
@@ -401,5 +455,8 @@ async fn tunnel(client: TokioIo<hyper::upgrade::Upgraded>, upstream: TcpStream, 
         }
         () = closed.notified() => "closed",
     };
-    let _ = tokio::join!(client.shutdown(), upstream.shutdown());
+    let _ = timeout(CLOSE_GRACE, async {
+        tokio::join!(client.shutdown(), upstream.shutdown())
+    })
+    .await;
 }
