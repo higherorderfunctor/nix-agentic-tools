@@ -147,18 +147,19 @@ in {
             apiKey = {
               apis = {
                 anthropic = null;
-                chat.base-url = "https://chat.example/v4";
+                chat.base-url = vendor.generalApis.chat.base-url;
               };
               key = clientKey "override";
               models = ["custom-model"];
             };
           };
         }));
-        block = family: lib.findFirst (entry: entry.name == "zai") null settings.api-keys.${family};
+        overriddenSettings = rendered overridden;
+        block = settings: family: lib.findFirst (entry: entry.name == "zai") null settings.api-keys.${family};
         checks = {
           "accepted" = failedMessages result == [];
-          "both API blocks" = (block "claude").base-url == vendor.apis.anthropic.base-url && (block "openai-compatibility").base-url == vendor.apis.chat.base-url;
-          "catalog defaults" = (block "claude").models == map (name: {inherit name;}) vendor.models && (block "openai-compatibility").models == (block "claude").models;
+          "both API blocks" = (block settings "claude").base-url == vendor.apis.anthropic.base-url && (block settings "openai-compatibility").base-url == vendor.apis.chat.base-url;
+          "catalog defaults" = (block settings "claude").models == map (name: {inherit name;}) vendor.models && (block settings "openai-compatibility").models == (block settings "claude").models;
           "chat client route" =
             (lib.last settings.access.key-allowlist).credentials
             == [
@@ -168,6 +169,7 @@ in {
                 provider = "openai-compatible-zai";
               }
             ];
+          "coding chat default" = (block settings "openai-compatibility").base-url == vendor.apis.chat.base-url && vendor.apis.chat.base-url != vendor.generalApis.chat.base-url;
           "overrides" =
             failedMessages overridden
             == []
@@ -175,13 +177,24 @@ in {
             == {
               apis = {
                 anthropic = null;
-                chat.base-url = "https://chat.example/v4";
+                chat.base-url = vendor.generalApis.chat.base-url;
                 responses = null;
               };
               key = clientKey "override";
               models = ["custom-model"];
               priority = null;
             };
+          "pay-as-you-go override" =
+            (block overriddenSettings "openai-compatibility").base-url
+            == vendor.generalApis.chat.base-url
+            && (lib.last overriddenSettings.access.key-allowlist).credentials
+            == [
+              {
+                base-urls = [vendor.generalApis.chat.base-url];
+                kind = "apikey";
+                provider = "openai-compatible-zai";
+              }
+            ];
           "picker catalog retained" =
             result.config.ai.claude.normalized.proxy.credentials
             == [
