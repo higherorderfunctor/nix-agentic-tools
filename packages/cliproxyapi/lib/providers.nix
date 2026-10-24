@@ -1,5 +1,8 @@
 # One API → CPA credential-family table for named upstream API-key credentials.
-{lib}: let
+{
+  lib,
+  oauthOptions,
+}: let
   inherit (lib) mkOption types;
   redact = import ../../../lib/redact {inherit lib;};
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
@@ -103,18 +106,18 @@
       };
       oauth = mkOption {
         type = types.nullOr (types.submodule {
-          # OAuth priority belongs to CPA login-file metadata; declaring
-          # oauth.priority here would accept a value no config field can apply.
-          options = {
-            account = mkOption {
-              type = redact.types.redacted;
-              description = "Exact account email as a redact reference. CPA matches OAuth logins by their trimmed account email.";
+          options =
+            oauthOptions
+            // {
+              account = mkOption {
+                type = redact.types.redacted;
+                description = "Exact account email as a redact reference. CPA matches OAuth logins by their trimmed account email.";
+              };
+              vendor = mkOption {
+                type = types.strMatching "[a-z][a-z0-9-]*";
+                description = "Vendor's CPA provider field, such as `claude` (Anthropic) or `codex` (OpenAI).";
+              };
             };
-            vendor = mkOption {
-              type = types.strMatching "[a-z][a-z0-9-]*";
-              description = "Vendor's CPA provider field, such as `claude` (Anthropic) or `codex` (OpenAI).";
-            };
-          };
         });
         default = null;
         description = "An OAuth upstream credential held in CPA's auth directory. Declare exactly one of oauth or apiKey.";
@@ -190,5 +193,9 @@
     else {rule = rule choice.credential credential.apiKey api;};
 in {
   inherit apiKeys apis clientKeyType credentialType route rule served;
+  oauthOverrides = instance:
+    lib.mapAttrsToList (_: credential:
+      {provider = credential.oauth.vendor;} // removeAttrs credential.oauth ["vendor"])
+    (lib.filterAttrs (_: credential: credential.oauth != null) instance.credentials);
   lower = providers: lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList blocks providers);
 }

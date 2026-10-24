@@ -5,7 +5,9 @@
 > reload can briefly serve a retired config credential under newly widened
 > rules, so rotation that also widens access requires a restart or an `ids`
 > rule. Named instance client routes derive secret OAuth account rules or API
-> base-URL rules. Model catalogs use selection's eligibility predicate.
+> base-URL rules. Model catalogs use selection's eligibility predicate. The same
+> patch applies per-account OAuth behavior overrides without persisting them
+> into login files.
 
 ## Why selection lives in CPA
 
@@ -158,3 +160,20 @@ candidate-selection loop before regenerating the diff. Offset-only moves may
 apply; changed context fails. The Go check covers behavior; the loop scan misses
 the shapes listed above. Regenerate the extracted settings facts after a schema
 change, then run the module assertions and Go check in CI.
+
+## OAuth behavior overrides
+
+`oauth.credential-overrides` selects the same provider and trimmed account
+identity as an OAuth account allowlist rule. File synthesis applies optional
+behavior before CPA's native metadata readers, keeping the original file
+snapshot bytes. The four concrete stores (file, Git, object storage and
+PostgreSQL) restore original overridden behavior on a copy before persistence;
+native refreshed tokens and disk-merge results still propagate back. Config
+reload forces fresh synthesis so removal restores native behavior. The Go check
+covers matching, both matching login files, reload/removal, native metadata
+consumers, every store boundary and Codex token persistence.
+
+The typed fields and their provider-specific scopes are listed in
+`cliproxyapi-settings.md`. They change scheduling and request behavior, never
+the access allowlist. A lower-priority OAuth login can remain eligible and
+listed while serving as fallback.

@@ -66,7 +66,9 @@ in {
         + lib.optionalString (!instance.fetchModelCatalogs) " --local-model";
       inherit backend;
       defaultPort = 8317;
-      derived = {instance, ...}: {
+      derived = {instance, ...}: let
+        oauthOverrides = providersLib.oauthOverrides instance;
+      in {
         api-keys = lib.mkIf ((providersLib.apiKeys instance) != {}) (providersLib.lower (providersLib.apiKeys instance));
         access = lib.mkIf (instance.clientKeys != {}) {
           api-keys = map (client: client.key) (builtins.attrValues instance.clientKeys);
@@ -80,7 +82,10 @@ in {
         # Without this the daemon downloads its control panel from GitHub at
         # start and every 3 hours after.
         management.disable-auto-update-panel = lib.mkDefault true;
-        oauth.auth-dir = "${instance.stateDir}/auth";
+        oauth = {
+          auth-dir = "${instance.stateDir}/auth";
+          credential-overrides = lib.mkIf (oauthOverrides != []) oauthOverrides;
+        };
         server = {
           host = lib.mkDefault "127.0.0.1";
           inherit (instance) port;
