@@ -140,6 +140,7 @@ deepseek
 deleg
 derefs
 devenv
+devpack
 devshell
 difftool
 diffutils
