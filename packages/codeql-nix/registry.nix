@@ -7,6 +7,7 @@
         location = "package";
         inherit name;
       }) [
+        "all-definitions"
         "builtin-models"
         "database-contract"
         "evaluation-isolation"

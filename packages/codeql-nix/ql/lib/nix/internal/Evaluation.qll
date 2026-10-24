@@ -9,6 +9,16 @@ module Evaluation {
     )
   }
 
+  /** Compare canonical signed decimals without narrowing to QL's integer domain. */
+  bindingset[left, right]
+  predicate decimalLessThan(string left, string right) {
+    left.prefix(1) = "-" and right.prefix(1) != "-"
+    or left.prefix(1) != "-" and right.prefix(1) != "-" and
+      (left.length() < right.length() or left.length() = right.length() and left < right)
+    or left.prefix(1) = "-" and right.prefix(1) = "-" and
+      (left.length() > right.length() or left.length() = right.length() and left > right)
+  }
+
   bindingset[character]
   private string escaped(string character) {
     character = "\"" and result = "\\\""

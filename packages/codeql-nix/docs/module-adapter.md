@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-23 — M3g walks the adapter's module graph into
 > observed occurrence rows with exact framed identities, import-tree edges and
-> native disabling Booleans; metadata semantics are unchanged.
+> native disabling Booleans; M3d adds bounded candidate plans through upstream
+> enabled unique-key collection.
 
 An adapter obtains configuration plus option metadata: a rich result.
 `src/eval/nix/adapters/evalModules.nix` takes pinned `lib`, module paths and
@@ -42,10 +43,15 @@ labels plus matching original and copied bytes. Missing rows mean unknown. An
 optional pinned `library` descriptor makes this adapter import the actual
 library handle; caller-supplied `lib` remains the legacy route without binding
 claims. The supervisor supplies independently authenticated top-level function
-and `lib` formal candidates, and successful selection transactions may bind
-direct root file invocations. `specialArguments.lib` suppresses these bindings;
-computed, forwarded and uncovered functions remain unknown. Library/target/model
-pins must match. Re-audit lazy label normalization before value consumers.
-Change these producers together, preserving F1 validation and F2 authorization.
-Run `checks.x86_64-linux.codeql-nix-modules` for direct Nix comparisons and
+and `lib` formal candidates, and successful selection and all-definitions
+transactions may bind direct root file invocations. `specialArguments.lib`
+suppresses these bindings; computed, forwarded and uncovered functions remain
+unknown. Library/target/model pins must match. Re-audit lazy label normalization
+before value consumers. The `all-definitions` facet adds source-backed
+candidates through the same adapter and upstream enabled unique-key collection;
+its plan ledger never merges config values. See
+[all-definitions.md](all-definitions.md) for source coverage, partial results,
+correspondence and collector pin boundaries. Change these producers together,
+preserving F1 validation and F2 authorization. Run
+`checks.x86_64-linux.codeql-nix-modules` for direct Nix comparisons and
 refusals; format edits and regenerate through `generate:all`.

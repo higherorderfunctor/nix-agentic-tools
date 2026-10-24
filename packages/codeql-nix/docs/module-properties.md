@@ -3,7 +3,8 @@
 > **Last verified:** 2026-10-23 — M3p adds selection metadata, authenticated
 > library formals and source property structure through the existing adapter,
 > model bundle and database contract; M3r reuses its helper identity for literal
-> source rename and alias paths.
+> source rename and alias paths; M3d emits invocation bindings on inventory
+> requests too.
 
 ## What it answers
 
@@ -61,9 +62,10 @@ those paths to admitted candidates and suppresses bindings when
 through another module, and other functions without source anchors, remain
 unknown. Missing bindings never prove a function did not execute or used a
 different library. Completion covers option metadata, not exhaustive function
-coverage. The current producer emits bindings on successful `selection`
-requests; the ABI also reserves their use by the later `all-definitions`
-consumer.
+coverage. The producer emits bindings on successful `selection` and
+`all-definitions` transactions. The [bounded inventory](all-definitions.md)
+consumes the same helper identity and keeps its candidate records separate from
+retained inputs.
 
 `models/modules/properties.nix` probes helpers and constants from the pinned
 library. `models/modules/generate.py` records source export/binding evidence,

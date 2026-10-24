@@ -2,6 +2,7 @@
   "abiVersion": 1,
   "entities": [
     "anchor",
+    "candidate",
     "context",
     "definition",
     "diagnostic",
@@ -15,6 +16,8 @@
     "target"
   ],
   "enums": {
+    "nx_candidates.active": ["false", "true", "unknown"],
+    "nx_candidates.selected": ["false", "true", "unknown"],
     "nx_capabilities.state": [
       "not-requested",
       "supported",
@@ -69,6 +72,13 @@
       "nodeKind",
       "childPath"
     ],
+    "candidate": [
+      "request",
+      "option",
+      "collectedModuleKey",
+      "anchor",
+      "wrapperGroupPathJson"
+    ],
     "evaluation": [
       "evaluatorVersion",
       "libVersion",
@@ -90,13 +100,17 @@
     "minimum": "-9223372036854775808",
     "optionWitness": {
       "domain": "option-metadata",
-      "facets": ["priority", "selection"],
+      "facets": ["all-definitions", "priority", "selection"],
       "stage": "pre-apply-metadata"
     }
   },
   "relations": {
     "nx_anchors": {
       "columns": "anchor:anchor file:file startByte:int endByte:int nodeKind:text childPath:text",
+      "key": [0]
+    },
+    "nx_candidates": {
+      "columns": "candidate:candidate option:option ordinal:int origin:origin anchor:anchor active:text selected:text wrapperChainJson:text",
       "key": [0]
     },
     "nx_capabilities": {
@@ -107,9 +121,17 @@
       "columns": "context:context target:target kind:text instancePathJson:text",
       "key": [0]
     },
+    "nx_definition_candidate_priorities": {
+      "columns": "candidate:candidate priorityDecimal:text",
+      "key": [0]
+    },
     "nx_definition_order": {
       "columns": "definition:definition priorityDecimal:text",
       "key": [0]
+    },
+    "nx_definition_selections": {
+      "columns": "candidate:candidate definition:definition",
+      "key": [0, 1]
     },
     "nx_definitions": {
       "columns": "definition:definition option:option ordinal:int origin:origin",
@@ -145,6 +167,10 @@
     },
     "nx_modules": {
       "columns": "module:module context:context moduleKey:text origin:origin disabled:bool",
+      "key": [0]
+    },
+    "nx_observation_candidates": {
+      "columns": "observation:observation candidate:candidate",
       "key": [0]
     },
     "nx_observation_contexts": {

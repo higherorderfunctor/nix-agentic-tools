@@ -509,9 +509,12 @@ nix_ast_node_parent(
 
 
 nx_anchors(unique int anchor: @nx_anchor, int file: @nx_file ref, int startByte: int ref, int endByte: int ref, string nodeKind: string ref, string childPath: string ref);
+nx_candidates(unique int candidate: @nx_candidate, int option: @nx_option ref, int ordinal: int ref, int origin: @nx_origin ref, int anchor: @nx_anchor ref, string active: string ref, string selected: string ref, string wrapperChainJson: string ref);
 nx_capabilities(int target: @nx_target ref, string capability: string ref, string state: string ref, string reason: string ref);
 nx_contexts(unique int context: @nx_context, int target: @nx_target ref, string kind: string ref, string instancePathJson: string ref);
+nx_definition_candidate_priorities(int candidate: @nx_candidate ref, string priorityDecimal: string ref);
 nx_definition_order(int definition: @nx_definition ref, string priorityDecimal: string ref);
+nx_definition_selections(int candidate: @nx_candidate ref, int definition: @nx_definition ref);
 nx_definitions(unique int definition: @nx_definition, int option: @nx_option ref, int ordinal: int ref, int origin: @nx_origin ref);
 nx_diagnostic_requests(int diagnostic: @nx_diagnostic ref, int request: @nx_request ref);
 nx_diagnostic_targets(int diagnostic: @nx_diagnostic ref, int target: @nx_target ref);
@@ -521,6 +524,7 @@ nx_module_imports(int parent: @nx_module ref, int ordinal: int ref, int child: @
 nx_module_lib_bindings(int request: @nx_request ref, int functionAnchor: @nx_anchor ref, int formalAnchor: @nx_anchor ref, string libHash: string ref, string modelHash: string ref);
 nx_module_roots(int context: @nx_context ref, int ordinal: int ref, int module: @nx_module ref);
 nx_modules(unique int module: @nx_module, int context: @nx_context ref, string moduleKey: string ref, int origin: @nx_origin ref, int disabled: int ref);
+nx_observation_candidates(int observation: @nx_observation ref, int candidate: @nx_candidate ref);
 nx_observation_contexts(int observation: @nx_observation ref, int context: @nx_context ref);
 nx_observation_definitions(int observation: @nx_observation ref, int definition: @nx_definition ref);
 nx_observation_modules(int observation: @nx_observation ref, int module: @nx_module ref);
