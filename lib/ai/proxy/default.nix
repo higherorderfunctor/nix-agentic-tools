@@ -137,7 +137,7 @@ in {
   rootOption = mkOption {
     type = types.submodule {options = selectionOptions;};
     default = {};
-    description = "Point a Harness at a named CPA or airlock instance with `instance` + `clientKey`, or at an external CPA origin with `url` + `key`. A per-Harness selection replaces this whole selection. Only Claude supports airlock in this release.";
+    description = "Point a Harness (Claude Code or Codex CLI) at a named CPA or airlock instance with `instance` + `clientKey`, or at an external CPA origin with `url` + `key`. A per-Harness selection replaces this whole selection. Only Claude Code supports airlock; Codex CLI selects CPA.";
   };
   runtimeOptions = selectionOptions;
   resolvedType = types.nullOr (types.submodule {
