@@ -2,12 +2,17 @@
 private import nix.internal.generated.Builtins as Model
 private import nix.internal.generated.Modules as Bundle
 
-predicate builtinIdentity(string namespace, string name, string identity) {
+/** The bundle fingerprint this library accepts as a run's model identity. */
+predicate bundleIdentity(string bundle) {
   exists(string version |
     Model::modelFingerprint(version) and Bundle::builtinFingerprint(version) and
-    exists(string bundle | Bundle::bundleFingerprint(bundle) and nx_runs(_, _, _, _, bundle, _)) and
-    Model::identity(namespace, name, identity)
+    Bundle::bundleFingerprint(bundle)
   )
+}
+
+predicate builtinIdentity(string namespace, string name, string identity) {
+  exists(string bundle | bundleIdentity(bundle) and nx_runs(_, _, _, _, bundle, _)) and
+  Model::identity(namespace, name, identity)
 }
 
 predicate runtimeIdentity(string identity) { Model::runtimeIdentity(identity) }

@@ -87,7 +87,7 @@ module Bindings {
   private class RuntimeGlobals extends OutermostBuiltinFrameProvider {
     RuntimeGlobals() { this = "runtime-globals" }
     override string getRuntimeIdentity(Variable use) { nx_runs(_, _, _, _, result, _) }
-    override string getModelIdentity() { BuiltinModels::modelFingerprint(result) }
+    override string getModelIdentity() { BuiltinModels::bundleIdentity(result) }
     override string getBindingIdentity(string name) { BuiltinModels::globalBindingIdentity(name, result) }
   }
 

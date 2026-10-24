@@ -69,10 +69,13 @@ Queries import `nix.internal.BuiltinModels`.
 database's `nx_runs` model fingerprint matches the installed builtin/module
 bundle, and that bundle's builtin fingerprint matches this model.
 `runtimeIdentity`, `runtimeSourceHash` and `modelFingerprint` describe the
-builtin model; `supportsRuntime` checks exactly its runtime/source pair within
-the fixed policy above. It does not test arbitrary runtime settings. A different
-policy changes the complete model fingerprint; a missing or mismatched model
-cannot establish builtin resolution.
+builtin model; `bundleIdentity` is the common bundle fingerprint this library
+accepts as a run's model identity, and
+[N2's runtime-globals frame](implicit-scope.md) requires exactly that of the run
+before generated globals become definite targets; `supportsRuntime` checks
+exactly its runtime/source pair within the fixed policy above. It does not test
+arbitrary runtime settings. A different policy changes the complete model
+fingerprint; a missing or mismatched model cannot establish builtin resolution.
 
 The existing [shared run identity](installed-extractor.md) carries the common
 bundle fingerprint: SHA-256 of canonical sorted compact JSON mapping `builtins`
