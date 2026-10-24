@@ -492,6 +492,7 @@ sysprompt
 taplo
 tengu
 testapp
+thiserror
 tidwall
 timespec
 tmpfs
@@ -562,5 +563,7 @@ ymtdzzz
 zdiff
 zebrafish
 zereight
+zeroize
+zeroizing
 zstd
 gnupatch

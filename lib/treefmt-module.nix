@@ -1,7 +1,8 @@
 # The treefmt-nix module this flake exports as `treefmtModules.default`: the
 # formatter programs and style used by the default `ai.formatter`, and which a
 # consumer can import into its own treefmt config. Repository-only settings
-# (root marker, path exclusions) live in the root treefmt.nix.
+# (root marker, formatters for languages `ai.*` never generates, path
+# exclusions) live in the root treefmt.nix.
 {
   config,
   lib,

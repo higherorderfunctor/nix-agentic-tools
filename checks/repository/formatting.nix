@@ -11,7 +11,7 @@
 {
   checks = {
     formatting =
-      (inputs.treefmt-nix.lib.evalModule pkgs (import ../../treefmt.nix))
+      (inputs.treefmt-nix.lib.evalModule pkgs (import ../../treefmt.nix {inherit inputs;}))
     .config
     .build
     .check
