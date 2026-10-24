@@ -1,7 +1,10 @@
 # shellcheck shell=bash
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
-# Shared by the packaged usage helpers; returns 1 only for direct-login fallback.
+readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage'
+readonly delegate_usage_claude_beta='oauth-2025-04-20'
+readonly delegate_usage_claude_projection='{five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage}'
+
 usage_cpa_error() {
   printf '%s\n' "usage: CPA $1" >&2
   exit 1
@@ -9,8 +12,6 @@ usage_cpa_error() {
 
 usage_cpa_request() {
   local method=$1 endpoint=$2 payload=${3-} response status
-  # Remove an inherited export attribute before reading the runtime secret.
-  unset delegate_usage_cpa_key
   if ! delegate_usage_cpa_key=$(<"$delegate_usage_cpa_key_file"); then
     usage_cpa_error 'cannot read management key file'
   fi
@@ -36,11 +37,11 @@ EOF_CPA
   printf '%s' "${response%$'\n'*}"
 }
 
+# Shared by the packaged usage helpers; returns 1 only for direct-login fallback.
 usage_cpa() {
   local vendor=$1 files accounts account request envelope vendor_status body result
   local delegate_usage_cpa_url delegate_usage_cpa_key_file url_variable key_variable
-  # Generic metadata is an explicit override. Generated vendor defaults share
-  # their names across HM and devenv, so project values replace inherited ones.
+  # Generic metadata is an explicit override of launcher-provided vendor defaults.
   if [[ -n ${DELEGATE_USAGE_CPA_URL-} || -n ${DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE-} ]]; then
     delegate_usage_cpa_url=${DELEGATE_USAGE_CPA_URL-}
     delegate_usage_cpa_key_file=${DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE-}
@@ -69,13 +70,14 @@ usage_cpa() {
     return 1
   fi
   while IFS= read -r account; do
-    request=$(jq -cn --argjson account "$account" --arg vendor "$vendor" '{
+    request=$(jq -cn --argjson account "$account" --arg vendor "$vendor" \
+      --arg claude_url "$delegate_usage_claude_url" --arg claude_beta "$delegate_usage_claude_beta" '{
       auth_index: $account.auth_index,
       method: "GET",
-      url: (if $vendor == "claude" then "https://api.anthropic.com/api/oauth/usage"
+      url: (if $vendor == "claude" then $claude_url
             else "https://chatgpt.com/backend-api/wham/usage" end),
       header: ({Authorization: "Bearer $TOKEN$", "Content-Type": "application/json"} +
-        if $vendor == "claude" then {"anthropic-beta": "oauth-2025-04-20"}
+        if $vendor == "claude" then {"anthropic-beta": $claude_beta}
         else {"User-Agent": "codex-tui"} +
           if ($account.id_token.chatgpt_account_id // "") != ""
           then {"Chatgpt-Account-Id": $account.id_token.chatgpt_account_id} else {} end end)
@@ -93,7 +95,7 @@ usage_cpa() {
       if type != "object" then error("body") else
       (if $vendor == "claude" then
         if (has("five_hour") | not) or (.five_hour != null and (.five_hour | type != "object")) then error("usage") else
-        {five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage} end
+        '"$delegate_usage_claude_projection"' end
       else .rate_limit.primary_window |
         if (.used_percent | type != "number") or (.reset_at | type != "number")
         then error("usage") else

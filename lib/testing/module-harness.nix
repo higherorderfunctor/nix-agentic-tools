@@ -66,10 +66,6 @@
           type = lib.types.listOf lib.types.package;
           default = [];
         };
-        sessionVariables = lib.mkOption {
-          type = lib.types.attrsOf (lib.types.oneOf [lib.types.str lib.types.path lib.types.int lib.types.float]);
-          default = {};
-        };
       };
       # Home Manager's real value type, so a check rejects what Home Manager
       # rejects (a four-level key, a null); an `attrsOf anything` stub hid

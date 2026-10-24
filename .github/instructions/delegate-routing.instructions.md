@@ -8,10 +8,9 @@ applyTo: "packages/delegate-routing/**"
 # Delegate routing package
 
 > **Last verified:** 2026-10-23 — a family may declare a usage node, rendered
-> once per shared pool after the tier tables. Vendor-specific CPA usage metadata
-> follows effective runtime proxy selection; generic explicit overrides take
-> precedence, and absent project metadata preserves inherited Home Manager
-> defaults.
+> once per shared pool after the tier tables. CPA usage metadata stays in each
+> source runtime's process environment, limited to its required delegate
+> targets; mixed installs configure project launcher metadata explicitly.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -239,24 +238,44 @@ metadata. A global personal instance plus a Codex work-instance override
 therefore sends each helper to its own instance, as do two runtime-only
 selections without a global proxy.
 
-Automatic discovery publishes only the vendor pairs, using `mkDefault` under
-Home Manager's `home.sessionVariables` or devenv's `env`. The generic pair is
-reserved for explicit overrides, so it always takes precedence over generated
-vendor defaults. Project vendor defaults replace inherited Home Manager defaults
-of the same name. A project with no CPA selection or instance contributes no
-metadata. Ambiguous instances, external proxy URLs without management metadata,
-and command or concat secret references warn and publish no automatic pair for
-the affected vendor. An explicit generic pair can point to an existing
-management-key file instead; discovery never materializes secrets.
+Automatic discovery publishes vendor pairs with `mkDefault` through the source
+runtime's process environment: Claude's `native.settings.env`, or the existing
+`environmentVariables` launcher pool for Codex, Kimchi and Kiro. Each source
+runtime receives only the Claude/Codex vendors in its required targets (itself,
+`extraRuntimes` and `manualExternalDelegates`). Only vendors reached by an
+enabled routing source produce metadata or warnings. No Home Manager session
+variables or devenv shell environment entries are written. The generic pair
+remains an explicit override of vendor defaults.
 
-| Install shape                 | Metadata delivery                                                                                                                                                     |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home Manager only             | Vendor session variables follow effective proxy selections or the sole enabled CPA instance.                                                                          |
-| devenv only                   | Vendor environment variables follow effective project proxy selections or the sole enabled instance.                                                                  |
-| Mixed, inherited Home Manager | Without project CPA selection or instances, neither vendor pair is emitted, preserving inherited Home Manager values when the project helper shadows the user helper. |
-| Mixed, project instance       | A local vendor pair replaces the inherited pair of the same name.                                                                                                     |
-| `devenv.local.nix` override   | Set both `env.DELEGATE_USAGE_CPA_URL` and `env.DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE` to override all vendor defaults with an existing endpoint and key file.        |
-| Direct, absent pairs          | With neither generic nor matching vendor metadata, helpers retain direct local-login behavior.                                                                        |
+Ambiguous instances, external proxy URLs without management metadata, and
+command or concat secret references warn and publish no automatic pair for the
+affected vendor. Explicit launcher configuration can point to an existing
+management-key file; discovery never materializes secrets.
+
+| Install shape                               | Metadata delivery                                                                                                                                                                                                                                                                   |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home Manager only                           | The runtime process receives vendor pairs from its effective proxy selections or the sole enabled CPA instance.                                                                                                                                                                     |
+| devenv only                                 | The project runtime process receives vendor pairs from project proxy selections or the sole enabled CPA instance.                                                                                                                                                                   |
+| Mixed, Home Manager CPA and project routing | Separate evaluations cannot discover each other's CPA options. Configure the existing project runtime environment option with the Home Manager CPA origin and management-key file path, as below. A Home Manager launcher already carrying metadata also passes it to its children. |
+| Mixed, project instance                     | Project launcher metadata follows the project's effective proxy selections and applies to helpers invoked by that launcher.                                                                                                                                                         |
+| Direct, absent pairs                        | With neither generic nor matching vendor metadata in the runtime process, helpers retain direct local-login behavior.                                                                                                                                                               |
+
+For a Home Manager CPA used by project Codex routing, `devenv.local.nix` can
+set:
+
+```nix
+ai.codex.environmentVariables = {
+  DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE = "/run/secrets/cpa-management";
+  DELEGATE_USAGE_CPA_URL = "http://127.0.0.1:8317";
+};
+```
+
+Use `ai.claude.native.settings.env` for a Claude source,
+`ai.kimchi.environmentVariables` for Kimchi, or
+`ai.kiro.cli.environmentVariables` for Kiro. The generic pair serves every usage
+helper that source's skill delivers. These options affect the runtime and its
+children; invoking a helper from an ordinary shell does not acquire launcher
+metadata.
 
 A partial generic override or matching vendor pair is an error; halves are never
 combined across pairs. If CPA has no OAuth login for the requested vendor, the

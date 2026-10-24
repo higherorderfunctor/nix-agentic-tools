@@ -462,16 +462,15 @@
       sole.ai.cliproxyapi.instances.main = usageMain;
     };
     usageResults = lib.mapAttrs (_: value: evaluate (lib.mkMerge [usageScenario value])) usageCases;
-    usageVars = evaluation:
-      if name == "hm"
-      then evaluation.config.home.sessionVariables
-      else evaluation.config.env;
-    usagePair = evaluation: lib.filterAttrs (key: _: lib.hasPrefix "DELEGATE_USAGE_CPA_" key) (usageVars evaluation);
+    usageVars = evaluation: runtime:
+      if runtime == "claude"
+      then evaluation.config.ai.claude.native.settings.env
+      else evaluation.config.ai.${runtime}.environmentVariables;
+    usagePair = evaluation: runtime: lib.filterAttrs (key: _: lib.hasPrefix "DELEGATE_USAGE_CPA_" key) (usageVars evaluation runtime);
     usageExpected = runtime: port: key: {
       "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_MANAGEMENT_KEY_FILE" = key;
       "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_URL" = "http://127.0.0.1:${toString port}";
     };
-    usageBoth = port: key: lib.foldl' (environment: runtime: environment // usageExpected runtime port key) {} ["claude" "codex"];
     usageExplicit = {
       DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE = "/run/secrets/explicit-management";
       DELEGATE_USAGE_CPA_URL = "http://127.0.0.1:28317";
@@ -479,12 +478,7 @@
     usageOverride = evaluate (lib.mkMerge [
       usageScenario
       usageCases.sole
-      (lib.setAttrByPath (
-          if name == "hm"
-          then ["home" "sessionVariables"]
-          else ["env"]
-        )
-        usageExplicit)
+      {ai.codex.environmentVariables = usageExplicit;}
     ]);
     usageSplit = evaluate (lib.mkMerge [
       usageScenario
@@ -515,17 +509,57 @@
         };
       })
     ]);
+    usageClaudeOnly = extraRuntimes:
+      evaluate (lib.mkMerge [
+        usageScenario
+        usageCases.external
+        {
+          ai.programs.delegate-routing.runtimes = {
+            claude = {inherit extraRuntimes;};
+            codex.enable = false;
+          };
+        }
+      ]);
+    usageExtra = evaluate (lib.mkMerge [
+      usageScenario
+      usageCases.sole
+      {
+        ai.programs.delegate-routing.runtimes = {
+          claude.extraRuntimes = ["codex"];
+          codex.enable = false;
+        };
+      }
+    ]);
     usageHasWarning = case: needle: lib.any (lib.hasInfix needle) usageResults.${case}.config.warnings;
   in {
     "module-delegate-routing-${name}-usage-cpa" = mkTest "delegate-routing-${name}-usage-cpa" (
-      usagePair usageResults.sole
-      == usageBoth 18317 "/run/secrets/cpa-management"
-      && usagePair usageResults.selected == usageBoth 18318 "/run/secrets/cpa-other"
-      && usagePair usageOverride == (usageBoth 18317 "/run/secrets/cpa-management" // usageExplicit)
-      && lib.all (evaluation: usagePair evaluation == (usageExpected "claude" 18317 "/run/secrets/cpa-management" // usageExpected "codex" 18318 "/run/secrets/cpa-other")) [usageSplit usageRuntimeOnly]
-      && lib.all (case: usagePair usageResults.${case} == {}) ["ambiguous" "command" "concat" "direct" "disabled" "disabledInstance"]
+      lib.all (runtime:
+        usagePair usageResults.sole runtime
+        == usageExpected runtime 18317 "/run/secrets/cpa-management"
+        && usagePair usageResults.selected runtime == usageExpected runtime 18318 "/run/secrets/cpa-other"
+        && lib.all (evaluation:
+          usagePair evaluation runtime
+          == usageExpected runtime (
+            if runtime == "claude"
+            then 18317
+            else 18318
+          ) (
+            if runtime == "claude"
+            then "/run/secrets/cpa-management"
+            else "/run/secrets/cpa-other"
+          )) [usageSplit usageRuntimeOnly]
+        && lib.all (case: usagePair usageResults.${case} runtime == {}) ["ambiguous" "command" "concat" "direct" "disabled" "disabledInstance"])
+      ["claude" "codex"]
+      && usagePair usageExtra "claude" == (usageExpected "claude" 18317 "/run/secrets/cpa-management" // usageExpected "codex" 18317 "/run/secrets/cpa-management")
+      && usagePair usageExtra "codex" == {}
+      && usagePair usageOverride "codex" == (usageExpected "codex" 18317 "/run/secrets/cpa-management" // usageExplicit)
+      && usagePair usageResults.external "claude" == usageExpected "claude" 18317 "/run/secrets/cpa-management"
+      && usagePair usageResults.external "codex" == {}
+      && usagePair (usageClaudeOnly []) "claude" == usageExpected "claude" 18317 "/run/secrets/cpa-management"
+      && !(lib.any (lib.hasInfix "codex usage:") (usageClaudeOnly []).config.warnings)
+      && lib.any (lib.hasInfix "codex usage:") (usageClaudeOnly ["codex"]).config.warnings
+      && usagePair (usageClaudeOnly ["codex"]) "codex" == {}
       && usageHasWarning "ambiguous" "select ai.proxy.instance"
-      && usagePair usageResults.external == usageExpected "claude" 18317 "/run/secrets/cpa-management"
       && usageHasWarning "external" "an external proxy URL"
       && usageHasWarning "command" "exact redact.file"
       && usageHasWarning "concat" "exact redact.file"

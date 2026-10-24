@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2154 # delegate_usage_claude_* are injected by the Nix wrapper
 shopt -s inherit_errexit 2>/dev/null || :
 
 if usage_cpa claude; then
@@ -6,9 +7,9 @@ if usage_cpa claude; then
 fi
 
 delegate_usage_token=$(jq -er '.claudeAiOauth.accessToken' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json")
-curl --fail --silent --show-error --config - <<EOF_USAGE | jq '{five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage}'
-url = "https://api.anthropic.com/api/oauth/usage"
+curl --fail --silent --show-error --config - <<EOF_USAGE | jq "$delegate_usage_claude_projection"
+url = "$delegate_usage_claude_url"
 header = "Authorization: Bearer $delegate_usage_token"
-header = "anthropic-beta: oauth-2025-04-20"
+header = "anthropic-beta: $delegate_usage_claude_beta"
 EOF_USAGE
 unset delegate_usage_token
