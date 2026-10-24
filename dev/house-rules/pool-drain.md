@@ -1,4 +1,5 @@
-Before each batch of delegates, run claude-usage and codex-usage. Among the
-families whose "use for" fits the task, pick the pool with the most allowance
-left per hour until its reset, because unused allowance is lost at reset. On a
-tie, prefer Codex: this Claude session is the interactive one.
+Before each batch of delegates, run every usage command the skill lists. Pick
+families whose "use for" fits the task. Keep Claude to about a third of delegate
+work; use Codex and GLM freely. Use Codex even past its weekly gauge: its
+credits expire at the end of 2026. The writer's vendor must differ from the
+reviewers'.
