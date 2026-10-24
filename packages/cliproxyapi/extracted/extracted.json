@@ -3020,7 +3020,7 @@
   "zAi": {
     "apis": {
       "anthropic": { "base-url": "https://api.z.ai/api/anthropic" },
-      "chat": { "base-url": "https://api.z.ai/api/paas/v4" }
+      "chat": { "base-url": "https://api.z.ai/api/coding/paas/v4" }
     },
     "claudeDefaults": { "API_TIMEOUT_MS": "3000000" },
     "claudeModels": {
@@ -3028,6 +3028,7 @@
       "opus": "glm-5.3-flash",
       "sonnet": "glm-5.3-flash"
     },
+    "generalApis": { "chat": { "base-url": "https://api.z.ai/api/paas/v4" } },
     "models": [
       "glm-4.6",
       "glm-4.7",

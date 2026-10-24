@@ -3,11 +3,12 @@
 > **Last verified:** 2026-10-23 — CPA 8.0.41 custom YAML decoders are probed
 > through yaml.v3; z.ai documentation uses the shared `webDocsLib.mkSnapshot`
 > updater, validates candidate pages, and refreshes the same owner facts after
-> pinning changed content.
+> pinning changed content; the devpack quick start's Endpoint Guide table
+> supplies the Coding Plan chat default.
 
 ## Why reflection also needs the v8 tables
 
-`packages/docs/cliproxyapi-z-ai-docs/package.nix` pins three official Markdown
+`packages/docs/cliproxyapi-z-ai-docs/package.nix` pins four official Markdown
 documents through `webDocsLib.mkSnapshot`, shared with `kimchi-docs` and
 `kiro-model-catalog`. Its explicit URL-to-path mapping produces a recursively
 hashed snapshot. The `cliproxyapi-z-ai-docs` update target fetches the mutable
@@ -15,13 +16,18 @@ URLs on every sweep, keeps pins unchanged when the bytes match, and validates
 changed pages with `extract/z-ai.py` before publishing the content and NAR
 hashes. The updater then runs the existing owner regenerator; failure restores
 the original pins. `extract/z-ai.py` parses the overview's chat API table,
-Claude Code's JSON environment example, and the quick start's Python AST for the
-two base URLs. Featured/Text Models tables require a known chat reference on
-every model row, accepting relative paths or absolute links on
-`https://docs.z.ai` only; image, tool and agent sections are explicitly
-excluded. Unknown sections or references, missing tables, ambiguous URLs,
-malformed tier bullets, or a tier pointing outside the catalog fail extraction.
-The fixtures exclude prose-only model mentions and image models.
+Claude Code's JSON environment example, the devpack quick start's Endpoint Guide
+table, and the general quick start's Python AST. The Endpoint Guide table
+supplies the chat default and must agree with the Claude Code page's Anthropic
+URL; every extracted URL is normalized before comparison, the chat endpoint must
+differ from the Anthropic and the general endpoint, and the general quick
+start's Python AST supplies `generalApis.chat.base-url`. Featured/Text Models
+tables require a known chat reference on every model row, accepting relative
+paths or absolute links on `https://docs.z.ai` only; image, tool and agent
+sections are explicitly excluded. Unknown catalog sections or references,
+changes to a page's table or example shape, and disagreement between pages fail
+extraction; `checks/z-ai.py` names each refusal. The fixtures exclude prose-only
+model mentions and image models.
 
 The Claude Code page's explicitly labeled default tier bullets are parsed as
 prose (the regex tier: no executable mapping or structured source exists). Later
