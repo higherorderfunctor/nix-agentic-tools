@@ -53,11 +53,49 @@
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
+  requiredTargets = runtime:
+    lib.unique ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates);
+  proxyLib = import ../../../lib/ai/proxy {inherit lib;};
+  redact = import ../../../lib/redact {inherit lib;};
+  usageFor = runtime: let
+    unselected = {
+      instance = null;
+      url = null;
+    };
+    selection = proxyLib.selectionFor (config.ai.proxy or unselected) (config.ai.${runtime}.proxy or unselected);
+    instances = lib.attrByPath ["ai" "cliproxyapi" "instances"] {} config;
+    selected =
+      if selection.instance == null
+      then null
+      else
+        (import ../../ai-module/lib/instances.nix {inherit lib;}).select {
+          inherit instances;
+          name = selection.instance;
+          option = "ai.${runtime}.proxy.instance";
+          owner = "cliproxyapi";
+        };
+    key =
+      if selected == null || selected ? problem
+      then null
+      else instances.${selection.instance}.settings.management.secret-key;
+    files =
+      if redact.isReference key
+      then redact.filePaths key
+      else [];
+    prefix = "DELEGATE_USAGE_CPA_${lib.toUpper runtime}";
+  in
+    lib.optionalAttrs (files != []) {
+      "${prefix}_MANAGEMENT_KEY_FILE" = lib.mkDefault (lib.head files);
+      "${prefix}_URL" = lib.mkDefault selected.url;
+    };
+  usageEnvironment = runtime:
+    lib.foldl' (environment: target: environment // usageFor target) {}
+    (lib.filter (target: builtins.elem target ["claude" "codex"]) (requiredTargets runtime));
   # The skill's Kiro evidence covers the v3 engine only. Default v3 on only
   # when ai.kiro.cli.package != null: the managed wrapper carries --v3 to launches.
   reachesKiro = lib.any (runtime:
     sourceEnabled runtime
-    && builtins.elem "kiro" ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates))
+    && builtins.elem "kiro" (requiredTargets runtime))
   supportedRuntimes;
   kiroV3Declared = lib.hasAttrByPath ["ai" "kiro" "cli" "v3"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
@@ -189,6 +227,13 @@ in {
 
   config = {
     ai = lib.mkMerge [
+      (lib.genAttrs supportedRuntimes (runtime:
+        lib.mkIf (sourceEnabled runtime)
+        (lib.setAttrByPath (
+          if runtime == "claude"
+          then ["native" "settings" "env"]
+          else lib.drop 2 (optionPaths.pool runtime "environmentVariables")
+        ) (usageEnvironment runtime))))
       {
         programs.delegate-routing = {
           families = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families;
@@ -241,9 +286,6 @@ in {
       ]
       ++ lib.concatMap (runtime: let
         path = "ai.programs.delegate-routing.runtimes.${runtime}";
-        extraRuntimes = config.ai.programs.delegate-routing.runtimes.${runtime}.extraRuntimes;
-        manualExternalDelegates = config.ai.programs.delegate-routing.runtimes.${runtime}.manualExternalDelegates;
-        requiredTargets = lib.unique ([runtime] ++ extraRuntimes ++ manualExternalDelegates);
       in
         lib.concatMap (list:
           map (target: {
@@ -255,7 +297,7 @@ in {
           assertion = !(sourceEnabled runtime) || select portable.families models.${target} != [];
           message = "ai.programs.delegate-routing.runtimes.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
         })
-        requiredTargets
+        (requiredTargets runtime)
         ++ map (selector: {
           assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
           message = "${path}.models contains an empty selector; specify vendors, tiers or families.";

@@ -142,11 +142,21 @@ in {
               always = true;
               source = ./house-rules/pool-drain.md;
             };
+            techniques.zai-usage = {
+              command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} claude";
+              kind = "usage";
+            };
           };
-          codex.models = [
-            {vendors = ["openai"];}
-            {families = ["glm" "glm-flash"];}
-          ];
+          codex = {
+            models = [
+              {vendors = ["openai"];}
+              {families = ["glm" "glm-flash"];}
+            ];
+            techniques.zai-usage = {
+              command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} codex";
+              kind = "usage";
+            };
+          };
           kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
           # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
           # only, and not Fable, which this account does not have.

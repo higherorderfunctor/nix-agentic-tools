@@ -1,7 +1,7 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-24 — repository model selection preserves native
-> families alongside routed families.
+> **Last verified:** 2026-10-24 — usage follows each runtime's selected proxy,
+> with direct reads when management metadata is absent.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -179,8 +179,31 @@ The always-on routing rule uses the existing native Claude rules and AGENTS.md
 delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
 its user harness AGENTS.md. Byte-identical contributions deduplicate. The
 content package injects packaged usage helper paths into technique defaults. The
-Claude helper carries curl and jq; the Codex helper carries timeout, jq and
-Python, while the consumer supplies the Codex CLI.
+helpers share a proxy backend; Codex also needs the consumer's Codex CLI for its
+direct read. `zai-usage claude|codex` selects the route whose GLM pool it reads;
+this repository attaches it to both runtimes as a usage technique.
+
+Usage follows generic `ai.<runtime>.proxy` selection. A selected local instance
+with a file management-key reference supplies metadata automatically. With no
+proxy or no management metadata, helpers use their direct login or
+`ZAI_API_KEY_FILE`. Once metadata is supplied, missing accounts, ambiguous z.ai
+keys, malformed responses and request failures are errors; stale local logins
+are not consulted. The backend never drains the usage queue. z.ai discovery
+reads secret-bearing configuration in memory, matches hostname `api.z.ai` and
+requires one distinct key across both supported transports.
+
+When a host manages the proxy and a project delivers routing, add the matching
+runtime pairs in `devenv.local.nix` (use `ai.codex.environmentVariables` for
+Codex's pair):
+
+```nix
+{
+  ai.claude.native.settings.env = {
+    DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE = "/run/secrets/proxy-management";
+    DELEGATE_USAGE_CPA_CLAUDE_URL = "http://127.0.0.1:9000";
+  };
+}
+```
 
 `mkSkill`, `render` and `skills` consume the same family, selector, technique
 and named-entry inputs. Generated skill trees use `lib.ai.generated` and the

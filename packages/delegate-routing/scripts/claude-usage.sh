@@ -1,10 +1,11 @@
 # shellcheck shell=bash
-shopt -s inherit_errexit 2>/dev/null || :
+# shellcheck disable=SC2154 # Shared constants come from the prepended usage-cpa.sh.
+if usage_cpa claude; then exit 0; fi
 
 delegate_usage_token=$(jq -er '.claudeAiOauth.accessToken' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json")
-curl --fail --silent --show-error --config - <<EOF_USAGE | jq '{five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage}'
-url = "https://api.anthropic.com/api/oauth/usage"
+curl --fail --silent --show-error --config - <<EOF_USAGE | jq "$delegate_usage_claude_projection"
+url = "$delegate_usage_claude_url"
 header = "Authorization: Bearer $delegate_usage_token"
-header = "anthropic-beta: oauth-2025-04-20"
+header = "anthropic-beta: $delegate_usage_claude_beta"
 EOF_USAGE
 unset delegate_usage_token

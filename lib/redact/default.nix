@@ -173,7 +173,7 @@ in {
   file = path: sealed "redact.file" {_redact.file = path;};
   # The one copy of the marker tests and the refusal, for consumers that walk
   # values (the extracted render) or test paths as the reader opens them.
-  inherit isAsFile isPath isRedacted isReserved sealed;
+  inherit isAsFile isPath isRedacted isReference isReserved sealed;
   # Every `redact.file` path a value reads: the reference itself, or the file
   # parts of a concat, through a secretFile tag. A literal or null reads none.
   filePaths = value: let
