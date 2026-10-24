@@ -25,7 +25,7 @@ class UsageTests(unittest.TestCase):
         self.helpers = {}
         for vendor in ["claude", "codex"]:
             helper = self.home / f"{vendor}-usage"
-            helper.write_text("#!/usr/bin/env bash\nset -euETo pipefail\n" + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
+            helper.write_text(f"#!{shutil.which('bash')}\nset -euETo pipefail\n" + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
             helper.chmod(0o755)
             self.helpers[vendor] = str(helper)
         self.key = self.home / "management-key"
