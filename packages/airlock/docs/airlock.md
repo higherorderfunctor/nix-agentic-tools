@@ -1,9 +1,9 @@
 # airlock
 
-> **Last verified:** 2026-10-24 (commit 57ba7444) — `ai.airlock.instances`
-> renders `settings` through the shared instances helper; `airlock serve` runs
-> the CONNECT gateway (tunnel and deny; intercepted hosts answer 501 until TLS
-> interception lands).
+> **Last verified:** 2026-10-24 (commit ccbd0dd2) — `airlock serve` tunnels,
+> denies, or intercepts as a passthrough: the client's TLS ends at a leaf from
+> airlock's tmpfs CA, verified TLS reopens to the real host, and the bytes pass
+> unchanged. No credential swap yet.
 
 ## Scope
 
@@ -17,11 +17,39 @@ the credential proxy; both coexist until the harnesses are rewired
 
 ## Transport
 
-A loopback TCP HTTP CONNECT forward proxy, reached through `HTTPS_PROXY`. TLS is
-intercepted only for the hosts an upstream lists in `intercept`; any other host
-is tunnelled or refused per `unknownHosts`. A client identifies itself with the
-token in `Proxy-Authorization: Basic`, so its proxy URL is
+A loopback TCP HTTP CONNECT forward proxy, reached through `HTTPS_PROXY`. Every
+connection goes through airlock, but only the hosts an upstream lists in
+`intercept` are decrypted; any other host is tunnelled or refused per
+`unknownHosts`. A client identifies itself with the token in
+`Proxy-Authorization: Basic`, so its proxy URL is
 `http://<client>:<token>@127.0.0.1:<port>`.
+
+Interception is a passthrough, in this order:
+
+- airlock reads the ClientHello and requires its SNI to equal the CONNECT host,
+  else it closes (`sni_mismatch`, `sni_missing`, `not_tls`). Otherwise a client
+  could CONNECT to one host and speak TLS to another under that host's leaf.
+- It opens TLS to the real host offering exactly the client's ALPN list,
+  verified against the system store (`SSL_CERT_FILE` is honoured). Only then
+  does it finish the client's handshake, offering only the protocol the upstream
+  chose, so ALPN matches end to end.
+- It copies the decrypted bytes both ways unchanged, record by record: no HTTP
+  parsing, no header edits, and nothing waits for a whole body. The audit event
+  adds `sni` and `alpn` and never carries decrypted bytes. On close it sends
+  `close_notify` both ways, waiting at most 1 s for a peer that stopped reading.
+
+The CA lives in `$XDG_RUNTIME_DIR/airlock-<port>/` (0700): `ca.key`
+(PKCS#8, 0600) and `ca.pem` (0644), ECDSA P-256 with `pathlen:0` and no name
+constraints. Startup refuses an unset or relative `XDG_RUNTIME_DIR`, one not
+owned 0700 by the user, or on Linux one that is not tmpfs or ramfs; the CA
+directory itself must pass the same checks. The tmpfs is what rotates the CA at
+every reboot; it survives airlock restarts within a boot. Startup also refuses a
+symlink in place of either directory or file, a lone `ca.key` or `ca.pem`, a
+group- or other-readable key, or a key that does not match the certificate, and
+never writes over an existing file. `ca.pem` is the one file meant to leave
+airlock: the sandbox will trust it, never the host's trust store. Leaves are
+minted per intercepted host on demand, each with its own key, for 7 days, and
+are held only in memory.
 
 Why CONNECT and not a base URL, measured 2026-10-24 against Claude Code 2.1.309
 with a local CONNECT proxy intercepting TLS and a fake token, offline:
@@ -37,17 +65,17 @@ with a local CONNECT proxy intercepting TLS and a fake token, offline:
   `/v1/messages`. An intercepted host must pass every path through and swap the
   token wherever it appears; an allowlist of paths would break features.
 
-airlock swaps only `Authorization` on intercepted hosts and forwards the body
-byte for byte; the harness holds a fake `CLAUDE_CODE_OAUTH_TOKEN`. Unverified
-until a live session: the real API accepting the request after the swap.
+Credential swap is the next milestone: airlock will replace the token on
+intercepted hosts while the harness holds a fake `CLAUDE_CODE_OAUTH_TOKEN`.
+Today a grant's `credentials` are neither loaded nor used.
 
 ## Not a security boundary yet
 
 airlock runs as the harness's uid. `ai.jail` binds `/` into the jail, so the
-harness can read airlock's runtime directory, its state and the secret files the
-launcher writes there. Until airlock runs under a separate uid or outside the
-harness's VM, it keeps real credentials out of the harness's environment and
-config, not out of its reach.
+harness can read airlock's runtime directory, its CA key, its state and the
+secret files the launcher writes there. Until airlock runs under a separate uid
+or outside the harness's VM, it keeps real credentials out of the harness's
+environment and config, not out of its reach.
 
 ## Nix wiring
 

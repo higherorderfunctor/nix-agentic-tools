@@ -1,167 +1,19 @@
-use std::{
-    io::{self, Write},
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+mod support;
+
+use std::time::{Duration, Instant};
 
 use airlock_core::config::{Config, RawConfig};
 use airlock_gateway::{Error, Gateway};
-use base64::{Engine as _, prelude::BASE64_STANDARD};
-use serde_json::{Value, json};
-use tempfile::TempDir;
+use rustls::RootCertStore;
+use serde_json::json;
+use support::{Running, TOKEN, TestCa, basic, config, fields, sink};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
+    net::TcpStream,
     sync::oneshot,
     task::JoinHandle,
     time::timeout,
 };
-use tracing::instrument::WithSubscriber;
-
-const TOKEN: &str = "fake-SECRET-harness-token";
-
-#[derive(Clone, Default)]
-struct Capture(Arc<Mutex<Vec<u8>>>);
-
-impl Write for Capture {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.0
-            .lock()
-            .expect("capture lock")
-            .extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl Capture {
-    fn events(&self) -> Vec<Value> {
-        let bytes = self.0.lock().expect("capture lock");
-        let text = std::str::from_utf8(&bytes).expect("JSON UTF-8");
-        assert!(!text.contains(TOKEN), "audit exposed token: {text}");
-        assert!(
-            !text.contains(&BASE64_STANDARD.encode(format!("harness:{TOKEN}"))),
-            "audit exposed Basic credentials"
-        );
-        assert!(!text.to_ascii_lowercase().contains("proxy-authorization"));
-        text.lines()
-            .map(|line| serde_json::from_str(line).expect("JSON event"))
-            .collect()
-    }
-}
-
-struct Running {
-    address: SocketAddr,
-    capture: Capture,
-    directory: TempDir,
-    shutdown: oneshot::Sender<()>,
-    task: JoinHandle<Result<(), Error>>,
-}
-
-impl Running {
-    async fn start(unknown_hosts: &str, intercepted: &[&str]) -> Self {
-        let directory = tempfile::tempdir().expect("tempdir");
-        std::fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("write token");
-        let gateway = Gateway::bind(config(&directory, unknown_hosts, intercepted))
-            .await
-            .expect("bind gateway");
-        let address = gateway.local_addr();
-        assert_eq!(address.ip(), std::net::Ipv4Addr::LOCALHOST);
-        let capture = Capture::default();
-        let writer = capture.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .json()
-            .with_writer(move || writer.clone())
-            .finish();
-        let (shutdown, receiver) = oneshot::channel();
-        let task = tokio::spawn(
-            gateway
-                .serve(async {
-                    let _ = receiver.await;
-                })
-                .with_subscriber(subscriber),
-        );
-        Self {
-            address,
-            capture,
-            directory,
-            shutdown,
-            task,
-        }
-    }
-
-    async fn stop(self) -> Vec<Value> {
-        self.shutdown.send(()).expect("request shutdown");
-        timeout(Duration::from_secs(7), self.task)
-            .await
-            .expect("bounded shutdown")
-            .expect("server task")
-            .expect("serve");
-        self.capture.events()
-    }
-
-    async fn request(
-        &self,
-        method: &str,
-        target: &str,
-        authorization: Option<&str>,
-    ) -> (TcpStream, String) {
-        let mut socket = TcpStream::connect(self.address)
-            .await
-            .expect("connect gateway");
-        let auth = authorization.map_or_else(String::new, |value| {
-            format!("Proxy-Authorization: {value}\r\n")
-        });
-        socket
-            .write_all(
-                format!("{method} {target} HTTP/1.1\r\nHost: localhost\r\n{auth}\r\n").as_bytes(),
-            )
-            .await
-            .expect("request");
-        let mut header = Vec::new();
-        timeout(Duration::from_secs(2), async {
-            while !header.ends_with(b"\r\n\r\n") {
-                header.push(socket.read_u8().await.expect("response header"));
-                assert!(header.len() < 8192);
-            }
-        })
-        .await
-        .expect("timely response");
-        (socket, String::from_utf8(header).expect("header UTF-8"))
-    }
-}
-
-fn config(directory: &TempDir, unknown_hosts: &str, intercepted: &[&str]) -> Config {
-    Config::try_from(serde_json::from_value::<RawConfig>(json!({
-        "clients": {"harness": {
-            "grants": [{"credentials": ["claude"], "upstream": "anthropic"}],
-            "token_file": directory.path().join("token")
-        }},
-        "credentials": {"claude": {
-            "auth": {"file": directory.path().join("unused-upstream-secret"), "type": "oauth_bearer"},
-            "upstream": "anthropic"
-        }},
-        "listen": "127.0.0.1:0",
-        "state_dir": directory.path(),
-        "unknown_hosts": unknown_hosts,
-        "upstreams": {"anthropic": {"intercept": intercepted, "provider": "anthropic"}}
-    })).expect("raw config")).expect("validated config")
-}
-
-fn basic(client: &str, token: &str) -> String {
-    format!(
-        "Basic {}",
-        BASE64_STANDARD.encode(format!("{client}:{token}"))
-    )
-}
-
-async fn sink() -> TcpListener {
-    TcpListener::bind("127.0.0.1:0").await.expect("bind sink")
-}
 
 async fn echo() -> (u16, JoinHandle<u64>) {
     let listener = sink().await;
@@ -172,11 +24,6 @@ async fn echo() -> (u16, JoinHandle<u64>) {
         tokio::io::copy(&mut read, &mut write).await.expect("echo")
     });
     (port, task)
-}
-
-fn fields(event: &Value) -> &Value {
-    assert_eq!(event["fields"]["message"], "CONNECT closed");
-    &event["fields"]
 }
 
 #[tokio::test]
@@ -287,15 +134,6 @@ async fn denied_targets_and_non_connect_never_reach_upstream() {
         drop(socket);
     }
     let (socket, header) = server
-        .request(
-            "CONNECT",
-            "api.anthropic.com:443",
-            Some(&basic("harness", TOKEN)),
-        )
-        .await;
-    assert!(header.starts_with("HTTP/1.1 501 "), "{header}");
-    drop(socket);
-    let (socket, header) = server
         .request("GET", &format!("http://localhost:{port}/"), None)
         .await;
     assert!(header.starts_with("HTTP/1.1 405 "), "{header}");
@@ -306,11 +144,7 @@ async fn denied_targets_and_non_connect_never_reach_upstream() {
             .is_err()
     );
     let events = server.stop().await;
-    assert_eq!(events.len(), targets.len() + 1);
-    assert_eq!(
-        fields(events.last().expect("intercept event"))["decision"],
-        "intercept"
-    );
+    assert_eq!(events.len(), targets.len());
 }
 
 #[tokio::test]
@@ -459,7 +293,7 @@ async fn startup_reports_all_empty_and_missing_client_token_files() {
     std::fs::write(directory.path().join("token"), "\n").expect("empty token");
     let initial = config(&directory, "tunnel", &[]);
     assert!(matches!(
-        Gateway::bind(initial).await,
+        Gateway::bind(initial, &directory.path().join("ca"), TestCa::new().roots()).await,
         Err(Error::Secrets(_))
     ));
     let raw = json!({
@@ -471,7 +305,12 @@ async fn startup_reports_all_empty_and_missing_client_token_files() {
         "listen": "127.0.0.1:0", "state_dir": directory.path(), "upstreams": {"anthropic": {"intercept": [], "provider": "anthropic"}}
     });
     let raw: RawConfig = serde_json::from_value(raw).expect("raw");
-    let Err(Error::Secrets(errors)) = Gateway::bind(Config::try_from(raw).expect("config")).await
+    let Err(Error::Secrets(errors)) = Gateway::bind(
+        Config::try_from(raw).expect("config"),
+        &directory.path().join("ca"),
+        TestCa::new().roots(),
+    )
+    .await
     else {
         panic!("startup accepted broken secrets");
     };
@@ -528,4 +367,17 @@ async fn upstream_reset_retains_successful_write_counts() {
     assert_eq!(audit["outcome"], "io_error");
     assert_eq!(audit["client_to_upstream"], 7);
     assert_eq!(audit["upstream_to_client"], 7);
+}
+
+#[tokio::test]
+async fn startup_refuses_an_empty_upstream_root_store() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    std::fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("write token");
+    let result = Gateway::bind(
+        config(&directory, "tunnel", &[]),
+        &directory.path().join("ca"),
+        RootCertStore::empty(),
+    )
+    .await;
+    assert!(matches!(result, Err(Error::NoUpstreamRoots)));
 }
