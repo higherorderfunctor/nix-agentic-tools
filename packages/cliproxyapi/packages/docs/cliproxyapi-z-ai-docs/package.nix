@@ -1,3 +1,4 @@
+# cspell:ignore devpack
 {
   extractedLib,
   pkgs,
@@ -20,6 +21,10 @@ in
         url = "https://docs.z.ai/devpack/tool/claude.md";
       }
       {
+        path = "devpack-quick-start.md";
+        url = "https://docs.z.ai/devpack/quick-start.md";
+      }
+      {
         path = "overview.md";
         url = "https://docs.z.ai/guides/overview/overview.md";
       }
@@ -29,7 +34,7 @@ in
       }
     ];
     validate = ''
-      ${python}/bin/python3 ${../../../extract/z-ai.py} "$1/claude.md" "$1/overview.md" "$1/quick-start.md" > /dev/null
+      ${python}/bin/python3 ${../../../extract/z-ai.py} "$1/claude.md" "$1/devpack-quick-start.md" "$1/overview.md" "$1/quick-start.md" > /dev/null
     '';
     afterUpdate = (extractedLib {inherit pkgs;}).regenCommand {name = "cliproxyapi";};
     meta = {
