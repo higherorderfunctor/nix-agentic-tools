@@ -168,7 +168,10 @@
     if supportsPool "proxy"
     then
       proxyLib.resolve {
-        instances = config.ai.cliproxyapi.instances or {};
+        instances = {
+          airlock = config.ai.airlock.instances or {};
+          cliproxyapi = config.ai.cliproxyapi.instances or {};
+        };
         root = config.ai.proxy;
         runtime = poolCfg.proxy;
       }
@@ -306,6 +309,10 @@
     proxy = {
       default = resolvedProxy;
       type = proxyLib.resolvedType;
+      apply = value:
+        if value == null || value.owner == "airlock"
+        then value
+        else removeAttrs value ["client" "instance" "owner" "port"];
     };
     rules = {
       type = lib.types.attrsOf aiCommon.ruleModule;
@@ -705,21 +712,35 @@
   # A value forced onto the normalized option still needs `enable = true`.
   jailRequested = launcherPackage != null && (callbackArgs.resolvedJail.enable or null) == true;
   jailLowers = appRecord.pkgs.stdenv.hostPlatform.isLinux;
+  effectiveProxy = callbackArgs.resolvedProxy;
+  airlockSelected = effectiveProxy != null && (effectiveProxy.owner or "cliproxyapi") == "airlock";
+  completeAirlock = !airlockSelected || (effectiveProxy.client != null && effectiveProxy.instance != null && effectiveProxy.port != null);
   jailWarnings =
     lib.optional (cfg.enable && jailRequested && !jailLowers)
     "${poolOptionName "jail"} is enabled but bubblewrap is Linux-only; nothing is jailed on ${appRecord.pkgs.stdenv.hostPlatform.system}.";
+  airlockWarnings =
+    lib.optional (cfg.enable && airlockSelected && launcherPackage == null)
+    "ai.${appRecord.name}.proxy selects airlock but ai.${appRecord.name}.package is null; no managed airlock launcher is delivered."
+    ++ lib.optional (cfg.enable && airlockSelected && !jailLowers)
+    "ai.${appRecord.name}.proxy selects airlock but bubblewrap is Linux-only; no airlock launcher is delivered on ${appRecord.pkgs.stdenv.hostPlatform.system}.";
   jailPackage = package:
     if jailRequested && jailLowers
     then
       jailLib.wrap {
+        airlock = airlockSelected;
         inherit (appRecord) executables name pkgs;
         inherit package;
         jail = config.ai.internal.jail;
         profile = callbackArgs.resolvedJail;
+        extraPermissions = c:
+          lib.optional (airlockSelected && completeAirlock) (c.airlock-client {
+            inherit (effectiveProxy) client instance port;
+            entry = config.ai.services."airlock-${effectiveProxy.instance}";
+          });
       }
     else package;
-  rawInstalledPackages = lib.optional (launcherPackage != null) (jailPackage (installPackageFn callbackArgs));
-  transformWarnings = deliveryWarnings ++ jailWarnings;
+  rawInstalledPackages = lib.optional (launcherPackage != null && !(airlockSelected && !jailLowers)) (jailPackage (installPackageFn callbackArgs));
+  transformWarnings = deliveryWarnings ++ jailWarnings ++ airlockWarnings;
   installedPackages =
     if options ? warnings
     then rawInstalledPackages
@@ -827,7 +848,26 @@ in {
     # Outside the enable gate, like every fanout validation: an invalid
     # selection must not hide behind a disabled runtime.
     (lib.optionalAttrs (supportsPool "proxy" && options ? assertions) {
-      assertions = proxyLib.assertionsFor (config.ai.cliproxyapi.instances or {}) (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"]) poolCfg.proxy;
+      assertions =
+        proxyLib.assertionsFor {
+          airlock = config.ai.airlock.instances or {};
+          cliproxyapi = config.ai.cliproxyapi.instances or {};
+        } (["ai" appRecord.name] ++ poolOptionsPath "proxy" ++ ["proxy"])
+        poolCfg.proxy
+        ++ [
+          {
+            assertion = !cfg.enable || completeAirlock;
+            message = "ai.${appRecord.name}.normalized.proxy selects airlock but needs client, instance and port.";
+          }
+          {
+            assertion = !cfg.enable || !airlockSelected || appRecord.name == "claude";
+            message = "ai.${appRecord.name}.proxy selects airlock, which only Claude supports in this release.";
+          }
+          {
+            assertion = !cfg.enable || !airlockSelected || !jailLowers || launcherPackage == null || jailRequested;
+            message = "ai.${appRecord.name}.proxy selects airlock on Linux; enable ai.${appRecord.name}.jail or ai.jail.";
+          }
+        ];
     })
     (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
       assertions = let

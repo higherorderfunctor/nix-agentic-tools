@@ -7,9 +7,10 @@ applyTo: "checks/ai-jail/**,lib/ai/jail/**,packages/jail-nix/**"
 
 # jail.nix library
 
-> **Last verified:** 2026-10-20 — the input tracks a tested GitHub mirror
-> through the dependency sweep; `ai-jail-live` proves on a CI runner that the
-> launcher runs inside bubblewrap.
+> **Last verified:** 2026-10-24 — Claude airlock uses a pre-bwrap runtime
+> permission and descriptor-backed per-launch CA delivery. The input tracks a
+> tested GitHub mirror through the dependency sweep; `ai-jail-live` proves on a
+> CI runner that the launcher runs inside bubblewrap.
 
 jail.nix (`sourcehut:~alexdavid/jail.nix`, read through the GitHub mirror
 `higherorderfunctor/jail.nix`) is a pure Nix library that wraps a program in
@@ -130,6 +131,19 @@ restoration, variable exclusions and `permissions`. Final permissions can
 deliberately restore an excluded variable with `set-env`, including `PATH`.
 Masks resolve through `realpath` at launch: a directory becomes a tmpfs, a file
 an empty read-only file, a missing path is skipped.
+
+For an airlock-selected Claude, an internal permission runs after the user's
+permissions and before bwrap. It reads the rendered service config and client
+file, checks the current CA and system roots, and adds one read-only
+`--ro-bind-data` from an opened, unlinked private bundle. Pinned bubblewrap
+0.12.0 supports that descriptor option. The wrapper unlinks the random private
+pathname before populating the bundle through its descriptor. Temporary traps
+remove the name if preparation is interrupted, then restore prior traps; an
+existing `add-cleanup` handler also runs on preparation failure. Without
+`add-cleanup`, the wrapper can `exec` bwrap, so signals, stdin and exit status
+follow the normal process path without a cleanup supervisor. The offline check
+makes its mock read the inherited descriptor and checks preparation and running
+signals, stdin and status; it does not prove a live namespace mount.
 
 On Darwin the option evaluates, installs the plain launcher, and both backends
 warn:

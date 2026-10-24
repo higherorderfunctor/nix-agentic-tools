@@ -45,6 +45,7 @@ SYSTEMONE
 TERMUX
 TYPESAFE
 uncarried
+urandom
 userconfig
 WEZTERM
 WHATWG
