@@ -128,7 +128,7 @@ class GraphSupervisorTests(unittest.TestCase):
         job = {"identities": ids, "request": dict(domain="module-graph", facet="closure", path=[],
                maxBytes=1048576, maxDepth=1, maxMemoryMiB=256, maxNodes=5, maxSeconds=5)}
         expression = 'import ' + str(OWNER / "src/eval/nix/modules.nix") + ' { lib = import ' + os.environ["CODEQL_NIX_TEST_LIB"] + '; modules = [ ' + str(self.root / "root.nix") + ' ]; job = builtins.fromJSON ' + json.dumps(json.dumps(job)) + '; }'
-        result = subprocess.run([isolation.NIX, "eval", "--json", "--impure", "--expr", expression],
+        result = subprocess.run([isolation.NIX, "--extra-experimental-features", "nix-command", "eval", "--json", "--impure", "--expr", expression],
                                 capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         packet = json.loads(result.stdout)
