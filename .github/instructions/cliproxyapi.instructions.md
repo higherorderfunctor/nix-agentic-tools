@@ -7,14 +7,17 @@ applyTo: "packages/cliproxyapi/**"
 
 # CLIProxyAPI extraction: the v8 configuration shape
 
+<!-- cspell:ignore devpack -->
+
 > **Last verified:** 2026-10-23 — CPA 8.0.41 custom YAML decoders are probed
 > through yaml.v3; z.ai documentation uses the shared `webDocsLib.mkSnapshot`
 > updater, validates candidate pages, and refreshes the same owner facts after
-> pinning changed content.
+> pinning changed content; the devpack quick start's Endpoint Guide table
+> supplies the Coding Plan chat default.
 
 ## Why reflection also needs the v8 tables
 
-`packages/docs/cliproxyapi-z-ai-docs/package.nix` pins three official Markdown
+`packages/docs/cliproxyapi-z-ai-docs/package.nix` pins four official Markdown
 documents through `webDocsLib.mkSnapshot`, shared with `kimchi-docs` and
 `kiro-model-catalog`. Its explicit URL-to-path mapping produces a recursively
 hashed snapshot. The `cliproxyapi-z-ai-docs` update target fetches the mutable
@@ -22,13 +25,18 @@ URLs on every sweep, keeps pins unchanged when the bytes match, and validates
 changed pages with `extract/z-ai.py` before publishing the content and NAR
 hashes. The updater then runs the existing owner regenerator; failure restores
 the original pins. `extract/z-ai.py` parses the overview's chat API table,
-Claude Code's JSON environment example, and the quick start's Python AST for the
-two base URLs. Featured/Text Models tables require a known chat reference on
-every model row, accepting relative paths or absolute links on
-`https://docs.z.ai` only; image, tool and agent sections are explicitly
-excluded. Unknown sections or references, missing tables, ambiguous URLs,
-malformed tier bullets, or a tier pointing outside the catalog fail extraction.
-The fixtures exclude prose-only model mentions and image models.
+Claude Code's JSON environment example, the devpack quick start's Endpoint Guide
+table, and the general quick start's Python AST. The Endpoint Guide table
+supplies the chat default and must agree with the Claude Code page's Anthropic
+URL; the general quick start's Python AST supplies `generalApis.chat.base-url`.
+Featured/Text Models tables require a known chat reference on every model row,
+accepting relative paths or absolute links on `https://docs.z.ai` only; image,
+tool and agent sections are explicitly excluded. Unknown sections or references,
+missing tables, a missing or duplicated Endpoint Guide table or row, a foreign
+host in that table, an Anthropic URL conflicting with the Claude Code page,
+ambiguous URLs, malformed tier bullets, or a tier pointing outside the catalog
+fail extraction. The fixtures exclude prose-only model mentions and image
+models.
 
 The Claude Code page's explicitly labeled default tier bullets are parsed as
 prose (the regex tier: no executable mapping or structured source exists). Later
@@ -304,8 +312,8 @@ change, then run the module assertions and Go check in CI.
 > a secret file, and derives named client keys' `access.api-keys` and
 > `access.key-allowlist` entries from named upstream routes. Built-in
 > `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
-> official documentation. Named API-key credentials accept an optional integer
-> priority, omitted when unset.
+> official documentation, chat to z.ai's Coding Plan endpoint. Named API-key
+> credentials accept an optional integer priority, omitted when unset.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -346,18 +354,27 @@ ai.cliproxyapi.instances.main.credentials.zai-api-personal = {
 };
 ```
 
-`apiKey.apis` defaults to Anthropic-compatible and OpenAI chat-compatible
-endpoints, and `apiKey.models` to z.ai's published general API chat catalog.
-Override either endpoint's `base-url`, set an API to `null`, or replace `models`
-with the subset your upstream credential permits. Check the key classification
-and entitlements in z.ai's
+`apiKey.apis` defaults chat to z.ai's Coding Plan endpoint
+(`https://api.z.ai/api/coding/paas/v4`) and Anthropic to the Anthropic endpoint
+(`https://api.z.ai/api/anthropic`), and `apiKey.models` to z.ai's published
+general API chat catalog. Override either endpoint's `base-url`, set an API to
+`null`, or replace `models` with the subset your upstream credential permits.
+For an older Compatible key, pointing chat at the general API endpoint pays as
+you go instead of using Coding Plan quota:
+
+```nix
+apiKey.apis.chat.base-url = "https://api.z.ai/api/paas/v4";
+```
+
+Check the key classification and entitlements in z.ai's
 [API Key Management Guide](https://docs.z.ai/devpack/notice/api-key-management):
-new Standard/Coding Plan keys determine billing across supported endpoints;
-older Compatible keys retain endpoint-dependent rules. Standard usage can
-consume account balance or usage bundles. The defaults describe the general API,
-not a guarantee of account access. Client keys still choose this credential and
-its API through `routes`; selecting `api = "chat"` lets CPA translate a Codex
-CLI Responses request to chat.
+new Standard and Coding Plan keys bill by key type on any supported endpoint, so
+a Coding Plan key uses plan quota and a Standard key never does; only older
+Compatible keys bill by endpoint, so the coding endpoint uses plan quota while
+the general endpoint may charge balance. The defaults describe the Coding Plan
+endpoint, not a guarantee of account access. Client keys still choose this
+credential and its API through `routes`; selecting `api = "chat"` lets CPA
+translate a Codex CLI Responses request to chat.
 
 The measured Claude Code tier mapping and timeout remain extraction data. The
 existing per-client-key model list carries model IDs for picker rows, without
