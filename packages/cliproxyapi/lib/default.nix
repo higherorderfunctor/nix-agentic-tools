@@ -53,16 +53,32 @@
     "credentials.in-flight.snapshot-interval" = duration;
     "credentials.in-flight.stale-after" = duration;
     "credentials.in-flight.staging-retention" = duration;
+    # CPA caps positive scheduler weights at one million.
+    "oauth.credential-overrides[].weight" = {
+      type = "int";
+      refine = {types, ...}: types.addCheck types.int (value: value <= 1000000);
+    };
   };
+  nodes = (import ../extract/rules.nix {inherit lib;}).config.entries;
   generated = import ../../../lib/extracted/options.nix {inherit lib;} {
     inherit refinements;
-    nodes = (import ../extract/rules.nix {inherit lib;}).config.entries;
+    inherit nodes;
     tool = "CLIProxyAPI";
   };
 in {
   cliproxyapi = {
     # Named upstream API-key providers (./providers.nix).
-    providers = import ./providers.nix {inherit lib;};
+    providers = import ./providers.nix {
+      inherit lib;
+      oauthOptions =
+        (import ../../../lib/extracted/options.nix {inherit lib;} {
+          nodes =
+            lib.mapAttrs' (path: value: lib.nameValuePair (lib.removePrefix "oauth.credential-overrides[]." path) value)
+            (lib.filterAttrs (path: _: lib.hasPrefix "oauth.credential-overrides[]." path && !(lib.elem path ["oauth.credential-overrides[].account" "oauth.credential-overrides[].provider"])) nodes);
+          refinements.weight = refinements."oauth.credential-overrides[].weight";
+          tool = "CLIProxyAPI OAuth credentials";
+        }).options;
+    };
     inherit refinements;
     inherit (generated) report sample;
     # settings → { content; secrets; }: config.yaml as JSON text, each secret

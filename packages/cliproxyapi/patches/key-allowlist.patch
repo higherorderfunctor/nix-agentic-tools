@@ -280,6 +280,20 @@ index 0000000..7dea5e5
 +		})
 +	}
 +}
+diff --git a/internal/config/config.go b/internal/config/config.go
+index cbe3449..c9076e9 100644
+--- a/internal/config/config.go
++++ b/internal/config/config.go
+@@ -195,6 +195,9 @@ type Config struct {
+ 	// NOTE: This applies only to OAuth credentials and does not affect per-credential request-scoped-errors under *-api-key.
+ 	OAuthRequestScopedErrors map[string][]RequestScopedErrorRule `yaml:"oauth-request-scoped-errors,omitempty" json:"oauth-request-scoped-errors,omitempty"`
+ 
++	// OAuthCredentialOverrides overrides behavior without editing OAuth login files.
++	OAuthCredentialOverrides []OAuthCredentialOverride `yaml:"oauth-credential-overrides,omitempty" json:"oauth-credential-overrides,omitempty"`
++
+ 	// OAuthSettings defines per-channel model settings (such as max-context-length) applied to OAuth/file-backed auth entries.
+ 	OAuthSettings map[string][]OAuthModelSetting `yaml:"oauth-settings,omitempty" json:"oauth-settings,omitempty"`
+ 
 diff --git a/internal/config/config_load.go b/internal/config/config_load.go
 index baca01e..d218b56 100644
 --- a/internal/config/config_load.go
@@ -295,7 +309,7 @@ index baca01e..d218b56 100644
  	// Hash remote management key if plaintext is detected (nested)
  	// We consider a value to be already hashed if it looks like a bcrypt hash ($2a$, $2b$, or $2y$ prefix).
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 68bd7d9..6fbec04 100644
+index 68bd7d9..0a093b3 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
 @@ -73,7 +73,7 @@ func buildV8Paths() []configPath {
@@ -307,6 +321,15 @@ index 68bd7d9..6fbec04 100644
  		{"credential-concurrency", "credentials.concurrency"}, {"credential-in-flight", "credentials.in-flight"},
  		{"force-model-prefix", "routing.force-model-prefix"},
  		{"request-retry", "routing.retry.request-retry"}, {"max-retry-credentials", "routing.retry.max-retry-credentials"},
+@@ -83,7 +83,7 @@ func buildV8Paths() []configPath {
+ 		{"proxy-url", "requests.proxy-url"}, {"tls-handshake-timeout-seconds", "requests.tls-handshake-timeout-seconds"}, {"passthrough-headers", "requests.passthrough-headers"},
+ 		{"nonstream-keepalive-interval", "requests.nonstream-keepalive-interval"}, {"streaming", "requests.streaming"}, {"payload", "requests.payload"},
+ 		{"auth-dir", "oauth.auth-dir"}, {"auth-auto-refresh-workers", "oauth.auth-auto-refresh-workers"},
+-		{"oauth-model-alias", "oauth.model-alias"}, {"oauth-excluded-models", "oauth.excluded-models"},
++		{"oauth-credential-overrides", "oauth.credential-overrides"}, {"oauth-model-alias", "oauth.model-alias"}, {"oauth-excluded-models", "oauth.excluded-models"},
+ 		{"oauth-request-scoped-errors", "oauth.request-scoped-errors"}, {"oauth-settings", "oauth.settings"}, {"ws-auth", "oauth.providers.aistudio.ws-auth"},
+ 		{"codex.disable-codex-cloaking", "upstream.codex.disable-codex-cloaking"},
+ 		{"codex.stream-bootstrap-buffering", "upstream.codex.stream-bootstrap-buffering"},
 diff --git a/internal/config/key_allowlist.go b/internal/config/key_allowlist.go
 new file mode 100644
 index 0000000..ef56d03
@@ -385,6 +408,70 @@ index 0000000..ef56d03
 +	}
 +	return fmt.Errorf("access.key-allowlist: %s have the same api-key after trimming; give each client key one entry, since entries sharing a key would merge their credential rules", strings.Join(duplicates, "; "))
 +}
+diff --git a/internal/config/oauth_credential_overrides.go b/internal/config/oauth_credential_overrides.go
+new file mode 100644
+index 0000000..91fc2ac
+--- /dev/null
++++ b/internal/config/oauth_credential_overrides.go
+@@ -0,0 +1,58 @@
++package config
++
++// OAuthCredentialOverride applies behavior to every OAuth login matching one provider and account.
++// Unset fields preserve the original login metadata and CPA defaults.
++type OAuthCredentialOverride struct {
++	Provider string `yaml:"provider" json:"provider"`
++	Account  string `yaml:"account" json:"account"`
++	// BaseURL Provider-specific upstream base URL.
++	BaseURL *string `yaml:"base-url,omitempty" json:"base_url,omitempty"`
++	// DisableCooling Per-credential cooldown override.
++	DisableCooling *bool `yaml:"disable-cooling,omitempty" json:"disable_cooling,omitempty"`
++	// Disabled Whether this credential is disabled.
++	Disabled *bool `yaml:"disabled,omitempty" json:"disabled,omitempty"`
++	// Domain Kimi provider domain.
++	Domain *string `yaml:"domain,omitempty" json:"domain,omitempty"`
++	// ExcludedModels Per-credential excluded model patterns.
++	ExcludedModels *[]string `yaml:"excluded-models,omitempty" json:"excluded_models,omitempty"`
++	// FingerprintProfile Provider request fingerprint profile.
++	FingerprintProfile *string `yaml:"fingerprint-profile,omitempty" json:"fingerprint_profile,omitempty"`
++	// Headers Per-credential upstream request headers.
++	Headers *map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
++	// Interactions selects native Vertex Interactions execution.
++	Interactions *bool `yaml:"interactions,omitempty" json:"interactions,omitempty"`
++	// Location is the Vertex request region.
++	Location *string `yaml:"location,omitempty" json:"location,omitempty"`
++	// ModelAliases Per-credential OAuth model aliases.
++	ModelAliases *[]OAuthModelAlias `yaml:"model-aliases,omitempty" json:"model_aliases,omitempty"`
++	// NativeInteractions selects native Vertex Interactions execution.
++	NativeInteractions *bool `yaml:"native-interactions,omitempty" json:"native_interactions,omitempty"`
++	// Note Human-readable credential note.
++	Note *string `yaml:"note,omitempty" json:"note,omitempty"`
++	// OpenAPI Select Vertex OpenAPI endpoints.
++	OpenAPI *bool `yaml:"openapi,omitempty" json:"openapi,omitempty"`
++	// OpenAPILocation Vertex OpenAPI location.
++	OpenAPILocation *string `yaml:"openapi-location,omitempty" json:"openapi_location,omitempty"`
++	// OpenAPIModels Vertex OpenAPI model names.
++	OpenAPIModels *[]string `yaml:"openapi-models,omitempty" json:"openapi_models,omitempty"`
++	// Prefix Model namespace prefix.
++	Prefix *string `yaml:"prefix,omitempty" json:"prefix,omitempty"`
++	// Priority Scheduling priority; higher available priorities win.
++	Priority *int `yaml:"priority,omitempty" json:"priority,omitempty"`
++	// ProxyURL Per-credential upstream proxy URL.
++	ProxyURL *string `yaml:"proxy-url,omitempty" json:"proxy_url,omitempty"`
++	// RequestRetry Per-credential request retry count; negative falls back to global.
++	RequestRetry *int `yaml:"request-retry,omitempty" json:"request_retry,omitempty"`
++	// RequestScopedErrors Per-credential upstream error rules.
++	RequestScopedErrors *[]RequestScopedErrorRule `yaml:"request-scoped-errors,omitempty" json:"request_scoped_errors,omitempty"`
++	// SkipAccountProfile skips Claude OAuth account-profile lookup.
++	SkipAccountProfile *bool `yaml:"skip-account-profile,omitempty" json:"skip_account_profile,omitempty"`
++	// ToolPrefixDisabled Disable the Anthropic tool name prefix.
++	ToolPrefixDisabled *bool `yaml:"tool-prefix-disabled,omitempty" json:"tool_prefix_disabled,omitempty"`
++	// UserAgent Antigravity upstream User-Agent.
++	UserAgent *string `yaml:"user-agent,omitempty" json:"user_agent,omitempty"`
++	// Websockets Enable Codex upstream WebSockets.
++	Websockets *bool `yaml:"websockets,omitempty" json:"websockets,omitempty"`
++	// Weight Proportional scheduling weight; non-positive disables weighted selection.
++	Weight *int64 `yaml:"weight,omitempty" json:"weight,omitempty"`
++}
 diff --git a/internal/config/parse.go b/internal/config/parse.go
 index c3442be..13a949f 100644
 --- a/internal/config/parse.go
@@ -414,6 +501,122 @@ index 1c52dc2..5a0b45d 100644
  	// PassthroughHeaders controls whether upstream response headers are forwarded to downstream clients.
  	// Default is false (disabled).
  	PassthroughHeaders bool `yaml:"passthrough-headers" json:"passthrough-headers"`
+diff --git a/internal/store/gitstore.go b/internal/store/gitstore.go
+index 3c1f0fb..77cb52d 100644
+--- a/internal/store/gitstore.go
++++ b/internal/store/gitstore.go
+@@ -426,6 +426,9 @@ func (s *GitTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (stri
+ 	if auth == nil {
+ 		return "", fmt.Errorf("auth filestore: auth is nil")
+ 	}
++	runtimeAuth := auth
++	auth = auth.WithoutOAuthOverrides()
++	defer func() { runtimeAuth.MergeOAuthPersistence(auth) }()
+ 	cliproxyauth.NormalizeCredentialMetadata(auth.Metadata)
+ 	if errWeight := cliproxyauth.ValidateAuthWeight(auth); errWeight != nil {
+ 		return "", fmt.Errorf("auth filestore: %w", errWeight)
+diff --git a/internal/store/oauth_overrides_test.go b/internal/store/oauth_overrides_test.go
+new file mode 100644
+index 0000000..477d2c9
+--- /dev/null
++++ b/internal/store/oauth_overrides_test.go
+@@ -0,0 +1,55 @@
++package store
++
++import (
++	"context"
++	"errors"
++	"path/filepath"
++	"testing"
++
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++)
++
++type overrideProbeStorage struct {
++	t        *testing.T
++	sentinel error
++}
++
++func (s *overrideProbeStorage) SetMetadata(metadata map[string]any) {
++	s.t.Helper()
++	if metadata["priority"] != float64(2) || metadata["disabled"] != false || metadata["access_token"] != "fake-refreshed" {
++		s.t.Fatalf("store received runtime overrides: %#v", metadata)
++	}
++}
++func (s *overrideProbeStorage) SaveTokenToFile(string) error { return s.sentinel }
++
++func TestKeyAllowlistOAuthOverrideStoreBoundaries(t *testing.T) {
++	for _, name := range []string{"git", "object", "postgres"} {
++		t.Run(name, func(t *testing.T) {
++			dir := t.TempDir()
++			authDir := filepath.Join(dir, "workspace", "auth")
++			sentinel := errors.New("observed sanitized metadata")
++			auth := &coreauth.Auth{ID: "login.json", FileName: "login.json", Provider: "claude", Disabled: true, Metadata: map[string]any{"type": "claude", "access_token": "fake-refreshed", "priority": float64(9), "disabled": true}, Storage: &overrideProbeStorage{t: t, sentinel: sentinel}}
++			auth.BindOAuthOverrideOriginal(map[string]any{"priority": float64(2), "disabled": false})
++			var save func(context.Context, *coreauth.Auth) (string, error)
++			switch name {
++			case "git":
++				remote := setupGitRemoteRepository(t, dir, "main", testBranchSpec{name: "main", contents: "fake\n"})
++				store := NewGitTokenStore(remote, "", "", "")
++				store.SetBaseDir(authDir)
++				save = store.Save
++			case "object":
++				store := &ObjectTokenStore{authDir: authDir}
++				save = store.Save
++			case "postgres":
++				store := &PostgresStore{authDir: authDir}
++				save = store.Save
++			}
++			if _, err := save(context.Background(), auth); !errors.Is(err, sentinel) {
++				t.Fatalf("save = %v, want probe sentinel", err)
++			}
++			if auth.Metadata["priority"] != float64(9) || !auth.Disabled {
++				t.Fatal("store replaced runtime overrides")
++			}
++		})
++	}
++}
+diff --git a/internal/store/objectstore.go b/internal/store/objectstore.go
+index 39b8b08..d71ff9a 100644
+--- a/internal/store/objectstore.go
++++ b/internal/store/objectstore.go
+@@ -162,6 +162,9 @@ func (s *ObjectTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (s
+ 	if auth == nil {
+ 		return "", fmt.Errorf("object store: auth is nil")
+ 	}
++	runtimeAuth := auth
++	auth = auth.WithoutOAuthOverrides()
++	defer func() { runtimeAuth.MergeOAuthPersistence(auth) }()
+ 	cliproxyauth.NormalizeCredentialMetadata(auth.Metadata)
+ 	if errWeight := cliproxyauth.ValidateAuthWeight(auth); errWeight != nil {
+ 		return "", fmt.Errorf("object store: %w", errWeight)
+diff --git a/internal/store/postgresstore.go b/internal/store/postgresstore.go
+index 69bc318..9aff22c 100644
+--- a/internal/store/postgresstore.go
++++ b/internal/store/postgresstore.go
+@@ -213,6 +213,9 @@ func (s *PostgresStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (stri
+ 	if auth == nil {
+ 		return "", fmt.Errorf("postgres store: auth is nil")
+ 	}
++	runtimeAuth := auth
++	auth = auth.WithoutOAuthOverrides()
++	defer func() { runtimeAuth.MergeOAuthPersistence(auth) }()
+ 	cliproxyauth.NormalizeCredentialMetadata(auth.Metadata)
+ 	if errWeight := cliproxyauth.ValidateAuthWeight(auth); errWeight != nil {
+ 		return "", fmt.Errorf("postgres store: %w", errWeight)
+diff --git a/internal/watcher/config_reload.go b/internal/watcher/config_reload.go
+index b9d5aab..7ff74a3 100644
+--- a/internal/watcher/config_reload.go
++++ b/internal/watcher/config_reload.go
+@@ -143,7 +143,7 @@ func (w *Watcher) reloadConfig() bool {
+ 
+ 	authDirChanged := oldConfig == nil || oldConfig.AuthDir != newConfig.AuthDir
+ 	retryConfigChanged := oldConfig != nil && (oldConfig.RequestRetry != newConfig.RequestRetry || oldConfig.MaxRetryInterval != newConfig.MaxRetryInterval || oldConfig.MaxRetryCredentials != newConfig.MaxRetryCredentials)
+-	forceAuthRefresh := oldConfig != nil && (oldConfig.ForceModelPrefix != newConfig.ForceModelPrefix || !reflect.DeepEqual(oldConfig.OAuthModelAlias, newConfig.OAuthModelAlias) || !reflect.DeepEqual(oldConfig.OAuthSettings, newConfig.OAuthSettings) || retryConfigChanged)
++	forceAuthRefresh := oldConfig != nil && (oldConfig.ForceModelPrefix != newConfig.ForceModelPrefix || !reflect.DeepEqual(oldConfig.OAuthCredentialOverrides, newConfig.OAuthCredentialOverrides) || !reflect.DeepEqual(oldConfig.OAuthModelAlias, newConfig.OAuthModelAlias) || !reflect.DeepEqual(oldConfig.OAuthSettings, newConfig.OAuthSettings) || retryConfigChanged)
+ 
+ 	log.Infof("config successfully reloaded, triggering client reload")
+ 	w.reloadClients(authDirChanged, affectedOAuthProviders, forceAuthRefresh)
 diff --git a/internal/watcher/key_allowlist_test.go b/internal/watcher/key_allowlist_test.go
 new file mode 100644
 index 0000000..c6771d7
@@ -475,6 +678,241 @@ index 0000000..c6771d7
 +	writeConfig("key-a", "key-c")
 +	w.reloadConfigIfChanged()
 +	assertState(2, "key-c")
++}
+diff --git a/internal/watcher/oauth_overrides_test.go b/internal/watcher/oauth_overrides_test.go
+new file mode 100644
+index 0000000..f77ac1c
+--- /dev/null
++++ b/internal/watcher/oauth_overrides_test.go
+@@ -0,0 +1,49 @@
++package watcher
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++)
++
++func TestKeyAllowlistOAuthOverrideReload(t *testing.T) {
++	dir := t.TempDir()
++	configPath := filepath.Join(dir, "config.yaml")
++	authDir := filepath.Join(dir, "auth")
++	if err := os.Mkdir(authDir, 0700); err != nil {
++		t.Fatal(err)
++	}
++	raw := []byte(`{"type":"claude","email":"person@example.invalid","access_token":"fake","priority":2}`)
++	if err := os.WriteFile(filepath.Join(authDir, "login.json"), raw, 0600); err != nil {
++		t.Fatal(err)
++	}
++	w := &Watcher{configPath: configPath, authDir: authDir}
++	write := func(extra string) {
++		t.Helper()
++		if err := os.WriteFile(configPath, []byte("config-version: 8\noauth:\n  auth-dir: "+authDir+"\n"+extra), 0600); err != nil {
++			t.Fatal(err)
++		}
++		w.reloadConfigIfChanged()
++	}
++	assertPriority := func(want string) {
++		t.Helper()
++		w.clientsMutex.RLock()
++		defer w.clientsMutex.RUnlock()
++		auth := w.currentAuths["login.json"]
++		if auth == nil || auth.Attributes["priority"] != want {
++			t.Fatalf("auth = %#v, want priority %s", auth, want)
++		}
++	}
++	write("")
++	assertPriority("2")
++	write("  credential-overrides:\n    - provider: claude\n      account: person@example.invalid\n      priority: -1\n")
++	assertPriority("-1")
++	write("  credential-overrides:\n    - provider: claude\n      account: person@example.invalid\n      priority: 0\n")
++	assertPriority("0")
++	write("")
++	assertPriority("2")
++	data, err := os.ReadFile(filepath.Join(authDir, "login.json"))
++	if err != nil || string(data) != string(raw) {
++		t.Fatal("reload wrote login")
++	}
++}
+diff --git a/internal/watcher/synthesizer/file.go b/internal/watcher/synthesizer/file.go
+index 1a40f50..0d9f1be 100644
+--- a/internal/watcher/synthesizer/file.go
++++ b/internal/watcher/synthesizer/file.go
+@@ -84,7 +84,7 @@ func SynthesizeAuthFile(ctx *SynthesisContext, fullPath string, data []byte) ([]
+ 	return synthesizeFileAuths(ctx, fullPath, data)
+ }
+ 
+-func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) ([]*coreauth.Auth, error) {
++func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) (auths []*coreauth.Auth, err error) {
+ 	if ctx == nil || len(data) == 0 {
+ 		return nil, nil
+ 	}
+@@ -97,6 +97,18 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) ([
+ 		return nil, nil
+ 	}
+ 	coreauth.NormalizeCredentialMetadata(metadata)
++	original, errOverride := applyOAuthCredentialOverrides(ctx.Config, metadata)
++	if errOverride != nil {
++		return nil, errOverride
++	}
++	// Native synthesis below consumes effective metadata; persistence restores only
++	// configured behavior fields, and snapshot identity remains the original bytes.
++	defer func() {
++		for _, auth := range auths {
++			auth.BindOAuthOverrideOriginal(original)
++		}
++	}()
++
+ 	if errWeight := coreauth.ValidateAuthWeight(&coreauth.Auth{Metadata: metadata}); errWeight != nil {
+ 		return nil, fmt.Errorf("invalid weight in %s: %w", filepath.Base(fullPath), errWeight)
+ 	}
+diff --git a/internal/watcher/synthesizer/oauth_overrides.go b/internal/watcher/synthesizer/oauth_overrides.go
+new file mode 100644
+index 0000000..cbacfa3
+--- /dev/null
++++ b/internal/watcher/synthesizer/oauth_overrides.go
+@@ -0,0 +1,52 @@
++package synthesizer
++
++import (
++	"encoding/json"
++	"strings"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++)
++
++func applyOAuthCredentialOverrides(cfg *config.Config, metadata map[string]any) (map[string]any, error) {
++	if cfg == nil {
++		return nil, nil
++	}
++	provider, _ := metadata["type"].(string)
++	provider = strings.ToLower(strings.TrimSpace(provider))
++	if provider == "gemini" {
++		provider = "gemini-cli"
++	}
++	// The watcher marks file-synthesized records OAuth, overriding stale file kind metadata.
++	probe := &coreauth.Auth{Provider: provider, Metadata: metadata, Attributes: map[string]string{coreauth.AttributeAuthKind: coreauth.AuthKindOAuth}}
++	kind, email := probe.AccountInfo()
++	if kind != "oauth" || email == "" {
++		return nil, nil
++	}
++	var original map[string]any
++	for _, entry := range cfg.OAuthCredentialOverrides {
++		if !strings.EqualFold(strings.TrimSpace(entry.Provider), strings.TrimSpace(provider)) || strings.TrimSpace(entry.Account) != email {
++			continue
++		}
++		raw, err := json.Marshal(entry)
++		if err != nil {
++			return nil, err
++		}
++		var values map[string]any
++		if err = json.Unmarshal(raw, &values); err != nil {
++			return nil, err
++		}
++		delete(values, "provider")
++		delete(values, "account")
++		if original == nil {
++			original = make(map[string]any)
++		}
++		for key, value := range values {
++			if _, captured := original[key]; !captured {
++				original[key] = metadata[key]
++			}
++			metadata[key] = value
++		}
++	}
++	return original, nil
++}
+diff --git a/internal/watcher/synthesizer/oauth_overrides_test.go b/internal/watcher/synthesizer/oauth_overrides_test.go
+new file mode 100644
+index 0000000..dd0b338
+--- /dev/null
++++ b/internal/watcher/synthesizer/oauth_overrides_test.go
+@@ -0,0 +1,84 @@
++package synthesizer
++
++import (
++	"encoding/json"
++	"os"
++	"path/filepath"
++	"reflect"
++	"testing"
++	"time"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++)
++
++func TestKeyAllowlistOAuthOverrides(t *testing.T) {
++	dir := t.TempDir()
++	raw := []byte(`{"type":"claude","email":" person@example.invalid ","access_token":"fake-original","auth_kind":"apikey","priority":2,"weight":3,"disabled":true,"note":"original","headers":{"X-Test":"original"},"request_retry":4}`)
++	paths := []string{filepath.Join(dir, "one.json"), filepath.Join(dir, "two.json")}
++	for _, path := range paths {
++		if err := os.WriteFile(path, raw, 0600); err != nil {
++			t.Fatal(err)
++		}
++	}
++	var entry config.OAuthCredentialOverride
++	if err := json.Unmarshal([]byte(`{"provider":" CLAUDE ","account":" person@example.invalid ","priority":-1,"weight":5,"prefix":"team","proxy_url":"direct://","disabled":false,"note":"managed","headers":{"X-Test":"managed"},"disable_cooling":true,"request_retry":0,"tool_prefix_disabled":true,"skip_account_profile":true,"websockets":true,"excluded_models":["hidden*"],"model_aliases":[{"name":"upstream","alias":"public"}]}`), &entry); err != nil {
++		t.Fatal(err)
++	}
++	ctx := &SynthesisContext{AuthDir: dir, Now: time.Now(), Config: &config.Config{OAuthCredentialOverrides: []config.OAuthCredentialOverride{entry}}}
++	synth := func() []*coreauth.Auth {
++		t.Helper()
++		auths, err := NewFileSynthesizer().Synthesize(ctx)
++		if err != nil || len(auths) != 2 {
++			t.Fatalf("synthesis: %d %v", len(auths), err)
++		}
++		return auths
++	}
++	for _, auth := range synth() {
++		if auth.Attributes["priority"] != "-1" || auth.Attributes["weight"] != "5" || auth.Prefix != "team" || auth.ProxyURL != "direct://" || auth.Disabled || auth.Attributes["note"] != "managed" || auth.Attributes["header:X-Test"] != "managed" {
++			t.Fatalf("effective auth: %#v", auth)
++		}
++		if value, present := auth.DisableCoolingOverride(); !present || !value {
++			t.Fatal("cooling override not consumed")
++		}
++		if value, present := auth.RequestRetryOverride(); !present || value != 0 {
++			t.Fatal("retry override not consumed")
++		}
++		if !auth.ToolPrefixDisabled() || auth.Metadata["skip_account_profile"] != true || auth.Metadata["websockets"] != true {
++			t.Fatal("metadata consumers missed overrides")
++		}
++		auth.Metadata["access_token"] = "fake-refreshed"
++		saved := auth.Clone().WithoutOAuthOverrides()
++		if saved.Metadata["access_token"] != "fake-refreshed" || saved.Metadata["priority"] != float64(2) || !saved.Disabled || saved.Metadata["prefix"] != nil || saved.Metadata["email"] != " person@example.invalid " {
++			t.Fatalf("persistence copy: %#v", saved)
++		}
++		if !auth.FileSnapshotMatchesDisk() {
++			t.Fatal("snapshot no longer matches original login bytes")
++		}
++	}
++	for _, path := range paths {
++		data, err := os.ReadFile(path)
++		if err != nil || string(data) != string(raw) {
++			t.Fatal("synthesis wrote login")
++		}
++	}
++	// Reload/removal synthesizes fresh raw login metadata; null and absent both omit overrides.
++	ctx.Config.OAuthCredentialOverrides = nil
++	for _, auth := range synth() {
++		if auth.Attributes["priority"] != "2" || !auth.Disabled || auth.Prefix != "" {
++			t.Fatalf("removal did not restore login: %#v", auth)
++		}
++	}
++	for _, changed := range []config.OAuthCredentialOverride{{Provider: "codex", Account: entry.Account, Priority: entry.Priority}, {Provider: entry.Provider, Account: "Person@example.invalid", Priority: entry.Priority}, {Provider: entry.Provider, Account: "", Priority: entry.Priority}} {
++		ctx.Config.OAuthCredentialOverrides = []config.OAuthCredentialOverride{changed}
++		for _, auth := range synth() {
++			if auth.Attributes["priority"] != "2" {
++				t.Fatal("undeclared login changed")
++			}
++		}
++	}
++	ctx.Config.OAuthCredentialOverrides = []config.OAuthCredentialOverride{{Provider: entry.Provider, Account: entry.Account}}
++	if !reflect.DeepEqual(synth()[0].Metadata["priority"], float64(2)) {
++		t.Fatal("null override changed native metadata")
++	}
 +}
 diff --git a/sdk/api/handlers/handlers_interceptors.go b/sdk/api/handlers/handlers_interceptors.go
 index b7aa2a5..670d553 100644
@@ -755,6 +1193,134 @@ index 0000000..cc91257
 +	base.WriteModelListResponse(ctx, "openai", []byte(body))
 +	if writer.Code != http.StatusOK || writer.Body.String() != body {
 +		t.Fatalf("unconfigured catalog changed: status=%d body=%s", writer.Code, writer.Body.String())
++	}
++}
+diff --git a/sdk/auth/filestore.go b/sdk/auth/filestore.go
+index f8e0615..3e632dc 100644
+--- a/sdk/auth/filestore.go
++++ b/sdk/auth/filestore.go
+@@ -76,6 +76,9 @@ func (s *FileTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (str
+ 	if auth == nil {
+ 		return "", fmt.Errorf("auth filestore: auth is nil")
+ 	}
++	runtimeAuth := auth
++	auth = auth.WithoutOAuthOverrides()
++	defer func() { runtimeAuth.MergeOAuthPersistence(auth) }()
+ 	cliproxyauth.NormalizeCredentialMetadata(auth.Metadata)
+ 	if errWeight := cliproxyauth.ValidateAuthWeight(auth); errWeight != nil {
+ 		return "", fmt.Errorf("auth filestore: %w", errWeight)
+diff --git a/sdk/auth/oauth_overrides_test.go b/sdk/auth/oauth_overrides_test.go
+new file mode 100644
+index 0000000..921cd1d
+--- /dev/null
++++ b/sdk/auth/oauth_overrides_test.go
+@@ -0,0 +1,108 @@
++package auth
++
++import (
++	"context"
++	"encoding/json"
++	"os"
++	"path/filepath"
++	"testing"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/codex"
++	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++)
++
++type overrideStorage struct{ metadata map[string]any }
++
++func (s *overrideStorage) SetMetadata(value map[string]any) { s.metadata = value }
++func (s *overrideStorage) SaveTokenToFile(path string) error {
++	raw, err := json.Marshal(s.metadata)
++	if err != nil {
++		return err
++	}
++	return os.WriteFile(path, raw, 0600)
++}
++
++func TestKeyAllowlistOAuthOverridePersistence(t *testing.T) {
++	for _, provider := range []string{"claude", "codex"} {
++		for _, useStorage := range []bool{false, true} {
++			t.Run(provider+map[bool]string{false: "-metadata", true: "-storage"}[useStorage], func(t *testing.T) {
++				dir := t.TempDir()
++				path := filepath.Join(dir, "login.json")
++				original := map[string]any{"type": provider, "email": "person@example.invalid", "access_token": "fake-original", "refresh_token": "fake-refresh", "priority": float64(2), "disabled": false}
++				raw, _ := json.Marshal(original)
++				if err := os.WriteFile(path, raw, 0600); err != nil {
++					t.Fatal(err)
++				}
++				auth := &coreauth.Auth{ID: "login.json", Provider: provider, FileName: "login.json", Metadata: original, Disabled: true}
++				auth.BindOAuthOverrideOriginal(map[string]any{"priority": float64(2), "disabled": false, "prefix": nil})
++				auth.Metadata["priority"] = float64(9)
++				auth.Metadata["disabled"] = true
++				auth.Metadata["prefix"] = "managed"
++				before := auth.Clone()
++				auth.Metadata["access_token"] = "fake-refreshed"
++				if provider == "codex" {
++					auth.CodexRefreshPatch = codex.NewCredentialRefreshPatch(before.Metadata, auth.Metadata, true, false)
++				}
++				storage := &overrideStorage{}
++				if useStorage {
++					auth.Storage = storage
++				}
++				store := NewFileTokenStore()
++				store.SetBaseDir(dir)
++				if _, err := store.Save(context.Background(), auth); err != nil {
++					t.Fatal(err)
++				}
++				data, err := os.ReadFile(path)
++				if err != nil {
++					t.Fatal(err)
++				}
++				var saved map[string]any
++				if err = json.Unmarshal(data, &saved); err != nil {
++					t.Fatal(err)
++				}
++				if saved["access_token"] != "fake-refreshed" || saved["refresh_token"] != "fake-refresh" || saved["priority"] != float64(2) || saved["disabled"] != false || saved["prefix"] != nil {
++					t.Fatalf("persisted overrides or lost tokens: %s", data)
++				}
++				if provider == "codex" && auth.CodexRefreshPatch != nil {
++					t.Fatal("native persistence did not consume refresh patch")
++				}
++				if auth.Metadata["access_token"] != "fake-refreshed" {
++					t.Fatal("native token merge lost")
++				}
++				if _, err := store.Save(context.Background(), auth); err != nil {
++					t.Fatal(err)
++				}
++				if auth.Metadata["priority"] != float64(9) || !auth.Disabled {
++					t.Fatal("save mutated runtime auth")
++				}
++				if useStorage && provider != "codex" && storage.metadata["priority"] != float64(2) {
++					t.Fatal("SetMetadata received configured behavior")
++				}
++			})
++		}
++	}
++}
++
++func TestKeyAllowlistOAuthOverrideCodexNativeDisabled(t *testing.T) {
++	dir := t.TempDir()
++	path := filepath.Join(dir, "login.json")
++	disk := []byte(`{"type":"codex","email":"person@example.invalid","access_token":"fake-original","disabled":true,"priority":2}`)
++	if err := os.WriteFile(path, disk, 0600); err != nil {
++		t.Fatal(err)
++	}
++	before := map[string]any{"type": "codex", "access_token": "fake-original", "disabled": false, "priority": float64(2)}
++	auth := &coreauth.Auth{ID: "login.json", FileName: "login.json", Provider: "codex", Metadata: map[string]any{"type": "codex", "access_token": "fake-refreshed", "disabled": false, "priority": float64(9)}}
++	auth.BindOAuthOverrideOriginal(map[string]any{"priority": float64(2)})
++	auth.CodexRefreshPatch = codex.NewCredentialRefreshPatch(before, auth.Metadata, true, false)
++	store := NewFileTokenStore()
++	store.SetBaseDir(dir)
++	if _, err := store.Save(context.Background(), auth); err != nil {
++		t.Fatal(err)
++	}
++	if !auth.Disabled || auth.Metadata["disabled"] != true {
++		t.Fatal("native disk disabled state lost")
++	}
++	if auth.CodexRefreshPatch != nil || auth.Metadata["priority"] != float64(9) {
++		t.Fatal("refresh patch or runtime priority incorrect")
 +	}
 +}
 diff --git a/sdk/cliproxy/auth/conductor.go b/sdk/cliproxy/auth/conductor.go
@@ -1476,6 +2042,63 @@ index 0000000..233e2b1
 +		})
 +	}
 +}
+diff --git a/sdk/cliproxy/auth/oauth_overrides.go b/sdk/cliproxy/auth/oauth_overrides.go
+new file mode 100644
+index 0000000..bccad9a
+--- /dev/null
++++ b/sdk/cliproxy/auth/oauth_overrides.go
+@@ -0,0 +1,51 @@
++package auth
++
++// BindOAuthOverrideOriginal remembers only configured behavior keys, never tokens.
++// Nil values mean that the original login had no such key.
++func (a *Auth) BindOAuthOverrideOriginal(original map[string]any) {
++	a.oauthOverrideOriginal = original
++}
++
++// WithoutOAuthOverrides keeps refreshed credentials while restoring login behavior
++// on a copy for the token store. Clone retains the immutable original map.
++func (a *Auth) WithoutOAuthOverrides() *Auth {
++	if len(a.oauthOverrideOriginal) == 0 {
++		return a
++	}
++	saved := a.Clone()
++	for key, value := range a.oauthOverrideOriginal {
++		if value == nil {
++			delete(saved.Metadata, key)
++		} else {
++			saved.Metadata[key] = value
++		}
++	}
++	if _, overridden := a.oauthOverrideOriginal["disabled"]; overridden {
++		saved.Disabled, _ = saved.Metadata["disabled"].(bool)
++	}
++	return saved
++}
++
++// MergeOAuthPersistence retains native token-store output (including Codex disk
++// merges and consumed refresh patches) without replacing effective behavior.
++func (a *Auth) MergeOAuthPersistence(saved *Auth) {
++	if a == saved {
++		return
++	}
++	metadata := saved.Clone().Metadata
++	for key := range a.oauthOverrideOriginal {
++		if value, present := a.Metadata[key]; present {
++			metadata[key] = value
++		} else {
++			delete(metadata, key)
++		}
++	}
++	if _, overridden := a.oauthOverrideOriginal["disabled"]; !overridden {
++		a.Disabled = saved.Disabled
++	}
++	a.Metadata = metadata
++	a.CodexRefreshPatch = saved.CodexRefreshPatch
++	a.Storage = saved.Storage
++	a.Attributes = saved.Attributes
++	a.FileName = saved.FileName
++}
 diff --git a/sdk/cliproxy/auth/scheduler.go b/sdk/cliproxy/auth/scheduler.go
 index 752a52d..6b1ae71 100644
 --- a/sdk/cliproxy/auth/scheduler.go
@@ -1507,3 +2130,17 @@ index 752a52d..6b1ae71 100644
  	modelKey := canonicalModelKey(model)
  
  	s.mu.Lock()
+diff --git a/sdk/cliproxy/auth/types.go b/sdk/cliproxy/auth/types.go
+index e4a4ef5..5b9aa9d 100644
+--- a/sdk/cliproxy/auth/types.go
++++ b/sdk/cliproxy/auth/types.go
+@@ -85,6 +85,9 @@ type Auth struct {
+ 	ProxyURL string `json:"proxy_url,omitempty"`
+ 	// Attributes stores provider specific metadata needed by executors (immutable configuration).
+ 	Attributes map[string]string `json:"attributes,omitempty"`
++	// oauthOverrideOriginal is immutable behavior metadata restored before token persistence.
++	oauthOverrideOriginal map[string]any
++
+ 	// Metadata stores runtime mutable provider state (e.g. tokens, cookies).
+ 	Metadata map[string]any `json:"metadata,omitempty"`
+ 	// Quota captures recent quota information for load balancers.
