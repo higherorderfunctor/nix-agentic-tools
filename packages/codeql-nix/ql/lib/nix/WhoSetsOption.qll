@@ -7,8 +7,10 @@ private import nix.internal.Evaluation
 private import nix.internal.RawBridge
 
 module WhoSetsOption {
+  /** Root-context requests only; concrete instance paths are relative to their own contexts. */
   private predicate requested(Targets::Target target, string pathJson) {
-    nx_requests(_, target, _, "option-metadata", pathJson, _, _, _, _, _, _)
+    exists(Modules::RootContext context |
+      nx_requests(_, target, context, "option-metadata", pathJson, _, _, _, _, _, _))
   }
 
   bindingset[origin]
@@ -30,7 +32,7 @@ module WhoSetsOption {
     exists(Modules::SelectedDefinition definition |
       definition.getOption().getTarget() = target and
       definition.getOption().getPathJson() = pathJson and
-      origin = definition.getOrigin() and binding = origin.getACandidate(target, pathJson)
+      definition.getOption().getContext() instanceof Modules::RootContext and origin = definition.getOrigin() and binding = origin.getACandidate(target, pathJson)
     )
   }
 
@@ -53,6 +55,7 @@ module WhoSetsOption {
       Origin::Origin origin |
       configuration = definition.getOption().getTarget() and
       pathJson = definition.getOption().getPathJson() and requested(configuration, pathJson) and
+      definition.getOption().getContext() instanceof Modules::RootContext and
       target = configuration.getName() and origin = definition.getOrigin() and
       kind = "selected" and file = file(origin) and point(origin, line, column) and
       priorityText = Modules::priorityText(configuration, pathJson) and selected = "true" and
@@ -73,7 +76,7 @@ module WhoSetsOption {
     or
     exists(Modules::ObservedOption option, Targets::Target configuration, Origin::Origin origin |
       configuration = option.getTarget() and pathJson = option.getPathJson() and
-      requested(configuration, pathJson) and target = configuration.getName() and
+      option.getContext() instanceof Modules::RootContext and requested(configuration, pathJson) and target = configuration.getName() and
       origin = option.getADeclaration() and kind = "declaration" and
       file = file(origin) and point(origin, line, column) and
       priorityText = "unknown" and selected = "unknown" and associationQuality = "unknown"

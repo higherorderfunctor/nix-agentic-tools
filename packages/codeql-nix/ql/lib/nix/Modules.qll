@@ -7,6 +7,26 @@ private import nix.internal.RawBridge
 private import nix.internal.generated.Modules as ModuleModels
 
 module Modules {
+  /** A target's root or explicitly requested concrete instance; metadata is pre-apply. */
+  class ModuleContext extends @nx_context {
+    Targets::Target getTarget() { nx_contexts(this, result, _, _) }
+    string getInstancePathJson() { nx_contexts(this, _, _, result) }
+    string toString() { result = this.getTarget().getName() + ":" + this.getInstancePathJson() }
+  }
+
+  class RootContext extends ModuleContext {
+    RootContext() { nx_contexts(this, _, "root", _) }
+  }
+
+  /** A request-local child; equal instance paths from separate requests stay distinct. */
+  class ConcreteContext extends ModuleContext {
+    ConcreteContext() { nx_contexts(this, _, "concrete-submodule", _) }
+    ModuleContext getParent() { nx_context_parents(this, result, _, _, _) }
+    @nx_option getParentOption() { nx_context_parents(this, _, result, _, _) }
+    string getMemberKind() { nx_context_parents(this, _, _, result, _) }
+    string getMemberKey() { nx_context_parents(this, _, _, _, result) }
+  }
+
   class ObservedOption extends @nx_option {
     ObservedOption() {
       exists(@nx_observation observation |
@@ -21,21 +41,23 @@ module Modules {
         Evaluation::observed(observation) and nx_observation_options(observation, this) and
         nx_observations(observation, result, _, "observed"))
     }
+    ModuleContext getContext() { nx_options(this, result, _) }
     string getPathJson() { nx_options(this, _, result) }
     string getPriorityText() { nx_option_priority(this, result) }
     Origin::Origin getADeclaration() { nx_option_declarations(this, _, result) }
     string toString() { result = this.getTarget().getName() + ":" + this.getPathJson() }
   }
 
-  /** Facet-specific identities share witnessed priority only within one target and exact path. */
+  /** Facet-specific root identities share witnessed priority only within one target and exact path. */
   bindingset[target, pathJson]
   string priorityText(Targets::Target target, string pathJson) {
     exists(ObservedOption option |
       option.getTarget() = target and option.getPathJson() = pathJson and
-      result = option.getPriorityText())
+      option.getContext() instanceof RootContext and result = option.getPriorityText())
     or not exists(ObservedOption option |
       option.getTarget() = target and option.getPathJson() = pathJson and
-      exists(option.getPriorityText())) and result = "unknown"
+      option.getContext() instanceof RootContext and exists(option.getPriorityText())) and
+      result = "unknown"
   }
 
   /** A retained definition with its own successful observation and observed parent option. */
@@ -53,6 +75,11 @@ module Modules {
     }
     ObservedOption getOption() { nx_definitions(this, result, _, _) }
     string getOrderPriorityText() { nx_definition_order(this, result) }
+    string getStage() {
+      exists(@nx_observation observation |
+        nx_observation_definitions(observation, this) and Evaluation::observed(observation) and
+        nx_observations(observation, _, result, "observed"))
+    }
     int getOrdinal() { nx_definitions(this, _, result, _) }
     Origin::Origin getOrigin() { nx_definitions(this, _, _, result) }
     string getPriorityText() { result = this.getOption().getPriorityText() }

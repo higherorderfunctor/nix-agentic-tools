@@ -18,6 +18,7 @@
         "metadata-library"
         "module-adapter"
         "module-properties"
+        "nested-metadata"
         "owner-layout"
         "source-identity"
         "target-contract"

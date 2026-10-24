@@ -1,11 +1,11 @@
 # Observed metadata library
 
-> **Last verified:** 2026-10-23 — M3p adds optional retained order to L0
-> metadata; source properties remain separate from observed selection.
+> **Last verified:** 2026-10-23 — M3n adds concrete context views; optional
+> retained order and source properties remain separate from observed selection.
 
 - QL is the language for querying a CodeQL database.
 - A target is an explicitly named configuration.
-- A context is a target's root instance.
+- A context is a target's root or explicitly requested concrete instance.
 - A request selects an option path, metadata facet and work limits.
 - An observation records an outcome for one typed option or definition.
 - Selected means retained for type merging, without proving a value's cause.
@@ -17,10 +17,11 @@
 - TRAP is the fact format imported into a CodeQL database.
 
 `Targets.qll`, `Modules.qll` and `Origin.qll` expose only `Target`,
-`RequestResult`, `ObservedOption`, `SelectedDefinition`, `Origin` and the
-separate `PropertyApplication`/`PropertyGroup` structural views. Private
-`internal/Evaluation.qll` shares observation witnesses and path encoding over
-the [existing tables](database-contract.md). Request results retain failures.
+`RequestResult`, `ObservedOption`, `SelectedDefinition`, `Origin`, root/concrete
+`ModuleContext` views and the separate `PropertyApplication`/`PropertyGroup`
+structural views. Private `internal/Evaluation.qll` shares observation witnesses
+and path encoding over the [existing tables](database-contract.md). Request
+results retain failures.
 
 Observed options require their typed subject link and an observed outcome from a
 complete or partial request. Selected definitions require their own such link

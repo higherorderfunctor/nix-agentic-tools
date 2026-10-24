@@ -1,8 +1,7 @@
 # Target and observation contract
 
-> **Last verified:** 2026-10-23 — F2 retains the metadata manifest and fact
-> envelope for Step 0; M3 activates exact-text model identities without adding
-> request domains.
+> **Last verified:** 2026-10-23 — M3n adds optional concrete context steps to
+> metadata requests; root requests and the existing fact envelope remain usable.
 
 ## Purpose and fit
 
@@ -59,8 +58,13 @@ runtime-reference resolution.
 Every request explicitly provides `domain`, `facet`, literal string-segment
 `path`, and all five budgets: `maxBytes`, `maxDepth`, `maxMemoryMiB`, `maxNodes`
 and `maxSeconds`. `["a.b"]` and `["a", "b"]` remain distinct. There is no
-implicit traversal or value request. The metadata baseline explicitly selects a
-prefix.
+implicit traversal or value request. Optional `contextPath` selects concrete
+instances; absent and explicit `[]` both select the root. Each step contains
+`option` (exact parent-relative option segments), `memberKind` and `memberKey`.
+Kinds are `attribute`, `index` and `submodule`: keys are respectively exact
+strings, canonical nonnegative decimal text and `""`. The final request `path`
+is relative to the selected context. No schema or sibling enumeration is
+implied.
 
 Every request uses the `option-metadata` domain and `metadata` observation mode.
 Facets: `declarations`, `definitions`, `isDefined`, `priority`, `selection`.
@@ -68,7 +72,11 @@ Selection emits retained inputs, whether the option is defined, winning override
 priority and explicit order under one request. Its capability is
 `module-properties`; unsupported helper pins retain independently requested Step
 0 metadata. Objects are closed to unknown fields; target and input maps permit
-explicit names.
+explicit names. Nested traversal uses capability `nested-metadata`; missing rich
+type metadata yields request `unsupported`, reason `nested-metadata-unavailable`
+and capability `unavailable`. Missing options or members instead fail with
+`option-unavailable` or `instance-unavailable`. A failed traversal stays rooted
+and publishes no concrete chain or provenance; independent requests survive.
 
 Deferred surfaces return with their consuming queries: increment 3 restores
 module graph requests and metadata enumeration; increment 4 restores
@@ -138,11 +146,13 @@ python packages/codeql-nix/checks/fixtures/protocol/test_protocol.py
 
 The tests check required descriptors, nested source roots and input identities,
 retained metadata facets, rejection of deferred controls, literal paths and
-budgets, all 27 relation mappings, status families and pre-target failures,
+budgets, all 28 relation mappings, status families and pre-target failures,
 priorities, and UTF-8/JSON-expansion boundaries. They use independent fixtures
-and F1 validation without invoking Nix evaluation or the CodeQL engine. F3 must
-integrate this standalone entry point into the owner's checks with nonempty
-health/ABI sentinels; F2 adds no check registration.
+and F1 validation without invoking Nix evaluation or the CodeQL engine.
+`checks.nix` imports `checks/contracts.nix`, whose `codeql-nix-contracts` runs
+this entry point through the nonempty domain runner with the existing health/ABI
+sentinels. Nested producer and installed-query coverage additionally runs
+through `codeql-nix-step0`.
 
 Change the relevant schema and independent fixture expectations together,
 preserve all three enabled format checks and the F1 validation layer, then
