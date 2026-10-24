@@ -1,4 +1,5 @@
 - description: Implemented Nix source, binding, and model queries
+- query: DirectoryImports.ql
 - query: ImportGraph.ql
 - query: NameBindings.ql
 - query: RenamedOptions.ql

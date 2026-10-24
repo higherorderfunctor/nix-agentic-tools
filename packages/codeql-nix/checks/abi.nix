@@ -59,7 +59,7 @@
           "$TMPDIR/dataset" "$TMPDIR/golden.trap"
         flock "$TMPDIR/codeql.lock" codeql dataset check "$TMPDIR/dataset"
         mkdir "$out"
-        printf '32 relations; ABI behavioral tests and typed golden TRAP import passed\n' > "$out/evidence"
+        printf '34 relations; ABI behavioral tests and typed golden TRAP import passed\n' > "$out/evidence"
       '';
   };
 }

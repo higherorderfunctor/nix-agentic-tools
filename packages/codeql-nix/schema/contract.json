@@ -23,6 +23,14 @@
     ],
     "nx_contexts.kind": ["root"],
     "nx_files.sourceKind": ["dependency", "generated", "project"],
+    "nx_import_path_candidates.kind": ["directory", "search"],
+    "nx_import_path_candidates.reason": [
+      "",
+      "missing-input",
+      "search-path-unmapped",
+      "source-not-admitted"
+    ],
+    "nx_import_path_candidates.status": ["resolved", "unavailable"],
     "nx_observations.stage": ["pre-apply-metadata"],
     "nx_observations.state": [
       "blocked",
@@ -130,6 +138,14 @@
     "nx_files": {
       "columns": "file:file rootKey:text relativePath:text contentHash:text sourceKind:text",
       "key": [0]
+    },
+    "nx_import_path_candidates": {
+      "columns": "target:target anchor:anchor kind:text status:text reason:text",
+      "key": [0, 1]
+    },
+    "nx_import_path_targets": {
+      "columns": "target:target anchor:anchor file:file",
+      "key": [0, 1]
     },
     "nx_module_imports": {
       "columns": "parent:module ordinal:int child:module",

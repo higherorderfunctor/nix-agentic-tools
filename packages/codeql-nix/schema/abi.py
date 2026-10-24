@@ -308,6 +308,14 @@ def validate(rows):
     admitted = defaultdict(set)
     for target, file, _ in tables["nx_target_inputs"]:
         admitted[file].add(owners["run"][owners["target"][target][1]][5])
+    links = {(target, anchor): file for target, anchor, file in tables["nx_import_path_targets"]}
+    candidates = {(target, anchor): status for target, anchor, _, status, _ in tables["nx_import_path_candidates"]}
+    inputs = {(target, file) for target, file, _ in tables["nx_target_inputs"]}
+    for target, anchor, _, status, reason in tables["nx_import_path_candidates"]:
+        require((status == "resolved") == (reason == "") == ((target, anchor) in links), "import path link mismatch")
+        require((target, owners["anchor"][anchor][1]) in inputs, "import path source not admitted")
+    for (target, anchor), file in links.items():
+        require(candidates.get((target, anchor)) == "resolved" and (target, file) in inputs, "import path target not admitted")
     for origin, runs in origin_targets.items():
         if origin in origin_files:
             require(all(owners["run"][run][5] in admitted[origin_files[origin][0]] for run in runs), "cross-snapshot origin")

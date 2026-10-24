@@ -18,6 +18,7 @@ LIMIT = 1048576
 M3P_TABLES = {
     "nx_anchors", "nx_capabilities", "nx_contexts", "nx_definition_order", "nx_definitions",
     "nx_diagnostic_requests", "nx_diagnostic_targets", "nx_diagnostics", "nx_files",
+    "nx_import_path_candidates", "nx_import_path_targets",
     "nx_module_imports", "nx_module_lib_bindings", "nx_module_roots", "nx_modules",
     "nx_observation_contexts", "nx_observation_definitions", "nx_observation_modules",
     "nx_observation_options", "nx_observations",

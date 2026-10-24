@@ -32,6 +32,16 @@ module RawBridge {
   /** Canonical archive path from the authenticated source map, never the process cwd. */
   string sourcePath(@nx_file file) { result = sourcePart(sourceEntry(file), 1) }
 
+  /** A producer directory/search candidate at `argument`'s anchor in `source`. */
+  predicate importPathCandidate(@nx_target target, @nx_file source, Node argument, string kind, string status, string reason) {
+    exists(Anchor anchor | argument = anchor.getUniqueNode() and nx_anchors(anchor, source, _, _, _, _) |
+      nx_import_path_candidates(target, anchor, kind, status, reason))
+  }
+  @nx_file importPathTarget(@nx_target target, @nx_file source, Node argument) {
+    exists(Anchor anchor | argument = anchor.getUniqueNode() and nx_anchors(anchor, source, _, _, _, _) |
+      nx_import_path_targets(target, anchor, result))
+  }
+
   /** Canonical or admitted lexical target path, retaining the authenticated identity. */
   string targetPath(@nx_file file) {
     result = sourcePath(file) or result = sourcePart(sourceEntry(file), 4)

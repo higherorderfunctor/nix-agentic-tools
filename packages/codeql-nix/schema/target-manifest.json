@@ -100,6 +100,23 @@
           "minItems": 1,
           "type": "array"
         },
+        "searchPath": {
+          "description": "Ordered explicit <name> mappings into admitted roots; never ambient NIX_PATH.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "prefix": { "$ref": "#/$defs/text" },
+              "relativePath": {
+                "$ref": "#/$defs/text",
+                "pattern": "^(?:(?!\\.\\.?(?:/|$))[^/:]+(?:/(?!\\.\\.?(?:/|$))[^/:]+)*)?$"
+              },
+              "rootLogicalName": { "$ref": "#/$defs/identity" }
+            },
+            "required": ["prefix", "relativePath", "rootLogicalName"],
+            "type": "object"
+          },
+          "type": "array"
+        },
         "sourceRoots": {
           "items": {
             "additionalProperties": false,

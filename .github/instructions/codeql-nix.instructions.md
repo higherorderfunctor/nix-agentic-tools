@@ -128,10 +128,8 @@ when these obligations change.
 
 # Handwritten database contract
 
-> **Last verified:** 2026-10-23 — M3g adds the module-graph closure: a module
-> entity, five relation tables and native Booleans; F1 validates occurrence-tree
-> structure, single-position occurrences, typed witnesses, observed counts,
-> incomplete-closure atomicity and module-origin admission.
+> **Last verified:** 2026-10-24 — I2b adds target-qualified import-path
+> candidates and links; M3g's module-graph closure validation is unchanged.
 
 ## Purpose and ownership
 
@@ -253,6 +251,11 @@ evidence: F1 neither hashes source bytes nor authenticates labels, roots or
 symlink policy. Diagnostics link directly to requests and targets; no
 diagnostic-origin relation is retained. File-level links do not establish
 expression-to-value edges or unique syntax associations.
+
+`nx_import_path_candidates` keys a literal directory or `<name>` argument anchor
+per target; `nx_import_path_targets` links its resolved file. F1 requires both
+files admitted to that target, and a link exactly when the status is `resolved`
+and the reason empty.
 
 Every `observed` observation requires its own `complete` or `partial` request
 result, `complete` only when the request's domain is `module-graph`. A
@@ -1046,8 +1049,8 @@ above.
 
 # Literal file imports
 
-> **Last verified:** 2026-10-23 — I2a connects proven builtin import calls to
-> admitted literal files through the authenticated source map.
+> **Last verified:** 2026-10-23 — I2b adds target-qualified directory and search
+> candidates; I2a retains source-only literal-file resolution.
 
 An import site is a call whose function resolves definitely to Nix's builtin
 `import`. An import edge links that site to an admitted source file.
@@ -1107,7 +1110,8 @@ targets. `getStatus(source)` is `resolved` when a target exists and
 distinguishes:
 
 - `dynamic-path`: the argument has no supported literal path, including
-  interpolated paths, strings, variables and search paths.
+  interpolated paths, strings, variables and search paths in this source-only
+  API.
 - `missing-input`: a literal path has no matching admitted target, including
   missing files and files or roots outside the admitted set.
 
@@ -1115,11 +1119,30 @@ distinguishes:
 column, status, target path and reason. An unresolved target is an empty string.
 Shadowed calls produce no site row.
 
-Directory imports, implicit `default.nix` selection, search-path lookup and
-`NIX_PATH` mappings have no resolution semantics in this slice. Neither dynamic
-values nor filesystem existence alone justify a target. Generated syntax access
-stays inside `RawBridge.qll`; the import layer reuses existing source relations
-and adds no evaluation tables.
+## Target-qualified directories and search paths
+
+The coordinator resolves literal directories and `<name/suffix>` in immutable
+trees, authenticating selected bytes before linking them. Ordered target
+`searchPath` mappings join input identity; see
+[target-contract.md](target-contract.md). Ambient `NIX_PATH` supplies no
+mappings.
+
+Lookup skips nonexistent candidates. An existing directory selects
+`default.nix`; a missing default stops lookup with `missing-input`. Unmatched
+mappings yield `search-path-unmapped`; unsafe or unreadable selected candidates
+yield `source-not-admitted`, without fallthrough.
+
+`nx_import_path_candidates` records target/argument-anchor answers independently
+of callee identity; `nx_import_path_targets` links resolved candidates only. The
+existing ABI validator requires source and selected-file admission to that
+target. Target-qualified `StaticImportSite` overloads consume these through
+`RawBridge`; absent a candidate, they restrict literal-file lookup to target
+admission. Source-only methods retain I2a semantics.
+
+`DirectoryImports.ql`, installed in `source.qls`, reports
+`(target, sourceFile, line, column, kind, status, targetFile, reason)`. Kind is
+`directory` or `search`; unavailable targets are empty. Definite builtin-call
+resolution excludes shadowed calls.
 
 ## Verification and changes
 
@@ -1138,11 +1161,16 @@ basename decoy, interpolation and files outside the admitted set. Its separate
 Nix witness arrays expose the values that static admission deliberately leaves
 unknown.
 
+The same runner registers `inc49/i2b/test_i2b.py`: two installed variants
+compare frozen query rows and dependency identities; Nix, ABI and supervisor
+controls check lookup, admission and identity. Installed acceptance requires CI.
+
 When changing resolution, update reviewed expected rows, exact identity
 assertions and independent Nix witnesses together. Preserve definite builtin
 identity, source correlation and the admission boundary. Extend literal
-recognition through the private bridge. Directory or search-path support needs
-its own verified evaluator rules and consuming tests. Format changed files with
+recognition through the private bridge. Keep producer candidate selection
+independent of builtin recognition, and update descriptor identity, ABI
+validation and target-qualified consumers together. Format changed files with
 `treefmt`, run the owner check through CI and update this note when these
 obligations change.
 
@@ -1818,9 +1846,9 @@ alone cannot establish that admitted bytes match the source snapshot.
 
 # Target and observation contract
 
-> **Last verified:** 2026-10-23 — F2 retains the metadata manifest and fact
-> envelope for Step 0; M3 activates exact-text model identities; M3g adds the
-> `module-graph` request domain.
+> **Last verified:** 2026-10-24 — I2b adds optional `searchPath`. F2 retains the
+> metadata manifest and fact envelope for Step 0; M3 activates exact-text model
+> identities; M3g adds the `module-graph` request domain.
 
 ## Purpose and fit
 
@@ -1864,13 +1892,17 @@ to match its run's generated builtin/module bundle fingerprint, otherwise
 returning `unsupported-model`. Legacy `not-requested` remains accepted. See
 [builtin-models.md](builtin-models.md) for model generation and compatibility.
 
-Input identities map exact input names to identity strings. Each source root has
-`logicalName`, `path` and `rootContentIdentity`. Logical name and content
-identity supply F1 root identity; checkout path is mapping data. The fingerprint
-fields combine with `adapterVersion`, the argument-description hash and `system`
-to supply F1 evaluation-fingerprint components. Validation checks their
-representation, not their derivation, source admission, hash authenticity or
-runtime-reference resolution.
+Optional `searchPath`, default `[]`, orders `<name>` mappings to
+`{prefix, rootLogicalName, relativePath}`; paths are normalized (empty, or no
+empty, `.` or `..` segments) inside a target root, and the ordered list joins
+the target's input hash. Input identities map exact input names to identity
+strings. Each source root has a unique `logicalName`, `path` and
+`rootContentIdentity`. Logical name and content identity supply F1 root
+identity; checkout path is mapping data. The fingerprint fields combine with
+`adapterVersion`, the argument-description hash and `system` to supply F1
+evaluation-fingerprint components. Validation checks their representation, not
+their derivation, source admission, hash authenticity or runtime-reference
+resolution.
 
 ## Requests and authorization
 

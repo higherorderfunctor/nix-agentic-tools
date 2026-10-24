@@ -74,6 +74,38 @@ module Imports {
          (exists(RawBridge::literalPath(RawBridge::argument(this))) and result = "missing-input"
           or not exists(RawBridge::literalPath(RawBridge::argument(this))) and result = "dynamic-path"))
     }
+
+    /** Target-qualified: producer directory/search answers, else literal files admitted to `target`. */
+    @nx_file getTargetFile(@nx_target target, @nx_file source) {
+      result = RawBridge::importPathTarget(target, source, RawBridge::argument(this))
+      or not RawBridge::importPathCandidate(target, source, RawBridge::argument(this), _, _, _) and
+        result = this.getTargetFile(source) and nx_target_inputs(target, source, _) and nx_target_inputs(target, result, _)
+    }
+    string getStatus(@nx_target target, @nx_file source) {
+      RawBridge::importPathCandidate(target, source, RawBridge::argument(this), _, result, _)
+      or not RawBridge::importPathCandidate(target, source, RawBridge::argument(this), _, _, _) and
+        source = this.getSourceFile() and nx_target_inputs(target, source, _) and
+        (if exists(this.getTargetFile(target, source)) then result = "resolved" else result = "unavailable")
+    }
+    string getReason(@nx_target target, @nx_file source) {
+      RawBridge::importPathCandidate(target, source, RawBridge::argument(this), _, _, result)
+      or not RawBridge::importPathCandidate(target, source, RawBridge::argument(this), _, _, _) and
+        exists(this.getStatus(target, source)) and
+        (if exists(this.getTargetFile(target, source)) then result = ""
+         else if this.getReason(source) = "" then result = "missing-input" else result = this.getReason(source))
+    }
+  }
+
+  predicate directoryImport(string target, string file, int line, int column, string kind, string status,
+      string path, string reason) {
+    exists(StaticImportSite site, @nx_target t, @nx_file source |
+      RawBridge::importPathCandidate(t, source, RawBridge::argument(site), kind, _, _) and
+      nx_targets(t, _, target, _, _, _, _, _, _, _) and nx_files(source, _, file, _, _) and
+      line = RawBridge::callee(site).getLocation().getStartLine() and
+      column = RawBridge::callee(site).getLocation().getStartColumn() and
+      status = site.getStatus(t, source) and reason = site.getReason(t, source) and
+      (nx_files(site.getTargetFile(t, source), _, path, _, _)
+       or not exists(site.getTargetFile(t, source)) and path = ""))
   }
 
   predicate importSite(string file, int line, int column, string status, string target, string reason) {

@@ -32,6 +32,10 @@ def exact_path(value):
 def validate(value, schema):
     Draft202012Validator(json.loads((SCHEMA / schema).read_text()),
                          format_checker=formats).validate(value)
+    if schema == "target-manifest.json":
+        # JSON Schema cannot key items: each logical name must select one root.
+        abi.require(all(len({root["logicalName"] for root in target["sourceRoots"]}) == len(target["sourceRoots"])
+                        for target in value["targets"].values()), "duplicate-root-logical-name")
 
 
 def envelope(facts):
