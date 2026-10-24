@@ -1,6 +1,6 @@
 # Extracted facts: typed settings and their render
 
-> **Last verified:** 2026-10-21 — `lib/extracted/options.nix` types the
+> **Last verified:** 2026-10-23 — `lib/extracted/options.nix` types the
 > CLIProxyAPI and CPA Manager Plus node trees with nullable container children
 > and `secretFile` nodes, and refuses a refinement row that would apply on a
 > node with a secret or secret-file descendant; a refinement row on a list node
@@ -30,7 +30,8 @@ element, `.<name>` for a map value). It needs only `lib`.
 - `bool`, `int`, `number`, `string` map to the obvious types; `enum` on a node
   gives `types.enum`; `duration` is `strMatching` time.ParseDuration's grammar;
   `any` is a JSON value (the type of `pkgs.formats.json`), and its child nodes
-  are consumed by it.
+  are consumed by it. Redact references retain their marker through this JSON
+  type's merge and are lifted by the render, including inside lists and maps.
 - A node carrying `secret` (the reason an annotations.json row gives, which
   reconcile requires for every classifier hit) is
   `nullOr redact.types.redacted`, including list elements and map values. Its

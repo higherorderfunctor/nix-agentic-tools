@@ -1,6 +1,6 @@
 ## Redact: secrets kept out of the Nix store
 
-> **Last verified:** 2026-10-21 — `types.secretFile` tags a reference for path
+> **Last verified:** 2026-10-23 — `types.secretFile` tags a reference for path
 > delivery by the `ai.services` launcher only; any set with a `_redact` key is
 > reserved; secret-name classification lives privately in
 > `lib/redact/classify.nix`, over the suffix table in
@@ -39,7 +39,9 @@ that logic. Constructors, types and `assign` all reach it through `sealed`.
 consumer that walks values (`lib/extracted/render.nix`) uses this copy too.
 `_redact` is reserved syntax: `isReserved` holds for any set with the key, valid
 or not, and a reserved set that is no reference is refused through `sealed`,
-judged after null attributes are dropped.
+judged after null attributes are dropped. The extracted settings JSON type
+preserves these markers through option merging; its renderer lifts valid
+references and refuses malformed reserved sets even under an untyped `any` node.
 
 ### Why refusals never print the value
 
