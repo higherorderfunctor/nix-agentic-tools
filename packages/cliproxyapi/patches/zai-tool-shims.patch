@@ -1,0 +1,542 @@
+diff --git a/internal/config/claude_tool_aliases.go b/internal/config/claude_tool_aliases.go
+new file mode 100644
+index 00000000..6ef77865
+--- /dev/null
++++ b/internal/config/claude_tool_aliases.go
+@@ -0,0 +1,30 @@
++package config
++
++import (
++	"fmt"
++	"regexp"
++)
++
++var claudeToolAliasName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
++
++// ValidateClaudeToolAliases rejects ambiguous static maps at config load.
++// Collision with an unaliased tools[] declaration is checked per request: those
++// declarations are supplied by the caller and do not exist in configuration.
++func (cfg *Config) ValidateClaudeToolAliases() error {
++	for i, key := range cfg.ClaudeKey {
++		targets := make(map[string]bool)
++		for client, upstream := range key.ToolAliases {
++			if !claudeToolAliasName.MatchString(client) || !claudeToolAliasName.MatchString(upstream) {
++				return fmt.Errorf("claude[%d].tool-aliases: names must contain 1-64 letters, digits, underscores or hyphens", i)
++			}
++			if targets[upstream] {
++				return fmt.Errorf("claude[%d].tool-aliases: duplicate upstream name", i)
++			}
++			if _, exists := key.ToolAliases[upstream]; exists && client != upstream {
++				return fmt.Errorf("claude[%d].tool-aliases: upstream name is another client name", i)
++			}
++			targets[upstream] = true
++		}
++	}
++	return nil
++}
+diff --git a/internal/config/claude_tool_aliases_test.go b/internal/config/claude_tool_aliases_test.go
+new file mode 100644
+index 00000000..a262ea00
+--- /dev/null
++++ b/internal/config/claude_tool_aliases_test.go
+@@ -0,0 +1,42 @@
++package config
++
++import (
++	"fmt"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestClaudeToolAliasesLoad(t *testing.T) {
++	for _, tc := range []struct {
++		name, aliases string
++		valid         bool
++	}{
++		{"valid", "{ToolSearch: ToolSearch_}", true},
++		{"absent", "{}", true},
++		{"duplicate", "{A: Z, B: Z}", false},
++		{"chain", "{A: B, B: C}", false},
++		{"long", fmt.Sprintf("{A: %s}", strings.Repeat("x", 65)), false},
++		{"unsafe", `{A: 'bad"name'}`, false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			data := []byte("config-version: 8\napi-keys:\n  claude:\n    - tool-aliases: " + tc.aliases + "\n      keys:\n        - api-key: dummy-a\n        - api-key: dummy-b\n")
++			path := filepath.Join(t.TempDir(), "config.yaml")
++			if err := os.WriteFile(path, data, 0600); err != nil {
++				t.Fatal(err)
++			}
++			for _, load := range []func() (*Config, error){func() (*Config, error) { return ParseConfigBytes(data) }, func() (*Config, error) { return LoadConfigOptional(path, true) }} {
++				cfg, err := load()
++				if (err == nil) != tc.valid {
++					t.Fatalf("valid=%v, err=%v", tc.valid, err)
++				}
++				if tc.name == "valid" {
++					if len(cfg.ClaudeKey) != 2 || cfg.ClaudeKey[0].ToolAliases["ToolSearch"] != "ToolSearch_" || cfg.ClaudeKey[1].ToolAliases["ToolSearch"] != "ToolSearch_" {
++						t.Fatalf("group not inherited: %+v", cfg.ClaudeKey)
++					}
++				}
++			}
++		})
++	}
++}
+diff --git a/internal/config/config_load.go b/internal/config/config_load.go
+index d218b56c..5000784b 100644
+--- a/internal/config/config_load.go
++++ b/internal/config/config_load.go
+@@ -239,6 +239,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
+ 	if errValidate := cfg.ValidateCredentialWeights(); errValidate != nil {
+ 		return nil, errValidate
+ 	}
++	if errValidate := cfg.ValidateClaudeToolAliases(); errValidate != nil {
++		return nil, errValidate
++	}
+ 	if errValidate := ValidateKeyAllowlist(cfg.KeyAllowlist); errValidate != nil {
+ 		return nil, errValidate
+ 	}
+diff --git a/internal/config/config_types.go b/internal/config/config_types.go
+index fbd849f0..1eae1c45 100644
+--- a/internal/config/config_types.go
++++ b/internal/config/config_types.go
+@@ -594,6 +594,9 @@ type CloakConfig struct {
+ // ClaudeKey represents the configuration for a Claude API key,
+ // including the API key itself and an optional base URL for the API endpoint.
+ type ClaudeKey struct {
++	// ToolAliases maps client tool names to upstream names for this credential.
++	ToolAliases map[string]string `yaml:"tool-aliases,omitempty" json:"tool-aliases,omitempty"`
++
+ 	// APIKey is the authentication key for accessing Claude API services.
+ 	APIKey string `yaml:"api-key" json:"api-key"`
+ 
+diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
+index 6fbec048..fff4f9ae 100644
+--- a/internal/config/config_v8.go
++++ b/internal/config/config_v8.go
+@@ -388,7 +388,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+ 		}
+ 		for i := 0; i < len(group.Content); i += 2 {
+ 			field := group.Content[i].Value
+-			if field != "name" && field != "base-url" && field != "keys" && !sharedKeyFields[field] {
++			if field != "name" && field != "base-url" && field != "keys" && !(provider == "claude" && field == "tool-aliases") && !sharedKeyFields[field] {
+ 				return nil, fmt.Errorf("api-keys.%s: unsupported group field %s", provider, field)
+ 			}
+ 		}
+@@ -402,7 +402,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+ 			item := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+ 			for i := 0; i < len(group.Content); i += 2 {
+ 				field := group.Content[i].Value
+-				if field == "base-url" || sharedKeyFields[field] {
++				if field == "base-url" || (provider == "claude" && field == "tool-aliases") || sharedKeyFields[field] {
+ 					setYAMLPath(item, field, group.Content[i+1])
+ 				}
+ 			}
+@@ -439,7 +439,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
+ 			key := deepCopyNode(entry)
+ 			for i := 0; i < len(entry.Content); i += 2 {
+ 				field := entry.Content[i].Value
+-				if field == "base-url" || sharedKeyFields[field] {
++				if field == "base-url" || (provider == "claude" && field == "tool-aliases") || sharedKeyFields[field] {
+ 					setYAMLPath(group, field, entry.Content[i+1])
+ 					deleteYAMLPath(key, field)
+ 				}
+diff --git a/internal/config/parse.go b/internal/config/parse.go
+index 13a949f3..603338bc 100644
+--- a/internal/config/parse.go
++++ b/internal/config/parse.go
+@@ -58,6 +58,9 @@ func ParseConfigBytes(data []byte) (*Config, error) {
+ 	if errValidate := cfg.Codex.LiveMediaRelay.Validate(); errValidate != nil {
+ 		return nil, errValidate
+ 	}
++	if errValidate := cfg.ValidateClaudeToolAliases(); errValidate != nil {
++		return nil, errValidate
++	}
+ 	if errValidate := ValidateKeyAllowlist(cfg.KeyAllowlist); errValidate != nil {
+ 		return nil, errValidate
+ 	}
+diff --git a/internal/runtime/executor/claude_executor_execute.go b/internal/runtime/executor/claude_executor_execute.go
+index e8b08d35..1d758e32 100644
+--- a/internal/runtime/executor/claude_executor_execute.go
++++ b/internal/runtime/executor/claude_executor_execute.go
+@@ -210,7 +210,12 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+ 	bodyForTranslation := body
+ 	bodyForUpstream := body
+ 	var oauthToolNamesReverseMap map[string]string
+-	if fp.MCPAlias && cloaked {
++	if claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
++		bodyForUpstream, oauthToolNamesReverseMap, err = prepareClaudeAPIKeyToolNames(bodyForUpstream, auth)
++		if err != nil {
++			return cliproxyexecutor.Response{}, err
++		}
++	} else if fp.MCPAlias && cloaked {
+ 		mcpAliases := resolveClaudeMCPAliasOptions(ctx)
+ 		bodyForUpstream, oauthToolNamesReverseMap, err = e.prepareClaudeOAuthToolNamesForRequest(bodyForUpstream, mcpAliases)
+ 		if err != nil {
+@@ -366,7 +371,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+ 		}
+ 		if msgID := claudeMessageIDFromSSE(data); msgID != "" {
+ 			commitClaudeContinuity(diagnosticsState, msgID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
+-			e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, msgID)
++			if !claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
++				e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, msgID)
++			}
+ 		}
+ 		lines := bytes.Split(data, []byte("\n"))
+ 		for i, line := range lines {
+@@ -385,7 +392,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+ 	} else {
+ 		messageID := claudeMessageIDFromResponse(data)
+ 		commitClaudeContinuity(diagnosticsState, messageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
+-		e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, messageID)
++		if !claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
++			e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, messageID)
++		}
+ 		reporter.ObserveResponseModel(data)
+ 		var errRestore error
+ 		data, errRestore = restoreClaudeOAuthToolNamesFromResponse(data, oauthToolNamesReverseMap)
+diff --git a/internal/runtime/executor/claude_executor_request.go b/internal/runtime/executor/claude_executor_request.go
+index e5cf769c..6254b7af 100644
+--- a/internal/runtime/executor/claude_executor_request.go
++++ b/internal/runtime/executor/claude_executor_request.go
+@@ -7,6 +7,7 @@ import (
+ 	"compress/gzip"
+ 	"compress/zlib"
+ 	"context"
++	"encoding/json"
+ 	"fmt"
+ 	"io"
+ 	"net/http"
+@@ -1841,6 +1842,7 @@ func isClaudeOAuthToken(apiKey string) bool {
+ }
+ 
+ type claudeMCPAliasOptions struct {
++	static map[string]string
+ 	secret string
+ }
+ 
+@@ -1924,7 +1926,12 @@ func remapOAuthToolNamesWithBatchedEdits(body []byte, mcpAliases claudeMCPAliasO
+ 	forwardMap := make(map[string]string)
+ 	protectedNames := make(map[string]bool)
+ 	reservedNames := helps.AugmentClaudeBuiltinToolRegistry(body, nil)
+-	if tools.Exists() && tools.IsArray() {
++	if mcpAliases.static != nil {
++		for original, renamed := range mcpAliases.static {
++			forwardMap[original] = renamed
++			recordRename(original, renamed)
++		}
++	} else if tools.Exists() && tools.IsArray() {
+ 		tools.ForEach(func(_, tool gjson.Result) bool {
+ 			name := tool.Get("name").String()
+ 			if name != "" {
+@@ -1964,7 +1971,7 @@ func remapOAuthToolNamesWithBatchedEdits(body []byte, mcpAliases claudeMCPAliasO
+ 	}
+ 
+ 	rewriteName := func(name string) (string, bool) {
+-		if name == "" || protectedNames[name] || helps.IsClaudeMCPToolName(name) {
++		if mcpAliases.static == nil && (name == "" || protectedNames[name] || helps.IsClaudeMCPToolName(name)) {
+ 			return name, false
+ 		}
+ 		if newName, ok := forwardMap[name]; ok && newName != name {
+@@ -1995,10 +2002,10 @@ func remapOAuthToolNamesWithBatchedEdits(body []byte, mcpAliases claudeMCPAliasO
+ 	if tools.Exists() && tools.IsArray() {
+ 		tools.ForEach(func(_, tool gjson.Result) bool {
+ 			toolType := tool.Get("type").String()
+-			if helps.IsClaudeServerToolType(toolType) {
++			if mcpAliases.static == nil && helps.IsClaudeServerToolType(toolType) {
+ 				return true
+ 			}
+-			if strings.TrimSpace(toolType) != "" {
++			if mcpAliases.static == nil && strings.TrimSpace(toolType) != "" {
+ 				toolsNeedRewrite = true
+ 				return false
+ 			}
+@@ -2012,7 +2019,7 @@ func remapOAuthToolNamesWithBatchedEdits(body []byte, mcpAliases claudeMCPAliasO
+ 		toolsJSON.WriteByte('[')
+ 		toolCount := 0
+ 		tools.ForEach(func(_, tool gjson.Result) bool {
+-			if helps.IsClaudeServerToolType(tool.Get("type").String()) {
++			if mcpAliases.static == nil && helps.IsClaudeServerToolType(tool.Get("type").String()) {
+ 				if toolCount > 0 {
+ 					toolsJSON.WriteByte(',')
+ 				}
+@@ -2023,7 +2030,7 @@ func remapOAuthToolNamesWithBatchedEdits(body []byte, mcpAliases claudeMCPAliasO
+ 
+ 			name := tool.Get("name").String()
+ 			toolJSON := tool.Raw
+-			if strings.TrimSpace(tool.Get("type").String()) != "" {
++			if mcpAliases.static == nil && strings.TrimSpace(tool.Get("type").String()) != "" {
+ 				if updatedTool, errDelete := sjson.Delete(toolJSON, "type"); errDelete == nil {
+ 					toolJSON = updatedTool
+ 				}
+@@ -3050,3 +3057,39 @@ func stripClaudeToolPrefixFromStreamLine(line []byte, prefix string) []byte {
+ 	}
+ 	return updated
+ }
++
++// prepareClaudeAPIKeyToolNames uses only the selected credential's static map;
++// no OAuth thread state is read or written.
++func prepareClaudeAPIKeyToolNames(body []byte, auth *cliproxyauth.Auth) ([]byte, map[string]string, error) {
++	if auth == nil || auth.Attributes["tool_aliases"] == "" {
++		return body, nil, nil
++	}
++	var aliases map[string]string
++	if err := json.Unmarshal([]byte(auth.Attributes["tool_aliases"]), &aliases); err != nil {
++		return nil, nil, fmt.Errorf("invalid tool-aliases attribute: %w", err)
++	}
++	// Also protect SDK callers which synthesize Auth without loading a config.
++	cfg := &config.Config{ClaudeKey: []config.ClaudeKey{{ToolAliases: aliases}}}
++	if err := cfg.ValidateClaudeToolAliases(); err != nil {
++		return nil, nil, err
++	}
++	declared := make(map[string]bool)
++	gjson.GetBytes(body, "tools").ForEach(func(_, tool gjson.Result) bool { declared[tool.Get("name").String()] = true; return true })
++	for client, upstream := range aliases {
++		if client != upstream && declared[upstream] {
++			return nil, nil, statusErr{code: http.StatusBadRequest, msg: "tool-aliases upstream name collides with a declared tool"}
++		}
++	}
++	if len(aliases) == 0 {
++		return body, nil, nil
++	}
++	remapped, reverse, ok := remapOAuthToolNamesWithBatchedEdits(body, claudeMCPAliasOptions{static: aliases})
++	if !ok {
++		return nil, nil, statusErr{code: http.StatusBadRequest, msg: "invalid JSON for tool-aliases"}
++	}
++	return remapped, reverse, nil
++}
++
++func claudeAPIKeyToolAliasesEnabled(auth *cliproxyauth.Auth, apiKey string) bool {
++	return auth != nil && auth.Attributes["tool_aliases"] != "" && !claudeCredentialUsesOAuth(auth, apiKey)
++}
+diff --git a/internal/runtime/executor/claude_executor_static_alias_test.go b/internal/runtime/executor/claude_executor_static_alias_test.go
+new file mode 100644
+index 00000000..903a96fd
+--- /dev/null
++++ b/internal/runtime/executor/claude_executor_static_alias_test.go
+@@ -0,0 +1,103 @@
++package executor
++
++import (
++	"bytes"
++	"encoding/json"
++	"fmt"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
++	"strings"
++	"testing"
++
++	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	"github.com/tidwall/gjson"
++)
++
++func TestClaudeAPIKeyToolAliases(t *testing.T) {
++	body := []byte(`{"tools":[{"name":"ToolSearch","input_schema":{"type":"object"}},{"name":"lookup","defer_loading":true}],"tool_choice":{"type":"tool","name":"ToolSearch"},"messages":[{"role":"assistant","content":[{"type":"tool_use","name":"ToolSearch","id":"t1","input":{}},{"type":"tool_reference","tool_name":"ToolSearch"}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"tool_reference","tool_name":"ToolSearch"}]}]}]}`)
++	auth := &cliproxyauth.Auth{Attributes: map[string]string{"tool_aliases": `{"ToolSearch":"ToolSearch_"}`}}
++	out, reverse, err := prepareClaudeAPIKeyToolNames(body, auth)
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, path := range []string{"tools.0.name", "tool_choice.name", "messages.0.content.0.name", "messages.0.content.1.tool_name", "messages.1.content.0.content.0.tool_name"} {
++		if got := gjson.GetBytes(out, path).String(); got != "ToolSearch_" {
++			t.Fatalf("%s = %q", path, got)
++		}
++	}
++	if !gjson.GetBytes(out, "tools.1.defer_loading").Bool() {
++		t.Fatal("lost deferred tool")
++	}
++	response := []byte(`{"content":[{"type":"tool_use","name":"ToolSearch_","id":"t2","input":{}}]}`)
++	restored, err := restoreClaudeOAuthToolNamesFromResponse(response, reverse)
++	if err != nil || gjson.GetBytes(restored, "content.0.name").String() != "ToolSearch" {
++		t.Fatalf("response=%s, err=%v", restored, err)
++	}
++	line := []byte(`data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","name":"ToolSearch_","id":"t2","input":{}}}`)
++	restored, err = restoreClaudeOAuthToolNamesFromStreamLine(line, reverse)
++	if err != nil || !bytes.Contains(restored, []byte(`"name":"ToolSearch"`)) {
++		t.Fatalf("stream=%s, err=%v", restored, err)
++	}
++	// History without tools[] still uses the credential map, without a session.
++	out, reverse, err = prepareClaudeAPIKeyToolNames([]byte(`{"messages":[{"content":[{"type":"tool_use","name":"ToolSearch"}]}]}`), auth)
++	if err != nil || gjson.GetBytes(out, "messages.0.content.0.name").String() != "ToolSearch_" || reverse["ToolSearch_"] != "ToolSearch" {
++		t.Fatalf("history=%s, reverse=%v, err=%v", out, reverse, err)
++	}
++	for _, absent := range []*cliproxyauth.Auth{nil, {}, {Attributes: map[string]string{"tool_aliases": "{}"}}} {
++		out, reverse, err = prepareClaudeAPIKeyToolNames(body, absent)
++		if err != nil || !bytes.Equal(out, body) || len(reverse) != 0 {
++			t.Fatalf("absent map changed body: %s %v", out, err)
++		}
++	}
++	if _, _, err = prepareClaudeAPIKeyToolNames([]byte(`{"tools":[{"name":"ToolSearch"},{"name":"ToolSearch_"}]}`), auth); err == nil {
++		t.Fatal("accepted declaration collision")
++	}
++	for _, aliases := range []map[string]string{{"A": "Z", "B": "Z"}, {"A": "B", "B": "C"}, {"A": strings.Repeat("x", 65)}} {
++		raw, _ := json.Marshal(aliases)
++		auth.Attributes["tool_aliases"] = string(raw)
++		if _, _, err = prepareClaudeAPIKeyToolNames(body, auth); err == nil {
++			t.Fatal("accepted invalid attribute")
++		}
++	}
++}
++
++func TestClaudeAPIKeyToolAliasesExecutorPaths(t *testing.T) {
++	for _, stream := range []bool{false, true} {
++		for _, profile := range []string{"", "claude-code-cli"} {
++			t.Run(fmt.Sprint(stream)+profile, func(t *testing.T) {
++				auth := &cliproxyauth.Auth{Attributes: map[string]string{"api_key": "dummy-key", "cloak_mode": "never", "tool_aliases": `{"ToolSearch":"ToolSearch_"}`}}
++				auth.Attributes["fingerprint_profile"] = profile
++				if profile != "" {
++					auth.Attributes["cloak_mode"] = "always"
++				}
++				body := []byte(`{"thread":{"type":"create"},"model":"claude-sonnet-4-5","tools":[{"name":"ToolSearch","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"hello"}]}`)
++				ex := NewClaudeExecutor(&config.Config{})
++				up := &midSystemUpstream{}
++				req := cliproxyexecutor.Request{Model: "claude-sonnet-4-5", Payload: body}
++				opts := cliproxyexecutor.Options{SourceFormat: sdktranslator.FormatClaude}
++				if stream {
++					result, err := ex.ExecuteStream(up.context(t, nil), auth, req, opts)
++					if err != nil {
++						t.Fatal(err)
++					}
++					for chunk := range result.Chunks {
++						if chunk.Err != nil {
++							t.Fatal(chunk.Err)
++						}
++					}
++				} else {
++					if _, err := ex.Execute(up.context(t, nil), auth, req, opts); err != nil {
++						t.Fatal(err)
++					}
++				}
++				if !up.called || gjson.GetBytes(up.body, "tools.0.name").String() != "ToolSearch_" {
++					t.Fatalf("upstream=%s", up.body)
++				}
++				if ex.oauthToolAliases != nil && len(ex.oauthToolAliases.entries) != 0 {
++					t.Fatal("API-key aliases wrote OAuth session state")
++				}
++			})
++		}
++	}
++}
+diff --git a/internal/runtime/executor/claude_executor_stream.go b/internal/runtime/executor/claude_executor_stream.go
+index dc6b2fd3..8a10061a 100644
+--- a/internal/runtime/executor/claude_executor_stream.go
++++ b/internal/runtime/executor/claude_executor_stream.go
+@@ -205,7 +205,12 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+ 	bodyForTranslation := body
+ 	bodyForUpstream := body
+ 	var oauthToolNamesReverseMap map[string]string
+-	if fp.MCPAlias && cloaked {
++	if claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
++		bodyForUpstream, oauthToolNamesReverseMap, err = prepareClaudeAPIKeyToolNames(bodyForUpstream, auth)
++		if err != nil {
++			return nil, err
++		}
++	} else if fp.MCPAlias && cloaked {
+ 		mcpAliases := resolveClaudeMCPAliasOptions(ctx)
+ 		bodyForUpstream, oauthToolNamesReverseMap, err = e.prepareClaudeOAuthToolNamesForRequest(bodyForUpstream, mcpAliases)
+ 		if err != nil {
+@@ -445,7 +450,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+ 			}
+ 			if upstreamCompleted {
+ 				commitClaudeContinuity(diagnosticsState, upstreamMessageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
+-				e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, upstreamMessageID)
++				if !claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
++					e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, upstreamMessageID)
++				}
+ 			}
+ 			return
+ 		}
+@@ -539,7 +546,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+ 		}
+ 		if upstreamCompleted {
+ 			commitClaudeContinuity(diagnosticsState, upstreamMessageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
+-			e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, upstreamMessageID)
++			if !claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
++				e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, upstreamMessageID)
++			}
+ 		}
+ 	}()
+ 	result := &cliproxyexecutor.StreamResult{Headers: httpResp.Header.Clone(), Chunks: out}
+diff --git a/internal/runtime/executor/claude_executor_tokens.go b/internal/runtime/executor/claude_executor_tokens.go
+index 8d949940..60c79c64 100644
+--- a/internal/runtime/executor/claude_executor_tokens.go
++++ b/internal/runtime/executor/claude_executor_tokens.go
+@@ -61,6 +61,12 @@ func (e *ClaudeExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Aut
+ 	if rebuildMidSystemMessageEnabled(e.cfg, auth) {
+ 		body = rebuildMidSystemMessagesToTopLevel(body)
+ 	}
++	if !claudeCredentialUsesOAuth(auth, apiKey) {
++		body, _, err = prepareClaudeAPIKeyToolNames(body, auth)
++		if err != nil {
++			return cliproxyexecutor.Response{}, err
++		}
++	}
+ 	body = sanitizeClaudeMessagesForClaudeUpstreamWithDebug(ctx, body, baseModel, helps.APIKeyModelIsCompat(req))
+ 	body = applyClaudePreservedThinkingBinding(body)
+ 	body = helps.NewPayloadFinalizer(e.cfg, e.Identifier(), baseModel, to.String(), "", originalTranslatedForPayload, req, opts)(body)
+@@ -216,7 +222,12 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
+ 	extraBetas, body = extractAndRemoveBetas(body)
+ 	// Claude Code 2.1.220's beta.messages.countTokens() always appends this beta.
+ 	extraBetas = append(extraBetas, claudeTokenCountingBeta)
+-	if fp.MCPAlias && cloaked {
++	if claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
++		body, _, err = prepareClaudeAPIKeyToolNames(body, auth)
++		if err != nil {
++			return cliproxyexecutor.Response{}, err
++		}
++	} else if fp.MCPAlias && cloaked {
+ 		mcpAliases := resolveClaudeMCPAliasOptions(ctx)
+ 		body, _ = prepareClaudeOAuthToolNamesForUpstream(body, mcpAliases)
+ 	}
+diff --git a/internal/watcher/synthesizer/claude_tool_aliases_test.go b/internal/watcher/synthesizer/claude_tool_aliases_test.go
+new file mode 100644
+index 00000000..4e71c0be
+--- /dev/null
++++ b/internal/watcher/synthesizer/claude_tool_aliases_test.go
+@@ -0,0 +1,22 @@
++package synthesizer
++
++import (
++	"encoding/json"
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	"testing"
++)
++
++func TestSynthesizeClaudeToolAliases(t *testing.T) {
++	ctx := &SynthesisContext{Config: &config.Config{ClaudeKey: []config.ClaudeKey{{APIKey: "dummy-a", ToolAliases: map[string]string{"ToolSearch": "ToolSearch_"}}, {APIKey: "dummy-b"}}}, IDGenerator: NewStableIDGenerator()}
++	auths, err := NewConfigSynthesizer().Synthesize(ctx)
++	if err != nil || len(auths) != 2 {
++		t.Fatalf("auths=%v err=%v", auths, err)
++	}
++	var aliases map[string]string
++	if err := json.Unmarshal([]byte(auths[0].Attributes["tool_aliases"]), &aliases); err != nil || aliases["ToolSearch"] != "ToolSearch_" {
++		t.Fatalf("attribute=%v err=%v", aliases, err)
++	}
++	if _, exists := auths[1].Attributes["tool_aliases"]; exists {
++		t.Fatal("leaked aliases to other credential")
++	}
++}
+diff --git a/internal/watcher/synthesizer/config.go b/internal/watcher/synthesizer/config.go
+index ab0f2a77..05029e06 100644
+--- a/internal/watcher/synthesizer/config.go
++++ b/internal/watcher/synthesizer/config.go
+@@ -1,6 +1,7 @@
+ package synthesizer
+ 
+ import (
++	"encoding/json"
+ 	"fmt"
+ 	"strconv"
+ 	"strings"
+@@ -172,6 +173,10 @@ func (s *ConfigSynthesizer) synthesizeClaudeKeys(ctx *SynthesisContext) []*corea
+ 		if ck.RebuildMidSystemMessage {
+ 			attrs["rebuild_mid_system_message"] = "true"
+ 		}
++		if len(ck.ToolAliases) > 0 {
++			encoded, _ := json.Marshal(ck.ToolAliases)
++			attrs["tool_aliases"] = string(encoded)
++		}
+ 		if ck.NativeToolSearch {
+ 			attrs["native_tool_search"] = "true"
+ 		}

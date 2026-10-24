@@ -27,10 +27,13 @@
   .overrideAttrs (prev: {
       inherit (sources) version;
       # The patched tree is `src` itself, so the build, the extractor and the
-      # settings checks (which copy `package.src`) all read the allowlist.
+      # settings checks (which copy `package.src`) all read the carried patches.
       src = pkgs.applyPatches {
         src = fetchzip {inherit (sources.src) url hash;};
-        patches = [../../../../patches/key-allowlist.patch];
+        patches = [
+          ../../../../patches/key-allowlist.patch
+          ../../../../patches/zai-tool-shims.patch
+        ];
         # A CPA release that changes the patched context fails here, loudly.
         patchFlags = ["-p1" "--fuzz=0"];
       };
