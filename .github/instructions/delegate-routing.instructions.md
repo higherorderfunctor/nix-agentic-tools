@@ -8,7 +8,8 @@ applyTo: "packages/delegate-routing/**"
 # Delegate routing package
 
 > **Last verified:** 2026-10-24 — usage follows each runtime's selected proxy,
-> with direct reads when management metadata is absent.
+> with direct reads when management metadata is absent; review role overrides
+> migrate to the single Review step, with no compatibility keys shipped.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -33,12 +34,16 @@ disabled. Policy belongs in these entries rather than renderer string literals.
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.
 The package ships one enabled workflow, "Work and review", with the steps
-Rubric, Subtractive, Work, Review, Prosecute, Defend, Judge and Loop chained by
-`after`. Review is one reviewer; Prosecute, Defend and Judge replace it for a
-change to a shared abstraction. The Subtractive step adds the subtraction
-standard to the rubric. Loop sends validated findings back to the worker for at
-most 3 rounds. Add, replace, disable or reorder a step by key. A workflow can
-have introductory text or only steps; an enabled step needs content.
+Rubric, Subtractive, Work, Review and Loop chained by `after`. Review embeds the
+checks; they are not separate steps. Add, replace, disable or reorder a step by
+key. A workflow can have introductory text or only steps; an enabled step needs
+content.
+
+**Breaking migration:** remove overrides of `steps.Prosecute`, `steps.Defend`
+and `steps.Judge`, and move their review policy into `steps.Review.text`
+(including runtime-specific overrides). Those keys no longer name shipped steps:
+setting them creates new consumer steps, and ordering against them no longer
+anchors to a shipped step. There are no compatibility aliases.
 
 Entries with `always = true` render through the existing per-runtime `ai.rules`
 fan-out. Other entries render in the generated skill. A workflow's `always`

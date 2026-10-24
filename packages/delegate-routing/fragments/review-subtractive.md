@@ -1,8 +1,6 @@
-Add this to the rubric. The worker writes to it; every reviewer and judge checks
-it. Review for subtraction. For each added line, ask what breaks if it is
-deleted: a named caller, or a named input the line exists to refuse (the
-concrete value, path or environment that gets through without it). Nothing named
-means delete it. A guard whose refused input is real but unstated is a naming
-finding: state the input where the guard lives. Treat a wrapper, shim,
-compatibility branch or test kept only to preserve an old shape as a finding. If
-the code can collapse into something simpler, say so.
+Add this to the rubric for the worker and every reviewer: each added line must
+name a caller or the concrete input it refuses (value, path or environment);
+otherwise remove it. A guard with a real but unstated refused input needs that
+input named where the guard lives. Flag wrappers, shims, compatibility branches
+and tests kept only to preserve an old shape; propose the simpler form when the
+code can collapse.

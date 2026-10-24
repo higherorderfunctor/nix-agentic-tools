@@ -817,14 +817,14 @@
       && lib.hasInfix "### ${workflowName}" codex
       && lib.hasInfix workflowHeader claude
       && lib.hasInfix "1. **Rubric:**" claude
-      && lib.hasInfix "8. **Loop:**" claude
+      && lib.hasInfix "5. **Loop:**" claude
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
-      && lib.hasInfix "8. **Loop:**" (readSkill runtimeWorkflowStep "claude")
+      && lib.hasInfix "5. **Loop:**" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "claude")
       && !(lib.hasInfix workflowHeader (readSkill runtimeCatalogHeader "claude"))
       && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogHeader "claude")
-      && lib.hasInfix "8. **Loop:**" (readSkill runtimeCatalogHeader "claude")
+      && lib.hasInfix "5. **Loop:**" (readSkill runtimeCatalogHeader "claude")
       && !(lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "codex"))
       && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "claude"))
       && lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "codex")
