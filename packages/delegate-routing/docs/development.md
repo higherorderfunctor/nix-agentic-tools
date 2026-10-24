@@ -1,7 +1,9 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-16 — Kiro workflow step sessions skip the per-turn
-> reminder; root sessions and the other runtimes retain their reminder output.
+> **Last verified:** 2026-10-23 — a family may declare a usage node, rendered
+> once per shared pool after the tier tables; Kiro workflow step sessions skip
+> the per-turn reminder; root sessions and the other runtimes retain their
+> reminder output.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -111,8 +113,16 @@ introspect and usage nodes. Delegate nodes describe model and effort pinning,
 and mode availability. Modes describe usual availability, not session-mode
 detection; use only tools present in the current session and external commands
 on PATH. Introspection and usage nodes describe how to obtain live evidence.
-Usage commands remain part of the existing technique catalog. Each package field
-uses `mkDefault`; consumers can override fields, add nodes or disable a node.
+Usage commands remain part of the existing technique catalog. A family can also
+set `usage`, a node of the same shape (`kind = "usage"` and a `command`
+required), for a pool that no single runtime owns, such as a provider reached
+through Claude or Codex. The skill renders it after the tier tables for every
+selected family, one line per distinct node naming the families that share it.
+The content package builds `zai-usage` beside the Claude and Codex helpers and
+exposes it as `usageScripts.zai-usage`; shared defaults declare no z.ai family,
+so a consumer supplies the family and points the helper at its key file. Each
+package field uses `mkDefault`; consumers can override fields, add nodes or
+disable a node.
 
 `runsOwnSubagents` fills the technique table's "Runs own subagents" column,
 which "Choose execution" points readers at. It is a hand-declared string,
@@ -178,7 +188,9 @@ delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
 its user harness AGENTS.md. Byte-identical contributions deduplicate. The
 content package injects packaged usage helper paths into technique defaults. The
 Claude helper carries curl and jq; the Codex helper carries timeout, jq and
-Python, while the consumer supplies the Codex CLI.
+Python, while the consumer supplies the Codex CLI. `zai-usage` carries curl and
+jq and reads the key file named by `ZAI_API_KEY_FILE` (base URL from
+`ZAI_API_BASE`, default `https://api.z.ai`), passing the key to curl on stdin.
 
 `mkSkill`, `render` and `skills` consume the same family, selector, technique
 and named-entry inputs. Generated skill trees use `lib.ai.generated` and the

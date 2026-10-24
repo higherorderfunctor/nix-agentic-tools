@@ -174,6 +174,32 @@
         programs.delegate-routing.runtimes.claude.models = [{families = ["x"];}];
       };
     };
+    usageFamilies = skill {
+      ai = {
+        programs.delegate-routing.families.example = let
+          pool = {
+            match = "example-*";
+            tier = "strong";
+            usage = {
+              command = "/bin/example-usage";
+              kind = "usage";
+              notes = "FAMILY USAGE NOTE";
+            };
+          };
+        in {
+          x = pool;
+          y = pool // {match = "example-y-*";};
+        };
+        programs.delegate-routing.runtimes.claude.models = [{families = ["x" "y"];}];
+      };
+    };
+    badFamilyUsage = change {
+      ai.programs.delegate-routing.families.example.x = {
+        match = "example-x-*";
+        tier = "strong";
+        usage.kind = "subagent";
+      };
+    };
     disabledNode = skill {ai.programs.delegate-routing.runtimes.claude.techniques.Agent.enable = false;};
     modifiedNode = skill {ai.programs.delegate-routing.runtimes.codex.techniques."codex exec".command = "CUSTOM CODEX COMMAND";};
     ownSubagentsOverride = skill {ai.programs.delegate-routing.runtimes.codex.techniques."codex exec".runsOwnSubagents = "CUSTOM OWN SUBAGENTS";};
@@ -518,6 +544,11 @@
           tier = "small";
         };
       }) "family names must be unique across vendors"
+    );
+    "module-delegate-routing-${name}-family-usage" = mkTest "delegate-routing-${name}-family-usage" (
+      lib.hasInfix "**x, y (usage):** `/bin/example-usage`; FAMILY USAGE NOTE" usageFamilies
+      && !(lib.hasInfix "(usage):** `/bin/example-usage`" claude)
+      && failsWith badFamilyUsage "a family usage node must have kind"
     );
     "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (
       failsWith (invalidNode {

@@ -47,6 +47,15 @@
         ])
         members)}
     '';
+  # Families sharing a pool declare the same node; render it once, named for them all.
+  familyUsage = let
+    withUsage = builtins.filter (family: (family.usage or null) != null && family.usage.enable) candidates;
+    pools = builtins.attrValues (lib.groupBy (family: builtins.toJSON family.usage) withUsage);
+  in
+    lib.concatMapStringsSep "\n\n" (members: let
+      inherit (builtins.head members) usage;
+    in "**${lib.concatMapStringsSep ", " (family: family.name) members} (usage):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") ["`${usage.command}`" usage.notes])}")
+    pools;
   techniqueBlock = target: externalOnly: let
     nodes = lib.filterAttrs (_: node:
       node.enable
@@ -97,6 +106,7 @@ in ''
   Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (Claude's interactive tools take the alias, e.g. `opus`).
 
   ${lib.concatMapStringsSep "\n" tier tiers}
+  ${lib.optionalString (familyUsage != "") "${familyUsage}\n"}
   Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
 
   ${techniqueBlock runtime false}
