@@ -14,6 +14,11 @@ in {
       after = ["Size the work"];
       source = ../fragments/choose-execution.md;
     };
+    "Decompose the work" = {
+      after = ["Size the work"];
+      before = ["Choose execution"];
+      source = ../fragments/decompose.md;
+    };
     "Follow the user's request".source = ../fragments/follow-the-users-request.md;
     "Load delegate-routing" = {
       always = true;
