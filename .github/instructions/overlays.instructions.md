@@ -885,11 +885,17 @@ locked overlay is too old, and another when it holds no stable release). It
 never falls back to nixpkgs' `go`, and no per-package version is chosen. Fix a
 throw with `nix flake update go-overlay`, not by pinning. Prereleases are
 filtered out on purpose: Nix sorts `1.27rc1` ABOVE `1.27.0`.
-`vu.mkRustPlatform {pkgs}` does the same for Rust, selecting
-`(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default`. These two
-helpers are a recipe's only compiler source: never nixpkgs' own `go`, `rustc` or
-`cargo`. `checks/packaging/toolchain-provenance.nix` fails when a Go or Rust
-package lacks the locked compiler or carries a nixpkgs one.
+`vu.mkRustToolchain {pkgs, extensions ? []}` selects
+`(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default` with the
+requested extensions. `vu.mkRustPlatform {pkgs}` feeds that helper's default
+toolchain to `makeRustPlatform`. The repository's interactive devenv shell uses
+the same helper with `rust-analyzer` and `rust-src`, and isolates `CARGO_HOME`
+under `config.devenv.state` so host-installed Cargo subcommands cannot shadow
+the shell's toolchain. The Rust language module and Cargo state are disabled by
+the existing `isCI` gate for the manual diagnostic. These helpers are a recipe's
+only compiler source: never nixpkgs' own `go`, `rustc` or `cargo`.
+`checks/packaging/toolchain-provenance.nix` fails when a Go or Rust package
+lacks the locked compiler or carries a nixpkgs one.
 
 Do not "clean up" a recorded floor that the locked Go already satisfies: it is
 the validation input, and a stale-LOW floor weakens the check silently. Do not

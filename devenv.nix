@@ -130,6 +130,21 @@ in {
       pkgs.ai.agnix
     ];
 
+  # ── Rust ──────────────────────────────────────────────────────────────
+  languages.rust = {
+    enable = !isCI;
+    lsp.package = config.languages.rust.toolchainPackage;
+    toolchainPackage = (import ./lib/toolchains.nix {inherit inputs;}).mkRustToolchain {
+      extensions = ["rust-analyzer" "rust-src"];
+      inherit pkgs;
+    };
+  };
+  # Cargo searches CARGO_HOME/bin for subcommands; the host's stale cargo-clippy
+  # must not shadow this shell's toolchain, even before enterShell adjusts PATH.
+  env = lib.optionalAttrs (!isCI) {
+    CARGO_HOME = "${config.devenv.state}/cargo";
+  };
+
   # ── treefmt ────────────────────────────────────────────────────────────
   treefmt = {
     enable = true;
