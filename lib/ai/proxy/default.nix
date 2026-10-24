@@ -3,6 +3,7 @@
   inherit (lib) mkOption types;
   redact = import ../../redact {inherit lib;};
   instancesLib = import ../../../packages/ai-module/lib/instances.nix {inherit lib;};
+  providersLib = import ../../../packages/cliproxyapi/lib/providers.nix {inherit lib;};
   urlPattern = "https?://([A-Za-z0-9.-]+|\\[[0-9A-Fa-f:.]+[]])(:[0-9]+)?";
   urlDescription = "the proxy origin only, `http://<host>:<port>`, with no path";
   selectionOptions = {
@@ -84,7 +85,12 @@
       inherit (selected) url;
       credentials = map (route: {
         name = route.credential;
-        models = instance.credentials.${route.credential}.apiKey.models or [];
+        models = let
+          apiKey = instance.credentials.${route.credential}.apiKey or null;
+        in
+          if apiKey == null
+          then []
+          else providersLib.visibleModels apiKey;
       }) (builtins.filter (route: builtins.hasAttr route.credential instance.credentials) client.routes);
     };
 in {
@@ -110,7 +116,7 @@ in {
           };
         });
         default = [];
-        description = "Named upstream credentials in client route order, with declared API-key models.";
+        description = "Named upstream credentials in client route order, with the client-visible name (alias when set) of each declared API-key model.";
       };
       key = mkOption {
         type = redact.types.redacted;
