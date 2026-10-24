@@ -1,5 +1,4 @@
 # shellcheck shell=bash
-shopt -s inherit_errexit 2>/dev/null || :
 
 if usage_cpa codex; then
   exit 0
