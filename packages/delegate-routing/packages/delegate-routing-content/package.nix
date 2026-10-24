@@ -18,11 +18,11 @@
     pkgs.writeShellApplication {
       inherit name runtimeInputs;
       bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
-      text = builtins.readFile (../../scripts + "/${name}.sh");
+      text = builtins.readFile ../../scripts/usage-cpa.sh + "\n" + builtins.readFile (../../scripts + "/${name}.sh");
     };
   usageScripts = {
     claude-usage = mkUsageScript "claude-usage" [pkgs.curl pkgs.jq];
-    codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.jq pkgs.python3];
+    codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3];
     zai-usage = mkUsageScript "zai-usage" [pkgs.curl pkgs.jq];
   };
   rawDefaults = import ../../lib/defaults.nix {

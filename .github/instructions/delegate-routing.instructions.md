@@ -8,7 +8,10 @@ applyTo: "packages/delegate-routing/**"
 # Delegate routing package
 
 > **Last verified:** 2026-10-23 — a family may declare a usage node, rendered
-> once per shared pool after the tier tables.
+> once per shared pool after the tier tables. Vendor-specific CPA usage metadata
+> follows effective runtime proxy selection; generic explicit overrides take
+> precedence, and absent project metadata preserves inherited Home Manager
+> defaults.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -192,9 +195,9 @@ The always-on routing rule uses the existing native Claude rules and AGENTS.md
 delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
 its user harness AGENTS.md. Byte-identical contributions deduplicate. The
 content package injects packaged usage helper paths into technique defaults. The
-Claude helper carries curl and jq; the Codex helper carries timeout, jq and
-Python, while the consumer supplies the Codex CLI. `zai-usage` carries curl and
-jq and reads the key file named by `ZAI_API_KEY_FILE` (base URL from
+Claude helper carries curl and jq; the Codex helper carries timeout, curl, jq
+and Python, while the consumer supplies the Codex CLI. `zai-usage` carries curl
+and jq and reads the key file named by `ZAI_API_KEY_FILE` (base URL from
 `ZAI_API_BASE`, default `https://api.z.ai`), passing the key to curl on stdin.
 
 `mkSkill`, `render` and `skills` consume the same family, selector, technique
@@ -210,6 +213,57 @@ nix eval --raw .#delegate-routing-content.skills.codex.text
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kiro"; models.kiro = [{vendors = ["anthropic"];}]; }'
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```
+
+## Usage through CLIProxyAPI
+
+`claude-usage` and `codex-usage` use CPA metadata from their environment. A
+complete `DELEGATE_USAGE_CPA_URL` and `DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE`
+pair is an explicit override for either helper. Otherwise each reads its
+matching vendor defaults: `DELEGATE_USAGE_CPA_CLAUDE_URL` and
+`DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE`, or
+`DELEGATE_USAGE_CPA_CODEX_URL` and
+`DELEGATE_USAGE_CPA_CODEX_MANAGEMENT_KEY_FILE`. The URL is the CPA origin; the
+file contains its management bearer key. Only origins and existing file paths
+enter generated configuration. Helpers read the key at invocation and query
+CPA's auth-file and API-call management endpoints for live vendor quota through
+its OAuth logins. All enabled OAuth accounts for that vendor in the selected
+instance are reported; client-key routes do not filter this management view.
+
+When routing is delivered to an enabled runtime, `modules/common.nix` uses the
+existing proxy `selectionFor` semantics for each vendor: `ai.claude.proxy` or
+`ai.codex.proxy` replaces `ai.proxy` when selected. With no effective selection
+it chooses the sole enabled `ai.cliproxyapi.instances` entry. The shared
+instances helper derives the loopback origin; the exact
+`settings.management.secret-key` `redact.file` path supplies the key-file
+metadata. A global personal instance plus a Codex work-instance override
+therefore sends each helper to its own instance, as do two runtime-only
+selections without a global proxy.
+
+Automatic discovery publishes only the vendor pairs, using `mkDefault` under
+Home Manager's `home.sessionVariables` or devenv's `env`. The generic pair is
+reserved for explicit overrides, so it always takes precedence over generated
+vendor defaults. Project vendor defaults replace inherited Home Manager defaults
+of the same name. A project with no CPA selection or instance contributes no
+metadata. Ambiguous instances, external proxy URLs without management metadata,
+and command or concat secret references warn and publish no automatic pair for
+the affected vendor. An explicit generic pair can point to an existing
+management-key file instead; discovery never materializes secrets.
+
+| Install shape                 | Metadata delivery                                                                                                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home Manager only             | Vendor session variables follow effective proxy selections or the sole enabled CPA instance.                                                                          |
+| devenv only                   | Vendor environment variables follow effective project proxy selections or the sole enabled instance.                                                                  |
+| Mixed, inherited Home Manager | Without project CPA selection or instances, neither vendor pair is emitted, preserving inherited Home Manager values when the project helper shadows the user helper. |
+| Mixed, project instance       | A local vendor pair replaces the inherited pair of the same name.                                                                                                     |
+| `devenv.local.nix` override   | Set both `env.DELEGATE_USAGE_CPA_URL` and `env.DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE` to override all vendor defaults with an existing endpoint and key file.        |
+| Direct, absent pairs          | With neither generic nor matching vendor metadata, helpers retain direct local-login behavior.                                                                        |
+
+A partial generic override or matching vendor pair is an error; halves are never
+combined across pairs. If CPA has no OAuth login for the requested vendor, the
+helper explains the fallback on stderr and tries the direct local login. CPA
+authentication, transport, malformed-response and vendor quota failures remain
+errors; they do not silently switch logins. The helpers never drain CPA's usage
+queue.
 
 ## Per-turn reminder
 
