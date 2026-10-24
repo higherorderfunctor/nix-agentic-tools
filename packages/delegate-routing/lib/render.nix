@@ -47,8 +47,9 @@
         ])
         members)}
     '';
+  command = node: lib.optionalString (node.command != null) "`${node.command}`";
   # One information line: bold name with its kind, then the command and notes.
-  infoLine = name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(lib.optionalString (node.command != null) "`${node.command}`") node.notes])}";
+  infoLine = name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(command node) node.notes])}";
   # Families sharing a pool declare the same node; render it once, named for them all.
   # Includes families reached only through a manual-only delegate. The grouping
   # key drops string context: a packaged usage command carries a store path,
@@ -68,7 +69,6 @@
     delegates = lib.filterAttrs (_: node: builtins.elem node.kind delegateKinds) nodes;
     info = lib.filterAttrs (_: node: builtins.elem node.kind ["introspect" "usage"]) nodes;
     hasCommand = lib.any (node: node.command != null) (builtins.attrValues delegates);
-    command = node: lib.optionalString (node.command != null) "`${node.command}`";
   in
     lib.optionalString (nodes != {}) ''
       ### ${target} techniques

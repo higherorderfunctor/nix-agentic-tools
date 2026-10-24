@@ -1,9 +1,7 @@
 # Delegate routing package
 
 > **Last verified:** 2026-10-23 — a family may declare a usage node, rendered
-> once per shared pool after the tier tables; Kiro workflow step sessions skip
-> the per-turn reminder; root sessions and the other runtimes retain their
-> reminder output.
+> once per shared pool after the tier tables.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth

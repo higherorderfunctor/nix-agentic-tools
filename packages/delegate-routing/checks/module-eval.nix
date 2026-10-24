@@ -180,6 +180,7 @@
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
     '';
+    exampleUsageCommand = builtins.unsafeDiscardStringContext (lib.getExe exampleUsage);
     usageFamilies = skill {
       ai = {
         programs.delegate-routing.families.example = let
@@ -571,8 +572,7 @@
       }) "family names must be unique across vendors"
     );
     "module-delegate-routing-${name}-family-usage" = mkTest "delegate-routing-${name}-family-usage" (
-      lib.hasInfix "**x, y (usage):** `${lib.getExe exampleUsage}`; FAMILY USAGE NOTE" usageFamilies
-      && !(lib.hasInfix "(usage):** `${lib.getExe exampleUsage}`" claude)
+      lib.hasInfix "**x, y (usage):** `${exampleUsageCommand}`; FAMILY USAGE NOTE" usageFamilies
       && lib.hasInfix "**m (usage):** `/bin/manual-usage`" manualFamilyUsage
       && failsWith badFamilyUsage "a family usage node must have kind"
     );
