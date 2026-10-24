@@ -94,14 +94,6 @@
       cp ${frontend}/* internal/httpapi/web/
       )
     '';
-    # subPackages restricts the default test pass to the command package.
-    preCheck = ''
-      (
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      go test ./internal/service/proxy -run '^TestConfigCredentials'
-      )
-    '';
     doInstallCheck = true;
     installCheckPhase = ''
       set -euETo pipefail

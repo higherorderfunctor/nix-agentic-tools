@@ -263,6 +263,8 @@ it adds no OAuth login or general API-key provider framework.
 
 The frontend check phase runs the quota parser/request/lifecycle/display
 integration tests and the credential loader tests alongside the existing theme
-test. The server pre-check runs `TestConfigCredentials` in the proxy service
-because the default package test pass is restricted by `subPackages`. The quota
-endpoint and browser display still require deployment verification.
+test. The `cpa-manager-plus-config-credentials` check runs
+`TestConfigCredentials.*` in the proxy service against the patched source
+through `goTest`, because the default package test pass is restricted by
+`subPackages`. The quota endpoint and browser display still require deployment
+verification.
