@@ -82,15 +82,9 @@ publication.
 
 # CPA Manager Plus typed settings
 
-> **Last verified:** 2026-10-21 — 28 config.json keys and 32 environment
-> variables give the settings type through `lib/extracted/options.nix`; the
-> render loads through patched Manager Plus 1.14.7's
-> `LoadWithoutCreatingDefault`; `config.defaultTheme` reaches the panel through
-> `/usage-service/info`; `ai.cpa-manager-plus.instances` renders it at start and
-> applies `config.adminKeyFile` through `reset-admin-key` on every start; key
-> files are secret files; evaluation resolves the database from declared paths
-> opened as written, and the run script unsets inherited admin-key and database
-> variables.
+> **Last verified:** 2026-10-23 — separate configuration credential state
+> survives OAuth batch inventory replacements; period quota providers share one
+> descriptor table, and the server projects only fields the panel consumes.
 
 `lib/default.nix` exports
 `cpa-manager-plus.{settingsType, render, report, exclusions, sample}`. One
@@ -219,3 +213,56 @@ theme. `module-service-instances-real-daemons` starts the patched server unset
 and with `dark`, reads `defaultTheme` back from `/usage-service/info`, and finds
 the reader in the served panel. `cpa-manager-plus-settings` runs the patch's
 `TestLoadDefaultTheme`, and the web build runs its `useThemeStore.test.ts`.
+
+## z.ai configuration credentials and quotas
+
+`patches/z-ai-credentials.patch` adds the authenticated, GET-only Manager
+endpoint `/v0/management/config-credentials`. Manager reads CPA's
+`/v8/management/config/api-keys/openai-compatibility` with its stored management
+key and projects identity fields only. It matches HTTPS `api.z.ai` URLs with the
+default port or port 443, rejects user info, and ignores the configured group's
+name when recognizing the provider. Each distinct nonempty `auth_index` becomes
+a stable `config:z-ai:<index>` identity; the arbitrary group name becomes its
+display label. No API key, upstream base URL, or configuration body reaches the
+browser. A missing v8 endpoint returns an empty list; other upstream failures
+produce a generic error without its body.
+
+`patches/z-ai-quota.patch` keeps configuration rows in separate state, refreshed
+by the credential loader and cleared when the connection changes. The exposed
+inventory combines OAuth and configuration rows before provider filters and
+pagination, so native OAuth batch writers cannot discard configuration rows. A
+discovery failure preserves the successfully fetched OAuth inventory and shows
+the error through the existing list error presentation; it does not retain stale
+configuration rows. Only a 404 from this Manager-only endpoint is treated as
+unsupported without an error, so the panel still works when hosted by plain CPA.
+Genuine discovery failures remain visible, and a caller requesting
+throw-on-error still receives the failure after the OAuth inventory is
+committed. Both requests retain the native request scope and freshness checks.
+Configuration rows retain `runtime_only` and
+`credential_kind = "config-api-key"`. They offer quota refresh but no file
+download, edit, delete, status toggle, OAuth refresh, or bulk file selection.
+Their list badge identifies a read-only configuration key rather than implying
+an OAuth credential status. OAuth files keep their native actions. The detail
+drawer also omits file actions and status controls for these configuration keys,
+while retaining quota refresh.
+
+Quota refresh uses the native config, credential-scoped store, refresh lifecycle
+and period-window renderer. One descriptor table supplies the quota store,
+window labels and source for both Devin and z.ai summaries and display windows.
+The browser sends CPA api-call the discovered `auth_index`, GET
+`https://api.z.ai/api/monitor/usage/quota/limit`, and the literal header
+`Authorization: Bearer $TOKEN$`; CPA resolves the API key server-side. Parsing
+requires a successful `code = 200` envelope and selects the five-hour window by
+`unit = 3, number = 5` and the weekly window by `unit = 6, number = 1`,
+irrespective of `type`. Provider `percentage` is used percent; the panel shows
+`100 - percentage` remaining. Both `nextResetTime` values remain millisecond
+timestamps and reach the native reset display. Missing windows, invalid
+percentages or reset timestamps fail refresh through its normal error state,
+rather than showing invented quota. This supports the z.ai quota endpoint only;
+it adds no OAuth login or general API-key provider framework.
+
+The frontend check phase runs the quota parser/request/lifecycle/display
+integration tests and the credential loader tests alongside the existing theme
+test. The server pre-check runs `TestConfigCredentials` in the proxy service
+because the default package test pass is restricted by `subPackages`. The quota
+endpoint and browser display still require deployment verification.

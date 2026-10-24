@@ -55,7 +55,7 @@
  import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
  import { useMediaQuery } from '@/hooks/useMediaQuery';
 -import { getAuthFileIcon, isQuotaRefreshSupportedProvider } from '@/features/authFiles/constants';
-+import { getAuthFileIcon, canRefreshCredentialQuota } from '@/features/authFiles/constants';
++import { canRefreshCredentialQuota, getAuthFileIcon, isConfigApiKeyCredential } from '@/features/authFiles/constants';
  import {
    useAuthFilesData,
    type AuthFilesCredentialMutation,
@@ -201,22 +201,30 @@
        </Button>
      );
 +
-+    if (row.raw.credential_kind === 'config-api-key') return <div className={styles.rowActions}>{refreshButton}</div>;
++    if (isConfigApiKeyCredential(row.raw)) return <div className={styles.rowActions}>{refreshButton}</div>;
  
      if (isGridCard) {
        return (
-@@ -9211,16 +9229,16 @@
+@@ -9109,6 +9127,7 @@
+           <div className={styles.accountGridList}>
+             {rowsToRender.map((row) => {
+               const ctx = resolveAccountRowContext(row);
++              const readOnlyConfig = isConfigApiKeyCredential(row.raw);
+               const quotaWindowGroups = getCardQuotaWindowGroups(row, ctx.mainListWindows);
+               return (
+                 <article
+@@ -9211,16 +9230,16 @@
                      >
                        <span
                          className={`${styles.badge} ${getHealthStatusClass(ctx.item.health.status)}`}
 -                        title={ctx.healthTitle}
-+                        title={row.raw.credential_kind === 'config-api-key' ? t('zai_quota.read_only') : ctx.healthTitle}
++                        title={readOnlyConfig ? t('zai_quota.read_only') : ctx.healthTitle}
                        >
 -                        {t(ctx.item.health.labelKey)}
-+                        {row.raw.credential_kind === 'config-api-key' ? t('zai_quota.read_only') : t(ctx.item.health.labelKey)}
++                        {readOnlyConfig ? t('zai_quota.read_only') : t(ctx.item.health.labelKey)}
                        </span>
 -                      <ToggleSwitch
-+                      {row.raw.credential_kind !== 'config-api-key' ? (<ToggleSwitch
++                      {!readOnlyConfig ? (<ToggleSwitch
                          checked={!row.disabled}
                          onChange={(enabled) => void handleBatchStatus(enabled, [row])}
                          disabled={disableControls || statusUpdating || row.runtimeOnly}
@@ -226,37 +234,45 @@
                      </div>
                    </div>
  
-@@ -9729,9 +9747,9 @@
+@@ -9627,6 +9646,7 @@
+               </div>
+             {rowsToRender.map((row) => {
+               const ctx = resolveAccountRowContext(row);
++              const readOnlyConfig = isConfigApiKeyCredential(row.raw);
+               return (
+                 <article
+                   key={row.selectionKey}
+@@ -9729,9 +9749,9 @@
                      <div className={styles.accountCardLine}>
                        <span
                          className={`${styles.badge} ${getHealthStatusClass(ctx.item.health.status)}`}
 -                        title={ctx.healthTitle}
-+                        title={row.raw.credential_kind === 'config-api-key' ? t('zai_quota.read_only') : ctx.healthTitle}
++                        title={readOnlyConfig ? t('zai_quota.read_only') : ctx.healthTitle}
                        >
 -                        {t(ctx.item.health.labelKey)}
-+                        {row.raw.credential_kind === 'config-api-key' ? t('zai_quota.read_only') : t(ctx.item.health.labelKey)}
++                        {readOnlyConfig ? t('zai_quota.read_only') : t(ctx.item.health.labelKey)}
                        </span>
                      </div>
                      <div className={styles.accountHealthMetaRow}>
-@@ -10062,7 +10080,7 @@
+@@ -10062,7 +10082,7 @@
      const selectedCredentialRefreshing =
        credentialRefreshing[getAuthFileSelectionKey(selectedRow.raw)] === true;
      const selectedQuotaRefreshing = isManualQuotaRefreshing(selectedRow);
 -    const drawerMoreItems: DropdownMenuItem[] = [
-+    const drawerMoreItems: DropdownMenuItem[] = selectedRow.raw.credential_kind === 'config-api-key' ? [] : [
++    const drawerMoreItems: DropdownMenuItem[] = isConfigApiKeyCredential(selectedRow.raw) ? [] : [
        {
          key: 'models',
          label: t('auth_files.models_button'),
-@@ -10162,7 +10180,7 @@
+@@ -10162,7 +10182,7 @@
          }
          footer={
            <div className={styles.drawerActions}>
 -            {detailView.health.status === 'reauth' ? (
-+            {selectedRow.raw.credential_kind !== 'config-api-key' && detailView.health.status === 'reauth' ? (
++            {!isConfigApiKeyCredential(selectedRow.raw) && detailView.health.status === 'reauth' ? (
                <Button
                  variant="primary"
                  onClick={() => handleReauthAccount(selectedRow.raw)}
-@@ -10172,18 +10190,18 @@
+@@ -10172,18 +10192,18 @@
                  {t('accounts.recommend_action_reauth')}
                </Button>
              ) : null}
@@ -274,11 +290,11 @@
                </Button>
              ) : null}
 -            <Button
-+            {selectedRow.raw.credential_kind !== 'config-api-key' ? (<Button
++            {!isConfigApiKeyCredential(selectedRow.raw) ? (<Button
                variant={selectedRow.disabled ? 'secondary' : 'danger'}
                onClick={() => handleBatchStatus(selectedRow.disabled, [selectedRow])}
                disabled={
-@@ -10191,15 +10209,15 @@
+@@ -10191,15 +10211,15 @@
                }
              >
                {selectedRow.disabled ? t('accounts.enable') : t('accounts.disable')}
@@ -299,7 +315,19 @@
        >
 --- a/apps/web/src/features/accounts/model/accountQuotaDisplayWindows.ts
 +++ b/apps/web/src/features/accounts/model/accountQuotaDisplayWindows.ts
-@@ -44,6 +44,7 @@
+@@ -23,9 +23,11 @@
+ } from '@/utils/quota/codexQuota';
+ import type { AccountRow } from './accountRows';
+ import {
++  PERIOD_QUOTA_DESCRIPTORS,
+   hasConfirmedXaiBillingEntitlement,
+   isExplicitFreeXaiPlan,
+   type AccountQuotaStores,
++  type PeriodQuotaDescriptor,
+ } from './accountQuotaSummary';
+
+ export type AccountQuotaWindowKind =
+@@ -44,6 +46,7 @@
    | 'claude'
    | 'antigravity'
    | 'devin'
@@ -307,51 +335,54 @@
    | 'kimi'
    | 'meta'
    | 'xai'
-@@ -855,8 +856,8 @@
+@@ -855,8 +858,9 @@
      if (windows.length) return windows;
    }
  
 -  if (row.provider === 'devin') {
 -    const windows = buildDevinQuotaDisplayWindows(row, options);
-+  if (row.provider === 'devin' || row.provider === 'z-ai') {
-+    const windows = buildPeriodQuotaDisplayWindows(row, options);
++  const periodQuota = PERIOD_QUOTA_DESCRIPTORS.get(row.provider);
++  if (periodQuota) {
++    const windows = buildPeriodQuotaDisplayWindows(row, options, periodQuota);
      if (windows.length) return windows;
    }
  
-@@ -868,11 +869,11 @@
+@@ -868,11 +872,12 @@
    return buildSummaryQuotaDisplayWindow(row, options);
  };
  
 -const buildDevinQuotaDisplayWindows = (
 +const buildPeriodQuotaDisplayWindows = (
    row: AccountRow,
-   options: BuildAccountQuotaDisplayWindowsOptions
+-  options: BuildAccountQuotaDisplayWindowsOptions
++  options: BuildAccountQuotaDisplayWindowsOptions,
++  descriptor: PeriodQuotaDescriptor
  ): AccountQuotaDisplayWindow[] => {
 -  const quota = getCredentialScopedQuotaState(options.stores.devinQuota, row.raw);
-+  const quota = row.provider === 'z-ai' ? getCredentialScopedQuotaState(options.stores.zaiQuota ?? {}, row.raw) : getCredentialScopedQuotaState(options.stores.devinQuota, row.raw);
++  const quota = getCredentialScopedQuotaState(descriptor.store(options.stores), row.raw);
    if (!quota || !quota.windows?.length) return [];
    return quota.windows.map((window) => {
      const remainingPercent =
-@@ -886,11 +887,11 @@
+@@ -886,11 +891,11 @@
        hasReset && window.resetAtMs !== null
          ? formatQuotaResetTime(window.resetAtMs)
          : '-';
 -    const labelKey = window.id === 'daily' ? 'devin_quota.daily' : 'devin_quota.weekly';
-+    const labelKey = row.provider === 'z-ai' ? (window.id === 'five_hour' ? 'zai_quota.five_hour' : 'zai_quota.weekly') : (window.id === 'daily' ? 'devin_quota.daily' : 'devin_quota.weekly');
++    const labelKey = descriptor.labels[window.id];
      const label = options.translateQuotaWindowLabel(undefined, labelKey);
  
      return buildAccountQuotaDisplayWindow({
 -      key: `devin:${window.id}`,
-+      key: `${row.provider}:${window.id}`,
++      key: `${descriptor.source}:${window.id}`,
        label,
        kind: window.id,
        remainingPercent,
-@@ -899,7 +900,7 @@
+@@ -899,7 +904,7 @@
        resetAtMs: window.resetAtMs,
        resetAccuracy: hasReset ? 'exact' : 'unknown',
        limitWindowSeconds: window.periodHours * 3600,
 -      source: 'devin',
-+      source: row.provider === 'z-ai' ? 'z-ai' : 'devin',
++      source: descriptor.source,
        modelScope: { kind: 'all', complete: true },
        observedAtMs: quota.observedAtMs ?? quota.fetchedAtMs ?? null,
        nowMs: options.nowMs,
@@ -365,22 +396,43 @@
  } from '@/types';
  import {
    isValidQuotaResetAtMs,
-@@ -81,6 +82,7 @@
+@@ -81,7 +82,27 @@
    kimiQuota: Record<string, KimiQuotaState>;
    metaQuota: Record<string, MetaQuotaState>;
    xaiQuota: Record<string, XaiQuotaState>;
 +  zaiQuota?: Record<string, ZaiQuotaState>;
  }
++
++export interface PeriodQuotaDescriptor {
++  labels: Partial<Record<'daily' | 'five_hour' | 'weekly', string>>;
++  source: 'devin' | 'z-ai';
++  store: (stores: AccountQuotaStores) => Record<string, DevinQuotaState | ZaiQuotaState>;
++}
++
++export const PERIOD_QUOTA_DESCRIPTORS: ReadonlyMap<string, PeriodQuotaDescriptor> = new Map<string, PeriodQuotaDescriptor>([
++  ['devin', {
++    labels: { daily: 'devin_quota.daily', weekly: 'devin_quota.weekly' },
++    source: 'devin',
++    store: (stores) => stores.devinQuota,
++  }],
++  ['z-ai', {
++    labels: { five_hour: 'zai_quota.five_hour', weekly: 'zai_quota.weekly' },
++    source: 'z-ai',
++    store: (stores) => stores.zaiQuota ?? {},
++  }],
++]);
  
  export interface AccountQuotaOverrides {
-@@ -1117,10 +1119,10 @@
+   codexQuotaBySelectionKey?: Map<string, CodexQuotaState>;
+@@ -1117,10 +1138,11 @@
      });
    }
  
 -  if (provider === 'devin') {
 -    const quota = getCredentialScopedQuotaState(stores.devinQuota, file);
-+  if (provider === 'devin' || provider === 'z-ai') {
-+    const quota = provider === 'devin' ? getCredentialScopedQuotaState(stores.devinQuota, file) : getCredentialScopedQuotaState(stores.zaiQuota ?? {}, file);
++  const periodQuota = PERIOD_QUOTA_DESCRIPTORS.get(provider);
++  if (periodQuota) {
++    const quota = getCredentialScopedQuotaState(periodQuota.store(stores), file);
      if (!quota) return emptyQuota(filePlanType);
 -    const planType = quota.plan ?? filePlanType;
 +    const planType = 'plan' in quota ? quota.plan ?? filePlanType : filePlanType;
@@ -414,13 +466,16 @@
    if (providerKey === 'iflow') return 'iFlow';
    if (providerKey === 'meta') return 'Muse (Meta)';
    return type.charAt(0).toUpperCase() + type.slice(1);
-@@ -322,3 +324,7 @@
+@@ -322,3 +324,10 @@
      return pattern.toLowerCase() === modelId.toLowerCase();
    });
  };
 +
++export const isConfigApiKeyCredential = (file: AuthFileItem): boolean =>
++  file.credential_kind === 'config-api-key';
++
 +export const canRefreshCredentialQuota = (file: AuthFileItem): boolean =>
-+  (!isRuntimeOnlyAuthFile(file) || file.credential_kind === 'config-api-key') &&
++  (!isRuntimeOnlyAuthFile(file) || isConfigApiKeyCredential(file)) &&
 +  isQuotaRefreshSupportedProvider(String(file.provider ?? file.type ?? ''));
 --- a/apps/web/src/features/authFiles/hooks/useAuthFilesData.test.ts
 +++ b/apps/web/src/features/authFiles/hooks/useAuthFilesData.test.ts
@@ -448,12 +503,40 @@
    vi.useRealTimers();
    vi.unstubAllGlobals();
  });
-@@ -5681,3 +5684,70 @@
+@@ -5681,3 +5684,98 @@
      });
    });
  });
 +
 +describe('configuration credential list input', () => {
++  it.each(['status', 'fields'] as const)('retains configuration rows after a multi-target %s mutation fails', async (operation) => {
++    const oauth = [
++      { name: 'claude.json', provider: 'claude', auth_index: 'claude-index' },
++      { name: 'codex.json', provider: 'codex', auth_index: 'codex-index' },
++    ];
++    const config = { name: 'config:z-ai:index', auth_index: 'index', provider: 'z-ai', credential_kind: 'config-api-key', runtime_only: true };
++    mocks.list.mockResolvedValue({ files: oauth });
++    vi.mocked(apiClient.get).mockResolvedValue({ files: [config] });
++    mocks.setStatus.mockRejectedValue(new Error('mutation failed'));
++    mocks.patchFields.mockRejectedValue(new Error('mutation failed'));
++    mocks.patchFieldsForAuthIndexes.mockRejectedValue(new Error('mutation failed'));
++    mocks.patchFieldsWithPluginSourceFallback.mockRejectedValue(new Error('mutation failed'));
++    const harness = mountUseAuthFilesData();
++    await act(async () => { await harness.getCurrent().loadFiles(); });
++    await act(async () => {
++      const targets = oauth.map(getAuthFilePatchTarget);
++      if (operation === 'status') {
++        await harness.getCurrent().batchSetStatus(targets, false);
++      } else {
++        await harness.getCurrent().batchPatchFields(targets, { prefix: 'new-prefix' });
++      }
++    });
++    expect(mocks.list).toHaveBeenCalledTimes(2);
++    expect(apiClient.get).toHaveBeenCalledTimes(1);
++    expect(harness.getCurrent().files).toEqual([...oauth, config]);
++    harness.unmount();
++  });
++
 +  it('merges arbitrary labels before consumers filter and paginate, keeping config rows out of selection', async () => {
 +    const config = { name: 'config:z-ai:index', auth_index: 'index', provider: 'z-ai', label: 'arbitrary group', credential_kind: 'config-api-key', runtime_only: true };
 +    mocks.list.mockResolvedValue({ files: [{ name: 'claude.json', provider: 'claude' }] });
@@ -521,11 +604,48 @@
 +});
 --- a/apps/web/src/features/authFiles/hooks/useAuthFilesData.ts
 +++ b/apps/web/src/features/authFiles/hooks/useAuthFilesData.ts
-@@ -970,9 +970,28 @@
+@@ -2,6 +2,7 @@
+   useCallback,
+   useEffect,
+   useLayoutEffect,
++  useMemo,
+   useRef,
+   useState,
+   type ChangeEvent,
+@@ -762,7 +763,9 @@
+   const requestScope = options.requestScope;
+   const onCredentialMutation = options.onCredentialMutation;
+
+-  const [files, setFiles] = useState<AuthFileItem[]>([]);
++  const [configFiles, setConfigFiles] = useState<AuthFileItem[]>([]);
++  const [oauthFiles, setOauthFiles] = useState<AuthFileItem[]>([]);
++  const files = useMemo(() => [...oauthFiles, ...configFiles], [oauthFiles, configFiles]);
+   const [loading, setLoading] = useState(true);
+   const [hasLoaded, setHasLoaded] = useState(false);
+   const [error, setError] = useState('');
+@@ -791,7 +794,7 @@
+   const selectionCount = selectedFiles.size;
+   const commitFiles = useCallback((next: SetStateAction<AuthFileItem[]>) => {
+     filesRevisionRef.current += 1;
+-    setFiles(next);
++    setOauthFiles(next);
+   }, []);
+
+   useLayoutEffect(() => {
+@@ -806,6 +809,7 @@
+     authJsonPasteSavingRef.current = false;
+     deleteOperationRef.current = null;
+     commitFiles([]);
++    setConfigFiles([]);
+     setHasLoaded(false);
+     setSelectedFiles(new Set());
+     setLoading(true);
+@@ -970,9 +974,29 @@
          // patch. Re-read until the response belongs to the current revision.
          let data: Awaited<ReturnType<typeof authFilesApi.list>>;
          let revision: number;
 +        let discoveryError: Error | null = null;
++        let nextConfigFiles: AuthFileItem[] = [];
          do {
            revision = filesRevisionRef.current;
 -          data = requestScope ? await authFilesApi.list(requestScope) : await authFilesApi.list();
@@ -535,9 +655,9 @@
 +            apiClient.get<{ files: AuthFileItem[] }>('/config-credentials', requestScope ? createScopedApiRequestConfig(requestScope) : undefined),
 +          ]);
 +          if (authFiles.status === 'rejected') throw authFiles.reason;
-+          let configFiles: AuthFileItem[] = [];
++          nextConfigFiles = [];
 +          if (configCredentials.status === 'fulfilled') {
-+            configFiles = configCredentials.value.files;
++            nextConfigFiles = configCredentials.value.files;
 +          } else {
 +            const reason: unknown = configCredentials.reason;
 +            // A CPA-hosted lightweight panel has no Manager-only endpoint.
@@ -547,21 +667,25 @@
 +              discoveryError = reason instanceof Error ? reason : new Error('Configuration credential discovery failed');
 +            }
 +          }
-+          data = { ...authFiles.value, files: [...(authFiles.value.files ?? []), ...configFiles] };
++          data = authFiles.value;
          } while (isCurrentRequest() && revision !== filesRevisionRef.current);
          if (!isCurrentRequest()) {
            if (options?.throwOnError) throw new Error(t('notification.refresh_failed'));
-@@ -981,6 +1000,10 @@
+@@ -980,8 +1004,13 @@
+         }
          const nextFiles = Array.isArray(data?.files) ? data.files : [];
          commitFiles(nextFiles);
++        setConfigFiles(nextConfigFiles);
          setHasLoaded(true);
+-        return nextFiles;
 +        if (discoveryError) {
 +          setError(discoveryError.message);
 +          if (options?.throwOnError) throw discoveryError;
 +        }
-         return nextFiles;
++        return [...nextFiles, ...nextConfigFiles];
        } catch (err: unknown) {
          if (!isCurrentRequest()) {
+           if (options?.throwOnError) throw err;
 --- a/apps/web/src/i18n/locales/en.json
 +++ b/apps/web/src/i18n/locales/en.json
 @@ -5369,5 +5369,10 @@
