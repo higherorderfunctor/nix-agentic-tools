@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-10-23 — F2 retains the metadata manifest and fact
 > envelope for Step 0; M3 activates exact-text model identities; M3g adds the
-> `module-graph` request domain.
+> `module-graph` request domain; M3d adds bounded `all-definitions` requests.
 
 ## Purpose and fit
 
@@ -63,25 +63,27 @@ implicit traversal or value request. The metadata baseline explicitly selects a
 prefix.
 
 Every request uses the `metadata` observation mode with the `option-metadata` or
-`module-graph` domain. `option-metadata` facets: `declarations`, `definitions`,
-`isDefined`, `priority`, `selection`. Selection emits retained inputs, whether
-the option is defined, winning override priority and explicit order under one
-request. Its capability is `module-properties`; unsupported helper pins retain
-independently requested Step 0 metadata. The `module-graph` domain selects the
-`closure` facet of a whole-root context; its capability is `module-graph`, the
-schema admits only `closure` with an empty path, a context admits at most one
-graph request, and an incomplete closure publishes status and diagnostics only.
-Objects are closed to unknown fields; target and input maps permit explicit
-names.
+`module-graph` domain. `option-metadata` facets: `all-definitions`,
+`declarations`, `definitions`, `isDefined`, `priority`, `selection`. The
+[all-definitions inventory](all-definitions.md) emits bounded source candidates
+and retained metadata under one request with its own exact-pin capability.
+Selection emits retained inputs, whether the option is defined, winning override
+priority and explicit order under one request. Its capability is
+`module-properties`; unsupported helper pins retain independently requested Step
+0 metadata. The `module-graph` domain selects the `closure` facet of a
+whole-root context; its capability is `module-graph`, the schema admits only
+`closure` with an empty path, a context admits at most one graph request, and an
+incomplete closure publishes status and diagnostics only. Objects are closed to
+unknown fields; target and input maps permit explicit names.
 
-Deferred surfaces return with their consuming queries: increment 3 restores
-metadata enumeration and the remaining context-parent tables; increment 4
-restores selected-value/member/string-context modes and scalar fixtures;
-increment 5 restores framework adapters, config-only handles and schema
-requests. Module graph requests are restored with the `DisabledModules` query.
-Other metadata facets return with the module queries that consume them. The
-`reusable` cache control returns in increment 8. Explicit input, argument, root,
-system and fingerprint identities remain required now.
+Deferred surfaces return with their consuming queries: increment 3 restores the
+remaining context-parent tables; increment 4 restores
+selected-value/member/string-context modes and scalar fixtures; increment 5
+restores framework adapters, config-only handles and schema requests. Module
+graph requests are restored with the `DisabledModules` query. Other metadata
+facets return with the module queries that consume them. The `reusable` cache
+control returns in increment 8. Explicit input, argument, root, system and
+fingerprint identities remain required now.
 
 ## Mandatory validation layers
 
@@ -144,7 +146,7 @@ python packages/codeql-nix/checks/fixtures/protocol/test_protocol.py
 
 The tests check required descriptors, nested source roots and input identities,
 retained metadata facets, rejection of deferred controls, literal paths and
-budgets, all 32 relation mappings, status families and pre-target failures,
+budgets, all 36 relation mappings, status families and pre-target failures,
 priorities, and UTF-8/JSON-expansion boundaries. They use independent fixtures
 and F1 validation without invoking Nix evaluation or the CodeQL engine. F3 must
 integrate this standalone entry point into the owner's checks with nonempty
