@@ -23,6 +23,7 @@
   usageScripts = {
     claude-usage = mkUsageScript "claude-usage" [pkgs.curl pkgs.jq];
     codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.jq pkgs.python3];
+    zai-usage = mkUsageScript "zai-usage" [pkgs.curl pkgs.jq];
   };
   rawDefaults = import ../../lib/defaults.nix {
     inherit lib;

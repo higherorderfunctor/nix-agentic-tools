@@ -134,6 +134,11 @@ in {
               type = lib.types.enum tierNames;
               description = "Capability tier.";
             };
+            usage = lib.mkOption {
+              type = lib.types.nullOr techniqueType;
+              default = null;
+              description = "Usage node for the pool this family draws on, rendered with the family whichever runtime reaches it. Same shape as a usage technique.";
+            };
             useFor = lib.mkOption {
               type = lib.types.str;
               default = "";
@@ -237,6 +242,10 @@ in {
         {
           assertion = lib.allUnique (map (family: family.name) flattenedFamilies);
           message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";
+        }
+        {
+          assertion = lib.all (family: family.usage == null || (family.usage.kind == "usage" && family.usage.command != null)) flattenedFamilies;
+          message = "ai.programs.delegate-routing.families: a family usage node must have kind \"usage\" and a command.";
         }
       ]
       ++ lib.concatMap (runtime: let

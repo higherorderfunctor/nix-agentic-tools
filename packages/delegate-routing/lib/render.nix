@@ -47,6 +47,20 @@
         ])
         members)}
     '';
+  command = node: lib.optionalString (node.command != null) "`${node.command}`";
+  # One information line: bold name with its kind, then the command and notes.
+  infoLine = name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(command node) node.notes])}";
+  # Families sharing a pool declare the same node; render it once, named for them all.
+  # Includes families reached only through a manual-only delegate. The grouping
+  # key drops string context: a packaged usage command carries a store path,
+  # which cannot become an attribute name; the rendered line keeps the
+  # dependency by reading the usage node, not the key.
+  familyUsage = let
+    reachable = lib.unique (candidates ++ lib.concatMap selected (lib.unique manualExternalDelegates));
+    withUsage = builtins.filter (family: (family.usage or null) != null && family.usage.enable) reachable;
+    pools = builtins.attrValues (lib.groupBy (family: builtins.unsafeDiscardStringContext (builtins.toJSON family.usage)) withUsage);
+  in
+    lib.concatMapStringsSep "\n\n" (members: infoLine (lib.concatMapStringsSep ", " (family: family.name) members) (builtins.head members).usage) pools;
   techniqueBlock = target: externalOnly: let
     nodes = lib.filterAttrs (_: node:
       node.enable
@@ -55,7 +69,6 @@
     delegates = lib.filterAttrs (_: node: builtins.elem node.kind delegateKinds) nodes;
     info = lib.filterAttrs (_: node: builtins.elem node.kind ["introspect" "usage"]) nodes;
     hasCommand = lib.any (node: node.command != null) (builtins.attrValues delegates);
-    command = node: lib.optionalString (node.command != null) "`${node.command}`";
   in
     lib.optionalString (nodes != {}) ''
       ### ${target} techniques
@@ -75,7 +88,7 @@
           ++ lib.optional hasCommand (command node))
         delegates))}
 
-      ${lib.concatStringsSep "\n\n" (lib.mapAttrsToList (name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(command node) node.notes])}") info)}
+      ${lib.concatStringsSep "\n\n" (lib.mapAttrsToList infoLine info)}
     '';
   manual = target: ''
     ### ${target}
@@ -97,6 +110,7 @@ in ''
   Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (Claude's interactive tools take the alias, e.g. `opus`).
 
   ${lib.concatMapStringsSep "\n" tier tiers}
+  ${lib.optionalString (familyUsage != "") "${familyUsage}\n"}
   Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
 
   ${techniqueBlock runtime false}

@@ -174,6 +174,57 @@
         programs.delegate-routing.runtimes.claude.models = [{families = ["x"];}];
       };
     };
+    # Derivation-backed like a packaged usage helper: its store path carries
+    # string context, which the pool grouping key must discard to render.
+    exampleUsage = pkgs.writeShellScriptBin "example-usage" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+    '';
+    exampleUsageCommand = builtins.unsafeDiscardStringContext (lib.getExe exampleUsage);
+    usageFamilies = skill {
+      ai = {
+        programs.delegate-routing.families.example = let
+          pool = {
+            match = "example-*";
+            tier = "strong";
+            usage = {
+              command = lib.getExe exampleUsage;
+              kind = "usage";
+              notes = "FAMILY USAGE NOTE";
+            };
+          };
+        in {
+          x = pool;
+          y = pool // {match = "example-y-*";};
+        };
+        programs.delegate-routing.runtimes.claude.models = [{families = ["x" "y"];}];
+      };
+    };
+    manualFamilyUsage = skill {
+      ai = {
+        programs.delegate-routing = {
+          families.example.m = {
+            match = "example-m-*";
+            tier = "strong";
+            usage = {
+              command = "/bin/manual-usage";
+              kind = "usage";
+            };
+          };
+          runtimes = {
+            claude.manualExternalDelegates = ["kiro"];
+            kiro.models = [{families = ["m"];}];
+          };
+        };
+      };
+    };
+    badFamilyUsage = change {
+      ai.programs.delegate-routing.families.example.x = {
+        match = "example-x-*";
+        tier = "strong";
+        usage.kind = "subagent";
+      };
+    };
     disabledNode = skill {ai.programs.delegate-routing.runtimes.claude.techniques.Agent.enable = false;};
     modifiedNode = skill {ai.programs.delegate-routing.runtimes.codex.techniques."codex exec".command = "CUSTOM CODEX COMMAND";};
     ownSubagentsOverride = skill {ai.programs.delegate-routing.runtimes.codex.techniques."codex exec".runsOwnSubagents = "CUSTOM OWN SUBAGENTS";};
@@ -518,6 +569,11 @@
           tier = "small";
         };
       }) "family names must be unique across vendors"
+    );
+    "module-delegate-routing-${name}-family-usage" = mkTest "delegate-routing-${name}-family-usage" (
+      hasProse "**x, y (usage):** `${exampleUsageCommand}`; FAMILY USAGE NOTE" usageFamilies
+      && lib.hasInfix "**m (usage):** `/bin/manual-usage`" manualFamilyUsage
+      && failsWith badFamilyUsage "a family usage node must have kind"
     );
     "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (
       failsWith (invalidNode {
