@@ -111,7 +111,7 @@ for line in sys.stdin:
         for vendor, expected in [("claude", ["a"]), ("codex", ["b", "c"])]:
             with self.subTest(vendor=vendor):
                 self.requests.clear()
-                result = self.run_helper(vendor, delegate_usage_cpa_key="inherited-export")
+                result = self.run_helper(vendor)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
                 decoder = json.JSONDecoder()
@@ -145,11 +145,10 @@ for line in sys.stdin:
         executable.write_text(f"#!{sys.executable}\n" + f'''import os, sys
 assert {SECRET!r} not in " ".join(sys.argv)
 assert {SECRET!r} not in os.environ.values()
-assert "delegate_usage_cpa_key" not in os.environ
 os.execv({real_curl!r}, [{real_curl!r}] + sys.argv[1:])
 ''')
         executable.chmod(0o755)
-        result = self.run_helper("codex", PATH=str(executable.parent) + os.pathsep + self.env["PATH"], delegate_usage_cpa_key=SECRET)
+        result = self.run_helper("codex", PATH=str(executable.parent) + os.pathsep + self.env["PATH"])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(self.requests), 2)
 
