@@ -60,9 +60,7 @@ in
     coordinator = strictShell {
       name = "nixql-extract";
       text = ''
-        exec ${python}/bin/python3 ${../.}/src/extract.py \
-          ${kit.syntax}/bin/nixql-anchors ${../schema} \
-          ${generated}/nix.dbscheme ${pins} ${pkgs.nix}/bin/nix
+        exec ${python}/bin/python3 ${../.}/src/extract.py ${kit.syntax}/bin/nixql-anchors ${../schema} ${generated}/nix.dbscheme ${pins} ${pkgs.nix}/bin/nix
       '';
     };
     extractor = pkgs.runCommand "nixql-extractor" {} ''
@@ -128,6 +126,7 @@ in
       shopt -s inherit_errexit 2>/dev/null || :
       mkdir -p "$out" # bare-commands: ok
       cp -r ${../ql/queries}/. "$out/" # bare-commands: ok
+      cp -r ${../ql/suites}/. "$out/" # bare-commands: ok
     '';
     inherit (kit) syntax;
     syntaxDriver = strictShell {

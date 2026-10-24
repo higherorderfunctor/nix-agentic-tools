@@ -18,12 +18,14 @@
         CODEQL_NIX_TEST_NIX = "${pkgs.nix}/bin/nix";
         CODEQL_NIX_TEST_NIXPKGS = pkgs.path;
         CODEQL_NIX_TEST_OWNER = owner;
+        CODEQL_NIX_TEST_QUERIES = packaging.queries;
         nativeBuildInputs = [pkgs.nix (pkgs.python3.withPackages (ps: [ps.jsonschema])) pkgs.util-linux];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         export CODEQL_NIX_TEST_LOCK="$TMPDIR/codeql.lock"
         export CODEQL_NIX_TEST_SCRATCH="$TMPDIR"
+        export CODEQL_NIX_TEST_SESSION="$TMPDIR/installed-session"
         python3 ${owner}/checks/run-domain-tests.py \
           ${owner}/checks/fixtures/installed/test_installed.py \
           ${owner}/checks/fixtures/installed/test_r0.py \

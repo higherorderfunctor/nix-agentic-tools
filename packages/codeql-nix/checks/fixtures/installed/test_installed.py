@@ -6,13 +6,19 @@ and SHA-256 of installed schema bytes. Never bless implementation query output.
 
 import csv
 import hashlib
+import importlib.util
 import io
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from installed_session import Session, tree_digest, variant_key
 
 
 class InstalledTests(unittest.TestCase):
@@ -35,6 +41,7 @@ class InstalledTests(unittest.TestCase):
         self.root = self.scratch / "source"
         self.root.mkdir()
         self.env = os.environ | {"HOME": str(self.scratch / "home"), "CODEQL_CONFIG_FILE": "/dev/null", "NIX_PATH": "", "NIX_CONFIG": "substitute = false\nbuilders =\nmax-jobs = 0\n"}
+        self.session = Session(Path(os.environ.get("CODEQL_NIX_TEST_SESSION", self.scratch / "session")))
         Path(self.env["HOME"]).mkdir()
 
     def run_codeql(self, *args, success=True, env=None):
@@ -98,13 +105,111 @@ class InstalledTests(unittest.TestCase):
             target = target.replace(name.upper() + "_HASH", json.dumps(descriptor["narHash"]))
         (self.root / ".nixql/targets.nix").write_text(target)
 
+    def installed_authority(self):
+        if not hasattr(self, "_installed_authority"):
+            wrapper = (self.extractor / "tools/autobuild.sh").resolve().read_text()
+            invocation = shlex.split(next(line for line in wrapper.splitlines() if line.startswith("exec ")))
+            if len(invocation) != 8:
+                raise AssertionError("incomplete installed coordinator invocation")
+            extract_spec = importlib.util.spec_from_file_location("nixql_installed_extract", invocation[2])
+            extract = importlib.util.module_from_spec(extract_spec)
+            extract_spec.loader.exec_module(extract)
+            abi_path = Path(invocation[4]) / "abi.py"
+            abi_spec = importlib.util.spec_from_file_location("nixql_installed_abi", abi_path)
+            abi = importlib.util.module_from_spec(abi_spec)
+            abi_spec.loader.exec_module(abi)
+            self._installed_authority = (invocation, extract.RunIdentity, abi)
+        return self._installed_authority
+
+    def installed_identities(self, expected_run):
+        if not hasattr(self, "_installed_identities"):
+            invocation, _, _ = self.installed_authority()
+            model = (self.library / "models/modules.json").read_bytes()
+            versions = json.loads(Path(invocation[6]).read_text())
+            row = expected_run.row[1]
+            self._installed_identities = {
+                "extractor": row[2], "grammar": versions["grammar"], "model": row[4],
+                "modelFile": hashlib.sha256(model).hexdigest(), "schema": row[1],
+            }
+            self._installed_identities["product"] = hashlib.sha256(
+                Path(self.command).resolve().read_bytes() + json.dumps(
+                    self._installed_identities, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return self._installed_identities | {"snapshot": tree_digest(self.root)}
+
+    def requested_run_identity(self, targets, inputs):
+        invocation, run_identity, abi = self.installed_authority()
+        handles = "".join("${" + json.dumps(name) + "} = { outPath = " + json.dumps(entry["path"]) +
+                          "; narHash = " + json.dumps(entry["narHash"]) + "; };"
+                          for name, entry in sorted(inputs.items()))
+        expression = ("let source = { outPath = " + json.dumps(str(self.root)) + "; }; inputs = { " +
+                      handles + " }; in import " + json.dumps(str(Path(targets).resolve())) +
+                      " { inherit inputs source; }")
+        result = subprocess.run(
+            [self.nix, "--extra-experimental-features", "nix-command", "eval", "--json", "--impure", "--expr", expression],
+            env=self.env, capture_output=True, text=True)
+        if result.returncode:
+            raise AssertionError(result.stdout[-4096:] + result.stderr[-4096:])
+        manifest = json.loads(result.stdout)["manifest"]
+        project_roots = {abi.canonical(root): root for target in manifest["targets"].values()
+                         for root in target["sourceRoots"] if Path(root["path"]).resolve() == self.root.resolve()}
+        result = subprocess.run(
+            [self.nix, "--extra-experimental-features", "nix-command", "hash", "path", str(self.root)],
+            env=self.env, capture_output=True, text=True, check=True)
+        project_hash = result.stdout.strip()
+        files = [{"path": path.relative_to(self.root).as_posix(), "contentHash": hashlib.sha256(path.read_bytes()).hexdigest()}
+                 for path in sorted(self.root.rglob("*.nix")) if path.is_file()]
+        roots = [root | {"path": str(self.root), "rootContentIdentity": project_hash, "files": files}
+                 for root in project_roots.values()]
+        roots += [{"logicalName": name, "rootContentIdentity": entry["narHash"], "files": []}
+                  for name, entry in sorted(inputs.items())]
+        return run_identity.syntax(abi, Path(invocation[3]), Path(invocation[5]), Path(invocation[6]), {"roots": roots})
+
+    def validate_session_database(self, database, key, identities, expected_run):
+        marker = json.dumps({"identities": identities, "key": key}, sort_keys=True, separators=(",", ":"))
+        if not (database / "ready").is_file() or (database / "ready").read_text() != marker:
+            raise ValueError("installed session identity mismatch")
+        runs = self.query(database, "SessionRun", """from @nx_run run, string schema, string extractor,
+              string grammar, string model, string snapshot
+            where nx_runs(run, schema, extractor, grammar, model, snapshot)
+            select count(@nx_run r | nx_runs(r, _, _, _, _, _) | r),
+              schema, extractor, grammar, model, snapshot""")
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(tuple(runs[0]), tuple(["1", *expected_run.row[1][1:]]))
+        phases = self.query(database, "SessionPhases", """from @nx_run run, string phase, string state, string reason
+            where nx_phases(run, phase, state, reason) select phase, state""")
+        self.assertTrue(phases)
+        self.assertTrue(all(row[1] == "complete" for row in phases), phases)
+
     def create(self, name="db", *, inputs=None, targets=None, success=True):
-        options = ["--extractor-option", "inputs=" + json.dumps(self.inputs if inputs is None else inputs)]
+        selected_inputs = self.inputs if inputs is None else inputs
+        selected_targets = self.root / ".nixql/targets.nix" if targets is None else Path(targets)
+        options = {"inputs": selected_inputs}
         if targets is not None:
-            options += ["--extractor-option", "targets=" + str(targets)]
-        database = self.scratch / name
-        result = self.run_codeql("database", "create", database, "--language=nix", "--source-root=" + str(self.root), *options, success=success)
-        return database, result
+            options["targets"] = str(targets)
+        arguments = ["--extractor-option", "inputs=" + json.dumps(selected_inputs)]
+        if targets is not None:
+            arguments += ["--extractor-option", "targets=" + str(targets)]
+        if not success:
+            database = self.scratch / name
+            return database, self.run_codeql("database", "create", database, "--language=nix",
+                                             "--source-root=" + str(self.root), *arguments, success=False)
+        expected_run = self.requested_run_identity(selected_targets, selected_inputs)
+        identities = self.installed_identities(expected_run)
+        manifest = selected_targets.read_bytes() if selected_targets.exists() else b""
+        key = variant_key(self.root, inputs=selected_inputs, manifest=manifest,
+                          options=options, identities=identities)
+        marker = json.dumps({"identities": identities, "key": key}, sort_keys=True, separators=(",", ":"))
+        built = []
+
+        def build(database):
+            built.append(self.run_codeql("database", "create", database, "--language=nix",
+                                         "--source-root=" + str(self.root), *arguments))
+            (database / "ready").write_text(marker)
+
+        database = self.session.database(
+            key, build,
+            lambda database: self.validate_session_database(database, key, identities, expected_run))
+        return database, built[0] if built else None
 
     def query(self, database, name, body):
         pack = self.scratch / "queries"
@@ -126,6 +231,13 @@ class InstalledTests(unittest.TestCase):
         decoded = self.run_codeql("bqrs", "decode", bqrs, "--format=csv", "--no-titles")
         bqrs.unlink()
         return list(csv.reader(io.StringIO(decoded.stdout)))
+
+    def test_installed_suites_compile_without_database(self):
+        suites = Path(os.environ["CODEQL_NIX_TEST_QUERIES"])
+        for name in ("metadata.qls", "source.qls", "values.qls"):
+            suite = suites / name
+            self.assertTrue(suite.is_file(), name)
+            self.run_codeql("query", "compile", "--check-only", "--threads=2", suite)
 
     def test_offline_resolution_and_schema_equality(self):
         result = self.run_codeql("resolve", "languages", "--format=json")

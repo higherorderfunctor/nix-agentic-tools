@@ -139,6 +139,7 @@ for it. When several entries match, their guidance composes.
     - [`packages/codeql-nix/docs/evaluation-isolation.md`](packages/codeql-nix/docs/evaluation-isolation.md)
     - [`packages/codeql-nix/docs/implicit-scope.md`](packages/codeql-nix/docs/implicit-scope.md)
     - [`packages/codeql-nix/docs/installed-extractor.md`](packages/codeql-nix/docs/installed-extractor.md)
+    - [`packages/codeql-nix/docs/installed-sessions.md`](packages/codeql-nix/docs/installed-sessions.md)
     - [`packages/codeql-nix/docs/integration-gate.md`](packages/codeql-nix/docs/integration-gate.md)
     - [`packages/codeql-nix/docs/lexical-scope.md`](packages/codeql-nix/docs/lexical-scope.md)
     - [`packages/codeql-nix/docs/literal-imports.md`](packages/codeql-nix/docs/literal-imports.md)

@@ -1,0 +1,4 @@
+- description: Implemented Nix source, binding, and model queries
+- query: ImportGraph.ql
+- query: NameBindings.ql
+- query: RenamedOptions.ql
