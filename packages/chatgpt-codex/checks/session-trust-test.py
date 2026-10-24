@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -43,7 +44,10 @@ for binary, trusted in ((stub_off, False), (stub_on, True)):
 for binary, trusted in ((codex_off, False), (codex_on, True)):
     result = launch(binary, "debug", "prompt-input", "PROBE")
     expected_count = 32 if trusted else 512
-    assert result.stdout.count("Q") == expected_count, result.stdout
+    # Measure the AGENTS.md probe's run, not every "Q": Codex's own prompt text
+    # carries capital Qs too ("Questions to show the user" from 0.164.0).
+    probe_run = max(map(len, re.findall("Q+", result.stdout)), default=0)
+    assert probe_run == expected_count, result.stdout
     assert ("END_OF_PROBE" in result.stdout) == (not trusted), result.stdout
     assert ("warning: Codex ignores" in result.stderr) == (not trusted), result.stderr
     assert user.read_text() == "", "launcher changed user config"
