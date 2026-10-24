@@ -78,7 +78,10 @@ class GraphTests(test_installed.InstalledTests):
         return list(csv.reader(io.StringIO(result.stdout)))
 
     def expected_g(self):
-        return [line.strip()[2:-2].split(" | ") for line in EXPECTED.read_text().splitlines()]
+        # The .expected file is in `codeql test run`'s textual order ("[0,0]" before
+        # "[0]"); the oracles report upstream graph order, so sort by occurrence path.
+        rows = [line.strip()[2:-2].split(" | ") for line in EXPECTED.read_text().splitlines()]
+        return sorted(rows, key=lambda row: json.loads(row[2]))
 
     def assert_oracles(self, expected):
         self.assertEqual(self.oracle(), expected)
@@ -224,9 +227,9 @@ class GraphTests(test_installed.InstalledTests):
         trap = self.scratch / "graph.trap"
         trap.write_text(protocol.trap(packet["facts"]))
         dataset = self.scratch / "typed-dataset"
-        self.run_codeql("dataset", "import", "--threads=4", "--ram=6000", "--dbscheme=" + str(self.extractor / "nix.dbscheme"),
+        self.run_codeql("dataset", "import", "--threads=4", "--dbscheme=" + str(self.extractor / "nix.dbscheme"),
                         "--fail-on-trap-errors", dataset, trap)
-        self.run_codeql("dataset", "check", "--threads=4", "--ram=6000", dataset)
+        self.run_codeql("dataset", "check", dataset)
         for invalid in (0, 1, "true", "false"):
             malformed = complete()
             next(args for table, args in malformed["facts"] if table == "nx_modules")[4] = invalid
