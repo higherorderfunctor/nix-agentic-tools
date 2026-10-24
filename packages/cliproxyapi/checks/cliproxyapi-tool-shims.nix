@@ -1,4 +1,4 @@
-# Exercise the carried tool-alias patch against the same source used by the
+# Exercise the carried tool shims against the same source used by the
 # package and extractor, including upstream OAuth regressions in the executor.
 {
   extractedLib,
@@ -20,6 +20,7 @@ in {
     }) [
       "internal/config"
       "internal/runtime/executor"
+      "internal/translator/openai/openai/responses"
       "internal/watcher/synthesizer"
     ]);
 }

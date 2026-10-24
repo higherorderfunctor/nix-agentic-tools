@@ -82,6 +82,37 @@ index 00000000..a262ea00
 +		})
 +	}
 +}
+diff --git a/internal/config/codex_shell_args_test.go b/internal/config/codex_shell_args_test.go
+new file mode 100644
+index 00000000..cfbdc738
+--- /dev/null
++++ b/internal/config/codex_shell_args_test.go
+@@ -0,0 +1,25 @@
++package config
++
++import "testing"
++
++func TestCodexShellArgCleanupGroup(t *testing.T) {
++	cfg, err := ParseConfigBytes([]byte(`config-version: 8
++api-keys:
++  openai-compatibility:
++    - name: enabled
++      base-url: https://upstream.example/v1
++      codex-shell-arg-cleanup: true
++      keys:
++        - api-key: dummy-a
++    - name: disabled
++      base-url: https://other.example/v1
++      keys:
++        - api-key: dummy-b
++`))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(cfg.OpenAICompatibility) != 2 || !cfg.OpenAICompatibility[0].CodexShellArgCleanup || cfg.OpenAICompatibility[1].CodexShellArgCleanup {
++		t.Fatalf("group option lost or leaked: %+v", cfg.OpenAICompatibility)
++	}
++}
 diff --git a/internal/config/config_load.go b/internal/config/config_load.go
 index d218b56c..5000784b 100644
 --- a/internal/config/config_load.go
@@ -97,7 +128,7 @@ index d218b56c..5000784b 100644
  		return nil, errValidate
  	}
 diff --git a/internal/config/config_types.go b/internal/config/config_types.go
-index fbd849f0..1eae1c45 100644
+index fbd849f0..276383db 100644
 --- a/internal/config/config_types.go
 +++ b/internal/config/config_types.go
 @@ -594,6 +594,9 @@ type CloakConfig struct {
@@ -109,6 +140,16 @@ index fbd849f0..1eae1c45 100644
 +
  	// APIKey is the authentication key for accessing Claude API services.
  	APIKey string `yaml:"api-key" json:"api-key"`
+ 
+@@ -920,6 +923,9 @@ func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking
+ // OpenAICompatibility represents the configuration for OpenAI API compatibility
+ // with external providers, allowing model aliases to be routed through OpenAI API format.
+ type OpenAICompatibility struct {
++	// CodexShellArgCleanup removes redundant approval arguments from Codex shell calls translated from chat completions.
++	CodexShellArgCleanup bool `yaml:"codex-shell-arg-cleanup,omitempty" json:"codex-shell-arg-cleanup,omitempty"`
++
+ 	// Name is the identifier for this OpenAI compatibility configuration.
+ 	Name string `yaml:"name" json:"name"`
  
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
 index 6fbec048..fff4f9ae 100644
@@ -489,6 +530,372 @@ index 8d949940..60c79c64 100644
  		mcpAliases := resolveClaudeMCPAliasOptions(ctx)
  		body, _ = prepareClaudeOAuthToolNamesForUpstream(body, mcpAliases)
  	}
+diff --git a/internal/runtime/executor/openai_compat_executor.go b/internal/runtime/executor/openai_compat_executor.go
+index 3f81ee02..559fdafb 100644
+--- a/internal/runtime/executor/openai_compat_executor.go
++++ b/internal/runtime/executor/openai_compat_executor.go
+@@ -20,6 +20,7 @@ import (
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/misc"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
++	responses "github.com/router-for-me/CLIProxyAPI/v8/internal/translator/openai/openai/responses"
+ 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
+ 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
+ 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
+@@ -229,6 +230,9 @@ func (e *OpenAICompatExecutor) executeWithCredentials(ctx context.Context, auth
+ 	// Ensure we at least record the request even if upstream doesn't return usage
+ 	// Translate response back to source format when needed
+ 	var param any
++	if compat != nil && compat.CodexShellArgCleanup {
++		ctx = responses.WithCodexShellArgCleanup(ctx)
++	}
+ 	out := sdktranslator.TranslateNonStream(ctx, to, responseFormat, req.Model, helps.ApplyPatchOriginalRequest(req, opts), translated, body, &param)
+ 	if helps.ApplyPatchTranslationError(param) != nil || len(out) == 0 {
+ 		return cliproxyexecutor.Response{}, statusErr{code: http.StatusBadGateway, msg: helps.ApplyPatchUpstreamErrorMessage}
+@@ -347,6 +351,9 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
+ 
+ func (e *OpenAICompatExecutor) executeStreamWithCredentials(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, baseURL, apiKey string, compat *config.OpenAICompatibility) (_ *cliproxyexecutor.StreamResult, err error) {
+ 	ctx = helps.EnsureSessionContext(ctx, opts, req.Payload)
++	if compat != nil && compat.CodexShellArgCleanup {
++		ctx = responses.WithCodexShellArgCleanup(ctx)
++	}
+ 
+ 	baseModel := thinking.ParseSuffix(req.Model).ModelName
+ 
+diff --git a/internal/runtime/executor/openai_compat_shell_args_test.go b/internal/runtime/executor/openai_compat_shell_args_test.go
+new file mode 100644
+index 00000000..8534e92c
+--- /dev/null
++++ b/internal/runtime/executor/openai_compat_shell_args_test.go
+@@ -0,0 +1,86 @@
++package executor
++
++import (
++	"context"
++	"fmt"
++	"io"
++	"net/http"
++	"strings"
++	"testing"
++
++	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
++	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
++	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
++	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
++	"github.com/tidwall/gjson"
++	"github.com/tidwall/sjson"
++)
++
++func TestOpenAICompatCodexShellArgCleanupSelectedGroup(t *testing.T) {
++	for _, stream := range []bool{false, true} {
++		for index := range 2 {
++			t.Run(fmt.Sprintf("stream=%t/index=%d", stream, index), func(t *testing.T) {
++				args := `{"cmd":"pwd","justification":"inspect","prefix_rule":[]}`
++				call := []byte(`{"index":0,"id":"call_1","type":"function","function":{"name":"exec_command"}}`)
++				call, _ = sjson.SetBytes(call, "function.arguments", args)
++				transport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
++					if req.URL.Path != "/v1/chat/completions" {
++						t.Errorf("path=%s", req.URL.Path)
++					}
++					body, _ := io.ReadAll(req.Body)
++					isStream := gjson.GetBytes(body, "stream").Bool()
++					response := []byte(`{"id":"resp_test","choices":[{"index":0,"message":{"role":"assistant","tool_calls":[]},"finish_reason":"tool_calls"}]}`)
++					response, _ = sjson.SetRawBytes(response, "choices.0.message.tool_calls.0", call)
++					contentType := "application/json"
++					if isStream {
++						response = []byte(`{"id":"resp_test","choices":[{"index":0,"delta":{"tool_calls":[]}}]}`)
++						response, _ = sjson.SetRawBytes(response, "choices.0.delta.tool_calls.0", call)
++						response = append([]byte("data: "), response...)
++						response = append(response, []byte("\n\ndata: {\"id\":\"resp_test\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n")...)
++						contentType = "text/event-stream"
++					}
++					return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{contentType}}, Body: io.NopCloser(strings.NewReader(string(response))), Request: req}, nil
++				})
++				cfg := &config.Config{OpenAICompatibility: []config.OpenAICompatibility{{Name: "duplicate", CodexShellArgCleanup: true}, {Name: "duplicate"}}}
++				ex := NewOpenAICompatExecutor("openai-compatibility", cfg)
++				auth := &cliproxyauth.Auth{Provider: "openai-compatibility", Attributes: map[string]string{"source": "config:duplicate[0]", "config_index": fmt.Sprint(index), "compat_name": "duplicate", "base_url": "https://upstream.example/v1", "api_key": "dummy"}}
++				req := cliproxyexecutor.Request{Model: "test", Payload: []byte(`{"model":"test","input":"inspect","tools":[{"type":"function","name":"exec_command","parameters":{"type":"object","properties":{"cmd":{"type":"string"}}}}]}`)}
++				opts := cliproxyexecutor.Options{SourceFormat: sdktranslator.FormatOpenAIResponse}
++				ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", http.RoundTripper(transport))
++				var got string
++				if stream {
++					result, err := ex.ExecuteStream(ctx, auth, req, opts)
++					if err != nil {
++						t.Fatal(err)
++					}
++					for chunk := range result.Chunks {
++						if chunk.Err != nil {
++							t.Fatal(chunk.Err)
++						}
++						for _, line := range strings.Split(string(chunk.Payload), "\n") {
++							if strings.HasPrefix(line, "data: ") {
++								event := gjson.Parse(strings.TrimPrefix(line, "data: "))
++								if event.Get("type").String() == "response.output_item.done" {
++									got = event.Get("item.arguments").String()
++								}
++							}
++						}
++					}
++				} else {
++					response, err := ex.Execute(ctx, auth, req, opts)
++					if err != nil {
++						t.Fatal(err)
++					}
++					got = gjson.GetBytes(response.Payload, "output.0.arguments").String()
++				}
++				want := args
++				if index == 0 {
++					want = `{"cmd":"pwd"}`
++				}
++				if got != want {
++					t.Fatalf("arguments=%s want=%s", got, want)
++				}
++			})
++		}
++	}
++}
+diff --git a/internal/translator/openai/openai/responses/codex_shell_args.go b/internal/translator/openai/openai/responses/codex_shell_args.go
+new file mode 100644
+index 00000000..c5012d8f
+--- /dev/null
++++ b/internal/translator/openai/openai/responses/codex_shell_args.go
+@@ -0,0 +1,45 @@
++package responses
++
++import (
++	"context"
++
++	"github.com/tidwall/gjson"
++	"github.com/tidwall/sjson"
++)
++
++type codexShellArgCleanupKey struct{}
++
++// WithCodexShellArgCleanup opts one selected upstream credential into terminal
++// argument cleanup. Function-call deltas remain unchanged: Codex ignores them
++// and dispatches the complete response.output_item.done item.
++func WithCodexShellArgCleanup(ctx context.Context) context.Context {
++	return context.WithValue(ctx, codexShellArgCleanupKey{}, true)
++}
++
++func (idx *responsesToolIndex) cleanupCodexShellArguments(enabled bool, name, arguments string) string {
++	if !enabled {
++		return arguments
++	}
++	name = idx.canonicalName(name)
++	if declaration, exists := idx.byChat[name]; exists {
++		if declaration.namespace != "" && declaration.namespace != "functions" {
++			return arguments
++		}
++		name = declaration.localName
++	}
++	if name != "exec_command" && name != "shell_command" {
++		return arguments
++	}
++	root := gjson.Parse(arguments)
++	if !gjson.Valid(arguments) || !root.IsObject() {
++		return arguments
++	}
++	justification := root.Get("justification")
++	if !root.Get("sandbox_permissions").Exists() || (justification.Type == gjson.String && justification.String() == "") {
++		arguments, _ = sjson.Delete(arguments, "justification")
++	}
++	if prefix := root.Get("prefix_rule"); prefix.IsArray() && len(prefix.Array()) == 0 {
++		arguments, _ = sjson.Delete(arguments, "prefix_rule")
++	}
++	return arguments
++}
+diff --git a/internal/translator/openai/openai/responses/codex_shell_args_test.go b/internal/translator/openai/openai/responses/codex_shell_args_test.go
+new file mode 100644
+index 00000000..77f6c5e3
+--- /dev/null
++++ b/internal/translator/openai/openai/responses/codex_shell_args_test.go
+@@ -0,0 +1,125 @@
++package responses
++
++import (
++	"context"
++	"fmt"
++	"strings"
++	"testing"
++
++	"github.com/tidwall/gjson"
++	"github.com/tidwall/sjson"
++)
++
++func TestCodexShellArgCleanup(t *testing.T) {
++	for _, tc := range []struct {
++		name, tool, args, want string
++		enabled                bool
++	}{
++		{"absent permissions", "exec_command", `{"cmd":"pwd","justification":"inspect","prefix_rule":[]}`, `{"cmd":"pwd"}`, true},
++		{"shell command", "shell_command", `{"command":"pwd","justification":"inspect"}`, `{"command":"pwd"}`, true},
++		{"empty justification", "exec_command", `{"cmd":"pwd","sandbox_permissions":"require_escalated","justification":"","prefix_rule":[]}`, `{"cmd":"pwd","sandbox_permissions":"require_escalated"}`, true},
++		{"legitimate escalation", "exec_command", `{"cmd":"pwd","sandbox_permissions":"require_escalated","justification":"Allow inspection?","prefix_rule":["pwd"]}`, `{"cmd":"pwd","sandbox_permissions":"require_escalated","justification":"Allow inspection?","prefix_rule":["pwd"]}`, true},
++		{"explicit default permissions", "exec_command", `{"cmd":"pwd","sandbox_permissions":"use_default","justification":"inspect"}`, `{"cmd":"pwd","sandbox_permissions":"use_default","justification":"inspect"}`, true},
++		{"retain nonempty prefix", "exec_command", `{"cmd":"pwd","prefix_rule":["pwd"]}`, `{"cmd":"pwd","prefix_rule":["pwd"]}`, true},
++		{"unrelated tool", "lookup", `{"justification":"inspect","prefix_rule":[]}`, `{"justification":"inspect","prefix_rule":[]}`, true},
++		{"disabled", "exec_command", `{"cmd":"pwd","justification":"","prefix_rule":[]}`, `{"cmd":"pwd","justification":"","prefix_rule":[]}`, false},
++		{"invalid arguments", "exec_command", `{"cmd":`, `{"cmd":`, true},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			ctx := context.Background()
++			if tc.enabled {
++				ctx = WithCodexShellArgCleanup(ctx)
++			}
++			request := []byte(fmt.Sprintf(`{"tools":[{"type":"function","name":%q,"parameters":{}}]}`, tc.tool))
++			assertCodexShellCleanup(t, ctx, request, tc.tool, tc.args, tc.want, false)
++		})
++	}
++}
++
++func TestCodexShellArgCleanupNamespaces(t *testing.T) {
++	args := `{"cmd":"pwd","justification":"inspect","prefix_rule":[]}`
++	for _, namespace := range []string{"functions", "mcp"} {
++		for _, custom := range []bool{false, true} {
++			kind := "function"
++			if custom {
++				kind = "custom"
++			}
++			request := []byte(fmt.Sprintf(`{"tools":[{"type":"namespace","name":%q,"tools":[{"type":%q,"name":"exec_command","parameters":{}}]}]}`, namespace, kind))
++			for _, name := range []string{namespace + "__exec_command", "exec_command"} {
++				t.Run(fmt.Sprintf("%s/%s/%s", namespace, kind, name), func(t *testing.T) {
++					want := args
++					if namespace == "functions" && !custom {
++						want = `{"cmd":"pwd"}`
++					}
++					assertCodexShellCleanup(t, WithCodexShellArgCleanup(context.Background()), request, name, args, want, custom)
++				})
++			}
++		}
++	}
++}
++
++func assertCodexShellCleanup(t *testing.T, ctx context.Context, request []byte, name, arguments, want string, custom bool) {
++	t.Helper()
++	field, deltaKind, doneKind := "arguments", "response.function_call_arguments.delta", "response.function_call_arguments.done"
++	if custom {
++		field, deltaKind, doneKind = "input", "response.custom_tool_call_input.delta", "response.custom_tool_call_input.done"
++	}
++	upstream := []byte(`{"id":"resp_test","choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[]}}]}`)
++	upstream, _ = sjson.SetRawBytes(upstream, "choices.0.message.tool_calls.0", shellUpstreamCall(name, arguments))
++	out := ConvertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream(ctx, "test", request, nil, upstream, nil)
++	if got := gjson.GetBytes(out, "output.0."+field).String(); got != want {
++		t.Fatalf("nonstream arguments=%s want=%s", got, want)
++	}
++	var state any
++	var delta strings.Builder
++	counts := map[string]int{}
++	push := func(chunk []byte) {
++		for _, event := range ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx, "test", request, nil, chunk, &state) {
++			for _, line := range strings.Split(string(event), "\n") {
++				if !strings.HasPrefix(line, "data: ") {
++					continue
++				}
++				root := gjson.Parse(strings.TrimPrefix(line, "data: "))
++				kind := root.Get("type").String()
++				path := ""
++				switch kind {
++				case deltaKind:
++					delta.WriteString(root.Get("delta").String())
++				case doneKind:
++					path = field
++				case "response.output_item.done":
++					path = "item." + field
++				case "response.completed":
++					path = "response.output.0." + field
++				}
++				if path != "" {
++					counts[kind]++
++					if got := root.Get(path).String(); got != want {
++						t.Errorf("%s arguments=%s want=%s", kind, got, want)
++					}
++				}
++			}
++		}
++	}
++	for i, fragment := range []string{arguments[:len(arguments)/2], arguments[len(arguments)/2:]} {
++		chunk := []byte(`{"id":"resp_test","choices":[{"index":0,"delta":{"tool_calls":[]}}]}`)
++		call := shellUpstreamCall(name, fragment)
++		if i == 1 {
++			call, _ = sjson.DeleteBytes(call, "id")
++			call, _ = sjson.DeleteBytes(call, "function.name")
++		}
++		chunk, _ = sjson.SetRawBytes(chunk, "choices.0.delta.tool_calls.0", call)
++		push(chunk)
++	}
++	push([]byte(`{"id":"resp_test","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`))
++	push([]byte("[DONE]"))
++	for _, kind := range []string{doneKind, "response.output_item.done", "response.completed"} {
++		if counts[kind] != 1 {
++			t.Errorf("%s count=%d", kind, counts[kind])
++		}
++	}
++	// Codex ignores these deltas; terminal arguments above are authoritative.
++	if !custom && delta.String() != arguments {
++		t.Errorf("deltas=%q want original %q", delta.String(), arguments)
++	}
++}
+diff --git a/internal/translator/openai/openai/responses/openai_openai-responses_response.go b/internal/translator/openai/openai/responses/openai_openai-responses_response.go
+index 18fe9537..7885d5fb 100644
+--- a/internal/translator/openai/openai/responses/openai_openai-responses_response.go
++++ b/internal/translator/openai/openai/responses/openai_openai-responses_response.go
+@@ -20,6 +20,7 @@ type oaiToResponsesStateReasoning struct {
+ 	OutputIndex   int
+ }
+ type oaiToResponsesState struct {
++	CodexShellArgCleanup bool
+ 	translatorcommon.ApplyPatchErrorState
+ 	ApplyPatchCalls map[string]*translatorcommon.ApplyPatchCallState
+ 	// RequestEcho holds the request fields echoed into the completed
+@@ -389,7 +390,7 @@ func buildResponsesCompletedEvent(st *oaiToResponsesState, nextSeq func() int) [
+ 			item := []byte(`{"id":"","type":"function_call","status":"completed","arguments":"","call_id":"","name":""}`)
+ 			item, _ = sjson.SetBytes(item, "id", fmt.Sprintf("fc_%s", callID))
+ 			item, _ = sjson.SetBytes(item, "status", toolStatus)
+-			item, _ = translatorcommon.SetStringWithoutHTMLEscape(item, "arguments", args)
++			item, _ = translatorcommon.SetStringWithoutHTMLEscape(item, "arguments", st.ToolIndex.cleanupCodexShellArguments(st.CodexShellArgCleanup, name, args))
+ 			item, _ = sjson.SetBytes(item, "call_id", callID)
+ 			item = st.ToolIndex.applyIdentity(item, name, "")
+ 			outputItems = append(outputItems, completedOutputItem{index: st.FuncOutputIx[key], raw: item})
+@@ -452,6 +453,7 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx context.Context,
+ 
+ 	rawJSON = bytes.TrimSpace(rawJSON)
+ 	if !st.RequestInitialized {
++		st.CodexShellArgCleanup = ctx.Value(codexShellArgCleanupKey{}) == true
+ 		requestRoot := gjson.ParseBytes(pickRequestJSON(originalRequestRawJSON, requestRawJSON))
+ 		st.ToolIndex = newResponsesToolIndex(requestRoot)
+ 		st.RequestEcho = extractResponsesRequestEcho(requestRoot)
+@@ -860,6 +862,7 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx context.Context,
+ 				st.FuncArgsDone[key] = true
+ 				continue
+ 			}
++			args = st.ToolIndex.cleanupCodexShellArguments(st.CodexShellArgCleanup, name, args)
+ 			fcDone := []byte(`{"type":"response.function_call_arguments.done","sequence_number":0,"item_id":"","output_index":0,"arguments":""}`)
+ 			fcDone, _ = sjson.SetBytes(fcDone, "sequence_number", nextSeq())
+ 			fcDone, _ = sjson.SetBytes(fcDone, "item_id", fmt.Sprintf("fc_%s", callID))
+@@ -1052,11 +1055,11 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponses(ctx context.Context,
+ 
+ // ConvertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream builds a single Responses JSON
+ // from a non-streaming OpenAI Chat Completions response.
+-func ConvertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream(_ context.Context, _ string, originalRequestRawJSON, requestRawJSON, rawJSON []byte, param *any) []byte {
++func ConvertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream(ctx context.Context, _ string, originalRequestRawJSON, requestRawJSON, rawJSON []byte, param *any) []byte {
+ 	root := gjson.ParseBytes(rawJSON)
+ 	requestForNamespace := pickRequestJSON(originalRequestRawJSON, requestRawJSON)
+ 	toolIndex := newResponsesToolIndex(gjson.ParseBytes(requestForNamespace))
+-	st := &oaiToResponsesState{}
++	st := &oaiToResponsesState{CodexShellArgCleanup: ctx.Value(codexShellArgCleanupKey{}) == true}
+ 	if param != nil {
+ 		*param = st
+ 	}
+@@ -1201,7 +1204,7 @@ func ConvertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream(_ context.Co
+ 						item := []byte(`{"id":"","type":"function_call","status":"completed","arguments":"","call_id":"","name":""}`)
+ 						item, _ = sjson.SetBytes(item, "id", fmt.Sprintf("fc_%s", callID))
+ 						item, _ = sjson.SetBytes(item, "status", toolStatus)
+-						item, _ = translatorcommon.SetStringWithoutHTMLEscape(item, "arguments", args)
++						item, _ = translatorcommon.SetStringWithoutHTMLEscape(item, "arguments", toolIndex.cleanupCodexShellArguments(st.CodexShellArgCleanup, name, args))
+ 						item, _ = sjson.SetBytes(item, "call_id", callID)
+ 						item = toolIndex.applyIdentity(item, name, "")
+ 						outputItems = append(outputItems, item)
 diff --git a/internal/watcher/synthesizer/claude_tool_aliases_test.go b/internal/watcher/synthesizer/claude_tool_aliases_test.go
 new file mode 100644
 index 00000000..4e71c0be
