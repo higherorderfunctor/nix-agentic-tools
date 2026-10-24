@@ -1218,7 +1218,8 @@ refusals; format edits and regenerate through `generate:all`.
 # Observed module graph
 
 > **Last verified:** 2026-10-23 — M3g observes the rich evalModules graph,
-> preserving occurrence order, direct disabled flags and atomic completion.
+> preserving occurrence order, direct disabled flags and atomic completion; F2
+> reserves `closure` for graph requests before admission or execution.
 
 ## What and why
 
@@ -1258,13 +1259,13 @@ support labels are fixture facts, not universal anonymous-key defaults.
 A request uses domain `module-graph`, facet `closure`, mode `metadata` and
 `path=[]`, in the root context only. Capability is `module-graph`. The manifest
 schema refuses a graph request with any other facet or a nonempty path before
-target admission or execution; discovery rejects multiple graph requests for one
-context before running producers; F1 independently enforces request shape and
-uniqueness on imported facts. Nested contexts are outside this cut. The
-supervisor advertises the graph capability as supported; a rich result without
-`.graph` returns state `failed`, reason `graph-unavailable`. This names runtime
-field absence using the existing result enum; it does not establish support for
-every possible library pin.
+target admission or execution, and refuses `closure` for `option-metadata`;
+discovery rejects multiple graph requests for one context before running
+producers; F1 independently enforces request shape and uniqueness on imported
+facts. Nested contexts are outside this cut. The supervisor advertises the graph
+capability as supported; a rich result without `.graph` returns state `failed`,
+reason `graph-unavailable`. This names runtime field absence using the existing
+result enum; it does not establish support for every possible library pin.
 
 `nx_modules` holds key, origin and native Boolean flag per occurrence;
 `nx_module_roots` and `nx_module_imports` retain contiguous ordinals. Every
@@ -1321,7 +1322,9 @@ completion, forgeries, uniqueness, budget refusal, malformed-manifest discovery
 refusal and module-row closure ownership. Its runner prints
 `test_graph_protocol.py: 7 tests, 7 executed`,
 `test_graph_regressions.py: 14 tests, 14 executed` and
-`test_graph_ownership.py: 9 tests, 9 executed`. The x86_64-linux
+`test_graph_ownership.py: 9 tests, 9 executed`. The independent O2 regression
+prints `test_facet_admission.py: 1 tests, 1 executed`, proving option metadata
+cannot use `closure` before admission or execution. The x86_64-linux
 `codeql-nix-step0` check runs installed qltests against reviewed expected rows;
 find `test_graph.py: 9 tests, 9 executed` and its evidence suffix
 `M3g module-graph installed qltest passed`. `codeql-nix-abi` imports native
