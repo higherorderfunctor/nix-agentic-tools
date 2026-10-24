@@ -120,6 +120,11 @@
   };
   refused = backend: fragment: ai: lib.any (lib.hasInfix fragment) (failedMessages (evaluate backend ai));
   instanceChange = change: {cliproxyapi.instances.clients = change;};
+  # The launcher carrying the devenv picker file, and a caught-evaluation probe
+  # for option types that must refuse; both instance tests read them.
+  claudeLauncher = result: lib.findFirst (package: package.name or "" == "claude-code-proxy") null (result.config.home.packages or result.config.packages);
+  pickerFile = result: lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" ((claudeLauncher result).buildCommand or ""));
+  rejectsType = backend: ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
 in {
   checks = {
     module-ai-proxy-z-ai-credential = mkTest "ai-proxy-z-ai-credential" (let
@@ -179,7 +184,12 @@ in {
                 responses = null;
               };
               key = clientKey "override";
-              models = ["custom-model"];
+              models = [
+                {
+                  name = "custom-model";
+                  alias = null;
+                }
+              ];
               priority = null;
             };
           "picker catalog retained" =
@@ -223,10 +233,7 @@ in {
           codex.enable = false;
           cliproxyapi.instances.clients.clientKeys = lib.mkForce {};
         };
-        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-code-proxy") null (result.config.home.packages or result.config.packages);
-        pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
-        rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
         priorityBlocks = priority:
           lib.concatLists (builtins.attrValues
             (rendered (evaluate backend (instanceChange {
@@ -236,7 +243,7 @@ in {
           "API-key priority on every served API" = lib.all (priority: map (block: block.priority) (priorityBlocks priority) == [priority priority priority]) [(-1) 0 3];
           "unset API-key priority omitted" = lib.all (block: !(block ? priority)) (lib.concatLists (builtins.attrValues settings.api-keys));
           "null API-key priority omitted" = lib.all (block: !(block ? priority)) (priorityBlocks null);
-          "OAuth rejects priority" = rejectsType (instanceChange {credentials.work.oauth.priority = -1;});
+          "OAuth rejects priority" = rejectsType backend (instanceChange {credentials.work.oauth.priority = -1;});
           "fixture accepted" = failedMessages result == [];
           "named keys" = settings.access.api-keys == map clientKey ["personal" "work"];
           "OAuth exact accounts, API exact URL, route order" =
@@ -286,7 +293,7 @@ in {
             ];
           "Claude user picker" = backend != "hm" || (claudeSettings result).modelPicker.options == rows;
           "Claude project has no picker" = backend == "hm" || !((claudeSettings result) ? modelPicker);
-          "Claude devenv picker follows routes" = backend == "hm" || (pickerFile != null && builtins.fromJSON (builtins.readFile (lib.head pickerFile)) == {modelPicker.options = rows;});
+          "Claude devenv picker follows routes" = backend == "hm" || (pickerFile result != null && builtins.fromJSON (builtins.readFile (lib.head (pickerFile result))) == {modelPicker.options = rows;});
           "client key hand-written access refused" = refused backend "lists ai.cliproxyapi.instances.clients.clientKeys.personal.key by hand" (instanceChange {settings.access.api-keys = [(clientKey "personal")];});
           "client key hand-written rule refused" = refused backend "hand-written entry for ai.cliproxyapi.instances.clients.clientKeys.personal.key" (instanceChange {
             settings.access.key-allowlist = [
@@ -376,8 +383,8 @@ in {
               }
             ];
           });
-          "literal OAuth account" = rejectsType (instanceChange {credentials.personal.oauth.account = lib.mkForce "secret";});
-          "required OAuth account" = rejectsType (instanceChange {credentials.personal = lib.mkForce {oauth.vendor = "claude";};});
+          "literal OAuth account" = rejectsType backend (instanceChange {credentials.personal.oauth.account = lib.mkForce "secret";});
+          "required OAuth account" = rejectsType backend (instanceChange {credentials.personal = lib.mkForce {oauth.vendor = "claude";};});
           "OAuth account placeholder" = let
             file = result.config.ai.services.cliproxyapi-clients.files.config;
             variable = "CLIPROXYAPI_ACCESS_KEY_ALLOWLIST_0_CREDENTIALS_0_ACCOUNTS_0";
@@ -386,13 +393,117 @@ in {
             == credentials.personal.oauth.account
             && lib.hasInfix ("{$" + variable + "}") file.content
             && !(lib.hasInfix "/run/secrets/cpa-personal-account" file.content);
-          "literal client key" = rejectsType (instanceChange {clientKeys.personal.key = lib.mkForce "secret";});
-          "literal upstream credential" = rejectsType (instanceChange {credentials.zai.apiKey.key = lib.mkForce "secret";});
+          "literal client key" = rejectsType backend (instanceChange {clientKeys.personal.key = lib.mkForce "secret";});
+          "literal upstream credential" = rejectsType backend (instanceChange {credentials.zai.apiKey.key = lib.mkForce "secret";});
         };
       in
         lib.mapAttrsToList (name: _: "${backend}: ${name}") (lib.filterAttrs (_: holds: !holds) checks)) ["devenv" "hm"];
     in
       lib.assertMsg (problems == []) (lib.concatStringsSep "; " problems));
+
+    # An `alias` rewrites the client-visible model name everywhere it reaches a
+    # client: the rendered api-keys blocks, `normalized.proxy.credentials` and
+    # the /model picker. Two entries of one credential with the same visible
+    # name (compared case-insensitively) are refused, since CPA keeps only the
+    # first.
+    module-ai-proxy-model-alias = mkTest "ai-proxy-model-alias" (let
+      aliased = instanceChange {
+        credentials.zai.apiKey.models = lib.mkForce [
+          "glm-5.3-flash"
+          {
+            name = "glm-5.3";
+            alias = "claude-opus-5-5";
+          }
+        ];
+        credentials.chat.apiKey.models = lib.mkForce [
+          {
+            name = "glm-5.3";
+            alias = "claude-opus-5-5";
+          }
+        ];
+        clientKeys.work.routes = lib.mkForce [(route "chat")];
+      };
+      zaiModels = models: instanceChange {credentials.zai.apiKey.models = lib.mkForce models;};
+      visibleNames = ["glm-5.3-flash" "claude-opus-5-5"];
+      aliasedModels = [
+        {name = "glm-5.3-flash";}
+        {
+          name = "glm-5.3";
+          alias = "claude-opus-5-5";
+        }
+      ];
+      rows =
+        map (model: {
+          inherit model;
+          description = "zai through CLIProxyAPI";
+        })
+        visibleNames;
+      problems = lib.concatMap (backend: let
+        result = evaluate backend aliased;
+        settings = rendered result;
+        block = family: name: lib.findFirst (entry: entry.name == name) null settings.api-keys.${family};
+        checks = {
+          "accepted" = failedMessages result == [];
+          "alias rendered in every family" =
+            (block "claude" "zai").models
+            == aliasedModels
+            && (block "codex" "zai").models == aliasedModels
+            && (block "openai-compatibility" "chat").models
+            == [
+              {
+                name = "glm-5.3";
+                alias = "claude-opus-5-5";
+              }
+            ];
+          "plain string unchanged" =
+            lib.all (entry: lib.all (model: model ? name && !(model ? alias) && model == {inherit (model) name;}) entry.models)
+            (lib.concatLists (builtins.attrValues (rendered (evaluate backend {})).api-keys));
+          "resolved names client-visible" =
+            result.config.ai.claude.normalized.proxy.credentials
+            == [
+              {
+                name = "personal";
+                models = [];
+              }
+              {
+                name = "zai";
+                models = visibleNames;
+              }
+            ];
+          "picker shows alias" =
+            if backend == "hm"
+            then (claudeSettings result).modelPicker.options == rows
+            else pickerFile result != null && builtins.fromJSON (builtins.readFile (lib.head (pickerFile result))) == {modelPicker.options = rows;};
+          "duplicate alias refused" = refused backend "lists `glm-5.3-flash` to clients more than once" (zaiModels [
+            {
+              name = "glm-5.3";
+              alias = "glm-5.3-flash";
+            }
+            "glm-5.3-flash"
+          ]);
+          "case-insensitive duplicate refused" = refused backend "lists `glm-5.3` to clients more than once" (zaiModels ["GLM-5.3" "glm-5.3"]);
+          "distinct names accepted" =
+            failedMessages (evaluate backend (zaiModels [
+              {
+                name = "glm-5.3";
+                alias = "claude-opus-5-5";
+              }
+              "glm-5.3"
+            ]))
+            == [];
+          "alias type refuses whitespace" = rejectsType backend (zaiModels [
+            {
+              name = "glm-5.3";
+              alias = " claude-opus-5-5";
+            }
+          ]);
+        };
+      in
+        map (name: "${backend}: ${name}") (builtins.attrNames (lib.filterAttrs (_: ok: !ok) checks))) ["hm" "devenv"];
+    in
+      if problems == []
+      then true
+      else throw (lib.concatStringsSep "\n" problems));
 
     # The authentication key requires a redact reference at both scopes;
     # cleartext and the retired credential branches cannot enter normalization.
