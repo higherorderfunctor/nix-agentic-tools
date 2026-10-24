@@ -2,7 +2,7 @@
 // Copied into a copy of CLIProxyAPI's internal/config by lib/extracted's
 // goTestExtract; it is not part of CLIProxyAPI. In-package, so it reads the v8
 // layout from CPA's own tables (v8Paths, v8StructPaths, v8KeyFamilies,
-// sharedKeyFields, v8AllowedRoots) instead of restating them. The node type
+// isV8GroupKeyField, v8AllowedRoots) instead of restating them. The node type
 // vocabulary, field walk and output come from
 // lib/extracted/go/nat_shared_test.go.
 //
@@ -208,7 +208,7 @@ func natV8(legacy string) (string, bool) {
 }
 
 // An upstream key family: v8 lists groups that carry `name`, `base-url` and
-// the shared key fields, each holding `keys` (expandV8Groups).
+// provider group fields from isV8GroupKeyField, each holding `keys`.
 // openai-compatibility keeps its own group struct and lists its
 // `api-key-entries` as `keys`. Neither layout reads `auth-index`.
 func (x *natExtractor) family(field reflect.StructField, owner reflect.Type, current string) {
@@ -242,7 +242,7 @@ func (x *natExtractor) family(field reflect.StructField, owner reflect.Type, cur
 		if tag != "base-url" {
 			x.walk(keyField.Type, base+"[].keys[]."+tag, doc, x.emit, nil)
 		}
-		if tag == "base-url" || sharedKeyFields[tag] {
+		if isV8GroupKeyField(current, tag) {
 			x.walk(keyField.Type, base+"[]."+tag, doc, x.emit, nil)
 		}
 	})

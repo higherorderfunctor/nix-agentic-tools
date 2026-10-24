@@ -7,7 +7,7 @@ applyTo: "packages/cliproxyapi/**"
 
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-23 — CPA 8.0.41 custom YAML decoders are probed
+> **Last verified:** 2026-10-24 — CPA 8.0.41 custom YAML decoders are probed
 > through yaml.v3; z.ai documentation uses the shared `webDocsLib.mkSnapshot`
 > updater, validates candidate pages, and refreshes the same owner facts after
 > pinning changed content.
@@ -59,16 +59,19 @@ roots accepted by `v8AllowedRoots()` but absent from the structs, including
 `config-version`, take their key and type from the canonical template.
 
 An upstream key family becomes `api-keys.<family>[]` groups holding `name` and
-`keys`; `base-url` and `sharedKeyFields` also appear at group level. OpenAI
-compatibility keeps its group struct with `api-key-entries` renamed to `keys`.
-The v8 group loader does not read `auth-index`, so those fields are omitted.
+`keys`; `isV8GroupKeyField` supplies the group fields to both CPA's loader and
+the extractor, including Claude's provider-specific `tool-aliases` map. This
+keeps accepted group fields in the generated settings type without another field
+list. OpenAI compatibility keeps its group struct with `api-key-entries` renamed
+to `keys`. The v8 group loader does not read `auth-index`, so those fields are
+omitted.
 
 ## Measured data
 
 The package's `passthru.extracted` is `lib/extracted`'s `goTestExtract`: it
-copies `package.src`, the `applyPatches` tree, so the facts include what
-`patches/key-allowlist.patch` adds to the config schema. It also copies the
-package's `goModules`, installs the extractor test beside the shared
+copies `package.src`, the `applyPatches` tree, so the facts include what the
+carried allowlist and tool-shim patches add to the config schema. It also copies
+the package's `goModules`, installs the extractor test beside the shared
 `lib/extracted/go/nat_shared_test.go` (node types, the field walk, the output)
 and runs it with the package's Go toolchain. `GOPROXY=off`,
 `GOFLAGS=-mod=vendor` and `GOTOOLCHAIN=local` keep extraction offline. The
@@ -131,7 +134,7 @@ before publication.
 
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-10-23 — the patch applies to CPA 8.0.41 with no fuzz;
+> **Last verified:** 2026-10-24 — the patch applies to CPA 8.0.41 with no fuzz;
 > loading rejects duplicate client keys and startup exits 1 on refusal. Hot
 > reload can briefly serve a retired config credential under newly widened
 > rules, so rotation that also widens access requires a restart or an `ids`
@@ -279,12 +282,83 @@ service restart registers credentials before listening and has no such window.
 Publishing the allowlist after credential replacement would instead delay
 revocation and could fail open, so that reorder was rejected.
 
+## Credential tool shims
+
+`patches/zai-tool-shims.patch` adds two opt-in credential settings for the
+pinned CPA 8.0.41. They repair measured z.ai compatibility failures without
+changing credential selection. Named credentials with `vendor = "z-ai"` default
+both on: `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` and
+`apiKey.codexShellArgCleanup = true`. Set them to `{}` and `false` to disable
+them; other vendors default both off.
+
+### Anthropic tool names
+
+In 12/12 exact-name probes, a client tool named `ToolSearch` made z.ai hide the
+other declared tools and expose its native `tool_search_tool_regex`. Renaming it
+to `ToolSearch_` restored the other tools, including deferred tools;
+`tool_reference` results were accepted. Removing deferred declarations or tool
+references therefore addresses the wrong cause. Related public reports are
+[Magpie #3253](https://github.com/yetone/magpie/issues/3253) and
+[Claude Code #104309](https://github.com/anthropics/claude-code/issues/104309).
+
+Each `api-keys.claude[]` group can set `tool-aliases`, a client-to-upstream name
+map inherited by its keys. Synthesis carries that map on the selected
+credential. The executor reuses its existing forward-map rewriting for
+declarations, tool choice, historical tool uses and tool references, then
+reverses response tool-use names in both JSON and streamed content-block starts.
+These static aliases use no OAuth thread store; the existing OAuth MCP alias
+behavior remains unchanged.
+
+Both config-load paths reject names outside 1–64 ASCII letters, digits,
+underscores or hyphens, duplicate upstream names and an upstream name that is
+another alias source. Nix checks the same conditions on merged Claude groups and
+key entries. A target colliding with another tool declared in a request is
+refused before dispatch: the caller's `tools[]` is unavailable at config load.
+
+### Codex shell arguments from chat
+
+All 23/23 rejected `exec_command` calls in the measured sample carried an empty
+`justification`. Codex treats that empty string as a present value, and
+[PR #36350](https://github.com/openai/codex/pull/36350) requires an explicit
+`sandbox_permissions` whenever justification is present. A model obeying the
+instruction to omit sandbox permissions can therefore fail before execution
+solely because it sends `justification = ""`.
+
+`api-keys.openai-compatibility[].codex-shell-arg-cleanup` applies only when the
+selected group's chat response becomes a Responses result. For `exec_command`
+and `shell_command` function calls in the empty or `functions` namespace, it
+removes justification when empty or when sandbox permissions are absent, and
+removes an empty prefix-rule array. A real justification with
+`sandbox_permissions = "require_escalated"`, nonempty prefix rules, unrelated
+namespaces and custom tools survive unchanged.
+
+Cleanup covers non-streaming output, streamed
+`response.function_call_arguments.done` and `response.output_item.done`, and the
+completed response's output array. Argument deltas retain their upstream bytes.
+Codex rust-v0.163.0's
+[SSE parser](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/codex-api/src/sse/responses.rs#L354)
+dispatches the complete output item and explicitly ignores function-argument
+delta/done events; its
+[WebSocket transport](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/codex-api/src/endpoint/responses_websocket.rs#L866)
+uses the same parser. Its
+[turn handler](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/session/turn.rs#L2801)
+executes the completed item, so function-call deltas need no buffering for this
+client.
+
+`cliproxyapi-tool-shims` runs config, executor, translation and synthesis tests
+from the same patched source as the package and extractor. It covers aliases and
+history, response reversal, namespace matching, every final argument surface,
+disabled settings and preserved escalation requests. Module checks cover
+defaults, overrides, omitted plain-provider settings and invalid aliases on Home
+Manager and devenv.
+
 ## Bumping CPA
 
-The package applies `patches/key-allowlist.patch` to the pinned source with
-`-p1 --fuzz=0`; extraction and the Go check read that patched source. Fetch the
-version from `sources.json` into scratch, verify its unpacked NAR hash, apply
-the patch with `patch --dry-run -p1 --fuzz=0`, and inspect every changed
+The package applies `patches/key-allowlist.patch`, then
+`patches/zai-tool-shims.patch`, to the pinned source with `-p1 --fuzz=0`;
+extraction and the Go checks read that same patched source. Fetch the version
+from `sources.json` into scratch, verify its unpacked NAR hash, apply the patch
+with `patch --dry-run -p1 --fuzz=0`, and inspect every changed
 candidate-selection loop before regenerating the diff. Offset-only moves may
 apply; changed context fails. The Go check covers behavior; the loop scan misses
 the shapes listed above. Regenerate the extracted settings facts after a schema
@@ -294,7 +368,7 @@ change, then run the module assertions and Go check in CI.
 
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-23 — 928 config nodes, including the patched
+> **Last verified:** 2026-10-24 — 933 config nodes, including the patched
 > `access.key-allowlist`, give the settings type through
 > `lib/extracted/options.nix`, with refinements and module assertions on the
 > allowlist; the clean render passes native v8 validation and loads through CPA
@@ -358,6 +432,15 @@ consume account balance or usage bundles. The defaults describe the general API,
 not a guarantee of account access. Client keys still choose this credential and
 its API through `routes`; selecting `api = "chat"` lets CPA translate a Codex
 CLI Responses request to chat.
+
+The vendor also defaults `apiKey.toolAliases.ToolSearch = "ToolSearch_"` on the
+Anthropic API and `apiKey.codexShellArgCleanup = true` on chat. The former
+avoids z.ai's exact-name ToolSearch interception; the latter removes redundant
+approval fields from Codex shell results translated from chat. Both are
+credential-scoped, and explicit `toolAliases = {};` and
+`codexShellArgCleanup = false;` disable them. Other vendors omit both fields
+unless requested. Validation and wire behavior are documented in
+`cliproxyapi-key-allowlist.md`.
 
 The measured Claude Code tier mapping and timeout remain extraction data. The
 existing per-client-key model list carries model IDs for picker rows, without

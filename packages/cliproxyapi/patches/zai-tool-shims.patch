@@ -36,10 +36,10 @@ index 00000000..6ef77865
 +}
 diff --git a/internal/config/claude_tool_aliases_test.go b/internal/config/claude_tool_aliases_test.go
 new file mode 100644
-index 00000000..a262ea00
+index 00000000..b569dc88
 --- /dev/null
 +++ b/internal/config/claude_tool_aliases_test.go
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,55 @@
 +package config
 +
 +import (
@@ -80,6 +80,19 @@ index 00000000..a262ea00
 +				}
 +			}
 +		})
++	}
++}
++
++func TestClaudeToolAliasesProviderScope(t *testing.T) {
++	_, err := ParseConfigBytes([]byte(`config-version: 8
++api-keys:
++  gemini:
++    - tool-aliases: {ToolSearch: ToolSearch_}
++      keys:
++        - api-key: dummy
++`))
++	if err == nil {
++		t.Fatal("accepted Claude tool-aliases on a Gemini group")
 +	}
 +}
 diff --git a/internal/config/codex_shell_args_test.go b/internal/config/codex_shell_args_test.go
@@ -152,33 +165,46 @@ index fbd849f0..276383db 100644
  	Name string `yaml:"name" json:"name"`
  
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 6fbec048..fff4f9ae 100644
+index 6fbec048..8045ea81 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
-@@ -388,7 +388,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -356,6 +356,12 @@ var sharedKeyFields = map[string]bool{
+ 	"request-retry": true, "request-scoped-errors": true,
+ }
+ 
++// isV8GroupKeyField is shared with the settings extractor: a field accepted
++// on a provider group must also appear in that group's generated schema.
++func isV8GroupKeyField(provider, field string) bool {
++	return field == "base-url" || sharedKeyFields[field] || (provider == "claude" && field == "tool-aliases")
++}
++
+ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+ 	if groups.Kind != yaml.SequenceNode {
+ 		return nil, fmt.Errorf("api-keys.%s must be a list", provider)
+@@ -388,7 +394,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
  		}
  		for i := 0; i < len(group.Content); i += 2 {
  			field := group.Content[i].Value
 -			if field != "name" && field != "base-url" && field != "keys" && !sharedKeyFields[field] {
-+			if field != "name" && field != "base-url" && field != "keys" && !(provider == "claude" && field == "tool-aliases") && !sharedKeyFields[field] {
++			if field != "name" && field != "keys" && !isV8GroupKeyField(provider, field) {
  				return nil, fmt.Errorf("api-keys.%s: unsupported group field %s", provider, field)
  			}
  		}
-@@ -402,7 +402,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -402,7 +408,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
  			item := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
  			for i := 0; i < len(group.Content); i += 2 {
  				field := group.Content[i].Value
 -				if field == "base-url" || sharedKeyFields[field] {
-+				if field == "base-url" || (provider == "claude" && field == "tool-aliases") || sharedKeyFields[field] {
++				if isV8GroupKeyField(provider, field) {
  					setYAMLPath(item, field, group.Content[i+1])
  				}
  			}
-@@ -439,7 +439,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
+@@ -439,7 +445,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
  			key := deepCopyNode(entry)
  			for i := 0; i < len(entry.Content); i += 2 {
  				field := entry.Content[i].Value
 -				if field == "base-url" || sharedKeyFields[field] {
-+				if field == "base-url" || (provider == "claude" && field == "tool-aliases") || sharedKeyFields[field] {
++				if isV8GroupKeyField(provider, field) {
  					setYAMLPath(group, field, entry.Content[i+1])
  					deleteYAMLPath(key, field)
  				}

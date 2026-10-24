@@ -1,6 +1,6 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-23 — 928 config nodes, including the patched
+> **Last verified:** 2026-10-24 — 933 config nodes, including the patched
 > `access.key-allowlist`, give the settings type through
 > `lib/extracted/options.nix`, with refinements and module assertions on the
 > allowlist; the clean render passes native v8 validation and loads through CPA
@@ -64,6 +64,15 @@ consume account balance or usage bundles. The defaults describe the general API,
 not a guarantee of account access. Client keys still choose this credential and
 its API through `routes`; selecting `api = "chat"` lets CPA translate a Codex
 CLI Responses request to chat.
+
+The vendor also defaults `apiKey.toolAliases.ToolSearch = "ToolSearch_"` on the
+Anthropic API and `apiKey.codexShellArgCleanup = true` on chat. The former
+avoids z.ai's exact-name ToolSearch interception; the latter removes redundant
+approval fields from Codex shell results translated from chat. Both are
+credential-scoped, and explicit `toolAliases = {};` and
+`codexShellArgCleanup = false;` disable them. Other vendors omit both fields
+unless requested. Validation and wire behavior are documented in
+`cliproxyapi-key-allowlist.md`.
 
 The measured Claude Code tier mapping and timeout remain extraction data. The
 existing per-client-key model list carries model IDs for picker rows, without

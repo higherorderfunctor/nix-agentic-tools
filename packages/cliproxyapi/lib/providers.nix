@@ -3,7 +3,12 @@
   inherit (lib) mkOption types;
   redact = import ../../../lib/redact {inherit lib;};
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
-  vendors.z-ai = facts.get (facts.load {dir = ../extracted;}).aggregate "zAi";
+  vendors.z-ai =
+    (facts.get (facts.load {dir = ../extracted;}).aggregate "zAi")
+    // {
+      codexShellArgCleanup = true;
+      toolAliases.ToolSearch = "ToolSearch_";
+    };
 
   # CPA's OpenAICompatibleProviderKey preserves one exact name and one prefix.
   # Provider names are ASCII (../modules/instances.nix), so toLower agrees.
@@ -55,6 +60,11 @@
         default = {};
         description = "The APIs this upstream credential serves, each with its base URL.";
       };
+      codexShellArgCleanup = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Remove redundant approval fields from exec_command and shell_command function calls returned through the chat API. Explicit escalation requests keep their justification.";
+      };
       key = mkOption {
         type = redact.types.redacted;
         description = "The upstream key, as a redact reference.";
@@ -68,6 +78,11 @@
         type = types.nullOr types.int;
         default = null;
         description = "CPA credential priority on every served API. Higher values win among available credentials, subject to CPA transport preference and session affinity; unset uses CPA's default of 0. Negative values permit fallback behind default-priority OAuth logins.";
+      };
+      toolAliases = mkOption {
+        type = types.attrsOf types.str;
+        default = {};
+        description = "Client-to-upstream tool names on the Anthropic API. Names must contain 1-64 letters, digits, underscores or hyphens; upstream names must be unique and may not name another alias source. An empty map disables aliases.";
       };
     };
   };
@@ -84,7 +99,9 @@
             keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
             models = map (model: {name = model;}) provider.models;
           }
-          // lib.optionalAttrs (provider.priority != null) {inherit (provider) priority;})
+          // lib.optionalAttrs (provider.priority != null) {inherit (provider) priority;}
+          // lib.optionalAttrs (api == "anthropic" && provider.toolAliases != {}) {tool-aliases = provider.toolAliases;}
+          // lib.optionalAttrs (api == "chat" && provider.codexShellArgCleanup) {codex-shell-arg-cleanup = true;})
       ])
     (served provider);
 
@@ -128,7 +145,9 @@
     config = lib.mkIf (config.vendor != null) {
       apiKey = {
         apis = lib.mapAttrs (_: lib.mkDefault) vendors.${config.vendor}.apis;
+        codexShellArgCleanup = lib.mkDefault vendors.${config.vendor}.codexShellArgCleanup;
         models = lib.mkDefault vendors.${config.vendor}.models;
+        toolAliases = lib.mkDefault vendors.${config.vendor}.toolAliases;
       };
     };
   });

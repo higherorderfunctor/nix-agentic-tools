@@ -140,12 +140,26 @@ in {
       entries = present allowlist;
       credentialsOf = entry: present (lib.defaultTo [] entry.credentials);
       rules = lib.concatMap credentialsOf entries;
+      aliasMaps =
+        map (block: lib.filterAttrs (_: value: value != null) (lib.defaultTo {} (block.tool-aliases or null)))
+        (lib.concatMap (block: [block] ++ present (lib.defaultTo [] (block.keys or null))) (present (lib.defaultTo [] (setting ["api-keys" "claude"]))));
+      validAliases = aliases: let
+        sources = builtins.attrNames aliases;
+        targets = builtins.attrValues aliases;
+      in
+        lib.all (name: builtins.match "[A-Za-z0-9_-]{1,64}" name != null) (sources ++ targets)
+        && lib.length targets == lib.length (lib.unique targets)
+        && lib.all (source: source == aliases.${source} || !(builtins.hasAttr aliases.${source} aliases)) sources;
       emptied = field: lib.filter (rule: rule.${field} == []) rules;
       unmatchable = entry: lib.filter (rule: rule.kind == "oauth" && lib.defaultTo [] rule."base-urls" != []) (credentialsOf entry);
       refusal = where: "${where} has a rule with kind = \"oauth\" and base-urls, which can never match: base-urls compare an API-key credential's base URL and never match an OAuth login. Use kind = \"apikey\" or drop base-urls.";
       offending = lib.filter (entry: unmatchable entry != []) entries;
     in
       lib.optionals instance.enable ([
+          {
+            assertion = lib.all validAliases aliasMaps;
+            message = "ai.cliproxyapi.instances.${name}.settings.api-keys.claude[].tool-aliases requires 1-64 letters, digits, underscores or hyphens per name, unique upstream names, and no upstream name that is another alias source. Collisions with caller-declared tools are refused at request time.";
+          }
           {
             assertion = setting ["plugins" "enabled"] != true || lib.elem (setting ["access" "key-allowlist"]) [null []];
             message = "ai.cliproxyapi.instances.${name}: settings.plugins.enabled = true voids settings.access.key-allowlist: plugin executors choose credentials outside it and can read every credential through host.auth.get. Disable plugins or drop the allowlist.";
