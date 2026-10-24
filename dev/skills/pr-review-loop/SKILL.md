@@ -4,10 +4,10 @@ description: >-
   Use when a PR against main is open, updated, or failing — the mechanics of
   running its review loop. Covers reading a Copilot review without missing the
   suppressed bucket, the API traps that silently report a clean round, the
-  separate-agent substitute when Copilot does not review, and the
-  prosecute/defend/judge protocol for complex changes. Load it when you are
-  actually operating the loop; the trigger and the decision rules are always-on
-  in the git-workflow orientation.
+  separate-agent substitute when Copilot does not review, and the adjudicated
+  review protocol for shared abstractions and disputed findings. Load it when
+  you are actually operating the loop; the trigger and the decision rules are
+  always-on in the git-workflow orientation.
 ---
 
 # PR review loop — mechanics
@@ -252,26 +252,42 @@ Default is ONE independent reviewer. Report dismissed findings by title and
 count — a review that reports only confirmed findings is indistinguishable from
 one that found nothing — and record the dispositions in the PR body.
 
-## Prosecute / defend / judge
+## Adjudicated review
 
 The recipe. WHEN to run it, and the scope limits on it, are stated once in the
 git-workflow orientation — do not restate them here.
 
-1. **Prosecute.** An agent whose job is to find why the change is wrong. It may
-   not conclude the change is fine.
-2. **Defend.** A separate agent arguing the change is correct. It may not
-   concede merely because a fix would be awkward.
-3. **Judge.** A third agent, given both cases and the diff, that rules per
-   finding on the EVIDENCE rather than the rhetoric.
+Record HEAD as the review base before the worker's first write. Give each role
+the same rubric and the full base..HEAD diff and what it touches, plus current
+working changes when fixes are not yet committed. Keep producers and evaluators
+separate; the PR body and the worker's account are arguments, not evidence.
 
-The three roles run inside a loop of at most 3 rounds with the worker: the
-worker fixes the findings you validated, then the review runs again on the fix
-and what it touches. Findings inside the worker's task need no approval from the
-operator. If the same defect survives 2 rounds, change the brief instead of
-repeating it. At the cap, return the result, the open defects and the decision
-needed. A finding the judge cannot settle goes back to you to validate.
+1. **Find.** An independent finder checks the change against the rubric and
+   supplies evidence for each finding. Finding nothing is valid.
+2. **Refute.** A refuter, neither worker nor finder, tests each finding against
+   the source and callers with evidence. It reports whether the finding is
+   refuted, stands or is unknown, and what would settle it. It does not argue
+   that the diff is correct.
+3. **Adjudicate.** A separate adjudicator rules per finding from the evidence
+   against the rubric. A finding that does not break the goal's happy path or a
+   stated guarantee is reported as a gap, not fixed. Unsettled findings go back
+   to the orchestrator to validate. No role argues for its own output.
 
-Size the stages separately. Prosecute and defend are judgement work; the
-evidence-gathering underneath them is mechanical and belongs on a cheaper model.
-Findings are unbounded, so bound the contest phase before adding lenses — a
-94-line docs PR once produced 28 findings and a 59-agent run.
+Aim for the smallest change that meets the goal. Before deleting a guard, name
+the input it refuses and show that the input cannot reach it or is refused once
+elsewhere, checking every importer and standalone evaluation. "No test" or
+"pre-existing" alone is not a finding. Every extra check, role or round must
+name what breaks if it is skipped.
+
+A round with no upheld finding ends the loop. Otherwise the worker fixes the
+validated findings and the next round reviews the full accumulated change and
+what it touches, not only the fix. Findings inside the worker's task need no
+approval from the operator. Run at most 3 rounds for the task; never split work
+to reset the cap. If the same defect survives 2 rounds, change the brief instead
+of repeating it. At the cap, return the result, open defects and the decision
+needed.
+
+Size the stages separately. Finding, refuting and adjudicating require judgment;
+evidence gathering underneath them is mechanical and belongs on a cheaper model.
+Bound the rounds before adding lenses: a 94-line docs PR once produced 28
+findings and a 59-agent run.

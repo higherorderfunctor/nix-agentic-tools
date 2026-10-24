@@ -1,11 +1,10 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-20 — `service-secret-ordering` is the tenth
-> required context, from #2765's merge; CI watching exits on the first failure
-> through the `pr-review-loop` watcher; `test` evaluates only. The worker and
-> three review roles run inside a loop of at most 3 rounds; unsettled findings
-> go back to the orchestrator to validate. Merge teardown deletes the PR's
-> `archive/*` backups.
+> **Last verified:** 2026-10-23 — adjudicated review separates finding from
+> refutation, reviews the accumulated change and ends on no upheld findings,
+> with a 3-round cap per task. The ten required contexts include
+> `service-secret-ordering`; CI watching exits on the first failure; merge
+> teardown deletes the PR's `archive/*` backups.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -160,11 +159,11 @@ This is not a fallback for one outage. It is the standing substitute whenever
 the automatic review did not happen, and github.com Copilot fails on this repo
 often enough that it is the common case, not the rare one.
 
-### Escalating past one reviewer: prosecute, defend, judge
+### Escalating past one reviewer: adjudicated review
 
-Escalate from one independent reviewer to the three-role protocol when EITHER
-holds. Do not grade the change's "complexity" — that word routed this decision
-before and two agents reading it reached opposite answers.
+Escalate from one independent reviewer to adjudicated review when EITHER holds.
+Do not grade the change's "complexity" — that word routed this decision before
+and two agents reading it reached opposite answers.
 
 **(a) You intend to DISMISS a reviewer finding rather than fix it.** Dismissing
 your own reviewer's finding is the second discard filter this whole structure
@@ -176,15 +175,21 @@ scoped to the disputed findings only.
 or `packages/*/packages/**/*.nix`; or a hunk under `packages/*/modules/**` or
 `lib/ai/**` adds, removes or retypes a `mkOption`.
 
-Everything else uses the single-reviewer default. Run the three-role protocol:
-an agent that prosecutes, a separate agent that defends, and a third that judges
-on evidence. The three roles run inside a loop of at most 3 rounds with the
-worker: the worker fixes the findings you validated, then the review runs again
-on the fix and what it touches. Findings inside the worker's task need no
-approval from the operator. If the same defect survives 2 rounds, change the
-brief instead of repeating it. At the cap, return the result, the open defects
-and the decision needed. A finding the judge cannot settle goes back to you to
-validate.
+Everything else uses the single-reviewer default. Adjudicated review uses an
+independent finder, a refuter who is neither worker nor finder and tests each
+finding with evidence, and a separate adjudicator who rules on that evidence. No
+role argues for its own output; the refuter does not argue for the diff.
+Findings outside the goal's happy path and stated guarantees are reported as
+gaps, not fixed. Unsettled findings go back to the orchestrator to validate.
+
+Record HEAD before the worker's first write as the review base. Every round
+reviews the full base..HEAD change and what it touches, including uncommitted
+fixes. A round with no upheld finding ends the loop; otherwise the worker fixes
+the validated findings. Findings inside the worker's task need no approval from
+the operator. Run at most 3 rounds for the task; never split the work to reset
+the cap. If the same defect survives 2 rounds, change the brief instead of
+repeating it. At the cap, return the result, open defects and the decision
+needed.
 
 **Scope, deliberately narrow:**
 
