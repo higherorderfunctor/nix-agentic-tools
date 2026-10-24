@@ -4,9 +4,7 @@ The direct oracle imports only the pinned upstream library. Synthetic _file
 labels deliberately prove reported origins, never authenticated source points.
 """
 
-import csv
 import hashlib
-import io
 import json
 import os
 import shutil
@@ -85,12 +83,7 @@ class PropertyTests(test_installed.InstalledTests):
         return json.loads(result.stdout)
 
     def product(self, database):
-        bqrs = self.scratch / "selection.bqrs"
-        self.run_codeql("query", "run", Path(os.environ["CODEQL_NIX_TEST_QUERIES"]) / "ModuleSelection.ql",
-                        "--database=" + str(database), "--output=" + str(bqrs))
-        decoded = self.run_codeql("bqrs", "decode", bqrs, "--format=csv", "--no-titles")
-        bqrs.unlink()
-        return list(csv.reader(io.StringIO(decoded.stdout)))
+        return self.installed_query(database, "ModuleSelection")
 
     def selected(self, database, expected, *, priority="100", value=None):
         oracle = self.oracle()

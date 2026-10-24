@@ -27,6 +27,7 @@ def source_bindings(parser, source):
         rows = [line.split("\t") for line in (directory / "index").read_text().splitlines()[1:]]
     nodes = {tuple(json.loads(row[3])): (int(row[0]), int(row[1]), row[2]) for row in rows}
     bindings = {}
+    parameters = {}
     for path, (start, end, kind) in nodes.items():
         if kind != "binding" or nodes[path[:-1]][2] != "binding_set":
             continue
@@ -42,7 +43,16 @@ def source_bindings(parser, source):
         line = data[:start].count(b"\n") + 1
         bindings[text] = {"column": start - (data.rfind(b"\n", 0, start) + 1) + 1,
                           "file": str(source), "line": line}
-    return bindings
+        arguments = []
+        function = path + (2,)
+        while nodes.get(function, (None, None, None))[2] == "function_expression":
+            parameter = nodes.get(function + (0,))
+            if parameter is None or parameter[2] != "identifier":
+                break
+            arguments.append(data[parameter[0]:parameter[1]].decode())
+            function += (2,)
+        parameters[text] = arguments
+    return bindings, parameters
 
 
 def generate(nix, library, builtins_model, output, anchors):
@@ -52,13 +62,20 @@ def generate(nix, library, builtins_model, output, anchors):
     lib_hash = subprocess.check_output(command + ["hash", "path", str(source)], text=True, env=environment).strip()
     expression = "import " + str(Path(__file__).with_name("properties.nix")) + " { lib = import " + json.dumps(str(source / "lib")) + "; }"
     model = json.loads(subprocess.check_output(command + ["eval", "--json", "--impure", "--expr", expression], text=True, env=environment))
-    model.update(generatorVersion="1", libHash=lib_hash)
-    bindings = source_bindings(anchors, source / "lib/modules.nix")
+    model.update(generatorVersion="2", libHash=lib_hash)
+    bindings, parameters = source_bindings(anchors, source / "lib/modules.nix")
     model["constantEvidence"]["ordinaryOverridePriority"] = [bindings["defaultOverridePriority"]]
     for helper in model["helpers"]:
         helper["evidence"].append(dict(bindings[helper["name"]]))
         helper["exportIdentity"] = "module-helper:" + fingerprint([lib_hash, helper["name"]])
-        helper["argumentSpecJson"] = canonical({"arity": helper["arity"], "content": helper["arity"] - 1})
+        if helper["kind"] in ("alias", "rename"):
+            arguments = parameters[helper["name"]]
+            if arguments != ["from", "to"]:
+                raise ValueError("unsupported rename helper argument roles")
+            spec = {"arity": len(arguments), **{name: index for index, name in enumerate(arguments)}}
+        else:
+            spec = {"arity": helper["arity"], "content": helper["arity"] - 1}
+        helper["argumentSpecJson"] = canonical(spec)
     evidence_rows = [evidence for records in model["constantEvidence"].values() for evidence in records] + [evidence for helper in model["helpers"] for evidence in helper["evidence"]]
     for evidence in evidence_rows:
         if evidence is None:

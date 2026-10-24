@@ -1,3 +1,4 @@
+// cspell:ignore forall
 /** Observed metadata subjects; absent witnesses do not establish losing definitions. */
 import nix.Bindings
 import nix.Origin
@@ -78,20 +79,27 @@ module Modules {
       libraryValue(RawBridge::declarationValue(declaration), request))
   }
 
-  private predicate helper(RawBridge::Node value, string kind, string spec, string name) {
-    exists(@nx_request request, string library, string model, string identity |
-      libraryValue(RawBridge::selectionBase(value), request) and
-      nx_module_lib_bindings(request, _, _, library, model) and
-      name = RawBridge::selectedName(value) and ModuleModels::exported(name, identity) and
-      ModuleModels::helper(library, model, identity, kind, spec))
+  private predicate libraryHelper(RawBridge::Node namespace, string name, string kind,
+    string spec, @nx_request request) {
+    exists(string library, string model, string identity |
+      libraryValue(namespace, request) and nx_module_lib_bindings(request, _, _, library, model) and
+      ModuleModels::exported(name, identity) and ModuleModels::helper(library, model, identity, kind, spec))
+  }
+
+  private predicate helper(RawBridge::Node value, string kind, string spec, string name, @nx_request request) {
+    name = RawBridge::selectedName(value) and
+    libraryHelper(RawBridge::selectionBase(value), name, kind, spec, request)
     or exists(RawBridge::Node declaration |
       value.(Bindings::Variable).mustResolveTo(Bindings::LexicalBinding(declaration)) and
-      helper(RawBridge::declarationValue(declaration), kind, spec, name))
+      (helper(RawBridge::declarationValue(declaration), kind, spec, name, request)
+       or RawBridge::bareInherited(declaration) and helper(declaration, kind, spec, name, request)
+       or name = RawBridge::binderName(declaration) and
+         libraryHelper(RawBridge::inheritedSource(declaration), name, kind, spec, request)))
   }
 
   private predicate propertyCall(RawBridge::Node call, RawBridge::Node callee) {
-    helper(RawBridge::callee(call), _, "{\"arity\":1,\"content\":0}", _) and callee = RawBridge::callee(call)
-    or helper(RawBridge::callee(RawBridge::callee(call)), _, "{\"arity\":2,\"content\":1}", _) and
+    helper(RawBridge::callee(call), _, "{\"arity\":1,\"content\":0}", _, _) and callee = RawBridge::callee(call)
+    or helper(RawBridge::callee(RawBridge::callee(call)), _, "{\"arity\":2,\"content\":1}", _, _) and
       callee = RawBridge::callee(RawBridge::callee(call))
   }
 
@@ -101,8 +109,8 @@ module Modules {
   class PropertyApplication extends PropertyIdentity {
     private RawBridge::Node getNode() { this = SourceProperty(result) }
     private RawBridge::Node getHelper() { propertyCall(this.getNode(), result) }
-    string getKind() { helper(this.getHelper(), result, _, _) }
-    string getArgumentSpecJson() { helper(this.getHelper(), _, result, _) }
+    string getKind() { helper(this.getHelper(), result, _, _, _) }
+    string getArgumentSpecJson() { helper(this.getHelper(), _, result, _, _) }
     RawBridge::Node getContent() { result = RawBridge::argument(this.getNode()) }
     RawBridge::Anchor getAnchor() { result.getUniqueNode() = this.getNode() }
     PropertyApplication getEnclosingProperty() {
@@ -119,7 +127,7 @@ module Modules {
       (this.getArgumentSpecJson() = "{\"arity\":2,\"content\":1}" and
          result = RawBridge::integerText(RawBridge::argument(RawBridge::callee(this.getNode())))
        or this.getArgumentSpecJson() = "{\"arity\":1,\"content\":0}" and
-         exists(string name | helper(this.getHelper(), _, _, name) and ModuleModels::constant(name, result)))
+         exists(string name | helper(this.getHelper(), _, _, name, _) and ModuleModels::constant(name, result)))
     }
     string toString() { result = this.getKind() + ":" + this.getAnchor().toString() }
   }
@@ -135,5 +143,48 @@ module Modules {
     RawBridge::Node getContent() { this = SourceGroup(_, _, result) }
     RawBridge::Anchor getAnchor() { result.getUniqueNode() = this.getContent() }
     string toString() { result = this.getApplication().toString() + ":" + this.getIndex().toString() }
+  }
+
+  private string literalSegments(RawBridge::Node list) {
+    RawBridge::listExpression(list) and
+    forall(RawBridge::Node element | element = RawBridge::listElement(list, _) |
+      exists(RawBridge::literalString(element))) and
+    result = "[" + concat(int i |
+      exists(RawBridge::listElement(list, i)) |
+      Evaluation::quoted(RawBridge::literalString(RawBridge::listElement(list, i))), "," order by i) + "]"
+  }
+
+  private predicate renameCall(RawBridge::Node call, @nx_request request, string kind) {
+    kind in ["alias", "rename"] and
+    helper(RawBridge::callee(RawBridge::callee(call)), kind,
+      "{\"arity\":2,\"from\":0,\"to\":1}", _, request) and
+    exists(literalSegments(RawBridge::argument(RawBridge::callee(call)))) and
+    exists(literalSegments(RawBridge::argument(call)))
+  }
+
+  newtype RenameIdentity = SourceRename(RawBridge::Node call, @nx_request request) {
+    renameCall(call, request, _)
+  }
+
+  /** An authenticated source edge; the call need not execute or become selected. */
+  class RenamedOption extends RenameIdentity {
+    private RawBridge::Node getNode() { this = SourceRename(result, _) }
+    @nx_request getRequest() { this = SourceRename(_, result) }
+    Targets::Target getTarget() {
+      nx_requests(this.getRequest(), result, _, _, _, _, _, _, _, _, _) and
+      nx_target_inputs(result, this.getNode().getSourceFile(), _)
+    }
+    string getHelperKind() { renameCall(this.getNode(), this.getRequest(), result) }
+    string getFromPathJson() {
+      result = literalSegments(RawBridge::argument(RawBridge::callee(this.getNode())))
+    }
+    string getToPathJson() { result = literalSegments(RawBridge::argument(this.getNode())) }
+    RawBridge::Anchor getAnchor() { result.getUniqueNode() = this.getNode() }
+    string toString() { result = this.getHelperKind() + ":" + this.getAnchor().toString() }
+  }
+
+  /** The no-rename-warning helper, using the same source-edge identity. */
+  class AliasOption extends RenamedOption {
+    AliasOption() { this.getHelperKind() = "alias" }
   }
 }

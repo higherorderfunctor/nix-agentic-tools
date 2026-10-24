@@ -162,8 +162,7 @@ module RawBridge {
       forall(Generated::Nix::AstNode child | child = text.getAChild() |
         child instanceof Generated::Nix::StringFragment
       ) and
-      result = concat(int i, Generated::Nix::StringFragment fragment |
-        fragment = text.getChild(i) | fragment.getValue(), "" order by i)
+      result = decodedString(text)
     )
   }
 
@@ -273,9 +272,111 @@ module RawBridge {
       binding.getAttrpath().getAttr(0) = declaration and
       not exists(binding.getAttrpath().getAttr(1)) and result = expression(unparenthesized(binding.getExpression())))
   }
+  /** An inherited helper keeps its source namespace and declaration spelling. */
+  Node inheritedSource(Node declaration) {
+    exists(Generated::Nix::InheritFrom clause |
+      declaration = clause.getAttrs().getAnAttr() and
+      result = expression(unparenthesized(clause.getExpression())))
+  }
+  predicate bareInherited(Node declaration) {
+    exists(Node clause | clause.getKind() = "Inherit" and declaration = inheritedToken(clause))
+  }
   Node listElement(Node list, int index) {
     result = list.(Generated::Nix::ListExpression).getElement(index)
   }
+  predicate listExpression(Node node) { node instanceof Generated::Nix::ListExpression }
+
+  private Generated::Nix::AstNode stringChild(Generated::Nix::AstNode text, int index) {
+    result = text.(Generated::Nix::StringExpression).getChild(index)
+    or result = text.(Generated::Nix::IndentedStringExpression).getChild(index)
+  }
+
+  bindingset[value]
+  private string unescapeCharacter(string value) {
+    value = "n" and result = "\n"
+    or value = "r" and result = "\r"
+    or value = "t" and result = "\t"
+    or not value in ["n", "r", "t"] and result = value
+  }
+
+  private string stringPart(Generated::Nix::AstNode text, int index) {
+    exists(Generated::Nix::AstNode child, string raw |
+      child = stringChild(text, index) and
+      (raw = child.(Generated::Nix::StringFragment).getValue() and
+        (text instanceof Generated::Nix::StringExpression and
+           result = raw.regexpReplaceAll("\r\n?", "\n")
+         or text instanceof Generated::Nix::IndentedStringExpression and
+           (index = 0 and result = raw.regexpReplaceAll("^ *\n", "")
+            or index != 0 and result = raw))
+       or child instanceof Generated::Nix::DollarEscape and raw = "" and result = ""
+       or raw = child.(Generated::Nix::EscapeSequence).getValue() and
+         (text instanceof Generated::Nix::StringExpression and
+            result = unescapeCharacter(raw.substring(1, raw.length()))
+          or text instanceof Generated::Nix::IndentedStringExpression and
+            (raw = "'''" and result = "''"
+             or raw != "'''" and result = unescapeCharacter(raw.substring(3, raw.length()))))))
+  }
+
+  // Escaped whitespace ends indentation in Nix's minimum-indent pass, even
+  // when its decoded value is a space or newline. Protect it for that pass.
+  private string indentationPart(Generated::Nix::AstNode text, int index) {
+    exists(string value | value = stringPart(text, index) |
+      stringChild(text, index) instanceof Generated::Nix::EscapeSequence and result = "x"
+      or not stringChild(text, index) instanceof Generated::Nix::EscapeSequence and result = value)
+  }
+
+  bindingset[text]
+  private predicate stringLine(string text, int start, string line) {
+    (start = 0 or start in [1 .. text.length()] and text.substring(start - 1, start) = "\n") and
+    line = text.substring(start, text.length()).regexpCapture("([^\n]*)(\n(.|\n)*)?", 1)
+  }
+
+  bindingset[text]
+  private int leadingSpaces(string text) {
+    result = text.regexpCapture("( *)(.|\n)*", 1).length()
+  }
+
+  private int minimumIndent(Generated::Nix::AstNode text) {
+    exists(string value |
+      value = concat(int i | exists(stringChild(text, i)) | indentationPart(text, i), "" order by i) and
+      (result = min(string line | stringLine(value, _, line) and not line.regexpMatch(" *") |
+          leadingSpaces(line))
+       or not exists(string line | stringLine(value, _, line) and not line.regexpMatch(" *")) and
+          result = value.length()))
+  }
+
+  bindingset[text, value]
+  private string stripIndentation(Generated::Nix::AstNode text, string value) {
+    exists(int indent, string stripped |
+      indent = minimumIndent(text) and
+      stripped = concat(int start, string line, int drop |
+        stringLine(value, start, line) and
+        (leadingSpaces(line) < indent and drop = leadingSpaces(line)
+         or leadingSpaces(line) >= indent and drop = indent) |
+        line.substring(drop, line.length()), "\n" order by start) and
+      // Nix removes a trailing spaces-only line only within the final token.
+      (exists(int last | exists(stringChild(text, last)) and not exists(stringChild(text, last + 1)) and
+          stringPart(text, last).regexpMatch("(.|\n)*\n(.|\n)*")) and
+         result = stripped.regexpReplaceAll("\n *\\z", "\n")
+       or not exists(int last | exists(stringChild(text, last)) and not exists(stringChild(text, last + 1)) and
+          stringPart(text, last).regexpMatch("(.|\n)*\n(.|\n)*")) and result = stripped))
+  }
+
+  /** One decoder for literal strings; lexical name callers retain their narrower guard. */
+  private string decodedString(Generated::Nix::AstNode text) {
+    (text instanceof Generated::Nix::StringExpression or text instanceof Generated::Nix::IndentedStringExpression) and
+    forall(Generated::Nix::AstNode child | child = stringChild(text, _) |
+      child instanceof Generated::Nix::StringFragment or child instanceof Generated::Nix::EscapeSequence or
+      child instanceof Generated::Nix::DollarEscape) and
+    exists(string value |
+      value = concat(int i | exists(stringChild(text, i)) | stringPart(text, i), "" order by i) and
+      (text instanceof Generated::Nix::StringExpression and result = value
+       or text instanceof Generated::Nix::IndentedStringExpression and result = stripIndentation(text, value)))
+  }
+
+  /** Authenticated literal strings; interpolated and computed elements remain unknown. */
+  string literalString(Node node) { result = decodedString(node) }
+
   string integerText(Node node) {
     result = node.(Generated::Nix::IntegerExpression).getValue() and
     result.regexpMatch("0|[1-9][0-9]*")
