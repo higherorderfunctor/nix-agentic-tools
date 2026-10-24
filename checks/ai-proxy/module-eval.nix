@@ -408,10 +408,11 @@ in {
     # An `alias` rewrites the client-visible model name everywhere it reaches a
     # client: the rendered api-keys blocks, `normalized.proxy.credentials` and
     # the /model picker, whose aliased rows name the upstream model they serve.
-    # Refused, since CPA keeps only the first per lowered key: two entries with
-    # the same visible name, and an alias colliding with a routing key an
-    # earlier aliased entry claims (its alias or name, with or without a
-    # trailing `(...)` suffix). Empty or padded names are refused by the type,
+    # Refused: two entries with the same visible name (CPA keeps only the first
+    # per lowered key), and a listed name that resolves to another entry's
+    # upstream model on the served family's resolution — the claude/codex alias
+    # table, first claim per lowered key, or the openai-compatibility pool,
+    # aliases before names. Empty or padded names are refused by the type,
     # since CPA trims names before listing and routing them.
     module-ai-proxy-model-alias = mkTest "ai-proxy-model-alias" (let
       aliased = instanceChange {
@@ -431,6 +432,7 @@ in {
         clientKeys.work.routes = lib.mkForce [(route "chat")];
       };
       zaiModels = models: instanceChange {credentials.zai.apiKey.models = lib.mkForce models;};
+      chatModels = models: instanceChange {credentials.chat.apiKey.models = lib.mkForce models;};
       visibleNames = ["glm-5.3-flash" "claude-opus-5-5"];
       aliasedModels = [
         {name = "glm-5.3-flash";}
@@ -495,7 +497,7 @@ in {
             "glm-5.3-flash"
           ]);
           "case-insensitive duplicate refused" = refused backend "lists `glm-5.3` to clients more than once" (zaiModels ["GLM-5.3" "glm-5.3"]);
-          "alias claiming an earlier name's key refused" = refused backend "claims the routing key `glm-5.3`" (zaiModels [
+          "alias claiming an earlier name's key refused" = refused backend "a request for `glm-5.3` is sent upstream as `glm-5.3`, not `glm-4`" (zaiModels [
             {
               name = "glm-5.3";
               alias = "claude-opus-5-5";
@@ -505,7 +507,7 @@ in {
               alias = "glm-5.3";
             }
           ]);
-          "suffix-stripped alias collision refused" = refused backend "claims the routing key `claude-opus-5-5`" (zaiModels [
+          "suffix-hidden alias refused" = refused backend "a request for `claude-opus-5-5` is sent upstream as `glm-5.3`, not `glm-4`" (zaiModels [
             {
               name = "glm-5.3";
               alias = "claude-opus-5-5(high)";
@@ -513,6 +515,34 @@ in {
             {
               name = "glm-4";
               alias = "claude-opus-5-5";
+            }
+          ]);
+          "plain name hidden by a suffix-stripped alias refused" = refused backend "a request for `a` is sent upstream as `c`, not `a`" (zaiModels [
+            {
+              name = "c";
+              alias = "a(high)";
+            }
+            "a"
+          ]);
+          "plain name hidden by a suffix-stripped name refused" = refused backend "a request for `a` is sent upstream as `a(high)`, not `a`" (zaiModels [
+            {
+              name = "a(high)";
+              alias = "b";
+            }
+            "a"
+          ]);
+          "suffixed plain name resolved through an alias refused" = refused backend "a request for `a(high)` is sent upstream as `c(high)`, not `a(high)`" (zaiModels [
+            "a(high)"
+            {
+              name = "c";
+              alias = "a";
+            }
+          ]);
+          "suffixed plain name resolved through an alias refused on chat" = refused backend "a request for `a(high)` is sent upstream as `c(high)`, not `a(high)`" (chatModels [
+            "a(high)"
+            {
+              name = "c";
+              alias = "a";
             }
           ]);
           "distinct names accepted" =
@@ -533,6 +563,30 @@ in {
               {
                 name = "claude-opus-5-5";
                 alias = "glm-4";
+              }
+            ]))
+            == [];
+          "suffixed alias beside its base accepted" =
+            failedMessages (evaluate backend (zaiModels [
+              {
+                name = "n1";
+                alias = "x";
+              }
+              {
+                name = "n2";
+                alias = "x(high)";
+              }
+            ]))
+            == [];
+          "alias claiming an earlier name accepted on chat" =
+            failedMessages (evaluate backend (chatModels [
+              {
+                name = "a";
+                alias = "b";
+              }
+              {
+                name = "c";
+                alias = "a";
               }
             ]))
             == [];

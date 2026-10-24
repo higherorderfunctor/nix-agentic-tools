@@ -60,57 +60,136 @@ backend: {
   # end in a "(...)" thinking suffix, and the name without it routes too. When
   # it does, drop everything from the last "(".
   parseSuffix = model: let
-    lastOpen =
-      lib.foldl'
-      (index: position:
-        if builtins.substring position 1 model == "("
-        then position
-        else index)
-      null
-      (lib.range 0 (builtins.stringLength model - 1));
+    groups = builtins.match "(.*)\\(.*\\)" model;
   in
-    if lib.hasSuffix ")" model && lastOpen != null
-    then builtins.substring 0 lastOpen model
-    else model;
+    if groups == null
+    then model
+    else builtins.head groups;
   # CPA keeps only the first model per case-insensitive client-visible name
-  # and drops the rest (sdk/cliproxy/service_models.go:924-929); its alias
-  # routing table also keeps the first entry per lowered key
-  # (sdk/cliproxy/auth/conductor_models.go:676-696), where an entry with both
-  # name and alias claims four keys, alias, ParseSuffix(alias), name and
-  # ParseSuffix(name), each routing to its name. A later aliased entry whose
-  # alias or ParseSuffix(alias) matches an earlier key routing to a different
-  # name lists its alias but routes requests to the earlier name, so refuse it.
+  # and drops the rest (sdk/cliproxy/service_models.go:924-929). An aliased
+  # entry also claims routing keys, and a claim that shadows another entry's
+  # listed name sends its requests to the wrong upstream model, so every
+  # listed name is resolved the way the served family resolves it and a name
+  # reaching another entry's upstream model is refused:
+  #
+  # - claude and codex credentials (the anthropic and responses APIs) resolve
+  #   through a table built from aliased entries only, first claim per lowered
+  #   key, each entry claiming alias, ParseSuffix(alias), name and
+  #   ParseSuffix(name); a lookup tries the requested key, then the key
+  #   without its suffix, and puts the suffix back on the resolved name
+  #   (sdk/cliproxy/auth/conductor_models.go:20-46, 676-696;
+  #   sdk/cliproxy/auth/oauth_model_alias.go:122-135).
+  # - openai-compatibility credentials (the chat API) resolve through a pool
+  #   that tries every entry's alias, the requested name and its
+  #   suffix-stripped base alike, before any name
+  #   (sdk/cliproxy/auth/conductor_models.go:132-158;
+  #   sdk/cliproxy/auth/oauth_model_alias.go:139-193).
   duplicateModels = name: instance:
     lib.concatLists (lib.mapAttrsToList (credential: apiKey: let
       visible = map lib.toLower (providersLib.visibleModels apiKey);
-      collisions =
-        lib.foldl'
-        ({
-          claimed,
-          problems,
-        }: entry: let
-          alias = lib.toLower entry.alias;
-          suffix = lib.toLower (parseSuffix entry.alias);
-          collision = lib.findFirst (key: claimed ? ${key} && claimed.${key} != entry.name) null (lib.unique [alias suffix]);
-          claims =
-            lib.filter (key: key != "" && !(claimed ? ${key}))
-            (lib.unique [alias suffix (lib.toLower entry.name) (lib.toLower (parseSuffix entry.name))]);
-        in {
-          claimed = claimed // builtins.listToAttrs (map (key: lib.nameValuePair key entry.name) claims);
-          problems =
-            problems
-            ++ lib.optional (collision != null)
-            "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models: the alias `${entry.alias}` claims the routing key `${collision}`, which an earlier entry already claims for `${claimed.${collision}}`; CPA keeps the first entry per lowered key, so a request for `${collision}` is sent upstream as `${claimed.${collision}}`, not `${entry.name}`. Give the alias a name no earlier aliased entry claims as its alias or name, with or without a trailing `(...)` suffix.";
+      servedApis = builtins.attrNames (providersLib.served apiKey);
+      # Each entry's listed name (alias when set, else name) and the upstream
+      # name a request for it must reach.
+      listed =
+        map (model: {
+          inherit (model) name;
+          visible =
+            if model.alias != null
+            then model.alias
+            else model.name;
         })
-        {
-          claimed = {};
-          problems = [];
-        }
+        apiKey.models;
+      # preserveResolvedModelSuffix: the request's suffix comes back on a
+      # resolved name that lacks one.
+      rawSuffix = model: let
+        groups = builtins.match ".*\\((.*)\\)" model;
+      in
+        if groups == null
+        then null
+        else builtins.head groups;
+      withSuffix = requested: resolved: let
+        suffix = rawSuffix requested;
+      in
+        if parseSuffix resolved != resolved
+        then resolved
+        else if suffix != null && suffix != ""
+        then resolved + "(" + suffix + ")"
+        else resolved;
+      # compileAPIKeyModelAliasForModels: aliased entries in order, each
+      # claiming four lowered keys, first claim wins, empty keys skipped.
+      table =
+        lib.foldl'
+        (claimed: entry: let
+          alias = lib.toLower entry.alias;
+          keys = lib.unique [
+            alias
+            (parseSuffix alias)
+            (lib.toLower entry.name)
+            (lib.toLower (parseSuffix entry.name))
+          ];
+          fresh = lib.filter (key: key != "" && !(claimed ? ${key})) keys;
+        in
+          claimed // builtins.listToAttrs (map (key: lib.nameValuePair key entry.name) fresh))
+        {}
         (lib.filter (model: model.alias != null) apiKey.models);
+      # lookupAPIKeyUpstreamModel: the exact lowered key, then the key without
+      # its suffix.
+      resolveTable = model: let
+        key = lib.toLower model;
+        base = parseSuffix key;
+        hit =
+          table.${
+            key
+          } or (
+            if base != "" && base != key
+            then table.${base} or null
+            else null
+          );
+      in
+        if hit == null
+        then null
+        else withSuffix model hit;
+      # resolveModelAliasPoolFromConfigModels: for each lookup candidate in
+      # turn (the name, then its suffix-stripped base), the first entry whose
+      # alias matches resolves to its name; when no alias matched, the first
+      # entry whose name matches does.
+      resolvePool = model: let
+        base = parseSuffix model;
+        candidates =
+          if base == "" || base == model
+          then [model]
+          else [model base];
+        aliasMatch = candidate:
+          lib.findFirst (entry: entry.alias != null && lib.toLower entry.alias == lib.toLower candidate) null apiKey.models;
+        nameMatch = candidate:
+          lib.findFirst (entry: lib.toLower entry.name == lib.toLower candidate) null apiKey.models;
+        aliasHit = lib.findFirst (candidate: aliasMatch candidate != null) null candidates;
+        nameHit = lib.findFirst (candidate: nameMatch candidate != null) null candidates;
+        entry =
+          if aliasHit != null
+          then aliasMatch aliasHit
+          else if nameHit != null
+          then nameMatch nameHit
+          else null;
+      in
+        if entry == null
+        then null
+        else withSuffix model entry.name;
+      # A listed name misroutes when CPA resolves it to another entry's
+      # upstream name.
+      misrouting = resolve: entry: let
+        result = resolve entry.visible;
+        expected = withSuffix entry.visible entry.name;
+      in
+        lib.optional (result != null && result != expected)
+        "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models: a request for `${entry.visible}` is sent upstream as `${result}`, not `${expected}`; another entry's routing claim wins. Give each entry a client-visible name that resolves to its own upstream name.";
+      usesTable = lib.any (api: api == "anthropic" || api == "responses") servedApis;
+      usesPool = lib.elem "chat" servedApis;
     in
       map (model: "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models lists `${model}` to clients more than once; CPA compares these names case-insensitively and keeps only the first. Give each entry a distinct client-visible name (alias when set, else name).")
       (lib.unique (lib.filter (model: lib.count (other: other == model) visible > 1) visible))
-      ++ collisions.problems)
+      ++ lib.optionals usesTable (lib.concatMap (misrouting resolveTable) listed)
+      ++ lib.optionals usesPool (lib.concatMap (misrouting resolvePool) listed))
     (providersLib.apiKeys instance));
 in {
   imports = [
