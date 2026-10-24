@@ -7,7 +7,7 @@ applyTo: "packages/airlock/**"
 
 # airlock
 
-> **Last verified:** 2026-10-24 (commit ccbd0dd2) — `airlock serve` tunnels,
+> **Last verified:** 2026-10-24 (commit 3980d01a) — `airlock serve` tunnels,
 > denies, or intercepts as a passthrough: the client's TLS ends at a leaf from
 > airlock's tmpfs CA, verified TLS reopens to the real host, and the bytes pass
 > unchanged. No credential swap yet.
