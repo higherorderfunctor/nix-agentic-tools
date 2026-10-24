@@ -1,10 +1,11 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-22 — an owner overlay returns only the leaves it
+> **Last verified:** 2026-10-24 — an owner overlay returns only the leaves it
 > claims and the composer deep-merges each one into `prev`, stopping at
 > derivations; nat-overlay-parity compares package leaves and checks owner
 > overlay leaves for presence; Go check names come from one declared table; the
-> flake has no `apps` output; Bruno past 4.2.x uses `npmDepsFetcherVersion = 2`.
+> flake has no `apps` output; Bruno past 4.2.x uses `npmDepsFetcherVersion = 2`;
+> `airlock` carries `updateTargetExempt`.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -311,9 +312,8 @@ These are package properties, not a second name registry:
 `passthru.updateFlakeInput = "<input>"` is accepted only when the named root
 flake input exists, while `passthru.updateTargetExempt = "<reason>"` must carry
 a non-empty explanation. The latter is for a derivation whose version labels an
-in-tree implementation with no upstream release to sweep. Its only instance, the
-repository-local `kiro-memory-distiller`, was removed on 2026-09-01, so
-`updateTargetExempt` currently has no consumer.
+in-tree implementation with no upstream release to sweep, such as `airlock`,
+built from its owner's cargo workspace.
 
 ### Thin overrides of a nixpkgs package
 

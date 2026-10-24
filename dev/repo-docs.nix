@@ -10,14 +10,14 @@
 # `generate:repo:*` tasks build and copy out, and which the drift check
 # compares against the tracked copies.
 {
+  inputs,
   lib,
   pkgs,
-  treefmt-nix,
 }: let
   gen = import ./generate.nix {inherit lib pkgs;};
   ai = import ../lib/ai {inherit lib;};
   generated = ai.generated pkgs;
-  treefmt = (treefmt-nix.lib.evalModule pkgs (import ../treefmt.nix)).config;
+  treefmt = (inputs.treefmt-nix.lib.evalModule pkgs (import ../treefmt.nix {inherit inputs;})).config;
 
   # One generated file, built, formatted and checked the way `ai.*` builds
   # generated Markdown, so the copy `generate:repo:*` drops in the working

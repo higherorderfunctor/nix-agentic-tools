@@ -133,7 +133,7 @@ in {
   # ── treefmt ────────────────────────────────────────────────────────────
   treefmt = {
     enable = true;
-    config = import ./treefmt.nix;
+    config = import ./treefmt.nix {inherit inputs;};
   };
 
   # ── Git Hooks ─────────────────────────────────────────────────────────
