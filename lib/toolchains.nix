@@ -1,7 +1,16 @@
 # Compiler helpers apply the locked toolchain functions to the supplied package set.
 {inputs}: let
   inherit (import ./packaging.nix) mkGoFloorFix;
+  mkRustToolchain = {
+    extensions ? [],
+    pkgs,
+  }:
+    (inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default.override {
+      inherit extensions;
+    };
 in {
+  inherit mkRustToolchain;
+
   # Compiler versions come only from the locked overlays. A recorded source
   # floor validates the newest stable Go release; it never selects nixpkgs Go.
   #
@@ -57,7 +66,7 @@ in {
   };
 
   mkRustPlatform = {pkgs}: let
-    rust = (inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default;
+    rust = mkRustToolchain {inherit pkgs;};
   in
     pkgs.makeRustPlatform {
       cargo = rust;
