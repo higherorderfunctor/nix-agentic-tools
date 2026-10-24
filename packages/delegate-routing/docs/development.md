@@ -1,7 +1,9 @@
 # Delegate routing package
 
 > **Last verified:** 2026-10-23 — a family may declare a usage node, rendered
-> once per shared pool after the tier tables.
+> once per shared pool after the tier tables. CPA usage metadata stays in each
+> source runtime's process environment, limited to its required delegate
+> targets; mixed installs configure project launcher metadata explicitly.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -185,9 +187,9 @@ The always-on routing rule uses the existing native Claude rules and AGENTS.md
 delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
 its user harness AGENTS.md. Byte-identical contributions deduplicate. The
 content package injects packaged usage helper paths into technique defaults. The
-Claude helper carries curl and jq; the Codex helper carries timeout, jq and
-Python, while the consumer supplies the Codex CLI. `zai-usage` carries curl and
-jq and reads the key file named by `ZAI_API_KEY_FILE` (base URL from
+Claude helper carries curl and jq; the Codex helper carries timeout, curl, jq
+and Python, while the consumer supplies the Codex CLI. `zai-usage` carries curl
+and jq and reads the key file named by `ZAI_API_KEY_FILE` (base URL from
 `ZAI_API_BASE`, default `https://api.z.ai`), passing the key to curl on stdin.
 
 `mkSkill`, `render` and `skills` consume the same family, selector, technique
@@ -203,6 +205,77 @@ nix eval --raw .#delegate-routing-content.skills.codex.text
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kiro"; models.kiro = [{vendors = ["anthropic"];}]; }'
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```
+
+## Usage through CLIProxyAPI
+
+`claude-usage` and `codex-usage` use CPA metadata from their environment. A
+complete `DELEGATE_USAGE_CPA_URL` and `DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE`
+pair is an explicit override for either helper. Otherwise each reads its
+matching vendor defaults: `DELEGATE_USAGE_CPA_CLAUDE_URL` and
+`DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE`, or
+`DELEGATE_USAGE_CPA_CODEX_URL` and
+`DELEGATE_USAGE_CPA_CODEX_MANAGEMENT_KEY_FILE`. The URL is the CPA origin; the
+file contains its management bearer key. Only origins and existing file paths
+enter generated configuration. Helpers read the key at invocation and query
+CPA's auth-file and API-call management endpoints for live vendor quota through
+its OAuth logins. All enabled OAuth accounts for that vendor in the selected
+instance are reported; client-key routes do not filter this management view.
+
+When routing is delivered to an enabled runtime, `modules/common.nix` uses the
+existing proxy `selectionFor` semantics for each vendor: `ai.claude.proxy` or
+`ai.codex.proxy` replaces `ai.proxy` when selected. With no effective selection
+it chooses the sole enabled `ai.cliproxyapi.instances` entry. The shared
+instances helper derives the loopback origin; the exact
+`settings.management.secret-key` `redact.file` path supplies the key-file
+metadata. A global personal instance plus a Codex work-instance override
+therefore sends each helper to its own instance, as do two runtime-only
+selections without a global proxy.
+
+Automatic discovery publishes vendor pairs with `mkDefault` through the source
+runtime's process environment: Claude's `native.settings.env`, or the existing
+`environmentVariables` launcher pool for Codex, Kimchi and Kiro. Each source
+runtime receives only the Claude/Codex vendors in its required targets (itself,
+`extraRuntimes` and `manualExternalDelegates`). Only vendors reached by an
+enabled routing source produce metadata or warnings. No Home Manager session
+variables or devenv shell environment entries are written. The generic pair
+remains an explicit override of vendor defaults.
+
+Ambiguous instances, external proxy URLs without management metadata, and
+command or concat secret references warn and publish no automatic pair for the
+affected vendor. Explicit launcher configuration can point to an existing
+management-key file; discovery never materializes secrets.
+
+| Install shape                               | Metadata delivery                                                                                                                                                                                                                                                                   |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home Manager only                           | The runtime process receives vendor pairs from its effective proxy selections or the sole enabled CPA instance.                                                                                                                                                                     |
+| devenv only                                 | The project runtime process receives vendor pairs from project proxy selections or the sole enabled CPA instance.                                                                                                                                                                   |
+| Mixed, Home Manager CPA and project routing | Separate evaluations cannot discover each other's CPA options. Configure the existing project runtime environment option with the Home Manager CPA origin and management-key file path, as below. A Home Manager launcher already carrying metadata also passes it to its children. |
+| Mixed, project instance                     | Project launcher metadata follows the project's effective proxy selections and applies to helpers invoked by that launcher.                                                                                                                                                         |
+| Direct, absent pairs                        | With neither generic nor matching vendor metadata in the runtime process, helpers retain direct local-login behavior.                                                                                                                                                               |
+
+For a Home Manager CPA used by project Codex routing, `devenv.local.nix` can
+set:
+
+```nix
+ai.codex.environmentVariables = {
+  DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE = "/run/secrets/cpa-management";
+  DELEGATE_USAGE_CPA_URL = "http://127.0.0.1:8317";
+};
+```
+
+Use `ai.claude.native.settings.env` for a Claude source,
+`ai.kimchi.environmentVariables` for Kimchi, or
+`ai.kiro.cli.environmentVariables` for Kiro. The generic pair serves every usage
+helper that source's skill delivers. These options affect the runtime and its
+children; invoking a helper from an ordinary shell does not acquire launcher
+metadata.
+
+A partial generic override or matching vendor pair is an error; halves are never
+combined across pairs. If CPA has no OAuth login for the requested vendor, the
+helper explains the fallback on stderr and tries the direct local login. CPA
+authentication, transport, malformed-response and vendor quota failures remain
+errors; they do not silently switch logins. The helpers never drain CPA's usage
+queue.
 
 ## Per-turn reminder
 

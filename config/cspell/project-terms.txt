@@ -169,6 +169,7 @@ esbuild
 etime
 evals
 execpolicy
+execv
 execve
 extensionless
 fakehttp

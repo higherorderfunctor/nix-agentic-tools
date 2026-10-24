@@ -53,11 +53,70 @@
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
+  requiredTargets = runtime:
+    lib.unique ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates);
+  usageVendors = runtime: lib.filter (target: builtins.elem target ["claude" "codex"]) (requiredTargets runtime);
+  cpaInstances = lib.attrByPath ["ai" "cliproxyapi" "instances"] {} config;
+  enabledCpaNames = lib.attrNames (lib.filterAttrs (_: instance: instance.enable) cpaInstances);
+  proxyLib = import ../../../lib/ai/proxy {inherit lib;};
+  usageFor = runtime: let
+    unselected = {
+      instance = null;
+      url = null;
+    };
+    selection =
+      proxyLib.selectionFor
+      (lib.attrByPath ["ai" "proxy"] unselected config)
+      (lib.attrByPath ["ai" runtime "proxy"] unselected config);
+    name =
+      if selection.instance != null
+      then selection.instance
+      else if selection.url == null && builtins.length enabledCpaNames == 1
+      then lib.head enabledCpaNames
+      else null;
+    selected =
+      if name == null
+      then null
+      else
+        (import ../../ai-module/lib/instances.nix {inherit lib;}).select {
+          instances = cpaInstances;
+          inherit name;
+          option = "ai.${runtime}.proxy.instance";
+          owner = "cliproxyapi";
+        };
+    key =
+      if selected == null || selected ? problem
+      then null
+      else cpaInstances.${name}.settings.management.secret-key;
+    file =
+      if builtins.isAttrs key && builtins.attrNames (key._redact or {}) == ["file"]
+      then key._redact.file
+      else null;
+    prefix = "DELEGATE_USAGE_CPA_${lib.toUpper runtime}";
+    label = "delegate-routing ${runtime} usage:";
+  in {
+    environment = lib.optionalAttrs (file != null) {
+      "${prefix}_MANAGEMENT_KEY_FILE" = lib.mkDefault file;
+      "${prefix}_URL" = lib.mkDefault selected.url;
+    };
+    warnings =
+      lib.optional (name == null && selection.url == null && builtins.length enabledCpaNames > 1)
+      "${label} multiple CLIProxyAPI instances are enabled; select ai.proxy.instance or ai.${runtime}.proxy.instance, or set both DELEGATE_USAGE_CPA_URL and DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE explicitly."
+      ++ lib.optional (selected != null && selected ? problem) "${label} ${selected.problem}"
+      ++ lib.optional (selected != null && !(selected ? problem) && file == null)
+      "${label} CLIProxyAPI management.secret-key must be an exact redact.file reference for automatic discovery; command and concat references are unsupported. Set both DELEGATE_USAGE_CPA_URL and DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE explicitly to use an existing management-key file."
+      ++ lib.optional (selection.url != null)
+      "${label} an external proxy URL does not declare a management-key file; set both DELEGATE_USAGE_CPA_URL and DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE explicitly for usage through CPA.";
+  };
+  usageEnvironment = runtime: lib.foldl' (environment: value: environment // value.environment) {} (map usageFor (usageVendors runtime));
+  usageWarnings =
+    lib.concatMap (vendor: (usageFor vendor).warnings)
+    (lib.unique (lib.concatMap usageVendors (lib.filter sourceEnabled supportedRuntimes)));
   # The skill's Kiro evidence covers the v3 engine only. Default v3 on only
   # when ai.kiro.cli.package != null: the managed wrapper carries --v3 to launches.
   reachesKiro = lib.any (runtime:
     sourceEnabled runtime
-    && builtins.elem "kiro" ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates))
+    && builtins.elem "kiro" (requiredTargets runtime))
   supportedRuntimes;
   kiroV3Declared = lib.hasAttrByPath ["ai" "kiro" "cli" "v3"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
@@ -194,6 +253,14 @@ in {
 
   config = {
     ai = lib.mkMerge [
+      (lib.genAttrs supportedRuntimes (runtime:
+        lib.mkIf (sourceEnabled runtime)
+        (lib.setAttrByPath (
+            if runtime == "claude"
+            then ["native" "settings" "env"]
+            else lib.drop 2 (optionPaths.pool runtime "environmentVariables")
+          )
+          (usageEnvironment runtime))))
       {
         programs.delegate-routing = {
           families = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families;
@@ -222,7 +289,8 @@ in {
         (reminder.hooks.${runtime} portable.reminder.text)))
     ];
     warnings =
-      map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}. Disable that runtime reminder or use devenv.")
+      usageWarnings
+      ++ map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}. Disable that runtime reminder or use devenv.")
       (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes)
       ++ lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
         ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
@@ -250,9 +318,6 @@ in {
       ]
       ++ lib.concatMap (runtime: let
         path = "ai.programs.delegate-routing.runtimes.${runtime}";
-        extraRuntimes = config.ai.programs.delegate-routing.runtimes.${runtime}.extraRuntimes;
-        manualExternalDelegates = config.ai.programs.delegate-routing.runtimes.${runtime}.manualExternalDelegates;
-        requiredTargets = lib.unique ([runtime] ++ extraRuntimes ++ manualExternalDelegates);
       in
         lib.concatMap (list:
           map (target: {
@@ -264,7 +329,7 @@ in {
           assertion = !(sourceEnabled runtime) || select portable.families models.${target} != [];
           message = "ai.programs.delegate-routing.runtimes.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
         })
-        requiredTargets
+        (requiredTargets runtime)
         ++ map (selector: {
           assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
           message = "${path}.models contains an empty selector; specify vendors, tiers or families.";
