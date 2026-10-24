@@ -2116,9 +2116,12 @@
     "models.catalog": { "type": "string" },
     "models.codex-catalog": { "type": "string" },
     "models.devin-catalog": { "type": "string" },
-    "multimedia": { "template": "Image and video behavior.", "type": "object" },
+    "multimedia": {
+      "template": "Image and video behavior.",
+      "type": "object"
+    },
     "multimedia.disable-image-generation": {
-      "description": "DisableImageGeneration controls whether the built-in image_generation tool is injected/allowed.\n\nSupported values:\n  - false (default): image_generation is enabled everywhere (normal behavior).\n  - true: image_generation is disabled everywhere. The server stops injecting it, removes it from request payloads,\n    and returns 404 for /v1/images/generations and /v1/images/edits.\n  - \"chat\": disable image_generation injection for all non-images endpoints (e.g. /v1/responses, /v1/chat/completions),\n    while keeping /v1/images/generations and /v1/images/edits enabled and preserving image_generation there.\n  - \"passthrough\": do not modify the tool list on non-images endpoints — keep image_generation if the client\n    sent it and do not inject it otherwise; on /v1/images/generations and /v1/images/edits behave like \"chat\".",
+      "description": "DisableImageGeneration controls whether the built-in image_generation tool is injected/allowed.\n\nSupported values:\n  - false (default): image_generation is enabled everywhere (normal behavior).\n  - true: image_generation is disabled everywhere. The server stops injecting it, removes it from request payloads,\n    and returns 404 for /v1/images/generations and /v1/images/edits.\n  - \"chat\": disable image_generation injection for all non-images endpoints (e.g. /v1/responses, /v1/chat/completions),\n    while keeping /v1/images/generations and /v1/images/edits enabled and preserving image_generation there.\n  - \"passthrough\": do not modify the tool list on non-images endpoints \u2014 keep image_generation if the client\n    sent it and do not inject it otherwise; on /v1/images/generations and /v1/images/edits behave like \"chat\".",
       "template": "disable-image-generation supports: false (default), true, \"chat\", or \"passthrough\".",
       "type": "any"
     },
@@ -2143,6 +2146,156 @@
       "description": "AuthDir is the directory where authentication token files are stored.",
       "template": "Authentication directory (supports ~ for home directory)",
       "type": "string"
+    },
+    "oauth.credential-overrides": {
+      "description": "OAuthCredentialOverrides overrides behavior without editing OAuth login files.",
+      "type": "list"
+    },
+    "oauth.credential-overrides[]": { "type": "object" },
+    "oauth.credential-overrides[].account": { "type": "string" },
+    "oauth.credential-overrides[].base-url": {
+      "description": "BaseURL Provider-specific upstream base URL.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].disable-cooling": {
+      "description": "DisableCooling Per-credential cooldown override.",
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].disabled": {
+      "description": "Disabled Whether this credential is disabled.",
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].domain": {
+      "description": "Domain Kimi provider domain.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].excluded-models": {
+      "description": "ExcludedModels Per-credential excluded model patterns.",
+      "type": "list"
+    },
+    "oauth.credential-overrides[].excluded-models[]": { "type": "string" },
+    "oauth.credential-overrides[].fingerprint-profile": {
+      "description": "FingerprintProfile Provider request fingerprint profile.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].headers": {
+      "description": "Headers Per-credential upstream request headers.",
+      "type": "map"
+    },
+    "oauth.credential-overrides[].headers.<name>": { "type": "string" },
+    "oauth.credential-overrides[].interactions": {
+      "description": "Interactions selects native Vertex Interactions execution.",
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].location": {
+      "description": "Location is the Vertex request region.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].model-aliases": {
+      "description": "ModelAliases Per-credential OAuth model aliases.",
+      "type": "list"
+    },
+    "oauth.credential-overrides[].model-aliases[]": { "type": "object" },
+    "oauth.credential-overrides[].model-aliases[].alias": { "type": "string" },
+    "oauth.credential-overrides[].model-aliases[].display-name": {
+      "description": "DisplayName is the optional human-readable name shown in model catalogs.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].model-aliases[].force-mapping": {
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].model-aliases[].fork": { "type": "bool" },
+    "oauth.credential-overrides[].model-aliases[].name": { "type": "string" },
+    "oauth.credential-overrides[].model-aliases[].openapi": {
+      "description": "OpenAPI overrides Vertex endpoint selection for this model.",
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].native-interactions": {
+      "description": "NativeInteractions selects native Vertex Interactions execution.",
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].note": {
+      "description": "Note Human-readable credential note.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].openapi": {
+      "description": "OpenAPI Select Vertex OpenAPI endpoints.",
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].openapi-location": {
+      "description": "OpenAPILocation Vertex OpenAPI location.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].openapi-models": {
+      "description": "OpenAPIModels Vertex OpenAPI model names.",
+      "type": "list"
+    },
+    "oauth.credential-overrides[].openapi-models[]": { "type": "string" },
+    "oauth.credential-overrides[].prefix": {
+      "description": "Prefix Model namespace prefix.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].priority": {
+      "description": "Priority Scheduling priority; higher available priorities win.",
+      "type": "int"
+    },
+    "oauth.credential-overrides[].provider": { "type": "string" },
+    "oauth.credential-overrides[].proxy-url": {
+      "description": "ProxyURL Per-credential upstream proxy URL.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].request-retry": {
+      "description": "RequestRetry Per-credential request retry count; negative falls back to global.",
+      "type": "int"
+    },
+    "oauth.credential-overrides[].request-scoped-errors": {
+      "description": "RequestScopedErrors Per-credential upstream error rules.",
+      "type": "list"
+    },
+    "oauth.credential-overrides[].request-scoped-errors[]": {
+      "type": "object"
+    },
+    "oauth.credential-overrides[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "oauth.credential-overrides[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "oauth.credential-overrides[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "oauth.credential-overrides[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "oauth.credential-overrides[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
+    "oauth.credential-overrides[].skip-account-profile": {
+      "description": "SkipAccountProfile skips Claude OAuth account-profile lookup.",
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].tool-prefix-disabled": {
+      "description": "ToolPrefixDisabled Disable the Anthropic tool name prefix.",
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].user-agent": {
+      "description": "UserAgent Antigravity upstream User-Agent.",
+      "type": "string"
+    },
+    "oauth.credential-overrides[].websockets": {
+      "description": "Websockets Enable Codex upstream WebSockets.",
+      "type": "bool"
+    },
+    "oauth.credential-overrides[].weight": {
+      "description": "Weight Proportional scheduling weight; non-positive disables weighted selection.",
+      "type": "int"
     },
     "oauth.excluded-models": {
       "description": "OAuthExcludedModels defines per-provider global model exclusions applied to OAuth/file-backed auth entries.",

@@ -580,6 +580,15 @@ hoc machinery beside an existing abstraction.
   wrapper, which would drift per runtime. See `lib/ai/jail/default.nix` and
   `packages/jail-nix/docs/jail-nix.md`.
 
+- **PROPOSAL (not yet vetted): CPA OAuth behavior stays in config.** Named OAuth
+  credentials lower account-matched behavior overrides into CPA's config. The
+  patched file synthesizer applies them to runtime auths, while the token-store
+  save boundary restores only their original behavior fields on a copy.
+  Refreshed tokens remain current; config never writes login metadata. A config
+  reload re-synthesizes from the unchanged login bytes, so removing an override
+  restores CPA's native behavior. This separation is CPA-specific, not a second
+  files engine. See `packages/cliproxyapi/patches/key-allowlist.patch`.
+
 ### Load delegate-routing
 
 Before you hand work to a subagent, another CLI or a workflow, load the

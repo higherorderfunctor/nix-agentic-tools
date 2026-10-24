@@ -1,6 +1,6 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-23 — 928 config nodes, including the patched
+> **Last verified:** 2026-10-23 — 974 config nodes, including the patched
 > `access.key-allowlist`, give the settings type through
 > `lib/extracted/options.nix`, with refinements and module assertions on the
 > allowlist; the clean render passes native v8 validation and loads through CPA
@@ -11,7 +11,8 @@
 > `access.key-allowlist` entries from named upstream routes. Built-in
 > `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
 > official documentation. Named API-key credentials accept an optional integer
-> priority, omitted when unset.
+> priority, omitted when unset. Named OAuth credentials apply typed behavior
+> overrides by vendor and secret account, without editing login files.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -40,8 +41,9 @@ once on the Instance. Harnesses select
 four-client example, required OAuth vendor/account selection and devenv secret
 references and the overlapping subscription/API-key recipe using
 `apiKey.priority = -1` are in `dev/fragments/ai-proxy/ai-proxy.md`. Priority
-applies to every API served by the credential; OAuth priority belongs to CPA's
-login file metadata and cannot be set through `oauth`.
+applies to every API served by an API-key credential. `oauth.priority` uses the
+same scheduling semantics for all matching logins; null preserves the login's
+priority or CPA's default of 0.
 
 For the built-in z.ai vendor, the upstream credential needs only its secret:
 
@@ -186,3 +188,52 @@ through their evaluated Home Manager instance units with runtime dummy secret
 files, polls both health endpoints, and checks both listeners are on loopback.
 It exists only on Linux. The stand-in instance check separately pins argv,
 working directory and state-directory modes.
+
+## Per-login OAuth behavior
+
+`credentials.<name>.oauth` requires `vendor` and secret `account`. Its optional
+behavior fields all default to null, preserving login metadata and CPA's own
+defaults. The same fields are available through
+`settings.oauth.credential-overrides`, generated from the patched source's
+measured schema. Types come from that schema; headers, account and URLs that may
+carry credentials use redact references.
+
+| Scope                               | Fields                                                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Antigravity                         | `user-agent`                                                                                       |
+| Claude                              | `fingerprint-profile`, `skip-account-profile`, `tool-prefix-disabled`                              |
+| Codex and xAI                       | `websockets`                                                                                       |
+| Kimi and other native URL consumers | `base-url`, `domain`                                                                               |
+| Routing and requests                | `excluded-models`, `headers`, `model-aliases`, `note`, `prefix`, `proxy-url`                       |
+| Scheduling                          | `disable-cooling`, `disabled`, `priority`, `request-retry`, `request-scoped-errors`, `weight`      |
+| Vertex                              | `interactions`, `location`, `native-interactions`, `openapi`, `openapi-location`, `openapi-models` |
+
+Higher available priorities win, subject to native transport preference and
+session affinity. Weight defaults to CPA's 1 when absent from both config and
+login; non-positive values normalize to zero and exclude weighted selection, and
+values above 1,000,000 are refused. Prefixes and provider-specific values retain
+native interpretation. `interactions` and `native-interactions` are separate
+native flags whose true values are combined by CPA; unset one if the other
+should control execution.
+
+The patch matches providers after trimming and case folding, and account emails
+case-sensitively after trimming, exactly as the account allowlist does. Every
+matching login receives the declared fields; unmatched logins retain their own
+values. The watcher applies changes and removals on config reload. Removing a
+field restores the unchanged login's metadata or native default. Repeated
+entries for the same account apply in config order, with later explicit fields
+winning.
+
+Overrides affect in-memory synthesis and native consumers. The four token stores
+restore only those original behavior fields on a copy before saving, and copy
+native token-merge results back while keeping runtime overrides. Tokens can
+refresh normally; the config never persists its behavior overrides into operator
+login files. No login directory is read during Nix evaluation or generation.
+
+Login identity and credential state remain CPA-owned: provider/account
+identifiers, access/refresh/ID tokens, nested credential partitions,
+service-account/project identity, setup-token classification, expiry, and
+provider-reported subscription metadata are not behavioral settings.
+`credential_options` belongs to Home API-key model configuration, not OAuth
+logins. `skip-account-profile` is included because CPA explicitly checks it to
+suppress Claude account-profile lookup.

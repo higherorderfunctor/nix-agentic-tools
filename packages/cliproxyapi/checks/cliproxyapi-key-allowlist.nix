@@ -16,21 +16,25 @@
   ...
 }: let
   package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi;
+  nameOf = packagePath: lib.replaceStrings ["/"] ["-"] packagePath;
   test = packagePath: sources:
     (extractedLib {inherit pkgs;}).goTest {
-      name = "cliproxyapi-key-allowlist-${baseNameOf packagePath}";
+      name = "cliproxyapi-key-allowlist-${nameOf packagePath}";
       inherit package packagePath sources;
       postTest = ''echo "ok — ${packagePath}: access.key-allowlist tests" >"$out"'';
       run = "TestKeyAllowlist.*";
     };
 in {
   checks.cliproxyapi-key-allowlist = pkgs.linkFarm "cliproxyapi-key-allowlist" (lib.mapAttrsToList (packagePath: sources: {
-      name = baseNameOf packagePath;
+      name = nameOf packagePath;
       path = test packagePath sources;
     }) {
       "internal/access/config_access" = {};
+      "internal/store" = {};
       "internal/watcher" = {};
+      "internal/watcher/synthesizer" = {};
       "sdk/api/handlers" = {};
+      "sdk/auth" = {};
       "sdk/cliproxy/auth"."key_allowlist_loops_test.go" = ./key_allowlist_loops_test.go;
     });
 }

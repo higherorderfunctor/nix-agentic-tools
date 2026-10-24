@@ -27,6 +27,18 @@
     "management.secret-key": {
       "secret": "The management API key; CPA hashes a plaintext value into its own config at start."
     },
+    "oauth.credential-overrides[].account": {
+      "secret": "An OAuth account email matched against login metadata."
+    },
+    "oauth.credential-overrides[].base-url": {
+      "secret": "A provider-specific upstream URL, which can carry credentials."
+    },
+    "oauth.credential-overrides[].headers.<name>": {
+      "secret": "An upstream request header, which can carry a credential."
+    },
+    "oauth.credential-overrides[].proxy-url": {
+      "secret": "A proxy URL, which can carry a user and password."
+    },
     "oauth.providers.codex.live-media-relay.ice-servers[].credential": {
       "secret": "A TURN server credential."
     },
