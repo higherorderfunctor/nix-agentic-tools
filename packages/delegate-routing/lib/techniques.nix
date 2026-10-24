@@ -6,7 +6,7 @@
     Agent = {
       kind = "subagent";
       modes = ["interactive" "headless"];
-      notes = "`model` takes an alias from the tool's enum; effort is inherited";
+      notes = "`model` accepts only an alias from the tool's own enum: no full ids and no model outside that enum; effort cannot be set (inherited)";
       pinsEffort = false;
       pinsModel = true;
       # docs/delegates/tools.md Claude `Agent`: depth 3 below main (claude:depth)
@@ -15,7 +15,7 @@
     Workflow = {
       kind = "workflow";
       modes = ["interactive" "headless"];
-      notes = "`agent(prompt, {model, effort})` per node; a single node is the way to pin one delegate";
+      notes = "`agent(prompt, {model, effort})` per node accepts full model ids, including ones the Agent enum lacks (for example models served through a proxy); a single node is the way to pin one delegate. For a non-Claude model pass `agentType: 'general-purpose'` (the default node type comes up without file or shell tools on non-Claude models) and start the brief with a preflight that returns BLOCKED when Bash is missing";
       pinsEffort = true;
       pinsModel = true;
       # docs/delegates/tools.md Claude `Workflow` fn 14: nodes lack Agent/Workflow (claude:wf_allowed)
@@ -25,7 +25,7 @@
       command = ''claude -p --model <id> --effort <effort> "<prompt>"'';
       kind = "external";
       modes = ["headless"];
-      notes = "omit --effort for Haiku; use the harness's own background mechanism, never nohup or a trailing &";
+      notes = "for when no Workflow tool exists; omit --effort for Haiku; use the harness's own background mechanism, never nohup or a trailing &";
       pinsEffort = true;
       pinsModel = true;
       # docs/delegates/tools.md Claude `Agent`: a `claude -p` main nests 3 levels (claude:depth)
@@ -33,7 +33,7 @@
     };
     models = {
       kind = "introspect";
-      notes = "read the Agent tool's `model` enum and any `maxEffortLevel` settings clamp";
+      notes = "read the Agent tool's `model` enum and any `maxEffortLevel` settings clamp; Workflow model ids come from the sizing tables, not the Agent enum";
     };
     usage = {
       command = claudeUsageScript;
