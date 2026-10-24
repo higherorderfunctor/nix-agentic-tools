@@ -18,15 +18,15 @@ use std::{
 };
 
 use airlock_core::{
-    config::Config,
+    config::{Auth, Config},
     error::SecretError,
-    ids::ClientId,
+    ids::{ClientId, CredentialId},
     policy::{Decision, Policy},
     secret::Secret,
     target::ConnectTarget,
 };
 use base64::{Engine as _, prelude::BASE64_STANDARD};
-use http_body_util::Full;
+use http_body_util::{Either, Full};
 use hyper::{
     Method, Request, Response, StatusCode,
     body::{Bytes, Incoming},
@@ -55,7 +55,7 @@ const CLOSE_GRACE: Duration = Duration::from_secs(1);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
-type Reply = Response<Full<Bytes>>;
+type Reply = Response<Either<Incoming, Full<Bytes>>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -76,7 +76,7 @@ pub struct SecretErrors(pub Vec<SecretError>);
 
 impl std::fmt::Display for SecretErrors {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("could not load client tokens:")?;
+        formatter.write_str("could not load secrets:")?;
         for error in &self.0 {
             write!(formatter, "\n{error}")?;
         }
@@ -91,9 +91,21 @@ pub struct Gateway {
 }
 
 struct State {
+    credentials: BTreeMap<CredentialId, Arc<LoadedCredential>>,
     interceptor: Interceptor,
     policy: Policy,
     tokens: BTreeMap<ClientId, Secret>,
+}
+
+#[derive(Clone, Copy)]
+enum AuthKind {
+    ApiKey,
+    OauthBearer,
+}
+
+struct LoadedCredential {
+    auth: AuthKind,
+    secret: Secret,
 }
 
 impl Gateway {
@@ -117,6 +129,25 @@ impl Gateway {
                 Err(error) => errors.push(error),
             }
         }
+        let mut credentials = BTreeMap::new();
+        for (credential, auth) in config.granted_credentials() {
+            let file = match auth {
+                Auth::ApiKey { file } => (AuthKind::ApiKey, file),
+                Auth::OauthBearer { file } => (AuthKind::OauthBearer, file),
+            };
+            match file.1.load() {
+                Ok(secret) => {
+                    credentials.insert(
+                        credential.clone(),
+                        Arc::new(LoadedCredential {
+                            auth: file.0,
+                            secret,
+                        }),
+                    );
+                }
+                Err(error) => errors.push(error),
+            }
+        }
         if !errors.is_empty() {
             return Err(SecretErrors(errors).into());
         }
@@ -126,6 +157,7 @@ impl Gateway {
             address: listener.local_addr()?,
             listener,
             state: Arc::new(State {
+                credentials,
                 interceptor,
                 policy: Policy::from_config(&config),
                 tokens,
@@ -178,8 +210,13 @@ struct PendingTunnel {
     upgrade: OnUpgrade,
 }
 
+struct InterceptRoute {
+    credential: CredentialId,
+    target: ConnectTarget,
+}
+
 enum Route {
-    Intercept(ConnectTarget),
+    Intercept(InterceptRoute),
     Tunnel(TcpStream),
 }
 
@@ -198,14 +235,23 @@ async fn connection(socket: TcpStream, state: Arc<State>) {
             return;
         }
         match (pending.upgrade.await, pending.route) {
-            (Ok(upgraded), Route::Intercept(target)) => {
+            (Ok(upgraded), Route::Intercept(route)) => {
+                let Some(credential) = state.credentials.get(&route.credential) else {
+                    pending.audit.outcome = "policy_denied";
+                    return;
+                };
                 state
                     .interceptor
-                    .run(TokioIo::new(upgraded), target, pending.audit)
+                    .run(
+                        TokioIo::new(upgraded),
+                        route.target,
+                        credential.clone(),
+                        pending.audit,
+                    )
                     .await;
             }
             (Ok(upgraded), Route::Tunnel(upstream)) => {
-                relay(TokioIo::new(upgraded), upstream, pending.audit).await;
+                relay(TokioIo::new(upgraded), upstream, &mut pending.audit).await;
             }
             (Err(_), _) => pending.audit.outcome = "upgrade_error",
         }
@@ -213,7 +259,7 @@ async fn connection(socket: TcpStream, state: Arc<State>) {
 }
 
 fn response(status: StatusCode, reason: impl Into<Bytes>) -> Reply {
-    let mut response = Response::new(Full::new(reason.into()));
+    let mut response = Response::new(Either::Right(Full::new(reason.into())));
     *response.status_mut() = status;
     response
 }
@@ -274,10 +320,19 @@ async fn handle(
             audit.outcome = "policy_denied";
             Ok(response(StatusCode::FORBIDDEN, format!("{reason:?}")))
         }
-        Decision::Intercept { .. } => {
-            // Passthrough only: the granted credentials are ignored until credential swap lands.
+        Decision::Intercept { credentials, .. } => {
+            // M2b deliberately uses only the first granted credential; fallback is later work.
+            let Some(credential) = credentials.first() else {
+                audit.outcome = "policy_denied";
+                return Ok(response(StatusCode::FORBIDDEN, "no granted credential"));
+            };
+            audit.credential = Some(credential.clone());
             audit.decision = "intercept";
-            Ok(establish(&mut request, &sender, audit, Route::Intercept(target)).await)
+            let route = InterceptRoute {
+                credential: credential.clone(),
+                target,
+            };
+            Ok(establish(&mut request, &sender, audit, Route::Intercept(route)).await)
         }
         Decision::Tunnel => {
             audit.decision = "tunnel";
@@ -336,10 +391,12 @@ struct Audit {
     alpn: Option<String>,
     client: Option<ClientId>,
     client_to_upstream: Arc<AtomicU64>,
+    credential: Option<CredentialId>,
     decision: &'static str,
     dispatch: tracing::Dispatch,
     host: Option<airlock_core::ids::HostName>,
     outcome: &'static str,
+    requests: Arc<AtomicU64>,
     port: u16,
     sni: Option<String>,
     started: Instant,
@@ -352,11 +409,13 @@ impl Audit {
             alpn: None,
             client: None,
             client_to_upstream: Arc::default(),
+            credential: None,
             decision: "deny",
             dispatch: tracing::dispatcher::get_default(Clone::clone),
             host: None,
             outcome: "cancelled",
             port: 0,
+            requests: Arc::default(),
             sni: None,
             started: Instant::now(),
             upstream_to_client: Arc::default(),
@@ -369,7 +428,9 @@ impl Drop for Audit {
         tracing::dispatcher::with_default(&self.dispatch, || {
             tracing::info!(
                 client = self.client.as_ref().map_or("", AsRef::as_ref),
+                credential = self.credential.as_ref().map_or("", AsRef::as_ref),
                 host = self.host.as_ref().map_or("", AsRef::as_ref),
+                requests = self.requests.load(Ordering::Relaxed),
                 port = self.port,
                 sni = self.sni.as_deref().unwrap_or_default(),
                 alpn = self.alpn.as_deref().unwrap_or_default(),
@@ -382,6 +443,17 @@ impl Drop for Audit {
             );
         });
     }
+}
+
+/// Records bytes accepted by the peer-facing transport, even if the caller is later cancelled.
+pub(crate) fn record_completed_write(
+    result: Poll<io::Result<usize>>,
+    written: &AtomicU64,
+) -> Poll<io::Result<usize>> {
+    if let Poll::Ready(Ok(bytes)) = result {
+        written.fetch_add(bytes as u64, Ordering::Relaxed);
+    }
+    result
 }
 
 // Counts completed writes even when copy_bidirectional fails or its future is cancelled.
@@ -415,10 +487,7 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for TunnelIo<T> {
         buffer: &[u8],
     ) -> Poll<io::Result<usize>> {
         let result = Pin::new(&mut self.inner).poll_write(cx, buffer);
-        if let Poll::Ready(Ok(bytes)) = result {
-            self.written.fetch_add(bytes as u64, Ordering::Relaxed);
-        }
-        result
+        record_completed_write(result, &self.written)
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -433,22 +502,36 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for TunnelIo<T> {
 /// Copies bytes both ways until either side ends, then shuts both down (`close_notify` for TLS).
 ///
 /// Shutdown flushes buffered ciphertext first, so it is bounded; on expiry both streams drop.
-async fn relay<C, U>(client: C, upstream: U, mut audit: Audit)
+async fn relay<C, U>(client: C, upstream: U, audit: &mut Audit)
 where
     C: AsyncRead + AsyncWrite + Unpin,
     U: AsyncRead + AsyncWrite + Unpin,
 {
     let closed = Arc::new(Notify::new());
-    let mut client = TunnelIo {
+    let client = TunnelIo {
         closed: closed.clone(),
         inner: client,
         written: audit.upstream_to_client.clone(),
     };
-    let mut upstream = TunnelIo {
+    let upstream = TunnelIo {
         closed: closed.clone(),
         inner: upstream,
         written: audit.client_to_upstream.clone(),
     };
+    relay_streams(client, upstream, closed, audit).await;
+}
+
+/// Runs the transport-agnostic relay lifecycle for wrappers that already own accounting and EOF
+/// wake-ups. Shutdown flushes buffered ciphertext first, so it is bounded; on expiry both drop.
+pub(crate) async fn relay_streams<C, U>(
+    mut client: C,
+    mut upstream: U,
+    closed: Arc<Notify>,
+    audit: &mut Audit,
+) where
+    C: AsyncRead + AsyncWrite + Unpin,
+    U: AsyncRead + AsyncWrite + Unpin,
+{
     audit.outcome = tokio::select! {
         result = tokio::io::copy_bidirectional(&mut client, &mut upstream) => {
             if result.is_ok() { "closed" } else { "io_error" }

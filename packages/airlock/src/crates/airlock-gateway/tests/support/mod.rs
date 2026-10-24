@@ -5,13 +5,26 @@ use std::{
     io::{self, Write},
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
 use airlock_core::config::{Config, RawConfig};
 use airlock_gateway::{Error, Gateway};
 use base64::{Engine as _, prelude::BASE64_STANDARD};
+use http_body_util::BodyExt;
+use hyper::{
+    Method, Request, Response, StatusCode, Uri,
+    body::{Body, Bytes, Frame, Incoming},
+    client::conn,
+    header::{HeaderMap, HeaderName},
+    server::conn as server_conn,
+    service::service_fn,
+};
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use rcgen::{
     BasicConstraints, CertificateParams, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
     KeyUsagePurpose,
@@ -26,14 +39,18 @@ use tempfile::TempDir;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
-    sync::oneshot,
+    sync::{Notify, mpsc, oneshot},
     task::JoinHandle,
-    time::timeout,
+    time::{sleep, timeout},
 };
 use tokio_rustls::{TlsAcceptor, TlsConnector, client, server};
 use tracing::instrument::WithSubscriber;
 
 pub const TOKEN: &str = "fake-SECRET-harness-token";
+pub const CLIENT_OAUTH_TOKEN: &str = "fake-CLIENT-oauth";
+pub const CLIENT_API_KEY: &str = "fake-CLIENT-api-key";
+pub const REAL_OAUTH_TOKEN: &str = "fake-REAL-oauth";
+pub const REAL_API_KEY: &str = "fake-REAL-api-key";
 
 #[derive(Clone, Default)]
 pub struct Capture(Arc<Mutex<Vec<u8>>>);
@@ -66,9 +83,29 @@ impl Capture {
             "audit exposed Basic credentials"
         );
         assert!(!text.to_ascii_lowercase().contains("proxy-authorization"));
+        for prefix in ["fake-REAL", "fake-CLIENT"] {
+            assert!(!text.contains(prefix), "audit exposed credential: {text}");
+        }
         text.lines()
             .map(|line| serde_json::from_str(line).expect("JSON event"))
             .collect()
+    }
+
+    pub fn request_events(&self) -> Vec<Value> {
+        let events: Vec<_> = self
+            .events()
+            .into_iter()
+            .filter(|event| event["fields"]["message"] == "request")
+            .collect();
+        assert!(!events.is_empty(), "no request events");
+        for event in &events {
+            let path = event["fields"]["path"].as_str().expect("request path");
+            assert!(
+                !path.contains('?'),
+                "request path exposed its query: {path}"
+            );
+        }
+        events
     }
 }
 
@@ -93,11 +130,28 @@ impl Running {
         roots: RootCertStore,
         ca_directory: Option<&Path>,
     ) -> Self {
+        Self::start_with_auth(
+            unknown_hosts,
+            intercepted,
+            roots,
+            ca_directory,
+            FixtureAuth::OauthBearer,
+        )
+        .await
+    }
+
+    pub async fn start_with_auth(
+        unknown_hosts: &str,
+        intercepted: &[&str],
+        roots: RootCertStore,
+        ca_directory: Option<&Path>,
+        auth: FixtureAuth,
+    ) -> Self {
         let directory = tempfile::tempdir().expect("tempdir");
-        std::fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("write token");
+        write_fixtures(&directory, auth);
         let ca_directory = ca_directory.map_or_else(|| directory.path().join("ca"), Path::to_owned);
         let gateway = Gateway::bind(
-            config(&directory, unknown_hosts, intercepted),
+            config_with_auth(&directory, unknown_hosts, intercepted, auth),
             &ca_directory,
             roots,
         )
@@ -109,6 +163,7 @@ impl Running {
         let writer = capture.clone();
         let subscriber = tracing_subscriber::fmt()
             .json()
+            .with_max_level(tracing::Level::DEBUG)
             .with_writer(move || writer.clone())
             .finish();
         let (shutdown, receiver) = oneshot::channel();
@@ -129,6 +184,24 @@ impl Running {
         }
     }
 
+    pub async fn closed_event(&self) -> Value {
+        timeout(Duration::from_secs(3), async {
+            loop {
+                if let Some(event) = self
+                    .capture
+                    .events()
+                    .into_iter()
+                    .find(|event| event["fields"]["message"] == "CONNECT closed")
+                {
+                    return event;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("CONNECT audit deadline")
+    }
+
     pub async fn stop(self) -> Vec<Value> {
         self.shutdown.send(()).expect("request shutdown");
         timeout(Duration::from_secs(7), self.task)
@@ -136,7 +209,11 @@ impl Running {
             .expect("bounded shutdown")
             .expect("server task")
             .expect("serve");
-        self.capture.events()
+        self.capture
+            .events()
+            .into_iter()
+            .filter(|event| event["fields"]["message"] == "CONNECT closed")
+            .collect()
     }
 
     pub async fn request(
@@ -217,16 +294,76 @@ impl Running {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum FixtureAuth {
+    ApiKey,
+    OauthBearer,
+}
+
+fn write_fixtures(directory: &TempDir, auth: FixtureAuth) {
+    std::fs::write(directory.path().join("token"), format!("{TOKEN}\n")).expect("write token");
+    std::fs::write(
+        directory.path().join("claude"),
+        format!(
+            "{}\n",
+            match auth {
+                FixtureAuth::ApiKey => REAL_API_KEY,
+                FixtureAuth::OauthBearer => REAL_OAUTH_TOKEN,
+            }
+        ),
+    )
+    .expect("write primary credential");
+    std::fs::write(
+        directory.path().join("backup"),
+        format!(
+            "{}\n",
+            match auth {
+                FixtureAuth::ApiKey => REAL_OAUTH_TOKEN,
+                FixtureAuth::OauthBearer => REAL_API_KEY,
+            }
+        ),
+    )
+    .expect("write backup credential");
+}
+
 pub fn config(directory: &TempDir, unknown_hosts: &str, intercepted: &[&str]) -> Config {
+    config_with_auth(
+        directory,
+        unknown_hosts,
+        intercepted,
+        FixtureAuth::OauthBearer,
+    )
+}
+
+fn config_with_auth(
+    directory: &TempDir,
+    unknown_hosts: &str,
+    intercepted: &[&str],
+    auth: FixtureAuth,
+) -> Config {
+    let primary = match auth {
+        FixtureAuth::ApiKey => json!({
+            "file": directory.path().join("claude"), "type": "api_key"
+        }),
+        FixtureAuth::OauthBearer => json!({
+            "file": directory.path().join("claude"), "type": "oauth_bearer"
+        }),
+    };
     Config::try_from(serde_json::from_value::<RawConfig>(json!({
         "clients": {"harness": {
-            "grants": [{"credentials": ["claude"], "upstream": "anthropic"}],
+            "grants": [{
+                "credentials": ["claude", "backup"],
+                "upstream": "anthropic"
+            }],
             "token_file": directory.path().join("token")
         }},
-        "credentials": {"claude": {
-            "auth": {"file": directory.path().join("unused-upstream-secret"), "type": "oauth_bearer"},
-            "upstream": "anthropic"
-        }},
+        "credentials": {
+            "backup": {"auth": {
+                "file": directory.path().join("backup"),
+                "type": if matches!(auth, FixtureAuth::ApiKey) { "oauth_bearer" } else { "api_key" }
+            }, "upstream": "anthropic"},
+            "claude": {"auth": primary, "upstream": "anthropic"}
+        },
         "listen": "127.0.0.1:0",
         "state_dir": directory.path(),
         "unknown_hosts": unknown_hosts,
@@ -313,4 +450,461 @@ pub async fn tls_upstream(config: Arc<ServerConfig>) -> Upstream {
         TlsAcceptor::from(config).accept(socket).await
     });
     Upstream { accepted, port }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HttpProtocol {
+    Http1,
+    Http2,
+}
+
+impl HttpProtocol {
+    pub fn client_alpn(self) -> &'static [&'static [u8]] {
+        match self {
+            Self::Http1 => &[b"http/1.1"],
+            Self::Http2 => &[b"h2"],
+        }
+    }
+
+    pub fn server_alpn(self) -> &'static [&'static [u8]] {
+        self.client_alpn()
+    }
+}
+
+#[derive(Debug)]
+pub struct RequestRecord {
+    pub body: Bytes,
+    pub body_hash: u64,
+    pub body_len: usize,
+    pub headers: HeaderMap,
+    pub method: Method,
+    pub path: String,
+}
+
+pub struct StallGates {
+    pub backpressure: Notify,
+    pub response_started: Notify,
+}
+
+pub struct UpgradeBytes {
+    pub client_to_upstream: AtomicU64,
+}
+
+#[derive(Clone)]
+pub enum UpstreamMode {
+    CloseAfterResponse,
+    DropMidResponse,
+    Echo,
+    Gate(Arc<Notify>),
+    HashUpload,
+    Metadata,
+    Sse(Arc<Notify>),
+    Stall(Arc<StallGates>),
+    UpgradeEcho(Arc<UpgradeBytes>),
+}
+
+async fn serve_raw_upgrade(
+    mut tls: server::TlsStream<TcpStream>,
+    bytes: Arc<UpgradeBytes>,
+) -> io::Result<()> {
+    let mut header = Vec::new();
+    while !header.ends_with(b"\r\n\r\n") {
+        let mut byte = [0];
+        let read = tls.read(&mut byte).await?;
+        if read == 0 {
+            return Err(io::Error::from(io::ErrorKind::UnexpectedEof));
+        }
+        bytes
+            .client_to_upstream
+            .fetch_add(read as u64, Ordering::Relaxed);
+        header.push(byte[0]);
+        assert!(header.len() < 8192);
+    }
+    tls.write_all(
+        b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: test\r\n\r\n",
+    )
+    .await?;
+    let mut buffer = [0; 4096];
+    loop {
+        let read = tls.read(&mut buffer).await?;
+        if read == 0 {
+            break;
+        }
+        bytes
+            .client_to_upstream
+            .fetch_add(read as u64, Ordering::Relaxed);
+        tls.write_all(&buffer[..read]).await?;
+    }
+    tls.shutdown().await
+}
+
+async fn request_body(mode: &UpstreamMode, mut body: Incoming) -> (Bytes, u64, usize) {
+    let echo = matches!(mode, UpstreamMode::Echo);
+    let mut collected = Vec::new();
+    let mut hash = FNV_OFFSET;
+    let mut len = 0;
+    while let Some(frame) = body.frame().await {
+        let frame = frame.expect("upstream body");
+        if let Ok(bytes) = frame.into_data() {
+            hash = fnv1a_test(hash, &bytes);
+            len += bytes.len();
+            if echo {
+                collected.extend_from_slice(&bytes);
+            }
+        }
+    }
+    (Bytes::from(collected), hash, len)
+}
+
+async fn upstream_response(
+    mode: UpstreamMode,
+    path: &str,
+    body: Bytes,
+    body_hash: u64,
+) -> Response<ReceiverBody> {
+    match mode {
+        UpstreamMode::CloseAfterResponse => Response::builder()
+            .header("connection", "close")
+            .body(queued_body(Bytes::from_static(b"upstream-closed")))
+            .expect("close response"),
+        UpstreamMode::DropMidResponse => {
+            let (sender, receiver) = mpsc::channel(1);
+            tokio::spawn(async move {
+                let _ = sender
+                    .send(Ok(Frame::data(Bytes::from_static(b"first-event;"))))
+                    .await;
+                let _ = sender
+                    .send(Err(io::Error::from(io::ErrorKind::BrokenPipe)))
+                    .await;
+            });
+            Response::new(ReceiverBody::new(receiver))
+        }
+        UpstreamMode::Echo => Response::new(queued_body(body)),
+        UpstreamMode::Gate(release) => {
+            if path == "/blocked" {
+                release.notified().await;
+            } else {
+                release.notify_one();
+            }
+            Response::new(queued_body(Bytes::from_static(b"released")))
+        }
+        UpstreamMode::HashUpload => Response::new(queued_body(Bytes::from(body_hash.to_string()))),
+        UpstreamMode::Metadata => Response::builder()
+            .status(StatusCode::TOO_MANY_REQUESTS)
+            .header("retry-after", "7")
+            .header("x-upstream", "metadata")
+            .header("upgrade", "websocket")
+            .body(queued_body(Bytes::from_static(b"quota")))
+            .expect("metadata response"),
+        UpstreamMode::Sse(release) => {
+            let (sender, receiver) = mpsc::channel(2);
+            tokio::spawn(async move {
+                let _ = sender
+                    .send(Ok(Frame::data(Bytes::from_static(b"event:first\n\n"))))
+                    .await;
+                release.notified().await;
+                let _ = sender
+                    .send(Ok(Frame::data(Bytes::from_static(b"event:last\n\n"))))
+                    .await;
+            });
+            Response::new(ReceiverBody::new(receiver))
+        }
+        UpstreamMode::Stall(_) => unreachable!("raw stalled-reader upstream"),
+        UpstreamMode::UpgradeEcho(_) => unreachable!("raw upgrade upstream"),
+    }
+}
+
+async fn serve_raw_stall(
+    mut tls: server::TlsStream<TcpStream>,
+    gates: Arc<StallGates>,
+) -> io::Result<()> {
+    let mut request = Vec::new();
+    while !request.ends_with(b"\r\n\r\n") {
+        let mut byte = [0];
+        let read = tls.read(&mut byte).await?;
+        if read == 0 {
+            return Err(io::Error::from(io::ErrorKind::UnexpectedEof));
+        }
+        request.push(byte[0]);
+        assert!(request.len() < 8192);
+    }
+    tls.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+        .await?;
+    tls.flush().await?;
+    gates.response_started.notify_one();
+    let chunk = vec![b'x'; 1024 * 1024];
+    loop {
+        let write = async {
+            write_chunk(&mut tls, &chunk).await?;
+            tls.flush().await
+        };
+        tokio::pin!(write);
+        if let Ok(result) = timeout(Duration::from_millis(100), write.as_mut()).await {
+            result?;
+        } else {
+            gates.backpressure.notify_one();
+            write.await?;
+        }
+    }
+}
+
+async fn write_chunk<T>(tls: &mut T, chunk: &[u8]) -> io::Result<()>
+where
+    T: AsyncWriteExt + Unpin,
+{
+    let length = format!("{:x}\r\n", chunk.len());
+    tls.write_all(length.as_bytes()).await?;
+    tls.write_all(chunk).await?;
+    tls.write_all(b"\r\n").await
+}
+
+pub struct HttpUpstream {
+    pub done: JoinHandle<io::Result<()>>,
+    pub port: u16,
+    pub records: std::sync::Arc<std::sync::Mutex<Vec<RequestRecord>>>,
+}
+
+pub async fn wait_for_request(upstream: &HttpUpstream, path: &str) {
+    timeout(Duration::from_secs(1), async {
+        loop {
+            if records(upstream).iter().any(|record| record.path == path) {
+                return;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("upstream request deadline");
+}
+
+pub fn records(upstream: &HttpUpstream) -> Vec<RequestRecord> {
+    let records = upstream.records.lock().expect("records lock");
+    records
+        .iter()
+        .map(|record| RequestRecord {
+            body: record.body.clone(),
+            body_hash: record.body_hash,
+            body_len: record.body_len,
+            headers: record.headers.clone(),
+            method: record.method.clone(),
+            path: record.path.clone(),
+        })
+        .collect()
+}
+
+pub async fn http_upstream(
+    ca: &TestCa,
+    protocol: HttpProtocol,
+    mode: UpstreamMode,
+) -> HttpUpstream {
+    let listener = sink().await;
+    let port = listener.local_addr().expect("upstream address").port();
+    let records = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let acceptor = TlsAcceptor::from(ca.server_config(protocol.server_alpn()));
+    let task_records = records.clone();
+
+    let done = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await?;
+        let tls = acceptor.accept(socket).await?;
+        if let UpstreamMode::Stall(gates) = &mode {
+            return serve_raw_stall(tls, gates.clone()).await;
+        }
+        if let UpstreamMode::UpgradeEcho(bytes) = &mode {
+            return serve_raw_upgrade(tls, bytes.clone()).await;
+        }
+        let is_h2 = tls.get_ref().1.alpn_protocol() == Some(&b"h2"[..]);
+        let service_records = task_records.clone();
+        let service_mode = mode.clone();
+        let service = service_fn(move |request: Request<Incoming>| {
+            let records = service_records.clone();
+            let mode = service_mode.clone();
+            async move {
+                let method = request.method().clone();
+                let path = request.uri().path().to_owned();
+                let headers = request.headers().clone();
+                let body = request.into_body();
+                let (body, body_hash, body_len) = request_body(&mode, body).await;
+                records.lock().expect("records lock").push(RequestRecord {
+                    body: body.clone(),
+                    body_hash,
+                    body_len,
+                    headers,
+                    method,
+                    path: path.clone(),
+                });
+
+                let response = upstream_response(mode, path.as_str(), body, body_hash).await;
+                Ok::<_, std::convert::Infallible>(response)
+            }
+        });
+
+        let result = if is_h2 {
+            server_conn::http2::Builder::new(TokioExecutor::new())
+                .serve_connection(TokioIo::new(tls), service)
+                .await
+        } else {
+            server_conn::http1::Builder::new()
+                .serve_connection(TokioIo::new(tls), service)
+                .with_upgrades()
+                .await
+        };
+        result.map_err(|error| io::Error::other(error.to_string()))?;
+        Ok(())
+    });
+
+    HttpUpstream {
+        done,
+        port,
+        records,
+    }
+}
+
+pub struct ReceiverBody {
+    receiver: mpsc::Receiver<Result<Frame<Bytes>, io::Error>>,
+    closed: bool,
+}
+
+fn queued_body(bytes: Bytes) -> ReceiverBody {
+    let (sender, receiver) = mpsc::channel(1);
+    sender.try_send(Ok(Frame::data(bytes))).expect("queue body");
+    ReceiverBody::new(receiver)
+}
+
+impl ReceiverBody {
+    pub fn new(receiver: mpsc::Receiver<Result<Frame<Bytes>, io::Error>>) -> Self {
+        Self {
+            receiver,
+            closed: false,
+        }
+    }
+
+    fn closed() -> Self {
+        let (_sender, receiver) = mpsc::channel(1);
+        Self {
+            receiver,
+            closed: true,
+        }
+    }
+}
+
+impl Body for ReceiverBody {
+    type Data = Bytes;
+    type Error = io::Error;
+
+    fn poll_frame(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        if self.closed {
+            return std::task::Poll::Ready(None);
+        }
+        match self.receiver.poll_recv(cx) {
+            std::task::Poll::Pending => std::task::Poll::Pending,
+            std::task::Poll::Ready(None) => std::task::Poll::Ready(None),
+            std::task::Poll::Ready(Some(Err(error))) => std::task::Poll::Ready(Some(Err(error))),
+            std::task::Poll::Ready(Some(Ok(frame))) => std::task::Poll::Ready(Some(Ok(frame))),
+        }
+    }
+}
+
+enum ClientSender {
+    Http1(conn::http1::SendRequest<ReceiverBody>),
+    Http2(conn::http2::SendRequest<ReceiverBody>),
+}
+
+pub struct HttpClient {
+    sender: ClientSender,
+    task: JoinHandle<()>,
+}
+
+impl Drop for HttpClient {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+impl HttpClient {
+    pub async fn connect(server: &Running, upstream_port: u16, protocol: HttpProtocol) -> Self {
+        let tls = server
+            .handshake(upstream_port, "localhost", protocol.client_alpn(), true)
+            .await
+            .expect("client handshake");
+        let (sender, task) = match protocol {
+            HttpProtocol::Http1 => {
+                let (sender, connection) =
+                    conn::http1::handshake::<_, ReceiverBody>(TokioIo::new(tls))
+                        .await
+                        .expect("HTTP/1 client handshake");
+                let task = tokio::spawn(async move {
+                    let _ = connection.with_upgrades().await;
+                });
+                (ClientSender::Http1(sender), task)
+            }
+            HttpProtocol::Http2 => {
+                let (sender, connection) = conn::http2::handshake::<_, _, ReceiverBody>(
+                    TokioExecutor::new(),
+                    TokioIo::new(tls),
+                )
+                .await
+                .expect("HTTP/2 client handshake");
+                let task = tokio::spawn(async move {
+                    let _ = connection.await;
+                });
+                (ClientSender::Http2(sender), task)
+            }
+        };
+        Self { sender, task }
+    }
+
+    pub async fn send(&mut self, request: Request<ReceiverBody>) -> Response<Incoming> {
+        match &mut self.sender {
+            ClientSender::Http1(sender) => sender.send_request(request).await.expect("send"),
+            ClientSender::Http2(sender) => sender.send_request(request).await.expect("send"),
+        }
+    }
+
+    pub fn http2_sender(&self) -> conn::http2::SendRequest<ReceiverBody> {
+        let ClientSender::Http2(sender) = &self.sender else {
+            panic!("HTTP/1 senders are not cloneable");
+        };
+        sender.clone()
+    }
+}
+
+pub fn request(
+    method: &str,
+    path: &str,
+    headers: &[(HeaderName, &'static str)],
+    body: ReceiverBody,
+) -> Request<ReceiverBody> {
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(Uri::try_from(path).expect("request URI"));
+    for (name, value) in headers {
+        builder = builder.header(name, *value);
+    }
+    builder.body(body).expect("request")
+}
+
+pub fn full_body(bytes: &'static [u8]) -> ReceiverBody {
+    let (sender, receiver) = mpsc::channel(1);
+    sender
+        .try_send(Ok(Frame::data(Bytes::from_static(bytes))))
+        .expect("queue body");
+    ReceiverBody::new(receiver)
+}
+
+pub fn streaming_body(
+    capacity: usize,
+) -> (mpsc::Sender<Result<Frame<Bytes>, io::Error>>, ReceiverBody) {
+    let (sender, receiver) = mpsc::channel(capacity);
+    (sender, ReceiverBody::new(receiver))
+}
+
+pub const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+
+pub fn fnv1a_test(hash: u64, bytes: &[u8]) -> u64 {
+    bytes.iter().fold(hash, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3)
+    })
 }
