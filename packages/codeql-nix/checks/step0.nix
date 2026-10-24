@@ -24,6 +24,7 @@
       shopt -s inherit_errexit 2>/dev/null || :
       export CODEQL_NIX_TEST_LOCK="$TMPDIR/codeql.lock"
       export CODEQL_NIX_TEST_SCRATCH="$TMPDIR"
+      export CODEQL_NIX_TEST_SESSION="$TMPDIR/installed-session"
       python3 ${owner}/checks/run-domain-tests.py ${lib.concatMapStringsSep " " (test: "${owner}/checks/fixtures/${test}") tests}
       mkdir "$out"
       printf '%s passed\n' ${lib.escapeShellArg evidence} > "$out/evidence"

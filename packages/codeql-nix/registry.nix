@@ -12,6 +12,7 @@
         "evaluation-isolation"
         "implicit-scope"
         "installed-extractor"
+        "installed-sessions"
         "integration-gate"
         "lexical-scope"
         "literal-imports"

@@ -1,0 +1,6 @@
+- description: Implemented Nix metadata queries
+- query: DisabledModules.ql
+- query: ExtractionHealth.ql
+- query: ModuleSelection.ql
+- query: RenamedOptions.ql
+- query: WhoSetsOption.ql
