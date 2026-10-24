@@ -122,7 +122,7 @@
       vendor = mkOption {
         type = types.nullOr (types.enum (builtins.attrNames vendors));
         default = null;
-        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+        description = "Built-in vendor defaults for this API-key upstream credential. z-ai defaults the chat API to z.ai's Coding Plan endpoint (`${vendors.z-ai.apis.chat.base-url}`) and the Anthropic API to `${vendors.z-ai.apis.anthropic.base-url}`; for the general pay-as-you-go endpoint set `apiKey.apis.chat.base-url = \"${vendors.z-ai.generalApis.chat.base-url}\"`; billing follows the key type for keys created from 2026-10-16, while older Compatible keys bill by endpoint. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
       };
     };
     config = lib.mkIf (config.vendor != null) {
