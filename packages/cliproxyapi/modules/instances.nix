@@ -93,10 +93,7 @@ backend: {
       listed =
         map (model: {
           inherit (model) name;
-          visible =
-            if model.alias != null
-            then model.alias
-            else model.name;
+          visible = providersLib.modelName model;
         })
         apiKey.models;
       # preserveResolvedModelSuffix: the request's suffix comes back on a
@@ -121,7 +118,7 @@ backend: {
         lib.foldl'
         (claimed: entry: let
           alias = lib.toLower entry.alias;
-          keys = lib.unique [
+          keys = [
             alias
             (parseSuffix alias)
             (lib.toLower entry.name)

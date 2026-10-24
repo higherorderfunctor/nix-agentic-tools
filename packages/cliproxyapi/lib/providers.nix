@@ -235,6 +235,6 @@
     then {problem = "${path}: upstream credential `${choice.credential}` does not serve API `${api}`.";}
     else {rule = rule choice.credential credential.apiKey api;};
 in {
-  inherit apiKeys apis clientKeyType credentialType route rule served visibleAliases visibleModels;
+  inherit apiKeys apis clientKeyType credentialType modelName route rule served visibleAliases visibleModels;
   lower = providers: lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList blocks providers);
 }
