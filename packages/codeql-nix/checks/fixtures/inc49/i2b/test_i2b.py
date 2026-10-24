@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -81,6 +82,12 @@ class I2bTests(unittest.TestCase):
             targets = {"T": {"sourceRoots": [{"logicalName": "project", "rootContentIdentity": "content-a"}]}}
             self.assertEqual(import_paths(abi, targets, {golden.ROOT: (root, root)}, facts)[0]["T"], [(anchor, "directory", "resolved", "", (golden.ROOT, "real/pkg/default.nix"))])
             self.assertEqual(json.loads(self.nix("eval", "--json", "--impure", "--file", str((root / "link/main.nix").resolve()))), 17)
+            snapshot = Path(temporary) / "snapshot"
+            shutil.copytree(root, snapshot, symlinks=True)
+            (snapshot / "link/main.nix").unlink()
+            (snapshot / "link/main.nix").symlink_to(root / "real/main.nix")
+            (root / "real/main.nix").write_text("import ./bad")
+            self.assertEqual(import_paths(abi, targets, {golden.ROOT: (root, snapshot)}, facts)[0]["T"], [(anchor, "directory", "resolved", "", (golden.ROOT, "real/pkg/default.nix"))])
             for expected in (17, 53):
                 self.assertEqual(json.loads(self.nix("eval", "--json", "--impure", "--expr", f"import {root}/pkg")), expected)
                 if expected == 17:
@@ -127,9 +134,12 @@ class I2bTests(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             hashes.append(rows[0][7])
         self.assertNotEqual(*hashes)
-        for path in ("../escape", "/absolute", "https://example.invalid/source"):
+        for path in ("../escape", "/absolute", "https://example.invalid/source", "./x", "x//y", "x/", "."):
             target["searchPath"] = [MAPPINGS["S"][0] | {"relativePath": path}]
             self.assertEqual(supervisor_fixture.rows(fixture.run_jobs(packet=packet), "nx_targets"), [])
+        target["searchPath"] = MAPPINGS["S"]
+        target["sourceRoots"].append(target["sourceRoots"][0] | {"rootContentIdentity": "duplicate"})
+        self.assertEqual(supervisor_fixture.rows(fixture.run_jobs(packet=packet), "nx_targets"), [])
         print("I2b fast target search-order identity and invalid descriptor paths passed", flush=True)
 
     def test_installed_directory_and_target_qualified_search_matrix(self):

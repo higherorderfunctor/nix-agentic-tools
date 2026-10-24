@@ -47,9 +47,10 @@ returning `unsupported-model`. Legacy `not-requested` remains accepted. See
 [builtin-models.md](builtin-models.md) for model generation and compatibility.
 
 Optional `searchPath`, default `[]`, orders `<name>` mappings to
-`{prefix, rootLogicalName, relativePath}`; paths stay inside a target root, and
-the ordered list joins the target's input hash. Input identities map exact input
-names to identity strings. Each source root has `logicalName`, `path` and
+`{prefix, rootLogicalName, relativePath}`; paths are normalized (empty, or no
+empty, `.` or `..` segments) inside a target root, and the ordered list joins
+the target's input hash. Input identities map exact input names to identity
+strings. Each source root has a unique `logicalName`, `path` and
 `rootContentIdentity`. Logical name and content identity supply F1 root
 identity; checkout path is mapping data. The fingerprint fields combine with
 `adapterVersion`, the argument-description hash and `system` to supply F1

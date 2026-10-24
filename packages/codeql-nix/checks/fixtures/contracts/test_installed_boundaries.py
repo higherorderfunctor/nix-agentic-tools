@@ -94,7 +94,7 @@ class InstalledBoundaryTests(unittest.TestCase):
             self.assertNotEqual(key, tree_digest(source))
         expected = {
             "metadata.qls": ["DisabledModules.ql", "ExtractionHealth.ql", "ModuleSelection.ql", "RenamedOptions.ql", "WhoSetsOption.ql"],
-            "source.qls": ["ImportGraph.ql", "NameBindings.ql", "RenamedOptions.ql"],
+            "source.qls": ["DirectoryImports.ql", "ImportGraph.ql", "NameBindings.ql", "RenamedOptions.ql"],
             "values.qls": [],
         }
         for name, queries in expected.items():

@@ -91,7 +91,9 @@ def import_paths(abi, targets, roots, facts):
             key, relative = files[file][1:3]
             if kind not in ("path_expression", "spath_expression") or key not in keys:
                 continue
-            text = (roots[key][1] / relative).read_bytes()[start:end].decode()
+            # syntax.py's canonical source (RawBridge sourcePath), read from the immutable tree.
+            source = (Path(roots[key][0]) / relative).resolve(strict=True).relative_to(roots[key][0])
+            text = (roots[key][1] / source).read_bytes()[start:end].decode()
             if kind == "spath_expression":
                 found, root, lookup, kind = ("search-path-unmapped", None), None, text[1:-1], "search"
                 for entry in target.get("searchPath", []):
@@ -105,11 +107,7 @@ def import_paths(abi, targets, roots, facts):
                     if hit:
                         break
             else:
-                # Canonical source directory (RawBridge sourcePath), contained in the immutable tree.
-                source = (roots[key][1] / relative).resolve()
-                if not source.is_relative_to(roots[key][1]):
-                    continue
-                path = Path(os.path.normpath(Path(roots[key][0]) / source.parent.relative_to(roots[key][1]) / text))
+                path = Path(os.path.normpath(Path(roots[key][0]) / source.parent / text))
                 root = next((k for k in [key, *keys] if k in roots and path.is_relative_to(roots[k][0])), None)
                 if "${" in text or root is None or not (roots[root][1] / path.relative_to(roots[root][0])).is_dir():
                     continue

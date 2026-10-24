@@ -108,7 +108,7 @@
               "prefix": { "$ref": "#/$defs/text" },
               "relativePath": {
                 "$ref": "#/$defs/text",
-                "pattern": "^(?!/)(?!.*:)(?!(.*/)?\\.\\.(/|$))"
+                "pattern": "^(?:(?!\\.\\.?(?:/|$))[^/:]+(?:/(?!\\.\\.?(?:/|$))[^/:]+)*)?$"
               },
               "rootLogicalName": { "$ref": "#/$defs/identity" }
             },
