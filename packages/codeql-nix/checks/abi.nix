@@ -47,7 +47,8 @@
                 trap.write(f"{ids[label]}=@{quoted(label)}\n")
             for table, args in GRAPH:
                 fields = [ids[value] if kind in abi.CONTRACT["entities"] else
-                          quoted(value) if kind == "text" else str(value)
+                          quoted(value) if kind == "text" else
+                          str(int(value)) if kind == "bool" else str(value)
                           for (_, kind), value in zip(abi.COLUMNS[table], args)]
                 trap.write(f"{table}({','.join(fields)})\n")
         print(f"ABI import fixture: {len(GRAPH)} rows, {len(labels)} labels, {Path(sys.argv[3]).stat().st_size} bytes")
@@ -58,7 +59,7 @@
           "$TMPDIR/dataset" "$TMPDIR/golden.trap"
         flock "$TMPDIR/codeql.lock" codeql dataset check "$TMPDIR/dataset"
         mkdir "$out"
-        printf '27 relations; ABI behavioral tests and typed golden TRAP import passed\n' > "$out/evidence"
+        printf '32 relations; ABI behavioral tests and typed golden TRAP import passed\n' > "$out/evidence"
       '';
   };
 }

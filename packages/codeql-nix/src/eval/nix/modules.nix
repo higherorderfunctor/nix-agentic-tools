@@ -46,9 +46,75 @@
     (row "nx_observations" [identity identities.request "pre-apply-metadata" "observed"])
     (row "nx_observation_${kind}s" [identity subject])
   ];
+  graph = request.domain == "module-graph";
+  occurrence = path: let
+    pathJson = builtins.toJSON path;
+  in {
+    module = key "module" [identities.request identities.context pathJson];
+    origin = key "origin" [identities.request pathJson];
+  };
+  emit = path: entry: let
+    identity = occurrence path;
+    children = effectiveLib.imap0 (i: child: emit (path ++ [i]) child) entry.imports;
+    total = folded: child: folded + child.count;
+    deepest = folded: child:
+      if child.depth > folded
+      then child.depth
+      else folded;
+  in {
+    count = 1 + builtins.foldl' total 0 children;
+    depth =
+      if children == []
+      then 0
+      else 1 + builtins.foldl' deepest 0 children;
+    rows =
+      [
+        (row "nx_origins" [
+          identity.origin
+          entry.file
+          (
+            if builtins.hasContext entry.file
+            then "source"
+            else "synthetic"
+          )
+        ])
+        (row "nx_modules" [identity.module identities.context entry.key identity.origin entry.disabled])
+      ]
+      ++ observation "module" identity.module
+      ++ effectiveLib.optional (builtins.length path == 1) (
+        row "nx_module_roots" [identities.context (builtins.head path) identity.module]
+      )
+      ++ effectiveLib.optional (builtins.length path > 1) (
+        row "nx_module_imports" [
+          (occurrence (effectiveLib.init path)).module
+          (effectiveLib.last path)
+          identity.module
+        ]
+      )
+      ++ effectiveLib.concatMap (child: child.rows) children;
+  };
+  graphEntries = effectiveLib.imap0 (i: entry: emit [i] entry) result.graph;
+  total = folded: entry: folded + entry.count;
+  deepest = folded: entry:
+    if entry.depth > folded
+    then entry.depth
+    else folded;
+  graphCount = builtins.foldl' total 0 graphEntries;
+  graphDepth = builtins.foldl' deepest 0 graphEntries;
+  graphOutcome =
+    if !(result ? graph)
+    then ["failed" "graph-unavailable" 0]
+    else if 1 + graphCount > request.maxNodes
+    then ["failed" "node-limit" 0]
+    else if graphDepth > request.maxDepth
+    then ["failed" "depth-limit" 0]
+    else ["complete" "" (1 + graphCount)];
+  graphRows = observation "context" identities.context ++ effectiveLib.concatMap (entry: entry.rows) graphEntries;
   count = 1 + builtins.length labels;
   outcome =
-    if !exists || (request.facet == "priority" && !option.isDefined)
+    if graph
+    then graphOutcome
+    else if !exists || (request.facet == "priority" && !option.isDefined)
     then ["failed" "option-unavailable" 0]
     else if request.facet == "selection" && request.maxDepth == 0 && labels != []
     then ["failed" "depth-limit" 0]
@@ -88,11 +154,14 @@ in {
   facts =
     [(row "nx_request_results" ([identities.request] ++ outcome))]
     ++ effectiveLib.optionals (builtins.head outcome == "complete") (
-      [(row "nx_options" [optionKey identities.context (builtins.toJSON request.path)])]
-      ++ observation "option" optionKey
-      ++ metadata
-      ++ effectiveLib.optionals (request.facet == "selection") (map (binding:
-        row "nx_module_lib_bindings" [identities.request binding.functionAnchor binding.formalAnchor model.libHash model.bundleHash])
-      result.nixqlModuleBindings)
+      if graph
+      then graphRows
+      else
+        [(row "nx_options" [optionKey identities.context (builtins.toJSON request.path)])]
+        ++ observation "option" optionKey
+        ++ metadata
+        ++ effectiveLib.optionals (request.facet == "selection") (map (binding:
+          row "nx_module_lib_bindings" [identities.request binding.functionAnchor binding.formalAnchor model.libHash model.bundleHash])
+        result.nixqlModuleBindings)
     );
 }

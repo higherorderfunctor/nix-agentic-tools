@@ -149,13 +149,22 @@
       "minLength": 1
     },
     "request": {
-      "description": "Every metadata request is explicit. Paths are literal segments, never dot-split. No default traversal or value request is implied.",
+      "description": "Every metadata request is explicit. Paths are literal segments, never dot-split. No default traversal or value request is implied. A module-graph request selects the closure facet over an empty path.",
+      "else": { "properties": { "facet": { "not": { "const": "closure" } } } },
+      "if": {
+        "properties": {
+          "domain": {
+            "const": "module-graph"
+          }
+        }
+      },
       "properties": {
         "domain": {
-          "const": "option-metadata"
+          "enum": ["module-graph", "option-metadata"]
         },
         "facet": {
           "enum": [
+            "closure",
             "declarations",
             "definitions",
             "isDefined",
@@ -196,6 +205,16 @@
         "maxSeconds",
         "path"
       ],
+      "then": {
+        "properties": {
+          "facet": {
+            "const": "closure"
+          },
+          "path": {
+            "maxItems": 0
+          }
+        }
+      },
       "type": "object",
       "unevaluatedProperties": false
     },

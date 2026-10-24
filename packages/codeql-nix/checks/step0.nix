@@ -30,6 +30,9 @@
     '';
 in {
   checks = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+    codeql-nix-graph =
+      installedSuite "codeql-nix-graph" ["inc3/graph/test_graph.py"]
+      "M3g module-graph installed qltest";
     codeql-nix-properties =
       installedSuite "codeql-nix-properties" ["inc3/properties/test_properties.py"]
       "M3p properties with real-Nix mutations";
