@@ -269,7 +269,7 @@ class GraphRegressionProducerTests(unittest.TestCase):
         if unavailable:
             lib = "(let actual = " + lib + "; in actual // { evalModules = args: builtins.removeAttrs (actual.evalModules args) [ \"graph\" ]; })"
         expression = "import " + str(OWNER / "src/eval/nix/modules.nix") + " { lib = " + lib + "; modules = [ " + str(self.root / "root.nix") + " ]; job = builtins.fromJSON " + json.dumps(json.dumps(job)) + "; }"
-        result = subprocess.run([NIX, "eval", "--json", "--impure", "--expr", expression],
+        result = subprocess.run([NIX, "--extra-experimental-features", "nix-command", "eval", "--json", "--impure", "--expr", expression],
                                 capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout), ids
