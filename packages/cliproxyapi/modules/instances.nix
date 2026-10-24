@@ -56,6 +56,17 @@ backend: {
     # API-key names become CPA compatibility provider identities.
     ++ map (provider: "ai.cliproxyapi.instances.${name}.credentials.${provider}: an API-key credential name must be letters, digits, `.`, `_` and `-`, starting with a letter or digit.")
     (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames (providersLib.apiKeys instance)));
+  # CPA keeps only the first model per case-insensitive client-visible name
+  # and drops the rest (sdk/cliproxy/service_models.go:925-928); the alias
+  # routing table keeps the first entry per lowered key
+  # (sdk/cliproxy/auth/conductor_models.go:676-682).
+  duplicateModels = name: instance:
+    lib.concatLists (lib.mapAttrsToList (credential: apiKey: let
+      visible = map lib.toLower (providersLib.visibleModels apiKey);
+    in
+      map (model: "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models lists \`${model}\` to clients more than once; CPA compares these names case-insensitively and keeps only the first. Give each entry a distinct client-visible name (alias when set, else name).")
+      (lib.unique (lib.filter (model: lib.count (other: other == model) visible > 1) visible)))
+    (providersLib.apiKeys instance));
 in {
   imports = [
     ((import ../../ai-module/lib/instances.nix {inherit lib;}).module {
@@ -186,5 +197,6 @@ in {
       assertion = false;
       inherit message;
     }) (lib.concatLists (lib.mapAttrsToList handWritten config.ai.cliproxyapi.instances
-        ++ lib.mapAttrsToList sharedBaseUrls config.ai.cliproxyapi.instances));
+      ++ lib.mapAttrsToList sharedBaseUrls config.ai.cliproxyapi.instances
+      ++ lib.mapAttrsToList duplicateModels config.ai.cliproxyapi.instances));
 }
