@@ -250,6 +250,14 @@ class InstalledAllDefinitionsTests(test_installed.InstalledTests):
         self.assertEqual(oracle, {"definitions": [{"file": "ordinary.nix"}],
                                   "isDefined": True, "priority": "100"})
         self.assertEqual(self.oracle(value=True), 1)
+        shutil.copy(OWNER / "ql/test/qlpack.yml", self.root / "qlpack.yml")
+        shutil.copy(Path(os.environ["CODEQL_NIX_TEST_QUERIES"]) / "LosingDefinitions.ql",
+                    self.root / "LosingDefinitions.ql")
+        # Keep expected contents outside the hashed source root: filling the
+        # anchor golden must not change the root identity it authenticates.
+        expected_path = self.scratch / "LosingDefinitions.expected"
+        expected_path.write_text("")
+        (self.root / "LosingDefinitions.expected").symlink_to(expected_path)
         database, _ = self.create_reviewed()
         wrapper = self.wrapper(database, "fallback.nix", "lib.mkDefault 2",
                                [("override", "1000")])
@@ -283,11 +291,8 @@ class InstalledAllDefinitionsTests(test_installed.InstalledTests):
         self.assertNotIn("fallback-50.nix", labels)
         self.assertNotIn("disabled.nix", labels)
 
-        shutil.copy(OWNER / "ql/test/qlpack.yml", self.root / "qlpack.yml")
-        shutil.copy(Path(os.environ["CODEQL_NIX_TEST_QUERIES"]) / "LosingDefinitions.ql",
-                    self.root / "LosingDefinitions.ql")
         expected = EXPECTED.read_text().replace("<fallback-wrapper>", wrapper)
-        (self.root / "LosingDefinitions.expected").write_text(expected)
+        expected_path.write_text(expected)
         result = self.run_codeql("test", "run", self.root,
             env=self.env | {"CODEQL_EXTRACTOR_NIX_OPTION_INPUTS": json.dumps(self.inputs)})
         print(result.stdout[-6000:] + result.stderr[-6000:], flush=True)
