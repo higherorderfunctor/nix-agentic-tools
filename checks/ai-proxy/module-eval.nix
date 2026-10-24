@@ -408,12 +408,15 @@ in {
     # An `alias` rewrites the client-visible model name everywhere it reaches a
     # client: the rendered api-keys blocks, `normalized.proxy.credentials` and
     # the /model picker, whose aliased rows name the upstream model they serve.
-    # Refused: two entries with the same visible name (CPA keeps only the first
-    # per lowered key), and a listed name that resolves to another entry's
-    # upstream model on the served family's resolution — the claude/codex alias
-    # table, first claim per lowered key, or the openai-compatibility pool,
-    # aliases before names. Empty or padded names are refused by the type,
-    # since CPA trims names before listing and routing them.
+    # Refused: two entries with the same visible name, for the reason the
+    # served family gives (the claude/codex table lists and routes only the
+    # first; the openai-compatibility pool would rotate requests across the
+    # entries), and a listed name that resolves to another entry's upstream
+    # model on the served family's resolution — the claude/codex alias table,
+    # first claim per lowered key, or the openai-compatibility pool, aliases
+    # before names; a name the duplicate refusal reports is never also checked
+    # for misrouting. Empty or padded names are refused by the type, since CPA
+    # trims names before listing and routing them.
     module-ai-proxy-model-alias = mkTest "ai-proxy-model-alias" (let
       aliased = instanceChange {
         credentials.zai.apiKey.models = lib.mkForce [
@@ -497,6 +500,37 @@ in {
             "glm-5.3-flash"
           ]);
           "case-insensitive duplicate refused" = refused backend "lists `glm-5.3` to clients more than once" (zaiModels ["GLM-5.3" "glm-5.3"]);
+          "chat duplicate names the refused pool" = let
+            messages = failedMessages (evaluate backend (chatModels [
+              {
+                name = "glm-5.3";
+                alias = "x";
+              }
+              {
+                name = "glm-4";
+                alias = "x";
+              }
+            ]));
+          in
+            lib.any (message: lib.hasInfix "lists `x` to clients more than once" message && lib.hasInfix "rotate requests for it across these entries' upstream models" message) messages
+            && lib.all (message: !lib.hasInfix "sent upstream as" message) messages;
+          "duplicate on both families names both reasons" = let
+            messages = failedMessages (evaluate backend (instanceChange {
+              credentials.zai.apiKey.apis.chat.base-url = "https://chat2.example/v1";
+              credentials.zai.apiKey.models = lib.mkForce [
+                {
+                  name = "glm-5.3";
+                  alias = "x";
+                }
+                {
+                  name = "glm-4";
+                  alias = "x";
+                }
+              ];
+            }));
+          in
+            lib.any (message: lib.hasInfix "lists and routes only the first" message && lib.hasInfix "rotate requests for it across these entries' upstream models" message) messages
+            && lib.all (message: !lib.hasInfix "sent upstream as" message) messages;
           "alias claiming an earlier name's key refused" = refused backend "a request for `glm-5.3` is sent upstream as `glm-5.3`, not `glm-4`" (zaiModels [
             {
               name = "glm-5.3";

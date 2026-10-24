@@ -65,12 +65,18 @@ backend: {
     if groups == null
     then model
     else builtins.head groups;
-  # CPA keeps only the first model per case-insensitive client-visible name
-  # and drops the rest (sdk/cliproxy/service_models.go:924-929). An aliased
-  # entry also claims routing keys, and a claim that shadows another entry's
-  # listed name sends its requests to the wrong upstream model, so every
-  # listed name is resolved the way the served family resolves it and a name
-  # reaching another entry's upstream model is refused:
+  # A duplicate client-visible name is refused for the reason its served
+  # families give: the claude and codex families keep only the first entry per
+  # lowered name and drop the rest (sdk/cliproxy/service_models.go:924-929),
+  # while openai-compatibility keeps every entry and rotates requests for the
+  # shared name across their upstream models
+  # (sdk/cliproxy/service_models.go:853-885;
+  # sdk/cliproxy/auth/conductor_models.go:347-352), a pool this module refuses
+  # rather than reproduce. An aliased entry also claims routing keys, and a
+  # claim that shadows another entry's listed name sends its requests to the
+  # wrong upstream model, so every listed name the duplicate refusal has not
+  # already reported is resolved the way the served family resolves it and a
+  # name reaching another entry's upstream model is refused:
   #
   # - claude and codex credentials (the anthropic and responses APIs) resolve
   #   through a table built from aliased entries only, first claim per lowered
@@ -182,11 +188,27 @@ backend: {
         "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models: a request for `${entry.visible}` is sent upstream as `${result}`, not `${expected}`; another entry's routing claim wins. Give each entry a client-visible name that resolves to its own upstream name.";
       usesTable = lib.any (api: api == "anthropic" || api == "responses") servedApis;
       usesPool = lib.elem "chat" servedApis;
+      duplicates = lib.unique (lib.filter (model: lib.count (other: other == model) visible > 1) visible);
+      # Why a duplicate client-visible name is refused, per served family: the
+      # claude and codex APIs list and route only the first entry, while
+      # openai-compatibility would rotate requests for it across the entries'
+      # upstream models, a pool this module refuses. A credential serving both
+      # families names both reasons; one serving no API keeps the bare
+      # case-insensitive comparison.
+      reasons =
+        lib.optional usesTable "on the claude and codex APIs CPA lists and routes only the first"
+        ++ lib.optional usesPool "on openai-compatibility CPA would rotate requests for it across these entries' upstream models, which this module refuses";
+      reason = "CPA compares these names case-insensitively" + lib.optionalString (reasons != []) ": ${lib.concatStringsSep ", and " reasons}";
+      # A listed name the duplicate refusal reports is not also checked for
+      # misrouting: the pool family rotates it, so no one upstream model is
+      # "the" resolution, and the table family's duplicate refusal already
+      # names the entry that wins.
+      distinct = lib.filter (entry: !(lib.elem (lib.toLower entry.visible) duplicates)) listed;
     in
-      map (model: "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models lists `${model}` to clients more than once; CPA compares these names case-insensitively and keeps only the first. Give each entry a distinct client-visible name (alias when set, else name).")
-      (lib.unique (lib.filter (model: lib.count (other: other == model) visible > 1) visible))
-      ++ lib.optionals usesTable (lib.concatMap (misrouting resolveTable) listed)
-      ++ lib.optionals usesPool (lib.concatMap (misrouting resolvePool) listed))
+      map (model: "ai.cliproxyapi.instances.${name}.credentials.${credential}.apiKey.models lists `${model}` to clients more than once; ${reason}. Give each entry a distinct client-visible name (alias when set, else name).")
+      duplicates
+      ++ lib.optionals usesTable (lib.concatMap (misrouting resolveTable) distinct)
+      ++ lib.optionals usesPool (lib.concatMap (misrouting resolvePool) distinct))
     (providersLib.apiKeys instance));
 in {
   imports = [
