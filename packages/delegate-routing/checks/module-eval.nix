@@ -347,7 +347,140 @@
       {ai.programs.delegate-routing.routing.Conflict.text = "FIRST CONTENT";}
       {ai.programs.delegate-routing.routing.Conflict.text = "SECOND CONTENT";}
     ]);
+    redact = import ../../../lib/redact {inherit lib;};
+    usageScenario.ai = {
+      claude = {
+        enable = true;
+        # Metadata tests do not inspect the generated skill. Suppress its file
+        # walk so warning evaluation needs no skill-render IFD realization.
+        skills.delegate-routing = null;
+      };
+      codex = {
+        enable = true;
+        skills.delegate-routing = null;
+      };
+      programs.delegate-routing.enable = true;
+    };
+    usageInstance = port: key: {
+      inherit port;
+      clientKeys.usage-test = {
+        key = redact.file "/run/secrets/cpa-client";
+        routes = [{credential = "login";}];
+      };
+      credentials.login.oauth = {
+        account = redact.file "/run/secrets/cpa-account";
+        vendor = "claude";
+      };
+      settings.management.secret-key = key;
+    };
+    usageMain = usageInstance 18317 (redact.file "/run/secrets/cpa-management");
+    usageCases = {
+      ambiguous.ai.cliproxyapi.instances = {
+        main = usageMain;
+        other = usageInstance 18318 (redact.file "/run/secrets/cpa-other");
+      };
+      command.ai.cliproxyapi.instances.main = usageInstance 18317 (redact.command "/run/credentials/read-cpa-key");
+      concat.ai.cliproxyapi.instances.main = usageInstance 18317 (redact.concat [(redact.file "/run/secrets/cpa-management") "suffix"]);
+      direct = {};
+      disabled.ai = {
+        cliproxyapi.instances.main = usageMain;
+        programs.delegate-routing.enable = lib.mkForce false;
+      };
+      disabledInstance.ai.cliproxyapi.instances.main = usageMain // {enable = false;};
+      external.ai = {
+        cliproxyapi.instances.main = usageMain;
+        proxy = {
+          clientKey = "usage-test";
+          instance = "main";
+        };
+        codex.proxy = {
+          key = redact.file "/run/secrets/external-client";
+          url = "http://external.example:8317";
+        };
+      };
+      selected.ai = {
+        cliproxyapi.instances = {
+          main = usageMain;
+          other = usageInstance 18318 (redact.file "/run/secrets/cpa-other");
+        };
+        proxy = {
+          clientKey = "usage-test";
+          instance = "other";
+        };
+      };
+      sole.ai.cliproxyapi.instances.main = usageMain;
+    };
+    usageResults = lib.mapAttrs (_: value: evaluate (lib.mkMerge [usageScenario value])) usageCases;
+    usageVars = evaluation:
+      if name == "hm"
+      then evaluation.config.home.sessionVariables
+      else evaluation.config.env;
+    usagePair = evaluation: lib.filterAttrs (key: _: lib.hasPrefix "DELEGATE_USAGE_CPA_" key) (usageVars evaluation);
+    usageExpected = runtime: port: key: {
+      "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_MANAGEMENT_KEY_FILE" = key;
+      "DELEGATE_USAGE_CPA_${lib.toUpper runtime}_URL" = "http://127.0.0.1:${toString port}";
+    };
+    usageBoth = port: key: lib.foldl' (environment: runtime: environment // usageExpected runtime port key) {} ["claude" "codex"];
+    usageExplicit = {
+      DELEGATE_USAGE_CPA_MANAGEMENT_KEY_FILE = "/run/secrets/explicit-management";
+      DELEGATE_USAGE_CPA_URL = "http://127.0.0.1:28317";
+    };
+    usageOverride = evaluate (lib.mkMerge [
+      usageScenario
+      usageCases.sole
+      (lib.setAttrByPath (
+          if name == "hm"
+          then ["home" "sessionVariables"]
+          else ["env"]
+        )
+        usageExplicit)
+    ]);
+    usageSplit = evaluate (lib.mkMerge [
+      usageScenario
+      (lib.recursiveUpdate usageCases.selected {
+        ai.proxy.instance = "main";
+        ai.codex.proxy = {
+          clientKey = "usage-test";
+          instance = "other";
+        };
+      })
+    ]);
+    usageRuntimeOnly = evaluate (lib.mkMerge [
+      usageScenario
+      (lib.recursiveUpdate usageCases.selected {
+        ai = {
+          claude.proxy = {
+            clientKey = "usage-test";
+            instance = "main";
+          };
+          codex.proxy = {
+            clientKey = "usage-test";
+            instance = "other";
+          };
+          proxy = {
+            clientKey = null;
+            instance = null;
+          };
+        };
+      })
+    ]);
+    usageHasWarning = case: needle: lib.any (lib.hasInfix needle) usageResults.${case}.config.warnings;
   in {
+    "module-delegate-routing-${name}-usage-cpa" = mkTest "delegate-routing-${name}-usage-cpa" (
+      usagePair usageResults.sole
+      == usageBoth 18317 "/run/secrets/cpa-management"
+      && usagePair usageResults.selected == usageBoth 18318 "/run/secrets/cpa-other"
+      && usagePair usageOverride == (usageBoth 18317 "/run/secrets/cpa-management" // usageExplicit)
+      && lib.all (evaluation: usagePair evaluation == (usageExpected "claude" 18317 "/run/secrets/cpa-management" // usageExpected "codex" 18318 "/run/secrets/cpa-other")) [usageSplit usageRuntimeOnly]
+      && lib.all (case: usagePair usageResults.${case} == {}) ["ambiguous" "command" "concat" "direct" "disabled" "disabledInstance"]
+      && usageHasWarning "ambiguous" "select ai.proxy.instance"
+      && usagePair usageResults.external == usageExpected "claude" 18317 "/run/secrets/cpa-management"
+      && usageHasWarning "external" "an external proxy URL"
+      && usageHasWarning "command" "exact redact.file"
+      && usageHasWarning "concat" "exact redact.file"
+      && !(usageHasWarning "direct" "usage:")
+      && !(usageHasWarning "disabled" "usage:")
+    );
     "module-delegate-routing-${name}-content" = mkTest "delegate-routing-${name}-content" (
       passes result
       && lib.all (family: lib.hasInfix "${family} (anthropic)" nativeClaude) ["fable" "haiku" "opus" "sonnet"]

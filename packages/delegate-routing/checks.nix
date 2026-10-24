@@ -23,6 +23,15 @@ in {
       python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
       touch "$out"
     '';
+  checks.delegate-routing-usage-runtime =
+    pkgs.runCommand "delegate-routing-usage-runtime" {
+      nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3];
+    } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      python ${./checks/usage-runtime.py} ${./scripts}
+      touch "$out"
+    '';
   imports = [./checks/module-eval.nix ./checks/reminder-runtime.nix];
   testing.moduleProbes = [
     {

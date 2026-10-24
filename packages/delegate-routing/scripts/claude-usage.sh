@@ -1,6 +1,10 @@
 # shellcheck shell=bash
 shopt -s inherit_errexit 2>/dev/null || :
 
+if usage_cpa claude; then
+  exit 0
+fi
+
 delegate_usage_token=$(jq -er '.claudeAiOauth.accessToken' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json")
 curl --fail --silent --show-error --config - <<EOF_USAGE | jq '{five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage}'
 url = "https://api.anthropic.com/api/oauth/usage"
