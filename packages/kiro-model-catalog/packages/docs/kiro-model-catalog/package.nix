@@ -7,8 +7,8 @@
 }: let
   inherit (pkgs) lib;
   snapshotDate = "2026-10-24";
-  contentHash = "sha256-vKftIFGpSnlhS1vacHs7AA5UWzhKQ7CY/s52SLP7Mzw=";
-  hash = "sha256-UGmTgRQ1hXAq8MRfIKcQKR7xCFGmRWvxr/172viw6uM=";
+  contentHash = "sha256-UCqrhyJgjgbnsPU5mIzEGZ90ptn6sXKOiaHsKgF+TBs=";
+  hash = "sha256-q+Ngp+XrQSjL6vF7qtvkstSbzFdephyHS1g4iDzU/90=";
   snapshot = (webDocsLib {inherit pkgs;}).mkSnapshot {
     name = "kiro-model-documentation";
     inherit contentHash hash snapshotDate;
