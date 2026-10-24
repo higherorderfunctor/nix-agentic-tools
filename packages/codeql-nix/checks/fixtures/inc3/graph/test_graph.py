@@ -211,7 +211,8 @@ class GraphTests(test_installed.InstalledTests):
         self.assert_oracles(self.expected_g())
         shutil.copy(OWNER / "ql/test/qlpack.yml", self.root / "qlpack.yml")
         shutil.copy(Path(os.environ["CODEQL_NIX_TEST_QUERIES"]) / "DisabledModules.ql", self.root / "DisabledModules.ql")
-        shutil.copy(EXPECTED, self.root / "DisabledModules.expected")
+        qltest_expected = "\n".join(sorted(EXPECTED.read_text().splitlines())) + "\n"
+        (self.root / "DisabledModules.expected").write_text(qltest_expected)
         result = self.run_codeql("test", "run", self.root,
             env=self.env | {"CODEQL_EXTRACTOR_NIX_OPTION_INPUTS": json.dumps(self.inputs)})
         print(result.stdout[-6000:] + result.stderr[-6000:], flush=True)
@@ -224,9 +225,9 @@ class GraphTests(test_installed.InstalledTests):
         trap = self.scratch / "graph.trap"
         trap.write_text(protocol.trap(packet["facts"]))
         dataset = self.scratch / "typed-dataset"
-        self.run_codeql("dataset", "import", "--threads=4", "--ram=6000", "--dbscheme=" + str(self.extractor / "nix.dbscheme"),
+        self.run_codeql("dataset", "import", "--threads=4", "--dbscheme=" + str(self.extractor / "nix.dbscheme"),
                         "--fail-on-trap-errors", dataset, trap)
-        self.run_codeql("dataset", "check", "--threads=4", "--ram=6000", dataset)
+        self.run_codeql("dataset", "check", dataset)
         for invalid in (0, 1, "true", "false"):
             malformed = complete()
             next(args for table, args in malformed["facts"] if table == "nx_modules")[4] = invalid
