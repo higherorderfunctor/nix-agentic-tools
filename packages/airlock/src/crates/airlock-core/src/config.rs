@@ -1,5 +1,3 @@
-#[cfg(test)]
-use std::path::Path;
 use std::{
     collections::{BTreeMap, BTreeSet},
     net::SocketAddr,
@@ -10,46 +8,66 @@ use serde::Deserialize;
 
 use crate::{
     error::{ConfigError, ConfigErrors, NameError},
-    ids::{ClientId, CredentialId, HostName, UpstreamId},
-    policy::Grant,
+    ids::{ClientId, CredentialId, GroupId, HostName, ProviderId},
     secret::SecretFile,
 };
 
-#[allow(dead_code)]
 pub struct Config {
     clients: BTreeMap<ClientId, ClientConfig>,
     credentials: BTreeMap<CredentialId, CredentialConfig>,
+    groups: BTreeMap<GroupId, GroupConfig>,
     listen: SocketAddr,
+    providers: BTreeMap<ProviderId, ProviderConfig>,
     state_dir: PathBuf,
     unknown_hosts: UnknownHosts,
-    upstreams: BTreeMap<UpstreamId, UpstreamConfig>,
 }
 
-#[allow(dead_code)]
-pub struct ClientConfig {
-    grants: Vec<Grant>,
+struct ClientConfig {
+    grants: Vec<GroupId>,
     token_file: SecretFile,
 }
 
-#[allow(dead_code)]
-pub struct CredentialConfig {
+struct CredentialConfig {
     auth: Auth,
-    upstream: UpstreamId,
+    provider: ProviderId,
 }
 
 pub enum Auth {
     ApiKey { file: SecretFile },
     OauthBearer { file: SecretFile },
+    OauthManaged,
 }
 
-#[allow(dead_code)]
-pub struct UpstreamConfig {
+struct GroupConfig {
     hosts: Vec<HostName>,
-    provider: Provider,
+    members: BTreeMap<CredentialId, Vec<String>>,
+    primary: CredentialId,
+    protocol: Protocol,
 }
 
-pub enum Provider {
+struct ProviderConfig {
+    endpoints: BTreeMap<Protocol, Endpoint>,
+}
+
+struct Endpoint {
+    host: HostName,
+    url: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Protocol {
     Anthropic,
+    Openai,
+}
+
+impl Protocol {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "anthropic" => Some(Self::Anthropic),
+            "openai" => Some(Self::Openai),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,17 +81,18 @@ pub enum UnknownHosts {
 pub struct RawConfig {
     pub clients: BTreeMap<String, RawClient>,
     pub credentials: BTreeMap<String, RawCredential>,
+    pub groups: BTreeMap<String, RawGroup>,
     pub listen: String,
+    pub providers: BTreeMap<String, RawProvider>,
     pub state_dir: PathBuf,
     #[serde(default)]
     pub unknown_hosts: Option<String>,
-    pub upstreams: BTreeMap<String, RawUpstream>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RawClient {
-    pub grants: Vec<RawGrant>,
+    pub grants: Vec<String>,
     pub token_file: PathBuf,
 }
 
@@ -81,7 +100,7 @@ pub struct RawClient {
 #[serde(deny_unknown_fields)]
 pub struct RawCredential {
     pub auth: RawAuth,
-    pub upstream: String,
+    pub provider: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,20 +108,43 @@ pub struct RawCredential {
 pub enum RawAuth {
     ApiKey { file: PathBuf },
     OauthBearer { file: PathBuf },
+    OauthManaged {},
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RawUpstream {
+pub struct RawGroup {
     pub intercept: Vec<String>,
-    pub provider: String,
+    pub members: BTreeMap<String, RawMember>,
+    pub primary: String,
+    pub protocol: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RawGrant {
-    pub credentials: Vec<String>,
-    pub upstream: String,
+pub struct RawMember {
+    pub models: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawProvider {
+    #[serde(default)]
+    pub endpoints: BTreeMap<String, String>,
+    #[serde(default)]
+    pub preset: Option<String>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum UnsupportedExecution {
+    #[error("group {group} uses OpenAI, which serve does not support yet")]
+    Openai { group: GroupId },
+    #[error("group {group} has multiple members; model routing is not implemented")]
+    MultipleMembers { group: GroupId },
+    #[error("credential {credential} uses managed OAuth, which serve does not support yet")]
+    ManagedOauth { credential: CredentialId },
+    #[error("group {group} endpoint {url:?} differs from the intercepted original host")]
+    Endpoint { group: GroupId, url: String },
 }
 
 impl Config {
@@ -111,48 +153,102 @@ impl Config {
         self.listen
     }
 
+    #[must_use]
+    pub fn state_dir(&self) -> &std::path::Path {
+        &self.state_dir
+    }
+
     pub fn client_token_files(&self) -> impl Iterator<Item = (&ClientId, &SecretFile)> {
         self.clients
             .iter()
             .map(|(client, config)| (client, &config.token_file))
     }
 
-    pub(crate) fn client_grants(&self) -> impl Iterator<Item = (&ClientId, &[Grant])> {
+    pub(crate) fn client_grants(&self) -> impl Iterator<Item = (&ClientId, &[GroupId])> {
         self.clients
             .iter()
             .map(|(client, config)| (client, config.grants.as_slice()))
     }
 
-    /// Returns each distinct credential named by a grant, in id order.
-    ///
-    /// Credentials configured without a grant stay unloaded; `serve`, unlike `check-config`,
-    /// reads only what an authorized client can select.
+    /// Configured but ungranted credentials remain unloaded.
     pub fn granted_credentials(&self) -> impl Iterator<Item = (&CredentialId, &Auth)> {
         let granted: BTreeSet<CredentialId> = self
             .clients
             .values()
-            .flat_map(|client| client.grants.iter())
-            .flat_map(|grant| match grant {
-                Grant::Upstream { credentials, .. } => credentials.as_slice().iter().cloned(),
-            })
+            .flat_map(|client| &client.grants)
+            .filter_map(|group| self.groups.get(group))
+            .flat_map(|group| group.members.keys().cloned())
             .collect();
-        self.credentials
-            .iter()
-            .filter_map(move |(credential, config)| {
-                granted
-                    .contains(credential)
-                    .then_some((credential, &config.auth))
-            })
+        self.credentials.iter().filter_map(move |(id, credential)| {
+            granted.contains(id).then_some((id, &credential.auth))
+        })
     }
 
-    pub(crate) fn intercepted_hosts(&self) -> impl Iterator<Item = (&HostName, &UpstreamId)> {
-        self.upstreams.iter().flat_map(|(upstream_id, upstream)| {
-            upstream.hosts.iter().map(move |host| (host, upstream_id))
-        })
+    pub(crate) fn intercepted_hosts(&self) -> impl Iterator<Item = (&HostName, &GroupId)> {
+        self.groups
+            .iter()
+            .flat_map(|(group_id, group)| group.hosts.iter().map(move |host| (host, group_id)))
+    }
+
+    pub(crate) fn group_primary(&self, group: &GroupId) -> Option<&CredentialId> {
+        self.groups.get(group).map(|config| &config.primary)
     }
 
     pub(crate) fn unknown_hosts(&self) -> UnknownHosts {
         self.unknown_hosts
+    }
+
+    /// Refuse active routes whose configured behavior the current transport cannot execute.
+    ///
+    /// # Errors
+    /// Returns the first active group with unsupported protocol, membership, auth or endpoint.
+    pub fn validate_executable(&self) -> Result<(), UnsupportedExecution> {
+        let active: BTreeSet<&GroupId> = self
+            .clients
+            .values()
+            .flat_map(|client| &client.grants)
+            .collect();
+        for group_id in active {
+            let Some(group) = self.groups.get(group_id) else {
+                continue;
+            };
+            if group.protocol != Protocol::Anthropic {
+                return Err(UnsupportedExecution::Openai {
+                    group: group_id.clone(),
+                });
+            }
+            if group.members.len() != 1 {
+                return Err(UnsupportedExecution::MultipleMembers {
+                    group: group_id.clone(),
+                });
+            }
+            let Some(credential) = self.credentials.get(&group.primary) else {
+                continue;
+            };
+            if matches!(credential.auth, Auth::OauthManaged) {
+                return Err(UnsupportedExecution::ManagedOauth {
+                    credential: group.primary.clone(),
+                });
+            }
+            let Some(endpoint) = self
+                .providers
+                .get(&credential.provider)
+                .and_then(|provider| provider.endpoints.get(&group.protocol))
+            else {
+                continue;
+            };
+            if group
+                .hosts
+                .iter()
+                .any(|host| endpoint.host != *host || endpoint.url != format!("https://{host}"))
+            {
+                return Err(UnsupportedExecution::Endpoint {
+                    group: group_id.clone(),
+                    url: endpoint.url.clone(),
+                });
+            }
+        }
+        Ok(())
     }
 }
 
@@ -174,12 +270,13 @@ impl TryFrom<RawConfig> for Config {
                 None
             }
         };
-        let state_dir = match absolute_path(&raw.state_dir) {
-            Ok(path) => Some(path),
-            Err(path) => {
-                errors.push(ConfigError::RelativeStateDir { path });
-                None
-            }
+        let state_dir = if raw.state_dir.is_absolute() {
+            Some(raw.state_dir.clone())
+        } else {
+            errors.push(ConfigError::RelativeStateDir {
+                path: raw.state_dir.clone(),
+            });
+            None
         };
         let unknown_hosts = match raw.unknown_hosts.as_deref().unwrap_or("tunnel") {
             "deny" => Some(UnknownHosts::Deny),
@@ -192,22 +289,21 @@ impl TryFrom<RawConfig> for Config {
             }
         };
 
-        let (clients, client_errors) = parse_clients(&raw);
-        let (credentials, credential_errors) = parse_credentials(&raw);
-        let (upstreams, upstream_errors) = parse_upstreams(&raw);
-        errors.extend(client_errors);
-        errors.extend(credential_errors);
-        errors.extend(upstream_errors);
-        validate_references(&raw, &mut errors);
+        let providers = parse_providers(&raw, &mut errors);
+        let credentials = parse_credentials(&raw, &mut errors);
+        let groups = parse_groups(&raw, &mut errors);
+        let clients = parse_clients(&raw, &mut errors);
+        validate_references(&raw, &providers, &mut errors);
 
         match (listen, state_dir, unknown_hosts) {
             (Some(listen), Some(state_dir), Some(unknown_hosts)) if errors.is_empty() => Ok(Self {
                 clients,
                 credentials,
+                groups,
                 listen,
+                providers,
                 state_dir,
                 unknown_hosts,
-                upstreams,
             }),
             _ => Err(ConfigErrors(errors)),
         }
@@ -221,276 +317,325 @@ fn invalid_name(field: &'static str, error: NameError) -> ConfigError {
     }
 }
 
-fn parse_clients(raw: &RawConfig) -> (BTreeMap<ClientId, ClientConfig>, Vec<ConfigError>) {
+fn parse_clients(
+    raw: &RawConfig,
+    errors: &mut Vec<ConfigError>,
+) -> BTreeMap<ClientId, ClientConfig> {
     let mut clients = BTreeMap::new();
-    let mut errors = Vec::new();
-
-    for (raw_client_id, raw_client) in &raw.clients {
-        let client = match ClientId::try_from(raw_client_id.as_str()) {
-            Ok(client) => Some(client),
-            Err(error) => {
-                errors.push(invalid_name("client", error));
-                None
-            }
-        };
-        let token_file = match SecretFile::try_from(raw_client.token_file.clone()) {
-            Ok(file) => Ok(file),
-            Err(error) => {
-                let path = match error {
-                    crate::error::SecretFileError::RelativePath { path } => path,
-                };
+    for (raw_id, raw_client) in &raw.clients {
+        let id = ClientId::try_from(raw_id.as_str())
+            .map_err(|error| errors.push(invalid_name("client", error)))
+            .ok();
+        let token_file = SecretFile::try_from(raw_client.token_file.clone())
+            .map_err(|_| {
                 errors.push(ConfigError::RelativeTokenFile {
-                    client: raw_client_id.clone(),
-                    path,
+                    client: raw_id.clone(),
+                    path: raw_client.token_file.clone(),
                 });
-                Err(())
-            }
-        };
-
+            })
+            .ok();
         if raw_client.grants.is_empty() {
             errors.push(ConfigError::EmptyGrants {
-                client: raw_client_id.clone(),
+                client: raw_id.clone(),
             });
         }
-
-        let mut grants = Vec::new();
-        for raw_grant in &raw_client.grants {
-            let upstream = match UpstreamId::try_from(raw_grant.upstream.as_str()) {
-                Ok(upstream) => Some(upstream),
-                Err(error) => {
-                    errors.push(invalid_name("upstream", error));
-                    None
-                }
-            };
-            if raw_grant.credentials.is_empty() {
-                errors.push(ConfigError::EmptyGrantCredentials {
-                    client: raw_client_id.clone(),
-                });
-            }
-
-            let mut credentials = Vec::new();
-            for raw_credential in &raw_grant.credentials {
-                match CredentialId::try_from(raw_credential.as_str()) {
-                    Ok(credential) => credentials.push(credential),
-                    Err(error) => errors.push(invalid_name("credential", error)),
-                }
-            }
-
-            if let Some(upstream) = upstream
-                && credentials.len() == raw_grant.credentials.len()
-            {
-                match NonEmpty::try_from(credentials) {
-                    Ok(credentials) => grants.push(Grant::Upstream {
-                        credentials,
-                        upstream,
-                    }),
-                    // The empty case was recorded before upstream parsing so both errors stay independent.
-                    Err(NonEmptyError::Empty) => {}
-                }
-            }
-        }
-
-        if let (Some(client), Ok(token_file)) = (client, token_file)
-            && (raw_client.grants.is_empty() || !grants.is_empty())
-        {
-            clients.insert(client, ClientConfig { grants, token_file });
+        let grants: Vec<_> = raw_client
+            .grants
+            .iter()
+            .filter_map(|grant| {
+                GroupId::try_from(grant.as_str())
+                    .map_err(|error| errors.push(invalid_name("group", error)))
+                    .ok()
+            })
+            .collect();
+        if let (Some(id), Some(token_file)) = (id, token_file) {
+            clients.insert(id, ClientConfig { grants, token_file });
         }
     }
-
-    (clients, errors)
+    clients
 }
 
 fn parse_credentials(
     raw: &RawConfig,
-) -> (BTreeMap<CredentialId, CredentialConfig>, Vec<ConfigError>) {
+    errors: &mut Vec<ConfigError>,
+) -> BTreeMap<CredentialId, CredentialConfig> {
     let mut credentials = BTreeMap::new();
-    let mut errors = Vec::new();
-
-    for (raw_credential_id, raw_credential) in &raw.credentials {
-        let credential = match CredentialId::try_from(raw_credential_id.as_str()) {
-            Ok(credential) => Some(credential),
-            Err(error) => {
-                errors.push(invalid_name("credential", error));
-                None
-            }
-        };
-        let upstream = match UpstreamId::try_from(raw_credential.upstream.as_str()) {
-            Ok(upstream) => Some(upstream),
-            Err(error) => {
-                errors.push(invalid_name("upstream", error));
-                None
-            }
-        };
-        let auth = parse_auth(&raw_credential.auth, raw_credential_id);
-
-        match (credential, upstream, auth) {
-            (Some(credential), Some(upstream), Ok(auth)) => {
-                credentials.insert(credential, CredentialConfig { auth, upstream });
-            }
-            (_, _, Err(error)) => errors.push(error),
-            (_, _, Ok(_)) => {}
-        }
-    }
-
-    (credentials, errors)
-}
-
-fn parse_auth(raw_auth: &RawAuth, raw_credential_id: &str) -> Result<Auth, ConfigError> {
-    let file = SecretFile::try_from(match raw_auth {
-        RawAuth::ApiKey { file } | RawAuth::OauthBearer { file } => file.clone(),
-    })
-    .map_err(|error| {
-        let path = match error {
-            crate::error::SecretFileError::RelativePath { path } => path,
-        };
-        ConfigError::RelativeAuthFile {
-            credential: raw_credential_id.to_owned(),
-            path,
-        }
-    })?;
-
-    Ok(match raw_auth {
-        RawAuth::ApiKey { .. } => Auth::ApiKey { file },
-        RawAuth::OauthBearer { .. } => Auth::OauthBearer { file },
-    })
-}
-
-fn parse_upstreams(raw: &RawConfig) -> (BTreeMap<UpstreamId, UpstreamConfig>, Vec<ConfigError>) {
-    let mut upstreams = BTreeMap::new();
-    let mut intercepted_hosts: BTreeMap<HostName, String> = BTreeMap::new();
-    let mut errors = Vec::new();
-
-    for (raw_upstream_id, raw_upstream) in &raw.upstreams {
-        let upstream = match UpstreamId::try_from(raw_upstream_id.as_str()) {
-            Ok(upstream) => Some(upstream),
-            Err(error) => {
-                errors.push(invalid_name("upstream", error));
-                None
-            }
-        };
-        let provider = match raw_upstream.provider.as_str() {
-            "anthropic" => Some(Provider::Anthropic),
-            provider => {
-                errors.push(ConfigError::UnsupportedProvider {
-                    upstream: raw_upstream_id.clone(),
-                    provider: provider.to_owned(),
-                });
-                None
-            }
-        };
-
-        let mut hosts = Vec::new();
-        for raw_host in &raw_upstream.intercept {
-            let host = match HostName::try_from(raw_host.as_str()) {
-                Ok(host) => Some(host),
-                Err(error) => {
-                    let host = match error {
-                        crate::error::HostNameError::InvalidHostName { value }
-                        | crate::error::HostNameError::IpAddress { value } => value,
-                    };
-                    errors.push(ConfigError::InvalidHost {
-                        upstream: raw_upstream_id.clone(),
-                        host,
+    for (raw_id, raw_credential) in &raw.credentials {
+        let id = CredentialId::try_from(raw_id.as_str())
+            .map_err(|error| errors.push(invalid_name("credential", error)))
+            .ok();
+        let provider = ProviderId::try_from(raw_credential.provider.as_str())
+            .map_err(|error| errors.push(invalid_name("provider", error)))
+            .ok();
+        let auth = match &raw_credential.auth {
+            RawAuth::OauthManaged {} => Some(Auth::OauthManaged),
+            RawAuth::ApiKey { file } | RawAuth::OauthBearer { file } => {
+                if let Ok(file) = SecretFile::try_from(file.clone()) {
+                    Some(match raw_credential.auth {
+                        RawAuth::ApiKey { .. } => Auth::ApiKey { file },
+                        _ => Auth::OauthBearer { file },
+                    })
+                } else {
+                    errors.push(ConfigError::RelativeAuthFile {
+                        credential: raw_id.clone(),
+                        path: file.clone(),
                     });
                     None
                 }
-            };
-
-            if let Some(host) = host {
-                if let Some(first) = intercepted_hosts.get(&host) {
-                    errors.push(ConfigError::DuplicateInterceptHost {
-                        host: raw_host.clone(),
-                        first: first.clone(),
-                        second: raw_upstream_id.clone(),
-                    });
-                } else {
-                    intercepted_hosts.insert(host.clone(), raw_upstream_id.clone());
-                }
-                hosts.push(host);
             }
-        }
-
-        if let (Some(upstream), Some(provider)) = (upstream, provider) {
-            upstreams.insert(upstream, UpstreamConfig { hosts, provider });
+        };
+        if let (Some(id), Some(provider), Some(auth)) = (id, provider, auth) {
+            credentials.insert(id, CredentialConfig { auth, provider });
         }
     }
-
-    (upstreams, errors)
+    credentials
 }
 
-fn validate_references(raw: &RawConfig, errors: &mut Vec<ConfigError>) {
-    for (raw_credential_id, raw_credential) in &raw.credentials {
-        if !raw.upstreams.contains_key(&raw_credential.upstream) {
-            errors.push(ConfigError::UnknownCredentialUpstream {
-                credential: raw_credential_id.clone(),
-                upstream: raw_credential.upstream.clone(),
+fn parse_groups(raw: &RawConfig, errors: &mut Vec<ConfigError>) -> BTreeMap<GroupId, GroupConfig> {
+    let mut groups = BTreeMap::new();
+    let mut intercepted = BTreeMap::<HostName, String>::new();
+    for (raw_id, raw_group) in &raw.groups {
+        let id = GroupId::try_from(raw_id.as_str())
+            .map_err(|error| errors.push(invalid_name("group", error)))
+            .ok();
+        let primary = CredentialId::try_from(raw_group.primary.as_str())
+            .map_err(|error| errors.push(invalid_name("credential", error)))
+            .ok();
+        let protocol = Protocol::parse(&raw_group.protocol);
+        if protocol.is_none() {
+            errors.push(ConfigError::UnsupportedProtocol {
+                group: raw_id.clone(),
+                protocol: raw_group.protocol.clone(),
+            });
+        }
+        if raw_group.members.is_empty() {
+            errors.push(ConfigError::EmptyGroupMembers {
+                group: raw_id.clone(),
+            });
+        }
+        let mut members = BTreeMap::new();
+        let mut model_owners = BTreeMap::<&str, &str>::new();
+        for (raw_credential, member) in &raw_group.members {
+            if raw_credential != &raw_group.primary && member.models.is_empty() {
+                errors.push(ConfigError::EmptyNonPrimaryModels {
+                    group: raw_id.clone(),
+                    credential: raw_credential.clone(),
+                });
+            }
+            for model in &member.models {
+                if model.is_empty() {
+                    errors.push(ConfigError::EmptyModel {
+                        group: raw_id.clone(),
+                        credential: raw_credential.clone(),
+                    });
+                } else if let Some(first) = model_owners.insert(model, raw_credential) {
+                    errors.push(ConfigError::DuplicateModel {
+                        group: raw_id.clone(),
+                        model: model.clone(),
+                        first: first.to_owned(),
+                        second: raw_credential.clone(),
+                    });
+                }
+            }
+            match CredentialId::try_from(raw_credential.as_str()) {
+                Ok(id) => {
+                    members.insert(id, member.models.clone());
+                }
+                Err(error) => errors.push(invalid_name("credential", error)),
+            }
+        }
+        if !raw_group.members.contains_key(&raw_group.primary) {
+            errors.push(ConfigError::PrimaryNotMember {
+                group: raw_id.clone(),
+                primary: raw_group.primary.clone(),
+            });
+        }
+        let mut hosts = Vec::new();
+        for raw_host in &raw_group.intercept {
+            match HostName::try_from(raw_host.as_str()) {
+                Ok(host) => {
+                    if let Some(first) = intercepted.insert(host.clone(), raw_id.clone()) {
+                        errors.push(ConfigError::DuplicateInterceptHost {
+                            host: raw_host.clone(),
+                            first,
+                            second: raw_id.clone(),
+                        });
+                    }
+                    hosts.push(host);
+                }
+                Err(_) => errors.push(ConfigError::InvalidHost {
+                    group: raw_id.clone(),
+                    host: raw_host.clone(),
+                }),
+            }
+        }
+        if let (Some(id), Some(primary), Some(protocol)) = (id, primary, protocol) {
+            groups.insert(
+                id,
+                GroupConfig {
+                    hosts,
+                    members,
+                    primary,
+                    protocol,
+                },
+            );
+        }
+    }
+    groups
+}
+
+fn parse_providers(
+    raw: &RawConfig,
+    errors: &mut Vec<ConfigError>,
+) -> BTreeMap<ProviderId, ProviderConfig> {
+    let mut providers = BTreeMap::new();
+    for (raw_id, raw_provider) in &raw.providers {
+        let id = ProviderId::try_from(raw_id.as_str())
+            .map_err(|error| errors.push(invalid_name("provider", error)))
+            .ok();
+        let mut endpoints = BTreeMap::new();
+        match raw_provider.preset.as_deref() {
+            Some("claude") => {
+                endpoints.insert(
+                    "anthropic".to_owned(),
+                    "https://api.anthropic.com".to_owned(),
+                );
+            }
+            Some("zai") => {
+                endpoints.insert(
+                    "anthropic".to_owned(),
+                    "https://api.z.ai/api/anthropic".to_owned(),
+                );
+                endpoints.insert(
+                    "openai".to_owned(),
+                    "https://api.z.ai/api/coding/paas/v4".to_owned(),
+                );
+            }
+            Some(preset) => errors.push(ConfigError::UnknownPreset {
+                provider: raw_id.clone(),
+                preset: preset.to_owned(),
+            }),
+            None => {}
+        }
+        endpoints.extend(raw_provider.endpoints.clone());
+        if endpoints.is_empty() {
+            errors.push(ConfigError::EmptyProviderEndpoints {
+                provider: raw_id.clone(),
+            });
+        }
+        let mut resolved = BTreeMap::new();
+        for (raw_protocol, url) in endpoints {
+            let Some(protocol) = Protocol::parse(&raw_protocol) else {
+                errors.push(ConfigError::UnsupportedProtocol {
+                    group: format!("provider {raw_id}"),
+                    protocol: raw_protocol,
+                });
+                continue;
+            };
+            match parse_endpoint(&url) {
+                Some(host) => {
+                    resolved.insert(protocol, Endpoint { host, url });
+                }
+                None => errors.push(ConfigError::InvalidEndpoint {
+                    provider: raw_id.clone(),
+                    protocol: raw_protocol,
+                }),
+            }
+        }
+        if let Some(id) = id {
+            providers.insert(
+                id,
+                ProviderConfig {
+                    endpoints: resolved,
+                },
+            );
+        }
+    }
+    providers
+}
+
+fn parse_endpoint(url: &str) -> Option<HostName> {
+    let rest = url.strip_prefix("https://")?;
+    let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+    if host.contains(['@', ':', '?', '#']) || !valid_uri_path(path) {
+        return None;
+    }
+    HostName::try_from(host).ok()
+}
+
+fn valid_uri_path(path: &str) -> bool {
+    let mut bytes = path.bytes();
+    while let Some(byte) = bytes.next() {
+        match byte {
+            b'%' => {
+                if !bytes.next().is_some_and(|digit| digit.is_ascii_hexdigit())
+                    || !bytes.next().is_some_and(|digit| digit.is_ascii_hexdigit())
+                {
+                    return false;
+                }
+            }
+            b'/' | b':' | b'@' | b'!' | b'$' | b'&' | b'\'' | b'(' | b')' | b'*' | b'+' | b','
+            | b';' | b'=' | b'-' | b'.' | b'_' | b'~' => {}
+            byte if byte.is_ascii_alphanumeric() => {}
+            _ => return false,
+        }
+    }
+    true
+}
+
+fn validate_references(
+    raw: &RawConfig,
+    providers: &BTreeMap<ProviderId, ProviderConfig>,
+    errors: &mut Vec<ConfigError>,
+) {
+    for (credential_id, credential) in &raw.credentials {
+        if !raw.providers.contains_key(&credential.provider) {
+            errors.push(ConfigError::UnknownCredentialProvider {
+                credential: credential_id.clone(),
+                provider: credential.provider.clone(),
             });
         }
     }
-
-    for (raw_client_id, raw_client) in &raw.clients {
-        for raw_grant in &raw_client.grants {
-            if !raw.upstreams.contains_key(&raw_grant.upstream) {
-                errors.push(ConfigError::UnknownGrantUpstream {
-                    client: raw_client_id.clone(),
-                    upstream: raw_grant.upstream.clone(),
+    for (group_id, group) in &raw.groups {
+        for credential_id in group.members.keys() {
+            let Some(credential) = raw.credentials.get(credential_id) else {
+                errors.push(ConfigError::UnknownGroupCredential {
+                    group: group_id.clone(),
+                    credential: credential_id.clone(),
+                });
+                continue;
+            };
+            if credential_id != &group.primary
+                && matches!(credential.auth, RawAuth::OauthManaged {})
+            {
+                errors.push(ConfigError::NonPrimaryManagedOauth {
+                    credential: credential_id.clone(),
+                    group: group_id.clone(),
                 });
             }
-
-            for raw_credential in &raw_grant.credentials {
-                let Some(actual) = raw.credentials.get(raw_credential) else {
-                    errors.push(ConfigError::UnknownGrantCredential {
-                        client: raw_client_id.clone(),
-                        credential: raw_credential.clone(),
-                    });
-                    continue;
-                };
-
-                if actual.upstream != raw_grant.upstream {
-                    errors.push(ConfigError::CredentialUpstreamMismatch {
-                        client: raw_client_id.clone(),
-                        credential: raw_credential.clone(),
-                        granted: raw_grant.upstream.clone(),
-                        actual: actual.upstream.clone(),
-                    });
-                }
+            if let (Some(provider_id), Some(protocol)) = (
+                ProviderId::try_from(credential.provider.as_str()).ok(),
+                Protocol::parse(&group.protocol),
+            ) && let Some(provider) = providers.get(&provider_id)
+                && !provider.endpoints.contains_key(&protocol)
+            {
+                errors.push(ConfigError::MissingProviderProtocol {
+                    group: group_id.clone(),
+                    credential: credential_id.clone(),
+                    provider: credential.provider.clone(),
+                    protocol: group.protocol.clone(),
+                });
             }
         }
     }
-}
-
-fn absolute_path(path: &std::path::Path) -> Result<PathBuf, PathBuf> {
-    if path.is_absolute() {
-        Ok(path.to_owned())
-    } else {
-        Err(path.to_owned())
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct NonEmpty<T>(Vec<T>);
-
-#[derive(Debug, thiserror::Error)]
-#[error("non-empty list must contain at least one value")]
-pub enum NonEmptyError {
-    Empty,
-}
-
-impl<T> NonEmpty<T> {
-    #[must_use]
-    pub fn as_slice(&self) -> &[T] {
-        &self.0
-    }
-}
-
-impl<T> TryFrom<Vec<T>> for NonEmpty<T> {
-    type Error = NonEmptyError;
-
-    fn try_from(value: Vec<T>) -> Result<Self, Self::Error> {
-        if value.is_empty() {
-            Err(NonEmptyError::Empty)
-        } else {
-            Ok(Self(value))
+    for (client_id, client) in &raw.clients {
+        for group in &client.grants {
+            if !raw.groups.contains_key(group) {
+                errors.push(ConfigError::UnknownGrantGroup {
+                    client: client_id.clone(),
+                    group: group.clone(),
+                });
+            }
         }
     }
 }
@@ -502,446 +647,228 @@ mod tests {
 
     fn valid_raw() -> Value {
         json!({
-            "clients": {
-                "harness": {
-                    "grants": [{
-                        "credentials": ["claude"],
-                        "upstream": "anthropic"
-                    }],
-                    "token_file": "/run/airlock/harness-token"
-                }
-            },
+            "clients": {"harness": {"grants": ["anthropic"], "token_file": "/run/airlock/harness"}},
             "credentials": {
-                "claude": {
-                    "auth": {
-                        "file": "/run/airlock/claude-token",
-                        "type": "oauth_bearer"
-                    },
-                    "upstream": "anthropic"
-                }
+                "claude": {"auth": {"type": "oauth_bearer", "file": "/run/airlock/claude"}, "provider": "claude"},
+                "zai": {"auth": {"type": "api_key", "file": "/run/airlock/zai"}, "provider": "zai"}
             },
+            "groups": {"anthropic": {
+                "intercept": ["api.anthropic.com"],
+                "members": {"claude": {"models": []}, "zai": {"models": ["glm-4.7"]}},
+                "primary": "claude", "protocol": "anthropic"
+            }},
             "listen": "127.0.0.1:8080",
-            "state_dir": "/var/lib/airlock",
-            "upstreams": {
-                "anthropic": {
-                    "intercept": ["api.anthropic.com"],
-                    "provider": "anthropic"
-                }
-            }
+            "providers": {"claude": {"preset": "claude"}, "zai": {"preset": "zai"}},
+            "state_dir": "/var/lib/airlock"
         })
     }
 
     fn converted(value: Value) -> Result<Config, ConfigErrors> {
-        Config::try_from(serde_json::from_value::<RawConfig>(value).expect("valid raw JSON"))
+        Config::try_from(serde_json::from_value::<RawConfig>(value).expect("raw JSON"))
     }
 
-    fn single_error(value: Value) -> ConfigError {
+    fn has_error(value: Value, predicate: impl Fn(&ConfigError) -> bool) {
         let Err(errors) = converted(value) else {
-            panic!("invalid fixture converted successfully");
+            panic!("invalid fixture accepted");
         };
-        assert_eq!(errors.0.len(), 1, "expected one error: {errors:?}");
-        errors.0.into_iter().next().expect("one error")
-    }
-
-    fn assert_matches(actual: &ConfigError, expected: &ConfigError) {
-        assert!(
-            matches!(actual, variant if std::mem::discriminant(variant) == std::mem::discriminant(expected)),
-            "expected {expected:?}, got {actual:?}"
-        );
+        assert!(errors.0.iter().any(predicate), "missing error: {errors:?}");
     }
 
     #[test]
-    fn valid_config_converts_and_defaults_unknown_hosts_to_tunnel() {
-        let config = converted(valid_raw()).expect("valid config");
-        assert_eq!(config.listen, "127.0.0.1:8080".parse().expect("listen"));
-        assert_eq!(config.state_dir, PathBuf::from("/var/lib/airlock"));
-        assert!(
-            config.clients.values().all(|client| {
-                client.token_file.path() == Path::new("/run/airlock/harness-token")
-            })
-        );
-
-        let credential = config
-            .credentials
-            .get(&CredentialId::try_from("claude").expect("credential id"))
-            .expect("credential");
-        assert!(matches!(
-            credential.auth,
-            Auth::OauthBearer {
-                file: ref secret_file
-            } if secret_file.path() == Path::new("/run/airlock/claude-token")
-        ));
+    fn presets_and_explicit_overrides_resolve_to_the_same_endpoints() {
+        let baseline = converted(valid_raw()).expect("valid config");
+        let mut overridden = valid_raw();
+        overridden["providers"]["zai"]["endpoints"] = json!({
+            "anthropic": "https://api.z.ai/api/anthropic",
+            "openai": "https://api.z.ai/api/coding/paas/v4"
+        });
+        let overridden = converted(overridden).expect("valid override");
+        let id = ProviderId::try_from("zai").expect("id");
+        let endpoint =
+            |config: &Config, protocol| config.providers[&id].endpoints[&protocol].url.clone();
+        for protocol in [Protocol::Anthropic, Protocol::Openai] {
+            assert_eq!(
+                endpoint(&baseline, protocol),
+                endpoint(&overridden, protocol)
+            );
+        }
+        assert_eq!(baseline.granted_credentials().count(), 2);
         assert_eq!(
-            credential.upstream,
-            UpstreamId::try_from("anthropic").expect("upstream id")
+            baseline.state_dir(),
+            std::path::Path::new("/var/lib/airlock")
         );
-
-        let upstream = config
-            .upstreams
-            .get(&UpstreamId::try_from("anthropic").expect("upstream id"))
-            .expect("upstream");
-        assert!(matches!(upstream.provider, Provider::Anthropic));
         assert_eq!(
-            upstream.hosts,
-            vec![HostName::try_from("api.anthropic.com").expect("host")]
+            baseline.clients[&ClientId::try_from("harness").expect("id")]
+                .token_file
+                .path(),
+            std::path::Path::new("/run/airlock/harness")
         );
-        assert_eq!(config.unknown_hosts(), UnknownHosts::Tunnel);
+        assert_eq!(baseline.unknown_hosts(), UnknownHosts::Tunnel);
     }
 
     #[test]
-    fn empty_grants_are_rejected() {
+    fn endpoint_paths_require_uri_syntax_without_normalizing_valid_escapes() {
+        for url in [
+            "https://api.anthropic.com/\ninvalid",
+            "https://api.anthropic.com/\0invalid",
+            "https://api.anthropic.com/a b",
+            "https://api.anthropic.com/%zz",
+        ] {
+            let mut value = valid_raw();
+            value["providers"]["claude"]["endpoints"] = json!({"anthropic": url});
+            has_error(value, |error| {
+                matches!(error, ConfigError::InvalidEndpoint { .. })
+            });
+        }
+
         let mut value = valid_raw();
-        value["clients"]["harness"]["grants"] = json!([]);
-        assert_matches(
-            &single_error(value),
-            &ConfigError::EmptyGrants {
-                client: String::new(),
-            },
+        let url = "https://api.z.ai/api/%76%31";
+        value["providers"]["zai"]["endpoints"] = json!({"anthropic": url});
+        let config = converted(value).expect("valid percent-encoded endpoint");
+        let id = ProviderId::try_from("zai").expect("id");
+        assert_eq!(
+            config.providers[&id].endpoints[&Protocol::Anthropic].url,
+            url
         );
     }
 
     #[test]
-    fn empty_grant_credentials_use_a_distinct_diagnostic() {
-        let mut value = valid_raw();
-        value["clients"]["harness"]["grants"][0]["credentials"] = json!([]);
-        assert_matches(
-            &single_error(value),
-            &ConfigError::EmptyGrantCredentials {
-                client: String::new(),
-            },
-        );
+    fn primary_owns_undeclared_models_and_unused_secrets_stay_inert() {
+        let mut raw = valid_raw();
+        raw["groups"]["anthropic"]["members"] = json!({"claude": {"models": []}});
+        raw["credentials"]["unused"] =
+            json!({"auth": {"type": "api_key", "file": "/missing"}, "provider": "zai"});
+        let config = converted(raw).expect("valid config");
+        assert_eq!(config.granted_credentials().count(), 1);
+        assert!(config.validate_executable().is_ok());
     }
 
     #[test]
-    fn duplicate_intercept_hosts_are_rejected() {
+    fn invalid_membership_and_references_are_rejected() {
         let mut value = valid_raw();
-        value["upstreams"]["openai"] = json!({
-            "intercept": ["api.anthropic.com"],
-            "provider": "anthropic"
+        value["groups"]["anthropic"]["members"]["zai"]["models"] = json!(["x", "x"]);
+        has_error(value, |error| {
+            matches!(error, ConfigError::DuplicateModel { .. })
         });
-        assert_matches(
-            &single_error(value),
-            &ConfigError::DuplicateInterceptHost {
-                host: String::new(),
-                first: String::new(),
-                second: String::new(),
-            },
-        );
-    }
 
-    #[test]
-    fn credential_upstream_mismatches_are_rejected() {
         let mut value = valid_raw();
-        value["credentials"]["openai"] = json!({
-            "auth": {
-                "file": "/run/airlock/openai-token",
-                "type": "api_key"
-            },
-            "upstream": "openai"
+        value["groups"]["anthropic"]["primary"] = json!("missing");
+        has_error(value, |error| {
+            matches!(error, ConfigError::PrimaryNotMember { .. })
         });
-        value["upstreams"]["openai"] = json!({
-            "intercept": ["api.openai.com"],
-            "provider": "anthropic"
+
+        let mut value = valid_raw();
+        value["groups"]["anthropic"]["members"]["missing"] = json!({"models": ["x"]});
+        has_error(value, |error| {
+            matches!(error, ConfigError::UnknownGroupCredential { .. })
         });
-        value["clients"]["harness"]["grants"][0]["credentials"] = json!(["openai"]);
-        assert_matches(
-            &single_error(value),
-            &ConfigError::CredentialUpstreamMismatch {
-                client: String::new(),
-                credential: String::new(),
-                granted: String::new(),
-                actual: String::new(),
-            },
-        );
+
+        let mut value = valid_raw();
+        value["providers"]["zai"] =
+            json!({"endpoints": {"openai": "https://api.z.ai/api/coding/paas/v4"}});
+        has_error(value, |error| {
+            matches!(error, ConfigError::MissingProviderProtocol { .. })
+        });
+
+        let mut value = valid_raw();
+        value["clients"]["harness"]["grants"] = json!(["missing"]);
+        has_error(value, |error| {
+            matches!(error, ConfigError::UnknownGrantGroup { .. })
+        });
+
+        let mut value = valid_raw();
+        value["credentials"]["zai"]["auth"] = json!({"type": "oauth_managed"});
+        has_error(value, |error| {
+            matches!(error, ConfigError::NonPrimaryManagedOauth { .. })
+        });
+    }
+
+    fn has_replaced_error(
+        pointer: &str,
+        replacement: Value,
+        predicate: impl Fn(&ConfigError) -> bool,
+    ) {
+        let mut value = valid_raw();
+        let (parent, key) = pointer.rsplit_once('/').expect("fixture pointer");
+        value
+            .pointer_mut(parent)
+            .expect("fixture parent")
+            .as_object_mut()
+            .expect("fixture object")
+            .insert(key.to_owned(), replacement);
+        has_error(value, predicate);
     }
 
     #[test]
-    fn invalid_listen_is_rejected() {
-        let mut value = valid_raw();
-        value["listen"] = json!("127.0.0.1");
-        assert_matches(
-            &single_error(value),
-            &ConfigError::InvalidListen {
-                value: String::new(),
-            },
+    fn transport_and_secret_shape_errors_remain_guarded() {
+        has_replaced_error("/clients/harness/grants", json!([]), |error| {
+            matches!(error, ConfigError::EmptyGrants { .. })
+        });
+        has_replaced_error("/listen", json!("127.0.0.1"), |error| {
+            matches!(error, ConfigError::InvalidListen { .. })
+        });
+        has_replaced_error("/listen", json!("192.0.2.1:8080"), |error| {
+            matches!(error, ConfigError::NonLoopbackListen { .. })
+        });
+        has_replaced_error("/state_dir", json!("relative"), |error| {
+            matches!(error, ConfigError::RelativeStateDir { .. })
+        });
+        has_replaced_error("/unknown_hosts", json!("forward"), |error| {
+            matches!(error, ConfigError::InvalidUnknownHostPolicy { .. })
+        });
+        has_replaced_error("/clients/harness/token_file", json!("relative"), |error| {
+            matches!(error, ConfigError::RelativeTokenFile { .. })
+        });
+        has_replaced_error(
+            "/credentials/claude/auth/file",
+            json!("relative"),
+            |error| matches!(error, ConfigError::RelativeAuthFile { .. }),
         );
-    }
-
-    #[test]
-    fn invalid_intercept_host_is_rejected() {
-        let mut value = valid_raw();
-        value["upstreams"]["anthropic"]["intercept"] = json!(["api.example.com:443"]);
-        assert_matches(
-            &single_error(value),
-            &ConfigError::InvalidHost {
-                upstream: String::new(),
-                host: String::new(),
-            },
+        has_replaced_error(
+            "/groups/anthropic/intercept",
+            json!(["api.example.com:443"]),
+            |error| matches!(error, ConfigError::InvalidHost { .. }),
         );
-    }
+        has_replaced_error("/credentials/claude/provider", json!("missing"), |error| {
+            matches!(error, ConfigError::UnknownCredentialProvider { .. })
+        });
+        has_replaced_error(
+            "/providers/claude/endpoints",
+            json!({"anthropic": "http://api.anthropic.com"}),
+            |error| matches!(error, ConfigError::InvalidEndpoint { .. }),
+        );
 
-    #[test]
-    fn invalid_identifier_is_rejected() {
         let mut value = valid_raw();
-        value["clients"]["Harness"] = value["clients"]["harness"].clone();
+        value["groups"]["other"] = json!({"intercept": ["api.anthropic.com"], "members": {"claude": {"models": []}}, "primary": "claude", "protocol": "anthropic"});
+        has_error(value, |error| {
+            matches!(error, ConfigError::DuplicateInterceptHost { .. })
+        });
+        let mut value = valid_raw();
+        value["clients"]["Harness"] = value["clients"]["harness"].take();
         value["clients"]
             .as_object_mut()
-            .expect("clients")
+            .expect("object")
             .remove("harness");
-        assert_matches(
-            &single_error(value),
-            &ConfigError::InvalidName {
-                field: "client",
-                value: String::new(),
-            },
-        );
-    }
-
-    #[test]
-    fn invalid_unknown_host_policy_is_rejected() {
-        let mut value = valid_raw();
-        value["unknown_hosts"] = json!("forward");
-        assert_matches(
-            &single_error(value),
-            &ConfigError::InvalidUnknownHostPolicy {
-                value: String::new(),
-            },
-        );
-    }
-
-    #[test]
-    fn non_loopback_listen_is_rejected() {
-        let mut value = valid_raw();
-        value["listen"] = json!("192.0.2.1:8080");
-        assert_matches(
-            &single_error(value),
-            &ConfigError::NonLoopbackListen {
-                address: "192.0.2.1:8080".parse().expect("socket address"),
-            },
-        );
-    }
-
-    #[test]
-    fn relative_auth_file_is_rejected() {
-        let mut value = valid_raw();
-        value["credentials"]["claude"]["auth"]["file"] = json!("tokens/claude");
-        assert_matches(
-            &single_error(value),
-            &ConfigError::RelativeAuthFile {
-                credential: String::new(),
-                path: PathBuf::new(),
-            },
-        );
-    }
-
-    #[test]
-    fn relative_state_dir_is_rejected() {
-        let mut value = valid_raw();
-        value["state_dir"] = json!("state");
-        assert_matches(
-            &single_error(value),
-            &ConfigError::RelativeStateDir {
-                path: PathBuf::new(),
-            },
-        );
-    }
-
-    #[test]
-    fn relative_token_file_is_rejected() {
-        let mut value = valid_raw();
-        value["clients"]["harness"]["token_file"] = json!("tokens/harness");
-        assert_matches(
-            &single_error(value),
-            &ConfigError::RelativeTokenFile {
-                client: String::new(),
-                path: PathBuf::new(),
-            },
-        );
-    }
-
-    #[test]
-    fn unknown_credential_upstream_and_dependent_mismatch_are_collected() {
-        let mut value = valid_raw();
-        value["credentials"]["claude"]["upstream"] = json!("missing");
-
-        let Err(errors) = converted(value) else {
-            panic!("invalid fixture converted successfully");
-        };
-        assert_eq!(errors.0.len(), 2);
-        assert!(matches!(
-            errors.0[0],
-            ConfigError::UnknownCredentialUpstream { .. }
-        ));
-        assert!(matches!(
-            errors.0[1],
-            ConfigError::CredentialUpstreamMismatch { .. }
-        ));
-    }
-
-    #[test]
-    fn unknown_grant_credential_is_rejected() {
-        let mut value = valid_raw();
-        value["clients"]["harness"]["grants"][0]["credentials"] = json!(["missing"]);
-        assert_matches(
-            &single_error(value),
-            &ConfigError::UnknownGrantCredential {
-                client: String::new(),
-                credential: String::new(),
-            },
-        );
-    }
-
-    #[test]
-    fn unknown_grant_upstream_and_dependent_mismatch_are_collected() {
-        let mut value = valid_raw();
-        value["clients"]["harness"]["grants"][0]["upstream"] = json!("missing");
-
-        let Err(errors) = converted(value) else {
-            panic!("invalid fixture converted successfully");
-        };
-        assert_eq!(errors.0.len(), 2);
-        assert!(matches!(
-            errors.0[0],
-            ConfigError::UnknownGrantUpstream { .. }
-        ));
-        assert!(matches!(
-            errors.0[1],
-            ConfigError::CredentialUpstreamMismatch { .. }
-        ));
-    }
-
-    #[test]
-    fn unsupported_provider_is_rejected() {
-        let mut value = valid_raw();
-        value["upstreams"]["anthropic"]["provider"] = json!("openai");
-        assert_matches(
-            &single_error(value),
-            &ConfigError::UnsupportedProvider {
-                upstream: String::new(),
-                provider: String::new(),
-            },
-        );
-    }
-
-    #[test]
-    fn unknown_auth_fields_are_rejected_by_raw_deserialization() {
-        let mut value = valid_raw();
-        value["credentials"]["claude"]["auth"]["unexpected"] = json!(true);
-        let result = serde_json::from_value::<RawConfig>(value);
-        assert!(result.is_err(), "unknown auth field was accepted");
-    }
-
-    #[test]
-    fn empty_grant_credentials_are_reported_even_when_grant_upstream_is_invalid() {
-        let mut value = valid_raw();
-        value["clients"]["harness"]["grants"][0]["credentials"] = json!([]);
-        value["clients"]["harness"]["grants"][0]["upstream"] = json!("Anthropic");
-
-        let Err(errors) = converted(value) else {
-            panic!("invalid fixture converted successfully");
-        };
-        assert!(
-            errors
-                .0
-                .iter()
-                .any(|error| matches!(error, ConfigError::EmptyGrantCredentials { .. }))
-        );
-        assert!(errors.0.iter().any(|error| matches!(
-            error,
-            ConfigError::InvalidName {
-                field: "upstream",
-                ..
-            }
-        )));
-    }
-
-    #[test]
-    fn duplicate_hosts_are_reported_even_when_second_upstream_id_is_invalid() {
-        let mut value = valid_raw();
-        value["upstreams"]["Anthropic"] = json!({
-            "intercept": ["api.anthropic.com"],
-            "provider": "anthropic"
+        has_error(value, |error| {
+            matches!(error, ConfigError::InvalidName { .. })
         });
-
-        let Err(errors) = converted(value) else {
-            panic!("invalid fixture converted successfully");
-        };
-        assert!(
-            errors
-                .0
-                .iter()
-                .any(|error| matches!(error, ConfigError::DuplicateInterceptHost { .. }))
-        );
-        assert!(errors.0.iter().any(|error| matches!(
-            error,
-            ConfigError::InvalidName {
-                field: "upstream",
-                ..
-            }
-        )));
     }
 
     #[test]
-    fn mismatch_is_reported_even_when_granted_upstream_reference_is_unknown() {
+    fn independent_errors_are_collected() {
         let mut value = valid_raw();
-        value["clients"]["harness"]["grants"][0]["upstream"] = json!("missing");
-
-        let Err(errors) = converted(value) else {
-            panic!("invalid fixture converted successfully");
-        };
-        assert!(
-            errors
-                .0
-                .iter()
-                .any(|error| matches!(error, ConfigError::UnknownGrantUpstream { .. }))
-        );
-        assert!(
-            errors
-                .0
-                .iter()
-                .any(|error| matches!(error, ConfigError::CredentialUpstreamMismatch { .. }))
-        );
-    }
-
-    #[test]
-    fn independent_domain_errors_are_all_collected() {
-        let mut value = valid_raw();
-        value["clients"]["Harness"] = value["clients"]["harness"].clone();
-        value["clients"]
-            .as_object_mut()
-            .expect("clients")
-            .remove("harness");
-        value["clients"]["Harness"]["grants"][0]["credentials"] = json!(["Claude"]);
-        value["credentials"]["Claude"] = value["credentials"]["claude"].clone();
-        value["credentials"]
-            .as_object_mut()
-            .expect("credentials")
-            .remove("claude");
-        value["upstreams"]["anthropic"]["intercept"] = json!(["api.example.com:443"]);
-        value["upstreams"]["Anthropic"] = value["upstreams"]["anthropic"].clone();
-        value["upstreams"]
-            .as_object_mut()
-            .expect("upstreams")
-            .remove("anthropic");
-        value["clients"]["Harness"]["grants"][0]["upstream"] = json!("Anthropic");
-        value["credentials"]["Claude"]["upstream"] = json!("Anthropic");
-        value["state_dir"] = json!("state");
         value["listen"] = json!("192.0.2.1:8080");
-
+        value["state_dir"] = json!("relative");
+        value["groups"]["anthropic"]["intercept"] = json!(["bad:443"]);
         let Err(errors) = converted(value) else {
-            panic!("multi-error fixture converted successfully");
+            panic!("invalid fixture accepted");
         };
-        let invalid_names = errors
-            .0
-            .iter()
-            .filter(|error| matches!(error, ConfigError::InvalidName { .. }))
-            .count();
-        assert_eq!(invalid_names, 6);
+        assert_eq!(errors.0.len(), 3);
         assert!(
             errors
                 .0
                 .iter()
-                .any(|error| matches!(error, ConfigError::InvalidHost { .. }))
+                .any(|error| matches!(error, ConfigError::NonLoopbackListen { .. }))
         );
         assert!(
             errors
@@ -953,8 +880,66 @@ mod tests {
             errors
                 .0
                 .iter()
-                .any(|error| matches!(error, ConfigError::NonLoopbackListen { .. }))
+                .any(|error| matches!(error, ConfigError::InvalidHost { .. }))
         );
-        assert_eq!(errors.0.len(), 9);
+    }
+
+    #[test]
+    fn unsupported_execution_is_explicit() {
+        let config = converted(valid_raw()).expect("valid multiplex config");
+        assert!(matches!(
+            config.validate_executable(),
+            Err(UnsupportedExecution::MultipleMembers { .. })
+        ));
+
+        let mut value = valid_raw();
+        value["groups"]["anthropic"]["members"] = json!({"claude": {"models": []}});
+        value["credentials"]["claude"]["auth"] = json!({"type": "oauth_managed"});
+        let config = converted(value).expect("valid managed OAuth config");
+        assert!(matches!(
+            config.validate_executable(),
+            Err(UnsupportedExecution::ManagedOauth { .. })
+        ));
+
+        let mut value = valid_raw();
+        value["groups"]["anthropic"]["members"] = json!({"claude": {"models": []}});
+        value["providers"]["claude"]["endpoints"] = json!({"anthropic": "https://other.example"});
+        let config = converted(value).expect("valid override config");
+        assert!(matches!(
+            config.validate_executable(),
+            Err(UnsupportedExecution::Endpoint { .. })
+        ));
+
+        let mut value = valid_raw();
+        value["groups"]["openai"] = json!({
+            "intercept": ["api.z.ai"],
+            "members": {"zai": {"models": []}},
+            "primary": "zai", "protocol": "openai"
+        });
+        value["clients"]["harness"]["grants"] = json!(["openai"]);
+        let config = converted(value).expect("valid OpenAI shape");
+        assert!(matches!(
+            config.validate_executable(),
+            Err(UnsupportedExecution::Openai { .. })
+        ));
+    }
+
+    #[test]
+    fn unknown_fields_are_rejected() {
+        let mut value = valid_raw();
+        value["groups"]["anthropic"]["unexpected"] = json!(true);
+        assert!(serde_json::from_value::<RawConfig>(value).is_err());
+        let mut value = valid_raw();
+        value["credentials"]["claude"]["auth"]["unexpected"] = json!(true);
+        assert!(serde_json::from_value::<RawConfig>(value).is_err());
+
+        for auth in [
+            json!({"type": "oauth_managed", "file": "/obvious-fake-secret"}),
+            json!({"type": "oauth_managed", "unexpected": true}),
+        ] {
+            let mut value = valid_raw();
+            value["credentials"]["claude"]["auth"] = auth;
+            assert!(serde_json::from_value::<RawConfig>(value).is_err());
+        }
     }
 }

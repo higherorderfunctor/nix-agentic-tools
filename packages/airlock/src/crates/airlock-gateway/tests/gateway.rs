@@ -301,11 +301,12 @@ async fn startup_reports_all_empty_and_missing_client_token_files() {
     ));
     let raw = json!({
         "clients": {
-            "empty": {"grants": [{"credentials": ["claude"], "upstream": "anthropic"}], "token_file": directory.path().join("token")},
-            "missing": {"grants": [{"credentials": ["claude"], "upstream": "anthropic"}], "token_file": directory.path().join("missing")}
+            "empty": {"grants": ["anthropic"], "token_file": directory.path().join("token")},
+            "missing": {"grants": ["anthropic"], "token_file": directory.path().join("missing")}
         },
-        "credentials": {"claude": {"auth": {"file": directory.path().join("claude"), "type": "oauth_bearer"}, "upstream": "anthropic"}},
-        "listen": "127.0.0.1:0", "state_dir": directory.path(), "upstreams": {"anthropic": {"intercept": [], "provider": "anthropic"}}
+        "credentials": {"claude": {"auth": {"file": directory.path().join("claude"), "type": "oauth_bearer"}, "provider": "claude"}},
+        "groups": {"anthropic": {"intercept": [], "members": {"claude": {"models": []}}, "primary": "claude", "protocol": "anthropic"}},
+        "listen": "127.0.0.1:0", "providers": {"claude": {"preset": "claude"}}, "state_dir": directory.path()
     });
     let raw: RawConfig = serde_json::from_value(raw).expect("raw");
     let Err(Error::Secrets(errors)) = Gateway::bind(
@@ -339,20 +340,21 @@ async fn startup_reports_each_granted_credential_file_error() {
     let raw = json!({
         "clients": {
             "harness": {
-                "grants": [{
-                    "credentials": ["empty", "missing"],
-                    "upstream": "anthropic"
-                }],
+                "grants": ["anthropic", "other"],
                 "token_file": directory.path().join("token")
             }
         },
         "credentials": {
-            "empty": {"auth": {"file": empty, "type": "oauth_bearer"}, "upstream": "anthropic"},
-            "missing": {"auth": {"file": missing, "type": "oauth_bearer"}, "upstream": "anthropic"}
+            "empty": {"auth": {"file": empty, "type": "oauth_bearer"}, "provider": "claude"},
+            "missing": {"auth": {"file": missing, "type": "oauth_bearer"}, "provider": "claude"}
+        },
+        "groups": {
+            "anthropic": {"intercept": [], "members": {"empty": {"models": []}}, "primary": "empty", "protocol": "anthropic"},
+            "other": {"intercept": [], "members": {"missing": {"models": []}}, "primary": "missing", "protocol": "anthropic"}
         },
         "listen": "127.0.0.1:0",
-        "state_dir": directory.path(),
-        "upstreams": {"anthropic": {"intercept": [], "provider": "anthropic"}}
+        "providers": {"claude": {"preset": "claude"}},
+        "state_dir": directory.path()
     });
     let raw: RawConfig = serde_json::from_value(raw).expect("raw");
     let Err(Error::Secrets(errors)) = Gateway::bind(
@@ -384,17 +386,18 @@ async fn startup_does_not_load_credentials_without_grants() {
     let raw = json!({
         "clients": {
             "harness": {
-                "grants": [{"credentials": ["granted"], "upstream": "anthropic"}],
+                "grants": ["anthropic"],
                 "token_file": directory.path().join("token")
             }
         },
         "credentials": {
-            "granted": {"auth": {"file": directory.path().join("granted"), "type": "oauth_bearer"}, "upstream": "anthropic"},
-            "unused": {"auth": {"file": directory.path().join("unused"), "type": "oauth_bearer"}, "upstream": "anthropic"}
+            "granted": {"auth": {"file": directory.path().join("granted"), "type": "oauth_bearer"}, "provider": "claude"},
+            "unused": {"auth": {"file": directory.path().join("unused"), "type": "oauth_bearer"}, "provider": "claude"}
         },
+        "groups": {"anthropic": {"intercept": [], "members": {"granted": {"models": []}}, "primary": "granted", "protocol": "anthropic"}},
         "listen": "127.0.0.1:0",
-        "state_dir": directory.path(),
-        "upstreams": {"anthropic": {"intercept": [], "provider": "anthropic"}}
+        "providers": {"claude": {"preset": "claude"}},
+        "state_dir": directory.path()
     });
     let raw: RawConfig = serde_json::from_value(raw).expect("raw");
     let gateway = Gateway::bind(
@@ -406,6 +409,25 @@ async fn startup_does_not_load_credentials_without_grants() {
     .expect("unused credential is not loaded");
     assert!(!directory.path().join("unused").exists());
     drop(gateway);
+}
+
+#[tokio::test]
+async fn unsupported_managed_oauth_fails_before_secret_loading() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let raw = serde_json::from_value::<RawConfig>(json!({
+        "clients": {"harness": {"grants": ["anthropic"], "token_file": directory.path().join("missing-token")}},
+        "credentials": {"claude": {"auth": {"type": "oauth_managed"}, "provider": "claude"}},
+        "groups": {"anthropic": {"intercept": ["api.anthropic.com"], "members": {"claude": {"models": []}}, "primary": "claude", "protocol": "anthropic"}},
+        "listen": "127.0.0.1:0",
+        "providers": {"claude": {"preset": "claude"}},
+        "state_dir": directory.path()
+    })).expect("raw config");
+    let config = Config::try_from(raw).expect("valid shape");
+    assert!(matches!(
+        Gateway::bind(config, &directory.path().join("ca"), TestCa::new().roots()).await,
+        Err(Error::UnsupportedExecution(_))
+    ));
+    assert!(!directory.path().join("ca").exists());
 }
 
 #[tokio::test]

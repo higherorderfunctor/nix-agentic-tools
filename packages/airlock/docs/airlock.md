@@ -1,20 +1,15 @@
 # airlock
 
-> **Last verified:** 2026-10-24 — `airlock serve` tunnels, denies, or
-> intercepts: the client's TLS ends at a leaf from airlock's tmpfs CA, verified
-> TLS reopens to the real host, and an intercepted HTTP request has its
-> credential swapped before it streams upstream. Claude selects airlock through
-> `ai.claude.proxy`, with the CA bundled into its jail.
+> **Last verified:** 2026-10-24 — provider presets and protocol groups replace
+> the upstream schema. Rust resolves endpoints for direct and Nix-rendered
+> config; `serve` rejects active routes whose configured behavior is not yet
+> implemented. CONNECT, CA trust and Claude selection remain as described below.
 
 ## Scope
 
-airlock is meant to become the single egress gateway of a sandboxed harness: LLM
-providers, MCP servers, gh/glab APIs, guarded web and a git+ssh relay all leave
-through it. LLM providers are one family of upstreams, not the center, so the
-core stays protocol-agnostic: listener, client identity, policy, upstream with
-credential injection, audit. It replaces CLIProxyAPI (`packages/cliproxyapi`) as
-the credential proxy; both coexist until the harnesses are rewired
-(`lib/ai/proxy` still resolves CLIProxyAPI instances only).
+airlock is becoming the sandboxed harness's egress gateway for providers, MCP,
+gh/glab, guarded web and git+ssh. Its core handles client identity, policy,
+credential injection and audit. CLIProxyAPI coexists until harnesses cut over.
 
 ## Transport
 
@@ -34,10 +29,10 @@ Interception follows this order:
   verified against the system store (`SSL_CERT_FILE` is honoured). Only then
   does it finish the client's handshake, offering only the protocol the upstream
   chose, so ALPN matches end to end.
-- Startup loads client tokens and every distinct credential named by a grant
-  once, collecting every unreadable or empty file before serving. Credentials
-  with no grant stay on disk. A grant currently selects its first credential;
-  fallback to a later credential is future work.
+- Startup loads client tokens and each credential in a granted group once,
+  collecting every unreadable or empty file before serving. Ungranted groups and
+  credentials stay inert. Until model routing lands, `serve` accepts only a
+  single member per active group and uses its primary credential.
 - Interception parses HTTP on the negotiated protocol, opens one verified
   upstream connection of the same kind, and streams request and response bodies
   as frames. It preserves method, path, query, status, version, headers, and
@@ -59,16 +54,11 @@ Interception follows this order:
 
 The CA lives in `$XDG_RUNTIME_DIR/airlock-<port>/` (0700): `ca.key`
 (PKCS#8, 0600) and `ca.pem` (0644), ECDSA P-256 with `pathlen:0` and no name
-constraints. Startup refuses an unset or relative `XDG_RUNTIME_DIR`, one not
-owned 0700 by the user, or on Linux one that is not tmpfs or ramfs; the CA
-directory itself must pass the same checks. The tmpfs is what rotates the CA at
-every reboot; it survives airlock restarts within a boot. Startup also refuses a
-symlink in place of either directory or file, a lone `ca.key` or `ca.pem`, a
-group- or other-readable key, or a key that does not match the certificate, and
-never writes over an existing file. `ca.pem` is the one file meant to leave
-airlock: the sandbox will trust it, never the host's trust store. Leaves are
-minted per intercepted host on demand, each with its own key, for 7 days, and
-are held only in memory.
+constraints. Startup requires absolute, user-owned 0700 directories and Linux
+tmpfs/ramfs; tmpfs rotates the CA at reboot. It rejects symlinks, incomplete
+key/cert pairs, exposed or mismatched keys, and never overwrites an existing
+file. Only `ca.pem` leaves airlock for the sandbox trust bundle. Per-host leaves
+have separate keys, seven-day validity and stay in memory.
 
 Why CONNECT and not a base URL, measured 2026-10-24 against Claude Code 2.1.309
 with a local CONNECT proxy intercepting TLS and a fake token, offline:
@@ -103,18 +93,28 @@ environment and config, not out of its reach.
 `airlock-<name>` running `airlock serve --config "$AIRLOCK_CONFIG"`; its port
 and service name are claimed by the helper.
 
-`settings` mirrors airlock-core's `RawConfig` field for field. The render
-renames three keys (`stateDir` → `state_dir`, `unknownHosts` → `unknown_hosts`,
-a client's `token` → `token_file`) and nothing else. Field validity (id
-spelling, references between clients, credentials and upstreams, empty grants)
-is airlock-core's job, not the Nix types'. Add a field on both sides at once:
-`airlock-config-roundtrip` runs `check-config` on a rendered sample, and
-`deny_unknown_fields` refuses a key Rust does not know.
+`settings` mirrors Rust's `RawConfig`. The render renames only `stateDir` →
+`state_dir`, `unknownHosts` → `unknown_hosts`, and client `token` →
+`token_file`; it omits null `preset` and managed-OAuth `file`. Rust checks IDs,
+references, URLs, protocol membership, primary and model ownership for both
+direct JSON and Nix output. `airlock-config-roundtrip` passes a rendered sample
+to `check-config`; raw structs deny unknown fields.
 
-Every client token and credential file is `redact.types.secretFile`. The
-launcher writes each value to a 0600 file in its runtime directory and fills the
-config's placeholder with that path; airlock-core requires the path to be
-absolute and reads it at start.
+`providers.<id>` holds a `claude` or `zai` preset plus optional protocol-keyed
+endpoint overrides. Rust expands the preset once: Claude Anthropic resolves to
+`https://api.anthropic.com`; z.ai Anthropic to `https://api.z.ai/api/anthropic`,
+and z.ai OpenAI to `https://api.z.ai/api/coding/paas/v4`. No Codex endpoint is
+asserted yet. `credentials.<id>` names a provider and auth mode; `groups.<id>`
+names one protocol, its first-party intercept hosts, a primary credential and
+member credentials with exact model IDs. A client grants whole groups. The
+primary owns undeclared models; non-primary members need explicit IDs. A
+duplicate ID within a group is invalid. No traffic routing by model exists yet.
+
+Client tokens and file-backed credentials use `redact.types.secretFile`; the
+launcher writes each value to a 0600 runtime file and renders only its absolute
+path. `oauth_managed` has no file and is shape-checked for the future primary
+OAuth flow. Active managed OAuth, OpenAI, multiple members or endpoints that
+cannot use original-host transport make `serve` fail before secret loading.
 
 ## Harness selection
 

@@ -101,7 +101,8 @@ macro_rules! domain_id {
 
 domain_id!(ClientId);
 domain_id!(CredentialId);
-domain_id!(UpstreamId);
+domain_id!(GroupId);
+domain_id!(ProviderId);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct HostName(String);
