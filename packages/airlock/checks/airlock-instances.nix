@@ -21,12 +21,7 @@
     stateDir = "/srv/airlock/main";
     settings = {
       clients.harness = {
-        grants = [
-          {
-            credentials = ["claude" "zai"];
-            upstream = "anthropic";
-          }
-        ];
+        grants = ["anthropic"];
         token = harnessToken;
       };
       credentials = {
@@ -35,15 +30,28 @@
             file = claudeToken;
             type = "oauth_bearer";
           };
-          upstream = "anthropic";
+          provider = "claude";
         };
         zai = {
           auth = {
             file = zaiKey;
             type = "api_key";
           };
-          upstream = "anthropic";
+          provider = "zai";
         };
+      };
+      groups.anthropic = {
+        intercept = ["api.anthropic.com"];
+        members = {
+          claude.models = [];
+          zai.models = ["glm-4.7"];
+        };
+        primary = "claude";
+        protocol = "anthropic";
+      };
+      providers = {
+        claude.preset = "claude";
+        zai.preset = "zai";
       };
     };
   };
@@ -55,6 +63,18 @@
     ) {ai = lib.recursiveUpdate {airlock.instances.main = sample;} ai;};
   fileOf = result: result.config.ai.services.airlock-main.files.config;
   hm = fileOf (evaluate "hm" {});
+  managed = backend:
+    fileOf (evaluate backend {
+      airlock.instances.main.settings.credentials.claude.auth = {
+        file = lib.mkForce null;
+        type = lib.mkForce "oauth_managed";
+      };
+    });
+  managedWithFile = backend:
+    fileOf (evaluate backend {
+      airlock.instances.main.settings.credentials.claude.auth.type = lib.mkForce "oauth_managed";
+    });
+  override = backend: fileOf (evaluate backend {airlock.instances.main.settings.providers.zai.endpoints.anthropic = "https://api.z.ai/api/anthropic";});
   failures = result: map (item: item.message) (builtins.filter (item: !item.assertion) result.config.assertions);
   thrown = backend: ai: !(builtins.tryEval (builtins.deepSeq (fileOf (evaluate backend ai)).content true)).success;
   packageRefused = backend: ai: !(builtins.tryEval (builtins.deepSeq (toString (builtins.head ((evaluate backend ai).config.home.packages or (evaluate backend ai).config.packages))) true)).success;
@@ -62,6 +82,9 @@
   # Each secret's placeholder filled with an absolute dummy path, where the
   # launcher would put the 0600 file it writes.
   checked = pkgs.writeText "airlock-config-roundtrip.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") hm.secrets) hm.content);
+  checkedManaged = pkgs.writeText "airlock-config-managed.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (managed "hm").secrets) (managed "hm").content);
+  checkedManagedWithFile = pkgs.writeText "airlock-config-managed-with-file.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (managedWithFile "hm").secrets) (managedWithFile "hm").content);
+  checkedOverride = pkgs.writeText "airlock-config-override.json" (fill (lib.mapAttrs (name: _: "/run/airlock-check/${name}") (override "hm").secrets) (override "hm").content);
 in {
   checks =
     {
@@ -69,7 +92,13 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         airlock check-config --config ${checked}
-        echo "ok — airlock check-config accepts the rendered instance config" >"$out"
+        airlock check-config --config ${checkedManaged}
+        airlock check-config --config ${checkedOverride}
+        if airlock check-config --config ${checkedManagedWithFile}; then
+          echo "managed OAuth unexpectedly accepted a file" >&2
+          exit 1
+        fi
+        echo "ok — airlock check-config accepts preset, managed-OAuth and explicit-override renders" >"$out"
       '';
 
       airlock-module-eval = mkTest "airlock-module-eval" (
@@ -79,6 +108,12 @@ in {
         in
           file
           == hm
+          && managed backend == managed "hm"
+          && !(builtins.hasAttr "file" (builtins.fromJSON (managed backend).content).credentials.claude.auth)
+          && managedWithFile backend == managedWithFile "hm"
+          && builtins.hasAttr "file" (builtins.fromJSON (managedWithFile backend).content).credentials.claude.auth
+          && override backend == override "hm"
+          && (builtins.fromJSON (override backend).content).providers.zai.endpoints.anthropic == "https://api.z.ai/api/anthropic"
           && file.variable == "AIRLOCK_CONFIG"
           # Tagged as secret files: the launcher writes each to a 0600 file and
           # the config receives its path, never the value.

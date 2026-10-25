@@ -349,25 +349,28 @@ fn config_with_auth(
             "file": directory.path().join("claude"), "type": "oauth_bearer"
         }),
     };
+    let endpoint = format!("https://{}", intercepted.first().unwrap_or(&"localhost"));
     Config::try_from(serde_json::from_value::<RawConfig>(json!({
         "clients": {"harness": {
-            "grants": [{
-                "credentials": ["claude", "backup"],
-                "upstream": "anthropic"
-            }],
+            "grants": ["anthropic"],
             "token_file": directory.path().join("token")
         }},
         "credentials": {
             "backup": {"auth": {
                 "file": directory.path().join("backup"),
                 "type": if matches!(auth, FixtureAuth::ApiKey) { "oauth_bearer" } else { "api_key" }
-            }, "upstream": "anthropic"},
-            "claude": {"auth": primary, "upstream": "anthropic"}
+            }, "provider": "claude"},
+            "claude": {"auth": primary, "provider": "claude"}
         },
+        "groups": {"anthropic": {
+            "intercept": intercepted,
+            "members": {"claude": {"models": []}},
+            "primary": "claude", "protocol": "anthropic"
+        }},
         "listen": "127.0.0.1:0",
+        "providers": {"claude": {"endpoints": {"anthropic": endpoint}}},
         "state_dir": directory.path(),
-        "unknown_hosts": unknown_hosts,
-        "upstreams": {"anthropic": {"intercept": intercepted, "provider": "anthropic"}}
+        "unknown_hosts": unknown_hosts
     })).expect("raw config")).expect("validated config")
 }
 

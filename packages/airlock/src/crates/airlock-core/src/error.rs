@@ -44,14 +44,12 @@ pub enum SecretError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    #[error(
-        "credential {credential:?} for client {client:?} belongs to {actual:?}, not {granted:?}"
-    )]
-    CredentialUpstreamMismatch {
-        actual: String,
-        client: String,
-        credential: String,
-        granted: String,
+    #[error("model {model:?} in group {group:?} is owned by both {first:?} and {second:?}")]
+    DuplicateModel {
+        first: String,
+        group: String,
+        model: String,
+        second: String,
     },
     #[error("host {host:?} is intercepted by both {first:?} and {second:?}")]
     DuplicateInterceptHost {
@@ -59,37 +57,60 @@ pub enum ConfigError {
         host: String,
         second: String,
     },
-    #[error("grant for client {client:?} has no credentials")]
-    EmptyGrantCredentials { client: String },
     #[error("client {client:?} has no grants")]
     EmptyGrants { client: String },
-    #[error("upstream {upstream:?} has invalid intercept host {host:?}")]
-    InvalidHost { host: String, upstream: String },
+    #[error("group {group:?} has no members")]
+    EmptyGroupMembers { group: String },
+    #[error("group {group:?} member {credential:?} has no model IDs")]
+    EmptyNonPrimaryModels { credential: String, group: String },
+    #[error("provider {provider:?} has no resolved endpoints")]
+    EmptyProviderEndpoints { provider: String },
+    #[error("group {group:?} member {credential:?} has an empty model ID")]
+    EmptyModel { credential: String, group: String },
+    #[error("provider {provider:?} has invalid {protocol:?} endpoint")]
+    InvalidEndpoint { protocol: String, provider: String },
+    #[error("group {group:?} has invalid intercept host {host:?}")]
+    InvalidHost { group: String, host: String },
     #[error("listen address {value:?} is not a valid socket address")]
     InvalidListen { value: String },
     #[error("invalid {field} identifier {value:?}")]
     InvalidName { field: &'static str, value: String },
+    #[error(
+        "group {group:?} credential {credential:?} uses provider {provider:?} without {protocol:?} endpoint"
+    )]
+    MissingProviderProtocol {
+        credential: String,
+        group: String,
+        protocol: String,
+        provider: String,
+    },
     #[error("unknown_hosts must be \"tunnel\" or \"deny\", not {value:?}")]
     InvalidUnknownHostPolicy { value: String },
     #[error("listen address {address} is not loopback")]
     NonLoopbackListen { address: SocketAddr },
+    #[error("group {group:?} non-primary credential {credential:?} cannot use managed OAuth")]
+    NonPrimaryManagedOauth { credential: String, group: String },
+    #[error("group {group:?} primary {primary:?} is not a member")]
+    PrimaryNotMember { group: String, primary: String },
     #[error("credential {credential:?} has a relative auth file {path:?}")]
     RelativeAuthFile { credential: String, path: PathBuf },
     #[error("state_dir {path:?} must be absolute")]
     RelativeStateDir { path: PathBuf },
     #[error("client {client:?} has a relative token file {path:?}")]
     RelativeTokenFile { client: String, path: PathBuf },
-    #[error("credential {credential:?} references unknown upstream {upstream:?}")]
-    UnknownCredentialUpstream {
+    #[error("credential {credential:?} references unknown provider {provider:?}")]
+    UnknownCredentialProvider {
         credential: String,
-        upstream: String,
+        provider: String,
     },
-    #[error("grant for client {client:?} references unknown credential {credential:?}")]
-    UnknownGrantCredential { client: String, credential: String },
-    #[error("grant for client {client:?} references unknown upstream {upstream:?}")]
-    UnknownGrantUpstream { client: String, upstream: String },
-    #[error("upstream {upstream:?} has unsupported provider {provider:?}")]
-    UnsupportedProvider { provider: String, upstream: String },
+    #[error("grant for client {client:?} references unknown group {group:?}")]
+    UnknownGrantGroup { client: String, group: String },
+    #[error("group {group:?} references unknown credential {credential:?}")]
+    UnknownGroupCredential { credential: String, group: String },
+    #[error("provider {provider:?} has unknown preset {preset:?}")]
+    UnknownPreset { preset: String, provider: String },
+    #[error("group {group:?} uses unsupported protocol {protocol:?}")]
+    UnsupportedProtocol { group: String, protocol: String },
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -18,7 +18,7 @@ use std::{
 };
 
 use airlock_core::{
-    config::{Auth, Config},
+    config::{Auth, Config, UnsupportedExecution},
     error::SecretError,
     ids::{ClientId, CredentialId},
     policy::{Decision, Policy},
@@ -69,6 +69,8 @@ pub enum Error {
     Secrets(#[from] SecretErrors),
     #[error("TLS configuration: {0}")]
     Tls(#[from] rustls::Error),
+    #[error(transparent)]
+    UnsupportedExecution(#[from] UnsupportedExecution),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -119,6 +121,7 @@ impl Gateway {
         ca_directory: &Path,
         upstream_roots: RootCertStore,
     ) -> Result<Self, Error> {
+        config.validate_executable()?;
         let mut errors = Vec::new();
         let mut tokens = BTreeMap::new();
         for (client, file) in config.client_token_files() {
@@ -134,6 +137,7 @@ impl Gateway {
             let file = match auth {
                 Auth::ApiKey { file } => (AuthKind::ApiKey, file),
                 Auth::OauthBearer { file } => (AuthKind::OauthBearer, file),
+                Auth::OauthManaged => continue, // rejected before secret loading
             };
             match file.1.load() {
                 Ok(secret) => {
@@ -321,7 +325,7 @@ async fn handle(
             Ok(response(StatusCode::FORBIDDEN, format!("{reason:?}")))
         }
         Decision::Intercept { credentials, .. } => {
-            // M2b deliberately uses only the first granted credential; fallback is later work.
+            // Until model routing lands, executable groups have one primary credential.
             let Some(credential) = credentials.first() else {
                 audit.outcome = "policy_denied";
                 return Ok(response(StatusCode::FORBIDDEN, "no granted credential"));
